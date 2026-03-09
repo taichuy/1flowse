@@ -1,44 +1,43 @@
 # 规则目录 — 代码质量
 
-## 条件类名使用工具函数
+## 使用当前仓库真实存在的样式与工具约定
 
 IsUrgent: True
 Category: 代码质量
 
 ### 描述
 
-确保通过共享的 `classNames` 处理条件 CSS，而不是自定义三元运算符、字符串连接或模板字符串。集中类逻辑可保持组件一致且更易于维护。
+不要在审查中默认要求不存在的样式工具或工具函数。当前 7Flows 前端是 Next.js 轻量骨架，并没有 Dify 的 `@/utils/classnames`、Tailwind 设计体系或一整套基础组件库。
 
 ### 建议的修复
 
-```ts
-import { cn } from '@/utils/classnames'
-const classNames = cn(isActive ? 'text-primary-600' : 'text-gray-500')
-```
+- 优先复用当前项目已经存在的样式方式和工具函数。
+- 如果需要引入 `cn`、设计 token、组件库或原子类方案，应把它作为显式架构决策，而不是默认前提。
 
-## 优先使用 Tailwind 样式
+## 组件 props 保持最小而清晰
 
-IsUrgent: True
+IsUrgent: False
 Category: 代码质量
 
 ### 描述
 
-优先使用 Tailwind CSS 工具类，而不是添加新的 `.module.css` 文件，除非 Tailwind 组合无法实现所需的样式。将样式保留在 Tailwind 中可提高一致性并减少维护开销。
+大型页面和节点组件容易把整个 `workflow`、`run` 或页面状态整包透传给子组件，导致耦合升高、重渲染扩大、测试困难。
 
-当添加、编辑或删除代码质量规则时更新此文件，以保持目录准确。
+### 建议的修复
 
-## 便于覆盖的类名顺序
+- 只传递子组件真正需要的字段和回调。
+- 在节点组件中优先传递派生后的视图数据，而不是完整原始对象。
+
+## 条件样式与条件渲染保持可读性
+
+IsUrgent: False
+Category: 代码质量
 
 ### 描述
 
-编写组件时，始终将传入的 `className` prop 放在组件自己的类值之后，以便下游使用者可以覆盖或扩展样式。这保留了组件的默认值，但仍允许外部调用者更改或删除特定样式。
+节点卡片、调试面板、状态徽标会出现大量条件样式。若通过深层三元表达式或长模板字符串拼接，会快速降低可维护性。
 
-示例：
+### 建议的修复
 
-```tsx
-import { cn } from '@/utils/classnames'
-
-const Button = ({ className }) => {
-  return <div className={cn('bg-primary-600', className)}></div>
-}
-```
+- 将复杂条件提取为命名布尔变量。
+- 将样式映射收敛到查找表或局部 helper。
