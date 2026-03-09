@@ -85,7 +85,7 @@
 如果某条偏好已经升级为仓库级长期规则：
 
 - 通用协作规则，更新本 `AGENTS.md`
-- 领域专项规则，更新对应 `.agents/skill-cn/.../SKILL.md` 或其 `references/`
+- 领域专项规则，更新对应 `.codex/skill/.../SKILL.md` 或其 `references/`
 
 ## 6. Skill 使用与维护
 
