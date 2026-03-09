@@ -32,6 +32,7 @@ class RunEventItem(BaseModel):
 class RunDetail(BaseModel):
     id: str
     workflow_id: str
+    workflow_version: str
     status: str
     input_payload: dict
     output_payload: dict | None = None

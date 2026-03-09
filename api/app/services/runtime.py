@@ -52,6 +52,7 @@ class RuntimeService:
         run = Run(
             id=str(uuid4()),
             workflow_id=workflow.id,
+            workflow_version=workflow.version,
             status="running",
             input_payload=input_payload,
             started_at=_utcnow(),

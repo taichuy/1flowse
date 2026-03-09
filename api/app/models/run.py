@@ -11,6 +11,7 @@ class Run(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     workflow_id: Mapped[str] = mapped_column(ForeignKey("workflows.id"), nullable=False, index=True)
+    workflow_version: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     input_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     output_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)

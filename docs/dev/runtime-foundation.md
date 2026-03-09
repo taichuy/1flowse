@@ -84,7 +84,36 @@ uv run alembic upgrade head
 - `run.completed`
 - `run.failed`
 
-### 4. 最小工作流执行器
+### 4. 工作流定义校验与版本快照
+
+编排 API 已经补上“最小但真实可用”的设计态约束，避免工作流定义继续以裸 JSON 直接进入运行时。
+
+当前已落地：
+
+- 创建/更新工作流时执行结构校验，至少覆盖：
+  - 必须且仅允许一个 `trigger` 节点
+  - 至少存在一个 `output` 节点
+  - 节点 ID / 连线 ID 唯一
+  - 连线引用的源节点和目标节点必须存在
+- 边定义会补齐默认 `channel=control`
+- 每次定义变更都会自动创建不可变版本快照
+- `runs` 会记录执行时绑定的 `workflow_version`
+
+当前相关文件：
+
+- `api/app/schemas/workflow.py`
+- `api/app/services/workflow_definitions.py`
+- `api/app/api/routes/workflows.py`
+- `api/migrations/versions/20260309_0002_workflow_versioning.py`
+
+当前最小版本管理策略：
+
+- 工作流初始版本为 `0.1.0`
+- 仅当 `definition` 发生变更时自动递增 patch 版本，例如 `0.1.0 -> 0.1.1`
+- 纯名称修改不会创建新版本
+- `workflow_versions` 用于保存不可变快照，供后续运行追溯、发布绑定和缓存失效复用
+
+### 5. 最小工作流执行器
 
 当前执行器位置：
 
@@ -107,7 +136,7 @@ uv run alembic upgrade head
 - 运行态是否能完整落库
 - 调试与观测数据是否可复用
 
-### 5. 运行 API
+### 6. 运行 API
 
 当前新增接口：
 
@@ -120,6 +149,13 @@ uv run alembic upgrade head
 - 触发一次最小工作流执行
 - 查询执行详情
 - 查询事件流
+
+工作流设计态新增接口：
+
+- `POST /api/workflows`
+- `PUT /api/workflows/{workflow_id}`
+- `GET /api/workflows/{workflow_id}`
+- `GET /api/workflows/{workflow_id}/versions`
 
 ## 推荐开发命令
 
@@ -164,8 +200,8 @@ docker compose up -d --build
 
 建议按下面顺序继续：
 
-1. 补齐工作流定义校验和版本管理
-2. 给执行器增加条件分支、失败分支和重试策略
-3. 增加节点授权上下文与 MCP 查询
-4. 实现 Dify 插件兼容代理
-5. 把 `run_events` 接到前端调试面板
+1. 给执行器增加条件分支、失败分支和重试策略
+2. 增加节点授权上下文与 MCP 查询
+3. 实现 Dify 插件兼容代理
+4. 把 `run_events` 接到前端调试面板
+5. 再回头收紧更完整的 `7Flows IR` 校验和发布态版本治理

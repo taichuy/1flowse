@@ -17,6 +17,7 @@ def test_execute_workflow_route(
     assert response.status_code == 201
     body = response.json()
     assert body["workflow_id"] == sample_workflow.id
+    assert body["workflow_version"] == "0.1.0"
     assert body["status"] == "succeeded"
     assert len(body["node_runs"]) == 3
     assert body["events"][-1]["event_type"] == "run.completed"

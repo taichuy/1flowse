@@ -14,6 +14,7 @@ def _serialize_run(artifacts: ExecutionArtifacts) -> RunDetail:
     return RunDetail(
         id=artifacts.run.id,
         workflow_id=artifacts.run.workflow_id,
+        workflow_version=artifacts.run.workflow_version,
         status=artifacts.run.status,
         input_payload=artifacts.run.input_payload,
         output_payload=artifacts.run.output_payload,
@@ -68,7 +69,7 @@ def execute_workflow(
         artifacts = runtime_service.execute_workflow(db, workflow, payload.input_payload)
     except WorkflowExecutionError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 

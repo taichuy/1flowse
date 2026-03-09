@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.main import app
-from app.models.workflow import Workflow
+from app.models.workflow import Workflow, WorkflowVersion
 
 
 @pytest.fixture
@@ -67,7 +67,15 @@ def sample_workflow(sqlite_session: Session) -> Workflow:
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
+    workflow_version = WorkflowVersion(
+        id="wf-demo-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+        created_at=datetime.now(UTC),
+    )
     sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
     sqlite_session.commit()
     sqlite_session.refresh(workflow)
     return workflow

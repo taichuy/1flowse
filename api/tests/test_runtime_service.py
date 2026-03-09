@@ -18,6 +18,7 @@ def test_runtime_service_executes_linear_workflow(
     )
 
     assert artifacts.run.status == "succeeded"
+    assert artifacts.run.workflow_version == "0.1.0"
     assert artifacts.run.output_payload == {"mock_tool": {"answer": "done"}}
     assert len(artifacts.node_runs) == 3
     assert [event.event_type for event in artifacts.events] == [
