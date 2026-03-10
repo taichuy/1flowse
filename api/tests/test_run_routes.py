@@ -28,6 +28,100 @@ def test_execute_workflow_route(
     assert stored_response.json()["id"] == run_id
 
 
+def test_get_run_trace_supports_machine_filters(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "trace me"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    run_id = body["id"]
+    first_node_run_id = body["node_runs"][0]["id"]
+
+    trace_response = client.get(f"/api/runs/{run_id}/trace", params={"limit": 2})
+
+    assert trace_response.status_code == 200
+    trace_body = trace_response.json()
+    assert trace_body["run_id"] == run_id
+    assert trace_body["filters"] == {
+        "event_type": None,
+        "node_run_id": None,
+        "before_event_id": None,
+        "after_event_id": None,
+        "limit": 2,
+        "order": "asc",
+    }
+    assert trace_body["summary"]["total_event_count"] == len(body["events"])
+    assert trace_body["summary"]["matched_event_count"] == len(body["events"])
+    assert trace_body["summary"]["returned_event_count"] == 2
+    assert trace_body["summary"]["has_more"] is True
+    assert trace_body["summary"]["first_event_id"] == body["events"][0]["id"]
+    assert trace_body["summary"]["last_event_id"] == body["events"][1]["id"]
+    assert len(trace_body["events"]) == 2
+
+    filtered_response = client.get(
+        f"/api/runs/{run_id}/trace",
+        params={"node_run_id": first_node_run_id, "event_type": "node.started"},
+    )
+
+    assert filtered_response.status_code == 200
+    filtered_body = filtered_response.json()
+    assert filtered_body["summary"]["matched_event_count"] == 1
+    assert filtered_body["summary"]["returned_event_count"] == 1
+    assert filtered_body["events"] == [
+        {
+            "id": body["events"][1]["id"],
+            "run_id": run_id,
+            "node_run_id": first_node_run_id,
+            "event_type": "node.started",
+            "payload": body["events"][1]["payload"],
+            "created_at": body["events"][1]["created_at"],
+        }
+    ]
+
+
+def test_get_run_trace_supports_cursor_and_desc_order(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "trace order"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    run_id = body["id"]
+    anchor_event_id = body["events"][-1]["id"]
+
+    trace_response = client.get(
+        f"/api/runs/{run_id}/trace",
+        params={"before_event_id": anchor_event_id, "order": "desc", "limit": 3},
+    )
+
+    assert trace_response.status_code == 200
+    trace_body = trace_response.json()
+    expected_events = list(reversed(body["events"][:-1]))[:3]
+    assert [event["id"] for event in trace_body["events"]] == [
+        event["id"] for event in expected_events
+    ]
+    assert trace_body["filters"]["before_event_id"] == anchor_event_id
+    assert trace_body["filters"]["order"] == "desc"
+
+
+def test_get_run_trace_returns_404_for_missing_run(client: TestClient) -> None:
+    response = client.get("/api/runs/run-missing/trace")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Run not found."}
+
+
 def test_execute_workflow_route_returns_handled_failure_branch(
     client: TestClient,
     sqlite_session: Session,

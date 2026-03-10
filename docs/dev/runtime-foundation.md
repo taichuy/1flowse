@@ -156,12 +156,14 @@ uv run alembic upgrade head
 - `POST /api/workflows/{workflow_id}/runs`
 - `GET /api/runs/{run_id}`
 - `GET /api/runs/{run_id}/events`
+- `GET /api/runs/{run_id}/trace`
 
 用途：
 
 - 触发一次最小工作流执行
 - 查询执行详情
 - 查询事件流
+- 为 AI / 自动化 提供带过滤条件的 run trace 检索
 
 系统诊断相关接口：
 
@@ -209,6 +211,7 @@ uv run alembic upgrade head
 
 - `GET /api/runs/{run_id}`
 - `GET /api/runs/{run_id}/events`
+- `GET /api/runs/{run_id}/trace`
 
 当前事实载体：
 
@@ -220,7 +223,9 @@ uv run alembic upgrade head
 
 - 保留原始运行态事实，不按首页展示需求做摘要化截断
 - AI / 自动化应优先读取这些接口或底层运行态对象，而不是抓取前端页面文本
-- 若后续机器侧需要更强查询能力，应围绕 `run_events` 增加专门接口，而不是继续往首页塞隐藏日志
+- `GET /api/runs/{run_id}/events` 继续保留原始事件列表语义
+- `GET /api/runs/{run_id}/trace` 负责提供按 `event_type`、`node_run_id`、事件游标和顺序过滤的机器检索能力
+- 若后续机器侧需要更强查询能力，应继续围绕 `run_events` 扩展，而不是继续往首页塞隐藏日志
 
 #### L3 开发留痕层
 
@@ -294,5 +299,5 @@ docker compose up -d --build
 
 1. 实现 Dify 插件兼容代理
 2. 把 `run_events` 接到前端调试面板
-3. 为 AI / 自动化补更明确的 run trace 检索接口边界
+3. 继续增强 `run trace` 的机器检索能力，例如时间范围、导出和回放支撑
 4. 再回头收紧更完整的 `7Flows IR` 校验和发布态版本治理
