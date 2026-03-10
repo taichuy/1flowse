@@ -106,6 +106,152 @@ def _valid_selector_definition() -> dict:
     }
 
 
+def _valid_expression_definition() -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "branch",
+                "type": "router",
+                "name": "Branch",
+                "config": {
+                    "expression": "trigger_input.intent if trigger_input.intent else 'default'"
+                },
+            },
+            {
+                "id": "search_path",
+                "type": "tool",
+                "name": "Search Path",
+                "config": {"mock_output": {"answer": "search"}},
+            },
+            {
+                "id": "default_path",
+                "type": "tool",
+                "name": "Default Path",
+                "config": {"mock_output": {"answer": "default"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {
+                "id": "e2",
+                "sourceNodeId": "branch",
+                "targetNodeId": "search_path",
+                "condition": "search",
+            },
+            {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
+            {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
+            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+        ],
+    }
+
+
+def _valid_edge_expression_definition() -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "scorer",
+                "type": "tool",
+                "name": "Scorer",
+                "config": {"mock_output": {"approved": True, "score": 95}},
+            },
+            {
+                "id": "approve",
+                "type": "tool",
+                "name": "Approve",
+                "config": {"mock_output": {"answer": "approved"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "scorer"},
+            {
+                "id": "e2",
+                "sourceNodeId": "scorer",
+                "targetNodeId": "approve",
+                "conditionExpression": "source_output.approved and source_output.score >= 90",
+            },
+            {"id": "e3", "sourceNodeId": "approve", "targetNodeId": "output"},
+        ],
+    }
+
+
+def _valid_join_definition() -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "planner",
+                "type": "tool",
+                "name": "Planner",
+                "config": {"mock_output": {"plan": "outline"}},
+            },
+            {
+                "id": "researcher",
+                "type": "tool",
+                "name": "Researcher",
+                "config": {"mock_output": {"facts": ["a"]}},
+            },
+            {
+                "id": "joiner",
+                "type": "tool",
+                "name": "Joiner",
+                "config": {"mock_output": {"answer": "combined"}},
+                "runtimePolicy": {"join": {"mode": "all", "onUnmet": "fail"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+            {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "joiner"},
+            {"id": "e4", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
+            {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+        ],
+    }
+
+
+def _valid_mapping_definition() -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "planner",
+                "type": "tool",
+                "name": "Planner",
+                "config": {"mock_output": {"plan": {"title": "Draft"}, "priority": "7"}},
+            },
+            {
+                "id": "formatter",
+                "type": "tool",
+                "name": "Formatter",
+                "config": {},
+                "runtimePolicy": {"join": {"mergeStrategy": "append"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+            {
+                "id": "e2",
+                "sourceNodeId": "planner",
+                "targetNodeId": "formatter",
+                "mapping": [
+                    {"sourceField": "plan.title", "targetField": "prompt"},
+                    {
+                        "sourceField": "priority",
+                        "targetField": "config.priority",
+                        "transform": {"type": "toNumber"},
+                    },
+                ],
+            },
+            {"id": "e3", "sourceNodeId": "formatter", "targetNodeId": "output"},
+        ],
+    }
+
+
 def test_create_workflow_persists_initial_version(client: TestClient) -> None:
     response = client.post(
         "/api/workflows",
@@ -251,6 +397,65 @@ def test_create_workflow_accepts_condition_selector_rules(client: TestClient) ->
     assert branch_node["config"]["selector"]["rules"][0]["path"] == "trigger_input.priority"
 
 
+def test_create_workflow_accepts_branch_expression(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Expression Workflow", "definition": _valid_expression_definition()},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    branch_node = next(node for node in body["definition"]["nodes"] if node["id"] == "branch")
+    assert branch_node["config"]["expression"] == (
+        "trigger_input.intent if trigger_input.intent else 'default'"
+    )
+
+
+def test_create_workflow_accepts_edge_condition_expression(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Edge Expression Workflow",
+            "definition": _valid_edge_expression_definition(),
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    approve_edge = next(edge for edge in body["definition"]["edges"] if edge["id"] == "e2")
+    assert approve_edge["conditionExpression"] == (
+        "source_output.approved and source_output.score >= 90"
+    )
+
+
+def test_create_workflow_accepts_join_runtime_policy(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Join Workflow", "definition": _valid_join_definition()},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    joiner_node = next(node for node in body["definition"]["nodes"] if node["id"] == "joiner")
+    assert joiner_node["runtimePolicy"]["join"]["mode"] == "all"
+    assert joiner_node["runtimePolicy"]["join"]["onUnmet"] == "fail"
+
+
+def test_create_workflow_accepts_edge_mapping_definition(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Mapping Workflow", "definition": _valid_mapping_definition()},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    formatter_node = next(node for node in body["definition"]["nodes"] if node["id"] == "formatter")
+    assert formatter_node["runtimePolicy"]["join"]["mergeStrategy"] == "append"
+    mapping_edge = next(edge for edge in body["definition"]["edges"] if edge["id"] == "e2")
+    assert mapping_edge["mapping"][0]["targetField"] == "prompt"
+    assert mapping_edge["mapping"][1]["transform"]["type"] == "toNumber"
+
+
 def test_create_workflow_rejects_selector_on_non_branch_node(client: TestClient) -> None:
     definition = _valid_definition()
     definition["nodes"][1]["config"]["selector"] = {
@@ -271,3 +476,60 @@ def test_create_workflow_rejects_selector_on_non_branch_node(client: TestClient)
 
     assert response.status_code == 422
     assert "Only condition/router nodes may define config.selector" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_expression_on_non_branch_node(client: TestClient) -> None:
+    definition = _valid_definition()
+    definition["nodes"][1]["config"]["expression"] = "trigger_input.priority == 'high'"
+
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Broken Expression Workflow", "definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "Only condition/router nodes may define config.expression" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_unsafe_edge_condition_expression(client: TestClient) -> None:
+    definition = _valid_edge_expression_definition()
+    definition["edges"][1]["conditionExpression"] = "__import__('os')"
+
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Unsafe Edge Expression Workflow", "definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "Unsupported expression syntax 'Call'" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_join_required_node_ids_outside_incoming_edges(
+    client: TestClient,
+) -> None:
+    definition = _valid_join_definition()
+    joiner_node = next(node for node in definition["nodes"] if node["id"] == "joiner")
+    joiner_node["runtimePolicy"]["join"]["requiredNodeIds"] = ["planner", "ghost"]
+
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Broken Join Workflow", "definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "join.requiredNodeIds references non-incoming sources" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_mapping_to_runtime_managed_input_root(
+    client: TestClient,
+) -> None:
+    definition = _valid_mapping_definition()
+    definition["edges"][1]["mapping"][0]["targetField"] = "upstream.plan"
+
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Broken Mapping Workflow", "definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "runtime-managed input roots" in response.json()["detail"]

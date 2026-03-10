@@ -83,6 +83,8 @@ uv run alembic upgrade head
 - `node.retrying`
 - `node.output.completed`
 - `node.context.read`
+- `node.join.ready`
+- `node.join.unmet`
 - `node.failed`
 - `run.completed`
 - `run.failed`
@@ -134,6 +136,10 @@ uv run alembic upgrade head
 - 支持节点级重试策略与退避参数
 - 支持节点授权上下文注入与 `mcp_query.authorized_context`
 - 支持 `condition` / `router` 通过最小规则选择器按输入命中分支
+- 支持 `condition` / `router` 通过安全表达式 `config.expression` 决定分支
+- 支持边通过 `conditionExpression` 做安全布尔门控
+- 支持节点通过 `runtimePolicy.join` 显式声明多上游 join 约束
+- 支持边通过 `mapping[]` 注入字段级输入，并通过 `join.mergeStrategy` 显式解决冲突
 - 其他节点默认走统一占位执行逻辑
 - 支持通过 `config.mock_output` 为节点声明稳定输出
 
@@ -197,7 +203,6 @@ docker compose up -d --build
 当前还没有实现：
 
 - 通用表达式引擎驱动的 DAG 条件语义
-- 多上游 join / 汇聚语义
 - Loop 节点执行
 - 外部 MCP Provider 接入
 - 插件兼容代理
@@ -208,8 +213,6 @@ docker compose up -d --build
 
 建议按下面顺序继续：
 
-1. 在规则选择器之上补安全表达式能力与更完整的 DAG 条件语义
-2. 实现多上游 join / 汇聚约束，避免分支合流继续靠“谁先写入”隐式决定
-3. 实现 Dify 插件兼容代理
-4. 把 `run_events` 接到前端调试面板
-5. 再回头收紧更完整的 `7Flows IR` 校验和发布态版本治理
+1. 实现 Dify 插件兼容代理
+2. 把 `run_events` 接到前端调试面板
+3. 再回头收紧更完整的 `7Flows IR` 校验和发布态版本治理

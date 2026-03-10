@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -9,10 +10,15 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.safe_expressions import (
+    BRANCH_EXPRESSION_NAMES,
+    EDGE_EXPRESSION_NAMES,
+    MISSING,
+    SafeExpressionError,
+    evaluate_expression,
+)
 from app.models.run import NodeRun, Run, RunEvent
 from app.models.workflow import Workflow
-
-_MISSING = object()
 
 
 class WorkflowExecutionError(RuntimeError):
@@ -38,6 +44,27 @@ class AuthorizedContextRefs:
     current_node_id: str
     readable_node_ids: tuple[str, ...] = ()
     readable_artifacts: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class JoinPolicy:
+    mode: str = "any"
+    required_node_ids: tuple[str, ...] = ()
+    on_unmet: str = "skip"
+    merge_strategy: str = "error"
+
+
+@dataclass(frozen=True)
+class JoinDecision:
+    should_execute: bool
+    mode: str
+    on_unmet: str
+    merge_strategy: str
+    expected_source_ids: tuple[str, ...]
+    activated_source_ids: tuple[str, ...]
+    missing_source_ids: tuple[str, ...]
+    reason: str | None = None
+    block_on_unmet: bool = False
 
 
 def _utcnow() -> datetime:
@@ -66,7 +93,8 @@ class RuntimeService:
         incoming_nodes = self._incoming_nodes(edges)
         outgoing_edges = self._outgoing_edges(edges)
         activated_by: dict[str, set[str]] = defaultdict(set)
-        data_inputs: dict[str, dict] = defaultdict(dict)
+        upstream_inputs: dict[str, dict] = defaultdict(dict)
+        mapped_inputs: dict[str, dict] = defaultdict(dict)
 
         run = Run(
             id=str(uuid4()),
@@ -91,24 +119,64 @@ class RuntimeService:
             for node in ordered_nodes:
                 node_id = node["id"]
                 retry_policy = self._retry_policy_for_node(node)
-                accumulated_input = data_inputs.get(node_id, {})
+                upstream_input = upstream_inputs.get(node_id, {})
+                mapped_input = mapped_inputs.get(node_id, {})
+                accumulated_input = self._accumulated_input_for_node(
+                    upstream=upstream_input,
+                    mapped=mapped_input,
+                )
                 activation_sources = activated_by.get(node_id, set())
                 authorized_context = self._authorized_context_for_node(node)
+                join_decision = self._join_decision_for_node(
+                    node=node,
+                    incoming=incoming_nodes.get(node_id, []),
+                    activated_sources=activation_sources,
+                )
                 node_input = self._build_node_input(
                     node=node,
                     input_payload=input_payload,
+                    upstream=upstream_input,
+                    mapped=mapped_input,
                     accumulated=accumulated_input,
                     activated_by=activation_sources,
                     authorized_context=authorized_context,
+                    join_decision=join_decision,
                     attempt_number=1,
                     max_attempts=retry_policy.max_attempts,
                 )
-                if not self._should_execute_node(
-                    node,
-                    incoming_nodes.get(node_id, []),
-                    activated_by,
-                ):
-                    skipped_node_run = self._build_skipped_node_run(node, run.id, node_input)
+                if not join_decision.should_execute:
+                    if len(join_decision.expected_source_ids) > 1:
+                        events.append(
+                            self._build_event(
+                                run.id,
+                                None,
+                                "node.join.unmet",
+                                self._build_join_event_payload(node, join_decision),
+                            )
+                        )
+                    if join_decision.block_on_unmet:
+                        blocked_node_run = self._build_blocked_node_run(
+                            node=node,
+                            run_id=run.id,
+                            node_input=node_input,
+                            reason=join_decision.reason or "Join requirements were not met.",
+                        )
+                        db.add(blocked_node_run)
+                        db.flush()
+                        node_runs.append(blocked_node_run)
+                        raise WorkflowExecutionError(
+                            blocked_node_run.error_message or "Join blocked."
+                        )
+
+                    skipped_node_run = self._build_skipped_node_run(
+                        node,
+                        run.id,
+                        node_input,
+                        reason=(
+                            join_decision.reason
+                            or "No active incoming branch reached this node."
+                        ),
+                    )
                     db.add(skipped_node_run)
                     db.flush()
                     node_runs.append(skipped_node_run)
@@ -119,11 +187,21 @@ class RuntimeService:
                             "node.skipped",
                             {
                                 "node_id": node_id,
-                                "reason": "No active incoming branch reached this node.",
+                                "reason": skipped_node_run.error_message,
                             },
                         )
                     )
                     continue
+
+                if len(join_decision.expected_source_ids) > 1 and join_decision.mode == "all":
+                    events.append(
+                        self._build_event(
+                            run.id,
+                            None,
+                            "node.join.ready",
+                            self._build_join_event_payload(node, join_decision),
+                        )
+                    )
 
                 node_run = NodeRun(
                     id=str(uuid4()),
@@ -154,9 +232,12 @@ class RuntimeService:
                         node_run=node_run,
                         run_id=run.id,
                         input_payload=input_payload,
+                        upstream=upstream_input,
+                        mapped=mapped_input,
                         accumulated=accumulated_input,
                         activated_by=activation_sources,
                         authorized_context=authorized_context,
+                        join_decision=join_decision,
                         outputs=outputs,
                         retry_policy=retry_policy,
                         events=events,
@@ -184,7 +265,8 @@ class RuntimeService:
                         outgoing_edges=outgoing_edges.get(node_id, []),
                         node_lookup=node_lookup,
                         activated_by=activated_by,
-                        data_inputs=data_inputs,
+                        upstream_inputs=upstream_inputs,
+                        mapped_inputs=mapped_inputs,
                     )
                     if not activated_targets:
                         raise WorkflowExecutionError(node_error) from exc
@@ -213,7 +295,8 @@ class RuntimeService:
                     outgoing_edges=outgoing_edges.get(node_id, []),
                     node_lookup=node_lookup,
                     activated_by=activated_by,
-                    data_inputs=data_inputs,
+                    upstream_inputs=upstream_inputs,
+                    mapped_inputs=mapped_inputs,
                 )
 
             if not completed_output_nodes:
@@ -314,9 +397,12 @@ class RuntimeService:
         node_run: NodeRun,
         run_id: str,
         input_payload: dict,
+        upstream: dict,
+        mapped: dict,
         accumulated: dict,
         activated_by: set[str],
         authorized_context: AuthorizedContextRefs,
+        join_decision: JoinDecision,
         outputs: dict[str, dict],
         retry_policy: RetryPolicy,
         events: list[RunEvent],
@@ -327,9 +413,12 @@ class RuntimeService:
             node_run.input_payload = self._build_node_input(
                 node=node,
                 input_payload=input_payload,
+                upstream=upstream,
+                mapped=mapped,
                 accumulated=accumulated,
                 activated_by=activated_by,
                 authorized_context=authorized_context,
+                join_decision=join_decision,
                 attempt_number=attempt_number,
                 max_attempts=retry_policy.max_attempts,
             )
@@ -406,7 +495,7 @@ class RuntimeService:
         if node_type == "trigger":
             return node_input.get("trigger_input", {})
         if node_type == "output":
-            return node_input.get("upstream", {})
+            return node_input.get("accumulated", {})
         if node_type == "mcp_query":
             return self._execute_mcp_query_node(node, authorized_context, outputs)
         if node_type in {"condition", "router"}:
@@ -430,6 +519,22 @@ class RuntimeService:
                 "received": node_input,
                 "selector": {
                     "matchedRule": matched_rule,
+                    "defaultUsed": default_used,
+                },
+            }
+
+        expression = config.get("expression")
+        if isinstance(expression, str):
+            selected, expression_value, default_used = self._select_branch_from_expression(
+                node,
+                node_input,
+            )
+            return {
+                "selected": selected,
+                "received": node_input,
+                "expression": {
+                    "source": expression,
+                    "value": expression_value,
                     "defaultUsed": default_used,
                 },
             }
@@ -498,32 +603,24 @@ class RuntimeService:
                 outgoing[source].append(edge)
         return outgoing
 
-    def _should_execute_node(
-        self,
-        node: dict,
-        incoming: list[str],
-        activated_by: dict[str, set[str]],
-    ) -> bool:
-        if node.get("type") == "trigger":
-            return True
-        if not incoming:
-            return False
-        return bool(activated_by.get(node["id"]))
-
     def _build_node_input(
         self,
         node: dict,
         input_payload: dict,
+        upstream: dict,
+        mapped: dict,
         accumulated: dict,
         activated_by: set[str],
         authorized_context: AuthorizedContextRefs,
+        join_decision: JoinDecision,
         attempt_number: int,
         max_attempts: int,
     ) -> dict:
-        return {
+        node_input = {
             "trigger_input": input_payload,
-            "upstream": accumulated,
+            "upstream": upstream,
             "accumulated": accumulated,
+            "mapped": mapped,
             "activated_by": sorted(activated_by),
             "authorized_context": {
                 "currentNodeId": authorized_context.current_node_id,
@@ -537,10 +634,27 @@ class RuntimeService:
                 "current": attempt_number,
                 "max": max_attempts,
             },
+            "join": {
+                "mode": join_decision.mode,
+                "onUnmet": join_decision.on_unmet,
+                "mergeStrategy": join_decision.merge_strategy,
+                "expectedSourceIds": list(join_decision.expected_source_ids),
+                "activatedSourceIds": list(join_decision.activated_source_ids),
+                "missingSourceIds": list(join_decision.missing_source_ids),
+            },
             "config": node.get("config", {}),
         }
+        if mapped:
+            return self._overlay_mapped_input(node_input, mapped)
+        return node_input
 
-    def _build_skipped_node_run(self, node: dict, run_id: str, node_input: dict) -> NodeRun:
+    def _build_skipped_node_run(
+        self,
+        node: dict,
+        run_id: str,
+        node_input: dict,
+        reason: str,
+    ) -> NodeRun:
         timestamp = _utcnow()
         return NodeRun(
             id=str(uuid4()),
@@ -550,6 +664,28 @@ class RuntimeService:
             node_type=node.get("type", "unknown"),
             status="skipped",
             input_payload=node_input,
+            error_message=reason,
+            started_at=timestamp,
+            finished_at=timestamp,
+        )
+
+    def _build_blocked_node_run(
+        self,
+        node: dict,
+        run_id: str,
+        node_input: dict,
+        reason: str,
+    ) -> NodeRun:
+        timestamp = _utcnow()
+        return NodeRun(
+            id=str(uuid4()),
+            run_id=run_id,
+            node_id=node["id"],
+            node_name=node.get("name", node["id"]),
+            node_type=node.get("type", "unknown"),
+            status="blocked",
+            input_payload=node_input,
+            error_message=reason,
             started_at=timestamp,
             finished_at=timestamp,
         )
@@ -571,23 +707,32 @@ class RuntimeService:
         outgoing_edges: list[dict],
         node_lookup: dict[str, dict],
         activated_by: dict[str, set[str]],
-        data_inputs: dict[str, dict],
+        upstream_inputs: dict[str, dict],
+        mapped_inputs: dict[str, dict],
     ) -> list[str]:
         activated_targets: list[str] = []
         for edge in outgoing_edges:
+            target_id = edge.get("targetNodeId")
+            if not target_id or target_id not in node_lookup:
+                continue
             if not self._should_activate_edge(
                 source_node,
                 source_output,
                 outcome,
                 edge,
+                node_lookup[target_id],
                 outgoing_edges,
             ):
                 continue
-            target_id = edge.get("targetNodeId")
-            if not target_id or target_id not in node_lookup:
-                continue
             activated_by[target_id].add(source_node["id"])
-            data_inputs[target_id][source_node["id"]] = source_output
+            upstream_inputs[target_id][source_node["id"]] = source_output
+            self._apply_edge_mappings(
+                edge=edge,
+                source_node=source_node,
+                target_node=node_lookup[target_id],
+                source_output=source_output,
+                mapped_input=mapped_inputs[target_id],
+            )
             activated_targets.append(target_id)
         return activated_targets
 
@@ -597,11 +742,20 @@ class RuntimeService:
         source_output: dict,
         outcome: str,
         edge: dict,
+        target_node: dict,
         sibling_edges: list[dict],
     ) -> bool:
         condition = self._normalize_branch_value(edge.get("condition"))
         if outcome == "failed":
-            return condition in {"error", "failed", "on_error"}
+            if condition not in {"error", "failed", "on_error"}:
+                return False
+            return self._edge_expression_matches(
+                source_node=source_node,
+                target_node=target_node,
+                source_output=source_output,
+                outcome=outcome,
+                edge=edge,
+            )
 
         if source_node.get("type") in {"condition", "router"}:
             selected = self._normalize_branch_value(source_output.get("selected"))
@@ -610,18 +764,49 @@ class RuntimeService:
                 for candidate in sibling_edges
             )
             if selected is None:
-                return not has_branch_conditions and condition is None
+                matches_branch = not has_branch_conditions and condition is None
+                if not matches_branch:
+                    return False
+                return self._edge_expression_matches(
+                    source_node=source_node,
+                    target_node=target_node,
+                    source_output=source_output,
+                    outcome=outcome,
+                    edge=edge,
+                )
 
             if condition == selected:
-                return True
+                return self._edge_expression_matches(
+                    source_node=source_node,
+                    target_node=target_node,
+                    source_output=source_output,
+                    outcome=outcome,
+                    edge=edge,
+                )
 
             has_explicit_match = any(
                 self._normalize_branch_value(candidate.get("condition")) == selected
                 for candidate in sibling_edges
             )
-            return condition is None and not has_explicit_match
+            if condition is not None or has_explicit_match:
+                return False
+            return self._edge_expression_matches(
+                source_node=source_node,
+                target_node=target_node,
+                source_output=source_output,
+                outcome=outcome,
+                edge=edge,
+            )
 
-        return condition in {None, "success", "succeeded", "default"}
+        if condition not in {None, "success", "succeeded", "default"}:
+            return False
+        return self._edge_expression_matches(
+            source_node=source_node,
+            target_node=target_node,
+            source_output=source_output,
+            outcome=outcome,
+            edge=edge,
+        )
 
     def _normalize_branch_value(self, value: object) -> str | None:
         if value is None:
@@ -644,16 +829,42 @@ class RuntimeService:
 
         return "default", None, True
 
+    def _select_branch_from_expression(
+        self,
+        node: dict,
+        node_input: dict,
+    ) -> tuple[str, object, bool]:
+        expression = str(node.get("config", {}).get("expression"))
+        try:
+            expression_value = evaluate_expression(
+                expression,
+                context=self._branch_expression_context(node_input),
+                allowed_names=BRANCH_EXPRESSION_NAMES,
+                description=f"Node '{node['id']}' config.expression",
+            )
+        except SafeExpressionError as exc:
+            raise WorkflowExecutionError(str(exc)) from exc
+
+        if node.get("type") == "condition":
+            selected = "true" if bool(expression_value) else "false"
+            return selected, expression_value, False
+
+        selected = self._stringify_branch_key(expression_value)
+        if selected is not None:
+            return selected, expression_value, False
+
+        return self._default_branch_key(node), expression_value, True
+
     def _selector_rule_matches(self, rule: dict, node_input: dict) -> bool:
         actual_value = self._resolve_selector_path(node_input, str(rule["path"]))
         operator = rule.get("operator", "eq")
         expected_value = rule.get("value")
 
         if operator == "exists":
-            return actual_value is not _MISSING
+            return actual_value is not MISSING
         if operator == "not_exists":
-            return actual_value is _MISSING
-        if actual_value is _MISSING:
+            return actual_value is MISSING
+        if actual_value is MISSING:
             return False
         if operator == "eq":
             return actual_value == expected_value
@@ -697,18 +908,18 @@ class RuntimeService:
         for token in self._selector_path_tokens(path):
             if isinstance(current_value, dict):
                 if token not in current_value:
-                    return _MISSING
+                    return MISSING
                 current_value = current_value[token]
                 continue
             if isinstance(current_value, list):
                 if not token.isdigit():
-                    return _MISSING
+                    return MISSING
                 index = int(token)
                 if index < 0 or index >= len(current_value):
-                    return _MISSING
+                    return MISSING
                 current_value = current_value[index]
                 continue
-            return _MISSING
+            return MISSING
         return current_value
 
     def _selector_path_tokens(self, path: str) -> list[str]:
@@ -855,6 +1066,354 @@ class RuntimeService:
             return 0.0
         multiplier = retry_policy.backoff_multiplier ** (failed_attempt_number - 1)
         return retry_policy.backoff_seconds * multiplier
+
+    def _accumulated_input_for_node(self, upstream: dict, mapped: dict) -> dict:
+        if mapped:
+            return deepcopy(mapped)
+        return deepcopy(upstream)
+
+    def _overlay_mapped_input(self, node_input: dict, mapped: dict) -> dict:
+        merged_input = deepcopy(node_input)
+        return self._deep_merge_dicts(merged_input, mapped)
+
+    def _deep_merge_dicts(self, base: dict, override: dict) -> dict:
+        for key, value in override.items():
+            if isinstance(base.get(key), dict) and isinstance(value, dict):
+                self._deep_merge_dicts(base[key], value)
+                continue
+            base[key] = deepcopy(value)
+        return base
+
+    def _apply_edge_mappings(
+        self,
+        edge: dict,
+        source_node: dict,
+        target_node: dict,
+        source_output: dict,
+        mapped_input: dict,
+    ) -> None:
+        mappings = edge.get("mapping") or []
+        if not mappings:
+            return
+
+        merge_strategy = self._join_policy_for_node(target_node).merge_strategy
+        for mapping in mappings:
+            source_value = self._resolve_mapping_source_value(source_output, mapping)
+            if source_value is MISSING:
+                continue
+            transformed_value = self._transform_mapping_value(source_value, mapping)
+            self._merge_mapping_target_value(
+                mapped_input=mapped_input,
+                target_field=str(mapping["targetField"]),
+                value=transformed_value,
+                merge_strategy=merge_strategy,
+                edge=edge,
+                target_node=target_node,
+            )
+
+    def _resolve_mapping_source_value(self, source_output: dict, mapping: dict) -> object:
+        source_field = str(mapping["sourceField"])
+        normalized_source_field = (
+            source_field[7:] if source_field.startswith("output.") else source_field
+        )
+        source_value = self._resolve_selector_path(source_output, normalized_source_field)
+        if source_value is not MISSING:
+            return source_value
+        if "fallback" in mapping:
+            return mapping.get("fallback")
+        return MISSING
+
+    def _transform_mapping_value(self, value: object, mapping: dict) -> object:
+        transform = mapping.get("transform") or {"type": "identity"}
+        transform_type = str(transform.get("type", "identity"))
+        if transform_type == "identity":
+            transformed = value
+        elif transform_type == "toString":
+            transformed = "" if value is None else str(value)
+        elif transform_type == "toNumber":
+            transformed = self._to_mapping_number(value)
+        elif transform_type == "toBoolean":
+            transformed = self._to_mapping_boolean(value)
+        else:
+            raise WorkflowExecutionError(
+                f"Unsupported field mapping transform '{transform_type}'."
+            )
+
+        template = mapping.get("template")
+        if isinstance(template, str):
+            return template.replace("{{value}}", self._stringify_template_value(transformed))
+        return transformed
+
+    def _to_mapping_number(self, value: object) -> int | float:
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int | float):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                raise WorkflowExecutionError("Cannot convert empty string to number.")
+            try:
+                return int(normalized) if normalized.isdigit() else float(normalized)
+            except ValueError as exc:
+                raise WorkflowExecutionError(
+                    f"Cannot convert mapping value '{value}' to number."
+                ) from exc
+        raise WorkflowExecutionError(f"Cannot convert mapping value '{value}' to number.")
+
+    def _to_mapping_boolean(self, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int | float):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "off", ""}:
+                return False
+        return bool(value)
+
+    def _stringify_template_value(self, value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        return str(value)
+
+    def _merge_mapping_target_value(
+        self,
+        mapped_input: dict,
+        target_field: str,
+        value: object,
+        merge_strategy: str,
+        edge: dict,
+        target_node: dict,
+    ) -> None:
+        target_tokens = self._target_path_tokens(target_field)
+        current = mapped_input
+        for token in target_tokens[:-1]:
+            current = current.setdefault(token, {})
+            if not isinstance(current, dict):
+                raise WorkflowExecutionError(
+                    f"Field mapping target '{target_field}' conflicts with an "
+                    "existing scalar value."
+                )
+
+        leaf_key = target_tokens[-1]
+        if leaf_key not in current:
+            if merge_strategy == "append":
+                current[leaf_key] = [deepcopy(value)]
+            else:
+                current[leaf_key] = deepcopy(value)
+            return
+
+        existing_value = current[leaf_key]
+        if merge_strategy == "error":
+            raise WorkflowExecutionError(
+                f"Node '{target_node['id']}' received conflicting field mapping for "
+                f"'{target_field}' from edge '{edge.get('id', '<unknown>')}'."
+            )
+        if merge_strategy == "overwrite":
+            current[leaf_key] = deepcopy(value)
+            return
+        if merge_strategy == "keep_first":
+            return
+        if merge_strategy == "append":
+            if isinstance(existing_value, list):
+                existing_value.append(deepcopy(value))
+            else:
+                current[leaf_key] = [existing_value, deepcopy(value)]
+            return
+        raise WorkflowExecutionError(
+            f"Node '{target_node['id']}' uses unsupported join mergeStrategy '{merge_strategy}'."
+        )
+
+    def _target_path_tokens(self, path: str) -> list[str]:
+        tokens = [segment for segment in path.split(".") if segment]
+        if not tokens:
+            raise WorkflowExecutionError("Field mapping targetField must not be empty.")
+        return tokens
+
+    def _join_policy_for_node(self, node: dict) -> JoinPolicy:
+        runtime_policy = node.get("runtimePolicy") or {}
+        join_config = runtime_policy.get("join") or {}
+        required_node_ids = tuple(
+            sorted(
+                {
+                    str(node_id).strip()
+                    for node_id in join_config.get("requiredNodeIds", [])
+                    if str(node_id).strip()
+                }
+            )
+        )
+        mode = str(join_config.get("mode", "any"))
+        on_unmet = str(join_config.get("onUnmet", "skip"))
+        merge_strategy = str(join_config.get("mergeStrategy", "error"))
+        if mode not in {"any", "all"}:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' uses unsupported join mode '{mode}'."
+            )
+        if on_unmet not in {"skip", "fail"}:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' uses unsupported join onUnmet policy '{on_unmet}'."
+            )
+        if merge_strategy not in {"error", "overwrite", "keep_first", "append"}:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' uses unsupported join mergeStrategy "
+                f"'{merge_strategy}'."
+            )
+        return JoinPolicy(
+            mode=mode,
+            required_node_ids=required_node_ids,
+            on_unmet=on_unmet,
+            merge_strategy=merge_strategy,
+        )
+
+    def _join_decision_for_node(
+        self,
+        node: dict,
+        incoming: list[str] | tuple[str, ...],
+        activated_sources: set[str],
+    ) -> JoinDecision:
+        incoming_ids = tuple(sorted({str(node_id) for node_id in incoming if str(node_id).strip()}))
+        activated_source_ids = tuple(sorted(str(node_id) for node_id in activated_sources))
+        if node.get("type") == "trigger":
+            return JoinDecision(
+                should_execute=True,
+                mode="any",
+                on_unmet="skip",
+                merge_strategy="error",
+                expected_source_ids=(),
+                activated_source_ids=activated_source_ids,
+                missing_source_ids=(),
+            )
+        if not incoming_ids:
+            return JoinDecision(
+                should_execute=False,
+                mode="any",
+                on_unmet="skip",
+                merge_strategy="error",
+                expected_source_ids=(),
+                activated_source_ids=activated_source_ids,
+                missing_source_ids=(),
+                reason="No incoming edges reached this node.",
+            )
+
+        join_policy = self._join_policy_for_node(node)
+        if join_policy.mode == "all":
+            expected_source_ids = (
+                join_policy.required_node_ids if join_policy.required_node_ids else incoming_ids
+            )
+            missing_source_ids = tuple(
+                node_id for node_id in expected_source_ids if node_id not in activated_sources
+            )
+            if missing_source_ids:
+                reason = (
+                    f"Join requirements were not met. Missing required upstream nodes: "
+                    f"{', '.join(missing_source_ids)}."
+                )
+                return JoinDecision(
+                    should_execute=False,
+                    mode=join_policy.mode,
+                    on_unmet=join_policy.on_unmet,
+                    merge_strategy=join_policy.merge_strategy,
+                    expected_source_ids=expected_source_ids,
+                    activated_source_ids=activated_source_ids,
+                    missing_source_ids=missing_source_ids,
+                    reason=reason,
+                    block_on_unmet=join_policy.on_unmet == "fail",
+                )
+            return JoinDecision(
+                should_execute=bool(expected_source_ids),
+                mode=join_policy.mode,
+                on_unmet=join_policy.on_unmet,
+                merge_strategy=join_policy.merge_strategy,
+                expected_source_ids=expected_source_ids,
+                activated_source_ids=activated_source_ids,
+                missing_source_ids=(),
+            )
+
+        return JoinDecision(
+            should_execute=bool(activated_sources),
+            mode=join_policy.mode,
+            on_unmet=join_policy.on_unmet,
+            merge_strategy=join_policy.merge_strategy,
+            expected_source_ids=incoming_ids,
+            activated_source_ids=activated_source_ids,
+            missing_source_ids=(),
+            reason="No active incoming branch reached this node."
+            if not activated_sources
+            else None,
+        )
+
+    def _branch_expression_context(self, node_input: dict) -> dict[str, object]:
+        return {
+            "trigger_input": node_input.get("trigger_input", {}),
+            "upstream": node_input.get("upstream", {}),
+            "accumulated": node_input.get("accumulated", {}),
+            "activated_by": node_input.get("activated_by", []),
+            "authorized_context": node_input.get("authorized_context", {}),
+            "attempt": node_input.get("attempt", {}),
+            "config": node_input.get("config", {}),
+        }
+
+    def _edge_expression_matches(
+        self,
+        source_node: dict,
+        target_node: dict,
+        source_output: dict,
+        outcome: str,
+        edge: dict,
+    ) -> bool:
+        expression = edge.get("conditionExpression")
+        if expression is None:
+            return True
+
+        try:
+            result = evaluate_expression(
+                str(expression),
+                context={
+                    "source_output": source_output,
+                    "source_node": source_node,
+                    "target_node": target_node,
+                    "edge": edge,
+                    "outcome": outcome,
+                },
+                allowed_names=EDGE_EXPRESSION_NAMES,
+                description=f"Edge '{edge.get('id', '<unknown>')}' conditionExpression",
+            )
+        except SafeExpressionError as exc:
+            raise WorkflowExecutionError(str(exc)) from exc
+
+        return bool(result)
+
+    def _default_branch_key(self, node: dict) -> str:
+        config = node.get("config", {})
+        for key in ("default", "selected"):
+            value = config.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+        return "default"
+
+    def _stringify_branch_key(self, value: object) -> str | None:
+        if value is MISSING or value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return str(value)
+
+    def _build_join_event_payload(self, node: dict, join_decision: JoinDecision) -> dict:
+        return {
+            "node_id": node["id"],
+            "mode": join_decision.mode,
+            "on_unmet": join_decision.on_unmet,
+            "merge_strategy": join_decision.merge_strategy,
+            "expected_source_ids": list(join_decision.expected_source_ids),
+            "activated_source_ids": list(join_decision.activated_source_ids),
+            "missing_source_ids": list(join_decision.missing_source_ids),
+        }
 
     def _build_context_read_payload(self, node: dict, node_output: dict) -> dict:
         results = node_output.get("results", [])

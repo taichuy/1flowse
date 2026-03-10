@@ -248,6 +248,532 @@ def test_runtime_service_uses_default_branch_when_selector_rules_do_not_match(
     assert branch_run.output_payload["selector"]["defaultUsed"] is True
 
 
+def test_runtime_service_selects_condition_branch_from_expression(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-condition-expression",
+        name="Condition Expression Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "condition",
+                    "name": "Branch",
+                    "config": {
+                        "expression": "trigger_input.priority == 'high' and "
+                        "not upstream.branch_override"
+                    },
+                },
+                {
+                    "id": "true_path",
+                    "type": "tool",
+                    "name": "True Path",
+                    "config": {"mock_output": {"answer": "expedite"}},
+                },
+                {
+                    "id": "false_path",
+                    "type": "tool",
+                    "name": "False Path",
+                    "config": {"mock_output": {"answer": "queue"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "true_path",
+                    "condition": "true",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "false_path",
+                    "condition": "false",
+                },
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"priority": "high"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"true_path": {"answer": "expedite"}}
+    assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
+        "trigger": "succeeded",
+        "branch": "succeeded",
+        "true_path": "succeeded",
+        "false_path": "skipped",
+        "output": "succeeded",
+    }
+    branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
+    assert branch_run.output_payload["selected"] == "true"
+    assert branch_run.output_payload["expression"]["value"] is True
+
+
+def test_runtime_service_routes_router_expression_to_matching_branch(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-router-expression",
+        name="Router Expression Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "router",
+                    "name": "Branch",
+                    "config": {
+                        "expression": "trigger_input.intent if trigger_input.intent else 'default'"
+                    },
+                },
+                {
+                    "id": "search_path",
+                    "type": "tool",
+                    "name": "Search Path",
+                    "config": {"mock_output": {"answer": "search mode"}},
+                },
+                {
+                    "id": "chat_path",
+                    "type": "tool",
+                    "name": "Chat Path",
+                    "config": {"mock_output": {"answer": "chat mode"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "search_path",
+                    "condition": "search",
+                },
+                {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "chat_path"},
+                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "chat_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"intent": "search"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"search_path": {"answer": "search mode"}}
+    branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
+    assert branch_run.output_payload["selected"] == "search"
+    assert branch_run.output_payload["expression"]["defaultUsed"] is False
+
+
+def test_runtime_service_gates_regular_edges_with_condition_expression(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-edge-expression",
+        name="Edge Expression Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "scorer",
+                    "type": "tool",
+                    "name": "Scorer",
+                    "config": {"mock_output": {"score": 92, "approved": True}},
+                },
+                {
+                    "id": "approve",
+                    "type": "tool",
+                    "name": "Approve",
+                    "config": {"mock_output": {"answer": "approved"}},
+                },
+                {
+                    "id": "reject",
+                    "type": "tool",
+                    "name": "Reject",
+                    "config": {"mock_output": {"answer": "rejected"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "scorer"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "scorer",
+                    "targetNodeId": "approve",
+                    "conditionExpression": "source_output.approved and source_output.score >= 90",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "scorer",
+                    "targetNodeId": "reject",
+                    "conditionExpression": "not source_output.approved",
+                },
+                {"id": "e4", "sourceNodeId": "approve", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "reject", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"topic": "gate"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"approve": {"answer": "approved"}}
+    assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
+        "trigger": "succeeded",
+        "scorer": "succeeded",
+        "approve": "succeeded",
+        "reject": "skipped",
+        "output": "succeeded",
+    }
+
+
+def test_runtime_service_applies_edge_mapping_to_target_input(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-edge-mapping",
+        name="Edge Mapping Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"plan": {"title": "Draft"}, "priority": "7"}},
+                },
+                {
+                    "id": "formatter",
+                    "type": "tool",
+                    "name": "Formatter",
+                    "config": {"mode": "summary"},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "planner",
+                    "targetNodeId": "formatter",
+                    "mapping": [
+                        {"sourceField": "plan.title", "targetField": "prompt"},
+                        {
+                            "sourceField": "priority",
+                            "targetField": "config.priority",
+                            "transform": {"type": "toNumber"},
+                        },
+                        {
+                            "sourceField": "missing",
+                            "targetField": "metadata.note",
+                            "fallback": "n/a",
+                            "template": "value={{value}}",
+                        },
+                    ],
+                },
+                {"id": "e3", "sourceNodeId": "formatter", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"topic": "mapping"})
+
+    assert artifacts.run.status == "succeeded"
+    formatter_run = next(
+        node_run for node_run in artifacts.node_runs if node_run.node_id == "formatter"
+    )
+    assert formatter_run.input_payload["prompt"] == "Draft"
+    assert formatter_run.input_payload["config"]["priority"] == 7
+    assert formatter_run.input_payload["metadata"]["note"] == "value=n/a"
+    assert formatter_run.input_payload["mapped"] == {
+        "prompt": "Draft",
+        "config": {"priority": 7},
+        "metadata": {"note": "value=n/a"},
+    }
+
+
+def test_runtime_service_appends_conflicting_mapped_values_when_merge_strategy_is_append(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-edge-mapping-append",
+        name="Edge Mapping Append Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"topic": "plan"}},
+                },
+                {
+                    "id": "researcher",
+                    "type": "tool",
+                    "name": "Researcher",
+                    "config": {"mock_output": {"topic": "facts"}},
+                },
+                {
+                    "id": "joiner",
+                    "type": "tool",
+                    "name": "Joiner",
+                    "config": {},
+                    "runtimePolicy": {
+                        "join": {"mode": "all", "mergeStrategy": "append"}
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {
+                    "id": "e3",
+                    "sourceNodeId": "planner",
+                    "targetNodeId": "joiner",
+                    "mapping": [{"sourceField": "topic", "targetField": "inputs.topics"}],
+                },
+                {
+                    "id": "e4",
+                    "sourceNodeId": "researcher",
+                    "targetNodeId": "joiner",
+                    "mapping": [{"sourceField": "topic", "targetField": "inputs.topics"}],
+                },
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"topic": "append"})
+
+    assert artifacts.run.status == "succeeded"
+    joiner_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "joiner")
+    assert joiner_run.input_payload["join"]["mergeStrategy"] == "append"
+    assert joiner_run.input_payload["inputs"]["topics"] == ["plan", "facts"]
+
+
+def test_runtime_service_rejects_conflicting_mapped_values_without_merge_strategy(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-edge-mapping-conflict",
+        name="Edge Mapping Conflict Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"topic": "plan"}},
+                },
+                {
+                    "id": "researcher",
+                    "type": "tool",
+                    "name": "Researcher",
+                    "config": {"mock_output": {"topic": "facts"}},
+                },
+                {
+                    "id": "joiner",
+                    "type": "tool",
+                    "name": "Joiner",
+                    "config": {},
+                    "runtimePolicy": {"join": {"mode": "all"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {
+                    "id": "e3",
+                    "sourceNodeId": "planner",
+                    "targetNodeId": "joiner",
+                    "mapping": [{"sourceField": "topic", "targetField": "inputs.topic"}],
+                },
+                {
+                    "id": "e4",
+                    "sourceNodeId": "researcher",
+                    "targetNodeId": "joiner",
+                    "mapping": [{"sourceField": "topic", "targetField": "inputs.topic"}],
+                },
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    with pytest.raises(WorkflowExecutionError, match="conflicting field mapping"):
+        RuntimeService().execute_workflow(sqlite_session, workflow, {"topic": "conflict"})
+
+
+def test_runtime_service_executes_join_all_after_all_required_sources_arrive(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-join-all-success",
+        name="Join All Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"plan": "outline"}},
+                },
+                {
+                    "id": "researcher",
+                    "type": "tool",
+                    "name": "Researcher",
+                    "config": {"mock_output": {"facts": ["a", "b"]}},
+                },
+                {
+                    "id": "joiner",
+                    "type": "tool",
+                    "name": "Joiner",
+                    "config": {"mock_output": {"answer": "combined"}},
+                    "runtimePolicy": {"join": {"mode": "all"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "joiner"},
+                {"id": "e4", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"topic": "join"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"joiner": {"answer": "combined"}}
+    joiner_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "joiner")
+    assert joiner_run.input_payload["join"] == {
+        "mode": "all",
+        "onUnmet": "skip",
+        "mergeStrategy": "error",
+        "expectedSourceIds": ["planner", "researcher"],
+        "activatedSourceIds": ["planner", "researcher"],
+        "missingSourceIds": [],
+    }
+    assert [event.event_type for event in artifacts.events].count("node.join.ready") == 1
+
+
+def test_runtime_service_blocks_when_join_all_missing_required_source_and_fail_policy(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-join-all-fail",
+        name="Join All Fail Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "router",
+                    "name": "Branch",
+                    "config": {"selected": "planner"},
+                },
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"plan": "outline"}},
+                },
+                {
+                    "id": "researcher",
+                    "type": "tool",
+                    "name": "Researcher",
+                    "config": {"mock_output": {"facts": ["a", "b"]}},
+                },
+                {
+                    "id": "joiner",
+                    "type": "tool",
+                    "name": "Joiner",
+                    "config": {"mock_output": {"answer": "combined"}},
+                    "runtimePolicy": {"join": {"mode": "all", "onUnmet": "fail"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "planner",
+                    "condition": "planner",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "researcher",
+                    "condition": "researcher",
+                },
+                {"id": "e4", "sourceNodeId": "planner", "targetNodeId": "joiner"},
+                {"id": "e5", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
+                {"id": "e6", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    service = RuntimeService()
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="Missing required upstream nodes: researcher",
+    ):
+        service.execute_workflow(sqlite_session, workflow, {"topic": "join fail"})
+
+    persisted_run = service.list_workflow_runs(sqlite_session, workflow.id)[0]
+    artifacts = service.load_run(sqlite_session, persisted_run.id)
+    assert artifacts is not None
+    assert artifacts.run.status == "failed"
+    joiner_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "joiner")
+    assert joiner_run.status == "blocked"
+    assert "researcher" in (joiner_run.error_message or "")
+    assert [event.event_type for event in artifacts.events].count("node.join.unmet") == 1
+
+
 def test_runtime_service_can_continue_through_failure_branch(sqlite_session: Session) -> None:
     workflow = Workflow(
         id="wf-failure-branch",

@@ -214,6 +214,271 @@ def test_execute_workflow_route_supports_selector_driven_branching(
     }
 
 
+def test_execute_workflow_route_supports_expression_driven_branching(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-expression",
+        name="Route Expression Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "router",
+                    "name": "Branch",
+                    "config": {
+                        "expression": "trigger_input.intent if trigger_input.intent else 'default'"
+                    },
+                },
+                {
+                    "id": "search_path",
+                    "type": "tool",
+                    "name": "Search Path",
+                    "config": {"mock_output": {"answer": "search mode"}},
+                },
+                {
+                    "id": "default_path",
+                    "type": "tool",
+                    "name": "Default Path",
+                    "config": {"mock_output": {"answer": "default mode"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "search_path",
+                    "condition": "search",
+                },
+                {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
+                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"intent": "search"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["output_payload"] == {"search_path": {"answer": "search mode"}}
+    branch_run = next(node_run for node_run in body["node_runs"] if node_run["node_id"] == "branch")
+    assert branch_run["output_payload"]["selected"] == "search"
+    assert branch_run["output_payload"]["expression"]["defaultUsed"] is False
+
+
+def test_execute_workflow_route_supports_edge_condition_expression(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-edge-expression",
+        name="Route Edge Expression Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "scorer",
+                    "type": "tool",
+                    "name": "Scorer",
+                    "config": {"mock_output": {"approved": True, "score": 97}},
+                },
+                {
+                    "id": "approve",
+                    "type": "tool",
+                    "name": "Approve",
+                    "config": {"mock_output": {"answer": "approved route"}},
+                },
+                {
+                    "id": "reject",
+                    "type": "tool",
+                    "name": "Reject",
+                    "config": {"mock_output": {"answer": "rejected route"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "scorer"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "scorer",
+                    "targetNodeId": "approve",
+                    "conditionExpression": "source_output.approved and source_output.score >= 90",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "scorer",
+                    "targetNodeId": "reject",
+                    "conditionExpression": "not source_output.approved",
+                },
+                {"id": "e4", "sourceNodeId": "approve", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "reject", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"message": "edge expr route"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["output_payload"] == {"approve": {"answer": "approved route"}}
+    assert {node_run["node_id"]: node_run["status"] for node_run in body["node_runs"]} == {
+        "trigger": "succeeded",
+        "scorer": "succeeded",
+        "approve": "succeeded",
+        "reject": "skipped",
+        "output": "succeeded",
+    }
+
+
+def test_execute_workflow_route_supports_join_all_policy(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-join-all",
+        name="Route Join All Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"plan": "outline"}},
+                },
+                {
+                    "id": "researcher",
+                    "type": "tool",
+                    "name": "Researcher",
+                    "config": {"mock_output": {"facts": ["a"]}},
+                },
+                {
+                    "id": "joiner",
+                    "type": "tool",
+                    "name": "Joiner",
+                    "config": {"mock_output": {"answer": "route combined"}},
+                    "runtimePolicy": {"join": {"mode": "all"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "joiner"},
+                {"id": "e4", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"message": "join route"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    joiner_run = next(node_run for node_run in body["node_runs"] if node_run["node_id"] == "joiner")
+    assert joiner_run["input_payload"]["join"]["expectedSourceIds"] == ["planner", "researcher"]
+    assert joiner_run["input_payload"]["join"]["mergeStrategy"] == "error"
+    assert [event["event_type"] for event in body["events"]].count("node.join.ready") == 1
+
+
+def test_execute_workflow_route_supports_edge_mapping_append_merge_strategy(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-mapping-append",
+        name="Route Mapping Append Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"topic": "plan"}},
+                },
+                {
+                    "id": "researcher",
+                    "type": "tool",
+                    "name": "Researcher",
+                    "config": {"mock_output": {"topic": "facts"}},
+                },
+                {
+                    "id": "joiner",
+                    "type": "tool",
+                    "name": "Joiner",
+                    "config": {},
+                    "runtimePolicy": {
+                        "join": {"mode": "all", "mergeStrategy": "append"}
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {
+                    "id": "e3",
+                    "sourceNodeId": "planner",
+                    "targetNodeId": "joiner",
+                    "mapping": [{"sourceField": "topic", "targetField": "inputs.topics"}],
+                },
+                {
+                    "id": "e4",
+                    "sourceNodeId": "researcher",
+                    "targetNodeId": "joiner",
+                    "mapping": [{"sourceField": "topic", "targetField": "inputs.topics"}],
+                },
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"message": "mapping append route"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    joiner_run = next(node_run for node_run in body["node_runs"] if node_run["node_id"] == "joiner")
+    assert joiner_run["input_payload"]["inputs"]["topics"] == ["plan", "facts"]
+
+
 def test_execute_workflow_route_exposes_authorized_context_reads(
     client: TestClient,
     sqlite_session: Session,

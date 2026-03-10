@@ -5,6 +5,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.safe_expressions import (
+    BRANCH_EXPRESSION_NAMES,
+    EDGE_EXPRESSION_NAMES,
+    SafeExpressionValidationError,
+    validate_expression,
+)
+
 NodeType = Literal[
     "trigger",
     "llm_agent",
@@ -20,6 +27,20 @@ EdgeChannel = Literal["control", "data"]
 PublishProtocol = Literal["native", "openai", "anthropic"]
 AuthMode = Literal["api_key", "token", "internal"]
 ArtifactType = Literal["text", "json", "file", "tool_result", "message"]
+
+
+def _validate_safe_expression(
+    expression: object,
+    *,
+    allowed_names: set[str] | frozenset[str],
+    error_prefix: str,
+) -> None:
+    if not isinstance(expression, str) or not expression.strip():
+        raise ValueError(f"{error_prefix} must be a non-empty string.")
+    try:
+        validate_expression(expression, allowed_names=allowed_names)
+    except SafeExpressionValidationError as exc:
+        raise ValueError(f"{error_prefix} is invalid: {exc}") from exc
 
 
 class WorkflowNodeContextArtifactRef(BaseModel):
@@ -57,6 +78,9 @@ BranchSelectorOperator = Literal[
     "not_in",
     "contains",
 ]
+JoinMode = Literal["any", "all"]
+JoinUnmetBehavior = Literal["skip", "fail"]
+JoinMergeStrategy = Literal["error", "overwrite", "keep_first", "append"]
 
 
 class WorkflowNodeBranchRule(BaseModel):
@@ -90,6 +114,40 @@ class WorkflowNodeBranchSelector(BaseModel):
         return self
 
 
+class WorkflowEdgeFieldTransform(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["identity", "toString", "toNumber", "toBoolean"] = "identity"
+
+
+class WorkflowEdgeFieldMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sourceField: str = Field(min_length=1, max_length=256)
+    targetField: str = Field(min_length=1, max_length=256)
+    transform: WorkflowEdgeFieldTransform | None = None
+    template: str | None = Field(default=None, min_length=1, max_length=512)
+    fallback: Any = None
+
+    @model_validator(mode="after")
+    def validate_target_field(self) -> WorkflowEdgeFieldMapping:
+        target_root = self.targetField.split(".", 1)[0].strip()
+        if target_root in {
+            "trigger_input",
+            "upstream",
+            "accumulated",
+            "mapped",
+            "activated_by",
+            "authorized_context",
+            "attempt",
+            "join",
+        }:
+            raise ValueError(
+                "Field mapping targetField cannot override runtime-managed input roots."
+            )
+        return self
+
+
 class WorkflowNodeDefinition(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -119,6 +177,16 @@ class WorkflowNodeDefinition(BaseModel):
                 raise ValueError("Only condition/router nodes may define config.selector.")
             WorkflowNodeBranchSelector.model_validate(selector)
 
+        expression = self.config.get("expression")
+        if expression is not None:
+            if self.type not in {"condition", "router"}:
+                raise ValueError("Only condition/router nodes may define config.expression.")
+            _validate_safe_expression(
+                expression,
+                allowed_names=BRANCH_EXPRESSION_NAMES,
+                error_prefix="config.expression",
+            )
+
         return self
 
 
@@ -130,10 +198,28 @@ class WorkflowNodeRetryPolicy(BaseModel):
     backoffMultiplier: float = Field(default=1.0, ge=1.0)
 
 
+class WorkflowNodeJoinPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: JoinMode = "any"
+    requiredNodeIds: list[str] = Field(default_factory=list)
+    onUnmet: JoinUnmetBehavior = "skip"
+    mergeStrategy: JoinMergeStrategy = "error"
+
+    @model_validator(mode="after")
+    def validate_required_node_ids(self) -> WorkflowNodeJoinPolicy:
+        normalized_ids = [node_id for node_id in self.requiredNodeIds if node_id.strip()]
+        if len(set(normalized_ids)) != len(normalized_ids):
+            raise ValueError("Join policy requiredNodeIds must be unique.")
+        self.requiredNodeIds = normalized_ids
+        return self
+
+
 class WorkflowNodeRuntimePolicy(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     retry: WorkflowNodeRetryPolicy | None = None
+    join: WorkflowNodeJoinPolicy | None = None
 
 
 class WorkflowEdgeDefinition(BaseModel):
@@ -144,7 +230,18 @@ class WorkflowEdgeDefinition(BaseModel):
     targetNodeId: str = Field(min_length=1, max_length=64)
     channel: EdgeChannel = "control"
     condition: str | None = None
-    mapping: list[dict[str, Any]] | None = None
+    conditionExpression: str | None = Field(default=None, min_length=1, max_length=512)
+    mapping: list[WorkflowEdgeFieldMapping] | None = None
+
+    @model_validator(mode="after")
+    def validate_condition_expression(self) -> WorkflowEdgeDefinition:
+        if self.conditionExpression is not None:
+            _validate_safe_expression(
+                self.conditionExpression,
+                allowed_names=EDGE_EXPRESSION_NAMES,
+                error_prefix="conditionExpression",
+            )
+        return self
 
 
 class WorkflowVariableDefinition(BaseModel):
@@ -242,6 +339,28 @@ class WorkflowDefinitionDocument(BaseModel):
                 )
             if edge.sourceNodeId == edge.targetNodeId:
                 raise ValueError(f"Edge '{edge.id}' cannot point to the same node on both ends.")
+
+        incoming_by_target: dict[str, set[str]] = {}
+        for edge in self.edges:
+            incoming_by_target.setdefault(edge.targetNodeId, set()).add(edge.sourceNodeId)
+
+        for node in self.nodes:
+            join_policy = node.runtimePolicy.join if node.runtimePolicy is not None else None
+            if join_policy is None:
+                continue
+            incoming_sources = incoming_by_target.get(node.id, set())
+            if node.type == "trigger":
+                raise ValueError("Trigger nodes cannot define runtimePolicy.join.")
+            if not incoming_sources:
+                raise ValueError(
+                    f"Node '{node.id}' defines runtimePolicy.join but has no incoming edges."
+                )
+            unknown_required_sources = sorted(set(join_policy.requiredNodeIds) - incoming_sources)
+            if unknown_required_sources:
+                raise ValueError(
+                    f"Node '{node.id}' join.requiredNodeIds references non-incoming sources: "
+                    f"{', '.join(unknown_required_sources)}."
+                )
 
         return self
 
