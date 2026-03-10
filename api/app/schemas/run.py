@@ -93,3 +93,17 @@ class RunDetail(BaseModel):
     last_event_at: datetime | None = None
     node_runs: list[NodeRunItem]
     events: list[RunEventItem] = Field(default_factory=list)
+
+
+class WorkflowRunListItem(BaseModel):
+    id: str
+    workflow_id: str
+    workflow_version: str
+    status: str
+    error_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    node_run_count: int = 0
+    event_count: int = 0
+    last_event_at: datetime | None = None

@@ -1,11 +1,13 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.run import NodeRun, Run, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
+from app.schemas.run import WorkflowRunListItem
 from app.schemas.workflow import (
     WorkflowCreate,
     WorkflowDetail,
@@ -170,4 +172,64 @@ def list_workflow_versions(
             created_at=version.created_at,
         )
         for version in versions
+    ]
+
+
+@router.get("/{workflow_id}/runs", response_model=list[WorkflowRunListItem])
+def list_workflow_runs(
+    workflow_id: str,
+    limit: int = Query(default=8, ge=1, le=20),
+    db: Session = Depends(get_db),
+) -> list[WorkflowRunListItem]:
+    workflow = db.get(Workflow, workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found.")
+
+    node_run_stats = (
+        select(
+            NodeRun.run_id.label("run_id"),
+            func.count(NodeRun.id).label("node_run_count"),
+        )
+        .group_by(NodeRun.run_id)
+        .subquery()
+    )
+    run_event_stats = (
+        select(
+            RunEvent.run_id.label("run_id"),
+            func.count(RunEvent.id).label("event_count"),
+            func.max(RunEvent.created_at).label("last_event_at"),
+        )
+        .group_by(RunEvent.run_id)
+        .subquery()
+    )
+
+    rows = db.execute(
+        select(
+            Run,
+            node_run_stats.c.node_run_count,
+            run_event_stats.c.event_count,
+            run_event_stats.c.last_event_at,
+        )
+        .outerjoin(node_run_stats, node_run_stats.c.run_id == Run.id)
+        .outerjoin(run_event_stats, run_event_stats.c.run_id == Run.id)
+        .where(Run.workflow_id == workflow_id)
+        .order_by(Run.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        WorkflowRunListItem(
+            id=run.id,
+            workflow_id=run.workflow_id,
+            workflow_version=run.workflow_version,
+            status=run.status,
+            error_message=run.error_message,
+            created_at=run.created_at,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            node_run_count=node_run_count or 0,
+            event_count=event_count or 0,
+            last_event_at=last_event_at,
+        )
+        for run, node_run_count, event_count, last_event_at in rows
     ]

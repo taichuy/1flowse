@@ -11,6 +11,12 @@ export type WorkflowCanvasNodeData = {
   runtimePolicy?: Record<string, unknown>;
   inputSchema?: Record<string, unknown> | null;
   outputSchema?: Record<string, unknown> | null;
+  runStatus?: string;
+  runNodeId?: string;
+  runDurationMs?: number;
+  runErrorMessage?: string | null;
+  runLastEventType?: string;
+  runEventCount?: number;
 };
 
 export type WorkflowCanvasEdgeData = {

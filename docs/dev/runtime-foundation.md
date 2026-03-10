@@ -159,6 +159,7 @@ uv run alembic upgrade head
 当前新增接口：
 
 - `POST /api/workflows/{workflow_id}/runs`
+- `GET /api/workflows/{workflow_id}/runs`
 - `GET /api/runs/{run_id}`
 - `GET /api/runs/{run_id}/events`
 - `GET /api/runs/{run_id}/trace`
@@ -167,9 +168,11 @@ uv run alembic upgrade head
 用途：
 
 - 触发一次最小工作流执行
+- 为 workflow editor 提供 workflow 级 recent runs 摘要入口
 - 查询执行详情
 - 查询事件流
 - 为 AI / 自动化 提供带过滤条件的 run trace 检索
+- `GET /api/workflows/{workflow_id}/runs` 当前会聚合返回 run 状态、版本、`node_run_count`、`event_count` 和 `last_event_at`，供 editor 选择最近执行上下文，而不是继续依赖首页摘要拼装
 - `GET /api/runs/{run_id}` 当前已支持 `include_events=false` 的摘要模式，供 run 诊断页等人类界面减少与 `/trace` 的重复数据搬运
 - 当前 trace 过滤已支持 `event_type`、`node_run_id`、时间范围、`payload_key`、事件游标和顺序控制
 - 当前 trace 还补充了回放 / 导出元信息，例如 trace / returned 时间边界、事件顺序、`replay_offset_ms` 以及 opaque `cursor`
@@ -278,6 +281,7 @@ uv run alembic upgrade head
   - 当前已支持编辑 edge 的 `channel` / `condition` / `conditionExpression`
   - 当前已支持保存回 `PUT /api/workflows/{workflow_id}`，继续复用版本快照递增
   - 当前 workflow 页面会并行读取 `/api/plugins/tools`，把持久化 tool catalog 直接带入 editor
+  - 当前 workflow 页面会并行读取 `/api/workflows/{workflow_id}/runs`，把 recent runs 直接带入 editor runtime overlay
   - 当前 `tool` / `mcp_query` / `condition` / `router` 节点已优先改成结构化配置表单，并保留高级 JSON 兜底：
     - `tool`
       - 可直接绑定持久化 compat / native 工具目录项
@@ -288,13 +292,19 @@ uv run alembic upgrade head
     - `condition` / `router`
       - 可在 selector rules / expression / fixed branch 三种模式间切换
   - 当前 inspector 已从画布壳层中拆出独立组件，降低 editor 主组件耦合
+  - 当前 editor 已支持把选中 run 的 `node_runs` / `trace` 摘要接回画布：
+    - 画布节点会叠加执行状态、最近事件、耗时和错误摘要
+    - 左侧新增 runtime overlay panel，可选择 recent run、查看 node timeline、trace preview，并跳转到 run diagnostics / trace export
+    - 当前 overlay 仍复用现有 `/api/runs/{run_id}` 与 `/trace`，没有另起前端专用 runtime 协议
 
 当前相关文件：
 
 - `web/app/workflows/[workflowId]/page.tsx`
 - `web/components/workflow-editor-workbench.tsx`
 - `web/components/workflow-editor-inspector.tsx`
+- `web/components/workflow-run-overlay-panel.tsx`
 - `web/components/workflow-node-config-form.tsx`
+- `web/lib/get-workflow-runs.ts`
 - `web/lib/workflow-editor.ts`
 
 当前边界：
@@ -302,7 +312,7 @@ uv run alembic upgrade head
 - 仍然是“最小骨架”，不是完整节点配置系统
 - `llm_agent` / `output` / `runtimePolicy` / edge `mapping[]` 等区域仍未结构化
 - `tool` 的复杂对象 / 数组 schema 字段仍需要通过高级 JSON 编辑
-- 尚未把 run 调试状态实时叠加到画布
+- 已经支持 recent run 的静态附着与节点高亮，但还没有做到 editor 内逐事件回放、过滤翻页和实时流式联动
 - 尚未提供 workflow 新建向导与 starter template 入口
 - 前端测试基线仍未建立
 
@@ -345,7 +355,7 @@ docker compose up -d --build
 - 流式响应映射
 - 回放调试面板
 - 更完整的节点结构化配置抽屉
-- 画布上的运行态高亮与调试联动
+- editor 内逐事件回放、trace 过滤和实时调试联动
 - workflow 新建向导与 starter template
 - 前端 editor 测试基线
 
@@ -355,23 +365,23 @@ docker compose up -d --build
 
 ### P0 当前最高优先级
 
-1. 把 `run_events`、`node_runs` 的状态接回画布节点高亮、时间线和回放入口。
+1. 把 trace filter、cursor 翻页和更细的 replay 控件继续收进 editor runtime overlay，而不是只提供 link-out 到 run diagnostics。
 2. 把 edge `mapping[]`、join 策略等剩余高频 JSON 编辑区继续结构化。
 
 原因：
 
-- 当前 P0 编排体验已经从“只能写 JSON”迈到“关键节点可结构化配置”，下一跳最值得放大的就是“可调试”和“数据流可理解”。
-- 如果运行态和数据流配置仍割裂，editor 仍然难以承接真实排障场景。
+- 这一轮已经完成“recent run -> 画布状态”的最小回接，下一跳最值得补的是 editor 内更细的 replay / filter，而不是重新分散到独立页面。
+- 数据流配置结构化仍是另一条同级主线；如果 `mapping[]` 与 join 继续停留在 JSON，editor 的“可理解性”依然不完整。
 
 ### P1 次高优先级
 
-1. 继续扩展 trace / export / replay 支撑，让 editor、run diagnostics 和机器追溯层形成统一闭环。
-2. 为 editor 引入最小测试基线，至少覆盖 definition 转换、结构化表单纯逻辑和保存链路。
+1. 为 editor 引入最小测试基线，至少覆盖 definition 转换、recent runs overlay 映射、结构化表单纯逻辑和保存链路。
+2. 继续扩展 trace / export / replay 支撑，让 editor、run diagnostics 和机器追溯层形成统一闭环。
 
 原因：
 
-- 当前运行态事实基础已经具备，接下来要把这些事实更顺畅地接回编辑器。
-- 结构化表单已经开始增长，如果仍没有测试，回归成本会明显上升。
+- editor 已开始同时承接设计态和运行态，如果缺少测试，回归面会明显扩大。
+- trace / replay 仍要继续推进，但现在更需要先给 editor 当前增长的纯逻辑补一层可回归保护。
 
 ### P2 中优先级
 

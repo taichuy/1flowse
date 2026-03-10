@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { WorkflowEditorWorkbench } from "@/components/workflow-editor-workbench";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
+import { getWorkflowRuns } from "@/lib/get-workflow-runs";
 import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 
 type WorkflowEditorPageProps = {
@@ -23,10 +24,11 @@ export default async function WorkflowEditorPage({
   params
 }: WorkflowEditorPageProps) {
   const { workflowId } = await params;
-  const [workflow, workflows, pluginRegistry] = await Promise.all([
+  const [workflow, workflows, pluginRegistry, recentRuns] = await Promise.all([
     getWorkflowDetail(workflowId),
     getWorkflows(),
-    getPluginRegistrySnapshot()
+    getPluginRegistrySnapshot(),
+    getWorkflowRuns(workflowId)
   ]);
 
   if (!workflow) {
@@ -38,6 +40,7 @@ export default async function WorkflowEditorPage({
       workflow={workflow}
       workflows={workflows}
       tools={pluginRegistry.tools}
+      recentRuns={recentRuns}
     />
   );
 }

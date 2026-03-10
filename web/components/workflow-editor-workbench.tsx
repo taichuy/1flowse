@@ -22,7 +22,11 @@ import {
 } from "@xyflow/react";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { RunDetail } from "@/lib/get-run-detail";
+import type { RunTrace } from "@/lib/get-run-trace";
+import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
+import { formatDurationMs } from "@/lib/runtime-presenters";
 import {
   EDITOR_NODE_LIBRARY,
   buildEditorEdge,
@@ -34,11 +38,13 @@ import {
 } from "@/lib/workflow-editor";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import { WorkflowEditorInspector } from "@/components/workflow-editor-inspector";
+import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 
 type WorkflowEditorWorkbenchProps = {
   workflow: WorkflowDetail;
   workflows: WorkflowListItem[];
   tools: PluginToolRegistryItem[];
+  recentRuns: WorkflowRunListItem[];
 };
 
 const nodeTypes = {
@@ -48,7 +54,8 @@ const nodeTypes = {
 export function WorkflowEditorWorkbench({
   workflow,
   workflows,
-  tools
+  tools,
+  recentRuns
 }: WorkflowEditorWorkbenchProps) {
   const initialGraph = workflowDefinitionToReactFlow(workflow.definition);
   const [workflowName, setWorkflowName] = useState(workflow.name);
@@ -64,11 +71,21 @@ export function WorkflowEditorWorkbench({
   const [nodeConfigText, setNodeConfigText] = useState(() =>
     stringifyJson(initialGraph.nodes[0]?.data.config ?? {})
   );
+  const [availableRuns, setAvailableRuns] = useState(recentRuns);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(
+    recentRuns[0]?.id ?? null
+  );
+  const [selectedRunDetail, setSelectedRunDetail] = useState<RunDetail | null>(null);
+  const [selectedRunTrace, setSelectedRunTrace] = useState<RunTrace | null>(null);
+  const [runOverlayError, setRunOverlayError] = useState<string | null>(null);
+  const [isLoadingRunOverlay, setIsLoadingRunOverlay] = useState(false);
+  const [isRefreshingRuns, setIsRefreshingRuns] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"success" | "error" | "idle">("idle");
   const [isSaving, startSavingTransition] = useTransition();
 
-  const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const displayedNodes = applyRunOverlayToNodes(nodes, selectedRunDetail, selectedRunTrace);
+  const selectedNode = displayedNodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
   const currentDefinition = reactFlowToWorkflowDefinition(nodes, edges, persistedDefinition);
   const isDirty =
@@ -86,13 +103,54 @@ export function WorkflowEditorWorkbench({
     setSelectedNodeId(nextGraph.nodes[0]?.id ?? null);
     setSelectedEdgeId(null);
     setNodeConfigText(stringifyJson(nextGraph.nodes[0]?.data.config ?? {}));
+    setAvailableRuns(recentRuns);
+    setSelectedRunId(recentRuns[0]?.id ?? null);
+    setSelectedRunDetail(null);
+    setSelectedRunTrace(null);
+    setRunOverlayError(null);
+    setIsLoadingRunOverlay(false);
+    setIsRefreshingRuns(false);
     setMessage(null);
     setMessageTone("idle");
-  }, [workflow, setEdges, setNodes]);
+  }, [recentRuns, workflow, setEdges, setNodes]);
 
   useEffect(() => {
     setNodeConfigText(stringifyJson(selectedNode?.data.config ?? {}));
   }, [selectedNodeId, selectedNode?.data.config]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!selectedRunId) {
+      setSelectedRunDetail(null);
+      setSelectedRunTrace(null);
+      setRunOverlayError(null);
+      setIsLoadingRunOverlay(false);
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setIsLoadingRunOverlay(true);
+
+    void Promise.all([
+      fetchRunDetail(selectedRunId),
+      fetchRunTrace(selectedRunId)
+    ]).then(([runDetail, traceResult]) => {
+      if (isCancelled) {
+        return;
+      }
+
+      setSelectedRunDetail(runDetail);
+      setSelectedRunTrace(traceResult.trace);
+      setRunOverlayError(traceResult.errorMessage);
+      setIsLoadingRunOverlay(false);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedRunId]);
 
   const onConnect: OnConnect = (connection) => {
     if (!connection.source || !connection.target) {
@@ -332,6 +390,19 @@ export function WorkflowEditorWorkbench({
     );
   };
 
+  const refreshRecentRuns = async () => {
+    setIsRefreshingRuns(true);
+    const refreshedRuns = await getWorkflowRuns(workflow.id);
+    setAvailableRuns(refreshedRuns);
+    setSelectedRunId((currentRunId) => {
+      if (currentRunId && refreshedRuns.some((run) => run.id === currentRunId)) {
+        return currentRunId;
+      }
+      return refreshedRuns[0]?.id ?? null;
+    });
+    setIsRefreshingRuns(false);
+  };
+
   const handleSave = () => {
     const nextDefinition = reactFlowToWorkflowDefinition(nodes, edges, persistedDefinition);
     startSavingTransition(async () => {
@@ -394,6 +465,7 @@ export function WorkflowEditorWorkbench({
               <span className="pill">{nodes.length} nodes</span>
               <span className="pill">{edges.length} edges</span>
               <span className="pill">{tools.length} catalog tools</span>
+              <span className="pill">{availableRuns.length} recent runs</span>
             </div>
             <div className="hero-actions">
               <Link className="inline-link" href="/">
@@ -431,6 +503,10 @@ export function WorkflowEditorWorkbench({
               <div>
                 <dt>Workflows</dt>
                 <dd>{workflows.length}</dd>
+              </div>
+              <div>
+                <dt>Selected run</dt>
+                <dd>{selectedRunId ? "Attached" : "-"}</dd>
               </div>
             </dl>
           </div>
@@ -510,13 +586,26 @@ export function WorkflowEditorWorkbench({
                 {message ?? "选择节点或连线后，这里会显示编辑器反馈。"}
               </p>
             </article>
+
+            <WorkflowRunOverlayPanel
+              runs={availableRuns}
+              selectedRunId={selectedRunId}
+              run={selectedRunDetail}
+              trace={selectedRunTrace}
+              traceError={runOverlayError}
+              selectedNodeId={selectedNodeId}
+              isLoading={isLoadingRunOverlay}
+              isRefreshingRuns={isRefreshingRuns}
+              onSelectRunId={setSelectedRunId}
+              onRefreshRuns={refreshRecentRuns}
+            />
           </aside>
 
           <section className="editor-canvas-panel">
             <div className="editor-canvas-card">
               <ReactFlow
                 fitView
-                nodes={nodes}
+                nodes={displayedNodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
@@ -566,7 +655,9 @@ function WorkflowCanvasNode({
 }: NodeProps<Node<WorkflowCanvasNodeData>>) {
   return (
     <div
-      className={`workflow-canvas-node ${selected ? "selected" : ""}`}
+      className={`workflow-canvas-node ${selected ? "selected" : ""} ${
+        data.runStatus ? `runtime-${toCssIdentifier(data.runStatus)}` : ""
+      }`}
       style={
         {
           "--node-accent": nodeColorByType(data.nodeType)
@@ -576,6 +667,29 @@ function WorkflowCanvasNode({
       <Handle type="target" position={Position.Left} />
       <div className="workflow-canvas-node-label">{data.label}</div>
       <div className="workflow-canvas-node-type">{data.nodeType}</div>
+      {data.runStatus ? (
+        <div className="workflow-canvas-node-runtime">
+          <span className={`health-pill ${data.runStatus}`}>{data.runStatus}</span>
+          <div className="workflow-canvas-node-runtime-meta">
+            {data.runLastEventType ? (
+              <span className="workflow-canvas-node-meta">{data.runLastEventType}</span>
+            ) : null}
+            {typeof data.runDurationMs === "number" ? (
+              <span className="workflow-canvas-node-meta">
+                {formatDurationMs(data.runDurationMs)}
+              </span>
+            ) : null}
+            {typeof data.runEventCount === "number" && data.runEventCount > 0 ? (
+              <span className="workflow-canvas-node-meta">
+                {data.runEventCount} events
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {data.runErrorMessage ? (
+        <div className="workflow-canvas-node-error">{data.runErrorMessage}</div>
+      ) : null}
       <Handle type="source" position={Position.Right} />
     </div>
   );
@@ -631,4 +745,119 @@ function readNodePosition(config: Record<string, unknown>): XYPosition {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function applyRunOverlayToNodes(
+  nodes: Array<Node<WorkflowCanvasNodeData>>,
+  run: RunDetail | null,
+  trace: RunTrace | null
+) {
+  if (!run) {
+    return nodes;
+  }
+
+  const eventCountByNodeRunId = new Map<string, number>();
+  const lastEventTypeByNodeRunId = new Map<string, string>();
+
+  trace?.events.forEach((event) => {
+    if (!event.node_run_id) {
+      return;
+    }
+    eventCountByNodeRunId.set(
+      event.node_run_id,
+      (eventCountByNodeRunId.get(event.node_run_id) ?? 0) + 1
+    );
+    lastEventTypeByNodeRunId.set(event.node_run_id, event.event_type);
+  });
+
+  return nodes.map((node) => {
+    const nodeRun = run.node_runs.find((item) => item.node_id === node.id) ?? null;
+    if (!nodeRun) {
+      return node;
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        runStatus: nodeRun.status,
+        runNodeId: nodeRun.id,
+        runDurationMs: calculateDurationMs(nodeRun.started_at, nodeRun.finished_at),
+        runErrorMessage: nodeRun.error_message ?? null,
+        runLastEventType: lastEventTypeByNodeRunId.get(nodeRun.id),
+        runEventCount: eventCountByNodeRunId.get(nodeRun.id) ?? 0
+      }
+    };
+  });
+}
+
+async function fetchRunDetail(runId: string) {
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/runs/${encodeURIComponent(runId)}?include_events=false`,
+      {
+        cache: "no-store"
+      }
+    );
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as RunDetail;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRunTrace(runId: string): Promise<{
+  trace: RunTrace | null;
+  errorMessage: string | null;
+}> {
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/runs/${encodeURIComponent(runId)}/trace?limit=100&order=asc`,
+      {
+        cache: "no-store"
+      }
+    );
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as
+        | { detail?: string }
+        | null;
+      return {
+        trace: null,
+        errorMessage:
+          body?.detail ?? `无法读取 run trace，API 返回 ${response.status}。`
+      };
+    }
+    return {
+      trace: (await response.json()) as RunTrace,
+      errorMessage: null
+    };
+  } catch {
+    return {
+      trace: null,
+      errorMessage: "无法连接后端读取 run trace，请确认 API 已启动。"
+    };
+  }
+}
+
+function calculateDurationMs(
+  startedAt?: string | null,
+  finishedAt?: string | null
+) {
+  if (!startedAt) {
+    return undefined;
+  }
+
+  const start = new Date(startedAt).getTime();
+  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return undefined;
+  }
+
+  return Math.max(0, end - start);
+}
+
+function toCssIdentifier(value: string) {
+  return value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
 }
