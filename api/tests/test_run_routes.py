@@ -136,6 +136,84 @@ def test_execute_workflow_route_exposes_retry_events(
     assert [event["event_type"] for event in body["events"]].count("node.retrying") == 1
 
 
+def test_execute_workflow_route_supports_selector_driven_branching(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-selector",
+        name="Route Selector Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "router",
+                    "name": "Branch",
+                    "config": {
+                        "selector": {
+                            "rules": [
+                                {
+                                    "key": "search",
+                                    "path": "trigger_input.intent",
+                                    "operator": "eq",
+                                    "value": "search",
+                                }
+                            ]
+                        }
+                    },
+                },
+                {
+                    "id": "search_path",
+                    "type": "tool",
+                    "name": "Search Path",
+                    "config": {"mock_output": {"answer": "search mode"}},
+                },
+                {
+                    "id": "default_path",
+                    "type": "tool",
+                    "name": "Default Path",
+                    "config": {"mock_output": {"answer": "default mode"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "search_path",
+                    "condition": "search",
+                },
+                {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
+                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"intent": "search"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["output_payload"] == {"search_path": {"answer": "search mode"}}
+    assert {node_run["node_id"]: node_run["status"] for node_run in body["node_runs"]} == {
+        "trigger": "succeeded",
+        "branch": "succeeded",
+        "search_path": "succeeded",
+        "default_path": "skipped",
+        "output": "succeeded",
+    }
+
+
 def test_execute_workflow_route_exposes_authorized_context_reads(
     client: TestClient,
     sqlite_session: Session,

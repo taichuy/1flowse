@@ -56,6 +56,56 @@ def _valid_mcp_definition() -> dict:
     }
 
 
+def _valid_selector_definition() -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "branch",
+                "type": "condition",
+                "name": "Branch",
+                "config": {
+                    "selector": {
+                        "rules": [
+                            {
+                                "key": "urgent",
+                                "path": "trigger_input.priority",
+                                "operator": "eq",
+                                "value": "high",
+                            }
+                        ]
+                    }
+                },
+            },
+            {
+                "id": "urgent_path",
+                "type": "tool",
+                "name": "Urgent Path",
+                "config": {"mock_output": {"answer": "rush"}},
+            },
+            {
+                "id": "default_path",
+                "type": "tool",
+                "name": "Default Path",
+                "config": {"mock_output": {"answer": "later"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {
+                "id": "e2",
+                "sourceNodeId": "branch",
+                "targetNodeId": "urgent_path",
+                "condition": "urgent",
+            },
+            {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
+            {"id": "e4", "sourceNodeId": "urgent_path", "targetNodeId": "output"},
+            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+        ],
+    }
+
+
 def test_create_workflow_persists_initial_version(client: TestClient) -> None:
     response = client.post(
         "/api/workflows",
@@ -187,3 +237,37 @@ def test_create_workflow_rejects_unauthorized_mcp_query_source(client: TestClien
 
     assert response.status_code == 422
     assert "unauthorized source nodes" in response.json()["detail"]
+
+
+def test_create_workflow_accepts_condition_selector_rules(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Selector Workflow", "definition": _valid_selector_definition()},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    branch_node = next(node for node in body["definition"]["nodes"] if node["id"] == "branch")
+    assert branch_node["config"]["selector"]["rules"][0]["path"] == "trigger_input.priority"
+
+
+def test_create_workflow_rejects_selector_on_non_branch_node(client: TestClient) -> None:
+    definition = _valid_definition()
+    definition["nodes"][1]["config"]["selector"] = {
+        "rules": [
+            {
+                "key": "broken",
+                "path": "trigger_input.priority",
+                "operator": "eq",
+                "value": "high",
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Broken Selector Workflow", "definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "Only condition/router nodes may define config.selector" in response.json()["detail"]

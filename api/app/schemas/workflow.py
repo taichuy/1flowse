@@ -44,6 +44,52 @@ class WorkflowNodeMcpQuery(BaseModel):
     artifactTypes: list[ArtifactType] | None = None
 
 
+BranchSelectorOperator = Literal[
+    "exists",
+    "not_exists",
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+    "not_in",
+    "contains",
+]
+
+
+class WorkflowNodeBranchRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=64)
+    path: str = Field(min_length=1, max_length=256)
+    operator: BranchSelectorOperator = "eq"
+    value: Any = None
+
+    @model_validator(mode="after")
+    def validate_value_requirement(self) -> WorkflowNodeBranchRule:
+        if self.operator in {"exists", "not_exists"}:
+            return self
+        if self.value is None:
+            raise ValueError("Branch selector rules require 'value' for this operator.")
+        return self
+
+
+class WorkflowNodeBranchSelector(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rules: list[WorkflowNodeBranchRule] = Field(min_length=1)
+    default: str | None = Field(default=None, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def validate_unique_rule_keys(self) -> WorkflowNodeBranchSelector:
+        rule_keys = [rule.key for rule in self.rules]
+        if len(set(rule_keys)) != len(rule_keys):
+            raise ValueError("Branch selector rule keys must be unique.")
+        return self
+
+
 class WorkflowNodeDefinition(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -66,6 +112,12 @@ class WorkflowNodeDefinition(BaseModel):
             if query is None:
                 raise ValueError("MCP query nodes must define config.query.")
             WorkflowNodeMcpQuery.model_validate(query)
+
+        selector = self.config.get("selector")
+        if selector is not None:
+            if self.type not in {"condition", "router"}:
+                raise ValueError("Only condition/router nodes may define config.selector.")
+            WorkflowNodeBranchSelector.model_validate(selector)
 
         return self
 

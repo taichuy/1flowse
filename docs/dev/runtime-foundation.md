@@ -79,7 +79,10 @@ uv run alembic upgrade head
 
 - `run.started`
 - `node.started`
+- `node.skipped`
+- `node.retrying`
 - `node.output.completed`
+- `node.context.read`
 - `node.failed`
 - `run.completed`
 - `run.failed`
@@ -127,6 +130,10 @@ uv run alembic upgrade head
 - 检测循环并拒绝执行
 - 支持 `trigger`
 - 支持 `output`
+- 支持基于激活边的条件分支 / 失败分支
+- 支持节点级重试策略与退避参数
+- 支持节点授权上下文注入与 `mcp_query.authorized_context`
+- 支持 `condition` / `router` 通过最小规则选择器按输入命中分支
 - 其他节点默认走统一占位执行逻辑
 - 支持通过 `config.mock_output` 为节点声明稳定输出
 
@@ -189,9 +196,10 @@ docker compose up -d --build
 
 当前还没有实现：
 
-- 正式的 DAG 条件分支语义
+- 通用表达式引擎驱动的 DAG 条件语义
+- 多上游 join / 汇聚语义
 - Loop 节点执行
-- 节点级权限上下文
+- 外部 MCP Provider 接入
 - 插件兼容代理
 - 流式响应映射
 - 回放调试面板
@@ -200,8 +208,8 @@ docker compose up -d --build
 
 建议按下面顺序继续：
 
-1. 给执行器增加条件分支、失败分支和重试策略
-2. 增加节点授权上下文与 MCP 查询
+1. 在规则选择器之上补安全表达式能力与更完整的 DAG 条件语义
+2. 实现多上游 join / 汇聚约束，避免分支合流继续靠“谁先写入”隐式决定
 3. 实现 Dify 插件兼容代理
 4. 把 `run_events` 接到前端调试面板
 5. 再回头收紧更完整的 `7Flows IR` 校验和发布态版本治理

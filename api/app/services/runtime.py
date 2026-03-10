@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.models.run import NodeRun, Run, RunEvent
 from app.models.workflow import Workflow
 
+_MISSING = object()
+
 
 class WorkflowExecutionError(RuntimeError):
     pass
@@ -408,13 +410,32 @@ class RuntimeService:
         if node_type == "mcp_query":
             return self._execute_mcp_query_node(node, authorized_context, outputs)
         if node_type in {"condition", "router"}:
-            return {
-                "selected": config.get("selected", "default"),
-                "received": node_input,
-            }
+            return self._execute_branch_node(node, node_input)
         return {
             "node_id": node.get("id"),
             "node_type": node_type,
+            "received": node_input,
+        }
+
+    def _execute_branch_node(self, node: dict, node_input: dict) -> dict:
+        config = node.get("config", {})
+        selector = config.get("selector")
+        if isinstance(selector, dict):
+            selected, matched_rule, default_used = self._select_branch_from_rules(
+                selector,
+                node_input,
+            )
+            return {
+                "selected": selected,
+                "received": node_input,
+                "selector": {
+                    "matchedRule": matched_rule,
+                    "defaultUsed": default_used,
+                },
+            }
+
+        return {
+            "selected": config.get("selected", "default"),
             "received": node_input,
         }
 
@@ -607,6 +628,92 @@ class RuntimeService:
             return None
         normalized = str(value).strip().lower()
         return normalized or None
+
+    def _select_branch_from_rules(
+        self,
+        selector: dict,
+        node_input: dict,
+    ) -> tuple[str | None, dict | None, bool]:
+        for rule in selector.get("rules", []):
+            if self._selector_rule_matches(rule, node_input):
+                return rule["key"], rule, False
+
+        default_branch = selector.get("default")
+        if default_branch is not None:
+            return str(default_branch), None, True
+
+        return "default", None, True
+
+    def _selector_rule_matches(self, rule: dict, node_input: dict) -> bool:
+        actual_value = self._resolve_selector_path(node_input, str(rule["path"]))
+        operator = rule.get("operator", "eq")
+        expected_value = rule.get("value")
+
+        if operator == "exists":
+            return actual_value is not _MISSING
+        if operator == "not_exists":
+            return actual_value is _MISSING
+        if actual_value is _MISSING:
+            return False
+        if operator == "eq":
+            return actual_value == expected_value
+        if operator == "ne":
+            return actual_value != expected_value
+        if operator == "gt":
+            return self._compare_selector_values(actual_value, expected_value, lambda a, b: a > b)
+        if operator == "gte":
+            return self._compare_selector_values(actual_value, expected_value, lambda a, b: a >= b)
+        if operator == "lt":
+            return self._compare_selector_values(actual_value, expected_value, lambda a, b: a < b)
+        if operator == "lte":
+            return self._compare_selector_values(actual_value, expected_value, lambda a, b: a <= b)
+        if operator == "in":
+            return isinstance(expected_value, list | tuple | set) and actual_value in expected_value
+        if operator == "not_in":
+            return isinstance(
+                expected_value,
+                list | tuple | set,
+            ) and actual_value not in expected_value
+        if operator == "contains":
+            try:
+                return expected_value in actual_value
+            except TypeError:
+                return False
+        raise WorkflowExecutionError(f"Unsupported branch selector operator '{operator}'.")
+
+    def _compare_selector_values(
+        self,
+        actual_value: object,
+        expected_value: object,
+        comparator,
+    ) -> bool:
+        try:
+            return bool(comparator(actual_value, expected_value))
+        except TypeError:
+            return False
+
+    def _resolve_selector_path(self, payload: object, path: str) -> object:
+        current_value = payload
+        for token in self._selector_path_tokens(path):
+            if isinstance(current_value, dict):
+                if token not in current_value:
+                    return _MISSING
+                current_value = current_value[token]
+                continue
+            if isinstance(current_value, list):
+                if not token.isdigit():
+                    return _MISSING
+                index = int(token)
+                if index < 0 or index >= len(current_value):
+                    return _MISSING
+                current_value = current_value[index]
+                continue
+            return _MISSING
+        return current_value
+
+    def _selector_path_tokens(self, path: str) -> list[str]:
+        normalized_path = path.replace("[", ".").replace("]", "")
+        return [segment for segment in normalized_path.split(".") if segment]
 
     def _authorized_context_for_node(self, node: dict) -> AuthorizedContextRefs:
         config = node.get("config", {})

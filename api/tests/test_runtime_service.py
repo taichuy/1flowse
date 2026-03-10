@@ -98,6 +98,156 @@ def test_runtime_service_only_executes_selected_condition_branch(sqlite_session:
     assert "node.skipped" in [event.event_type for event in artifacts.events]
 
 
+def test_runtime_service_selects_condition_branch_from_trigger_input(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-condition-selector",
+        name="Condition Selector Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "condition",
+                    "name": "Branch",
+                    "config": {
+                        "selector": {
+                            "rules": [
+                                {
+                                    "key": "urgent",
+                                    "path": "trigger_input.priority",
+                                    "operator": "eq",
+                                    "value": "high",
+                                }
+                            ]
+                        }
+                    },
+                },
+                {
+                    "id": "urgent_path",
+                    "type": "tool",
+                    "name": "Urgent Path",
+                    "config": {"mock_output": {"answer": "rush"}},
+                },
+                {
+                    "id": "normal_path",
+                    "type": "tool",
+                    "name": "Normal Path",
+                    "config": {"mock_output": {"answer": "later"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "urgent_path",
+                    "condition": "urgent",
+                },
+                {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "normal_path"},
+                {"id": "e4", "sourceNodeId": "urgent_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "normal_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"priority": "high"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"urgent_path": {"answer": "rush"}}
+    assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
+        "trigger": "succeeded",
+        "branch": "succeeded",
+        "urgent_path": "succeeded",
+        "normal_path": "skipped",
+        "output": "succeeded",
+    }
+    branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
+    assert branch_run.output_payload["selected"] == "urgent"
+    assert branch_run.output_payload["selector"]["matchedRule"]["path"] == "trigger_input.priority"
+
+
+def test_runtime_service_uses_default_branch_when_selector_rules_do_not_match(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-condition-selector-default",
+        name="Condition Selector Default Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "router",
+                    "name": "Branch",
+                    "config": {
+                        "selector": {
+                            "rules": [
+                                {
+                                    "key": "research",
+                                    "path": "trigger_input.intent",
+                                    "operator": "eq",
+                                    "value": "research",
+                                }
+                            ]
+                        }
+                    },
+                },
+                {
+                    "id": "research_path",
+                    "type": "tool",
+                    "name": "Research Path",
+                    "config": {"mock_output": {"answer": "search docs"}},
+                },
+                {
+                    "id": "default_path",
+                    "type": "tool",
+                    "name": "Default Path",
+                    "config": {"mock_output": {"answer": "chat"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "research_path",
+                    "condition": "research",
+                },
+                {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
+                {"id": "e4", "sourceNodeId": "research_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"intent": "chat"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"default_path": {"answer": "chat"}}
+    assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
+        "trigger": "succeeded",
+        "branch": "succeeded",
+        "research_path": "skipped",
+        "default_path": "succeeded",
+        "output": "succeeded",
+    }
+    branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
+    assert branch_run.output_payload["selected"] == "default"
+    assert branch_run.output_payload["selector"]["defaultUsed"] is True
+
+
 def test_runtime_service_can_continue_through_failure_branch(sqlite_session: Session) -> None:
     workflow = Workflow(
         id="wf-failure-branch",
