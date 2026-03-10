@@ -1,3 +1,5 @@
+import json
+from collections import Counter
 from collections.abc import Callable
 
 import boto3
@@ -25,6 +27,10 @@ from app.services.plugin_runtime import (
 
 router = APIRouter(tags=["system"])
 
+_RECENT_RUN_LIMIT = 5
+_RECENT_EVENT_LIMIT = 8
+_PAYLOAD_PREVIEW_LIMIT = 180
+
 
 def _probe(name: str, handler: Callable[[], None]) -> ServiceCheck:
     try:
@@ -34,8 +40,31 @@ def _probe(name: str, handler: Callable[[], None]) -> ServiceCheck:
         return ServiceCheck(name=name, status="down", detail=str(exc))
 
 
+def _summarize_payload(payload: dict) -> tuple[list[str], str, int]:
+    payload_keys = sorted(str(key) for key in payload.keys())[:6]
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    payload_size = len(raw)
+    if payload_size <= _PAYLOAD_PREVIEW_LIMIT:
+        return payload_keys, raw, payload_size
+    return payload_keys, f"{raw[:_PAYLOAD_PREVIEW_LIMIT]}...", payload_size
+
+
+def _serialize_recent_event(event: RunEvent) -> RecentRunEventCheck:
+    payload_keys, payload_preview, payload_size = _summarize_payload(event.payload)
+    return RecentRunEventCheck(
+        id=event.id,
+        run_id=event.run_id,
+        node_run_id=event.node_run_id,
+        event_type=event.event_type,
+        payload_keys=payload_keys,
+        payload_preview=payload_preview,
+        payload_size=payload_size,
+        created_at=event.created_at,
+    )
+
+
 def _build_runtime_activity(db: Session) -> RuntimeActivityCheck:
-    recent_runs = db.query(Run).order_by(Run.created_at.desc()).limit(5).all()
+    recent_runs = db.query(Run).order_by(Run.created_at.desc()).limit(_RECENT_RUN_LIMIT).all()
     run_ids = [run.id for run in recent_runs]
 
     event_counts: dict[str, int] = {}
@@ -48,9 +77,19 @@ def _build_runtime_activity(db: Session) -> RuntimeActivityCheck:
         )
         event_counts = {run_id: count for run_id, count in counts}
 
-    recent_events = db.query(RunEvent).order_by(RunEvent.created_at.desc()).limit(12).all()
+    recent_events = (
+        db.query(RunEvent).order_by(RunEvent.created_at.desc()).limit(_RECENT_EVENT_LIMIT).all()
+    )
+    run_statuses = dict(sorted(Counter(run.status for run in recent_runs).items()))
+    event_types = dict(sorted(Counter(event.event_type for event in recent_events).items()))
 
     return RuntimeActivityCheck(
+        summary={
+            "recent_run_count": len(recent_runs),
+            "recent_event_count": len(recent_events),
+            "run_statuses": run_statuses,
+            "event_types": event_types,
+        },
         recent_runs=[
             RecentRunCheck(
                 id=run.id,
@@ -64,14 +103,7 @@ def _build_runtime_activity(db: Session) -> RuntimeActivityCheck:
             for run in recent_runs
         ],
         recent_events=[
-            RecentRunEventCheck(
-                id=event.id,
-                run_id=event.run_id,
-                node_run_id=event.node_run_id,
-                event_type=event.event_type,
-                payload=event.payload,
-                created_at=event.created_at,
-            )
+            _serialize_recent_event(event)
             for event in recent_events
         ],
     )

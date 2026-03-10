@@ -13,6 +13,7 @@ export default async function HomePage() {
   const overview = await getSystemOverview();
   const recentRuns = overview.runtime_activity.recent_runs;
   const recentEvents = overview.runtime_activity.recent_events;
+  const activitySummary = overview.runtime_activity.summary;
 
   return (
     <main className="shell">
@@ -50,7 +51,7 @@ export default async function HomePage() {
             </div>
             <div>
               <dt>Recent events</dt>
-              <dd>{recentEvents.length}</dd>
+              <dd>{activitySummary.recent_event_count}</dd>
             </div>
           </dl>
         </div>
@@ -156,6 +157,21 @@ export default async function HomePage() {
             </p>
           </div>
 
+          <div className="summary-strip">
+            <article className="summary-card">
+              <span>Recent runs</span>
+              <strong>{activitySummary.recent_run_count}</strong>
+            </article>
+            <article className="summary-card">
+              <span>Recent events</span>
+              <strong>{activitySummary.recent_event_count}</strong>
+            </article>
+            <article className="summary-card">
+              <span>Run statuses</span>
+              <strong>{formatCountMap(activitySummary.run_statuses)}</strong>
+            </article>
+          </div>
+
           <div className="activity-list">
             {recentRuns.length === 0 ? (
               <p className="empty-state">还没有历史 run，可先通过运行接口触发一次工作流执行。</p>
@@ -187,8 +203,21 @@ export default async function HomePage() {
               <h2>Application log spine</h2>
             </div>
             <p className="section-copy">
-              调试、流式输出和回放都会复用同一条 run events 事件流，这里先把最近事件直出。
+              调试、流式输出和回放都会复用同一条 run events 事件流；这里默认展示摘要与预览，
+              详细 payload 仍应回到专门的 run 详情或调试视图。
             </p>
+          </div>
+
+          <div className="event-type-strip">
+            {Object.keys(activitySummary.event_types).length === 0 ? (
+              <p className="empty-state compact">当前还没有可聚合的事件类型统计。</p>
+            ) : (
+              Object.entries(activitySummary.event_types).map(([eventType, count]) => (
+                <span className="event-chip" key={eventType}>
+                  {eventType} · {count}
+                </span>
+              ))
+            )}
           </div>
 
           <div className="event-list">
@@ -202,7 +231,11 @@ export default async function HomePage() {
                     <span>{formatTimestamp(event.created_at)}</span>
                   </div>
                   <p className="event-run">run {event.run_id}</p>
-                  <pre>{formatPayloadPreview(event.payload)}</pre>
+                  <div className="event-payload-meta">
+                    <span>keys: {event.payload_keys.join(", ") || "none"}</span>
+                    <span>size: {event.payload_size}</span>
+                  </div>
+                  <pre>{event.payload_preview}</pre>
                 </article>
               ))
             )}
@@ -238,7 +271,13 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
-function formatPayloadPreview(payload: Record<string, unknown>) {
-  const text = JSON.stringify(payload, null, 2);
-  return text.length > 220 ? `${text.slice(0, 220)}...` : text;
+function formatCountMap(value: Record<string, number>) {
+  const entries = Object.entries(value);
+  if (entries.length === 0) {
+    return "none";
+  }
+
+  return entries
+    .map(([label, count]) => `${label}:${count}`)
+    .join(" / ");
 }

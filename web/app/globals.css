@@ -246,6 +246,49 @@ body::before {
   margin-top: 22px;
 }
 
+.summary-strip,
+.event-type-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.summary-card,
+.event-chip {
+  border-radius: 18px;
+  border: 1px solid rgba(28, 25, 21, 0.08);
+  background: rgba(255, 252, 246, 0.78);
+}
+
+.summary-card {
+  min-width: 150px;
+  padding: 14px 16px;
+}
+
+.summary-card span {
+  display: block;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.summary-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.event-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 12px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
 .adapter-card,
 .tool-row,
 .activity-row,
@@ -394,9 +437,22 @@ body::before {
   font-size: 0.9rem;
 }
 
+.event-payload-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .empty-state {
   margin: 20px 0 0;
   line-height: 1.7;
+}
+
+.empty-state.compact {
+  margin-top: 0;
 }
 
 .roadmap {

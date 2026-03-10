@@ -95,7 +95,16 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
             "callable": True,
         }
     ]
-    assert body["runtime_activity"] == {"recent_runs": [], "recent_events": []}
+    assert body["runtime_activity"] == {
+        "summary": {
+            "recent_run_count": 0,
+            "recent_event_count": 0,
+            "run_statuses": {},
+            "event_types": {},
+        },
+        "recent_runs": [],
+        "recent_events": [],
+    }
     assert any(service["name"] == "plugin-adapter:dify-default" for service in body["services"])
 
 
@@ -169,6 +178,12 @@ def test_runtime_activity_returns_recent_runs_and_events(
 
     assert response.status_code == 200
     assert response.json() == {
+        "summary": {
+            "recent_run_count": 1,
+            "recent_event_count": 1,
+            "run_statuses": {"succeeded": 1},
+            "event_types": {"run.completed": 1},
+        },
         "recent_runs": [
             {
                 "id": "run-demo",
@@ -186,7 +201,9 @@ def test_runtime_activity_returns_recent_runs_and_events(
                 "run_id": "run-demo",
                 "node_run_id": None,
                 "event_type": "run.completed",
-                "payload": {"summary": "done"},
+                "payload_keys": ["summary"],
+                "payload_preview": "{\"summary\": \"done\"}",
+                "payload_size": 19,
                 "created_at": created_at_text,
             }
         ],

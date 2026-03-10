@@ -38,11 +38,21 @@ export type RecentRunEventCheck = {
   run_id: string;
   node_run_id?: string | null;
   event_type: string;
-  payload: Record<string, unknown>;
+  payload_keys: string[];
+  payload_preview: string;
+  payload_size: number;
   created_at: string;
 };
 
+export type RuntimeActivitySummary = {
+  recent_run_count: number;
+  recent_event_count: number;
+  run_statuses: Record<string, number>;
+  event_types: Record<string, number>;
+};
+
 export type RuntimeActivityCheck = {
+  summary: RuntimeActivitySummary;
   recent_runs: RecentRunCheck[];
   recent_events: RecentRunEventCheck[];
 };
@@ -71,6 +81,12 @@ const fallback: SystemOverview = {
   plugin_adapters: [],
   plugin_tools: [],
   runtime_activity: {
+    summary: {
+      recent_run_count: 0,
+      recent_event_count: 0,
+      run_statuses: {},
+      event_types: {}
+    },
     recent_runs: [],
     recent_events: []
   }

@@ -26,6 +26,13 @@ class PluginToolCheck(BaseModel):
     callable: bool
 
 
+class RuntimeActivitySummary(BaseModel):
+    recent_run_count: int = 0
+    recent_event_count: int = 0
+    run_statuses: dict[str, int] = Field(default_factory=dict)
+    event_types: dict[str, int] = Field(default_factory=dict)
+
+
 class RecentRunCheck(BaseModel):
     id: str
     workflow_id: str
@@ -41,11 +48,14 @@ class RecentRunEventCheck(BaseModel):
     run_id: str
     node_run_id: str | None = None
     event_type: str
-    payload: dict = Field(default_factory=dict)
+    payload_keys: list[str] = Field(default_factory=list)
+    payload_preview: str = ""
+    payload_size: int = 0
     created_at: datetime
 
 
 class RuntimeActivityCheck(BaseModel):
+    summary: RuntimeActivitySummary = Field(default_factory=RuntimeActivitySummary)
     recent_runs: list[RecentRunCheck] = Field(default_factory=list)
     recent_events: list[RecentRunEventCheck] = Field(default_factory=list)
 
