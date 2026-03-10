@@ -34,7 +34,8 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(var(--line) 1px, transparent 1px),
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
     linear-gradient(90deg, var(--line) 1px, transparent 1px);
   background-size: 28px 28px;
   opacity: 0.35;
@@ -50,7 +51,8 @@ body::before {
 
 .hero,
 .roadmap,
-.status-card {
+.status-card,
+.diagnostic-panel {
   backdrop-filter: blur(18px);
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.45);
@@ -66,7 +68,8 @@ body::before {
 }
 
 .hero-copy h1,
-.roadmap h2 {
+.roadmap h2,
+.section-heading h2 {
   margin: 8px 0 0;
   line-height: 1.05;
   letter-spacing: -0.04em;
@@ -80,7 +83,14 @@ body::before {
 .hero-text,
 .panel-text,
 .status-description,
-.roadmap-list {
+.roadmap-list,
+.section-copy,
+.adapter-copy,
+.adapter-endpoint,
+.tool-row p,
+.activity-copy,
+.event-run,
+.empty-state {
   color: var(--muted);
 }
 
@@ -132,21 +142,66 @@ body::before {
   letter-spacing: -0.04em;
 }
 
-.grid {
+.signal-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.signal-list div {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 248, 239, 0.1);
+  border: 1px solid rgba(255, 248, 239, 0.14);
+}
+
+.signal-list dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(255, 248, 239, 0.7);
+}
+
+.signal-list dd {
+  margin: 6px 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.grid,
+.diagnostics-layout {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   margin-top: 18px;
 }
 
-.status-card {
+.grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.diagnostics-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-card,
+.diagnostic-panel {
   padding: 20px;
   border-radius: 22px;
 }
 
-.status-header {
+.diagnostic-panel {
+  padding: 24px;
+  border-radius: 28px;
+}
+
+.status-header,
+.adapter-header,
+.activity-header,
+.event-meta,
+.section-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
@@ -176,6 +231,174 @@ body::before {
   line-height: 1.6;
 }
 
+.section-copy {
+  max-width: 30ch;
+  margin: 0;
+  line-height: 1.7;
+}
+
+.diagnostic-list,
+.tool-list,
+.activity-list,
+.event-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.adapter-card,
+.tool-row,
+.activity-row,
+.event-row {
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 252, 246, 0.78);
+  border: 1px solid rgba(28, 25, 21, 0.08);
+}
+
+.adapter-card h3,
+.tool-row h3,
+.activity-row h3 {
+  margin: 8px 0 0;
+  font-size: 1.15rem;
+}
+
+.adapter-endpoint,
+.tool-row p,
+.activity-row p,
+.event-row p,
+.event-row pre {
+  margin: 0;
+}
+
+.adapter-endpoint {
+  margin-top: 10px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.9rem;
+}
+
+.adapter-copy,
+.activity-copy {
+  margin: 10px 0 0;
+  line-height: 1.6;
+}
+
+.health-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: rgba(28, 25, 21, 0.08);
+}
+
+.health-pill.up,
+.health-pill.succeeded,
+.health-pill.success {
+  background: rgba(33, 110, 74, 0.12);
+  color: var(--ok);
+}
+
+.health-pill.down,
+.health-pill.failed,
+.health-pill.error {
+  background: rgba(161, 58, 50, 0.12);
+  color: var(--down);
+}
+
+.health-pill.disabled,
+.health-pill.skipped {
+  background: rgba(28, 25, 21, 0.08);
+  color: var(--muted);
+}
+
+.tool-row {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.tool-row dl {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  margin: 0;
+}
+
+.tool-row dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.tool-row dd {
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+
+.sync-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.sync-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: #fff8ef;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sync-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.sync-message {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.sync-message.success {
+  color: var(--ok);
+}
+
+.sync-message.error {
+  color: var(--down);
+}
+
+.event-row pre {
+  overflow-x: auto;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(28, 25, 21, 0.92);
+  color: #fff8ef;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.event-meta span:last-child,
+.event-run {
+  font-size: 0.9rem;
+}
+
+.empty-state {
+  margin: 20px 0 0;
+  line-height: 1.7;
+}
+
 .roadmap {
   display: grid;
   gap: 18px;
@@ -198,11 +421,23 @@ body::before {
   }
 
   .hero,
-  .roadmap {
+  .roadmap,
+  .diagnostics-layout {
     grid-template-columns: 1fr;
   }
 
   .hero-copy h1 {
     font-size: clamp(2.4rem, 12vw, 4rem);
+  }
+
+  .section-heading,
+  .tool-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .signal-list,
+  .tool-row dl {
+    grid-template-columns: 1fr;
   }
 }
