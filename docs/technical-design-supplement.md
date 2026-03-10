@@ -20,14 +20,75 @@
 
 ### 14.1 设计目标
 
-7Flows 不重新发明插件生态，而是通过**兼容性代理层**复用 Dify 已有的插件市场与工具包。代理层负责：
+7Flows 的目标不是把 Dify 兼容逻辑硬编码进核心后端，而是建立一个**原生插件生态 + 可开关兼容层代理**的架构。
 
-1. **Manifest 转译**：读取 Dify 插件 `manifest.yaml`，将 `plugins.tools[].identity / parameters` 映射为 7Flows IR `ToolDefinition`
-2. **调用代理**：请求序列化（7Flows IR → Dify Plugin Request）、鉴权注入、超时控制、响应反序列化
-3. **生命周期管理**：插件进程启停、健康检查、版本热更新
-4. **隔离策略**：每个插件运行在独立容器/进程中，崩溃不影响宿主
+这组设计同时遵循以下架构理念：
 
-### 14.2 转译协议
+1. **内部事实优先**
+   - 插件兼容只能把外部描述转译进 7Flows 内部对象模型，不能让外部生态反向定义内部 DSL
+2. **兼容层是边缘能力，不是平台中轴**
+   - 核心运行时、事件流、鉴权与发布链路不应为某一个外部生态长出专属分支
+3. **原生生态先于生态复刻**
+   - 兼容层用于冷启动复用，不代表 7Flows 要长期以“复刻某平台结构”为目标
+4. **能力接入先分层，再复用**
+   - 先区分 node/provider/compat adapter 三类职责，再谈安装、发现、调用与 UI 映射
+5. **部署与生命周期可观测**
+   - 每个兼容层都应可启停、可限域、可健康检查、可独立排障
+
+当前建议分为两层：
+
+1. **7Flows Native Plugin Layer**
+   - 挂在 `api/` 原生后端
+   - 管理平台自己的节点插件、供应商插件、未来的原生生态
+2. **Compatibility Adapter Layer**
+   - 以插件形式或独立服务形式挂接
+   - 每个兼容层对应一个外部生态，例如 Dify
+   - 可按部署或工作空间启用/停用，不应成为核心后端的硬编码分支
+
+首版重点仍然是 Dify，但架构上应直接为多兼容层预留：
+
+- `compat:dify`
+- `compat:n8n`（未来预留，不在当前交付范围）
+- 其他外部生态
+
+对于单个兼容层，代理层负责：
+
+1. **生态转译**：读取外部插件描述并映射到 7Flows 内部 `ToolDefinition` / `ProviderDefinition`
+2. **调用代理**：请求序列化、鉴权注入、超时控制、响应反序列化
+3. **生命周期管理**：插件安装、卸载、升级、健康检查
+4. **隔离策略**：每个插件或每类兼容服务运行在独立容器/进程中，崩溃不影响宿主
+
+### 14.2 插件分类与服务边界
+
+建议平台内统一存在三类插件：
+
+```ts
+type PluginKind =
+  | 'node'
+  | 'provider'
+  | 'compat_adapter'
+```
+
+- `node`
+  - 直接为工作流提供节点能力
+- `provider`
+  - 提供模型、向量、外部服务等供应商能力
+- `compat_adapter`
+  - 提供“外部插件生态到 7Flows”的桥接能力
+
+推荐服务边界：
+
+- `api/`
+  - 保存原生插件注册中心与统一调用协议
+  - 决定某个插件来自哪个生态
+  - 统一向运行时暴露节点能力与供应商能力
+- `dify adapter service`
+  - 单独负责 Dify 插件安装、运行、调试和健康检查
+  - 7Flows 通过 compat adapter 协议调用该服务
+
+这样 Dify 兼容层可以独立启停、独立部署、独立观察，也更利于未来新增其他生态兼容层。
+
+### 14.3 Dify 兼容层转译协议
 
 Dify 插件的 Manifest 与 7Flows 内部工具定义的映射关系：
 
@@ -66,7 +127,7 @@ type DifyToolParameter = {
 
 /** 7Flows 内部工具定义（与 Node.config 中 tool 类型节点配合） */
 type SevenFlowsToolDefinition = {
-  id: string                       // `plugin:<author>/<name>`
+  id: string                       // `compat:dify:plugin:<author>/<name>`
   name: string
   description: string
   inputSchema: JsonSchema           // 复用 product-design.md 中的 JsonSchema
@@ -74,6 +135,7 @@ type SevenFlowsToolDefinition = {
   source: 'builtin' | 'plugin' | 'mcp'
   pluginMeta?: {
     origin: 'dify'
+    ecosystem: 'compat:dify'
     manifestVersion: string
     author: string
     icon: string
@@ -85,7 +147,7 @@ type SevenFlowsToolDefinition = {
 
 | Dify 字段 | 7Flows 字段 | 转换逻辑 |
 |-----------|-------------|----------|
-| `identity.name` | `id` | 拼接为 `plugin:{author}/{name}` |
+| `identity.name` | `id` | 拼接为 `compat:dify:plugin:{author}/{name}` |
 | `identity.label.en_US` | `name` | 取英文标签，缺省用 `identity.name` |
 | `identity.description.en_US` | `description` | 取英文描述 |
 | `parameters[]` | `inputSchema.properties` | 逐字段映射类型 |
@@ -95,11 +157,13 @@ type SevenFlowsToolDefinition = {
 | `parameters[].type = 'file'` | `{ type: 'string', format: 'uri' }` | 文件引用 URI |
 | `parameters[].required` | `inputSchema.required[]` | 聚合 required 数组 |
 
-### 14.3 调用代理 PluginCallProxy
+### 14.4 调用代理 PluginCallProxy
 
 ```ts
 type PluginCallRequest = {
   toolId: string
+  ecosystem: string                     // 如 'native' | 'compat:dify'
+  adapterId?: string                    // 如 'dify-default'
   inputs: Record<string, unknown>
   credentials: Record<string, string>   // 运行时解密注入
   timeout: number                       // 毫秒
@@ -119,25 +183,86 @@ type PluginCallResponse = {
 ```
 7Flows Node Executor
   → PluginCallProxy.invoke(request)
-    → 序列化为 Dify Plugin HTTP 请求格式
-    → 注入鉴权 Header（从凭证管理解密获取）
-    → 发送到插件进程/容器 HTTP 端口
-    → 超时控制（AbortController / asyncio.timeout）
-    → 反序列化响应为 PluginCallResponse
+    → 根据 ecosystem 选择 native runtime 或 compat adapter
+    → 若 ecosystem = compat:dify：
+      → 序列化为 Dify Plugin HTTP 请求格式
+      → 注入鉴权 Header（从凭证管理解密获取）
+      → 发送到 Dify Adapter Service
+      → 超时控制（AbortController / asyncio.timeout）
+      → 反序列化响应为 PluginCallResponse
   → 写入 Node Run 产出
 ```
 
-### 14.4 生命周期管理
+### 14.5 兼容层开关与生命周期管理
+
+建议兼容层开关粒度：
+
+- 部署级
+  - 某个适配服务是否启用
+- 工作空间级
+  - 某个 workspace 是否可用某个生态
+- 插件级
+  - 某个具体插件是否安装/启用
+
+建议最小控制对象：
+
+```ts
+type CompatibilityAdapterRegistration = {
+  id: string
+  ecosystem: 'compat:dify' | 'compat:n8n'
+  enabled: boolean
+  endpoint: string
+  healthStatus: 'healthy' | 'degraded' | 'offline'
+  scopes: {
+    workspaceIds?: string[]
+    pluginKinds: ('node' | 'provider')[]
+  }
+}
+```
+
+### 14.6 Dify 兼容层生命周期管理
 
 | 事件 | 行为 |
 |------|------|
-| 插件安装 | 拉取包 → 解析 manifest → 转译注册 → 启动容器 |
-| 插件调用 | 健康检查 → 调用 → 记录指标 |
-| 插件更新 | 拉取新版本 → 重新转译 → 滚动替换容器 |
-| 插件卸载 | 停止容器 → 清理注册 → 清理凭证 |
-| 健康检查失败 | 重启容器（最多 3 次） → 标记不可用 → 通知 |
+| 兼容层启用 | 注册 adapter → 健康检查 → 暴露可发现插件列表 |
+| 插件安装 | Dify Adapter Service 拉取包 → 解析 manifest → 转译注册 → 启动容器 |
+| 插件调用 | 7Flows 健康检查 adapter → 调用 → 记录指标 |
+| 插件更新 | Adapter 拉取新版本 → 重新转译 → 滚动替换容器 |
+| 插件卸载 | Adapter 停止容器 → 清理注册 → 清理凭证 |
+| 兼容层停用 | adapter 标记 disabled → 从发现列表移除 → 拒绝新调用 |
+| 健康检查失败 | 重启 adapter / 容器（最多 3 次） → 标记不可用 → 通知 |
 
-### 14.5 参考代码
+### 14.7 与 Dify 官方插件类型的边界
+
+根据本地 Dify 文档 `E:\code\taichuCode\dify-docs\zh\develop-plugin\dev-guides-and-walkthroughs\cheatsheet.mdx`，Dify 当前插件类型包含：
+
+- 工具插件
+- 模型插件
+- 智能体策略插件
+- 扩展插件
+- 数据源插件
+- 触发器插件
+
+7Flows 首版不要求一次性完整覆盖所有类型，而是建议：
+
+- 优先兼容工具插件
+- 评估模型插件与供应商插件的映射边界
+- 将触发器/数据源/扩展类能力视为后续分类，不在首版假装已完整支持
+
+### 14.8 仓库与部署建议
+
+为便于未来多生态共存，建议从文档和工程组织上就区分：
+
+- `api/`
+  - 7Flows 原生插件接口、注册中心、统一调用协议
+- `services/compat-dify/`（未来建议目录）
+  - Dify 兼容层服务
+- `services/compat-n8n/`（未来建议目录）
+  - n8n 兼容层服务
+- 插件管理视图
+  - 按 `native / compat:dify / compat:n8n` 分类展示
+
+### 14.9 参考代码
 
 | 参考项 | 路径 |
 |--------|------|
@@ -148,6 +273,7 @@ type PluginCallResponse = {
 | Dify 插件 Provider 控制器 | `dify/api/core/tools/plugin_tool/provider.py` → `PluginToolProviderController` (line 11) |
 | Dify 工具管理中枢 | `dify/api/core/tools/tool_manager.py` → `ToolManager` |
 | Dify 工具执行引擎 | `dify/api/core/tools/tool_engine.py` → `ToolEngine.agent_invoke()` (line 48) |
+| Dify 插件类型速查 | `E:\code\taichuCode\dify-docs\zh\develop-plugin\dev-guides-and-walkthroughs\cheatsheet.mdx` |
 
 ---
 
