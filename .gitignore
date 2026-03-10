@@ -144,3 +144,4 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 api/.venv/
 docker/volumes/
+api/app/schemas/__pycache__/
