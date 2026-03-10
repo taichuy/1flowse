@@ -3,9 +3,14 @@ import { notFound } from "next/navigation";
 
 import { RunDiagnosticsPanel } from "@/components/run-diagnostics-panel";
 import { getRunDetail } from "@/lib/get-run-detail";
+import {
+  getRunTrace,
+  parseRunTraceSearchParams
+} from "@/lib/get-run-trace";
 
 type RunDiagnosticsPageProps = {
   params: Promise<{ runId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export async function generateMetadata({
@@ -19,14 +24,26 @@ export async function generateMetadata({
 }
 
 export default async function RunDiagnosticsPage({
-  params
+  params,
+  searchParams
 }: RunDiagnosticsPageProps) {
   const { runId } = await params;
-  const run = await getRunDetail(runId);
+  const traceQuery = parseRunTraceSearchParams((await searchParams) ?? {});
+  const [run, traceResult] = await Promise.all([
+    getRunDetail(runId),
+    getRunTrace(runId, traceQuery)
+  ]);
 
   if (!run) {
     notFound();
   }
 
-  return <RunDiagnosticsPanel run={run} />;
+  return (
+    <RunDiagnosticsPanel
+      run={run}
+      trace={traceResult.trace}
+      traceError={traceResult.errorMessage}
+      traceQuery={traceQuery}
+    />
+  );
 }
