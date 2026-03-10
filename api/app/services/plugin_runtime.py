@@ -18,6 +18,10 @@ class PluginInvocationError(RuntimeError):
     pass
 
 
+class PluginCatalogError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class PluginToolDefinition:
     id: str
@@ -287,6 +291,76 @@ class CompatibilityAdapterHealthChecker:
         return [self.probe(adapter) for adapter in registry.list_adapters()]
 
 
+class CompatibilityAdapterCatalogClient:
+    def __init__(
+        self,
+        *,
+        client_factory: ClientFactory | None = None,
+        timeout_ms: int = 5_000,
+    ) -> None:
+        self._client_factory = client_factory or PluginCallProxy._default_client_factory
+        self._timeout_ms = timeout_ms
+
+    def fetch_tools(
+        self,
+        adapter: CompatibilityAdapterRegistration,
+    ) -> list[PluginToolDefinition]:
+        tools_url = f"{adapter.endpoint.rstrip('/')}/tools"
+        try:
+            with self._client_factory(self._timeout_ms) as client:
+                response = client.get(
+                    tools_url,
+                    headers={"x-sevenflows-adapter-id": adapter.id},
+                )
+            response.raise_for_status()
+        except Exception as exc:
+            raise PluginCatalogError(
+                f"Plugin adapter '{adapter.id}' tool catalog request failed."
+            ) from exc
+
+        body = response.json()
+        raw_tools = body.get("tools") if isinstance(body, dict) else body
+        if not isinstance(raw_tools, list):
+            raise PluginCatalogError(
+                f"Plugin adapter '{adapter.id}' returned an invalid tool catalog payload."
+            )
+
+        definitions: list[PluginToolDefinition] = []
+        for item in raw_tools:
+            if not isinstance(item, dict):
+                raise PluginCatalogError(
+                    f"Plugin adapter '{adapter.id}' returned a non-object tool entry."
+                )
+
+            ecosystem = str(item.get("ecosystem") or adapter.ecosystem)
+            if ecosystem != adapter.ecosystem:
+                raise PluginCatalogError(
+                    f"Plugin adapter '{adapter.id}' returned tool ecosystem '{ecosystem}', "
+                    f"expected '{adapter.ecosystem}'."
+                )
+
+            definitions.append(
+                PluginToolDefinition(
+                    id=str(item.get("id") or ""),
+                    name=str(item.get("name") or ""),
+                    ecosystem=ecosystem,
+                    description=str(item.get("description") or ""),
+                    input_schema=dict(item.get("input_schema") or {}),
+                    output_schema=item.get("output_schema"),
+                    source=str(item.get("source") or "plugin"),
+                    plugin_meta=dict(item.get("plugin_meta") or {}) or None,
+                )
+            )
+
+        for definition in definitions:
+            if not definition.id or not definition.name:
+                raise PluginCatalogError(
+                    f"Plugin adapter '{adapter.id}' returned a tool without id or name."
+                )
+
+        return definitions
+
+
 def build_plugin_registry(settings: Settings | None = None) -> PluginRegistry:
     app_settings = settings or get_settings()
     registry = PluginRegistry()
@@ -318,3 +392,8 @@ def get_plugin_call_proxy() -> PluginCallProxy:
 @lru_cache(maxsize=1)
 def get_compatibility_adapter_health_checker() -> CompatibilityAdapterHealthChecker:
     return CompatibilityAdapterHealthChecker()
+
+
+@lru_cache(maxsize=1)
+def get_compatibility_adapter_catalog_client() -> CompatibilityAdapterCatalogClient:
+    return CompatibilityAdapterCatalogClient()

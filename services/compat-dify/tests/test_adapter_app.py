@@ -17,6 +17,48 @@ def test_healthz_reports_stub_identity() -> None:
     }
 
 
+def test_tools_lists_translated_catalog() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/tools", headers={"x-sevenflows-adapter-id": "dify-default"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["adapter_id"] == "dify-default"
+    assert body["ecosystem"] == "compat:dify"
+    assert len(body["tools"]) == 2
+    assert body["tools"][0]["id"] == "compat:dify:plugin:demo/search"
+    assert body["tools"][0]["input_schema"] == {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "title": "Query",
+                "description": "Search query",
+                "x-dify-form": "llm",
+            },
+            "limit": {
+                "type": "number",
+                "title": "Limit",
+                "description": "Maximum number of results",
+                "default": 5,
+                "x-dify-form": "form",
+            },
+        },
+        "additionalProperties": False,
+        "required": ["query"],
+    }
+
+
+def test_tools_rejects_wrong_adapter_header() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/tools", headers={"x-sevenflows-adapter-id": "wrong-adapter"})
+
+    assert response.status_code == 422
+    assert "Header adapter id mismatch" in response.json()["detail"]
+
+
 def test_invoke_returns_stubbed_output() -> None:
     client = TestClient(create_app())
 

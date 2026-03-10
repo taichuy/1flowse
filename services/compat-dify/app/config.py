@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     health_status: str = "ok"
     supported_ecosystem: str = "compat:dify"
     default_latency_ms: int = Field(default=5, ge=0, le=30_000)
+    catalog_root: str = "catalog"
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

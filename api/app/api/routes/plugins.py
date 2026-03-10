@@ -1,14 +1,17 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.schemas.plugin import (
     PluginAdapterRegistrationCreate,
     PluginAdapterRegistrationItem,
     PluginToolItem,
     PluginToolRegistrationCreate,
+    PluginToolSyncResult,
 )
 from app.services.plugin_runtime import (
     CompatibilityAdapterRegistration,
+    PluginCatalogError,
     PluginToolDefinition,
+    get_compatibility_adapter_catalog_client,
     get_compatibility_adapter_health_checker,
     get_plugin_registry,
 )
@@ -82,6 +85,43 @@ def register_plugin_adapter(
         )
     )
     return _serialize_adapter(payload.id)
+
+
+@router.post(
+    "/adapters/{adapter_id}/sync-tools",
+    response_model=PluginToolSyncResult,
+)
+def sync_plugin_adapter_tools(adapter_id: str) -> PluginToolSyncResult:
+    registry = get_plugin_registry()
+    adapter = registry.get_adapter(adapter_id)
+    if adapter is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Plugin adapter '{adapter_id}' is not registered.",
+        )
+    if not adapter.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Plugin adapter '{adapter_id}' is disabled.",
+        )
+
+    try:
+        tools = get_compatibility_adapter_catalog_client().fetch_tools(adapter)
+    except PluginCatalogError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    for tool in tools:
+        registry.register_tool(tool)
+
+    return PluginToolSyncResult(
+        adapter_id=adapter.id,
+        ecosystem=adapter.ecosystem,
+        discovered_count=len(tools),
+        tools=[_serialize_tool(tool.id) for tool in tools],
+    )
 
 
 @router.get("/tools", response_model=list[PluginToolItem])

@@ -54,3 +54,10 @@ class PluginToolItem(BaseModel):
     source: str
     plugin_meta: dict[str, Any] | None = None
     callable: bool
+
+
+class PluginToolSyncResult(BaseModel):
+    adapter_id: str
+    ecosystem: str
+    discovered_count: int
+    tools: list[PluginToolItem] = Field(default_factory=list)

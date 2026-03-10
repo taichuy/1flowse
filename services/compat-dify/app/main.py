@@ -5,8 +5,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, status
 
+from app.catalog import list_catalog_tools
 from app.config import get_settings
-from app.schemas import AdapterHealthResponse, AdapterInvokeRequest, AdapterInvokeResponse
+from app.schemas import (
+    AdapterHealthResponse,
+    AdapterInvokeRequest,
+    AdapterInvokeResponse,
+    AdapterToolListResponse,
+)
 
 
 @asynccontextmanager
@@ -31,6 +37,24 @@ def create_app() -> FastAPI:
             mode=settings.stub_mode,
         )
 
+    def validate_adapter_header(x_sevenflows_adapter_id: str | None) -> None:
+        if x_sevenflows_adapter_id and x_sevenflows_adapter_id != settings.adapter_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Header adapter id mismatch: expected '{settings.adapter_id}'.",
+            )
+
+    @application.get("/tools", response_model=AdapterToolListResponse)
+    def list_tools(
+        x_sevenflows_adapter_id: str | None = Header(default=None),
+    ) -> AdapterToolListResponse:
+        validate_adapter_header(x_sevenflows_adapter_id)
+        return AdapterToolListResponse(
+            adapter_id=settings.adapter_id,
+            ecosystem=settings.supported_ecosystem,
+            tools=list_catalog_tools(settings),
+        )
+
     @application.post("/invoke", response_model=AdapterInvokeResponse)
     def invoke(
         payload: AdapterInvokeRequest,
@@ -52,11 +76,7 @@ def create_app() -> FastAPI:
                 detail=f"Adapter id mismatch: expected '{settings.adapter_id}'.",
             )
 
-        if x_sevenflows_adapter_id and x_sevenflows_adapter_id != settings.adapter_id:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Header adapter id mismatch: expected '{settings.adapter_id}'.",
-            )
+        validate_adapter_header(x_sevenflows_adapter_id)
 
         started_at = time.perf_counter()
         if settings.default_latency_ms > 0:
