@@ -84,3 +84,119 @@ def test_execute_workflow_route_returns_handled_failure_branch(
         "fallback": "succeeded",
         "output": "succeeded",
     }
+
+
+def test_execute_workflow_route_exposes_retry_events(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-retry",
+        name="Route Retry Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "flaky_tool",
+                    "type": "tool",
+                    "name": "Flaky Tool",
+                    "config": {
+                        "mock_error_sequence": ["route temporary"],
+                        "mock_output": {"answer": "route recovered"},
+                    },
+                    "runtimePolicy": {
+                        "retry": {
+                            "maxAttempts": 2,
+                            "backoffSeconds": 0,
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "flaky_tool"},
+                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"message": "retry route"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["output_payload"] == {"flaky_tool": {"answer": "route recovered"}}
+    assert [event["event_type"] for event in body["events"]].count("node.retrying") == 1
+
+
+def test_execute_workflow_route_exposes_authorized_context_reads(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-mcp",
+        name="Route MCP Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "planner",
+                    "type": "tool",
+                    "name": "Planner",
+                    "config": {"mock_output": {"plan": "route plan"}},
+                },
+                {
+                    "id": "reader",
+                    "type": "mcp_query",
+                    "name": "Reader",
+                    "config": {
+                        "contextAccess": {"readableNodeIds": ["planner"]},
+                        "query": {
+                            "type": "authorized_context",
+                            "sourceNodeIds": ["planner"],
+                            "artifactTypes": ["json"],
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "reader"},
+                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"message": "mcp route"}},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["output_payload"] == {
+        "reader": {
+            "query": {
+                "type": "authorized_context",
+                "sourceNodeIds": ["planner"],
+                "artifactTypes": ["json"],
+            },
+            "results": [
+                {"nodeId": "planner", "artifactType": "json", "content": {"plan": "route plan"}}
+            ],
+        }
+    }
+    assert [event["event_type"] for event in body["events"]].count("node.context.read") == 1

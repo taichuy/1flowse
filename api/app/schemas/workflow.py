@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any, Literal
 
@@ -17,6 +19,29 @@ NodeType = Literal[
 EdgeChannel = Literal["control", "data"]
 PublishProtocol = Literal["native", "openai", "anthropic"]
 AuthMode = Literal["api_key", "token", "internal"]
+ArtifactType = Literal["text", "json", "file", "tool_result", "message"]
+
+
+class WorkflowNodeContextArtifactRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nodeId: str = Field(min_length=1, max_length=64)
+    artifactType: ArtifactType
+
+
+class WorkflowNodeContextAccess(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    readableNodeIds: list[str] = Field(default_factory=list)
+    readableArtifacts: list[WorkflowNodeContextArtifactRef] = Field(default_factory=list)
+
+
+class WorkflowNodeMcpQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["authorized_context"]
+    sourceNodeIds: list[str] | None = None
+    artifactTypes: list[ArtifactType] | None = None
 
 
 class WorkflowNodeDefinition(BaseModel):
@@ -28,7 +53,35 @@ class WorkflowNodeDefinition(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     inputSchema: dict[str, Any] | None = None
     outputSchema: dict[str, Any] | None = None
-    runtimePolicy: dict[str, Any] | None = None
+    runtimePolicy: WorkflowNodeRuntimePolicy | None = None
+
+    @model_validator(mode="after")
+    def validate_embedded_config(self) -> WorkflowNodeDefinition:
+        context_access = self.config.get("contextAccess")
+        if context_access is not None:
+            WorkflowNodeContextAccess.model_validate(context_access)
+
+        query = self.config.get("query")
+        if self.type == "mcp_query":
+            if query is None:
+                raise ValueError("MCP query nodes must define config.query.")
+            WorkflowNodeMcpQuery.model_validate(query)
+
+        return self
+
+
+class WorkflowNodeRetryPolicy(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    maxAttempts: int = Field(default=1, ge=1)
+    backoffSeconds: float = Field(default=0.0, ge=0.0)
+    backoffMultiplier: float = Field(default=1.0, ge=1.0)
+
+
+class WorkflowNodeRuntimePolicy(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    retry: WorkflowNodeRetryPolicy | None = None
 
 
 class WorkflowEdgeDefinition(BaseModel):
@@ -74,7 +127,7 @@ class WorkflowDefinitionDocument(BaseModel):
     trigger: dict[str, Any] | None = None
 
     @model_validator(mode="after")
-    def validate_graph(self) -> "WorkflowDefinitionDocument":
+    def validate_graph(self) -> WorkflowDefinitionDocument:
         node_ids = [node.id for node in self.nodes]
         if len(set(node_ids)) != len(node_ids):
             raise ValueError("Workflow node ids must be unique.")
@@ -90,6 +143,39 @@ class WorkflowDefinitionDocument(BaseModel):
 
         if not any(node.type == "output" for node in self.nodes):
             raise ValueError("Workflow definition must contain at least one output node.")
+
+        for node in self.nodes:
+            context_access = WorkflowNodeContextAccess.model_validate(
+                node.config.get("contextAccess") or {}
+            )
+            authorized_node_ids = set(context_access.readableNodeIds)
+            authorized_node_ids.update(
+                artifact.nodeId for artifact in context_access.readableArtifacts
+            )
+
+            for readable_node_id in sorted(authorized_node_ids):
+                if readable_node_id not in node_id_set:
+                    raise ValueError(
+                        f"Node '{node.id}' contextAccess references missing node "
+                        f"'{readable_node_id}'."
+                    )
+
+            if node.type == "mcp_query":
+                query = WorkflowNodeMcpQuery.model_validate(node.config["query"])
+                requested_source_ids = set(query.sourceNodeIds or [])
+                for source_node_id in sorted(requested_source_ids):
+                    if source_node_id not in node_id_set:
+                        raise ValueError(
+                            f"Node '{node.id}' query references missing source node "
+                            f"'{source_node_id}'."
+                        )
+                unauthorized_sources = sorted(requested_source_ids - authorized_node_ids)
+                if unauthorized_sources:
+                    joined_sources = ", ".join(unauthorized_sources)
+                    raise ValueError(
+                        f"Node '{node.id}' query references unauthorized source nodes: "
+                        f"{joined_sources}."
+                    )
 
         for edge in self.edges:
             if edge.sourceNodeId not in node_id_set:
@@ -118,7 +204,7 @@ class WorkflowUpdate(BaseModel):
     definition: dict | None = None
 
     @model_validator(mode="after")
-    def ensure_update_payload(self) -> "WorkflowUpdate":
+    def ensure_update_payload(self) -> WorkflowUpdate:
         if self.name is None and self.definition is None:
             raise ValueError("At least one of 'name' or 'definition' must be provided.")
         return self

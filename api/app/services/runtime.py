@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -21,6 +22,20 @@ class ExecutionArtifacts:
     run: Run
     node_runs: list[NodeRun]
     events: list[RunEvent]
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    max_attempts: int = 1
+    backoff_seconds: float = 0.0
+    backoff_multiplier: float = 1.0
+
+
+@dataclass(frozen=True)
+class AuthorizedContextRefs:
+    current_node_id: str
+    readable_node_ids: tuple[str, ...] = ()
+    readable_artifacts: tuple[tuple[str, str], ...] = ()
 
 
 def _utcnow() -> datetime:
@@ -73,11 +88,18 @@ class RuntimeService:
         try:
             for node in ordered_nodes:
                 node_id = node["id"]
+                retry_policy = self._retry_policy_for_node(node)
+                accumulated_input = data_inputs.get(node_id, {})
+                activation_sources = activated_by.get(node_id, set())
+                authorized_context = self._authorized_context_for_node(node)
                 node_input = self._build_node_input(
                     node=node,
                     input_payload=input_payload,
-                    accumulated=data_inputs.get(node_id, {}),
-                    activated_by=activated_by.get(node_id, set()),
+                    accumulated=accumulated_input,
+                    activated_by=activation_sources,
+                    authorized_context=authorized_context,
+                    attempt_number=1,
+                    max_attempts=retry_policy.max_attempts,
                 )
                 if not self._should_execute_node(
                     node,
@@ -125,7 +147,18 @@ class RuntimeService:
                 )
 
                 try:
-                    node_output = self._execute_node(node, node_input)
+                    node_output = self._execute_node_with_retry(
+                        node=node,
+                        node_run=node_run,
+                        run_id=run.id,
+                        input_payload=input_payload,
+                        accumulated=accumulated_input,
+                        activated_by=activation_sources,
+                        authorized_context=authorized_context,
+                        outputs=outputs,
+                        retry_policy=retry_policy,
+                        events=events,
+                    )
                 except Exception as exc:
                     node_error = str(exc)
                     node_run.status = "failed"
@@ -273,8 +306,94 @@ class RuntimeService:
             select(Run).where(Run.workflow_id == workflow_id).order_by(Run.created_at.desc())
         ).all()
 
-    def _execute_node(self, node: dict, node_input: dict) -> dict:
+    def _execute_node_with_retry(
+        self,
+        node: dict,
+        node_run: NodeRun,
+        run_id: str,
+        input_payload: dict,
+        accumulated: dict,
+        activated_by: set[str],
+        authorized_context: AuthorizedContextRefs,
+        outputs: dict[str, dict],
+        retry_policy: RetryPolicy,
+        events: list[RunEvent],
+    ) -> dict:
+        last_error: Exception | None = None
+
+        for attempt_number in range(1, retry_policy.max_attempts + 1):
+            node_run.input_payload = self._build_node_input(
+                node=node,
+                input_payload=input_payload,
+                accumulated=accumulated,
+                activated_by=activated_by,
+                authorized_context=authorized_context,
+                attempt_number=attempt_number,
+                max_attempts=retry_policy.max_attempts,
+            )
+            node_run.status = "retrying" if attempt_number > 1 else "running"
+
+            try:
+                node_output = self._execute_node(
+                    node=node,
+                    node_input=node_run.input_payload,
+                    attempt_number=attempt_number,
+                    authorized_context=authorized_context,
+                    outputs=outputs,
+                )
+                if node.get("type") == "mcp_query":
+                    events.append(
+                        self._build_event(
+                            run_id,
+                            node_run.id,
+                            "node.context.read",
+                            self._build_context_read_payload(node, node_output),
+                        )
+                    )
+                return node_output
+            except Exception as exc:
+                last_error = exc
+                if attempt_number >= retry_policy.max_attempts:
+                    raise
+
+                delay_seconds = self._retry_delay_seconds(retry_policy, attempt_number)
+                events.append(
+                    self._build_event(
+                        run_id,
+                        node_run.id,
+                        "node.retrying",
+                        {
+                            "node_id": node["id"],
+                            "attempt": attempt_number,
+                            "max_attempts": retry_policy.max_attempts,
+                            "error": str(exc),
+                            "next_retry_in_seconds": delay_seconds,
+                        },
+                    )
+                )
+                if delay_seconds > 0:
+                    time.sleep(delay_seconds)
+
+        if last_error is None:
+            raise WorkflowExecutionError(f"Node '{node['id']}' exhausted retries without error.")
+        raise last_error
+
+    def _execute_node(
+        self,
+        node: dict,
+        node_input: dict,
+        attempt_number: int,
+        authorized_context: AuthorizedContextRefs,
+        outputs: dict[str, dict],
+    ) -> dict:
         config = node.get("config", {})
+        mock_error_sequence = config.get("mock_error_sequence")
+        if isinstance(mock_error_sequence, list):
+            attempt_index = attempt_number - 1
+            if attempt_index < len(mock_error_sequence):
+                attempt_error = mock_error_sequence[attempt_index]
+                if attempt_error:
+                    raise WorkflowExecutionError(str(attempt_error))
         if "mock_error" in config:
             raise WorkflowExecutionError(str(config["mock_error"]))
         if "mock_output" in config:
@@ -286,6 +405,8 @@ class RuntimeService:
             return node_input.get("trigger_input", {})
         if node_type == "output":
             return node_input.get("upstream", {})
+        if node_type == "mcp_query":
+            return self._execute_mcp_query_node(node, authorized_context, outputs)
         if node_type in {"condition", "router"}:
             return {
                 "selected": config.get("selected", "default"),
@@ -374,12 +495,27 @@ class RuntimeService:
         input_payload: dict,
         accumulated: dict,
         activated_by: set[str],
+        authorized_context: AuthorizedContextRefs,
+        attempt_number: int,
+        max_attempts: int,
     ) -> dict:
         return {
             "trigger_input": input_payload,
             "upstream": accumulated,
             "accumulated": accumulated,
             "activated_by": sorted(activated_by),
+            "authorized_context": {
+                "currentNodeId": authorized_context.current_node_id,
+                "readableNodeIds": list(authorized_context.readable_node_ids),
+                "readableArtifacts": [
+                    {"nodeId": node_id, "artifactType": artifact_type}
+                    for node_id, artifact_type in authorized_context.readable_artifacts
+                ],
+            },
+            "attempt": {
+                "current": attempt_number,
+                "max": max_attempts,
+            },
             "config": node.get("config", {}),
         }
 
@@ -471,6 +607,157 @@ class RuntimeService:
             return None
         normalized = str(value).strip().lower()
         return normalized or None
+
+    def _authorized_context_for_node(self, node: dict) -> AuthorizedContextRefs:
+        config = node.get("config", {})
+        context_access = config.get("contextAccess") or {}
+        readable_node_ids = {
+            str(node_id)
+            for node_id in context_access.get("readableNodeIds", [])
+            if str(node_id).strip()
+        }
+        readable_artifacts: set[tuple[str, str]] = set()
+
+        for node_id in readable_node_ids:
+            readable_artifacts.add((node_id, "json"))
+
+        for artifact in context_access.get("readableArtifacts", []):
+            artifact_node_id = str(artifact.get("nodeId", "")).strip()
+            artifact_type = str(artifact.get("artifactType", "")).strip()
+            if not artifact_node_id or not artifact_type:
+                continue
+            readable_node_ids.add(artifact_node_id)
+            readable_artifacts.add((artifact_node_id, artifact_type))
+
+        return AuthorizedContextRefs(
+            current_node_id=node["id"],
+            readable_node_ids=tuple(sorted(readable_node_ids)),
+            readable_artifacts=tuple(sorted(readable_artifacts)),
+        )
+
+    def _execute_mcp_query_node(
+        self,
+        node: dict,
+        authorized_context: AuthorizedContextRefs,
+        outputs: dict[str, dict],
+    ) -> dict:
+        query = node.get("config", {}).get("query") or {}
+        query_type = query.get("type")
+        if query_type != "authorized_context":
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' uses unsupported MCP query type '{query_type}'."
+            )
+
+        authorized_artifacts = self._authorized_artifact_lookup(authorized_context)
+        requested_source_ids = [
+            str(source_node_id)
+            for source_node_id in (
+                query.get("sourceNodeIds") or authorized_context.readable_node_ids
+            )
+        ]
+        unauthorized_sources = sorted(
+            source_node_id
+            for source_node_id in requested_source_ids
+            if source_node_id not in authorized_artifacts
+        )
+        if unauthorized_sources:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' requested unauthorized context sources: "
+                f"{', '.join(unauthorized_sources)}."
+            )
+
+        requested_artifact_types = {
+            str(artifact_type)
+            for artifact_type in (query.get("artifactTypes") or ["json"])
+        }
+
+        results: list[dict] = []
+        for source_node_id in requested_source_ids:
+            allowed_artifact_types = authorized_artifacts.get(source_node_id, set())
+            unauthorized_artifact_types = sorted(requested_artifact_types - allowed_artifact_types)
+            if unauthorized_artifact_types:
+                raise WorkflowExecutionError(
+                    f"Node '{node['id']}' requested unauthorized artifact types from "
+                    f"'{source_node_id}': {', '.join(unauthorized_artifact_types)}."
+                )
+
+            if "json" in requested_artifact_types and source_node_id in outputs:
+                results.append(
+                    {
+                        "nodeId": source_node_id,
+                        "artifactType": "json",
+                        "content": outputs[source_node_id],
+                    }
+                )
+
+        return {
+            "query": {
+                "type": query_type,
+                "sourceNodeIds": requested_source_ids,
+                "artifactTypes": sorted(requested_artifact_types),
+            },
+            "results": results,
+        }
+
+    def _authorized_artifact_lookup(
+        self,
+        authorized_context: AuthorizedContextRefs,
+    ) -> dict[str, set[str]]:
+        artifact_lookup: dict[str, set[str]] = defaultdict(set)
+        for node_id in authorized_context.readable_node_ids:
+            artifact_lookup[node_id].add("json")
+        for node_id, artifact_type in authorized_context.readable_artifacts:
+            artifact_lookup[node_id].add(artifact_type)
+        return artifact_lookup
+
+    def _retry_policy_for_node(self, node: dict) -> RetryPolicy:
+        runtime_policy = node.get("runtimePolicy") or {}
+        retry_config = runtime_policy.get("retry")
+        if retry_config is None and any(
+            key in runtime_policy for key in ("maxAttempts", "backoffSeconds", "backoffMultiplier")
+        ):
+            retry_config = runtime_policy
+        if retry_config is None:
+            return RetryPolicy()
+
+        max_attempts = int(retry_config.get("maxAttempts", 1))
+        backoff_seconds = float(retry_config.get("backoffSeconds", 0.0))
+        backoff_multiplier = float(retry_config.get("backoffMultiplier", 1.0))
+
+        if max_attempts < 1:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' retry policy must use maxAttempts >= 1."
+            )
+        if backoff_seconds < 0:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' retry policy must use backoffSeconds >= 0."
+            )
+        if backoff_multiplier < 1:
+            raise WorkflowExecutionError(
+                f"Node '{node['id']}' retry policy must use backoffMultiplier >= 1."
+            )
+
+        return RetryPolicy(
+            max_attempts=max_attempts,
+            backoff_seconds=backoff_seconds,
+            backoff_multiplier=backoff_multiplier,
+        )
+
+    def _retry_delay_seconds(self, retry_policy: RetryPolicy, failed_attempt_number: int) -> float:
+        if retry_policy.backoff_seconds <= 0:
+            return 0.0
+        multiplier = retry_policy.backoff_multiplier ** (failed_attempt_number - 1)
+        return retry_policy.backoff_seconds * multiplier
+
+    def _build_context_read_payload(self, node: dict, node_output: dict) -> dict:
+        results = node_output.get("results", [])
+        return {
+            "node_id": node["id"],
+            "query_type": node_output.get("query", {}).get("type"),
+            "source_node_ids": [item["nodeId"] for item in results],
+            "artifact_types": sorted({item["artifactType"] for item in results}),
+            "result_count": len(results),
+        }
 
     def _build_event(
         self,
