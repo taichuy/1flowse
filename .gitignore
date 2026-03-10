@@ -145,6 +145,3 @@ vite.config.ts.timestamp-*
 api/.venv/
 docker/volumes/
 api/app/schemas/__pycache__/
-__pycache__/
-*.py[cod]
-*$py.class
