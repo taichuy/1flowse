@@ -58,6 +58,33 @@ class AdapterToolListResponse(BaseModel):
     tools: list[AdapterToolItem] = Field(default_factory=list)
 
 
+class AdapterExecutionContractField(BaseModel):
+    name: str
+    required: bool = False
+    valueSource: Literal["llm", "user", "credential", "file"]
+    jsonSchema: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdapterExecutionContractConstraints(BaseModel):
+    additionalProperties: bool = False
+    credentialFields: list[str] = Field(default_factory=list)
+    fileFields: list[str] = Field(default_factory=list)
+    llmFillableFields: list[str] = Field(default_factory=list)
+    userConfigFields: list[str] = Field(default_factory=list)
+
+
+class AdapterExecutionContract(BaseModel):
+    irVersion: str = "2026-03-10"
+    kind: Literal["tool_execution"] = "tool_execution"
+    ecosystem: str
+    toolId: str
+    inputContract: list[AdapterExecutionContractField] = Field(default_factory=list)
+    constraints: AdapterExecutionContractConstraints = Field(
+        default_factory=AdapterExecutionContractConstraints
+    )
+    pluginMeta: dict[str, Any] | None = None
+
+
 class AdapterInvokeRequest(BaseModel):
     toolId: str = Field(min_length=1, max_length=256)
     ecosystem: str = Field(min_length=1, max_length=64)
@@ -66,6 +93,7 @@ class AdapterInvokeRequest(BaseModel):
     credentials: dict[str, str] = Field(default_factory=dict)
     timeout: int = Field(default=30_000, ge=1, le=600_000)
     traceId: str = ""
+    executionContract: AdapterExecutionContract
 
 
 class AdapterInvokeResponse(BaseModel):

@@ -7,6 +7,9 @@ import yaml
 
 from app.config import Settings
 from app.schemas import (
+    AdapterExecutionContract,
+    AdapterExecutionContractConstraints,
+    AdapterExecutionContractField,
     AdapterToolItem,
     ConstrainedToolConstraints,
     ConstrainedToolInputField,
@@ -28,6 +31,40 @@ def list_catalog_tools(settings: Settings) -> list[AdapterToolItem]:
             catalog[tool.id] = tool
 
     return [catalog[tool_id] for tool_id in sorted(catalog)]
+
+
+def get_catalog_tool(settings: Settings, tool_id: str) -> AdapterToolItem | None:
+    for tool in list_catalog_tools(settings):
+        if tool.id == tool_id:
+            return tool
+    return None
+
+
+def build_execution_contract(tool: AdapterToolItem) -> AdapterExecutionContract:
+    constrained_ir = tool.constrained_ir
+    return AdapterExecutionContract(
+        irVersion=constrained_ir.ir_version,
+        kind="tool_execution",
+        ecosystem=constrained_ir.ecosystem,
+        toolId=constrained_ir.tool_id,
+        inputContract=[
+            AdapterExecutionContractField(
+                name=field.name,
+                required=field.required,
+                valueSource=field.value_source,
+                jsonSchema=dict(field.json_schema),
+            )
+            for field in constrained_ir.input_contract
+        ],
+        constraints=AdapterExecutionContractConstraints(
+            additionalProperties=constrained_ir.constraints.additional_properties,
+            credentialFields=list(constrained_ir.constraints.credential_fields),
+            fileFields=list(constrained_ir.constraints.file_fields),
+            llmFillableFields=list(constrained_ir.constraints.llm_fillable_fields),
+            userConfigFields=list(constrained_ir.constraints.user_config_fields),
+        ),
+        pluginMeta=dict(constrained_ir.plugin_meta) if constrained_ir.plugin_meta else None,
+    )
 
 
 def _resolve_catalog_root(catalog_root: str) -> Path:

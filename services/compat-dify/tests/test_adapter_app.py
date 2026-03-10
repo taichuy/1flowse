@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from app.catalog import build_execution_contract, get_catalog_tool
+from app.config import get_settings
 from app.main import create_app
 
 
@@ -132,6 +134,122 @@ def test_tools_rejects_wrong_adapter_header() -> None:
 
 def test_invoke_returns_stubbed_output() -> None:
     client = TestClient(create_app())
+    tool = get_catalog_tool(get_settings(), "compat:dify:plugin:demo/search")
+    assert tool is not None
+
+    response = client.post(
+        "/invoke",
+        headers={"x-sevenflows-adapter-id": "dify-default"},
+        json={
+            "toolId": "compat:dify:plugin:demo/search",
+            "ecosystem": "compat:dify",
+            "adapterId": "dify-default",
+            "inputs": {"query": "sevenflows"},
+            "credentials": {},
+            "timeout": 30000,
+            "traceId": "trace-demo",
+            "executionContract": build_execution_contract(tool).model_dump(),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["output"] == {
+        "toolId": "compat:dify:plugin:demo/search",
+        "adapterId": "dify-default",
+        "traceId": "trace-demo",
+        "received": {"query": "sevenflows"},
+        "credentialFields": [],
+        "executionContract": {
+            "kind": "tool_execution",
+            "irVersion": "2026-03-10",
+            "toolId": "compat:dify:plugin:demo/search",
+        },
+    }
+    assert (
+        body["logs"][0]
+        == "compat:dify stub validated tool 'compat:dify:plugin:demo/search' against constrained contract"
+    )
+
+
+def test_invoke_rejects_wrong_ecosystem() -> None:
+    client = TestClient(create_app())
+    tool = get_catalog_tool(get_settings(), "compat:dify:plugin:demo/search")
+    assert tool is not None
+
+    response = client.post(
+        "/invoke",
+        json={
+            "toolId": "compat:dify:plugin:demo/search",
+            "ecosystem": "compat:n8n",
+            "adapterId": "dify-default",
+            "inputs": {},
+            "credentials": {},
+            "timeout": 30000,
+            "traceId": "",
+            "executionContract": build_execution_contract(tool).model_dump(),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "Adapter only supports ecosystem 'compat:dify'" in response.json()["detail"]
+
+
+def test_invoke_rejects_contract_mismatch() -> None:
+    client = TestClient(create_app())
+    tool = get_catalog_tool(get_settings(), "compat:dify:plugin:demo/search")
+    assert tool is not None
+    contract = build_execution_contract(tool).model_dump()
+    contract["inputContract"][0]["valueSource"] = "user"
+
+    response = client.post(
+        "/invoke",
+        headers={"x-sevenflows-adapter-id": "dify-default"},
+        json={
+            "toolId": "compat:dify:plugin:demo/search",
+            "ecosystem": "compat:dify",
+            "adapterId": "dify-default",
+            "inputs": {"query": "sevenflows"},
+            "credentials": {},
+            "timeout": 30000,
+            "traceId": "trace-demo",
+            "executionContract": contract,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "does not match the local catalog" in response.json()["detail"]
+
+
+def test_invoke_rejects_unknown_input_fields() -> None:
+    client = TestClient(create_app())
+    tool = get_catalog_tool(get_settings(), "compat:dify:plugin:demo/search")
+    assert tool is not None
+
+    response = client.post(
+        "/invoke",
+        headers={"x-sevenflows-adapter-id": "dify-default"},
+        json={
+            "toolId": "compat:dify:plugin:demo/search",
+            "ecosystem": "compat:dify",
+            "adapterId": "dify-default",
+            "inputs": {"query": "sevenflows", "unexpected": True},
+            "credentials": {},
+            "timeout": 30000,
+            "traceId": "trace-demo",
+            "executionContract": build_execution_contract(tool).model_dump(),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "unsupported input fields: unexpected" in response.json()["detail"]
+
+
+def test_invoke_rejects_unknown_credential_fields() -> None:
+    client = TestClient(create_app())
+    tool = get_catalog_tool(get_settings(), "compat:dify:plugin:demo/search")
+    assert tool is not None
 
     response = client.post(
         "/invoke",
@@ -144,36 +262,9 @@ def test_invoke_returns_stubbed_output() -> None:
             "credentials": {"api_key": "secret"},
             "timeout": 30000,
             "traceId": "trace-demo",
-        },
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "success"
-    assert body["output"] == {
-        "toolId": "compat:dify:plugin:demo/search",
-        "adapterId": "dify-default",
-        "traceId": "trace-demo",
-        "received": {"query": "sevenflows"},
-    }
-    assert body["logs"][0] == "compat:dify stub handled tool 'compat:dify:plugin:demo/search'"
-
-
-def test_invoke_rejects_wrong_ecosystem() -> None:
-    client = TestClient(create_app())
-
-    response = client.post(
-        "/invoke",
-        json={
-            "toolId": "compat:dify:plugin:demo/search",
-            "ecosystem": "compat:n8n",
-            "adapterId": "dify-default",
-            "inputs": {},
-            "credentials": {},
-            "timeout": 30000,
-            "traceId": "",
+            "executionContract": build_execution_contract(tool).model_dump(),
         },
     )
 
     assert response.status_code == 422
-    assert "Adapter only supports ecosystem 'compat:dify'" in response.json()["detail"]
+    assert "unsupported credential fields: api_key" in response.json()["detail"]

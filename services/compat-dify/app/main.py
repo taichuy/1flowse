@@ -5,8 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, status
 
-from app.catalog import list_catalog_tools
+from app.catalog import get_catalog_tool, list_catalog_tools
 from app.config import get_settings
+from app.invocation import InvocationValidationError, validate_invocation_request
 from app.schemas import (
     AdapterHealthResponse,
     AdapterInvokeRequest,
@@ -77,6 +78,25 @@ def create_app() -> FastAPI:
             )
 
         validate_adapter_header(x_sevenflows_adapter_id)
+        tool = get_catalog_tool(settings, payload.toolId)
+        if tool is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tool '{payload.toolId}' is not present in the local catalog.",
+            )
+
+        try:
+            normalized_inputs, normalized_credentials = validate_invocation_request(
+                tool=tool,
+                execution_contract=payload.executionContract,
+                inputs=payload.inputs,
+                credentials=payload.credentials,
+            )
+        except InvocationValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
 
         started_at = time.perf_counter()
         if settings.default_latency_ms > 0:
@@ -86,10 +106,16 @@ def create_app() -> FastAPI:
             "toolId": payload.toolId,
             "adapterId": settings.adapter_id,
             "traceId": payload.traceId,
-            "received": payload.inputs,
+            "received": normalized_inputs,
+            "credentialFields": sorted(normalized_credentials),
+            "executionContract": {
+                "kind": payload.executionContract.kind,
+                "irVersion": payload.executionContract.irVersion,
+                "toolId": payload.executionContract.toolId,
+            },
         }
         logs = [
-            f"compat:dify stub handled tool '{payload.toolId}'",
+            f"compat:dify stub validated tool '{payload.toolId}' against constrained contract",
             f"mode={settings.stub_mode}",
         ]
 

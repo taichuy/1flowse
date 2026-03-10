@@ -18,6 +18,50 @@ from app.services.plugin_runtime import (
 from app.services.runtime import RuntimeService
 
 
+def _demo_search_constrained_ir() -> dict:
+    return {
+        "ir_version": "2026-03-10",
+        "kind": "tool",
+        "ecosystem": "compat:dify",
+        "tool_id": "compat:dify:plugin:demo/search",
+        "name": "Demo Search",
+        "description": "Search via Dify adapter",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "number"},
+            },
+            "required": ["query"],
+            "additional_properties": False,
+        },
+        "output_schema": {"type": "object"},
+        "source": "plugin",
+        "input_contract": [
+            {
+                "name": "query",
+                "required": True,
+                "value_source": "llm",
+                "json_schema": {"type": "string"},
+            },
+            {
+                "name": "limit",
+                "required": False,
+                "value_source": "user",
+                "json_schema": {"type": "number"},
+            },
+        ],
+        "constraints": {
+            "additional_properties": False,
+            "credential_fields": [],
+            "file_fields": [],
+            "llm_fillable_fields": ["query"],
+            "user_config_fields": ["limit"],
+        },
+        "plugin_meta": {"origin": "dify"},
+    }
+
+
 def test_plugin_call_proxy_invokes_native_tool() -> None:
     registry = PluginRegistry()
     registry.register_tool(
@@ -53,6 +97,7 @@ def test_plugin_call_proxy_invokes_compat_adapter() -> None:
             name="Search",
             ecosystem="compat:dify",
             source="plugin",
+            constrained_ir=_demo_search_constrained_ir(),
         )
     )
     registry.register_adapter(
@@ -69,6 +114,35 @@ def test_plugin_call_proxy_invokes_compat_adapter() -> None:
         assert payload["toolId"] == "compat:dify:plugin:demo/search"
         assert payload["traceId"] == "trace-compat"
         assert payload["inputs"] == {"query": "sevenflows"}
+        assert payload["credentials"] == {}
+        assert payload["executionContract"] == {
+            "irVersion": "2026-03-10",
+            "kind": "tool_execution",
+            "ecosystem": "compat:dify",
+            "toolId": "compat:dify:plugin:demo/search",
+            "inputContract": [
+                {
+                    "name": "query",
+                    "required": True,
+                    "valueSource": "llm",
+                    "jsonSchema": {"type": "string"},
+                },
+                {
+                    "name": "limit",
+                    "required": False,
+                    "valueSource": "user",
+                    "jsonSchema": {"type": "number"},
+                },
+            ],
+            "constraints": {
+                "additionalProperties": False,
+                "credentialFields": [],
+                "fileFields": [],
+                "llmFillableFields": ["query"],
+                "userConfigFields": ["limit"],
+            },
+            "pluginMeta": {"origin": "dify"},
+        }
         return httpx.Response(
             200,
             json={
@@ -100,6 +174,41 @@ def test_plugin_call_proxy_invokes_compat_adapter() -> None:
     assert response.output == {"documents": ["doc-1"]}
     assert response.logs == ["adapter ok"]
     assert response.duration_ms == 17
+
+
+def test_plugin_call_proxy_rejects_unsupported_contract_fields() -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="compat:dify:plugin:demo/search",
+            name="Search",
+            ecosystem="compat:dify",
+            source="plugin",
+            constrained_ir=_demo_search_constrained_ir(),
+        )
+    )
+    registry.register_adapter(
+        CompatibilityAdapterRegistration(
+            id="dify-default",
+            ecosystem="compat:dify",
+            endpoint="http://adapter.local/dify",
+        )
+    )
+    proxy = PluginCallProxy(registry)
+
+    try:
+        proxy.invoke(
+            PluginCallRequest(
+                tool_id="compat:dify:plugin:demo/search",
+                ecosystem="compat:dify",
+                inputs={"query": "sevenflows", "unexpected": True},
+                trace_id="trace-compat",
+            )
+        )
+    except Exception as exc:
+        assert "unsupported input fields: unexpected" in str(exc)
+    else:
+        raise AssertionError("Expected unsupported input fields to be rejected.")
 
 
 def test_runtime_service_executes_registered_native_tool(
