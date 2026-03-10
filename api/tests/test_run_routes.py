@@ -83,10 +83,23 @@ def test_get_run_trace_supports_machine_filters(
     assert _parse_trace_datetime(trace_body["summary"]["matched_finished_at"]).replace(
         tzinfo=None
     ) == _parse_trace_datetime(body["events"][-1]["created_at"]).replace(tzinfo=None)
+    assert _parse_trace_datetime(trace_body["summary"]["returned_started_at"]).replace(
+        tzinfo=None
+    ) == _parse_trace_datetime(body["events"][0]["created_at"]).replace(tzinfo=None)
+    assert _parse_trace_datetime(trace_body["summary"]["returned_finished_at"]).replace(
+        tzinfo=None
+    ) == _parse_trace_datetime(body["events"][1]["created_at"]).replace(tzinfo=None)
+    assert trace_body["summary"]["returned_duration_ms"] >= 0
     assert "input" in trace_body["summary"]["available_payload_keys"]
     assert "node_type" in trace_body["summary"]["available_payload_keys"]
     assert trace_body["summary"]["first_event_id"] == body["events"][0]["id"]
     assert trace_body["summary"]["last_event_id"] == body["events"][1]["id"]
+    assert trace_body["summary"]["prev_cursor"] is None
+    assert trace_body["summary"]["next_cursor"] == {
+        "before_event_id": None,
+        "after_event_id": body["events"][1]["id"],
+        "order": "asc",
+    }
     assert len(trace_body["events"]) == 2
     assert trace_body["events"][0]["sequence"] == 1
     assert trace_body["events"][0]["replay_offset_ms"] == 0
@@ -102,6 +115,9 @@ def test_get_run_trace_supports_machine_filters(
     filtered_body = filtered_response.json()
     assert filtered_body["summary"]["matched_event_count"] == 1
     assert filtered_body["summary"]["returned_event_count"] == 1
+    assert filtered_body["summary"]["returned_duration_ms"] == 0
+    assert filtered_body["summary"]["next_cursor"] is None
+    assert filtered_body["summary"]["prev_cursor"] is None
     assert filtered_body["events"] == [
         {
             "id": body["events"][1]["id"],
@@ -151,6 +167,19 @@ def test_get_run_trace_supports_cursor_and_desc_order(
         len(body["events"]) - 2,
         len(body["events"]) - 3,
     ]
+    assert trace_body["summary"]["returned_started_at"] == trace_body["events"][-1]["created_at"]
+    assert trace_body["summary"]["returned_finished_at"] == trace_body["events"][0]["created_at"]
+    assert trace_body["summary"]["returned_duration_ms"] >= 0
+    assert trace_body["summary"]["next_cursor"] == {
+        "before_event_id": body["events"][-4]["id"],
+        "after_event_id": None,
+        "order": "desc",
+    }
+    assert trace_body["summary"]["prev_cursor"] == {
+        "before_event_id": None,
+        "after_event_id": expected_events[0]["id"],
+        "order": "asc",
+    }
     assert trace_body["filters"]["before_event_id"] == anchor_event_id
     assert trace_body["filters"]["order"] == "desc"
 
@@ -231,6 +260,11 @@ def test_get_run_trace_supports_time_range_and_payload_key_search(
     ) == (base_time + timedelta(minutes=3)).replace(tzinfo=None)
     assert trace_body["summary"]["matched_started_at"] == trace_body["events"][0]["created_at"]
     assert trace_body["summary"]["matched_finished_at"] == trace_body["events"][0]["created_at"]
+    assert trace_body["summary"]["returned_started_at"] == trace_body["events"][0]["created_at"]
+    assert trace_body["summary"]["returned_finished_at"] == trace_body["events"][0]["created_at"]
+    assert trace_body["summary"]["returned_duration_ms"] == 0
+    assert trace_body["summary"]["next_cursor"] is None
+    assert trace_body["summary"]["prev_cursor"] is None
     expected_event_id = sqlite_session.scalars(
         select(RunEvent.id).where(
             RunEvent.run_id == run.id,

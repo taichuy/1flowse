@@ -107,18 +107,25 @@
 - `RunTrace.summary.trace_finished_at`
 - `RunTrace.summary.matched_started_at`
 - `RunTrace.summary.matched_finished_at`
+- `RunTrace.summary.returned_started_at`
+- `RunTrace.summary.returned_finished_at`
+- `RunTrace.summary.returned_duration_ms`
+- `RunTrace.summary.next_cursor`
+- `RunTrace.summary.prev_cursor`
 - `RunTrace.events[].sequence`
 - `RunTrace.events[].replay_offset_ms`
 
 用途：
 
 - 导出 trace 时，调用方可以直接知道整条 trace 和当前匹配窗口的时间边界
-- 做 replay 时，调用方不需要重新扫描整条事件流去推导事件顺序和相对时间
+- 做 replay 时，调用方不需要重新扫描整条事件流去推导事件顺序、相对时间和下一窗口请求参数
 
 当前取舍：
 
 - `sequence` 采用事件在整条 run 内的 1-based 顺序
 - `replay_offset_ms` 采用“相对整条 trace 首事件”的毫秒偏移
+- `returned_*` 采用当前返回窗口的真实时间边界，不随 `order=desc` 反转语义
+- `next_cursor` / `prev_cursor` 用结构化参数对象表达，便于机器直接复用到下一次 trace 请求
 - 仍然不引入独立 replay DSL，继续围绕 `run_events` 衍生机器侧字段
 
 ## 下一步

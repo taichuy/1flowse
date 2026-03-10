@@ -35,6 +35,12 @@ class RunTraceEventItem(RunEventItem):
     replay_offset_ms: int
 
 
+class RunTraceCursor(BaseModel):
+    before_event_id: int | None = None
+    after_event_id: int | None = None
+    order: Literal["asc", "desc"]
+
+
 class RunTraceFilters(BaseModel):
     event_type: str | None = None
     node_run_id: str | None = None
@@ -58,6 +64,11 @@ class RunTraceSummary(BaseModel):
     trace_finished_at: datetime | None = None
     matched_started_at: datetime | None = None
     matched_finished_at: datetime | None = None
+    returned_started_at: datetime | None = None
+    returned_finished_at: datetime | None = None
+    returned_duration_ms: int = 0
+    next_cursor: RunTraceCursor | None = None
+    prev_cursor: RunTraceCursor | None = None
     first_event_id: int | None = None
     last_event_id: int | None = None
     has_more: bool = False

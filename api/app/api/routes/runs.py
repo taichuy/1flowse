@@ -13,6 +13,7 @@ from app.schemas.run import (
     RunDetail,
     RunEventItem,
     RunTrace,
+    RunTraceCursor,
     RunTraceEventItem,
     RunTraceFilters,
     RunTraceSummary,
@@ -155,6 +156,19 @@ def _serialize_trace_event(
     )
 
 
+def _build_trace_cursor(
+    *,
+    before_event_id: int | None = None,
+    after_event_id: int | None = None,
+    order: Literal["asc", "desc"],
+) -> RunTraceCursor:
+    return RunTraceCursor(
+        before_event_id=before_event_id,
+        after_event_id=after_event_id,
+        order=order,
+    )
+
+
 @router.post(
     "/workflows/{workflow_id}/runs",
     response_model=RunDetail,
@@ -245,9 +259,23 @@ def get_run_trace(
     sequence_by_event_id = {
         event.id: index + 1 for index, event in enumerate(run_events)
     }
-    matched_events = [
+    base_filtered_events = [
         event
         for event in run_events
+        if _event_matches_trace_filters(
+            event,
+            event_type=event_type,
+            node_run_id=node_run_id,
+            created_after=created_after,
+            created_before=created_before,
+            payload_key=payload_key,
+            before_event_id=None,
+            after_event_id=None,
+        )
+    ]
+    matched_events = [
+        event
+        for event in base_filtered_events
         if _event_matches_trace_filters(
             event,
             event_type=event_type,
@@ -274,6 +302,53 @@ def get_run_trace(
     if has_more:
         events = events[:limit]
 
+    normalized_returned_datetimes = [
+        _normalize_filter_datetime(event.created_at) for event in events
+    ]
+    returned_started_at = min(normalized_returned_datetimes) if normalized_returned_datetimes else None
+    returned_finished_at = max(normalized_returned_datetimes) if normalized_returned_datetimes else None
+    returned_duration_ms = 0
+    if returned_started_at is not None and returned_finished_at is not None:
+        returned_duration_ms = max(
+            0,
+            int((returned_finished_at - returned_started_at).total_seconds() * 1000),
+        )
+
+    prev_cursor: RunTraceCursor | None = None
+    next_cursor: RunTraceCursor | None = None
+    if events:
+        first_returned_event = events[0]
+        last_returned_event = events[-1]
+        has_earlier_base_events = any(
+            event.id < first_returned_event.id for event in base_filtered_events
+        )
+        has_later_base_events = any(
+            event.id > last_returned_event.id for event in base_filtered_events
+        )
+
+        if order == "asc":
+            if has_more:
+                next_cursor = _build_trace_cursor(
+                    after_event_id=last_returned_event.id,
+                    order="asc",
+                )
+            if has_earlier_base_events:
+                prev_cursor = _build_trace_cursor(
+                    before_event_id=first_returned_event.id,
+                    order="desc",
+                )
+        else:
+            if has_more:
+                next_cursor = _build_trace_cursor(
+                    before_event_id=last_returned_event.id,
+                    order="desc",
+                )
+            if has_later_base_events:
+                prev_cursor = _build_trace_cursor(
+                    after_event_id=first_returned_event.id,
+                    order="asc",
+                )
+
     return RunTrace(
         run_id=run_id,
         filters=RunTraceFilters(
@@ -298,6 +373,11 @@ def get_run_trace(
             trace_finished_at=trace_finished_at,
             matched_started_at=matched_started_at,
             matched_finished_at=matched_finished_at,
+            returned_started_at=returned_started_at,
+            returned_finished_at=returned_finished_at,
+            returned_duration_ms=returned_duration_ms,
+            next_cursor=next_cursor,
+            prev_cursor=prev_cursor,
             first_event_id=events[0].id if events else None,
             last_event_id=events[-1].id if events else None,
             has_more=has_more,
