@@ -63,14 +63,29 @@
 
 这样既保留了用户可见的监控信号，也避免首页诊断被低层细节淹没。
 
+### 5. 首页与 run 诊断职责拆分
+
+继续推进时，用户明确要求不要再把“详细日志查看”继续堆到首页。
+
+因此本轮把职责进一步拆开：
+
+- 首页保留系统诊断摘要、最近 runs 与事件类型分布
+- 详细日志查看迁移到单独的 run 诊断面板
+- run 诊断面板直接复用 `GET /api/runs/{run_id}`，承载节点输入输出、错误信息与完整事件流
+
+这样既保持首页是“总览入口”，也让 run 级排障开始具备独立的一等位置。
+
 ## 影响范围
 
 - `api/app/schemas/system.py`
 - `api/app/api/routes/system.py`
 - `api/tests/test_system_routes.py`
 - `web/app/page.tsx`
+- `web/app/runs/[runId]/page.tsx`
+- `web/components/run-diagnostics-panel.tsx`
 - `web/app/actions.ts`
 - `web/components/adapter-sync-form.tsx`
+- `web/lib/get-run-detail.ts`
 - `web/lib/get-system-overview.ts`
 - `web/lib/api-base-url.ts`
 - `web/app/globals.css`

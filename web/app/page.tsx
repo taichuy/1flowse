@@ -1,7 +1,13 @@
+import Link from "next/link";
+
 import { syncAdapterTools } from "@/app/actions";
 import { AdapterSyncForm } from "@/components/adapter-sync-form";
 import { StatusCard } from "@/components/status-card";
 import { getSystemOverview } from "@/lib/get-system-overview";
+import {
+  formatCountMap,
+  formatTimestamp
+} from "@/lib/runtime-presenters";
 
 const highlights = [
   "Dify 风格的本地源码开发路径",
@@ -12,8 +18,8 @@ const highlights = [
 export default async function HomePage() {
   const overview = await getSystemOverview();
   const recentRuns = overview.runtime_activity.recent_runs;
-  const recentEvents = overview.runtime_activity.recent_events;
   const activitySummary = overview.runtime_activity.summary;
+  const latestRun = recentRuns[0];
 
   return (
     <main className="shell">
@@ -23,7 +29,8 @@ export default async function HomePage() {
           <h1>为多 Agent 工作流准备的丝滑起步架构</h1>
           <p className="hero-text">
             当前首页已经接上后端概览接口，用来直观看到中间件、运行时与对象存储是否就绪。
-            现在也会把 compat adapter、工具目录同步结果和最近运行事件一起展示出来。
+            现在也会把 compat adapter、工具目录同步结果和运行摘要一起展示出来，详细日志则进入独立的
+            run 诊断面板查看。
           </p>
           <div className="pill-row">
             {highlights.map((item) => (
@@ -190,6 +197,9 @@ export default async function HomePage() {
                   <p className="activity-copy">
                     Created {formatTimestamp(run.created_at)} · events {run.event_count}
                   </p>
+                  <Link className="activity-link" href={`/runs/${run.id}`}>
+                    查看 run 诊断面板
+                  </Link>
                 </article>
               ))
             )}
@@ -200,11 +210,11 @@ export default async function HomePage() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Run Events</p>
-              <h2>Application log spine</h2>
+              <h2>Event spine overview</h2>
             </div>
             <p className="section-copy">
-              调试、流式输出和回放都会复用同一条 run events 事件流；这里默认展示摘要与预览，
-              详细 payload 仍应回到专门的 run 详情或调试视图。
+              调试、流式输出和回放都会复用同一条 run events 事件流；首页只保留聚合信号，
+              详细 payload 和节点级日志统一回到独立 run 诊断面板。
             </p>
           </div>
 
@@ -220,24 +230,28 @@ export default async function HomePage() {
             )}
           </div>
 
-          <div className="event-list">
-            {recentEvents.length === 0 ? (
-              <p className="empty-state">当前没有运行事件，系统诊断会在产生 run 后自动展示。</p>
+          <div className="summary-strip">
+            <article className="summary-card">
+              <span>Recent events</span>
+              <strong>{activitySummary.recent_event_count}</strong>
+            </article>
+            <article className="summary-card">
+              <span>Event types</span>
+              <strong>{Object.keys(activitySummary.event_types).length}</strong>
+            </article>
+          </div>
+
+          <div className="entry-card">
+            <p className="entry-card-title">详细日志查看</p>
+            <p className="section-copy entry-copy">
+              从最近 run 进入独立诊断页后，可以继续看节点输入输出、错误信息和完整事件 payload。
+            </p>
+            {latestRun ? (
+              <Link className="inline-link" href={`/runs/${latestRun.id}`}>
+                打开最新 run 诊断面板
+              </Link>
             ) : (
-              recentEvents.map((event) => (
-                <article className="event-row" key={event.id}>
-                  <div className="event-meta">
-                    <span>{event.event_type}</span>
-                    <span>{formatTimestamp(event.created_at)}</span>
-                  </div>
-                  <p className="event-run">run {event.run_id}</p>
-                  <div className="event-payload-meta">
-                    <span>keys: {event.payload_keys.join(", ") || "none"}</span>
-                    <span>size: {event.payload_size}</span>
-                  </div>
-                  <pre>{event.payload_preview}</pre>
-                </article>
-              ))
+              <p className="empty-state compact">当前还没有可打开的 run 诊断记录。</p>
             )}
           </div>
         </article>
@@ -255,29 +269,10 @@ export default async function HomePage() {
         <ul className="roadmap-list">
           <li>让 compat 工具同步结果进入持久化存储与重启恢复</li>
           <li>把更多调试信息继续统一收敛到 run events</li>
-          <li>补充更完整的前端调试面板与发布诊断视图</li>
+          <li>继续扩展独立 run 诊断面板与发布诊断视图</li>
           <li>继续保持每轮开发的验证结果和开发记录留痕</li>
         </ul>
       </section>
     </main>
   );
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "short",
-    timeStyle: "medium",
-    hour12: false
-  }).format(new Date(value));
-}
-
-function formatCountMap(value: Record<string, number>) {
-  const entries = Object.entries(value);
-  if (entries.length === 0) {
-    return "none";
-  }
-
-  return entries
-    .map(([label, count]) => `${label}:${count}`)
-    .join(" / ");
 }
