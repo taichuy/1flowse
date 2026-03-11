@@ -3,19 +3,19 @@
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type { WorkflowLibrarySourceLane } from "@/lib/workflow-source-model";
 import type {
-  WorkflowStarterId,
+  WorkflowStarterTemplateId,
   WorkflowStarterTemplate,
   WorkflowStarterTrackItem
 } from "@/lib/workflow-starters";
 
 type WorkflowStarterBrowserProps = {
   activeTrack: WorkflowBusinessTrack;
-  selectedStarterId: WorkflowStarterId;
+  selectedStarterId: WorkflowStarterTemplateId;
   starters: WorkflowStarterTemplate[];
   tracks: WorkflowStarterTrackItem[];
   sourceLanes: WorkflowLibrarySourceLane[];
   onSelectTrack: (track: WorkflowBusinessTrack) => void;
-  onSelectStarter: (starterId: WorkflowStarterId) => void;
+  onSelectStarter: (starterId: WorkflowStarterTemplateId) => void;
 };
 
 export function WorkflowStarterBrowser({

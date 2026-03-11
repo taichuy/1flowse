@@ -28,6 +28,7 @@ import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-ru
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
 import { formatDurationMs } from "@/lib/runtime-presenters";
 import { summarizePluginToolSources } from "@/lib/workflow-source-model";
+import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import {
   EDITOR_NODE_LIBRARY,
   buildEditorEdge,
@@ -86,6 +87,7 @@ export function WorkflowEditorWorkbench({
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"success" | "error" | "idle">("idle");
   const [isSaving, startSavingTransition] = useTransition();
+  const [isSavingStarter, startSaveStarterTransition] = useTransition();
 
   const displayedNodes = applyRunOverlayToNodes(nodes, selectedRunDetail, selectedRunTrace);
   const selectedNode = displayedNodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -450,6 +452,51 @@ export function WorkflowEditorWorkbench({
     });
   };
 
+  const handleSaveAsWorkspaceStarter = () => {
+    const nextDefinition = reactFlowToWorkflowDefinition(nodes, edges, persistedDefinition);
+    const businessTrack = inferWorkflowBusinessTrack(nextDefinition);
+    const normalizedWorkflowName = workflowName.trim() || workflow.name;
+    const starterPayload = buildWorkspaceStarterPayload({
+      workflowId: workflow.id,
+      workflowName: normalizedWorkflowName,
+      workflowVersion,
+      businessTrack,
+      definition: nextDefinition
+    });
+
+    startSaveStarterTransition(async () => {
+      setMessage("正在保存到 workspace starter library...");
+      setMessageTone("idle");
+
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/api/workspace-starters`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(starterPayload)
+        });
+        const body = (await response.json().catch(() => null)) as
+          | { detail?: string; name?: string }
+          | null;
+
+        if (!response.ok) {
+          setMessage(body?.detail ?? `保存模板失败，API 返回 ${response.status}。`);
+          setMessageTone("error");
+          return;
+        }
+
+        setMessage(
+          `已保存 workspace starter：${body?.name ?? starterPayload.name}。回到创建页即可复用。`
+        );
+        setMessageTone("success");
+      } catch {
+        setMessage("无法连接后端保存 workspace starter，请确认 API 已启动。");
+        setMessageTone("error");
+      }
+    });
+  };
+
   return (
     <ReactFlowProvider>
       <main className="editor-shell">
@@ -485,6 +532,14 @@ export function WorkflowEditorWorkbench({
               >
                 {isSaving ? "保存中..." : "保存 workflow"}
               </button>
+              <button
+                className="sync-button secondary"
+                type="button"
+                onClick={handleSaveAsWorkspaceStarter}
+                disabled={isSavingStarter}
+              >
+                {isSavingStarter ? "模板保存中..." : "保存为 workspace starter"}
+              </button>
             </div>
           </div>
 
@@ -496,6 +551,9 @@ export function WorkflowEditorWorkbench({
             </p>
             <p className="panel-text">
               当前边界：<strong>Loop / 发布网关 / 调试联动稍后继续</strong>
+            </p>
+            <p className="panel-text">
+              当前治理入口：<strong>editor -&gt; workspace starter library</strong>
             </p>
             <dl className="signal-list">
               <div>
@@ -894,4 +952,55 @@ function calculateDurationMs(
 
 function toCssIdentifier(value: string) {
   return value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+}
+
+function buildWorkspaceStarterPayload({
+  workflowId,
+  workflowName,
+  workflowVersion,
+  businessTrack,
+  definition
+}: {
+  workflowId: string;
+  workflowName: string;
+  workflowVersion: string;
+  businessTrack: ReturnType<typeof inferWorkflowBusinessTrack>;
+  definition: WorkflowDetail["definition"];
+}) {
+  const trackMeta = {
+    "应用新建编排": {
+      description: "来自 editor 的最小可复用 workflow 入口草稿。",
+      workflowFocus: "把团队常用的应用创建骨架沉淀成可持续复用的 workspace starter。",
+      recommendedNextStep: "回到创建页验证模板入口，再继续补业务节点和输出约束。"
+    },
+    "编排节点能力": {
+      description: "来自 editor 的节点编排样板，可继续补 Agent、分支和上下文授权。",
+      workflowFocus: "把当前 workflow 中较成熟的节点组合沉淀成团队级 starter。",
+      recommendedNextStep: "继续结构化高频节点配置，再复用到新的业务流程里。"
+    },
+    "Dify 插件兼容": {
+      description: "来自 editor 的工具/兼容链路草稿，适合作为插件能力复用入口。",
+      workflowFocus: "优先复用 tool 节点、目录绑定和 compat adapter 相关结构。",
+      recommendedNextStep: "从创建页复用后继续验证 tool binding 与插件目录链路。"
+    },
+    "API 调用开放": {
+      description: "来自 editor 的输出/发布准备草稿，适合作为 API-ready workflow 起点。",
+      workflowFocus: "围绕 output、响应格式和后续发布配置保留可复用起点。",
+      recommendedNextStep: "继续补 output schema、发布配置与协议映射。"
+    }
+  }[businessTrack];
+
+  return {
+    workspace_id: "default",
+    name: `${workflowName} Template`,
+    description: trackMeta.description,
+    business_track: businessTrack,
+    default_workflow_name: workflowName,
+    workflow_focus: trackMeta.workflowFocus,
+    recommended_next_step: trackMeta.recommendedNextStep,
+    tags: ["workspace starter", "editor saved", businessTrack],
+    definition,
+    created_from_workflow_id: workflowId,
+    created_from_workflow_version: workflowVersion
+  };
 }

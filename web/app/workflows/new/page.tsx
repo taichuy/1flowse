@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
+import { getWorkspaceStarterTemplates } from "@/lib/get-workspace-starters";
 import { getWorkflows } from "@/lib/get-workflows";
 
 export const metadata: Metadata = {
@@ -9,15 +10,17 @@ export const metadata: Metadata = {
 };
 
 export default async function NewWorkflowPage() {
-  const [pluginRegistry, workflows] = await Promise.all([
+  const [pluginRegistry, workflows, workspaceTemplates] = await Promise.all([
     getPluginRegistrySnapshot(),
-    getWorkflows()
+    getWorkflows(),
+    getWorkspaceStarterTemplates()
   ]);
 
   return (
     <WorkflowCreateWizard
       catalogToolCount={pluginRegistry.tools.length}
       workflows={workflows}
+      workspaceTemplates={workspaceTemplates}
     />
   );
 }

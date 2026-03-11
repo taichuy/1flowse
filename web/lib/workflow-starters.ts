@@ -4,6 +4,7 @@ import {
   type WorkflowBusinessTrack,
   type WorkflowBusinessTrackPriority
 } from "@/lib/workflow-business-tracks";
+import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import {
   buildCatalogNodeDefinition,
   getWorkflowNodeCatalogItem,
@@ -19,10 +20,12 @@ import {
 } from "@/lib/workflow-source-model";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
 
-export type WorkflowStarterId = "blank" | "agent" | "tooling" | "response";
+export type WorkflowStarterTemplateId = string;
+export type BuiltinWorkflowStarterId = "blank" | "agent" | "tooling" | "response";
 
 export type WorkflowStarterTemplate = {
-  id: WorkflowStarterId;
+  id: WorkflowStarterTemplateId;
+  origin: "builtin" | "workspace";
   name: string;
   description: string;
   businessTrack: WorkflowBusinessTrack;
@@ -36,6 +39,7 @@ export type WorkflowStarterTemplate = {
   nodeCount: number;
   nodeLabels: string[];
   tags: string[];
+  definition: WorkflowDefinition;
 };
 
 export type WorkflowStarterTrackItem = {
@@ -44,11 +48,11 @@ export type WorkflowStarterTrackItem = {
   summary: string;
   focus: string;
   starterCount: number;
-  recommendedStarterId: WorkflowStarterId | null;
+  recommendedStarterId: WorkflowStarterTemplateId | null;
 };
 
 type WorkflowStarterBlueprint = {
-  id: WorkflowStarterId;
+  id: BuiltinWorkflowStarterId;
   name: string;
   description: string;
   businessTrack: WorkflowBusinessTrack;
@@ -211,44 +215,42 @@ const WORKFLOW_STARTER_BLUEPRINTS: WorkflowStarterBlueprint[] = [
   }
 ];
 
-export const WORKFLOW_STARTER_TEMPLATES: WorkflowStarterTemplate[] =
-  WORKFLOW_STARTER_BLUEPRINTS.map((starter) => {
-    const track = getWorkflowBusinessTrack(starter.businessTrack);
-
-    return {
+export const BUILTIN_WORKFLOW_STARTER_TEMPLATES: WorkflowStarterTemplate[] =
+  WORKFLOW_STARTER_BLUEPRINTS.map((starter) =>
+    buildWorkflowStarterTemplate({
       id: starter.id,
+      origin: "builtin",
       name: starter.name,
       description: starter.description,
       businessTrack: starter.businessTrack,
-      priority: track.priority,
-      trackSummary: track.summary,
-      trackFocus: track.focus,
       defaultWorkflowName: starter.defaultWorkflowName,
       source: starter.source,
       workflowFocus: starter.workflowFocus,
       recommendedNextStep: starter.recommendedNextStep,
-      nodeCount: starter.nodes.length,
-      nodeLabels: starter.nodes.map(
-        (node) => getWorkflowNodeCatalogItem(node.type)?.label ?? node.type
-      ),
-      tags: starter.tags
-    };
-  });
+      tags: starter.tags,
+      definition: {
+        nodes: starter.nodes.map((node) => buildCatalogNodeDefinition(node)),
+        edges: starter.edges.map((edge) => ({ ...edge })),
+        variables: [],
+        publish: []
+      }
+    })
+  );
 
-export const WORKFLOW_STARTER_SOURCE_LANES: WorkflowLibrarySourceLane[] = [
-  buildWorkflowLibrarySourceLane(
-    BUILTIN_STARTER_SOURCE,
-    WORKFLOW_STARTER_TEMPLATES.filter(
-      (starter) => starter.source.scope === BUILTIN_STARTER_SOURCE.scope
-    ).length
-  ),
-  buildWorkflowLibrarySourceLane(WORKSPACE_TEMPLATE_SOURCE, 0),
-  buildWorkflowLibrarySourceLane(ECOSYSTEM_TEMPLATE_SOURCE, 0)
-];
+export function combineWorkflowStarterTemplates(
+  workspaceTemplates: WorkspaceStarterTemplateItem[]
+) {
+  return [
+    ...BUILTIN_WORKFLOW_STARTER_TEMPLATES,
+    ...workspaceTemplates.map(buildWorkspaceWorkflowStarterTemplate)
+  ];
+}
 
-export const WORKFLOW_STARTER_TRACKS: WorkflowStarterTrackItem[] =
-  WORKFLOW_BUSINESS_TRACKS.map((track) => {
-    const starters = WORKFLOW_STARTER_TEMPLATES.filter(
+export function buildWorkflowStarterTracks(
+  starters: WorkflowStarterTemplate[]
+): WorkflowStarterTrackItem[] {
+  return WORKFLOW_BUSINESS_TRACKS.map((track) => {
+    const trackStarters = starters.filter(
       (starter) => starter.businessTrack === track.id
     );
 
@@ -257,41 +259,153 @@ export const WORKFLOW_STARTER_TRACKS: WorkflowStarterTrackItem[] =
       priority: track.priority,
       summary: track.summary,
       focus: track.focus,
-      starterCount: starters.length,
-      recommendedStarterId: starters[0]?.id ?? null
+      starterCount: trackStarters.length,
+      recommendedStarterId: trackStarters[0]?.id ?? null
     };
   });
+}
 
-export function buildWorkflowStarterDefinition(
-  starterId: WorkflowStarterId
-): WorkflowDefinition {
-  const starter = readWorkflowStarterBlueprint(starterId);
+export function buildWorkflowStarterSourceLanes(
+  starters: WorkflowStarterTemplate[]
+): WorkflowLibrarySourceLane[] {
+  return [
+    buildWorkflowLibrarySourceLane(
+      BUILTIN_STARTER_SOURCE,
+      starters.filter((starter) => starter.origin === "builtin").length
+    ),
+    buildWorkflowLibrarySourceLane(
+      {
+        ...WORKSPACE_TEMPLATE_SOURCE,
+        status: starters.some((starter) => starter.origin === "workspace")
+          ? "available"
+          : WORKSPACE_TEMPLATE_SOURCE.status,
+        shortLabel: starters.some((starter) => starter.origin === "workspace")
+          ? "workspace ready"
+          : WORKSPACE_TEMPLATE_SOURCE.shortLabel,
+        summary: starters.some((starter) => starter.origin === "workspace")
+          ? "工作空间模板已进入真实存储与读取链路，可从 editor 保存并回到创建页复用。"
+          : WORKSPACE_TEMPLATE_SOURCE.summary
+      },
+      starters.filter((starter) => starter.origin === "workspace").length
+    ),
+    buildWorkflowLibrarySourceLane(ECOSYSTEM_TEMPLATE_SOURCE, 0)
+  ];
+}
+
+export function inferWorkflowBusinessTrack(
+  definition: WorkflowDefinition
+): WorkflowBusinessTrack {
+  const nodeTypes = new Set(
+    (definition.nodes ?? [])
+      .map((node) => (typeof node.type === "string" ? node.type : ""))
+      .filter(Boolean)
+  );
+  const publishCount = Array.isArray(definition.publish) ? definition.publish.length : 0;
+  const outputNodes = (definition.nodes ?? []).filter((node) => node.type === "output");
+
+  if (
+    publishCount > 0 ||
+    outputNodes.some((node) => typeof node.config?.responseMode === "string")
+  ) {
+    return "API 调用开放";
+  }
+
+  if (nodeTypes.has("tool")) {
+    return "Dify 插件兼容";
+  }
+
+  if (
+    nodeTypes.has("llm_agent") ||
+    nodeTypes.has("mcp_query") ||
+    nodeTypes.has("condition") ||
+    nodeTypes.has("router")
+  ) {
+    return "编排节点能力";
+  }
+
+  return "应用新建编排";
+}
+
+function buildWorkspaceWorkflowStarterTemplate(
+  template: WorkspaceStarterTemplateItem
+): WorkflowStarterTemplate {
+  return buildWorkflowStarterTemplate({
+    id: template.id,
+    origin: "workspace",
+    name: template.name,
+    description: template.description,
+    businessTrack: template.business_track,
+    defaultWorkflowName: template.default_workflow_name,
+    source: {
+      ...WORKSPACE_TEMPLATE_SOURCE,
+      status: "available",
+      shortLabel: "workspace ready",
+      summary: "工作空间模板已落到后端真实数据源，可作为团队 starter 持续复用。"
+    },
+    workflowFocus: template.workflow_focus,
+    recommendedNextStep: template.recommended_next_step,
+    tags: template.tags,
+    definition: normalizeWorkflowDefinition(template.definition)
+  });
+}
+
+function buildWorkflowStarterTemplate(input: {
+  id: WorkflowStarterTemplateId;
+  origin: WorkflowStarterTemplate["origin"];
+  name: string;
+  description: string;
+  businessTrack: WorkflowBusinessTrack;
+  defaultWorkflowName: string;
+  source: WorkflowLibrarySourceDescriptor;
+  workflowFocus: string;
+  recommendedNextStep: string;
+  tags: string[];
+  definition: WorkflowDefinition;
+}): WorkflowStarterTemplate {
+  const track = getWorkflowBusinessTrack(input.businessTrack);
+  const definition = normalizeWorkflowDefinition(input.definition);
+  const nodeTypes = (definition.nodes ?? []).map((node) => node.type);
 
   return {
-    nodes: starter.nodes.map((node) => buildCatalogNodeDefinition(node)),
-    edges: starter.edges.map((edge) => ({ ...edge })),
-    variables: [],
-    publish: []
+    id: input.id,
+    origin: input.origin,
+    name: input.name,
+    description: input.description,
+    businessTrack: input.businessTrack,
+    priority: track.priority,
+    trackSummary: track.summary,
+    trackFocus: track.focus,
+    defaultWorkflowName: input.defaultWorkflowName,
+    source: input.source,
+    workflowFocus: input.workflowFocus,
+    recommendedNextStep: input.recommendedNextStep,
+    nodeCount: definition.nodes?.length ?? 0,
+    nodeLabels: nodeTypes.map(
+      (nodeType) => getWorkflowNodeCatalogItem(nodeType)?.label ?? nodeType
+    ),
+    tags: input.tags,
+    definition
   };
 }
 
-export function getWorkflowStarterTemplate(starterId: WorkflowStarterId) {
-  return (
-    WORKFLOW_STARTER_TEMPLATES.find((starter) => starter.id === starterId) ??
-    WORKFLOW_STARTER_TEMPLATES[0]
-  );
-}
-
-export function listWorkflowStarterTemplates(
-  businessTrack?: WorkflowBusinessTrack | null
-) {
-  if (!businessTrack) {
-    return WORKFLOW_STARTER_TEMPLATES;
-  }
-
-  return WORKFLOW_STARTER_TEMPLATES.filter(
-    (starter) => starter.businessTrack === businessTrack
-  );
+function normalizeWorkflowDefinition(definition: WorkflowDefinition): WorkflowDefinition {
+  return {
+    nodes: Array.isArray(definition.nodes)
+      ? definition.nodes.map((node) => ({
+          ...node,
+          config: isRecord(node.config) ? { ...node.config } : {}
+        }))
+      : [],
+    edges: Array.isArray(definition.edges)
+      ? definition.edges.map((edge) => ({ ...edge }))
+      : [],
+    variables: Array.isArray(definition.variables)
+      ? definition.variables.map((variable) => ({ ...variable }))
+      : [],
+    publish: Array.isArray(definition.publish)
+      ? definition.publish.map((endpoint) => ({ ...endpoint }))
+      : []
+  };
 }
 
 function createEdge(id: string, sourceNodeId: string, targetNodeId: string) {
@@ -303,9 +417,6 @@ function createEdge(id: string, sourceNodeId: string, targetNodeId: string) {
   };
 }
 
-function readWorkflowStarterBlueprint(starterId: WorkflowStarterId) {
-  return (
-    WORKFLOW_STARTER_BLUEPRINTS.find((item) => item.id === starterId) ??
-    WORKFLOW_STARTER_BLUEPRINTS[0]
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

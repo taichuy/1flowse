@@ -7,57 +7,81 @@ import { useRouter } from "next/navigation";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
-  buildWorkflowStarterDefinition,
-  getWorkflowStarterTemplate,
-  WORKFLOW_STARTER_SOURCE_LANES,
-  listWorkflowStarterTemplates,
-  WORKFLOW_STARTER_TEMPLATES,
-  WORKFLOW_STARTER_TRACKS,
-  type WorkflowStarterId
+  BUILTIN_WORKFLOW_STARTER_TEMPLATES,
+  buildWorkflowStarterSourceLanes,
+  buildWorkflowStarterTracks,
+  combineWorkflowStarterTemplates,
+  type WorkflowStarterTemplateId
 } from "@/lib/workflow-starters";
 
 type WorkflowCreateWizardProps = {
   catalogToolCount: number;
   workflows: WorkflowListItem[];
+  workspaceTemplates: WorkspaceStarterTemplateItem[];
 };
 
-const DEFAULT_STARTER_ID: WorkflowStarterId = "blank";
+const DEFAULT_STARTER_ID: WorkflowStarterTemplateId = "blank";
 
 export function WorkflowCreateWizard({
   catalogToolCount,
-  workflows
+  workflows,
+  workspaceTemplates
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
-  const defaultStarter = getWorkflowStarterTemplate(DEFAULT_STARTER_ID);
+  const starterTemplates = useMemo(
+    () => combineWorkflowStarterTemplates(workspaceTemplates),
+    [workspaceTemplates]
+  );
+  const sourceLanes = useMemo(
+    () => buildWorkflowStarterSourceLanes(starterTemplates),
+    [starterTemplates]
+  );
+  const starterTracks = useMemo(
+    () => buildWorkflowStarterTracks(starterTemplates),
+    [starterTemplates]
+  );
+  const defaultStarter =
+    starterTemplates.find((starter) => starter.id === DEFAULT_STARTER_ID) ??
+    starterTemplates[0] ??
+    BUILTIN_WORKFLOW_STARTER_TEMPLATES[0];
   const [activeTrack, setActiveTrack] = useState(defaultStarter.businessTrack);
   const [selectedStarterId, setSelectedStarterId] =
-    useState<WorkflowStarterId>(DEFAULT_STARTER_ID);
+    useState<WorkflowStarterTemplateId>(defaultStarter.id);
   const [workflowName, setWorkflowName] = useState(defaultStarter.defaultWorkflowName);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [isCreating, startCreateTransition] = useTransition();
 
   const selectedStarter = useMemo(
-    () => getWorkflowStarterTemplate(selectedStarterId),
-    [selectedStarterId]
+    () =>
+      starterTemplates.find((starter) => starter.id === selectedStarterId) ??
+      defaultStarter,
+    [defaultStarter, selectedStarterId, starterTemplates]
   );
   const activeTrackMeta = useMemo(
     () => getWorkflowBusinessTrack(activeTrack),
     [activeTrack]
   );
   const visibleStarters = useMemo(
-    () => listWorkflowStarterTemplates(activeTrack),
-    [activeTrack]
+    () =>
+      starterTemplates.filter((starter) =>
+        activeTrack ? starter.businessTrack === activeTrack : true
+      ),
+    [activeTrack, starterTemplates]
   );
 
   const applyStarterSelection = (
-    nextStarterId: WorkflowStarterId,
-    currentStarterId: WorkflowStarterId = selectedStarterId
+    nextStarterId: WorkflowStarterTemplateId,
+    currentStarterId: WorkflowStarterTemplateId = selectedStarterId
   ) => {
-    const currentStarter = getWorkflowStarterTemplate(currentStarterId);
-    const nextStarter = getWorkflowStarterTemplate(nextStarterId);
+    const currentStarter =
+      starterTemplates.find((starter) => starter.id === currentStarterId) ??
+      defaultStarter;
+    const nextStarter =
+      starterTemplates.find((starter) => starter.id === nextStarterId) ?? defaultStarter;
 
     if (
       !workflowName.trim() ||
@@ -67,14 +91,17 @@ export function WorkflowCreateWizard({
     }
 
     setSelectedStarterId(nextStarterId);
+    setActiveTrack(nextStarter.businessTrack);
     setMessage(null);
     setMessageTone("idle");
   };
 
-  const handleTrackSelect = (trackId: (typeof WORKFLOW_STARTER_TRACKS)[number]["id"]) => {
+  const handleTrackSelect = (trackId: (typeof starterTracks)[number]["id"]) => {
     setActiveTrack(trackId);
 
-    const nextVisibleStarters = listWorkflowStarterTemplates(trackId);
+    const nextVisibleStarters = starterTemplates.filter(
+      (starter) => starter.businessTrack === trackId
+    );
     if (nextVisibleStarters.some((starter) => starter.id === selectedStarterId)) {
       return;
     }
@@ -98,7 +125,7 @@ export function WorkflowCreateWizard({
           },
           body: JSON.stringify({
             name: normalizedName,
-            definition: buildWorkflowStarterDefinition(selectedStarterId)
+            definition: structuredClone(selectedStarter.definition)
           })
         });
         const body = (await response.json().catch(() => null)) as
@@ -134,8 +161,8 @@ export function WorkflowCreateWizard({
             这样 starter 不只是创建页素材，而是后续模板治理和节点入口分层的稳定落点。
           </p>
           <div className="pill-row">
-            <span className="pill">{WORKFLOW_STARTER_TRACKS.length} business tracks</span>
-            <span className="pill">{WORKFLOW_STARTER_TEMPLATES.length} starter templates</span>
+            <span className="pill">{starterTracks.length} business tracks</span>
+            <span className="pill">{starterTemplates.length} starter templates</span>
             <span className="pill">{catalogToolCount} catalog tools</span>
             <span className="pill">{workflows.length} existing workflows</span>
           </div>
@@ -200,8 +227,8 @@ export function WorkflowCreateWizard({
             activeTrack={activeTrack}
             selectedStarterId={selectedStarterId}
             starters={visibleStarters}
-            tracks={WORKFLOW_STARTER_TRACKS}
-            sourceLanes={WORKFLOW_STARTER_SOURCE_LANES}
+            tracks={starterTracks}
+            sourceLanes={sourceLanes}
             onSelectTrack={handleTrackSelect}
             onSelectStarter={applyStarterSelection}
           />
