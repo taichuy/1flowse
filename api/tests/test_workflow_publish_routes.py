@@ -322,7 +322,7 @@ def test_invoke_published_native_endpoint_uses_active_binding_blueprint(
     assert body["run"]["output_payload"] == {"tool": {"answer": "v1"}}
 
 
-def test_invoke_published_native_endpoint_rejects_unimplemented_auth_modes(
+def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
     client: TestClient,
 ) -> None:
     create_response = client.post(
@@ -337,7 +337,7 @@ def test_invoke_published_native_endpoint_rejects_unimplemented_auth_modes(
                         "name": "Native Chat",
                         "protocol": "native",
                         "workflowVersion": "0.1.0",
-                        "authMode": "api_key",
+                        "authMode": "token",
                         "streaming": False,
                         "inputSchema": {"type": "object"},
                     }
@@ -366,4 +366,4 @@ def test_invoke_published_native_endpoint_rejects_unimplemented_auth_modes(
         json={"input_payload": {}},
     )
     assert invoke_response.status_code == 422
-    assert "auth mode 'api_key' is not supported yet" in invoke_response.json()["detail"]
+    assert "auth mode 'token' is not supported yet" in invoke_response.json()["detail"]

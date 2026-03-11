@@ -138,3 +138,38 @@ class WorkflowPublishedEndpoint(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+
+class WorkflowPublishedApiKey(Base):
+    __tablename__ = "workflow_published_api_keys"
+    __table_args__ = (
+        UniqueConstraint("key_hash", name="uq_workflow_published_api_keys_key_hash"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(
+        ForeignKey("workflows.id"),
+        nullable=False,
+        index=True,
+    )
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(24), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default="active",
+        nullable=False,
+        index=True,
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
