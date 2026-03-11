@@ -27,6 +27,7 @@ import type { RunTrace } from "@/lib/get-run-trace";
 import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
 import { formatDurationMs } from "@/lib/runtime-presenters";
+import { summarizePluginToolSources } from "@/lib/workflow-source-model";
 import {
   EDITOR_NODE_LIBRARY,
   buildEditorEdge,
@@ -36,6 +37,7 @@ import {
   type WorkflowCanvasEdgeData,
   type WorkflowCanvasNodeData
 } from "@/lib/workflow-editor";
+import { WORKFLOW_NODE_SOURCE_LANE } from "@/lib/workflow-node-catalog";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import { WorkflowEditorInspector } from "@/components/workflow-editor-inspector";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
@@ -58,6 +60,7 @@ export function WorkflowEditorWorkbench({
   recentRuns
 }: WorkflowEditorWorkbenchProps) {
   const initialGraph = workflowDefinitionToReactFlow(workflow.definition);
+  const toolSourceLanes = summarizePluginToolSources(tools);
   const [workflowName, setWorkflowName] = useState(workflow.name);
   const [persistedWorkflowName, setPersistedWorkflowName] = useState(workflow.name);
   const [workflowVersion, setWorkflowVersion] = useState(workflow.version);
@@ -562,6 +565,29 @@ export function WorkflowEditorWorkbench({
                 先覆盖当前 MVP 较有意义的节点类型。`trigger` 保持单实例，`loop` 暂不放进画布。
               </p>
 
+              <div className="summary-strip compact-strip">
+                <div className="summary-card">
+                  <span>Node lane</span>
+                  <strong>{WORKFLOW_NODE_SOURCE_LANE.shortLabel}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Palette nodes</span>
+                  <strong>{WORKFLOW_NODE_SOURCE_LANE.count}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Tool lanes</span>
+                  <strong>{toolSourceLanes.length}</strong>
+                </div>
+              </div>
+
+              <div className="starter-tag-row">
+                {toolSourceLanes.map((lane) => (
+                  <span className="event-chip" key={`${lane.kind}-${lane.label}`}>
+                    {lane.shortLabel} · {lane.count}
+                  </span>
+                ))}
+              </div>
+
               <div className="editor-palette">
                 {EDITOR_NODE_LIBRARY.map((item) => (
                   <button
@@ -575,7 +601,7 @@ export function WorkflowEditorWorkbench({
                     <span>{item.description}</span>
                     <div className="starter-meta-row">
                       <span>{item.type}</span>
-                      <span>{item.ecosystem}</span>
+                      <span>{item.source.shortLabel}</span>
                     </div>
                   </button>
                 ))}

@@ -1,5 +1,11 @@
 import type { WorkflowDetail, WorkflowNodeItem } from "@/lib/get-workflows";
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import {
+  buildWorkflowLibrarySourceLane,
+  NATIVE_NODE_SOURCE,
+  type WorkflowLibrarySourceDescriptor,
+  type WorkflowLibrarySourceLane
+} from "@/lib/workflow-source-model";
 
 export type WorkflowDefinition = WorkflowDetail["definition"];
 export type WorkflowNodeType =
@@ -18,6 +24,7 @@ export type WorkflowNodeCatalogItem = {
   label: string;
   description: string;
   ecosystem: "native";
+  source: WorkflowLibrarySourceDescriptor;
   capabilityGroup: "entry" | "agent" | "integration" | "logic" | "output";
   businessTrack: WorkflowBusinessTrack;
   tags: string[];
@@ -46,6 +53,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "Trigger",
     description: "工作流入口节点，负责接收用户请求、表单输入或 API 调用。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "entry",
     businessTrack: "应用新建编排",
     tags: ["入口", "native", "workflow"],
@@ -64,6 +72,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "LLM Agent",
     description: "承载模型推理、角色设定和上下文授权的核心编排节点。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "agent",
     businessTrack: "编排节点能力",
     tags: ["agent", "llm", "native"],
@@ -82,6 +91,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "Tool",
     description: "绑定 native 或 compat tool catalog 的工具能力入口。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "integration",
     businessTrack: "Dify 插件兼容",
     tags: ["tool", "catalog", "compat-ready"],
@@ -100,6 +110,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "MCP Query",
     description: "按授权读取上游上下文，为 Agent 或工具提供受控查询入口。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "integration",
     businessTrack: "编排节点能力",
     tags: ["mcp", "context", "authorized"],
@@ -122,6 +133,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "Condition",
     description: "基于 selector 或安全表达式进行条件分支。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "logic",
     businessTrack: "编排节点能力",
     tags: ["branch", "logic", "safe-expression"],
@@ -140,6 +152,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "Router",
     description: "根据意图或规则把请求路由到不同分支和节点链路。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "logic",
     businessTrack: "编排节点能力",
     tags: ["router", "branch", "decision"],
@@ -158,6 +171,7 @@ const WORKFLOW_NODE_CATALOG: WorkflowNodeCatalogItem[] = [
     label: "Output",
     description: "聚合并整形最终结果，为后续发布映射和响应输出做准备。",
     ecosystem: "native",
+    source: NATIVE_NODE_SOURCE,
     capabilityGroup: "output",
     businessTrack: "API 调用开放",
     tags: ["output", "response", "publish-ready"],
@@ -182,6 +196,9 @@ const WORKFLOW_NODE_CATALOG_BY_TYPE = new Map(
 export const WORKFLOW_NODE_PALETTE = WORKFLOW_NODE_CATALOG.filter(
   (item) => item.palette.enabled
 ).sort((left, right) => left.palette.order - right.palette.order);
+
+export const WORKFLOW_NODE_SOURCE_LANE: WorkflowLibrarySourceLane =
+  buildWorkflowLibrarySourceLane(NATIVE_NODE_SOURCE, WORKFLOW_NODE_PALETTE.length);
 
 export function getWorkflowNodeCatalogItem(type: string) {
   return WORKFLOW_NODE_CATALOG_BY_TYPE.get(type as WorkflowNodeType) ?? null;

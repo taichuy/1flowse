@@ -1,6 +1,7 @@
 "use client";
 
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import type { WorkflowLibrarySourceLane } from "@/lib/workflow-source-model";
 import type {
   WorkflowStarterId,
   WorkflowStarterTemplate,
@@ -12,6 +13,7 @@ type WorkflowStarterBrowserProps = {
   selectedStarterId: WorkflowStarterId;
   starters: WorkflowStarterTemplate[];
   tracks: WorkflowStarterTrackItem[];
+  sourceLanes: WorkflowLibrarySourceLane[];
   onSelectTrack: (track: WorkflowBusinessTrack) => void;
   onSelectStarter: (starterId: WorkflowStarterId) => void;
 };
@@ -21,6 +23,7 @@ export function WorkflowStarterBrowser({
   selectedStarterId,
   starters,
   tracks,
+  sourceLanes,
   onSelectTrack,
   onSelectStarter
 }: WorkflowStarterBrowserProps) {
@@ -55,6 +58,15 @@ export function WorkflowStarterBrowser({
         </div>
       </div>
 
+      <div className="summary-strip compact-strip">
+        {sourceLanes.map((lane) => (
+          <div className="summary-card" key={`${lane.kind}-${lane.label}`}>
+            <span>{lane.label}</span>
+            <strong>{lane.count > 0 ? `${lane.count} ready` : lane.status}</strong>
+          </div>
+        ))}
+      </div>
+
       <div className="starter-grid">
         {starters.map((starter) => (
           <button
@@ -79,7 +91,7 @@ export function WorkflowStarterBrowser({
             </div>
             <div className="starter-meta-row">
               <span>{starter.nodeCount} nodes</span>
-              <span>{starter.sourceEcosystem}</span>
+              <span>{starter.source.shortLabel}</span>
               <span>{starter.tags[0]}</span>
             </div>
           </button>

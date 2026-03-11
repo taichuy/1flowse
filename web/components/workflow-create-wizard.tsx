@@ -11,6 +11,7 @@ import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
   buildWorkflowStarterDefinition,
   getWorkflowStarterTemplate,
+  WORKFLOW_STARTER_SOURCE_LANES,
   listWorkflowStarterTemplates,
   WORKFLOW_STARTER_TEMPLATES,
   WORKFLOW_STARTER_TRACKS,
@@ -200,6 +201,7 @@ export function WorkflowCreateWizard({
             selectedStarterId={selectedStarterId}
             starters={visibleStarters}
             tracks={WORKFLOW_STARTER_TRACKS}
+            sourceLanes={WORKFLOW_STARTER_SOURCE_LANES}
             onSelectTrack={handleTrackSelect}
             onSelectStarter={applyStarterSelection}
           />
@@ -238,8 +240,8 @@ export function WorkflowCreateWizard({
                   <strong>{selectedStarter.businessTrack}</strong>
                 </div>
                 <div className="summary-card">
-                  <span>Focus</span>
-                  <strong>{selectedStarter.sourceEcosystem}</strong>
+                  <span>Source</span>
+                  <strong>{selectedStarter.source.shortLabel}</strong>
                 </div>
                 <div className="summary-card">
                   <span>Nodes</span>
@@ -247,6 +249,7 @@ export function WorkflowCreateWizard({
                 </div>
               </div>
               <p className="starter-focus-copy">{selectedStarter.trackSummary}</p>
+              <p className="starter-focus-copy">{selectedStarter.source.summary}</p>
               <p className="starter-focus-copy">
                 下一步：{selectedStarter.recommendedNextStep}
               </p>

@@ -9,6 +9,14 @@ import {
   getWorkflowNodeCatalogItem,
   type WorkflowNodeType
 } from "@/lib/workflow-node-catalog";
+import {
+  buildWorkflowLibrarySourceLane,
+  BUILTIN_STARTER_SOURCE,
+  ECOSYSTEM_TEMPLATE_SOURCE,
+  WORKSPACE_TEMPLATE_SOURCE,
+  type WorkflowLibrarySourceDescriptor,
+  type WorkflowLibrarySourceLane
+} from "@/lib/workflow-source-model";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
 
 export type WorkflowStarterId = "blank" | "agent" | "tooling" | "response";
@@ -22,7 +30,7 @@ export type WorkflowStarterTemplate = {
   trackSummary: string;
   trackFocus: string;
   defaultWorkflowName: string;
-  sourceEcosystem: "native";
+  source: WorkflowLibrarySourceDescriptor;
   workflowFocus: string;
   recommendedNextStep: string;
   nodeCount: number;
@@ -45,7 +53,7 @@ type WorkflowStarterBlueprint = {
   description: string;
   businessTrack: WorkflowBusinessTrack;
   defaultWorkflowName: string;
-  sourceEcosystem: "native";
+  source: WorkflowLibrarySourceDescriptor;
   workflowFocus: string;
   recommendedNextStep: string;
   tags: string[];
@@ -66,7 +74,7 @@ const WORKFLOW_STARTER_BLUEPRINTS: WorkflowStarterBlueprint[] = [
     description: "保留最小 trigger -> output 骨架，适合从零开始搭应用入口。",
     businessTrack: "应用新建编排",
     defaultWorkflowName: "Blank Workflow",
-    sourceEcosystem: "native",
+    source: BUILTIN_STARTER_SOURCE,
     workflowFocus: "先生成一个真实可保存、可运行、可继续扩展的最小 workflow 草稿。",
     recommendedNextStep: "进入画布后优先补应用命名、首个业务节点和基础输出格式。",
     tags: ["最小骨架", "可立即运行", "适合打草稿"],
@@ -90,7 +98,7 @@ const WORKFLOW_STARTER_BLUEPRINTS: WorkflowStarterBlueprint[] = [
     description: "预留一个 LLM Agent 节点，方便继续补提示词、上下文授权和输出结构。",
     businessTrack: "编排节点能力",
     defaultWorkflowName: "Agent Workflow",
-    sourceEcosystem: "native",
+    source: BUILTIN_STARTER_SOURCE,
     workflowFocus: "把高频 Agent 节点先放进画布，继续往角色、上下文和结构化输出推进。",
     recommendedNextStep: "继续补 LLM Agent 的结构化配置和 output 节点的结果约束。",
     tags: ["LLM Agent", "多 Agent 起点", "便于继续扩节点"],
@@ -130,7 +138,7 @@ const WORKFLOW_STARTER_BLUEPRINTS: WorkflowStarterBlueprint[] = [
     description: "预留一个 tool 节点，创建后即可在编辑器里绑定 catalog tool 或 compat tool。",
     businessTrack: "Dify 插件兼容",
     defaultWorkflowName: "Tool Workflow",
-    sourceEcosystem: "native",
+    source: BUILTIN_STARTER_SOURCE,
     workflowFocus: "先把工具节点纳入编排主线，再接目录绑定、compat adapter 和外部生态。",
     recommendedNextStep: "创建后优先绑定一个 catalog tool，再继续补 adapter 与输入 schema。",
     tags: ["工具节点", "插件目录", "compat 入口"],
@@ -166,7 +174,7 @@ const WORKFLOW_STARTER_BLUEPRINTS: WorkflowStarterBlueprint[] = [
     description: "围绕 output 响应整形预留一个最小 API-ready 草稿，方便后续接发布配置。",
     businessTrack: "API 调用开放",
     defaultWorkflowName: "Response Workflow",
-    sourceEcosystem: "native",
+    source: BUILTIN_STARTER_SOURCE,
     workflowFocus: "先把响应结构、输出格式和发布前的最终结果整形组织在 workflow 内部。",
     recommendedNextStep: "继续在编辑器里补 output schema、发布配置和协议映射策略。",
     tags: ["响应整形", "发布准备", "output 优先"],
@@ -216,7 +224,7 @@ export const WORKFLOW_STARTER_TEMPLATES: WorkflowStarterTemplate[] =
       trackSummary: track.summary,
       trackFocus: track.focus,
       defaultWorkflowName: starter.defaultWorkflowName,
-      sourceEcosystem: starter.sourceEcosystem,
+      source: starter.source,
       workflowFocus: starter.workflowFocus,
       recommendedNextStep: starter.recommendedNextStep,
       nodeCount: starter.nodes.length,
@@ -226,6 +234,17 @@ export const WORKFLOW_STARTER_TEMPLATES: WorkflowStarterTemplate[] =
       tags: starter.tags
     };
   });
+
+export const WORKFLOW_STARTER_SOURCE_LANES: WorkflowLibrarySourceLane[] = [
+  buildWorkflowLibrarySourceLane(
+    BUILTIN_STARTER_SOURCE,
+    WORKFLOW_STARTER_TEMPLATES.filter(
+      (starter) => starter.source.scope === BUILTIN_STARTER_SOURCE.scope
+    ).length
+  ),
+  buildWorkflowLibrarySourceLane(WORKSPACE_TEMPLATE_SOURCE, 0),
+  buildWorkflowLibrarySourceLane(ECOSYSTEM_TEMPLATE_SOURCE, 0)
+];
 
 export const WORKFLOW_STARTER_TRACKS: WorkflowStarterTrackItem[] =
   WORKFLOW_BUSINESS_TRACKS.map((track) => {
