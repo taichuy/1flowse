@@ -24,9 +24,14 @@ from app.services.workflow_definitions import (
     bump_workflow_version,
     validate_workflow_definition,
 )
+from app.services.workflow_publish import (
+    WorkflowPublishBindingError,
+    WorkflowPublishBindingService,
+)
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 compiled_blueprint_service = CompiledBlueprintService()
+workflow_publish_service = WorkflowPublishBindingService(compiled_blueprint_service)
 
 
 def _serialize_workflow_detail(
@@ -115,12 +120,20 @@ def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)) -> W
     )
     db.add(workflow)
     db.add(workflow_version)
+    db.flush()
     try:
         compiled_blueprint = compiled_blueprint_service.ensure_for_workflow_version(
             db,
             workflow_version,
         )
+        db.flush()
+        workflow_publish_service.ensure_for_workflow_version(db, workflow_version)
     except CompiledBlueprintError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    except WorkflowPublishBindingError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
@@ -184,9 +197,18 @@ def update_workflow(
             definition=definition,
         )
         db.add(workflow_version)
+        db.flush()
         try:
             compiled_blueprint_service.ensure_for_workflow_version(db, workflow_version)
+            db.flush()
         except CompiledBlueprintError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
+        try:
+            workflow_publish_service.ensure_for_workflow_version(db, workflow_version)
+        except WorkflowPublishBindingError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
