@@ -75,6 +75,7 @@ def _serialize_run(artifacts: ExecutionArtifacts, *, include_events: bool = True
         id=artifacts.run.id,
         workflow_id=artifacts.run.workflow_id,
         workflow_version=artifacts.run.workflow_version,
+        compiled_blueprint_id=artifacts.run.compiled_blueprint_id,
         status=artifacts.run.status,
         input_payload=artifacts.run.input_payload,
         output_payload=artifacts.run.output_payload,

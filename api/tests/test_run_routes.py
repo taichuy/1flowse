@@ -25,6 +25,7 @@ def test_execute_workflow_route(
     body = response.json()
     assert body["workflow_id"] == sample_workflow.id
     assert body["workflow_version"] == "0.1.0"
+    assert body["compiled_blueprint_id"] is not None
     assert body["status"] == "succeeded"
     assert len(body["node_runs"]) == 3
     assert body["events"][-1]["event_type"] == "run.completed"
@@ -59,6 +60,7 @@ def test_get_run_supports_summary_mode_without_events(
     assert summary_response.status_code == 200
     summary_body = summary_response.json()
     assert summary_body["id"] == run_id
+    assert summary_body["compiled_blueprint_id"] == body["compiled_blueprint_id"]
     assert summary_body["event_count"] == len(body["events"])
     assert summary_body["event_type_counts"]["run.started"] == 1
     assert summary_body["event_type_counts"]["run.completed"] == 1

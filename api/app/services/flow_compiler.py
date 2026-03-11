@@ -109,6 +109,111 @@ class FlowCompiler:
             },
         )
 
+    def dump_blueprint(self, blueprint: CompiledWorkflowBlueprint) -> dict[str, Any]:
+        return {
+            "workflow_id": blueprint.workflow_id,
+            "workflow_version": blueprint.workflow_version,
+            "trigger_node_id": blueprint.trigger_node_id,
+            "output_node_ids": list(blueprint.output_node_ids),
+            "workflow_variables": dict(blueprint.workflow_variables),
+            "ordered_nodes": [
+                {
+                    "id": node.id,
+                    "type": node.type,
+                    "name": node.name,
+                    "config": dict(node.config),
+                    "runtime_policy": dict(node.runtime_policy),
+                    "input_schema": (
+                        dict(node.input_schema) if node.input_schema is not None else None
+                    ),
+                    "output_schema": (
+                        dict(node.output_schema) if node.output_schema is not None else None
+                    ),
+                }
+                for node in blueprint.ordered_nodes
+            ],
+            "incoming_nodes": {
+                node_id: list(source_ids)
+                for node_id, source_ids in blueprint.incoming_nodes.items()
+            },
+            "outgoing_edges": {
+                node_id: [
+                    {
+                        "id": edge.id,
+                        "source_node_id": edge.source_node_id,
+                        "target_node_id": edge.target_node_id,
+                        "channel": edge.channel,
+                        "condition": edge.condition,
+                        "condition_expression": edge.condition_expression,
+                        "mapping": [dict(item) for item in edge.mapping],
+                    }
+                    for edge in edges
+                ]
+                for node_id, edges in blueprint.outgoing_edges.items()
+            },
+        }
+
+    def load_blueprint(self, payload: dict[str, Any]) -> CompiledWorkflowBlueprint:
+        ordered_nodes = tuple(
+            CompiledNode(
+                id=str(node["id"]),
+                type=str(node["type"]),
+                name=str(node["name"]),
+                config=dict(node.get("config") or {}),
+                runtime_policy=dict(node.get("runtime_policy") or {}),
+                input_schema=(
+                    dict(node["input_schema"])
+                    if isinstance(node.get("input_schema"), dict)
+                    else None
+                ),
+                output_schema=(
+                    dict(node["output_schema"])
+                    if isinstance(node.get("output_schema"), dict)
+                    else None
+                ),
+            )
+            for node in (payload.get("ordered_nodes") or [])
+        )
+        node_lookup = {node.id: node for node in ordered_nodes}
+        outgoing_edges = {
+            str(node_id): tuple(
+                CompiledEdge(
+                    id=str(edge["id"]),
+                    source_node_id=str(edge["source_node_id"]),
+                    target_node_id=str(edge["target_node_id"]),
+                    channel=str(edge.get("channel") or "control"),
+                    condition=edge.get("condition"),
+                    condition_expression=edge.get("condition_expression"),
+                    mapping=tuple(
+                        dict(item) for item in (edge.get("mapping") or []) if isinstance(item, dict)
+                    ),
+                )
+                for edge in edges
+            )
+            for node_id, edges in (payload.get("outgoing_edges") or {}).items()
+        }
+        incoming_nodes = {
+            str(node_id): tuple(str(source_id) for source_id in source_ids)
+            for node_id, source_ids in (payload.get("incoming_nodes") or {}).items()
+        }
+
+        return CompiledWorkflowBlueprint(
+            workflow_id=str(payload["workflow_id"]),
+            workflow_version=str(payload["workflow_version"]),
+            trigger_node_id=str(payload["trigger_node_id"]),
+            output_node_ids=tuple(
+                str(node_id) for node_id in (payload.get("output_node_ids") or [])
+            ),
+            workflow_variables={
+                str(name): value
+                for name, value in (payload.get("workflow_variables") or {}).items()
+            },
+            ordered_nodes=ordered_nodes,
+            node_lookup=node_lookup,
+            incoming_nodes=incoming_nodes,
+            outgoing_edges=outgoing_edges,
+        )
+
     def _topological_nodes(
         self,
         nodes: list[dict[str, Any]],

@@ -609,6 +609,9 @@ class WorkflowVersionItem(BaseModel):
     workflow_id: str
     version: str
     created_at: datetime
+    compiled_blueprint_id: str | None = None
+    compiled_blueprint_compiler_version: str | None = None
+    compiled_blueprint_updated_at: datetime | None = None
 
 
 class WorkflowDetail(WorkflowListItem):

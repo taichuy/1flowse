@@ -283,6 +283,8 @@ def test_create_workflow_persists_initial_version(client: TestClient) -> None:
     assert body["version"] == "0.1.0"
     assert body["definition"]["edges"][0]["channel"] == "control"
     assert [version["version"] for version in body["versions"]] == ["0.1.0"]
+    assert body["versions"][0]["compiled_blueprint_id"] is not None
+    assert body["versions"][0]["compiled_blueprint_compiler_version"] == "flow-compiler.v1"
 
 
 def test_create_workflow_rejects_invalid_definition(client: TestClient) -> None:
@@ -301,6 +303,32 @@ def test_create_workflow_rejects_invalid_definition(client: TestClient) -> None:
     assert "trigger node" in response.json()["detail"]
 
 
+def test_create_workflow_rejects_cycles_during_blueprint_compilation(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Cycle Workflow",
+            "definition": {
+                "nodes": [
+                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "middle", "type": "tool", "name": "Middle", "config": {}},
+                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                ],
+                "edges": [
+                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "middle"},
+                    {"id": "e2", "sourceNodeId": "middle", "targetNodeId": "output"},
+                    {"id": "e3", "sourceNodeId": "output", "targetNodeId": "middle"},
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert "cycle" in response.json()["detail"]
+
+
 def test_update_workflow_bumps_version_and_keeps_history(
     client: TestClient,
     sample_workflow,
@@ -315,10 +343,12 @@ def test_update_workflow_bumps_version_and_keeps_history(
     assert body["version"] == "0.1.1"
     assert body["definition"]["nodes"][1]["config"]["mock_output"]["answer"] == "updated"
     assert [version["version"] for version in body["versions"]] == ["0.1.1", "0.1.0"]
+    assert all(version["compiled_blueprint_id"] for version in body["versions"])
 
     versions_response = client.get(f"/api/workflows/{sample_workflow.id}/versions")
     assert versions_response.status_code == 200
     assert [version["version"] for version in versions_response.json()] == ["0.1.1", "0.1.0"]
+    assert all(version["compiled_blueprint_id"] for version in versions_response.json())
 
 
 def test_create_workflow_accepts_retry_runtime_policy(client: TestClient) -> None:
@@ -675,7 +705,12 @@ def test_create_workflow_rejects_invalid_branch_edge_conditions(client: TestClie
         ],
         "edges": [
             {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
-            {"id": "e2", "sourceNodeId": "branch", "targetNodeId": "search_path", "condition": "search"},
+            {
+                "id": "e2",
+                "sourceNodeId": "branch",
+                "targetNodeId": "search_path",
+                "condition": "search",
+            },
             {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
             {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
             {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},

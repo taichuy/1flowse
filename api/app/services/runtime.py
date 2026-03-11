@@ -13,6 +13,10 @@ from app.models.run import AICallRecord, NodeRun, Run, RunArtifact, RunEvent, To
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.agent_runtime import AgentRuntime
 from app.services.artifact_store import RuntimeArtifactStore
+from app.services.compiled_blueprints import (
+    CompiledBlueprintError,
+    CompiledBlueprintService,
+)
 from app.services.context_service import ContextService
 from app.services.flow_compiler import FlowCompiler
 from app.services.plugin_runtime import (
@@ -20,11 +24,11 @@ from app.services.plugin_runtime import (
     get_plugin_call_proxy,
     get_plugin_registry,
 )
+from app.services.run_callback_tickets import RunCallbackTicketService
 from app.services.run_resume_scheduler import (
     RunResumeScheduler,
     get_run_resume_scheduler,
 )
-from app.services.run_callback_tickets import RunCallbackTicketService
 from app.services.runtime_graph_support import RuntimeGraphSupportMixin
 from app.services.runtime_types import (
     AuthorizedContextRefs,
@@ -73,9 +77,10 @@ class RuntimeService(RuntimeGraphSupportMixin):
         self._uses_default_plugin_proxy = plugin_call_proxy is None
         self._plugin_call_proxy = plugin_call_proxy or get_plugin_call_proxy()
         self._resume_scheduler = resume_scheduler or get_run_resume_scheduler()
+        self._flow_compiler = FlowCompiler()
+        self._compiled_blueprints = CompiledBlueprintService(self._flow_compiler)
         self._artifact_store = RuntimeArtifactStore()
         self._context_service = ContextService()
-        self._flow_compiler = FlowCompiler()
         self._callback_tickets = RunCallbackTicketService()
         self._tool_gateway = ToolGateway(
             plugin_call_proxy=self._plugin_call_proxy,
@@ -95,8 +100,13 @@ class RuntimeService(RuntimeGraphSupportMixin):
     ) -> ExecutionArtifacts:
         self._refresh_runtime_dependencies(db)
         try:
-            blueprint = self._flow_compiler.compile_workflow(workflow)
-        except Exception as exc:
+            workflow_version = self._ensure_workflow_version_for_execution(db, workflow)
+            blueprint_record = self._compiled_blueprints.ensure_for_workflow_version(
+                db,
+                workflow_version,
+            )
+            blueprint = self._compiled_blueprints.load_blueprint(blueprint_record)
+        except (CompiledBlueprintError, WorkflowExecutionError) as exc:
             raise WorkflowExecutionError(str(exc)) from exc
         if any(node.type == "loop" for node in blueprint.ordered_nodes):
             raise WorkflowExecutionError("Loop nodes are not supported by the MVP executor yet.")
@@ -105,6 +115,7 @@ class RuntimeService(RuntimeGraphSupportMixin):
             id=str(uuid4()),
             workflow_id=workflow.id,
             workflow_version=workflow.version,
+            compiled_blueprint_id=blueprint_record.id,
             status="running",
             input_payload=input_payload,
             checkpoint_payload={},
@@ -160,20 +171,10 @@ class RuntimeService(RuntimeGraphSupportMixin):
         if run.status != "waiting":
             raise WorkflowExecutionError("Only waiting runs can be resumed.")
 
-        workflow_version = db.scalar(
-            select(WorkflowVersion).where(
-                WorkflowVersion.workflow_id == run.workflow_id,
-                WorkflowVersion.version == run.workflow_version,
-            )
-        )
-        if workflow_version is None:
-            raise WorkflowExecutionError(
-                f"Workflow version '{run.workflow_version}' is not available for resume."
-            )
-
         try:
-            blueprint = self._flow_compiler.compile_workflow_version(workflow_version)
-        except Exception as exc:
+            blueprint_record = self._resolve_run_blueprint_record(db, run)
+            blueprint = self._compiled_blueprints.load_blueprint(blueprint_record)
+        except (CompiledBlueprintError, WorkflowExecutionError) as exc:
             raise WorkflowExecutionError(str(exc)) from exc
         checkpoint_state = FlowCheckpointState.from_dict(
             run.checkpoint_payload,
@@ -221,6 +222,68 @@ class RuntimeService(RuntimeGraphSupportMixin):
         if artifacts.run.status == "failed":
             raise WorkflowExecutionError(artifacts.run.error_message or "Workflow resume failed.")
         return artifacts
+
+    def _ensure_workflow_version_for_execution(
+        self,
+        db: Session,
+        workflow: Workflow,
+    ) -> WorkflowVersion:
+        record = db.scalar(
+            select(WorkflowVersion).where(
+                WorkflowVersion.workflow_id == workflow.id,
+                WorkflowVersion.version == workflow.version,
+            )
+        )
+        if record is not None:
+            return record
+
+        record = WorkflowVersion(
+            id=str(uuid4()),
+            workflow_id=workflow.id,
+            version=workflow.version,
+            definition=deepcopy(workflow.definition or {}),
+        )
+        db.add(record)
+        return record
+
+    def _load_workflow_version(
+        self,
+        db: Session,
+        *,
+        workflow_id: str,
+        workflow_version: str,
+    ) -> WorkflowVersion:
+        record = db.scalar(
+            select(WorkflowVersion).where(
+                WorkflowVersion.workflow_id == workflow_id,
+                WorkflowVersion.version == workflow_version,
+            )
+        )
+        if record is None:
+            raise WorkflowExecutionError(
+                f"Workflow version '{workflow_version}' is not available."
+            )
+        return record
+
+    def _resolve_run_blueprint_record(
+        self,
+        db: Session,
+        run: Run,
+    ):
+        record = self._compiled_blueprints.get_for_run(db, run)
+        if record is not None:
+            if run.compiled_blueprint_id != record.id:
+                run.compiled_blueprint_id = record.id
+            return record
+
+        workflow_version = self._load_workflow_version(
+            db,
+            workflow_id=run.workflow_id,
+            workflow_version=run.workflow_version,
+        )
+        record = self._compiled_blueprints.ensure_for_workflow_version(db, workflow_version)
+        run.compiled_blueprint_id = record.id
+        return record
 
     def receive_callback(
         self,

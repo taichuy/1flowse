@@ -170,13 +170,17 @@ uv run alembic upgrade head
 - 边定义会补齐默认 `channel=control`
 - 每次定义变更都会自动创建不可变版本快照
 - `runs` 会记录执行时绑定的 `workflow_version`
+- 创建/更新 workflow 时会同步生成 `workflow_compiled_blueprints`
+- `runs` 当前会继续记录执行绑定的 `compiled_blueprint_id`
 
 当前相关文件：
 
 - `api/app/schemas/workflow.py`
 - `api/app/services/workflow_definitions.py`
+- `api/app/services/compiled_blueprints.py`
 - `api/app/api/routes/workflows.py`
 - `api/migrations/versions/20260309_0002_workflow_versioning.py`
+- `api/migrations/versions/20260311_0009_compiled_workflow_blueprints.py`
 
 当前最小版本管理策略：
 
@@ -184,6 +188,7 @@ uv run alembic upgrade head
 - 仅当 `definition` 发生变更时自动递增 patch 版本，例如 `0.1.0 -> 0.1.1`
 - 纯名称修改不会创建新版本
 - `workflow_versions` 用于保存不可变快照，供后续运行追溯、发布绑定和缓存失效复用
+- `workflow_compiled_blueprints` 用于保存编译后的稳定执行蓝图，供 runtime run binding、后续 publish binding 和回放复用
 
 ### 5. 最小工作流执行器
 
@@ -215,6 +220,9 @@ uv run alembic upgrade head
 - 引入最小 `Flow Compiler`
   - `api/app/services/flow_compiler.py`
   - 负责把设计态 workflow/version 快照编译成运行时 blueprint，补齐拓扑顺序、输入输出关系和默认结构
+- 引入 `CompiledBlueprintService`
+  - `api/app/services/compiled_blueprints.py`
+  - 负责把 `workflow_version -> compiled blueprint` 变成持久化事实，并让 `runs` 显式绑定 `compiled_blueprint_id`
 - `RuntimeService` 升级为可恢复的 phase state machine 风格执行器
   - `api/app/services/runtime.py`
   - `api/app/services/runtime_graph_support.py`
@@ -525,22 +533,24 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 最近一次 Git 提交是 `feat: schedule durable runtime resume`，主要把 waiting run 的时间驱动恢复正式接到 scheduler / worker。
+- 最近一次 Git 提交是 `feat: 补充产品设计文档，新增项目架构图与关键时序图`，主要补强目标设计总览。
+- 当前代码主线则继续把 runtime 事实往设计方向收口：本轮已把 `workflow_version -> compiled blueprint -> run.compiled_blueprint_id` 接成稳定边界。
 - 当前真正需要承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
-  - 本轮继续沿这条线补上 `run_callback_tickets + callback ingress`，而不是再回去堆新的页面级壳层
+  - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
+  - 本轮继续把 compiled blueprint 从瞬时编译推进到持久化绑定，而不是再回去堆新的页面级壳层
 - 当前基础框架已经写到“可以继续推进主业务”的阶段：
   - `应用新建编排` 这一条线已经有 `workflow library -> starter -> editor -> 保存版本 -> recent runs overlay`
   - `编排节点能力` 这一条线已经有 phase runtime、tool/evidence/artifact、scheduler resume 和 callback ingress
   - `Dify 插件兼容` 已有 registry / adapter / tool lane / workspace scope 的基础 contract，但生命周期仍未完整
-  - `API 调用开放` 还停留在设计与局部 starter 层，发布态 compiled blueprint 和协议映射还没真正接上
+  - `API 调用开放` 仍停留在设计与局部 starter 层；虽然 run 侧已经绑定 compiled blueprint，但发布态 endpoint 和协议映射还没真正接上
 - 当前架构方向整体是解耦的，但仍有未完全拆开的高风险边界：
   - 后端已经开始形成 `Flow Compiler -> RuntimeService -> AgentRuntime / ToolGateway / ContextService / RunResumeScheduler / RunCallbackTicketService` 的分层
   - worker 恢复入口已经从运行主循环里旁路出来，没有继续把后台调度写死在 API 或 `RuntimeService` 单点内
   - 前端创建页、editor、starter 治理也已开始围绕共享 snapshot 演进，而不是各自维护私有常量
-  - 但 compiled blueprint 持久边界、publish mapping、callback ticket 生命周期治理和节点插件注册中心仍未彻底拆清
+  - 但 publish mapping、execution/evidence view、callback ticket 生命周期治理和节点插件注册中心仍未彻底拆清
 - 当前需要显式盯住的长文件：
-  - `api/app/services/runtime.py` 当前约 1356 行，已经逼近后端 1500 行偏好上限；本轮虽然通过 `RunCallbackTicketService` 避免把 ticket 生命周期完全塞进主循环，但下一轮若再补 compiled blueprint 持久化、scheduler 观测或 publish binding，应优先拆 waiting/resume orchestration
+  - `api/app/services/runtime.py` 当前约 1380 行，已经逼近后端 1500 行偏好上限；本轮虽然把 compiled blueprint 收口到独立 `CompiledBlueprintService`，但下一轮若再补 publish binding、scheduler 观测或 execution view，应优先拆 waiting/resume orchestration
   - `api/app/api/routes/runs.py` 当前约 700 行，已经开始同时承担 detail / trace / export / resume / callback；若继续长 execution / evidence view API，建议拆 trace/export/callback 子模块
   - `api/app/services/agent_runtime.py` 当前约 628 行，已经承载 phase pipeline、tool waiting 恢复和 evidence 组装；若继续长出 assistant 策略与 subflow 候选能力，应提前拆 plan/tool/finalize 子阶段
   - `api/app/services/workflow_library.py` 当前约 650 行，仍适合继续演进，但若再接 adapter health / node plugin registry，应优先拆 source assembly 与 starter builder
@@ -613,14 +623,14 @@ docker compose up -d --build
 - 现在还不适合一步到位宣称“完整 Durable Runtime 已完成”，原因是：
   - callback ingress 已经落地，但 callback bus、ticket 生命周期治理和更强鉴权还没有完成
   - scheduler 还只有最小任务投递，没有 dead-letter、去重、重投和系统化观测
-  - 发布态 compiled blueprint 与开放 API 映射还没有完全接上
+  - 发布态虽然已经有 compiled blueprint 持久边界，但开放 API 映射还没有完全接上
 - 因此后续应按 “Phase 1 MVP 稳定化 -> Phase 2 完整耐久化” 的路线推进，而不是再把所有能力堆回 `runtime.py`
 
 ### P0 当前最高优先级
 
 1. 把编译态与运行态彻底收口：
-   - 让执行入口优先绑定 compiled blueprint / version snapshot
-   - 为后续 publish binding 和开放 API 保留稳定执行蓝图
+   - 把已落地的 `compiled blueprint / version snapshot / run binding` 继续推进到 publish binding
+   - 让开放 API 和后续回放也建立在稳定执行蓝图上
 2. 把执行追踪补齐为 UI 与机器都可复用的查询面：
    - 继续围绕 `run_artifacts`、`tool_call_records`、`ai_call_records`
    - 把 `run.callback.ticket.issued / run.callback.received` 一并纳入 execution view
@@ -632,7 +642,7 @@ docker compose up -d --build
 
 原因：
 
-- 如果 compiled blueprint 继续只存在于运行前瞬时编译阶段，后续发布、回放和开放调用会缺少稳定事实边界。
+- run 侧虽然已经绑定 compiled blueprint，但如果发布层和 execution/evidence view 不继续承接，稳定执行边界仍然无法真正服务主业务。
 - artifact / tool / AI / callback 追踪已经落库，下一步要尽快让它们成为可消费能力，而不只是后台表结构。
 - callback ingress 虽然已打通，但 ticket 生命周期治理仍属于 durable runtime 稳定化的一部分。
 

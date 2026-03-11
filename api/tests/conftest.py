@@ -11,6 +11,7 @@ from app.core.database import Base, get_db
 from app.main import app
 from app.models.plugin import PluginAdapterRecord, PluginToolRecord  # noqa: F401
 from app.models.workflow import Workflow, WorkflowVersion
+from app.services.compiled_blueprints import CompiledBlueprintService
 
 
 @pytest.fixture
@@ -44,6 +45,7 @@ def client(sqlite_session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 def sample_workflow(sqlite_session: Session) -> Workflow:
+    blueprint_service = CompiledBlueprintService()
     workflow = Workflow(
         id="wf-demo",
         name="Demo Workflow",
@@ -77,6 +79,7 @@ def sample_workflow(sqlite_session: Session) -> Workflow:
     )
     sqlite_session.add(workflow)
     sqlite_session.add(workflow_version)
+    blueprint_service.ensure_for_workflow_version(sqlite_session, workflow_version)
     sqlite_session.commit()
     sqlite_session.refresh(workflow)
     return workflow

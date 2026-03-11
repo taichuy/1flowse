@@ -42,3 +42,37 @@ class WorkflowVersion(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
     )
+
+
+class WorkflowCompiledBlueprint(Base):
+    __tablename__ = "workflow_compiled_blueprints"
+    __table_args__ = (
+        UniqueConstraint(
+            "workflow_version_id",
+            name="uq_workflow_compiled_blueprints_workflow_version",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(
+        ForeignKey("workflows.id"),
+        nullable=False,
+        index=True,
+    )
+    workflow_version_id: Mapped[str] = mapped_column(
+        ForeignKey("workflow_versions.id"),
+        nullable=False,
+        index=True,
+    )
+    workflow_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    compiler_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    blueprint_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )

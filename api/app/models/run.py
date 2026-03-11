@@ -12,6 +12,11 @@ class Run(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     workflow_id: Mapped[str] = mapped_column(ForeignKey("workflows.id"), nullable=False, index=True)
     workflow_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    compiled_blueprint_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workflow_compiled_blueprints.id"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     input_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     output_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -128,7 +133,11 @@ class RunCallbackTicket(Base):
     )
     tool_id: Mapped[str | None] = mapped_column(String(256), nullable=True, index=True)
     tool_call_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    waiting_status: Mapped[str] = mapped_column(String(32), default="waiting_callback", nullable=False)
+    waiting_status: Mapped[str] = mapped_column(
+        String(32),
+        default="waiting_callback",
+        nullable=False,
+    )
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     callback_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)

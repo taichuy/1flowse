@@ -1,8 +1,9 @@
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.run import RunCallbackTicket
-from app.models.workflow import Workflow, WorkflowVersion
+from app.models.workflow import Workflow, WorkflowCompiledBlueprint, WorkflowVersion
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
 from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.runtime import RuntimeService, WorkflowExecutionError
@@ -22,6 +23,7 @@ def test_runtime_service_executes_linear_workflow(
 
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.workflow_version == "0.1.0"
+    assert artifacts.run.compiled_blueprint_id is not None
     assert artifacts.run.output_payload == {"mock_tool": {"answer": "done"}}
     assert len(artifacts.node_runs) == 3
     assert [event.event_type for event in artifacts.events] == [
@@ -34,6 +36,15 @@ def test_runtime_service_executes_linear_workflow(
         "node.output.completed",
         "run.completed",
     ]
+
+    compiled_blueprint = sqlite_session.scalar(
+        select(WorkflowCompiledBlueprint).where(
+            WorkflowCompiledBlueprint.id == artifacts.run.compiled_blueprint_id
+        )
+    )
+    assert compiled_blueprint is not None
+    assert compiled_blueprint.workflow_id == sample_workflow.id
+    assert compiled_blueprint.workflow_version == sample_workflow.version
 
 
 def test_runtime_service_only_executes_selected_condition_branch(sqlite_session: Session) -> None:
