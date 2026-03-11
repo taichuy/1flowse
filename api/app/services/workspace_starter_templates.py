@@ -3,11 +3,12 @@ from __future__ import annotations
 from functools import lru_cache
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.workspace_starter import WorkspaceStarterTemplateRecord
 from app.schemas.workspace_starter import (
+    WorkflowBusinessTrack,
     WorkspaceStarterTemplateCreate,
     WorkspaceStarterTemplateItem,
     WorkspaceStarterTemplateUpdate,
@@ -21,12 +22,48 @@ class WorkspaceStarterTemplateService:
         db: Session,
         *,
         workspace_id: str = "default",
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
     ) -> list[WorkspaceStarterTemplateRecord]:
+        query = select(WorkspaceStarterTemplateRecord).where(
+            WorkspaceStarterTemplateRecord.workspace_id == workspace_id
+        )
+
+        if business_track is not None:
+            query = query.where(
+                WorkspaceStarterTemplateRecord.business_track == business_track
+            )
+
+        normalized_search = search.strip() if search else ""
+        if normalized_search:
+            pattern = f"%{normalized_search}%"
+            query = query.where(
+                or_(
+                    WorkspaceStarterTemplateRecord.name.ilike(pattern),
+                    WorkspaceStarterTemplateRecord.description.ilike(pattern),
+                    WorkspaceStarterTemplateRecord.default_workflow_name.ilike(pattern),
+                    WorkspaceStarterTemplateRecord.workflow_focus.ilike(pattern),
+                    WorkspaceStarterTemplateRecord.recommended_next_step.ilike(pattern),
+                )
+            )
+
+        return db.scalars(
+            query.order_by(WorkspaceStarterTemplateRecord.updated_at.desc())
+        ).all()
+
+    def get_template(
+        self,
+        db: Session,
+        template_id: str,
+        *,
+        workspace_id: str = "default",
+    ) -> WorkspaceStarterTemplateRecord | None:
         return db.scalars(
             select(WorkspaceStarterTemplateRecord)
+            .where(WorkspaceStarterTemplateRecord.id == template_id)
             .where(WorkspaceStarterTemplateRecord.workspace_id == workspace_id)
-            .order_by(WorkspaceStarterTemplateRecord.updated_at.desc())
-        ).all()
+            .limit(1)
+        ).first()
 
     def create_template(
         self,

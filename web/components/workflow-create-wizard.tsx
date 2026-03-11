@@ -170,6 +170,9 @@ export function WorkflowCreateWizard({
             <Link className="inline-link" href="/">
               返回系统首页
             </Link>
+            <Link className="inline-link secondary" href="/workspace-starters">
+              管理 workspace starters
+            </Link>
             {workflows[0] ? (
               <Link
                 className="inline-link secondary"

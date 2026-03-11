@@ -115,6 +115,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <Link className="inline-link" href="/workflows/new">
                 新建 workflow
               </Link>
+              <Link className="inline-link secondary" href="/workspace-starters">
+                管理 workspace starters
+              </Link>
             </div>
           </div>
 

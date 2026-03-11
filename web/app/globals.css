@@ -565,6 +565,10 @@ a {
   margin-top: 14px;
 }
 
+.governance-filter-form {
+  margin-top: 18px;
+}
+
 .binding-field {
   display: grid;
   gap: 10px;
@@ -826,6 +830,19 @@ a {
   gap: 18px;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
   margin-top: 18px;
+}
+
+.governance-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  margin-top: 18px;
+  align-items: start;
+}
+
+.governance-sidebar {
+  display: grid;
+  gap: 18px;
 }
 
 .editor-hero {
@@ -1204,6 +1221,25 @@ a {
     monospace;
 }
 
+.governance-textarea {
+  min-height: 120px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(28, 25, 21, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 252, 246, 0.94);
+  padding: 12px 14px;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.6;
+}
+
+.governance-node-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
 .compact-stack {
   display: grid;
   gap: 10px;
@@ -1243,6 +1279,7 @@ a {
   .binding-workbench,
   .trace-filter-form,
   .creation-layout,
+  .governance-layout,
   .starter-track-summary,
   .editor-workspace {
     grid-template-columns: 1fr;
