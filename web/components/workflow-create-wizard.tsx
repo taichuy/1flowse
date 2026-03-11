@@ -7,13 +7,15 @@ import { useRouter } from "next/navigation";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
-import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import type {
+  WorkflowLibrarySourceLane,
+  WorkflowLibraryStarterItem,
+  WorkflowNodeCatalogItem
+} from "@/lib/get-workflow-library";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
-  BUILTIN_WORKFLOW_STARTER_TEMPLATES,
-  buildWorkflowStarterSourceLanes,
+  buildWorkflowStarterTemplates,
   buildWorkflowStarterTracks,
-  combineWorkflowStarterTemplates,
   type WorkflowStarterTemplateId
 } from "@/lib/workflow-starters";
 
@@ -21,25 +23,23 @@ type WorkflowCreateWizardProps = {
   catalogToolCount: number;
   preferredStarterId?: string;
   workflows: WorkflowListItem[];
-  workspaceTemplates: WorkspaceStarterTemplateItem[];
+  starters: WorkflowLibraryStarterItem[];
+  starterSourceLanes: WorkflowLibrarySourceLane[];
+  nodeCatalog: WorkflowNodeCatalogItem[];
 };
-
-const DEFAULT_STARTER_ID: WorkflowStarterTemplateId = "blank";
 
 export function WorkflowCreateWizard({
   catalogToolCount,
   preferredStarterId,
   workflows,
-  workspaceTemplates
+  starters,
+  starterSourceLanes,
+  nodeCatalog
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
   const starterTemplates = useMemo(
-    () => combineWorkflowStarterTemplates(workspaceTemplates),
-    [workspaceTemplates]
-  );
-  const sourceLanes = useMemo(
-    () => buildWorkflowStarterSourceLanes(starterTemplates),
-    [starterTemplates]
+    () => buildWorkflowStarterTemplates(starters, nodeCatalog),
+    [nodeCatalog, starters]
   );
   const starterTracks = useMemo(
     () => buildWorkflowStarterTracks(starterTemplates),
@@ -47,9 +47,7 @@ export function WorkflowCreateWizard({
   );
   const defaultStarter =
     starterTemplates.find((starter) => starter.id === preferredStarterId) ??
-    starterTemplates.find((starter) => starter.id === DEFAULT_STARTER_ID) ??
-    starterTemplates[0] ??
-    BUILTIN_WORKFLOW_STARTER_TEMPLATES[0];
+    starterTemplates[0];
   const [activeTrack, setActiveTrack] = useState(defaultStarter.businessTrack);
   const [selectedStarterId, setSelectedStarterId] =
     useState<WorkflowStarterTemplateId>(defaultStarter.id);
@@ -234,7 +232,7 @@ export function WorkflowCreateWizard({
             selectedStarterId={selectedStarterId}
             starters={visibleStarters}
             tracks={starterTracks}
-            sourceLanes={sourceLanes}
+            sourceLanes={starterSourceLanes}
             onSelectTrack={handleTrackSelect}
             onSelectStarter={applyStarterSelection}
           />

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 
 import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
-import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
-import { getWorkspaceStarterTemplates } from "@/lib/get-workspace-starters";
+import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflows } from "@/lib/get-workflows";
 
 export const metadata: Metadata = {
@@ -15,18 +14,19 @@ type NewWorkflowPageProps = {
 
 export default async function NewWorkflowPage({ searchParams }: NewWorkflowPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
-  const [pluginRegistry, workflows, workspaceTemplates] = await Promise.all([
-    getPluginRegistrySnapshot(),
-    getWorkflows(),
-    getWorkspaceStarterTemplates()
+  const [workflowLibrary, workflows] = await Promise.all([
+    getWorkflowLibrarySnapshot(),
+    getWorkflows()
   ]);
 
   return (
     <WorkflowCreateWizard
-      catalogToolCount={pluginRegistry.tools.length}
+      catalogToolCount={workflowLibrary.tools.length}
+      starters={workflowLibrary.starters}
+      starterSourceLanes={workflowLibrary.starterSourceLanes}
+      nodeCatalog={workflowLibrary.nodes}
       preferredStarterId={readQueryValue(resolvedSearchParams.starter)}
       workflows={workflows}
-      workspaceTemplates={workspaceTemplates}
     />
   );
 }

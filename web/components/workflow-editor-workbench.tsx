@@ -22,16 +22,18 @@ import {
 } from "@xyflow/react";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type {
+  WorkflowLibrarySourceLane,
+  WorkflowNodeCatalogItem
+} from "@/lib/get-workflow-library";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
 import { formatDurationMs } from "@/lib/runtime-presenters";
-import { summarizePluginToolSources } from "@/lib/workflow-source-model";
 import { buildWorkspaceStarterPayload } from "@/lib/workspace-starter-payload";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import {
-  EDITOR_NODE_LIBRARY,
   buildEditorEdge,
   createWorkflowNodeDraft,
   reactFlowToWorkflowDefinition,
@@ -39,14 +41,17 @@ import {
   type WorkflowCanvasEdgeData,
   type WorkflowCanvasNodeData
 } from "@/lib/workflow-editor";
-import { WORKFLOW_NODE_SOURCE_LANE } from "@/lib/workflow-node-catalog";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import { getPaletteNodeCatalog } from "@/lib/workflow-node-catalog";
 import { WorkflowEditorInspector } from "@/components/workflow-editor-inspector";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 
 type WorkflowEditorWorkbenchProps = {
   workflow: WorkflowDetail;
   workflows: WorkflowListItem[];
+  nodeCatalog: WorkflowNodeCatalogItem[];
+  nodeSourceLanes: WorkflowLibrarySourceLane[];
+  toolSourceLanes: WorkflowLibrarySourceLane[];
   tools: PluginToolRegistryItem[];
   recentRuns: WorkflowRunListItem[];
 };
@@ -58,11 +63,15 @@ const nodeTypes = {
 export function WorkflowEditorWorkbench({
   workflow,
   workflows,
+  nodeCatalog,
+  nodeSourceLanes,
+  toolSourceLanes,
   tools,
   recentRuns
 }: WorkflowEditorWorkbenchProps) {
-  const initialGraph = workflowDefinitionToReactFlow(workflow.definition);
-  const toolSourceLanes = summarizePluginToolSources(tools);
+  const initialGraph = workflowDefinitionToReactFlow(nodeCatalog, workflow.definition);
+  const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
+  const primaryNodeLane = nodeSourceLanes[0] ?? null;
   const [workflowName, setWorkflowName] = useState(workflow.name);
   const [persistedWorkflowName, setPersistedWorkflowName] = useState(workflow.name);
   const [workflowVersion, setWorkflowVersion] = useState(workflow.version);
@@ -99,7 +108,7 @@ export function WorkflowEditorWorkbench({
     JSON.stringify(currentDefinition) !== JSON.stringify(persistedDefinition);
 
   useEffect(() => {
-    const nextGraph = workflowDefinitionToReactFlow(workflow.definition);
+    const nextGraph = workflowDefinitionToReactFlow(nodeCatalog, workflow.definition);
     setWorkflowName(workflow.name);
     setPersistedWorkflowName(workflow.name);
     setWorkflowVersion(workflow.version);
@@ -118,7 +127,7 @@ export function WorkflowEditorWorkbench({
     setIsRefreshingRuns(false);
     setMessage(null);
     setMessageTone("idle");
-  }, [recentRuns, workflow, setEdges, setNodes]);
+  }, [nodeCatalog, recentRuns, workflow, setEdges, setNodes]);
 
   useEffect(() => {
     setNodeConfigText(stringifyJson(selectedNode?.data.config ?? {}));
@@ -178,8 +187,8 @@ export function WorkflowEditorWorkbench({
     setSelectedEdgeId(nextEdge?.id ?? null);
   };
 
-  const handleAddNode = (type: (typeof EDITOR_NODE_LIBRARY)[number]["type"]) => {
-    const draft = createWorkflowNodeDraft(type, nodes.length + 1);
+  const handleAddNode = (type: string) => {
+    const draft = createWorkflowNodeDraft(nodeCatalog, type, nodes.length + 1);
     const nextNode: Node<WorkflowCanvasNodeData> = {
       id: draft.id,
       type: "workflowNode",
@@ -628,13 +637,17 @@ export function WorkflowEditorWorkbench({
               </p>
 
               <div className="summary-strip compact-strip">
-                <div className="summary-card">
-                  <span>Node lane</span>
-                  <strong>{WORKFLOW_NODE_SOURCE_LANE.shortLabel}</strong>
-                </div>
+                {primaryNodeLane ? (
+                  <div className="summary-card">
+                    <span>Node lane</span>
+                    <strong>{primaryNodeLane.shortLabel}</strong>
+                  </div>
+                ) : null}
                 <div className="summary-card">
                   <span>Palette nodes</span>
-                  <strong>{WORKFLOW_NODE_SOURCE_LANE.count}</strong>
+                  <strong>
+                    {primaryNodeLane?.count ?? editorNodeLibrary.length}
+                  </strong>
                 </div>
                 <div className="summary-card">
                   <span>Tool lanes</span>
@@ -651,7 +664,7 @@ export function WorkflowEditorWorkbench({
               </div>
 
               <div className="editor-palette">
-                {EDITOR_NODE_LIBRARY.map((item) => (
+                {editorNodeLibrary.map((item) => (
                   <button
                     key={item.type}
                     className="editor-node-add"

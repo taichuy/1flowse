@@ -6,6 +6,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.plugins import router as plugin_router
 from app.api.routes.runs import router as run_router
 from app.api.routes.system import router as system_router
+from app.api.routes.workflow_library import router as workflow_library_router
 from app.api.routes.workflows import router as workflow_router
 from app.api.routes.workspace_starters import router as workspace_starter_router
 from app.core.config import get_settings
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     application.include_router(plugin_router, prefix="/api")
     application.include_router(system_router, prefix="/api")
     application.include_router(workflow_router, prefix="/api")
+    application.include_router(workflow_library_router, prefix="/api")
     application.include_router(workspace_starter_router, prefix="/api")
     application.include_router(run_router, prefix="/api")
     return application

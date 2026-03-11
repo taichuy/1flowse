@@ -1,9 +1,9 @@
 import type { Edge, Node } from "@xyflow/react";
 
+import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import {
   buildCatalogNodeDefinition,
-  getPaletteNodeCatalog,
   getWorkflowNodeCatalogItem,
   getWorkflowNodeDefaultPosition
 } from "@/lib/workflow-node-catalog";
@@ -32,20 +32,20 @@ export type WorkflowCanvasEdgeData = {
   mapping?: Array<Record<string, unknown>>;
 };
 
-export const EDITOR_NODE_LIBRARY = getPaletteNodeCatalog();
-
 const DEFAULT_EDGE_OPTIONS: WorkflowCanvasEdgeData = {
   channel: "control"
 };
 
-export function createStarterWorkflowDefinition(): WorkflowDefinition {
+export function createStarterWorkflowDefinition(
+  nodeCatalog: WorkflowNodeCatalogItem[]
+): WorkflowDefinition {
   return {
     nodes: [
-      buildCatalogNodeDefinition({
+      buildCatalogNodeDefinition(nodeCatalog, {
         id: createEntityId("trigger"),
         type: "trigger"
       }),
-      buildCatalogNodeDefinition({
+      buildCatalogNodeDefinition(nodeCatalog, {
         id: createEntityId("output"),
         type: "output"
       })
@@ -57,16 +57,17 @@ export function createStarterWorkflowDefinition(): WorkflowDefinition {
 }
 
 export function createWorkflowNodeDraft(
-  type: (typeof EDITOR_NODE_LIBRARY)[number]["type"],
+  nodeCatalog: WorkflowNodeCatalogItem[],
+  type: string,
   existingNodesCount: number
 ) {
-  const fallbackPosition = getWorkflowNodeDefaultPosition(type);
-  const catalogItem = getWorkflowNodeCatalogItem(type);
+  const fallbackPosition = getWorkflowNodeDefaultPosition(nodeCatalog, type);
+  const catalogItem = getWorkflowNodeCatalogItem(nodeCatalog, type);
 
   return {
     id: createEntityId(type),
     type,
-    name: buildDefaultNodeName(type, existingNodesCount),
+    name: buildDefaultNodeName(nodeCatalog, type, existingNodesCount),
     config: withCanvasPosition(
       structuredClone(catalogItem?.defaults.config ?? {}),
       {
@@ -78,6 +79,7 @@ export function createWorkflowNodeDraft(
 }
 
 export function workflowDefinitionToReactFlow(
+  nodeCatalog: WorkflowNodeCatalogItem[],
   definition: WorkflowDefinition
 ): {
   nodes: Array<Node<WorkflowCanvasNodeData>>;
@@ -88,7 +90,7 @@ export function workflowDefinitionToReactFlow(
 
   const nodes = rawNodes.map((node, index) => {
     const config = toRecord(node.config);
-    const position = readCanvasPosition(config, node.type, index);
+    const position = readCanvasPosition(nodeCatalog, config, node.type, index);
 
     return {
       id: node.id,
@@ -164,8 +166,12 @@ export function reactFlowToWorkflowDefinition(
   };
 }
 
-function buildDefaultNodeName(type: string, existingNodesCount: number) {
-  const baseName = getWorkflowNodeCatalogItem(type)?.label ?? type;
+function buildDefaultNodeName(
+  nodeCatalog: WorkflowNodeCatalogItem[],
+  type: string,
+  existingNodesCount: number
+) {
+  const baseName = getWorkflowNodeCatalogItem(nodeCatalog, type)?.label ?? type;
   return `${baseName} ${Math.max(1, existingNodesCount)}`;
 }
 
@@ -181,6 +187,7 @@ function createEntityId(prefix: string) {
 }
 
 function readCanvasPosition(
+  nodeCatalog: WorkflowNodeCatalogItem[],
   config: Record<string, unknown>,
   nodeType: string,
   index: number
@@ -194,7 +201,7 @@ function readCanvasPosition(
     return { x, y };
   }
 
-  const fallback = getWorkflowNodeDefaultPosition(nodeType);
+  const fallback = getWorkflowNodeDefaultPosition(nodeCatalog, nodeType);
   return {
     x: fallback.x + index * 40,
     y: fallback.y + (index % 3) * 48

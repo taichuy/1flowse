@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { WorkflowEditorWorkbench } from "@/components/workflow-editor-workbench";
-import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
+import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
 import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 
@@ -24,10 +24,10 @@ export default async function WorkflowEditorPage({
   params
 }: WorkflowEditorPageProps) {
   const { workflowId } = await params;
-  const [workflow, workflows, pluginRegistry, recentRuns] = await Promise.all([
+  const [workflow, workflows, workflowLibrary, recentRuns] = await Promise.all([
     getWorkflowDetail(workflowId),
     getWorkflows(),
-    getPluginRegistrySnapshot(),
+    getWorkflowLibrarySnapshot(),
     getWorkflowRuns(workflowId)
   ]);
 
@@ -39,7 +39,10 @@ export default async function WorkflowEditorPage({
     <WorkflowEditorWorkbench
       workflow={workflow}
       workflows={workflows}
-      tools={pluginRegistry.tools}
+      nodeCatalog={workflowLibrary.nodes}
+      nodeSourceLanes={workflowLibrary.nodeSourceLanes}
+      toolSourceLanes={workflowLibrary.toolSourceLanes}
+      tools={workflowLibrary.tools}
       recentRuns={recentRuns}
     />
   );

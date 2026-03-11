@@ -1,0 +1,302 @@
+import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type { WorkflowEdgeItem, WorkflowNodeItem } from "@/lib/get-workflows";
+import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import type { WorkflowDefinition } from "@/lib/workflow-editor";
+
+export type WorkflowLibrarySourceDescriptor = {
+  kind: "starter" | "node" | "tool";
+  scope: "builtin" | "workspace" | "ecosystem";
+  status: "available" | "planned";
+  governance: "repo" | "workspace" | "adapter";
+  ecosystem: string;
+  label: string;
+  shortLabel: string;
+  summary: string;
+};
+
+export type WorkflowLibrarySourceLane = WorkflowLibrarySourceDescriptor & {
+  count: number;
+};
+
+export type WorkflowNodeCatalogItem = {
+  type: string;
+  label: string;
+  description: string;
+  ecosystem: string;
+  source: WorkflowLibrarySourceDescriptor;
+  capabilityGroup: "entry" | "agent" | "integration" | "logic" | "output";
+  businessTrack: WorkflowBusinessTrack;
+  tags: string[];
+  palette: {
+    enabled: boolean;
+    order: number;
+    defaultPosition: { x: number; y: number };
+  };
+  defaults: {
+    name: string;
+    config: Record<string, unknown>;
+  };
+};
+
+export type WorkflowLibraryStarterItem = {
+  id: string;
+  origin: "builtin" | "workspace";
+  workspaceId?: string | null;
+  name: string;
+  description: string;
+  businessTrack: WorkflowBusinessTrack;
+  defaultWorkflowName: string;
+  workflowFocus: string;
+  recommendedNextStep: string;
+  tags: string[];
+  definition: WorkflowDefinition;
+  source: WorkflowLibrarySourceDescriptor;
+  createdFromWorkflowId?: string | null;
+  createdFromWorkflowVersion?: string | null;
+  archived: boolean;
+  archivedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type WorkflowLibrarySnapshot = {
+  nodes: WorkflowNodeCatalogItem[];
+  starters: WorkflowLibraryStarterItem[];
+  starterSourceLanes: WorkflowLibrarySourceLane[];
+  nodeSourceLanes: WorkflowLibrarySourceLane[];
+  toolSourceLanes: WorkflowLibrarySourceLane[];
+  tools: PluginToolRegistryItem[];
+};
+
+type WorkflowLibrarySnapshotResponse = {
+  nodes?: Array<Record<string, unknown>>;
+  starters?: Array<Record<string, unknown>>;
+  starter_source_lanes?: Array<Record<string, unknown>>;
+  node_source_lanes?: Array<Record<string, unknown>>;
+  tool_source_lanes?: Array<Record<string, unknown>>;
+  tools?: Array<Record<string, unknown>>;
+};
+
+const fallbackSnapshot: WorkflowLibrarySnapshot = {
+  nodes: [],
+  starters: [],
+  starterSourceLanes: [],
+  nodeSourceLanes: [],
+  toolSourceLanes: [],
+  tools: []
+};
+
+export async function getWorkflowLibrarySnapshot(
+  workspaceId = "default"
+): Promise<WorkflowLibrarySnapshot> {
+  const params = new URLSearchParams();
+  params.set("workspace_id", workspaceId);
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/workflow-library?${params.toString()}`,
+      {
+        cache: "no-store"
+      }
+    );
+
+    if (!response.ok) {
+      return fallbackSnapshot;
+    }
+
+    return normalizeWorkflowLibrarySnapshot(
+      (await response.json()) as WorkflowLibrarySnapshotResponse
+    );
+  } catch {
+    return fallbackSnapshot;
+  }
+}
+
+function normalizeWorkflowLibrarySnapshot(
+  input: WorkflowLibrarySnapshotResponse
+): WorkflowLibrarySnapshot {
+  return {
+    nodes: Array.isArray(input.nodes) ? input.nodes.map(normalizeNodeCatalogItem) : [],
+    starters: Array.isArray(input.starters)
+      ? input.starters.map(normalizeStarterItem)
+      : [],
+    starterSourceLanes: Array.isArray(input.starter_source_lanes)
+      ? input.starter_source_lanes.map(normalizeSourceLane)
+      : [],
+    nodeSourceLanes: Array.isArray(input.node_source_lanes)
+      ? input.node_source_lanes.map(normalizeSourceLane)
+      : [],
+    toolSourceLanes: Array.isArray(input.tool_source_lanes)
+      ? input.tool_source_lanes.map(normalizeSourceLane)
+      : [],
+    tools: Array.isArray(input.tools) ? input.tools.map(normalizeToolItem) : []
+  };
+}
+
+function normalizeSourceDescriptor(
+  input: Record<string, unknown>
+): WorkflowLibrarySourceDescriptor {
+  return {
+    kind: asString(input.kind, "starter") as WorkflowLibrarySourceDescriptor["kind"],
+    scope: asString(input.scope, "builtin") as WorkflowLibrarySourceDescriptor["scope"],
+    status: asString(
+      input.status,
+      "planned"
+    ) as WorkflowLibrarySourceDescriptor["status"],
+    governance: asString(
+      input.governance,
+      "repo"
+    ) as WorkflowLibrarySourceDescriptor["governance"],
+    ecosystem: asString(input.ecosystem),
+    label: asString(input.label),
+    shortLabel: asString(input.short_label),
+    summary: asString(input.summary)
+  };
+}
+
+function normalizeSourceLane(input: Record<string, unknown>): WorkflowLibrarySourceLane {
+  return {
+    ...normalizeSourceDescriptor(input),
+    count: typeof input.count === "number" ? input.count : 0
+  };
+}
+
+function normalizeNodeCatalogItem(
+  input: Record<string, unknown>
+): WorkflowNodeCatalogItem {
+  const palette = isRecord(input.palette) ? input.palette : {};
+  const defaultPosition = isRecord(palette.default_position)
+    ? palette.default_position
+    : {};
+  const defaults = isRecord(input.defaults) ? input.defaults : {};
+
+  return {
+    type: asString(input.type),
+    label: asString(input.label),
+    description: asString(input.description),
+    ecosystem: asString(input.ecosystem, "native"),
+    source: normalizeSourceDescriptor(isRecord(input.source) ? input.source : {}),
+    capabilityGroup: asString(
+      input.capability_group,
+      "integration"
+    ) as WorkflowNodeCatalogItem["capabilityGroup"],
+    businessTrack: asString(
+      input.business_track,
+      "应用新建编排"
+    ) as WorkflowBusinessTrack,
+    tags: asStringArray(input.tags),
+    palette: {
+      enabled: Boolean(palette.enabled),
+      order: typeof palette.order === "number" ? palette.order : 0,
+      defaultPosition: {
+        x: typeof defaultPosition.x === "number" ? defaultPosition.x : 240,
+        y: typeof defaultPosition.y === "number" ? defaultPosition.y : 120
+      }
+    },
+    defaults: {
+      name: asString(defaults.name, asString(input.type)),
+      config: isRecord(defaults.config) ? { ...defaults.config } : {}
+    }
+  };
+}
+
+function normalizeStarterItem(input: Record<string, unknown>): WorkflowLibraryStarterItem {
+  return {
+    id: asString(input.id),
+    origin: asString(input.origin, "builtin") as WorkflowLibraryStarterItem["origin"],
+    workspaceId: asOptionalString(input.workspace_id),
+    name: asString(input.name),
+    description: asString(input.description),
+    businessTrack: asString(
+      input.business_track,
+      "应用新建编排"
+    ) as WorkflowBusinessTrack,
+    defaultWorkflowName: asString(input.default_workflow_name, asString(input.name)),
+    workflowFocus: asString(input.workflow_focus),
+    recommendedNextStep: asString(input.recommended_next_step),
+    tags: asStringArray(input.tags),
+    definition: normalizeWorkflowDefinition(input.definition),
+    source: normalizeSourceDescriptor(isRecord(input.source) ? input.source : {}),
+    createdFromWorkflowId: asOptionalString(input.created_from_workflow_id),
+    createdFromWorkflowVersion: asOptionalString(input.created_from_workflow_version),
+    archived: Boolean(input.archived),
+    archivedAt: asOptionalString(input.archived_at),
+    createdAt: asOptionalString(input.created_at),
+    updatedAt: asOptionalString(input.updated_at)
+  };
+}
+
+function normalizeToolItem(input: Record<string, unknown>): PluginToolRegistryItem {
+  return {
+    id: asString(input.id),
+    name: asString(input.name),
+    ecosystem: asString(input.ecosystem, "native"),
+    description: asString(input.description),
+    input_schema: isRecord(input.input_schema) ? { ...input.input_schema } : {},
+    output_schema: isRecord(input.output_schema) ? { ...input.output_schema } : null,
+    source: asString(input.source, "builtin"),
+    plugin_meta: isRecord(input.plugin_meta) ? { ...input.plugin_meta } : null,
+    callable: Boolean(input.callable)
+  };
+}
+
+function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition {
+  const definition = isRecord(value) ? value : {};
+  return {
+    nodes: Array.isArray(definition.nodes)
+      ? definition.nodes
+          .filter(isRecord)
+          .map((node) => normalizeWorkflowNodeItem(node))
+      : [],
+    edges: Array.isArray(definition.edges)
+      ? definition.edges
+          .filter(isRecord)
+          .map((edge) => normalizeWorkflowEdgeItem(edge))
+      : [],
+    variables: Array.isArray(definition.variables)
+      ? definition.variables.filter(isRecord).map((item) => ({ ...item }))
+      : [],
+    publish: Array.isArray(definition.publish)
+      ? definition.publish.filter(isRecord).map((item) => ({ ...item }))
+      : []
+  };
+}
+
+function normalizeWorkflowNodeItem(input: Record<string, unknown>): WorkflowNodeItem {
+  return {
+    ...input,
+    id: asString(input.id),
+    type: asString(input.type),
+    name: asString(input.name, asString(input.type)),
+    config: isRecord(input.config) ? { ...input.config } : {}
+  };
+}
+
+function normalizeWorkflowEdgeItem(input: Record<string, unknown>): WorkflowEdgeItem {
+  return {
+    ...input,
+    id: asString(input.id),
+    sourceNodeId: asString(input.sourceNodeId),
+    targetNodeId: asString(input.targetNodeId),
+    channel: asString(input.channel, "control")
+  };
+}
+
+function asString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asOptionalString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
+function asStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
