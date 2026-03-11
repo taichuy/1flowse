@@ -230,6 +230,18 @@ uv run alembic upgrade head
 - 当前已开放第一版恢复接口
   - `POST /api/runs/{run_id}/resume`
   - 适用于 waiting tool / fallback 后的最小恢复闭环
+- 新增最小 `Run Resume Scheduler`
+  - `api/app/services/run_resume_scheduler.py`
+  - 把 runtime waiting 的恢复请求收口到独立调度层，默认投递给 Celery
+- 新增 worker 任务 `runtime.resume_run`
+  - `api/app/tasks/runtime.py`
+  - worker 现在可以消费 waiting run 的恢复请求；若 run 已离开 waiting，会按当前状态幂等跳过
+- 节点 retry backoff 已不再依赖同步 `sleep`
+  - 有 backoff 的重试会把 run 挂起为 `waiting`
+  - `node_runs.checkpoint_payload` 会记录 `retry_state` 与 `scheduled_resume`
+- tool waiting 已可通过工具结果元数据声明恢复策略
+  - 当前支持 `meta.waiting_status = waiting_tool / waiting_callback`
+  - 当前支持 `meta.resume_after_seconds` 触发自动恢复调度
 
 这让我们可以先验证：
 
@@ -262,7 +274,8 @@ uv run alembic upgrade head
 - `GET /api/workflow-library` 当前已开始按 `workspace_id` 过滤 adapter 绑定的 compat 工具，并把 `tool` 节点的 `binding_required` / `binding_source_lanes` 一并返回给 editor
 - `GET /api/workflows/{workflow_id}/runs` 当前会聚合返回 run 状态、版本、`node_run_count`、`event_count` 和 `last_event_at`，供 editor 选择最近执行上下文，而不是继续依赖首页摘要拼装
 - `GET /api/runs/{run_id}` 当前已支持 `include_events=false` 的摘要模式，供 run 诊断页等人类界面减少与 `/trace` 的重复数据搬运
-- `POST /api/runs/{run_id}/resume` 当前会从 `runs.checkpoint_payload` 与 `node_runs.checkpoint_payload` 恢复 phase state machine，优先支持 tool waiting 场景
+- `POST /api/runs/{run_id}/resume` 当前会从 `runs.checkpoint_payload` 与 `node_runs.checkpoint_payload` 恢复 phase state machine；事件里会额外带出 `source`
+- runtime 当前还能通过 worker 侧 `runtime.resume_run` 消费被调度的 waiting run，并把计划恢复写成 `run.resume.scheduled`
 - 当前 trace 过滤已支持 `event_type`、`node_run_id`、时间范围、`payload_key`、事件游标和顺序控制
 - 当前 trace 还补充了回放 / 导出元信息，例如 trace / returned 时间边界、事件顺序、`replay_offset_ms` 以及 opaque `cursor`
 - `GET /api/runs/{run_id}/trace/export` 当前支持 `json` 与 `jsonl`，导出会复用相同过滤条件，便于离线分析与后续 replay 包演进
@@ -486,30 +499,27 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 最近一次 Git 提交 `fix: add missing newline at end of SOURCES.txt` 只是打包产物换行修复，不构成新的业务开发主线。
-- 最近一次真正有业务内容的提交 `feat: harden workspace starter bulk governance` 与本轮实现存在明确衔接：
-  - 上一次先把 workspace starter 推进到“批量删除、风险提示和跳过原因聚合”的阶段
-  - 本轮没有继续把能力堆回 starter 单线，而是顺着 shared `workflow library` 往前补 workspace-aware tool filtering 和 plugin-backed node source contract，避免主业务入口再次分叉回页面本地推断
-- 再往前一轮提交 `refactor: split workflow editor forms and workbench` 仍然是这条链路的重要前置：
-  - editor 主体和配置表单先拆开，才让后续 starter 治理能力可以继续旁路演进，而不是重新堆回画布壳层
-- 当前基础框架已经足够继续推进主业务完整度：
-  - 新建应用 -> shared workflow library -> starter -> editor -> 保存版本 -> workspace starter 治理 -> 创建页复用 -> recent runs overlay 这条链路已连续
-  - workspace starter 现在已经具备 active / archived 治理、来源漂移摘要、来源 refresh、治理历史、source diff、rebase、批量 delete 和创建页深链回填
-  - shared `workflow library` 也已开始表达 workspace 级 compat 工具可见性，以及 `tool` 节点依赖的 plugin-backed binding lanes
-  - 但 `publish config`、更完整的节点插件 source contract 和 batch result drill-down / 更细团队决策提示仍未接上
-- 当前架构方向整体是解耦的，但还没完全拆开：
-  - `workflow business tracks`、`workflow library snapshot`、`workspace starter API`、`workspace starter governance page` 已开始分层
-  - 创建页和 editor 现在已经优先消费同一份后端 snapshot，而不是各自靠前端常量拼装 starter / node / tool lane
-  - shared snapshot 现在也不再把 adapter-scoped compat 工具无差别暴露给所有 workspace，node/tool source 的边界开始以后端 contract 为准
-  - editor 内部也已从“单文件混排 UI + 状态 + 运行态附着”转成“顶层状态编排 + UI 子模块”
-  - workspace starter 治理态也已经从模板记录扩展到“模板 + 历史事件”，没有继续把设计态资产治理塞进运行态事实表
-  - 但节点插件注册中心、provider-backed node source 和 ecosystem starter 仍未进入这份 contract
+- 最近一次 Git 提交是 `docs: sync durable runtime design baselines`，主要同步了产品与技术设计基线，本身不需要直接做代码衔接。
+- 当前真正需要承接的实现主线仍是 `feat: add durable agent runtime phase1`：
+  - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
+  - 本轮继续沿这条线补上 `run resume scheduler + worker resume task`，而不是再回去堆新的页面级壳层
+- 当前基础框架已经写到“可以继续推进主业务”的阶段：
+  - `应用新建编排` 这一条线已经有 `workflow library -> starter -> editor -> 保存版本 -> recent runs overlay`
+  - `编排节点能力` 这一条线已经有 phase runtime、tool/evidence/artifact 和最小后台恢复闭环
+  - `Dify 插件兼容` 已有 registry / adapter / tool lane / workspace scope 的基础 contract，但生命周期仍未完整
+  - `API 调用开放` 还停留在设计与局部 starter 层，发布态 compiled blueprint 和协议映射还没真正接上
+- 当前架构方向整体是解耦的，但仍有未完全拆开的高风险边界：
+  - 后端已经开始形成 `Flow Compiler -> RuntimeService -> AgentRuntime / ToolGateway / ContextService / RunResumeScheduler` 的分层
+  - worker 恢复入口已经从运行主循环里旁路出来，没有继续把后台调度写死在 API 或 `RuntimeService` 单点内
+  - 前端创建页、editor、starter 治理也已开始围绕共享 snapshot 演进，而不是各自维护私有常量
+  - 但正式 callback ingress、compiled blueprint 持久边界、publish mapping 和节点插件注册中心仍未彻底拆清
 - 当前需要显式盯住的长文件：
-  - `api/app/services/runtime.py` 本轮已拆到约 986 行，并把图路由 / join / edge mapping / 授权上下文辅助逻辑下沉到 `api/app/services/runtime_graph_support.py`；后续若继续补 scheduler、callback 和 subflow，不要再把这些职责堆回主执行器
-  - `api/app/services/workflow_library.py` 当前约 639 行，虽然还没逼近后端红线，但已经同时承担 builtin starter、workspace starter、tool visibility 和 source lane 拼装；若继续接 adapter health / node plugin registry，应优先拆 source assembly 与 starter builders
-  - `web/components/workspace-starter-library.tsx` 当前仍约千行，是治理页的最大单文件；本轮已继续把 bulk governance 抽到子组件，后续若再补结果钻取或批量决策面板，建议继续抽离筛选栏和详情表单
-  - `web/components/workflow-node-config-form/shared.ts` 约 368 行，当前是前端节点配置的共享工具汇聚点，后续若继续长出更多 schema / mapping 工具，需要及时再拆
-  - `web/components/workflow-editor-workbench.tsx` 当前约 529 行，主文件已明显收缩，但若后续继续增加保存流程和 run overlay 状态，仍需继续盯住
+  - `api/app/services/runtime.py` 当前约 1187 行，仍低于后端 1500 行偏好上限，但下一轮若再补 callback ingress、scheduler 观测或 publish binding，应继续拆分 waiting/resume orchestration
+  - `api/app/api/routes/runs.py` 当前约 732 行，已经开始同时承担 detail / trace / export / resume；若继续长 execution / evidence view API，建议拆 trace/export 子模块
+  - `api/app/services/agent_runtime.py` 当前约 666 行，已经承载 phase pipeline、tool waiting 恢复和 evidence 组装；若继续长出 assistant 策略与 subflow 候选能力，应提前拆 plan/tool/finalize 子阶段
+  - `api/app/services/workflow_library.py` 当前约 689 行，仍适合继续演进，但若再接 adapter health / node plugin registry，应优先拆 source assembly 与 starter builder
+  - `web/components/workspace-starter-library.tsx` 当前约 1135 行，是前端体量最大的真实业务文件；虽然还在前端 2000 行偏好之内，但后续继续补批量结果钻取时仍应继续拆
+  - `web/components/run-diagnostics-panel.tsx` 当前约 678 行、`web/components/workflow-editor-workbench.tsx` 当前约 581 行，下一轮若继续接 execution / evidence view，要避免重新长回页面级混排组件
 
 ## 推荐开发命令
 
@@ -528,6 +538,8 @@ Worker:
 ```powershell
 uv run celery -A app.core.celery_app.celery_app worker --loglevel INFO --pool solo
 ```
+
+当前 worker 除 `system.heartbeat` 外，也会消费 `runtime.resume_run`，用于等待中的 run 自动恢复。
 
 ### Docker 全栈模式
 
@@ -554,6 +566,8 @@ docker compose up -d --build
 - Loop 节点执行
 - 外部 MCP Provider 接入
 - 完整插件兼容代理生命周期
+- 正式的 `WAITING_CALLBACK` 外部回调入口与回调鉴权协议
+- scheduler 级 dead-letter / dedupe / metrics / 失败重投治理
 - 流式响应映射
 - 回放调试面板
 - 更完整的节点结构化配置抽屉
@@ -568,19 +582,19 @@ docker compose up -d --build
 
 当前判断：
 
-- 本轮已经完成 Durable Agent Runtime 的 Phase 1 MVP 重构版。
+- 本轮已经把 Durable Agent Runtime 从“手动 resume 的 Phase 1”推进到“带最小后台恢复入口的 Phase 1.5”。
 - 现在还不适合一步到位宣称“完整 Durable Runtime 已完成”，原因是：
-  - 还没有独立的 queue / scheduler / callback event bus
-  - `WAITING_CALLBACK`、延迟重试、定时恢复仍主要依赖同步恢复入口，而不是后台任务系统
+  - 还没有正式的 callback ingress / callback event bus
+  - scheduler 还只有最小任务投递，没有 dead-letter、去重、重投和系统化观测
   - 发布态 compiled blueprint 与开放 API 映射还没有完全接上
 - 因此后续应按 “Phase 1 MVP 稳定化 -> Phase 2 完整耐久化” 的路线推进，而不是再把所有能力堆回 `runtime.py`
 
 ### P0 当前最高优先级
 
-1. 把 `resume` 从手动恢复入口推进到最小 scheduler / callback 闭环：
-   - 支持 `WAITING_CALLBACK`
-   - 支持基于 retry policy 的延迟重试调度
-   - 支持工具完成 / 外部回调后自动唤醒节点，而不是依赖长请求存活
+1. 把 `WAITING_CALLBACK` 补成正式外部回调闭环：
+   - 定义 callback token / ticket 到 run/node_run 的关联协议
+   - 提供工具完成 / 外部系统回调后的恢复入口，而不是只靠时间驱动恢复
+   - 明确回调鉴权、幂等与重复回调处理
 2. 把编译态与运行态彻底收口：
    - 让执行入口优先绑定 compiled blueprint / version snapshot
    - 为后续 publish binding 和开放 API 保留稳定执行蓝图
@@ -590,22 +604,26 @@ docker compose up -d --build
 
 原因：
 
-- 当前 phase state machine 已经成立，但没有 scheduler 就还不算真正 durable。
+- 当前 phase state machine 与最小 scheduler 已经成立，但没有正式 callback ingress 就还不算真正 durable。
 - 如果 compiled blueprint 继续只存在于运行前瞬时编译阶段，后续发布、回放和开放调用会缺少稳定事实边界。
 - artifact / tool / AI 追踪已经落库，下一步要尽快让它们成为可消费能力，而不只是后台表结构。
 
 ### P1 次高优先级
 
-1. 继续补强 `llm_agent` 结构化配置：
+1. 继续补强 scheduler / worker 的稳定性治理：
+   - `run.resume.scheduled` 的查询与诊断入口
+   - dead-letter / 失败重投 / 去重策略
+   - 按 waiting type 区分 time-driven 与 event-driven 恢复
+2. 继续补强 `llm_agent` 结构化配置：
    - 输出契约
    - assistant trigger 阈值
    - tool policy
    - timeout / fallback / review 策略
-2. 继续扩展 `Tool Gateway`：
+3. 继续扩展 `Tool Gateway`：
    - 参数 schema 校验
    - 权限控制收口
    - native / compat / local agent / remote API 适配
-3. 把 execution view 和 evidence view 接回 editor / run diagnostics：
+4. 把 execution view 和 evidence view 接回 editor / run diagnostics：
    - 节点 phase timeline
    - tool 调用摘要
    - assistant evidence 展示
@@ -613,6 +631,7 @@ docker compose up -d --build
 
 原因：
 
+- scheduler 已经落了最小实现，下一步要尽快补齐“能排队”之外的可靠性与可观测性。
 - 当前 `llm_agent` 已从单次调用器升级为复合节点，但还需要更多结构化配置才能真正承载“节点级智能性”。
 - Tool Gateway 已经建立统一入口，应该继续成为所有工具能力的唯一穿透点，避免重新散落调用。
 - 运行时追踪如果不尽快回到 UI，后续 evidence 分层与 phase 调试价值会被埋在底层表里。
@@ -623,6 +642,7 @@ docker compose up -d --build
    - 异步工具完成事件
    - assistant 异步任务恢复
    - timer-based timeout / retry / fallback
+   - callback / timer / manual 三类恢复来源统一收口
 2. 开始补 Loop / Subflow 的运行时边界：
    - Loop 仍坚持显式节点表达
    - 某些复杂 assistant pipeline 未来可升级为 subflow，但当前先不提前抽象

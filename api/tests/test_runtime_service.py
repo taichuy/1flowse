@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
+from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.runtime import RuntimeService, WorkflowExecutionError
 
 
@@ -1304,3 +1305,182 @@ def test_llm_agent_waiting_tool_can_resume(sqlite_session: Session) -> None:
     assert resumed_agent_run.output_payload["decision_basis"] == "tool_results"
     assert resumed.run.output_payload["agent"]["result"] == "callback finished"
     assert "run.resumed" in [event.event_type for event in resumed.events]
+
+
+def test_runtime_service_schedules_retry_resume_with_backoff(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-retry-scheduled",
+        name="Retry Scheduled Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "flaky_tool",
+                    "type": "tool",
+                    "name": "Flaky Tool",
+                    "config": {
+                        "mock_error_sequence": ["temporary outage"],
+                        "mock_output": {"answer": "recovered"},
+                    },
+                    "runtimePolicy": {
+                        "retry": {
+                            "maxAttempts": 2,
+                            "backoffSeconds": 5,
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "flaky_tool"},
+                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-retry-scheduled-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    sqlite_session.commit()
+
+    scheduled_resumes = []
+    runtime = RuntimeService(
+        resume_scheduler=RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
+
+    first_pass = runtime.execute_workflow(sqlite_session, workflow, {"topic": "retry"})
+
+    retry_run = next(
+        node_run for node_run in first_pass.node_runs if node_run.node_id == "flaky_tool"
+    )
+    assert first_pass.run.status == "waiting"
+    assert retry_run.status == "retrying"
+    assert retry_run.waiting_reason == "Retry 2/2 scheduled in 5s after error: temporary outage"
+    assert retry_run.checkpoint_payload["retry_state"]["next_attempt_number"] == 2
+    assert retry_run.checkpoint_payload["scheduled_resume"]["delay_seconds"] == 5.0
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].run_id == first_pass.run.id
+    assert scheduled_resumes[0].delay_seconds == 5.0
+    assert "run.resume.scheduled" in [event.event_type for event in first_pass.events]
+
+    resumed = runtime.resume_run(sqlite_session, first_pass.run.id, source="test")
+
+    resumed_retry_run = next(
+        node_run for node_run in resumed.node_runs if node_run.node_id == "flaky_tool"
+    )
+    assert resumed.run.status == "succeeded"
+    assert resumed_retry_run.status == "succeeded"
+    assert resumed_retry_run.retry_count == 1
+    assert "retry_state" not in resumed_retry_run.checkpoint_payload
+    assert "scheduled_resume" not in resumed_retry_run.checkpoint_payload
+
+
+def test_llm_agent_waiting_callback_can_schedule_resume(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-agent-scheduled-resume",
+        name="Agent Scheduled Resume Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "assistant": {"enabled": False},
+                        "toolPolicy": {"allowedToolIds": ["native.search"]},
+                        "mockPlan": {
+                            "toolCalls": [
+                                {
+                                    "toolId": "native.search",
+                                    "inputs": {"query": "schedule-me"},
+                                }
+                            ]
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-agent-scheduled-resume-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    sqlite_session.commit()
+
+    call_counter = {"count": 0}
+
+    def _scheduled_resume_tool(request):
+        call_counter["count"] += 1
+        if call_counter["count"] == 1:
+            return {
+                "status": "waiting",
+                "content_type": "json",
+                "summary": "awaiting callback",
+                "structured": {"ticket": "tool-456"},
+                "meta": {
+                    "tool_name": "Native Search",
+                    "waiting_reason": "callback pending",
+                    "waiting_status": "waiting_callback",
+                    "resume_after_seconds": 3,
+                },
+            }
+        return {
+            "status": "success",
+            "content_type": "json",
+            "summary": "callback finished",
+            "structured": {"documents": ["done"], "query": request.inputs["query"]},
+            "meta": {"tool_name": "Native Search"},
+        }
+
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(id="native.search", name="Native Search"),
+        invoker=_scheduled_resume_tool,
+    )
+    scheduled_resumes = []
+    runtime = RuntimeService(
+        plugin_call_proxy=PluginCallProxy(registry),
+        resume_scheduler=RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
+
+    first_pass = runtime.execute_workflow(sqlite_session, workflow, {"topic": "resume"})
+
+    waiting_run = next(node_run for node_run in first_pass.node_runs if node_run.node_id == "agent")
+    assert first_pass.run.status == "waiting"
+    assert waiting_run.status == "waiting_callback"
+    assert waiting_run.phase == "waiting_callback"
+    assert waiting_run.checkpoint_payload["scheduled_resume"]["delay_seconds"] == 3.0
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].delay_seconds == 3.0
+    assert "run.resume.scheduled" in [event.event_type for event in first_pass.events]
+
+    resumed = runtime.resume_run(sqlite_session, first_pass.run.id, source="test")
+
+    resumed_agent_run = next(
+        node_run for node_run in resumed.node_runs if node_run.node_id == "agent"
+    )
+    assert resumed.run.status == "succeeded"
+    assert resumed_agent_run.status == "succeeded"
+    assert resumed.run.output_payload["agent"]["result"] == "callback finished"

@@ -634,7 +634,7 @@ def resume_run(
     db: Session = Depends(get_db),
 ) -> RunDetail:
     try:
-        artifacts = runtime_service.resume_run(db, run_id)
+        artifacts = runtime_service.resume_run(db, run_id, source="manual_api")
     except WorkflowExecutionError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

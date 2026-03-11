@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -20,6 +19,10 @@ from app.services.plugin_runtime import (
     PluginCallProxy,
     get_plugin_call_proxy,
     get_plugin_registry,
+)
+from app.services.run_resume_scheduler import (
+    RunResumeScheduler,
+    get_run_resume_scheduler,
 )
 from app.services.runtime_graph_support import RuntimeGraphSupportMixin
 from app.services.runtime_types import (
@@ -52,9 +55,14 @@ def _utcnow() -> datetime:
 
 
 class RuntimeService(RuntimeGraphSupportMixin):
-    def __init__(self, plugin_call_proxy: PluginCallProxy | None = None) -> None:
+    def __init__(
+        self,
+        plugin_call_proxy: PluginCallProxy | None = None,
+        resume_scheduler: RunResumeScheduler | None = None,
+    ) -> None:
         self._uses_default_plugin_proxy = plugin_call_proxy is None
         self._plugin_call_proxy = plugin_call_proxy or get_plugin_call_proxy()
+        self._resume_scheduler = resume_scheduler or get_run_resume_scheduler()
         self._artifact_store = RuntimeArtifactStore()
         self._context_service = ContextService()
         self._flow_compiler = FlowCompiler()
@@ -126,7 +134,14 @@ class RuntimeService(RuntimeGraphSupportMixin):
             )
         return artifacts
 
-    def resume_run(self, db: Session, run_id: str) -> ExecutionArtifacts:
+    def resume_run(
+        self,
+        db: Session,
+        run_id: str,
+        *,
+        source: str = "manual",
+        reason: str | None = None,
+    ) -> ExecutionArtifacts:
         self._refresh_runtime_dependencies(db)
         run = db.get(Run, run_id)
         if run is None:
@@ -159,7 +174,18 @@ class RuntimeService(RuntimeGraphSupportMixin):
         run.status = "running"
         run.current_node_id = None
         run.error_message = None
-        events = [self._build_event(run.id, None, "run.resumed", {"run_id": run.id})]
+        events = [
+            self._build_event(
+                run.id,
+                None,
+                "run.resumed",
+                {
+                    "run_id": run.id,
+                    "source": source,
+                    "reason": reason,
+                },
+            )
+        ]
         try:
             self._continue_execution(
                 db,
@@ -346,6 +372,13 @@ class RuntimeService(RuntimeGraphSupportMixin):
                 checkpoint_state.next_node_index = node_index
                 checkpoint_state.waiting_node_run_id = node_run.id
                 run.checkpoint_payload = checkpoint_state.as_dict()
+                self._schedule_waiting_resume_if_needed(
+                    run=run,
+                    node=node,
+                    node_run=node_run,
+                    result=result,
+                    events=events,
+                )
                 events.append(
                     self._build_event(
                         run.id,
@@ -501,6 +534,7 @@ class RuntimeService(RuntimeGraphSupportMixin):
             node_run = db.get(NodeRun, checkpoint_state.waiting_node_run_id)
             if node_run is None:
                 raise WorkflowExecutionError("Waiting node run no longer exists.")
+            self._clear_scheduled_resume(node_run)
             node_run.status = "running"
             node_run.waiting_reason = None
             events.append(
@@ -570,8 +604,9 @@ class RuntimeService(RuntimeGraphSupportMixin):
         events: list[RunEvent],
     ) -> NodeExecutionResult:
         last_error: Exception | None = None
+        starting_attempt_number = self._starting_retry_attempt(node_run)
 
-        for attempt_number in range(1, retry_policy.max_attempts + 1):
+        for attempt_number in range(starting_attempt_number, retry_policy.max_attempts + 1):
             node_input = self._build_node_input(
                 node=node,
                 node_run=node_run,
@@ -602,10 +637,13 @@ class RuntimeService(RuntimeGraphSupportMixin):
                     authorized_context=authorized_context,
                     outputs=outputs,
                 )
+                self._clear_retry_state(node_run)
                 return result
             except Exception as exc:
                 last_error = exc
+                node_run.retry_count = attempt_number
                 if attempt_number >= retry_policy.max_attempts:
+                    self._clear_retry_state(node_run)
                     raise
 
                 delay_seconds = self._retry_delay_seconds(retry_policy, attempt_number)
@@ -624,7 +662,25 @@ class RuntimeService(RuntimeGraphSupportMixin):
                     )
                 )
                 if delay_seconds > 0:
-                    time.sleep(delay_seconds)
+                    next_attempt_number = attempt_number + 1
+                    retry_waiting_reason = (
+                        "Retry "
+                        f"{next_attempt_number}/{retry_policy.max_attempts} "
+                        f"scheduled in {delay_seconds:g}s after error: {exc}"
+                    )
+                    self._set_retry_state(
+                        node_run,
+                        next_attempt_number=next_attempt_number,
+                        delay_seconds=delay_seconds,
+                        error_message=str(exc),
+                    )
+                    return NodeExecutionResult(
+                        suspended=True,
+                        waiting_status="retrying",
+                        waiting_reason=retry_waiting_reason,
+                        resume_after_seconds=delay_seconds,
+                    )
+                self._clear_retry_state(node_run)
 
         if last_error is None:
             raise WorkflowExecutionError(f"Node '{node['id']}' exhausted retries without error.")
@@ -1011,6 +1067,85 @@ class RuntimeService(RuntimeGraphSupportMixin):
                     runtime_event.payload,
                 )
             )
+
+    def _schedule_waiting_resume_if_needed(
+        self,
+        *,
+        run: Run,
+        node: dict,
+        node_run: NodeRun,
+        result: NodeExecutionResult,
+        events: list[RunEvent],
+    ) -> None:
+        if result.resume_after_seconds is None:
+            self._clear_scheduled_resume(node_run)
+            return
+
+        scheduled_resume = self._resume_scheduler.schedule(
+            run_id=run.id,
+            delay_seconds=result.resume_after_seconds,
+            reason=result.waiting_reason or f"{node['id']} waiting",
+            source="runtime_waiting",
+        )
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        checkpoint_payload["scheduled_resume"] = {
+            "delay_seconds": scheduled_resume.delay_seconds,
+            "reason": scheduled_resume.reason,
+            "source": scheduled_resume.source,
+            "waiting_status": result.waiting_status,
+        }
+        node_run.checkpoint_payload = checkpoint_payload
+        events.append(
+            self._build_event(
+                run.id,
+                node_run.id,
+                "run.resume.scheduled",
+                {
+                    "node_id": node["id"],
+                    "delay_seconds": scheduled_resume.delay_seconds,
+                    "reason": scheduled_resume.reason,
+                    "source": scheduled_resume.source,
+                    "waiting_status": result.waiting_status,
+                },
+            )
+        )
+
+    def _starting_retry_attempt(self, node_run: NodeRun) -> int:
+        checkpoint_payload = node_run.checkpoint_payload or {}
+        retry_state = checkpoint_payload.get("retry_state")
+        if not isinstance(retry_state, dict):
+            return 1
+        raw_attempt = retry_state.get("next_attempt_number")
+        try:
+            return max(int(raw_attempt), 1)
+        except (TypeError, ValueError):
+            return 1
+
+    def _set_retry_state(
+        self,
+        node_run: NodeRun,
+        *,
+        next_attempt_number: int,
+        delay_seconds: float,
+        error_message: str,
+    ) -> None:
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        checkpoint_payload["retry_state"] = {
+            "next_attempt_number": next_attempt_number,
+            "delay_seconds": max(float(delay_seconds), 0.0),
+            "error_message": error_message,
+        }
+        node_run.checkpoint_payload = checkpoint_payload
+
+    def _clear_retry_state(self, node_run: NodeRun) -> None:
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        if checkpoint_payload.pop("retry_state", None) is not None:
+            node_run.checkpoint_payload = checkpoint_payload
+
+    def _clear_scheduled_resume(self, node_run: NodeRun) -> None:
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        if checkpoint_payload.pop("scheduled_resume", None) is not None:
+            node_run.checkpoint_payload = checkpoint_payload
 
     def _persist_events(self, db: Session, events: list[RunEvent]) -> None:
         for event in events:

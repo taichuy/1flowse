@@ -100,7 +100,12 @@ class AgentRuntime:
             for item in checkpoint.get("tool_results", [])
             if isinstance(item, dict)
         ]
-        next_tool_index = int(checkpoint.get("next_tool_index") or len(tool_results))
+        raw_next_tool_index = checkpoint.get("next_tool_index")
+        next_tool_index = (
+            len(tool_results)
+            if raw_next_tool_index is None
+            else int(raw_next_tool_index)
+        )
         artifact_refs = list(node_run.artifact_refs or [])
 
         if next_tool_index < len(plan.tool_calls):
@@ -163,7 +168,10 @@ class AgentRuntime:
                     events=events,
                 )
 
-            tool_results.append(tool_result)
+            if next_tool_index < len(tool_results):
+                tool_results[next_tool_index] = tool_result
+            else:
+                tool_results.append(tool_result)
             checkpoint["tool_results"] = [
                 self._tool_result_to_dict(result) for result in tool_results
             ]
@@ -176,13 +184,14 @@ class AgentRuntime:
             )
 
             if tool_result.status == "waiting":
+                waiting_status = self._waiting_status_for_tool_result(tool_result)
                 waiting_reason = str(
                     tool_result.meta.get("waiting_reason")
                     or tool_result.summary
                     or "Waiting for tool completion."
                 )
-                node_run.status = "waiting_tool"
-                node_run.phase = "waiting_tool"
+                node_run.status = waiting_status
+                node_run.phase = waiting_status
                 node_run.waiting_reason = waiting_reason
                 node_run.checkpoint_payload = checkpoint
                 self._context_service.replace_artifact_refs(node_run, artifact_refs)
@@ -199,8 +208,9 @@ class AgentRuntime:
                 )
                 return AgentExecutionResult(
                     suspended=True,
-                    waiting_status="waiting_tool",
+                    waiting_status=waiting_status,
                     waiting_reason=waiting_reason,
+                    resume_after_seconds=self._resume_after_seconds_for_tool_result(tool_result),
                     evidence_pack=node_run.evidence_context,
                     artifact_refs=artifact_refs,
                     tool_results=tool_results,
@@ -630,6 +640,26 @@ class AgentRuntime:
         if value not in refs:
             refs.append(value)
         return refs
+
+    def _waiting_status_for_tool_result(self, result: ToolExecutionResult) -> str:
+        waiting_status = str(result.meta.get("waiting_status") or "waiting_tool").strip()
+        if waiting_status not in {"waiting_tool", "waiting_callback"}:
+            return "waiting_tool"
+        return waiting_status
+
+    def _resume_after_seconds_for_tool_result(
+        self,
+        result: ToolExecutionResult,
+    ) -> float | None:
+        raw_value = result.meta.get("resume_after_seconds")
+        if raw_value is None:
+            raw_value = result.meta.get("resumeAfterSeconds")
+        if raw_value is None:
+            return None
+        try:
+            return max(float(raw_value), 0.0)
+        except (TypeError, ValueError):
+            return None
 
     def _to_dict(self, value: Any) -> dict[str, Any]:
         return deepcopy(value) if isinstance(value, dict) else {}

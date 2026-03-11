@@ -200,6 +200,7 @@ class NodeExecutionResult:
     suspended: bool = False
     waiting_status: str | None = None
     waiting_reason: str | None = None
+    resume_after_seconds: float | None = None
     events: list[RuntimeEvent] = field(default_factory=list)
 
 
