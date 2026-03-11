@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from uuid import uuid4
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.workflow import Workflow
@@ -260,6 +260,11 @@ class WorkspaceStarterTemplateService:
         db: Session,
         record: WorkspaceStarterTemplateRecord,
     ) -> None:
+        db.execute(
+            delete(WorkspaceStarterHistoryRecord).where(
+                WorkspaceStarterHistoryRecord.template_id == record.id
+            )
+        )
         db.delete(record)
 
     def refresh_from_workflow(

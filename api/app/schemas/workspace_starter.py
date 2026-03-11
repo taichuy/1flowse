@@ -24,6 +24,7 @@ WorkspaceStarterBulkAction = Literal[
     "restore",
     "refresh",
     "rebase",
+    "delete",
 ]
 WorkspaceStarterBulkSkipReason = Literal[
     "not_found",
@@ -31,6 +32,7 @@ WorkspaceStarterBulkSkipReason = Literal[
     "not_archived",
     "no_source_workflow",
     "source_workflow_missing",
+    "delete_requires_archive",
 ]
 
 
@@ -173,6 +175,17 @@ class WorkspaceStarterBulkSkippedItem(BaseModel):
     detail: str
 
 
+class WorkspaceStarterBulkSkippedSummary(BaseModel):
+    reason: WorkspaceStarterBulkSkipReason
+    count: int
+    detail: str
+
+
+class WorkspaceStarterBulkDeletedItem(BaseModel):
+    template_id: str
+    name: str | None = None
+
+
 class WorkspaceStarterBulkActionResult(BaseModel):
     workspace_id: str
     action: WorkspaceStarterBulkAction
@@ -180,4 +193,8 @@ class WorkspaceStarterBulkActionResult(BaseModel):
     updated_count: int
     skipped_count: int
     updated_items: list[WorkspaceStarterTemplateItem] = Field(default_factory=list)
+    deleted_items: list[WorkspaceStarterBulkDeletedItem] = Field(default_factory=list)
     skipped_items: list[WorkspaceStarterBulkSkippedItem] = Field(default_factory=list)
+    skipped_reason_summary: list[WorkspaceStarterBulkSkippedSummary] = Field(
+        default_factory=list
+    )

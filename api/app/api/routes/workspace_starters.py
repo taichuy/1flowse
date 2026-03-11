@@ -5,8 +5,10 @@ from app.core.database import get_db
 from app.models.workflow import Workflow
 from app.schemas.workspace_starter import (
     WorkspaceStarterBulkActionRequest,
+    WorkspaceStarterBulkDeletedItem,
     WorkspaceStarterBulkActionResult,
     WorkspaceStarterBulkSkippedItem,
+    WorkspaceStarterBulkSkippedSummary,
     WorkflowBusinessTrack,
     WorkspaceStarterHistoryItem,
     WorkspaceStarterSourceDiff,
@@ -35,6 +37,7 @@ def bulk_update_workspace_starters(
     )
     record_map = {record.id: record for record in records}
     updated_items: list[WorkspaceStarterTemplateItem] = []
+    deleted_items: list[WorkspaceStarterBulkDeletedItem] = []
     skipped_items: list[WorkspaceStarterBulkSkippedItem] = []
 
     for template_id in payload.template_ids:
@@ -70,6 +73,9 @@ def bulk_update_workspace_starters(
                 summary=f"批量归档了 workspace starter「{record.name}」。",
                 payload={"bulk": True},
             )
+            db.add(record)
+            db.flush()
+            updated_items.append(service.serialize(record))
         elif payload.action == "restore":
             if record.archived_at is None:
                 skipped_items.append(
@@ -91,6 +97,28 @@ def bulk_update_workspace_starters(
                 summary=f"批量恢复了 workspace starter「{record.name}」。",
                 payload={"bulk": True},
             )
+            db.add(record)
+            db.flush()
+            updated_items.append(service.serialize(record))
+        elif payload.action == "delete":
+            if record.archived_at is None:
+                skipped_items.append(
+                    WorkspaceStarterBulkSkippedItem(
+                        template_id=record.id,
+                        name=record.name,
+                        reason="delete_requires_archive",
+                        detail="Archive the workspace starter before deleting it.",
+                    )
+                )
+                continue
+
+            deleted_items.append(
+                WorkspaceStarterBulkDeletedItem(
+                    template_id=record.id,
+                    name=record.name,
+                )
+            )
+            service.delete_template(db, record)
         else:
             if record.created_from_workflow_id is None:
                 skipped_items.append(
@@ -158,20 +186,22 @@ def bulk_update_workspace_starters(
                         "edge_changes": diff.edge_summary.model_dump(),
                     },
                 )
-
-        db.add(record)
-        db.flush()
-        updated_items.append(service.serialize(record))
+            db.add(record)
+            db.flush()
+            updated_items.append(service.serialize(record))
 
     db.commit()
+    processed_count = len(updated_items) + len(deleted_items)
     return WorkspaceStarterBulkActionResult(
         workspace_id=payload.workspace_id,
         action=payload.action,
         requested_count=len(payload.template_ids),
-        updated_count=len(updated_items),
+        updated_count=processed_count,
         skipped_count=len(skipped_items),
         updated_items=updated_items,
+        deleted_items=deleted_items,
         skipped_items=skipped_items,
+        skipped_reason_summary=_summarize_bulk_skips(skipped_items),
     )
 
 
@@ -527,3 +557,22 @@ def delete_workspace_starter(
 
     service.delete_template(db, record)
     db.commit()
+
+
+def _summarize_bulk_skips(
+    skipped_items: list[WorkspaceStarterBulkSkippedItem],
+) -> list[WorkspaceStarterBulkSkippedSummary]:
+    summary_by_reason: dict[str, WorkspaceStarterBulkSkippedSummary] = {}
+    for item in skipped_items:
+        summary = summary_by_reason.get(item.reason)
+        if summary is None:
+            summary_by_reason[item.reason] = WorkspaceStarterBulkSkippedSummary(
+                reason=item.reason,
+                count=1,
+                detail=item.detail,
+            )
+            continue
+
+        summary.count += 1
+
+    return sorted(summary_by_reason.values(), key=lambda item: item.reason)

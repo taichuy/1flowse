@@ -383,6 +383,62 @@ def test_workspace_starter_delete_requires_archive_first(client: TestClient) -> 
     assert detail_response.status_code == 404
 
 
+def test_workspace_starter_bulk_delete_requires_archive_and_removes_archived_items(
+    client: TestClient,
+) -> None:
+    active = _create_workspace_starter(
+        client,
+        name="Bulk Delete Active Starter",
+        business_track="应用新建编排",
+        description="Template that still needs archive before delete",
+    )
+    archived = _create_workspace_starter(
+        client,
+        name="Bulk Delete Archived Starter",
+        business_track="API 调用开放",
+        description="Template ready for bulk delete",
+    )
+    archive_response = client.post(f"/api/workspace-starters/{archived['id']}/archive")
+    assert archive_response.status_code == 200
+
+    delete_response = client.post(
+        "/api/workspace-starters/bulk",
+        json={
+            "workspace_id": "default",
+            "action": "delete",
+            "template_ids": [active["id"], archived["id"]],
+        },
+    )
+
+    assert delete_response.status_code == 200
+    delete_result = delete_response.json()
+    assert delete_result["updated_count"] == 1
+    assert delete_result["deleted_items"] == [
+        {"template_id": archived["id"], "name": "Bulk Delete Archived Starter"}
+    ]
+    assert delete_result["skipped_items"] == [
+        {
+            "template_id": active["id"],
+            "name": "Bulk Delete Active Starter",
+            "reason": "delete_requires_archive",
+            "detail": "Archive the workspace starter before deleting it.",
+        }
+    ]
+    assert delete_result["skipped_reason_summary"] == [
+        {
+            "reason": "delete_requires_archive",
+            "count": 1,
+            "detail": "Archive the workspace starter before deleting it.",
+        }
+    ]
+
+    active_detail = client.get(f"/api/workspace-starters/{active['id']}")
+    assert active_detail.status_code == 200
+
+    deleted_detail = client.get(f"/api/workspace-starters/{archived['id']}")
+    assert deleted_detail.status_code == 404
+
+
 def test_workspace_starter_bulk_archive_and_restore_returns_summary(
     client: TestClient,
 ) -> None:
@@ -418,6 +474,18 @@ def test_workspace_starter_bulk_archive_and_restore_returns_summary(
         "already_archived",
         "not_found",
     }
+    assert archive_result["skipped_reason_summary"] == [
+        {
+            "reason": "already_archived",
+            "count": 1,
+            "detail": "Workspace starter is already archived.",
+        },
+        {
+            "reason": "not_found",
+            "count": 1,
+            "detail": "Workspace starter template not found.",
+        },
+    ]
 
     restore_bulk_response = client.post(
         "/api/workspace-starters/bulk",
@@ -431,6 +499,7 @@ def test_workspace_starter_bulk_archive_and_restore_returns_summary(
     restore_result = restore_bulk_response.json()
     assert restore_result["updated_count"] == 2
     assert restore_result["skipped_count"] == 0
+    assert restore_result["skipped_reason_summary"] == []
 
     history_response = client.get(f"/api/workspace-starters/{active['id']}/history")
     assert history_response.status_code == 200
@@ -502,6 +571,13 @@ def test_workspace_starter_bulk_refresh_and_rebase_skip_invalid_sources(
     assert refresh_result["skipped_count"] == 1
     assert refresh_result["updated_items"][0]["created_from_workflow_version"] == "0.1.3"
     assert refresh_result["skipped_items"][0]["reason"] == "no_source_workflow"
+    assert refresh_result["skipped_reason_summary"] == [
+        {
+            "reason": "no_source_workflow",
+            "count": 1,
+            "detail": "Workspace starter has no source workflow.",
+        }
+    ]
 
     rebase_response = client.post(
         "/api/workspace-starters/bulk",
@@ -515,3 +591,4 @@ def test_workspace_starter_bulk_refresh_and_rebase_skip_invalid_sources(
     rebase_result = rebase_response.json()
     assert rebase_result["updated_count"] == 1
     assert rebase_result["updated_items"][0]["default_workflow_name"] == "Bulk Source Workflow"
+    assert rebase_result["deleted_items"] == []

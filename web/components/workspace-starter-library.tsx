@@ -9,6 +9,7 @@ import {
   getWorkspaceStarterHistory,
   getWorkspaceStarterSourceDiff,
   type WorkspaceStarterBulkAction,
+  type WorkspaceStarterBulkActionResult,
   type WorkspaceStarterHistoryItem,
   type WorkspaceStarterSourceDiff,
   type WorkspaceStarterTemplateItem
@@ -20,6 +21,11 @@ import {
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import { summarizeWorkspaceStarterSourceStatus } from "@/lib/workspace-starter-source-status";
+import {
+  getWorkspaceStarterBulkActionConfirmationMessage,
+  getWorkspaceStarterBulkActionLabel,
+  WorkspaceStarterBulkGovernanceCard
+} from "@/components/workspace-starter-library/bulk-governance-card";
 import { WorkspaceStarterHistoryPanel } from "@/components/workspace-starter-library/history-panel";
 import { WorkspaceStarterSourceDiffPanel } from "@/components/workspace-starter-library/source-diff-panel";
 import { WorkspaceStarterSourceCard } from "@/components/workspace-starter-library/source-status-card";
@@ -67,6 +73,9 @@ export function WorkspaceStarterLibrary({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [sourceDiff, setSourceDiff] = useState<WorkspaceStarterSourceDiff | null>(null);
   const [isLoadingSourceDiff, setIsLoadingSourceDiff] = useState(false);
+  const [lastBulkResult, setLastBulkResult] = useState<WorkspaceStarterBulkActionResult | null>(
+    null
+  );
   const [isRebasing, startRebasingTransition] = useTransition();
 
   const filteredTemplates = useMemo(() => {
@@ -139,7 +148,8 @@ export function WorkspaceStarterLibrary({
         .map((template) => template.id),
       rebase: filteredTemplates
         .filter((template) => Boolean(template.created_from_workflow_id))
-        .map((template) => template.id)
+        .map((template) => template.id),
+      delete: filteredTemplates.filter((template) => template.archived).map((template) => template.id)
     }),
     [filteredTemplates]
   );
@@ -510,12 +520,11 @@ export function WorkspaceStarterLibrary({
       return;
     }
 
-    const actionLabel = getBulkActionLabel(action);
+    const actionLabel = getWorkspaceStarterBulkActionLabel(action);
+    const requiresConfirmation = action === "rebase" || action === "delete";
     const shouldContinue =
-      action !== "rebase" ||
-      window.confirm(
-        `确认对当前筛选结果中的 ${templateIds.length} 个 starter 批量执行 rebase 吗？`
-      );
+      !requiresConfirmation ||
+      window.confirm(getWorkspaceStarterBulkActionConfirmationMessage(action, templateIds.length));
     if (!shouldContinue) {
       return;
     }
@@ -529,17 +538,29 @@ export function WorkspaceStarterLibrary({
           action,
           templateIds
         });
-        setTemplates((current) =>
-          current.map(
-            (template) =>
-              result.updated_items.find((item) => item.id === template.id) ?? template
-          )
+        const deletedTemplateIds = new Set(
+          result.deleted_items.map((item) => item.template_id)
         );
+        const updatedTemplateMap = new Map(
+          result.updated_items.map((item) => [item.id, item] as const)
+        );
+        setTemplates((current) =>
+          current
+            .filter((template) => !deletedTemplateIds.has(template.id))
+            .map((template) => updatedTemplateMap.get(template.id) ?? template)
+        );
+        setLastBulkResult(result);
 
         const updatedSelected = selectedTemplateId
           ? result.updated_items.find((item) => item.id === selectedTemplateId) ?? null
           : null;
-        if (updatedSelected) {
+        const selectedWasDeleted =
+          selectedTemplateId !== null && deletedTemplateIds.has(selectedTemplateId);
+        if (selectedWasDeleted) {
+          setSourceWorkflow(null);
+          setHistoryItems([]);
+          setSourceDiff(null);
+        } else if (updatedSelected) {
           await reloadHistory(updatedSelected.id);
           if (updatedSelected.created_from_workflow_id) {
             await reloadSourceDiff(updatedSelected.id);
@@ -590,7 +611,7 @@ export function WorkspaceStarterLibrary({
             当前主线：<strong>P0 应用新建编排</strong>
           </p>
           <p className="panel-text">
-            视图能力：<strong>列表 / 筛选 / 详情 / 更新 / 归档</strong>
+            视图能力：<strong>列表 / 筛选 / 详情 / 批量治理 / 删除</strong>
           </p>
           <p className="panel-text">
             当前选中：<strong>{selectedTemplate?.name ?? "暂无模板"}</strong>
@@ -703,65 +724,19 @@ export function WorkspaceStarterLibrary({
               />
             </label>
 
-            <div className="binding-card compact-card">
-              <div className="binding-card-header">
-                <div>
-                  <p className="entry-card-title">Bulk governance</p>
-                  <p className="binding-meta">
-                    先用筛选条件收敛模板范围，再对当前结果集批量治理。
-                  </p>
-                </div>
-                <span className="health-pill">{filteredTemplates.length} in scope</span>
-              </div>
-              <div className="starter-tag-row">
-                <span className="event-chip">
-                  archive {bulkActionCandidates.archive.length}
-                </span>
-                <span className="event-chip">
-                  restore {bulkActionCandidates.restore.length}
-                </span>
-                <span className="event-chip">
-                  refresh {bulkActionCandidates.refresh.length}
-                </span>
-                <span className="event-chip">
-                  rebase {bulkActionCandidates.rebase.length}
-                </span>
-              </div>
-              <div className="binding-actions">
-                <button
-                  className="sync-button secondary"
-                  type="button"
-                  onClick={() => handleBulkAction("archive")}
-                  disabled={bulkActionCandidates.archive.length === 0 || isBulkMutating}
-                >
-                  {isBulkMutating ? "处理中..." : "批量归档当前结果"}
-                </button>
-                <button
-                  className="sync-button secondary"
-                  type="button"
-                  onClick={() => handleBulkAction("restore")}
-                  disabled={bulkActionCandidates.restore.length === 0 || isBulkMutating}
-                >
-                  {isBulkMutating ? "处理中..." : "批量恢复当前结果"}
-                </button>
-                <button
-                  className="sync-button secondary"
-                  type="button"
-                  onClick={() => handleBulkAction("refresh")}
-                  disabled={bulkActionCandidates.refresh.length === 0 || isBulkMutating}
-                >
-                  {isBulkMutating ? "处理中..." : "批量刷新来源快照"}
-                </button>
-                <button
-                  className="sync-button secondary"
-                  type="button"
-                  onClick={() => handleBulkAction("rebase")}
-                  disabled={bulkActionCandidates.rebase.length === 0 || isBulkMutating}
-                >
-                  {isBulkMutating ? "处理中..." : "批量执行 rebase"}
-                </button>
-              </div>
-            </div>
+            <WorkspaceStarterBulkGovernanceCard
+              inScopeCount={filteredTemplates.length}
+              candidateCounts={{
+                archive: bulkActionCandidates.archive.length,
+                restore: bulkActionCandidates.restore.length,
+                refresh: bulkActionCandidates.refresh.length,
+                rebase: bulkActionCandidates.rebase.length,
+                delete: bulkActionCandidates.delete.length
+              }}
+              isMutating={isBulkMutating}
+              lastResult={lastBulkResult}
+              onAction={handleBulkAction}
+            />
           </div>
 
           {filteredTemplates.length === 0 ? (
@@ -1131,25 +1106,29 @@ function formatTimestamp(value: string) {
   }).format(date);
 }
 
-function getBulkActionLabel(action: WorkspaceStarterBulkAction) {
-  return {
-    archive: "归档",
-    restore: "恢复",
-    refresh: "刷新",
-    rebase: "rebase"
-  }[action];
-}
-
 function buildBulkActionMessage(result: {
   action: WorkspaceStarterBulkAction;
   updated_count: number;
   skipped_count: number;
+  deleted_items?: Array<{ template_id: string }>;
+  skipped_reason_summary?: Array<{ reason: string; count: number }>;
 }) {
-  const actionLabel = getBulkActionLabel(result.action);
+  const actionLabel = getWorkspaceStarterBulkActionLabel(result.action);
+  const deletedCount = result.deleted_items?.length ?? 0;
   const updatedPart =
-    result.updated_count > 0 ? `已批量${actionLabel} ${result.updated_count} 个 starter` : `没有 starter 被${actionLabel}`;
+    result.updated_count > 0
+      ? result.action === "delete"
+        ? `已批量${actionLabel} ${deletedCount} 个已归档 starter`
+        : `已批量${actionLabel} ${result.updated_count} 个 starter`
+      : `没有 starter 被${actionLabel}`;
   if (result.skipped_count === 0) {
     return `${updatedPart}。`;
   }
-  return `${updatedPart}，跳过 ${result.skipped_count} 个。`;
+  const summaryPart =
+    result.skipped_reason_summary && result.skipped_reason_summary.length > 0
+      ? `，跳过 ${result.skipped_count} 个（${result.skipped_reason_summary
+          .map((item) => `${item.reason} ${item.count}`)
+          .join("，")}）`
+      : `，跳过 ${result.skipped_count} 个`;
+  return `${updatedPart}${summaryPart}。`;
 }

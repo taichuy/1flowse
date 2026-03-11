@@ -313,11 +313,14 @@ uv run alembic upgrade head
       - `/api/workspace-starters/{template_id}/rebase` 已支持把 source-derived 字段同步回 starter（definition / source version / default workflow name）
       - 治理页已支持执行来源刷新、查看独立历史面板、查看 source diff，并在需要时执行 rebase
       - 当前已继续补上结果集批量治理：
-        - `/api/workspace-starters/bulk` 已支持按当前筛选结果批量 archive / restore / refresh / rebase
+        - `/api/workspace-starters/bulk` 已支持按当前筛选结果批量 archive / restore / refresh / rebase / delete
         - 批量治理会继续复用 `workspace_starter_history`，并通过 `payload.bulk=true` 标识批量上下文
+        - 批量删除继续遵循“先归档再删除”，并会同步清理 starter history，避免删除模板时残留孤儿治理记录
+        - 批量结果会额外返回 `deleted_items` 和 `skipped_reason_summary`，用于前端展示风险提示和跳过原因聚合
       - 当前 source diff 已细化到字段级：
         - changed node / edge 会返回 `changed_fields`
         - 治理页会基于 definition drift / workflow name drift 提示 refresh 与 rebase 的决策差异
+      - 当前治理页已把 bulk governance 区块拆到独立子组件，避免 `workspace-starter-library.tsx` 一边补能力一边重新长回单文件混排
   - 当前创建页已把 starter 浏览逻辑拆到独立组件，避免 `/workflows/new` 再次长成页面级杂糅入口
   - 当前已支持把 workflow definition 映射为画布节点与连线
   - 当前已支持新增 `llm_agent` / `tool` / `mcp_query` / `condition` / `router` / `output`
@@ -383,7 +386,7 @@ uv run alembic upgrade head
 当前边界：
 
 - 仍然是“最小骨架”，不是完整节点配置系统
-- workspace starter 已补齐归档 / 删除、来源漂移摘要、来源 refresh、治理历史、source diff、字段级 changed fields、rebase、批量 archive / restore / refresh / rebase 和创建页深链回填，但批量删除、字段级决策规则进一步收敛仍未补齐
+- workspace starter 已补齐归档 / 删除、来源漂移摘要、来源 refresh、治理历史、source diff、字段级 changed fields、rebase、批量 archive / restore / refresh / rebase / delete、跳过原因聚合和创建页深链回填，但批量结果钻取与更细的团队决策提示仍未补齐
 - ecosystem 模板仍然只是规划态，还没有真实数据源
 - 统一 node catalog / starter / tool lanes 已进入共享后端 contract，但尚未和未来节点插件注册中心、plugin-backed node source 和 ecosystem starter 打通
 - `runtimePolicy` / edge `mapping[]` / 更细的节点输入输出 schema 仍未结构化
@@ -393,15 +396,15 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 上一次 Git 提交 `feat: add workspace starter governance history` 与本轮实现是直接衔接的：
-  - 上一次先把 workspace starter 推进到“可刷新、可追溯”的治理阶段
-  - 本轮继续顺着这条线，把治理能力补到“可比较差异、可执行 rebase”，避免来源演进继续停留在人工比对和口头同步
+- 上一次 Git 提交 `feat: add bulk workspace starter governance` 与本轮实现是直接衔接的：
+  - 上一次先把 workspace starter 推进到“可按结果集批量治理、可做字段级 diff”的阶段
+  - 本轮继续顺着这条线，把治理能力补到“可批量删除、可聚合跳过原因、可给出更明确风险提示”，避免团队治理继续停留在单条删除和口头确认
 - 再往前一轮提交 `refactor: split workflow editor forms and workbench` 仍然是这条链路的重要前置：
   - editor 主体和配置表单先拆开，才让后续 starter 治理能力可以继续旁路演进，而不是重新堆回画布壳层
 - 当前基础框架已经足够继续推进主业务完整度：
   - 新建应用 -> shared workflow library -> starter -> editor -> 保存版本 -> workspace starter 治理 -> 创建页复用 -> recent runs overlay 这条链路已连续
-  - workspace starter 现在已经具备 active / archived 治理、来源漂移摘要、来源 refresh、治理历史、source diff、rebase 和创建页深链回填
-  - 但 `plugin-backed node source`、`publish config` 和 starter 来源 batch governance / 更细 diff 仍未接上
+  - workspace starter 现在已经具备 active / archived 治理、来源漂移摘要、来源 refresh、治理历史、source diff、rebase、批量 delete 和创建页深链回填
+  - 但 `plugin-backed node source`、`publish config` 和 batch result drill-down / 更细团队决策提示仍未接上
 - 当前架构方向整体是解耦的，但还没完全拆开：
   - `workflow business tracks`、`workflow library snapshot`、`workspace starter API`、`workspace starter governance page` 已开始分层
   - 创建页和 editor 现在已经优先消费同一份后端 snapshot，而不是各自靠前端常量拼装 starter / node / tool lane
@@ -409,8 +412,8 @@ uv run alembic upgrade head
   - workspace starter 治理态也已经从模板记录扩展到“模板 + 历史事件”，没有继续把设计态资产治理塞进运行态事实表
   - 但 `plugin-backed node source`、节点插件注册中心和 ecosystem starter 仍未进入这份 contract
 - 当前需要显式盯住的长文件：
-  - `api/app/services/runtime.py` 当前约 1520 行，已经超过后端 1500 行偏好阈值；后续应优先拆执行规划、事件写入、节点执行策略，避免运行时继续单点膨胀
-  - `web/components/workspace-starter-library.tsx` 当前约 1003 行，虽然仍低于前端 2000 行偏好阈值，但仍是治理页的最大单文件；本轮已继续拆出 source diff 面板，后续若再补 batch / bulk actions，建议继续抽离筛选栏和详情表单
+  - `api/app/services/runtime.py` 当前约 1387 行，虽然暂时回到偏好阈值内，但仍接近后端 1500 行红线；后续应优先拆执行规划、事件写入、节点执行策略，避免运行时重新越界
+  - `web/components/workspace-starter-library.tsx` 当前仍约千行，是治理页的最大单文件；本轮已继续把 bulk governance 抽到子组件，后续若再补结果钻取或批量决策面板，建议继续抽离筛选栏和详情表单
   - `web/components/workflow-node-config-form/shared.ts` 约 368 行，当前是前端节点配置的共享工具汇聚点，后续若继续长出更多 schema / mapping 工具，需要及时再拆
   - `web/components/workflow-editor-workbench.tsx` 当前约 581 行，主文件已明显收缩，但若后续继续增加保存流程和 run overlay 状态，仍需继续盯住
 
@@ -462,7 +465,7 @@ docker compose up -d --build
 - 更完整的节点结构化配置抽屉
 - editor 内逐事件回放、trace 过滤和实时调试联动
 - 节点目录与插件注册中心打通后的动态 starter / 节点库模型
-- workspace starter 的批量治理、字段级来源 diff 和更清晰的 drift 决策提示
+- workspace starter 的批量结果钻取、字段级治理决策提示和更细的团队审阅反馈
 - 前端 editor 测试基线
 
 ## 下一步建议
@@ -471,13 +474,13 @@ docker compose up -d --build
 
 ### P0 当前最高优先级
 
-1. 继续完善 workspace starter 治理第三阶段：在已落地批量 archive / restore / refresh / rebase、字段级来源 diff 和 drift 决策提示的基础上，补批量删除、风险提示和更清晰的跳过原因聚合，让 starter library 从“可治理”继续走向“团队级资产”。
-2. 把新的 `workflow library snapshot` 继续推进到 `plugin-backed node source` 和统一 node/tool source contract：明确哪些能力来自 native node、plugin registry、compat adapter 和未来节点插件注册中心。
+1. 把新的 `workflow library snapshot` 继续推进到 `plugin-backed node source` 和统一 node/tool source contract：明确哪些能力来自 native node、plugin registry、compat adapter 和未来节点插件注册中心。
+2. 继续完善 workspace starter 治理第三阶段：在已落地批量 archive / restore / refresh / rebase / delete、字段级来源 diff、风险提示和跳过原因聚合的基础上，补批量结果钻取、模板审阅反馈和更清晰的团队决策提示，让 starter library 从“可治理”继续走向“团队级资产”。
 
 原因：
 
-- `workflow library` 的共享后端 contract 已经落地，P0 的缺口自然转到“团队级治理能力补完”和“把更多真实来源接进同一份 contract”。
-- workspace starter 当前已经不是单纯可保存，而是团队资产入口；批量治理、字段级 source diff 和 drift 决策提示已经补上，但如果缺少批量删除、风险提示和更清晰的批量反馈，多人复用时仍会继续堆积治理成本。
+- `workflow library` 的共享后端 contract 已经落地，P0 的缺口自然转到“把更多真实来源接进同一份 contract”和“继续补团队级治理反馈”。
+- workspace starter 当前已经不是单纯可保存，而是团队资产入口；批量治理、字段级 source diff、批量删除和跳过原因聚合已经补上，但如果缺少结果钻取和更细的审阅反馈，多人复用时仍会继续堆积治理成本。
 - 如果 `plugin-backed node source` 继续留在 contract 外，后续节点、插件兼容和开放调用仍会在入口层反复返工。
 
 ### P1 次高优先级

@@ -68,7 +68,8 @@ export type WorkspaceStarterBulkAction =
   | "archive"
   | "restore"
   | "refresh"
-  | "rebase";
+  | "rebase"
+  | "delete";
 
 export type WorkspaceStarterBulkSkippedItem = {
   template_id: string;
@@ -78,8 +79,20 @@ export type WorkspaceStarterBulkSkippedItem = {
     | "already_archived"
     | "not_archived"
     | "no_source_workflow"
-    | "source_workflow_missing";
+    | "source_workflow_missing"
+    | "delete_requires_archive";
   detail: string;
+};
+
+export type WorkspaceStarterBulkSkippedSummary = {
+  reason: WorkspaceStarterBulkSkippedItem["reason"];
+  count: number;
+  detail: string;
+};
+
+export type WorkspaceStarterBulkDeletedItem = {
+  template_id: string;
+  name?: string | null;
 };
 
 export type WorkspaceStarterBulkActionResult = {
@@ -89,7 +102,9 @@ export type WorkspaceStarterBulkActionResult = {
   updated_count: number;
   skipped_count: number;
   updated_items: WorkspaceStarterTemplateItem[];
+  deleted_items: WorkspaceStarterBulkDeletedItem[];
   skipped_items: WorkspaceStarterBulkSkippedItem[];
+  skipped_reason_summary: WorkspaceStarterBulkSkippedSummary[];
 };
 
 export async function getWorkspaceStarterTemplates(): Promise<
@@ -239,7 +254,9 @@ export async function bulkUpdateWorkspaceStarters({
       updated_count: 0,
       skipped_count: 0,
       updated_items: [],
-      skipped_items: []
+      deleted_items: [],
+      skipped_items: [],
+      skipped_reason_summary: []
     };
   }
 
