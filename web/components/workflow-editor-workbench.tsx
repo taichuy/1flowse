@@ -1,22 +1,12 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
 import {
-  Background,
-  Controls,
-  type Node,
-  type NodeProps,
-  type OnConnect,
-  type OnSelectionChangeParams,
-  type XYPosition,
-  Position,
-  ReactFlow,
   ReactFlowProvider,
   addEdge,
-  Handle,
-  MiniMap,
+  type Node,
+  type OnConnect,
+  type OnSelectionChangeParams,
   useEdgesState,
   useNodesState
 } from "@xyflow/react";
@@ -30,7 +20,6 @@ import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
-import { formatDurationMs } from "@/lib/runtime-presenters";
 import { buildWorkspaceStarterPayload } from "@/lib/workspace-starter-payload";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import {
@@ -43,8 +32,21 @@ import {
 } from "@/lib/workflow-editor";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import { getPaletteNodeCatalog } from "@/lib/workflow-node-catalog";
+import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/workflow-editor-canvas";
+import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
+import { fetchRunDetail, fetchRunTrace } from "@/components/workflow-editor-workbench/run-overlay";
+import {
+  isRecord,
+  readNodePosition,
+  stringifyJson,
+  stripUiPosition
+} from "@/components/workflow-editor-workbench/shared";
+import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
+import {
+  applyRunOverlayToNodes,
+  WORKFLOW_EDITOR_NODE_TYPES
+} from "@/components/workflow-editor-workbench/workflow-canvas-node";
 import { WorkflowEditorInspector } from "@/components/workflow-editor-inspector";
-import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 
 type WorkflowEditorWorkbenchProps = {
   workflow: WorkflowDetail;
@@ -54,10 +56,6 @@ type WorkflowEditorWorkbenchProps = {
   toolSourceLanes: WorkflowLibrarySourceLane[];
   tools: PluginToolRegistryItem[];
   recentRuns: WorkflowRunListItem[];
-};
-
-const nodeTypes = {
-  workflowNode: WorkflowCanvasNode
 };
 
 export function WorkflowEditorWorkbench({
@@ -148,19 +146,18 @@ export function WorkflowEditorWorkbench({
 
     setIsLoadingRunOverlay(true);
 
-    void Promise.all([
-      fetchRunDetail(selectedRunId),
-      fetchRunTrace(selectedRunId)
-    ]).then(([runDetail, traceResult]) => {
-      if (isCancelled) {
-        return;
-      }
+    void Promise.all([fetchRunDetail(selectedRunId), fetchRunTrace(selectedRunId)]).then(
+      ([runDetail, traceResult]) => {
+        if (isCancelled) {
+          return;
+        }
 
-      setSelectedRunDetail(runDetail);
-      setSelectedRunTrace(traceResult.trace);
-      setRunOverlayError(traceResult.errorMessage);
-      setIsLoadingRunOverlay(false);
-    });
+        setSelectedRunDetail(runDetail);
+        setSelectedRunTrace(traceResult.trace);
+        setRunOverlayError(traceResult.errorMessage);
+        setIsLoadingRunOverlay(false);
+      }
+    );
 
     return () => {
       isCancelled = true;
@@ -439,7 +436,7 @@ export function WorkflowEditorWorkbench({
           }
         );
         const body = (await response.json().catch(() => null)) as
-          | { detail?: string; version?: string; name?: string; definition?: WorkflowDetail["definition"] }
+          | { detail?: string; version?: string }
           | null;
 
         if (!response.ok) {
@@ -451,9 +448,7 @@ export function WorkflowEditorWorkbench({
         setPersistedWorkflowName(workflowName.trim() || workflow.name);
         setPersistedDefinition(nextDefinition);
         setWorkflowVersion(body?.version ?? workflowVersion);
-        setMessage(
-          `已保存 workflow，当前版本 ${body?.version ?? workflowVersion}。`
-        );
+        setMessage(`已保存 workflow，当前版本 ${body?.version ?? workflowVersion}。`);
         setMessageTone("success");
       } catch {
         setMessage("无法连接后端保存 workflow，请确认 API 已启动。");
@@ -510,230 +505,57 @@ export function WorkflowEditorWorkbench({
   return (
     <ReactFlowProvider>
       <main className="editor-shell">
-        <section className="hero editor-hero">
-          <div className="hero-copy">
-            <p className="eyebrow">Workflow Editor</p>
-            <h1>让设计态正式长出画布骨架</h1>
-            <p className="hero-text">
-              这一版先把 workflow definition 和 `xyflow` 画布接起来，支持最小节点编排、
-              边元数据编辑和保存回后端版本链路。更细的节点表单、调试联动和发布配置会继续沿着
-              同一条 definition 演进。
-            </p>
-            <div className="pill-row">
-              <span className="pill">workflow {workflow.id}</span>
-              <span className="pill">version {workflowVersion}</span>
-              <span className="pill">{nodes.length} nodes</span>
-              <span className="pill">{edges.length} edges</span>
-              <span className="pill">{tools.length} catalog tools</span>
-              <span className="pill">{availableRuns.length} recent runs</span>
-            </div>
-            <div className="hero-actions">
-              <Link className="inline-link" href="/">
-                返回系统首页
-              </Link>
-              <Link className="inline-link secondary" href="/workflows/new">
-                新建 workflow
-              </Link>
-              <Link className="inline-link secondary" href="/workspace-starters">
-                管理 workspace starters
-              </Link>
-              <button
-                className="sync-button"
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-              >
-                {isSaving ? "保存中..." : "保存 workflow"}
-              </button>
-              <button
-                className="sync-button secondary"
-                type="button"
-                onClick={handleSaveAsWorkspaceStarter}
-                disabled={isSavingStarter}
-              >
-                {isSavingStarter ? "模板保存中..." : "保存为 workspace starter"}
-              </button>
-            </div>
-          </div>
-
-          <div className="hero-panel">
-            <div className="panel-label">Editor state</div>
-            <div className="panel-value">{isDirty ? "Dirty" : "Synced"}</div>
-            <p className="panel-text">
-              当前保存链路：<strong>web canvas -&gt; workflow definition -&gt; API versioning</strong>
-            </p>
-            <p className="panel-text">
-              当前边界：<strong>Loop / 发布网关 / 调试联动稍后继续</strong>
-            </p>
-            <p className="panel-text">
-              当前治理入口：<strong>editor -&gt; workspace starter library</strong>
-            </p>
-            <dl className="signal-list">
-              <div>
-                <dt>Selected node</dt>
-                <dd>{selectedNode?.data.label ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>Selected edge</dt>
-                <dd>{selectedEdge?.id ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>Workflows</dt>
-                <dd>{workflows.length}</dd>
-              </div>
-              <div>
-                <dt>Selected run</dt>
-                <dd>{selectedRunId ? "Attached" : "-"}</dd>
-              </div>
-            </dl>
-          </div>
-        </section>
+        <WorkflowEditorHero
+          workflowId={workflow.id}
+          workflowVersion={workflowVersion}
+          nodesCount={nodes.length}
+          edgesCount={edges.length}
+          toolsCount={tools.length}
+          availableRunsCount={availableRuns.length}
+          isDirty={isDirty}
+          selectedNodeLabel={selectedNode?.data.label ?? null}
+          selectedEdgeId={selectedEdge?.id ?? null}
+          workflowsCount={workflows.length}
+          selectedRunAttached={Boolean(selectedRunId)}
+          isSaving={isSaving}
+          isSavingStarter={isSavingStarter}
+          onSave={handleSave}
+          onSaveAsWorkspaceStarter={handleSaveAsWorkspaceStarter}
+        />
 
         <section className="editor-workspace">
-          <aside className="editor-sidebar">
-            <article className="diagnostic-panel editor-panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Workflow</p>
-                  <h2>Canvas overview</h2>
-                </div>
-              </div>
+          <WorkflowEditorSidebar
+            workflowId={workflow.id}
+            workflowName={workflowName}
+            workflows={workflows}
+            primaryNodeLane={primaryNodeLane}
+            toolSourceLanes={toolSourceLanes}
+            editorNodeLibrary={editorNodeLibrary}
+            message={message}
+            messageTone={messageTone}
+            runs={availableRuns}
+            selectedRunId={selectedRunId}
+            run={selectedRunDetail}
+            trace={selectedRunTrace}
+            traceError={runOverlayError}
+            selectedNodeId={selectedNodeId}
+            isLoadingRunOverlay={isLoadingRunOverlay}
+            isRefreshingRuns={isRefreshingRuns}
+            onWorkflowNameChange={setWorkflowName}
+            onAddNode={handleAddNode}
+            onSelectRunId={setSelectedRunId}
+            onRefreshRuns={refreshRecentRuns}
+          />
 
-              <label className="binding-field">
-                <span className="binding-label">Workflow name</span>
-                <input
-                  className="trace-text-input"
-                  value={workflowName}
-                  onChange={(event) => setWorkflowName(event.target.value)}
-                  placeholder="输入 workflow 名称"
-                />
-              </label>
-
-              <div className="workflow-chip-row compact-stack">
-                {workflows.map((item) => (
-                  <Link
-                    key={item.id}
-                    className={`workflow-chip ${item.id === workflow.id ? "selected" : ""}`}
-                    href={`/workflows/${encodeURIComponent(item.id)}`}
-                  >
-                    <span>{item.name}</span>
-                    <small>
-                      {item.version} · {item.status}
-                    </small>
-                  </Link>
-                ))}
-              </div>
-            </article>
-
-            <article className="diagnostic-panel editor-panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Palette</p>
-                  <h2>Add nodes</h2>
-                </div>
-              </div>
-              <p className="section-copy">
-                先覆盖当前 MVP 较有意义的节点类型。`trigger` 保持单实例，`loop` 暂不放进画布。
-              </p>
-
-              <div className="summary-strip compact-strip">
-                {primaryNodeLane ? (
-                  <div className="summary-card">
-                    <span>Node lane</span>
-                    <strong>{primaryNodeLane.shortLabel}</strong>
-                  </div>
-                ) : null}
-                <div className="summary-card">
-                  <span>Palette nodes</span>
-                  <strong>
-                    {primaryNodeLane?.count ?? editorNodeLibrary.length}
-                  </strong>
-                </div>
-                <div className="summary-card">
-                  <span>Tool lanes</span>
-                  <strong>{toolSourceLanes.length}</strong>
-                </div>
-              </div>
-
-              <div className="starter-tag-row">
-                {toolSourceLanes.map((lane) => (
-                  <span className="event-chip" key={`${lane.kind}-${lane.label}`}>
-                    {lane.shortLabel} · {lane.count}
-                  </span>
-                ))}
-              </div>
-
-              <div className="editor-palette">
-                {editorNodeLibrary.map((item) => (
-                  <button
-                    key={item.type}
-                    className="editor-node-add"
-                    type="button"
-                    onClick={() => handleAddNode(item.type)}
-                  >
-                    <span className="starter-track">{item.businessTrack}</span>
-                    <strong>{item.label}</strong>
-                    <span>{item.description}</span>
-                    <div className="starter-meta-row">
-                      <span>{item.type}</span>
-                      <span>{item.source.shortLabel}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </article>
-
-            <article className="diagnostic-panel editor-panel">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Status</p>
-                  <h2>Editor feedback</h2>
-                </div>
-              </div>
-
-              <p className={`sync-message ${messageTone}`}>
-                {message ?? "选择节点或连线后，这里会显示编辑器反馈。"}
-              </p>
-            </article>
-
-            <WorkflowRunOverlayPanel
-              runs={availableRuns}
-              selectedRunId={selectedRunId}
-              run={selectedRunDetail}
-              trace={selectedRunTrace}
-              traceError={runOverlayError}
-              selectedNodeId={selectedNodeId}
-              isLoading={isLoadingRunOverlay}
-              isRefreshingRuns={isRefreshingRuns}
-              onSelectRunId={setSelectedRunId}
-              onRefreshRuns={refreshRecentRuns}
-            />
-          </aside>
-
-          <section className="editor-canvas-panel">
-            <div className="editor-canvas-card">
-              <ReactFlow
-                fitView
-                nodes={displayedNodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                onSelectionChange={handleSelectionChange}
-                deleteKeyCode={["Delete", "Backspace"]}
-                className="editor-canvas"
-              >
-                <Background gap={24} size={1} />
-                <MiniMap
-                  pannable
-                  zoomable
-                  nodeColor={(node) => nodeColorByType((node.data as WorkflowCanvasNodeData).nodeType)}
-                />
-                <Controls />
-              </ReactFlow>
-            </div>
-          </section>
+          <WorkflowEditorCanvas
+            nodes={displayedNodes}
+            edges={edges}
+            nodeTypes={WORKFLOW_EDITOR_NODE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onSelectionChange={handleSelectionChange}
+          />
 
           <aside className="editor-inspector">
             <WorkflowEditorInspector
@@ -756,217 +578,4 @@ export function WorkflowEditorWorkbench({
       </main>
     </ReactFlowProvider>
   );
-}
-
-function WorkflowCanvasNode({
-  data,
-  selected
-}: NodeProps<Node<WorkflowCanvasNodeData>>) {
-  return (
-    <div
-      className={`workflow-canvas-node ${selected ? "selected" : ""} ${
-        data.runStatus ? `runtime-${toCssIdentifier(data.runStatus)}` : ""
-      }`}
-      style={
-        {
-          "--node-accent": nodeColorByType(data.nodeType)
-        } as CSSProperties
-      }
-    >
-      <Handle type="target" position={Position.Left} />
-      <div className="workflow-canvas-node-label">{data.label}</div>
-      <div className="workflow-canvas-node-type">{data.nodeType}</div>
-      {data.runStatus ? (
-        <div className="workflow-canvas-node-runtime">
-          <span className={`health-pill ${data.runStatus}`}>{data.runStatus}</span>
-          <div className="workflow-canvas-node-runtime-meta">
-            {data.runLastEventType ? (
-              <span className="workflow-canvas-node-meta">{data.runLastEventType}</span>
-            ) : null}
-            {typeof data.runDurationMs === "number" ? (
-              <span className="workflow-canvas-node-meta">
-                {formatDurationMs(data.runDurationMs)}
-              </span>
-            ) : null}
-            {typeof data.runEventCount === "number" && data.runEventCount > 0 ? (
-              <span className="workflow-canvas-node-meta">
-                {data.runEventCount} events
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-      {data.runErrorMessage ? (
-        <div className="workflow-canvas-node-error">{data.runErrorMessage}</div>
-      ) : null}
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-
-function nodeColorByType(type: string) {
-  switch (type) {
-    case "trigger":
-      return "#216e4a";
-    case "output":
-      return "#d0632d";
-    case "tool":
-      return "#2f6ca3";
-    case "condition":
-    case "router":
-      return "#8b5cf6";
-    case "mcp_query":
-      return "#0f766e";
-    default:
-      return "#62574a";
-  }
-}
-
-function stringifyJson(value: unknown) {
-  return JSON.stringify(value ?? {}, null, 2);
-}
-
-function stripUiPosition(config: Record<string, unknown>) {
-  const nextConfig = { ...config };
-  const ui = isRecord(nextConfig.ui) ? { ...(nextConfig.ui as Record<string, unknown>) } : null;
-  if (!ui) {
-    return nextConfig;
-  }
-
-  delete ui.position;
-  if (Object.keys(ui).length === 0) {
-    delete nextConfig.ui;
-    return nextConfig;
-  }
-
-  nextConfig.ui = ui;
-  return nextConfig;
-}
-
-function readNodePosition(config: Record<string, unknown>): XYPosition {
-  const ui = isRecord(config.ui) ? (config.ui as Record<string, unknown>) : null;
-  const position = ui && isRecord(ui.position) ? (ui.position as Record<string, unknown>) : null;
-  return {
-    x: typeof position?.x === "number" ? position.x : 320,
-    y: typeof position?.y === "number" ? position.y : 220
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function applyRunOverlayToNodes(
-  nodes: Array<Node<WorkflowCanvasNodeData>>,
-  run: RunDetail | null,
-  trace: RunTrace | null
-) {
-  if (!run) {
-    return nodes;
-  }
-
-  const eventCountByNodeRunId = new Map<string, number>();
-  const lastEventTypeByNodeRunId = new Map<string, string>();
-
-  trace?.events.forEach((event) => {
-    if (!event.node_run_id) {
-      return;
-    }
-    eventCountByNodeRunId.set(
-      event.node_run_id,
-      (eventCountByNodeRunId.get(event.node_run_id) ?? 0) + 1
-    );
-    lastEventTypeByNodeRunId.set(event.node_run_id, event.event_type);
-  });
-
-  return nodes.map((node) => {
-    const nodeRun = run.node_runs.find((item) => item.node_id === node.id) ?? null;
-    if (!nodeRun) {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        runStatus: nodeRun.status,
-        runNodeId: nodeRun.id,
-        runDurationMs: calculateDurationMs(nodeRun.started_at, nodeRun.finished_at),
-        runErrorMessage: nodeRun.error_message ?? null,
-        runLastEventType: lastEventTypeByNodeRunId.get(nodeRun.id),
-        runEventCount: eventCountByNodeRunId.get(nodeRun.id) ?? 0
-      }
-    };
-  });
-}
-
-async function fetchRunDetail(runId: string) {
-  try {
-    const response = await fetch(
-      `${getApiBaseUrl()}/api/runs/${encodeURIComponent(runId)}?include_events=false`,
-      {
-        cache: "no-store"
-      }
-    );
-    if (!response.ok) {
-      return null;
-    }
-    return (await response.json()) as RunDetail;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchRunTrace(runId: string): Promise<{
-  trace: RunTrace | null;
-  errorMessage: string | null;
-}> {
-  try {
-    const response = await fetch(
-      `${getApiBaseUrl()}/api/runs/${encodeURIComponent(runId)}/trace?limit=100&order=asc`,
-      {
-        cache: "no-store"
-      }
-    );
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as
-        | { detail?: string }
-        | null;
-      return {
-        trace: null,
-        errorMessage:
-          body?.detail ?? `无法读取 run trace，API 返回 ${response.status}。`
-      };
-    }
-    return {
-      trace: (await response.json()) as RunTrace,
-      errorMessage: null
-    };
-  } catch {
-    return {
-      trace: null,
-      errorMessage: "无法连接后端读取 run trace，请确认 API 已启动。"
-    };
-  }
-}
-
-function calculateDurationMs(
-  startedAt?: string | null,
-  finishedAt?: string | null
-) {
-  if (!startedAt) {
-    return undefined;
-  }
-
-  const start = new Date(startedAt).getTime();
-  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return undefined;
-  }
-
-  return Math.max(0, end - start);
-}
-
-function toCssIdentifier(value: string) {
-  return value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
 }

@@ -313,7 +313,12 @@ uv run alembic upgrade head
   - 当前已支持保存回 `PUT /api/workflows/{workflow_id}`，继续复用版本快照递增
   - 当前 workflow 页面会优先读取 `/api/workflow-library`，把 node catalog、tool lanes 和 tool catalog 一并带入 editor
   - 当前 workflow 页面会并行读取 `/api/workflows/{workflow_id}/runs`，把 recent runs 直接带入 editor runtime overlay
-  - 当前 `tool` / `mcp_query` / `condition` / `router` 节点已优先改成结构化配置表单，并保留高级 JSON 兜底：
+  - 当前 `llm_agent` / `tool` / `mcp_query` / `condition` / `router` / `output` 节点已开始进入结构化配置表单，并保留高级 JSON 兜底：
+    - `llm_agent`
+      - 可编辑 `provider` / `modelId` / `temperature`
+      - 可编辑 `systemPrompt` / `prompt`
+      - 可显式切换 `toolsEnabled` / `mcpEnabled` / `sandboxEnabled`
+      - 可声明可读上游上下文授权
     - `tool`
       - 可直接绑定持久化 compat / native 工具目录项
       - 可编辑 `adapterId` / `timeoutMs`
@@ -322,11 +327,17 @@ uv run alembic upgrade head
       - 可编辑 `authorized_context` 的 readable nodes、extra artifact grants、query sources、query artifact types
     - `condition` / `router`
       - 可在 selector rules / expression / fixed branch 三种模式间切换
+    - `output`
+      - 可编辑 `format` / `responseKey` / `contentType`
+      - 可补充 response notes 和 `includeRunMetadata`
   - 当前 inspector 已从画布壳层中拆出独立组件，降低 editor 主组件耦合
   - 当前 editor 已支持把选中 run 的 `node_runs` / `trace` 摘要接回画布：
     - 画布节点会叠加执行状态、最近事件、耗时和错误摘要
     - 左侧新增 runtime overlay panel，可选择 recent run、查看 node timeline、trace preview，并跳转到 run diagnostics / trace export
     - 当前 overlay 仍复用现有 `/api/runs/{run_id}` 与 `/trace`，没有另起前端专用 runtime 协议
+  - 当前 editor 两个核心大组件已按职责拆出子模块：
+    - `workflow-node-config-form.tsx` 当前只保留节点类型分发；各节点结构化表单、授权区块和 schema 工具已拆到子目录
+    - `workflow-editor-workbench.tsx` 当前主要保留状态编排；hero / sidebar / canvas / run overlay helper / canvas node 已拆到子目录
 
 当前相关文件：
 
@@ -340,10 +351,12 @@ uv run alembic upgrade head
 - `web/components/workflow-create-wizard.tsx`
 - `web/components/workflow-starter-browser.tsx`
 - `web/components/workflow-editor-workbench.tsx`
+- `web/components/workflow-editor-workbench/*`
 - `web/components/workflow-editor-inspector.tsx`
 - `web/components/workflow-run-overlay-panel.tsx`
 - `web/components/workspace-starter-library.tsx`
 - `web/components/workflow-node-config-form.tsx`
+- `web/components/workflow-node-config-form/*`
 - `web/lib/get-workflow-runs.ts`
 - `web/lib/get-workspace-starters.ts`
 - `web/lib/workspace-starter-payload.ts`
@@ -359,16 +372,16 @@ uv run alembic upgrade head
 - workspace starter 已补齐归档 / 删除、来源漂移摘要和创建页深链回填，但仍未补治理历史、来源 refresh / rebase 和批量操作
 - ecosystem 模板仍然只是规划态，还没有真实数据源
 - 统一 node catalog / starter / tool lanes 已进入共享后端 contract，但尚未和未来节点插件注册中心、plugin-backed node source 和 ecosystem starter 打通
-- `llm_agent` / `output` / `runtimePolicy` / edge `mapping[]` 等区域仍未结构化
+- `runtimePolicy` / edge `mapping[]` / 更细的节点输入输出 schema 仍未结构化
 - `tool` 的复杂对象 / 数组 schema 字段仍需要通过高级 JSON 编辑
 - 已经支持 recent run 的静态附着与节点高亮，但还没有做到 editor 内逐事件回放、过滤翻页和实时流式联动
 - 前端测试基线仍未建立
 
 ### 当前架构与体量判断
 
-- 最近一次 Git 提交 `feat: extend workspace starter governance` 与本轮实现是直接衔接的：
-  - 上一次提交继续补了 workspace starter 的归档 / 恢复 / 删除、来源漂移摘要和创建页深链回填
-  - 本轮在这个基础上，把 `builtin starter / workspace starter / node catalog / tool lanes` 收到统一 `workflow library snapshot`，避免前端继续维护第二套来源事实
+- 最近一次 Git 提交 `feat: add workflow library snapshot` 与本轮实现是直接衔接的：
+  - 上一次提交把 `builtin starter / workspace starter / node catalog / tool lanes` 收到统一 `workflow library snapshot`
+  - 本轮继续顺着这条线，把 editor 的大组件拆开，并补上 `llm_agent` / `output` 的结构化配置入口，避免共享 contract 刚落地就又在前端长回第二层耦合
 - 当前基础框架已经足够继续推进主业务完整度：
   - 新建应用 -> shared workflow library -> starter -> editor -> 保存版本 -> workspace starter 治理 -> 创建页复用 -> recent runs overlay 这条链路已连续
   - workspace starter 也已经具备 active / archived 资产治理、来源漂移摘要和创建页深链回填
@@ -376,12 +389,13 @@ uv run alembic upgrade head
 - 当前架构方向整体是解耦的，但还没完全拆开：
   - `workflow business tracks`、`workflow library snapshot`、`workspace starter API`、`workspace starter governance page` 已开始分层
   - 创建页和 editor 现在已经优先消费同一份后端 snapshot，而不是各自靠前端常量拼装 starter / node / tool lane
+  - editor 内部也已从“单文件混排 UI + 状态 + 运行态附着”转成“顶层状态编排 + UI 子模块”
   - 但 `plugin-backed node source`、节点插件注册中心和 ecosystem starter 仍未进入这份 contract
 - 当前需要显式盯住的长文件：
-  - `api/app/services/runtime.py` 约 1521 行，已经超过后端 1500 行偏好阈值，后续应优先拆执行规划、事件写入、节点执行策略
-  - `web/components/workflow-node-config-form.tsx` 约 1256 行，是前端当前最明显的结构化拆分对象
-  - `web/components/workflow-editor-workbench.tsx` 约 960 行，虽然本轮已把 library contract 的事实外移到 API，但后续仍适合继续拆 run overlay 状态、保存链路和画布壳层
+  - `api/app/services/runtime.py` 当前约 1387 行，已低于后端 1500 行偏好阈值，但仍然偏大，后续应继续拆执行规划、事件写入、节点执行策略
   - `web/components/workspace-starter-library.tsx` 约 848 行，仍低于前端 2000 行偏好阈值，但如果继续叠治理动作，需要尽早拆分详情、操作栏和来源状态区块
+  - `web/components/workflow-node-config-form/shared.ts` 约 321 行，当前是前端节点配置的共享工具汇聚点，后续若继续长出更多 schema / mapping 工具，需要及时再拆
+  - `web/components/workflow-editor-workbench.tsx` 当前约 529 行，主文件已明显收缩，但若后续继续增加保存流程和 run overlay 状态，仍需继续盯住
 
 ## 推荐开发命令
 
@@ -451,15 +465,15 @@ docker compose up -d --build
 
 ### P1 次高优先级
 
-1. 围绕“编排节点”补强高频节点能力：优先继续结构化 `llm_agent`、`output`、edge `mapping[]`、join 策略和节点输入输出配置。
-2. 优先拆 `web/components/workflow-editor-workbench.tsx`，把 run overlay、保存链路和 starter 治理动作从画布壳层中拆开。
-3. 把运行态调试继续接回节点体验，但以服务主业务编排为前提推进，例如节点状态高亮、trace 筛选、回放入口继续贴近画布。
+1. 围绕“编排节点”补强高频节点能力：优先继续结构化 edge `mapping[]`、`runtimePolicy.join`、节点输入输出 schema 和更细的 `tool` schema 编辑。
+2. 把运行态调试继续接回节点体验，但以服务主业务编排为前提推进，例如节点状态高亮、trace 筛选、回放入口继续贴近画布。
+3. 继续盯住 editor 新拆出来的共享层，避免 `workflow-node-config-form/shared.ts` 与 `workflow-editor-workbench.tsx` 再次回到单点堆叠。
 
 原因：
 
-- 节点能力是编排产品最直接的业务承载面，当前大量配置仍停留在高级 JSON，离真实可用还有距离。
-- editor 主组件已经增长到 900+ 行，继续叠加业务入口会明显降低后续推进速度。
+- 节点能力是编排产品最直接的业务承载面，当前 edge mapping、join 和 schema 仍大量停留在高级 JSON，离真实可用还有距离。
 - 运行态可调试仍重要，但应作为节点编排体验的一部分推进，而不是再次独立成为唯一主线。
+- 虽然这轮已经把 editor 主组件和节点配置表单拆开，但共享层仍需继续控体量，避免拆分后很快重新长回去。
 
 ### P2 中优先级
 
