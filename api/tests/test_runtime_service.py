@@ -1709,7 +1709,11 @@ def test_expired_callback_ticket_is_rejected_without_resuming_run(
     assert refreshed_run.status == "waiting"
     assert ticket_record.status == "expired"
     assert ticket_record.expired_at is not None
-    assert ticket_record.callback_payload == {"reason": "callback_ticket_expired"}
+    assert ticket_record.callback_payload == {
+        "reason": "callback_ticket_expired",
+        "source": "expired_callback_test",
+        "cleanup": False,
+    }
     assert "run.callback.ticket.expired" in [
         event.event_type for event in callback_result.artifacts.events
     ]

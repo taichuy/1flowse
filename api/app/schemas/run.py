@@ -22,6 +22,38 @@ class RunCallbackRequest(BaseModel):
     result: RunCallbackToolResult
 
 
+class CallbackTicketCleanupRequest(BaseModel):
+    source: str = Field(default="manual_cleanup", min_length=1, max_length=64)
+    limit: int | None = Field(default=None, ge=1, le=1000)
+    dry_run: bool = False
+
+
+class CallbackTicketCleanupItem(BaseModel):
+    ticket: str
+    run_id: str
+    node_run_id: str
+    node_id: str | None = None
+    tool_call_id: str | None = None
+    tool_id: str | None = None
+    tool_call_index: int = 0
+    waiting_status: str
+    status: str
+    reason: str | None = None
+    created_at: datetime
+    expires_at: datetime | None = None
+    expired_at: datetime | None = None
+
+
+class CallbackTicketCleanupResponse(BaseModel):
+    source: str
+    dry_run: bool = False
+    limit: int
+    matched_count: int = 0
+    expired_count: int = 0
+    run_ids: list[str] = Field(default_factory=list)
+    items: list[CallbackTicketCleanupItem] = Field(default_factory=list)
+
+
 class NodeRunItem(BaseModel):
     id: str
     node_id: str

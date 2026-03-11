@@ -1,0 +1,63 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.schemas.run import (
+    CallbackTicketCleanupItem,
+    CallbackTicketCleanupRequest,
+    CallbackTicketCleanupResponse,
+)
+from app.services.run_callback_ticket_cleanup import (
+    CallbackTicketCleanupResult,
+    RunCallbackTicketCleanupService,
+)
+
+router = APIRouter(prefix="/runs/callback-tickets", tags=["run-callback-tickets"])
+cleanup_service = RunCallbackTicketCleanupService()
+
+
+def _serialize_cleanup_result(
+    result: CallbackTicketCleanupResult,
+) -> CallbackTicketCleanupResponse:
+    return CallbackTicketCleanupResponse(
+        source=result.source,
+        dry_run=result.dry_run,
+        limit=result.limit,
+        matched_count=result.matched_count,
+        expired_count=result.expired_count,
+        run_ids=result.run_ids,
+        items=[
+            CallbackTicketCleanupItem(
+                ticket=item.ticket,
+                run_id=item.run_id,
+                node_run_id=item.node_run_id,
+                node_id=item.node_id,
+                tool_call_id=item.tool_call_id,
+                tool_id=item.tool_id,
+                tool_call_index=item.tool_call_index,
+                waiting_status=item.waiting_status,
+                status=item.status,
+                reason=item.reason,
+                created_at=item.created_at,
+                expires_at=item.expires_at,
+                expired_at=item.expired_at,
+            )
+            for item in result.items
+        ],
+    )
+
+
+@router.post("/cleanup", response_model=CallbackTicketCleanupResponse)
+def cleanup_stale_run_callback_tickets(
+    payload: CallbackTicketCleanupRequest,
+    db: Session = Depends(get_db),
+) -> CallbackTicketCleanupResponse:
+    result = cleanup_service.cleanup_stale_tickets(
+        db,
+        source=payload.source,
+        limit=payload.limit,
+        dry_run=payload.dry_run,
+    )
+    if not payload.dry_run:
+        db.commit()
+    return _serialize_cleanup_result(result)

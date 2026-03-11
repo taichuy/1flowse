@@ -106,6 +106,33 @@ class RunCallbackTicketService:
     def get_ticket(self, db: Session, ticket: str) -> RunCallbackTicket | None:
         return db.get(RunCallbackTicket, ticket)
 
+    def snapshot(self, record: RunCallbackTicket) -> CallbackTicketSnapshot:
+        return self._snapshot(record)
+
+    def list_expired_pending_tickets(
+        self,
+        db: Session,
+        *,
+        now: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[RunCallbackTicket]:
+        effective_now = _normalize_datetime(now or _utcnow())
+        statement = (
+            select(RunCallbackTicket)
+            .where(
+                RunCallbackTicket.status == "pending",
+                RunCallbackTicket.expires_at.is_not(None),
+                RunCallbackTicket.expires_at <= effective_now,
+            )
+            .order_by(
+                RunCallbackTicket.expires_at.asc(),
+                RunCallbackTicket.created_at.asc(),
+            )
+        )
+        if limit is not None:
+            statement = statement.limit(max(int(limit), 1))
+        return db.scalars(statement).all()
+
     def consume_ticket(
         self,
         record: RunCallbackTicket,
@@ -137,10 +164,11 @@ class RunCallbackTicketService:
         *,
         reason: str,
         expired_at: datetime | None = None,
+        callback_payload: dict | None = None,
     ) -> CallbackTicketSnapshot:
         timestamp = expired_at or _utcnow()
         record.status = "expired"
-        record.callback_payload = {"reason": reason}
+        record.callback_payload = callback_payload or {"reason": reason}
         record.expired_at = timestamp
         return self._snapshot(record)
 

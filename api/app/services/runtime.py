@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.run import AICallRecord, NodeRun, Run, RunArtifact, RunEvent, ToolCallRecord
+from app.models.run import NodeRun, Run, RunEvent, ToolCallRecord
 from app.models.workflow import Workflow, WorkflowCompiledBlueprint, WorkflowVersion
 from app.services.agent_runtime import AgentRuntime
 from app.services.artifact_store import RuntimeArtifactStore
@@ -24,12 +24,12 @@ from app.services.plugin_runtime import (
     get_plugin_registry,
 )
 from app.services.run_callback_tickets import RunCallbackTicketService
-from app.services.runtime_records import CallbackHandleResult, ExecutionArtifacts
 from app.services.run_resume_scheduler import (
     RunResumeScheduler,
     get_run_resume_scheduler,
 )
 from app.services.runtime_graph_support import RuntimeGraphSupportMixin
+from app.services.runtime_records import CallbackHandleResult, ExecutionArtifacts
 from app.services.runtime_types import (
     AuthorizedContextRefs,
     CompiledEdge,
@@ -358,6 +358,11 @@ class RuntimeService(RuntimeGraphSupportMixin):
             callback_snapshot = self._callback_tickets.expire_ticket(
                 ticket_record,
                 reason="callback_ticket_expired",
+                callback_payload={
+                    "reason": "callback_ticket_expired",
+                    "source": source,
+                    "cleanup": False,
+                },
             )
             self._persist_events(
                 db,
@@ -382,6 +387,7 @@ class RuntimeService(RuntimeGraphSupportMixin):
                                 else None
                             ),
                             "source": source,
+                            "cleanup": False,
                         },
                     )
                 ],

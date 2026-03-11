@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.routes.health import router as health_router
-from app.api.routes.published_endpoint_activity import router as published_endpoint_activity_router
 from app.api.routes.plugins import router as plugin_router
+from app.api.routes.published_endpoint_activity import router as published_endpoint_activity_router
 from app.api.routes.published_endpoint_keys import router as published_endpoint_key_router
 from app.api.routes.published_gateway import router as published_gateway_router
+from app.api.routes.run_callback_tickets import router as run_callback_ticket_router
 from app.api.routes.run_views import router as run_view_router
 from app.api.routes.runs import router as run_router
 from app.api.routes.system import router as system_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     application.include_router(workflow_library_router, prefix="/api")
     application.include_router(workspace_starter_router, prefix="/api")
     application.include_router(run_router, prefix="/api")
+    application.include_router(run_callback_ticket_router, prefix="/api")
     application.include_router(run_view_router, prefix="/api")
     return application
 

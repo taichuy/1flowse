@@ -288,6 +288,11 @@ uv run alembic upgrade head
   - `SEVENFLOWS_CALLBACK_TICKET_TTL_SECONDS` 用于控制 ticket TTL
   - `run_callback_tickets` 已保存 `expires_at / expired_at`
   - 过期 callback 会返回 `expired`，并写入 `run.callback.ticket.expired`
+- callback ticket 当前已补上最小 cleanup 治理
+  - 新增 `RunCallbackTicketCleanupService`
+  - 新增 `POST /api/runs/callback-tickets/cleanup`
+  - 新增 worker 任务 `runtime.cleanup_callback_tickets`
+  - cleanup 过期事件会继续复用 `run.callback.ticket.expired`，并显式写入 `source + cleanup`
 - 新增最小 `Run Resume Scheduler`
   - `api/app/services/run_resume_scheduler.py`
   - 把 runtime waiting 的恢复请求收口到独立调度层，默认投递给 Celery
@@ -322,6 +327,7 @@ uv run alembic upgrade head
 - `GET /api/runs/{run_id}/evidence-view`
 - `POST /api/runs/{run_id}/resume`
 - `POST /api/runs/callbacks/{ticket}`
+- `POST /api/runs/callback-tickets/cleanup`
 - `GET /api/runs/{run_id}/events`
 - `GET /api/runs/{run_id}/trace`
 - `GET /api/runs/{run_id}/trace/export`
@@ -345,6 +351,7 @@ uv run alembic upgrade head
 - 读取 evidence-focused 视图，供 assistant/evidence 排障与回放入口复用
 - 恢复处于 waiting 状态的 run
 - 消费 `waiting_callback` ticket 并自动恢复 run
+- 批量清理已过期但仍处于 `pending` 的 callback tickets
 - 查询事件流
 - 为 AI / 自动化 提供带过滤条件的 run trace 检索
 - 为创建页和 editor 提供共享的 workflow library snapshot，统一暴露 builtin/workspace starters、node catalog、tool lanes 和 tools
@@ -384,7 +391,9 @@ uv run alembic upgrade head
 - `GET /api/runs/{run_id}/evidence-view` 当前会围绕 `node_runs.evidence_context`、assistant 调用、supporting artifacts 和 decision output 输出 evidence-focused 视图
 - `POST /api/runs/{run_id}/resume` 当前会从 `runs.checkpoint_payload` 与 `node_runs.checkpoint_payload` 恢复 phase state machine；事件里会额外带出 `source`
 - `POST /api/runs/callbacks/{ticket}` 当前会把 callback 结果写回 waiting tool 的 checkpoint / tool trace / artifact，再自动调用 `resume_run`
+- `POST /api/runs/callback-tickets/cleanup` 当前支持 `source / limit / dry_run`，并返回匹配数、实际过期数和受影响 ticket 明细
 - runtime 当前还能通过 worker 侧 `runtime.resume_run` 消费被调度的 waiting run，并把计划恢复写成 `run.resume.scheduled`
+- worker 当前还能通过 `runtime.cleanup_callback_tickets` 复用同一治理服务，对 stale `pending` tickets 做批量过期
 - 当前 trace 过滤已支持 `event_type`、`node_run_id`、时间范围、`payload_key`、事件游标和顺序控制
 - 当前 trace 还补充了回放 / 导出元信息，例如 trace / returned 时间边界、事件顺序、`replay_offset_ms` 以及 opaque `cursor`
 - `GET /api/runs/{run_id}/trace/export` 当前支持 `json` 与 `jsonl`，导出会复用相同过滤条件，便于离线分析与后续 replay 包演进
@@ -626,6 +635,10 @@ uv run alembic upgrade head
   - published invocation 的 `created_from / created_to` 时间窗口筛选
   - binding 级 timeline buckets
   - route 侧时间窗口合法性校验
+- 本轮继续承接最近一次提交 `feat: harden callback ticket lifecycle`，补上：
+  - callback ticket 的批量 cleanup service
+  - 独立 cleanup API 与 worker 任务入口
+  - cleanup 来源审计与 dry-run 治理语义
 - 当前真正需要持续承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
   - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
@@ -643,13 +656,14 @@ uv run alembic upgrade head
   - publish invoke 现在也已独立落到 `PublishedEndpointGatewayService + published_gateway route`，没有把发布协议入口继续塞回 `runs.py` 或 `workflow_publish.py`
   - published API key 生命周期也已独立落到 `PublishedEndpointApiKeyService + published_endpoint_keys route`，没有塞回 runtime 或 workflow CRUD
   - published activity 现在也已独立落到 `PublishedInvocationService + published_endpoint_activity route`，没有把调用审计继续塞回 gateway route 或 runtime 主循环
+  - callback ticket cleanup 现在也已独立落到 `RunCallbackTicketCleanupService + run_callback_tickets route`，没有继续把批量治理塞回 `runtime.py` 或 `runs.py`
   - worker 恢复入口已经从运行主循环里旁路出来，没有继续把后台调度写死在 API 或 `RuntimeService` 单点内
   - `ExecutionArtifacts / CallbackHandleResult` 这类 runtime 返回模型已从 `runtime.py` 抽到 `runtime_records.py`，避免主执行器继续堆叠非执行职责
   - 前端创建页、editor、starter 治理也已开始围绕共享 snapshot 演进，而不是各自维护私有常量
   - `run diagnostics` 新增 execution/evidence sections，但通过独立组件承接，没有继续把 `run-diagnostics-panel.tsx` 变成新的页面级大文件
   - 但 publish endpoint 的 protocol mapping、callback ticket 自动清理/来源审计/更强鉴权，以及节点插件注册中心仍未彻底拆清
 - 当前需要显式盯住的长文件：
-  - `api/app/services/runtime.py` 当前约 1496 行，已通过抽离 runtime 返回模型重新压回后端 1500 行偏好阈值内；下一轮若继续补 scheduler、callback 治理或 publish gateway，应优先拆 execution / waiting / resume orchestration
+  - `api/app/services/runtime.py` 当前约 1502 行，已经重新越过后端 1500 行偏好阈值；本轮虽然把 callback cleanup 编排抽到独立 service，但下一轮若继续补 scheduler、callback 治理或 publish gateway，应优先拆 execution / waiting / resume orchestration
   - `api/app/api/routes/runs.py` 仍然偏长，但本轮已把 execution / evidence 聚合和 RunDetail 序列化拆出；下一轮若继续扩展 trace/export/callback，应进一步考虑 trace/export/callback 子模块拆分
   - `api/app/services/agent_runtime.py` 当前约 628 行，已经承载 phase pipeline、tool waiting 恢复和 evidence 组装；若继续长出 assistant 策略与 subflow 候选能力，应提前拆 plan/tool/finalize 子阶段
   - `api/app/services/workflow_library.py` 当前约 650 行，仍适合继续演进，但若再接 adapter health / node plugin registry，应优先拆 source assembly 与 starter builder
@@ -706,7 +720,7 @@ docker compose up -d --build
 - `native` 发布调用的 streaming / SSE 与更完整发布管理
 - `openai / anthropic` 的正式协议映射与开放调用入口
 - scheduler 级 dead-letter / dedupe / metrics / 失败重投治理
-- callback ticket 的自动清理、来源审计与更强鉴权
+- callback ticket 的周期自动清理调度与更强鉴权
 - 回放调试面板
 - 更完整的节点结构化配置抽屉
 - editor 内消费 execution/evidence view、逐事件回放、trace 过滤和实时调试联动
@@ -738,15 +752,15 @@ docker compose up -d --build
    - 更细的 API key 维度观测与趋势消费视图
    - 继续坚持绑定 `workflow_version + compiled_blueprint`
 3. 收口 callback ticket 的剩余治理：
-   - 自动清理策略
-   - 来源审计
+   - 周期自动清理调度
    - 更强鉴权形态
+   - 系统诊断侧的治理可见性
 
 原因：
 
 - 最小 `native` 调用入口、`api_key` 鉴权实体、alias/path 地址语义和基础 activity audit 都已经落地，当前最该补的是发布托管能力与兼容协议映射，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
 - run 侧虽然已经绑定 compiled blueprint，execution/evidence 视图也已经开始消费这些事实，但发布层仍需要继续承接，稳定执行边界才能真正服务主业务。
-- callback ingress 与 ticket TTL/expired 状态虽然已打通，但自动清理、来源审计和更强鉴权仍属于 durable runtime 稳定化的一部分。
+- callback ingress 与 ticket TTL/expired 状态已经补到“手动/API/worker cleanup + 来源审计”，但周期调度和更强鉴权仍属于 durable runtime 稳定化的剩余工作。
 
 ### P1 次高优先级
 
