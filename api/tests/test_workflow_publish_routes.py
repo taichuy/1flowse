@@ -57,6 +57,9 @@ def test_create_workflow_persists_publish_bindings(client: TestClient) -> None:
     assert body[0]["target_workflow_version"] == "0.1.0"
     assert body[0]["compiled_blueprint_id"] is not None
     assert body[0]["endpoint_id"] == "native-chat"
+    assert body[0]["lifecycle_status"] == "draft"
+    assert body[0]["published_at"] is None
+    assert body[0]["unpublished_at"] is None
 
 
 def test_list_published_endpoints_supports_current_and_all_versions(
@@ -138,3 +141,133 @@ def test_create_workflow_rejects_publish_binding_to_unknown_version(
 
     assert response.status_code == 422
     assert "references unknown workflow version" in response.json()["detail"]
+
+
+def test_publish_binding_promotes_selected_version_and_offlines_previous_one(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Lifecycle Workflow",
+            "definition": _publishable_definition(),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    initial_bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert initial_bindings_response.status_code == 200
+    initial_binding_id = initial_bindings_response.json()[0]["id"]
+
+    publish_initial_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{initial_binding_id}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_initial_response.status_code == 200
+    published_initial = publish_initial_response.json()
+    assert published_initial["lifecycle_status"] == "published"
+    assert published_initial["published_at"] is not None
+    assert published_initial["unpublished_at"] is None
+
+    update_response = client.put(
+        f"/api/workflows/{workflow_id}",
+        json={
+            "definition": {
+                **_publishable_definition(answer="updated", workflow_version=None),
+                "publish": [
+                    {
+                        "id": "native-chat",
+                        "name": "Native Chat Stable",
+                        "protocol": "native",
+                        "workflowVersion": "0.1.1",
+                        "authMode": "internal",
+                        "streaming": False,
+                        "inputSchema": {"type": "object"},
+                    }
+                ],
+            }
+        },
+    )
+    assert update_response.status_code == 200
+
+    all_bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert all_bindings_response.status_code == 200
+    all_bindings = all_bindings_response.json()
+    latest_binding = next(item for item in all_bindings if item["workflow_version"] == "0.1.1")
+    previous_binding = next(item for item in all_bindings if item["workflow_version"] == "0.1.0")
+    assert latest_binding["lifecycle_status"] == "draft"
+    assert previous_binding["lifecycle_status"] == "published"
+
+    publish_latest_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{latest_binding['id']}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_latest_response.status_code == 200
+    published_latest = publish_latest_response.json()
+    assert published_latest["lifecycle_status"] == "published"
+    assert published_latest["published_at"] is not None
+    assert published_latest["unpublished_at"] is None
+
+    published_only_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true", "lifecycle_status": "published"},
+    )
+    assert published_only_response.status_code == 200
+    published_only = published_only_response.json()
+    assert [(item["workflow_version"], item["lifecycle_status"]) for item in published_only] == [
+        ("0.1.1", "published")
+    ]
+
+    all_bindings_after_publish_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert all_bindings_after_publish_response.status_code == 200
+    all_bindings_after_publish = all_bindings_after_publish_response.json()
+    previous_binding_after_publish = next(
+        item for item in all_bindings_after_publish if item["workflow_version"] == "0.1.0"
+    )
+    assert previous_binding_after_publish["lifecycle_status"] == "offline"
+    assert previous_binding_after_publish["unpublished_at"] is not None
+
+
+def test_unpublish_binding_marks_binding_offline(client: TestClient) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Offline Publish Workflow",
+            "definition": _publishable_definition(),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding_id = bindings_response.json()[0]["id"]
+
+    publish_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_response.status_code == 200
+
+    offline_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/lifecycle",
+        json={"status": "offline"},
+    )
+    assert offline_response.status_code == 200
+    body = offline_response.json()
+    assert body["lifecycle_status"] == "offline"
+    assert body["published_at"] is not None
+    assert body["unpublished_at"] is not None

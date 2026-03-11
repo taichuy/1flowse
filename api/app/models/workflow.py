@@ -116,8 +116,19 @@ class WorkflowPublishedEndpoint(Base):
     protocol: Mapped[str] = mapped_column(String(32), nullable=False)
     auth_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     streaming: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(32),
+        default="draft",
+        nullable=False,
+        index=True,
+    )
     input_schema: Mapped[dict] = mapped_column(JSON, default=dict)
     output_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    unpublished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
