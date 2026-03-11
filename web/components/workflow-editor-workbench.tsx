@@ -69,7 +69,6 @@ export function WorkflowEditorWorkbench({
 }: WorkflowEditorWorkbenchProps) {
   const initialGraph = workflowDefinitionToReactFlow(nodeCatalog, workflow.definition);
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
-  const primaryNodeLane = nodeSourceLanes[0] ?? null;
   const [workflowName, setWorkflowName] = useState(workflow.name);
   const [persistedWorkflowName, setPersistedWorkflowName] = useState(workflow.name);
   const [workflowVersion, setWorkflowVersion] = useState(workflow.version);
@@ -528,7 +527,7 @@ export function WorkflowEditorWorkbench({
             workflowId={workflow.id}
             workflowName={workflowName}
             workflows={workflows}
-            primaryNodeLane={primaryNodeLane}
+            nodeSourceLanes={nodeSourceLanes}
             toolSourceLanes={toolSourceLanes}
             editorNodeLibrary={editorNodeLibrary}
             message={message}

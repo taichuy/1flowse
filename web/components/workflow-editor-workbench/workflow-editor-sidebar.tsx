@@ -16,7 +16,7 @@ type WorkflowEditorSidebarProps = {
   workflowId: string;
   workflowName: string;
   workflows: WorkflowListItem[];
-  primaryNodeLane: WorkflowLibrarySourceLane | null;
+  nodeSourceLanes: WorkflowLibrarySourceLane[];
   toolSourceLanes: WorkflowLibrarySourceLane[];
   editorNodeLibrary: WorkflowNodeCatalogItem[];
   message: string | null;
@@ -39,7 +39,7 @@ export function WorkflowEditorSidebar({
   workflowId,
   workflowName,
   workflows,
-  primaryNodeLane,
+  nodeSourceLanes,
   toolSourceLanes,
   editorNodeLibrary,
   message,
@@ -57,6 +57,11 @@ export function WorkflowEditorSidebar({
   onSelectRunId,
   onRefreshRuns
 }: WorkflowEditorSidebarProps) {
+  const primaryNodeLane = nodeSourceLanes[0] ?? null;
+  const pluginBackedNodeCount = editorNodeLibrary.filter(
+    (item) => item.bindingRequired
+  ).length;
+
   return (
     <aside className="editor-sidebar">
       <article className="diagnostic-panel editor-panel">
@@ -116,9 +121,21 @@ export function WorkflowEditorSidebar({
             <strong>{primaryNodeLane?.count ?? editorNodeLibrary.length}</strong>
           </div>
           <div className="summary-card">
+            <span>Plugin-backed</span>
+            <strong>{pluginBackedNodeCount}</strong>
+          </div>
+          <div className="summary-card">
             <span>Tool lanes</span>
             <strong>{toolSourceLanes.length}</strong>
           </div>
+        </div>
+
+        <div className="starter-tag-row">
+          {nodeSourceLanes.map((lane) => (
+            <span className="event-chip" key={`${lane.kind}-${lane.label}`}>
+              {lane.shortLabel} · {lane.count}
+            </span>
+          ))}
         </div>
 
         <div className="starter-tag-row">
@@ -144,6 +161,14 @@ export function WorkflowEditorSidebar({
                 <span>{item.type}</span>
                 <span>{item.source.shortLabel}</span>
               </div>
+              {item.bindingSourceLanes.length > 0 ? (
+                <div className="starter-meta-row">
+                  <span>{item.bindingRequired ? "binding" : "optional"}</span>
+                  <span>
+                    {item.bindingSourceLanes.map((lane) => lane.shortLabel).join(" / ")}
+                  </span>
+                </div>
+              ) : null}
             </button>
           ))}
         </div>

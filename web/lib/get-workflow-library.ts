@@ -28,6 +28,8 @@ export type WorkflowNodeCatalogItem = {
   capabilityGroup: "entry" | "agent" | "integration" | "logic" | "output";
   businessTrack: WorkflowBusinessTrack;
   tags: string[];
+  bindingRequired: boolean;
+  bindingSourceLanes: WorkflowLibrarySourceLane[];
   palette: {
     enabled: boolean;
     order: number;
@@ -186,6 +188,12 @@ function normalizeNodeCatalogItem(
       "应用新建编排"
     ) as WorkflowBusinessTrack,
     tags: asStringArray(input.tags),
+    bindingRequired: Boolean(input.binding_required),
+    bindingSourceLanes: Array.isArray(input.binding_source_lanes)
+      ? input.binding_source_lanes
+          .filter(isRecord)
+          .map((lane) => normalizeSourceLane(lane))
+      : [],
     palette: {
       enabled: Boolean(palette.enabled),
       order: typeof palette.order === "number" ? palette.order : 0,

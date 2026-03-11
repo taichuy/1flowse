@@ -74,6 +74,8 @@ class WorkflowNodeCatalogItem(BaseModel):
     tags: list[str] = Field(default_factory=list)
     palette: WorkflowNodeCatalogPalette
     defaults: WorkflowNodeCatalogDefaults
+    binding_required: bool = False
+    binding_source_lanes: list[WorkflowLibrarySourceLane] = Field(default_factory=list)
 
 
 class WorkflowLibraryStarterItem(BaseModel):

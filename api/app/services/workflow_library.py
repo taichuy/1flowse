@@ -3,8 +3,10 @@ from __future__ import annotations
 from copy import deepcopy
 from functools import lru_cache
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.plugin import PluginToolRecord
 from app.schemas.plugin import PluginToolItem
 from app.schemas.workflow_library import (
     WorkflowLibrarySnapshot,
@@ -18,7 +20,7 @@ from app.schemas.workflow_library import (
     WorkflowNodeType,
 )
 from app.services.plugin_registry_store import get_plugin_registry_store
-from app.services.plugin_runtime import get_plugin_registry
+from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_plugin_registry
 from app.services.workspace_starter_templates import get_workspace_starter_template_service
 
 BUILTIN_STARTER_SOURCE = WorkflowLibrarySourceDescriptor(
@@ -84,8 +86,9 @@ class WorkflowLibraryService:
         *,
         workspace_id: str = "default",
     ) -> WorkflowLibrarySnapshot:
-        nodes = self.list_node_catalog_items()
-        tools = self.list_tool_items(db)
+        tools = self.list_tool_items(db, workspace_id=workspace_id)
+        tool_source_lanes = self.build_tool_source_lanes(tools)
+        nodes = self.list_node_catalog_items(tool_source_lanes=tool_source_lanes)
         starters = self.list_starter_items(
             db,
             workspace_id=workspace_id,
@@ -96,11 +99,16 @@ class WorkflowLibraryService:
             starters=starters,
             starter_source_lanes=self.build_starter_source_lanes(starters),
             node_source_lanes=self.build_node_source_lanes(nodes),
-            tool_source_lanes=self.build_tool_source_lanes(tools),
+            tool_source_lanes=tool_source_lanes,
             tools=tools,
         )
 
-    def list_node_catalog_items(self) -> list[WorkflowNodeCatalogItem]:
+    def list_node_catalog_items(
+        self,
+        *,
+        tool_source_lanes: list[WorkflowLibrarySourceLane] | None = None,
+    ) -> list[WorkflowNodeCatalogItem]:
+        tool_binding_lanes = self._clone_source_lanes(tool_source_lanes or [])
         return [
             WorkflowNodeCatalogItem(
                 type="trigger",
@@ -137,6 +145,8 @@ class WorkflowLibraryService:
                 tags=["tool", "catalog", "compat-ready"],
                 palette=self._build_palette(enabled=True, order=20, x=340, y=280),
                 defaults=self._build_defaults(name="Tool"),
+                binding_required=True,
+                binding_source_lanes=tool_binding_lanes,
             ),
             WorkflowNodeCatalogItem(
                 type="mcp_query",
@@ -194,13 +204,29 @@ class WorkflowLibraryService:
             ),
         ]
 
-    def list_tool_items(self, db: Session) -> list[PluginToolItem]:
+    def list_tool_items(
+        self,
+        db: Session,
+        *,
+        workspace_id: str = "default",
+    ) -> list[PluginToolItem]:
         registry = get_plugin_registry()
         get_plugin_registry_store().hydrate_registry(db, registry)
+        tool_adapter_ids = self._load_tool_adapter_ids(db)
+        adapters_by_id = {adapter.id: adapter for adapter in registry.list_adapters()}
         return [
-            self._serialize_tool(tool.id)
+            self._serialize_tool_definition(tool)
             for tool in sorted(
-                registry.list_tools(),
+                (
+                    tool
+                    for tool in registry.list_tools()
+                    if self._tool_visible_for_workspace(
+                        ecosystem=tool.ecosystem,
+                        adapter_id=tool_adapter_ids.get(tool.id),
+                        workspace_id=workspace_id,
+                        adapters_by_id=adapters_by_id,
+                    )
+                ),
                 key=lambda item: (item.ecosystem, item.name.lower(), item.id),
             )
         ]
@@ -511,12 +537,8 @@ class WorkflowLibraryService:
         }
         return next_config
 
-    def _serialize_tool(self, tool_id: str) -> PluginToolItem:
+    def _serialize_tool_definition(self, tool) -> PluginToolItem:
         registry = get_plugin_registry()
-        tool = registry.get_tool(tool_id)
-        if tool is None:
-            raise ValueError(f"Plugin tool '{tool_id}' is not registered.")
-
         return PluginToolItem(
             id=tool.id,
             name=tool.name,
@@ -532,6 +554,47 @@ class WorkflowLibraryService:
             plugin_meta=deepcopy(tool.plugin_meta) if isinstance(tool.plugin_meta, dict) else None,
             callable=(tool.ecosystem != "native") or registry.has_native_invoker(tool.id),
         )
+
+    def _load_tool_adapter_ids(
+        self,
+        db: Session,
+    ) -> dict[str, str | None]:
+        rows = db.execute(
+            select(PluginToolRecord.id, PluginToolRecord.adapter_id).order_by(
+                PluginToolRecord.created_at.asc()
+            )
+        ).all()
+        return {
+            str(tool_id): (str(adapter_id) if adapter_id else None)
+            for tool_id, adapter_id in rows
+        }
+
+    def _tool_visible_for_workspace(
+        self,
+        *,
+        ecosystem: str,
+        adapter_id: str | None,
+        workspace_id: str,
+        adapters_by_id: dict[str, CompatibilityAdapterRegistration],
+    ) -> bool:
+        if ecosystem == "native" or adapter_id is None:
+            return True
+
+        adapter = adapters_by_id.get(adapter_id)
+        if adapter is None or not adapter.enabled:
+            return False
+
+        workspace_ids = tuple(adapter.workspace_ids or ())
+        if not workspace_ids:
+            return True
+
+        return workspace_id in workspace_ids
+
+    def _clone_source_lanes(
+        self,
+        lanes: list[WorkflowLibrarySourceLane],
+    ) -> list[WorkflowLibrarySourceLane]:
+        return [WorkflowLibrarySourceLane(**lane.model_dump()) for lane in lanes]
 
     def _describe_tool_source(
         self,
