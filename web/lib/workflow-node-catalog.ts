@@ -1,4 +1,5 @@
 import type { WorkflowDetail, WorkflowNodeItem } from "@/lib/get-workflows";
+import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 
 export type WorkflowDefinition = WorkflowDetail["definition"];
 export type WorkflowNodeType =
@@ -11,12 +12,6 @@ export type WorkflowNodeType =
   | "router"
   | "loop"
   | "output";
-
-export type WorkflowBusinessTrack =
-  | "应用新建编排"
-  | "编排节点能力"
-  | "Dify 插件兼容"
-  | "API 调用开放";
 
 export type WorkflowNodeCatalogItem = {
   type: WorkflowNodeType;

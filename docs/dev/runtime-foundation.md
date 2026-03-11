@@ -279,6 +279,11 @@ uv run alembic upgrade head
 - 引入 `xyflow` 作为画布基础：
   - 当前已提供 starter template 新建向导，创建成功后会直接进入 editor
   - 当前已新增统一 `workflow node catalog`，把 starter template、节点默认名称/位置和 editor palette 收敛到同一份节点能力描述
+  - 当前已新增 `workflow business tracks` 与 `starter library` 元数据：
+    - 创建页会按 `应用新建编排` / `编排节点能力` / `Dify 插件兼容` / `API 调用开放` 四条主业务线筛选 starter
+    - starter template 会显式标注优先级、主线焦点、来源生态和推荐下一步
+    - 当前已补充 `Response Draft`，让“API 调用开放”不再完全停留在文档层
+  - 当前创建页已把 starter 浏览逻辑拆到独立组件，避免 `/workflows/new` 再次长成页面级杂糅入口
   - 当前已支持把 workflow definition 映射为画布节点与连线
   - 当前已支持新增 `llm_agent` / `tool` / `mcp_query` / `condition` / `router` / `output`
   - 当前已支持编辑节点名称、基础 `config`、基础 `runtimePolicy`
@@ -306,11 +311,13 @@ uv run alembic upgrade head
 - `web/app/workflows/new/page.tsx`
 - `web/app/workflows/[workflowId]/page.tsx`
 - `web/components/workflow-create-wizard.tsx`
+- `web/components/workflow-starter-browser.tsx`
 - `web/components/workflow-editor-workbench.tsx`
 - `web/components/workflow-editor-inspector.tsx`
 - `web/components/workflow-run-overlay-panel.tsx`
 - `web/components/workflow-node-config-form.tsx`
 - `web/lib/get-workflow-runs.ts`
+- `web/lib/workflow-business-tracks.ts`
 - `web/lib/workflow-node-catalog.ts`
 - `web/lib/workflow-editor.ts`
 - `web/lib/workflow-starters.ts`
@@ -318,12 +325,28 @@ uv run alembic upgrade head
 当前边界：
 
 - 仍然是“最小骨架”，不是完整节点配置系统
-- starter template 当前仍是内置静态定义，还没有变成 workspace 级模板体系
+- starter template 当前虽然已经按业务主线组织，但仍是内置静态定义，还没有变成 workspace 级模板体系
 - 统一 node catalog 当前仍是前端静态目录，尚未和未来节点插件注册中心、生态分层和工作空间模板打通
 - `llm_agent` / `output` / `runtimePolicy` / edge `mapping[]` 等区域仍未结构化
 - `tool` 的复杂对象 / 数组 schema 字段仍需要通过高级 JSON 编辑
 - 已经支持 recent run 的静态附着与节点高亮，但还没有做到 editor 内逐事件回放、过滤翻页和实时流式联动
 - 前端测试基线仍未建立
+
+### 当前架构与体量判断
+
+- 上一次 Git 提交 `feat: unify workflow node catalog entry model` 和当前实现是连续衔接的：
+  - 上一轮先把 starter / palette 的节点入口统一
+  - 这一轮再把 starter 升级为按主业务线筛选的 `starter library`
+- 当前基础框架已经足够继续推进主业务完整度：
+  - 新建应用 -> starter -> editor -> 保存版本 -> recent runs overlay 这条链路已连续
+  - 但 `workspace template governance`、`plugin-backed node source` 和 `publish config` 仍未接上
+- 当前架构方向整体是解耦的，但还没完全拆开：
+  - `workflow business tracks`、`node catalog`、`starter templates` 已开始分层
+  - `tool catalog` 与未来动态节点注册仍未并到同一个来源分层模型
+- 当前需要显式盯住的长文件：
+  - `api/app/services/runtime.py` 约 1387 行，已接近后端 1500 行偏好阈值，后续应优先拆执行规划、事件写入、节点执行策略
+  - `web/components/workflow-node-config-form.tsx` 约 1136 行，是前端当前最明显的结构化拆分对象
+  - `web/components/workflow-editor-workbench.tsx` 约 796 行，后续适合继续拆 run overlay 状态、保存链路和画布壳层
 
 ## 推荐开发命令
 
@@ -381,13 +404,14 @@ docker compose up -d --build
 
 ### P0 当前最高优先级
 
-1. 把统一 node catalog 继续推进到“节点库 / starter template / 工具目录”协同模型：明确哪些能力是静态 native node，哪些来自后续 plugin registry，避免前端重新长出第二套扩展入口。
-2. 把“应用新建编排”继续从入口推进到 workspace 级可扩展状态：让 starter template 能按业务主线、生态来源和未来模板治理顺滑扩展，而不是继续停留在当前仓库内置草稿。
+1. 把 starter library 从“按主业务线筛选”继续推进到“workspace 级模板来源模型”：明确内置 starter、未来 workspace 模板和生态模板的来源字段、治理入口和扩展边界。
+2. 把统一 node catalog 继续推进到“节点库 / starter template / 工具目录”协同模型：明确哪些能力是静态 native node，哪些来自后续 plugin registry，避免前端重新长出第二套扩展入口。
 
 原因：
 
-- workflow 新建入口和 editor palette 已经共享同一份节点目录，但这层还没有和未来 plugin registry、模板治理和生态分层真正接上。
-- 如果不继续把“哪些节点来自原生目录，哪些来自插件目录”设计清楚，后续节点、插件兼容和开放调用仍会在入口层反复返工。
+- workflow 新建入口已经可以按主业务线筛选 starter，但模板来源仍只有“仓库内置静态定义”，离 workspace 级治理还差一层明确模型。
+- workflow 新建入口和 editor palette 已经共享节点目录，但这层还没有和未来 plugin registry、模板治理和生态分层真正接上。
+- 如果不继续把“哪些 starter / 节点来自原生目录，哪些来自插件目录或工作空间模板”设计清楚，后续节点、插件兼容和开放调用仍会在入口层反复返工。
 
 ### P1 次高优先级
 

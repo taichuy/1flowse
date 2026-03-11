@@ -1001,6 +1001,88 @@ a {
   margin-top: 22px;
 }
 
+.starter-track-bar,
+.starter-track-summary,
+.starter-card-header {
+  display: flex;
+  gap: 12px;
+}
+
+.starter-track-bar,
+.starter-track-summary {
+  margin-top: 22px;
+}
+
+.starter-track-bar {
+  flex-wrap: wrap;
+}
+
+.starter-track-chip {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  border: 1px solid rgba(28, 25, 21, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 252, 246, 0.72);
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.starter-track-chip span,
+.starter-track-chip small,
+.starter-focus-copy,
+.starter-track-focus-card p {
+  color: var(--muted);
+}
+
+.starter-track-chip strong,
+.starter-track-focus-card strong {
+  font-size: 0.98rem;
+}
+
+.starter-track-chip.selected {
+  transform: translateY(-1px);
+  border-color: rgba(208, 99, 45, 0.28);
+  box-shadow: 0 16px 34px rgba(208, 99, 45, 0.12);
+}
+
+.starter-track-summary {
+  align-items: stretch;
+  justify-content: space-between;
+  border-radius: 22px;
+  border: 1px solid rgba(28, 25, 21, 0.08);
+  background: rgba(255, 252, 246, 0.76);
+  padding: 18px;
+}
+
+.starter-track-copy,
+.starter-focus-copy {
+  max-width: none;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.starter-track-focus-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: min(280px, 100%);
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(28, 25, 21, 0.04);
+}
+
+.starter-track-focus-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
 .starter-card {
   display: grid;
   gap: 10px;
@@ -1029,6 +1111,11 @@ a {
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.starter-card-header {
+  align-items: center;
+  justify-content: space-between;
 }
 
 .starter-track {
@@ -1156,6 +1243,7 @@ a {
   .binding-workbench,
   .trace-filter-form,
   .creation-layout,
+  .starter-track-summary,
   .editor-workspace {
     grid-template-columns: 1fr;
   }
@@ -1163,5 +1251,9 @@ a {
   .editor-canvas-card,
   .editor-canvas {
     min-height: 62vh;
+  }
+
+  .starter-track-summary {
+    display: grid;
   }
 }

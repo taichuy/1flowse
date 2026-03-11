@@ -4,11 +4,16 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
   buildWorkflowStarterDefinition,
+  getWorkflowStarterTemplate,
+  listWorkflowStarterTemplates,
   WORKFLOW_STARTER_TEMPLATES,
+  WORKFLOW_STARTER_TRACKS,
   type WorkflowStarterId
 } from "@/lib/workflow-starters";
 
@@ -24,23 +29,34 @@ export function WorkflowCreateWizard({
   workflows
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
+  const defaultStarter = getWorkflowStarterTemplate(DEFAULT_STARTER_ID);
+  const [activeTrack, setActiveTrack] = useState(defaultStarter.businessTrack);
   const [selectedStarterId, setSelectedStarterId] =
     useState<WorkflowStarterId>(DEFAULT_STARTER_ID);
-  const [workflowName, setWorkflowName] = useState(
-    readStarter(DEFAULT_STARTER_ID).defaultWorkflowName
-  );
+  const [workflowName, setWorkflowName] = useState(defaultStarter.defaultWorkflowName);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [isCreating, startCreateTransition] = useTransition();
 
   const selectedStarter = useMemo(
-    () => readStarter(selectedStarterId),
+    () => getWorkflowStarterTemplate(selectedStarterId),
     [selectedStarterId]
   );
+  const activeTrackMeta = useMemo(
+    () => getWorkflowBusinessTrack(activeTrack),
+    [activeTrack]
+  );
+  const visibleStarters = useMemo(
+    () => listWorkflowStarterTemplates(activeTrack),
+    [activeTrack]
+  );
 
-  const handleStarterSelect = (nextStarterId: WorkflowStarterId) => {
-    const currentStarter = readStarter(selectedStarterId);
-    const nextStarter = readStarter(nextStarterId);
+  const applyStarterSelection = (
+    nextStarterId: WorkflowStarterId,
+    currentStarterId: WorkflowStarterId = selectedStarterId
+  ) => {
+    const currentStarter = getWorkflowStarterTemplate(currentStarterId);
+    const nextStarter = getWorkflowStarterTemplate(nextStarterId);
 
     if (
       !workflowName.trim() ||
@@ -52,6 +68,19 @@ export function WorkflowCreateWizard({
     setSelectedStarterId(nextStarterId);
     setMessage(null);
     setMessageTone("idle");
+  };
+
+  const handleTrackSelect = (trackId: (typeof WORKFLOW_STARTER_TRACKS)[number]["id"]) => {
+    setActiveTrack(trackId);
+
+    const nextVisibleStarters = listWorkflowStarterTemplates(trackId);
+    if (nextVisibleStarters.some((starter) => starter.id === selectedStarterId)) {
+      return;
+    }
+
+    if (nextVisibleStarters[0]) {
+      applyStarterSelection(nextVisibleStarters[0].id);
+    }
   };
 
   const handleCreateWorkflow = () => {
@@ -97,13 +126,14 @@ export function WorkflowCreateWizard({
       <section className="hero creation-hero">
         <div className="hero-copy">
           <p className="eyebrow">Workflow Creation</p>
-          <h1>从新建应用开始进入编排，而不是先手写 API</h1>
+          <h1>按业务主线挑 starter，再把草稿送进画布</h1>
           <p className="hero-text">
-            这一页补的是当前最高优先级的主业务入口：先选一个最小 starter，再把草稿直接送进
-            编辑器。现在 starter 也和编辑器 palette 共用同一份节点目录，后续节点、插件兼容和
-            开放 API 都继续沿着同一条 workflow definition 演进。
+            这一页继续沿着当前优先级推进，不再只展示一排静态 starter 卡片，而是把
+            “应用新建编排 / 节点能力 / 插件兼容 / API 调用开放” 收成一组可筛选的主业务入口。
+            这样 starter 不只是创建页素材，而是后续模板治理和节点入口分层的稳定落点。
           </p>
           <div className="pill-row">
+            <span className="pill">{WORKFLOW_STARTER_TRACKS.length} business tracks</span>
             <span className="pill">{WORKFLOW_STARTER_TEMPLATES.length} starter templates</span>
             <span className="pill">{catalogToolCount} catalog tools</span>
             <span className="pill">{workflows.length} existing workflows</span>
@@ -125,17 +155,20 @@ export function WorkflowCreateWizard({
 
         <div className="hero-panel">
           <div className="panel-label">Starter focus</div>
-          <div className="panel-value">{selectedStarter.nodeCount} nodes</div>
+          <div className="panel-value">{activeTrackMeta.priority}</div>
           <p className="panel-text">
-            当前主线：<strong>{selectedStarter.businessTrack}</strong>
+            当前主线：<strong>{activeTrackMeta.id}</strong>
           </p>
           <p className="panel-text">
             选中的 starter：<strong>{selectedStarter.name}</strong>
           </p>
+          <p className="panel-text">
+            当前焦点：<strong>{selectedStarter.workflowFocus}</strong>
+          </p>
           <dl className="signal-list">
             <div>
-              <dt>Templates</dt>
-              <dd>{WORKFLOW_STARTER_TEMPLATES.length}</dd>
+              <dt>Visible starters</dt>
+              <dd>{visibleStarters.length}</dd>
             </div>
             <div>
               <dt>Catalog tools</dt>
@@ -154,40 +187,22 @@ export function WorkflowCreateWizard({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Templates</p>
-              <h2>Starter templates</h2>
+              <h2>Starter library</h2>
             </div>
             <p className="section-copy">
-              先用最小骨架进入编排，再继续往节点能力、插件兼容和发布配置推进。
+              先按主业务线选入口，再用最小骨架进入编排。后续 workspace 级模板治理，也继续沿着
+              这套 starter library 演进。
             </p>
           </div>
 
-          <div className="starter-grid">
-            {WORKFLOW_STARTER_TEMPLATES.map((starter) => (
-              <button
-                key={starter.id}
-                className={`starter-card ${
-                  starter.id === selectedStarterId ? "selected" : ""
-                }`}
-                type="button"
-                onClick={() => handleStarterSelect(starter.id)}
-              >
-                <span className="starter-track">{starter.businessTrack}</span>
-                <strong>{starter.name}</strong>
-                <p>{starter.description}</p>
-                <div className="starter-node-row">
-                  {starter.nodeLabels.map((nodeLabel) => (
-                    <span className="event-chip" key={`${starter.id}-${nodeLabel}`}>
-                      {nodeLabel}
-                    </span>
-                  ))}
-                </div>
-                <div className="starter-meta-row">
-                  <span>{starter.nodeCount} nodes</span>
-                  <span>{starter.tags[0]}</span>
-                </div>
-              </button>
-            ))}
-          </div>
+          <WorkflowStarterBrowser
+            activeTrack={activeTrack}
+            selectedStarterId={selectedStarterId}
+            starters={visibleStarters}
+            tracks={WORKFLOW_STARTER_TRACKS}
+            onSelectTrack={handleTrackSelect}
+            onSelectStarter={applyStarterSelection}
+          />
         </article>
 
         <article className="diagnostic-panel">
@@ -210,9 +225,30 @@ export function WorkflowCreateWizard({
             </label>
 
             <div className="starter-summary-card">
-              <p className="entry-card-title">{selectedStarter.name}</p>
+              <div className="starter-card-header">
+                <p className="entry-card-title">{selectedStarter.name}</p>
+                <span className="health-pill">{selectedStarter.priority}</span>
+              </div>
               <p className="section-copy starter-summary-copy">
                 {selectedStarter.description}
+              </p>
+              <div className="summary-strip compact-strip">
+                <div className="summary-card">
+                  <span>Track</span>
+                  <strong>{selectedStarter.businessTrack}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Focus</span>
+                  <strong>{selectedStarter.sourceEcosystem}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Nodes</span>
+                  <strong>{selectedStarter.nodeCount}</strong>
+                </div>
+              </div>
+              <p className="starter-focus-copy">{selectedStarter.trackSummary}</p>
+              <p className="starter-focus-copy">
+                下一步：{selectedStarter.recommendedNextStep}
               </p>
               <div className="starter-tag-row">
                 {selectedStarter.nodeLabels.map((nodeLabel) => (
@@ -241,7 +277,7 @@ export function WorkflowCreateWizard({
 
             <p className={`sync-message ${messageTone}`}>
               {message ??
-                "创建后会直接进入 workflow 编辑器，继续补节点、连线和运行态调试。"}
+                "创建后会直接进入 workflow 编辑器，继续补节点、连线、运行态调试和后续发布链路。"}
             </p>
           </div>
         </article>
@@ -280,12 +316,5 @@ export function WorkflowCreateWizard({
         </article>
       </section>
     </main>
-  );
-}
-
-function readStarter(starterId: WorkflowStarterId) {
-  return (
-    WORKFLOW_STARTER_TEMPLATES.find((starter) => starter.id === starterId) ??
-    WORKFLOW_STARTER_TEMPLATES[0]
   );
 }
