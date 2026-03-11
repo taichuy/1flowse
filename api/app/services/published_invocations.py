@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import uuid4
 
@@ -58,16 +58,34 @@ class PublishedInvocationFailureReason:
 
 
 @dataclass(frozen=True)
+class PublishedInvocationTimeBucket:
+    bucket_start: datetime
+    bucket_end: datetime
+    total_count: int = 0
+    succeeded_count: int = 0
+    failed_count: int = 0
+    rejected_count: int = 0
+
+
+@dataclass(frozen=True)
 class PublishedInvocationAudit:
     summary: PublishedInvocationSummary
     status_counts: list[PublishedInvocationFacet]
     request_source_counts: list[PublishedInvocationFacet]
     api_key_usage: list[PublishedInvocationApiKeyUsage]
     recent_failure_reasons: list[PublishedInvocationFailureReason]
+    timeline_granularity: Literal["hour", "day"]
+    timeline: list[PublishedInvocationTimeBucket]
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _build_payload_preview(payload: dict) -> dict:
@@ -136,6 +154,75 @@ def _summarize_records(
     )
 
 
+def _resolve_timeline_granularity(
+    *,
+    created_from: datetime | None,
+    created_to: datetime | None,
+    records: list[WorkflowPublishedInvocation],
+) -> Literal["hour", "day"]:
+    normalized_from = _as_utc(created_from) if created_from is not None else None
+    normalized_to = _as_utc(created_to) if created_to is not None else None
+
+    if normalized_from is not None and normalized_to is not None:
+        return "hour" if normalized_to - normalized_from <= timedelta(days=2) else "day"
+
+    if records:
+        last_record_at = _as_utc(records[0].created_at)
+        first_record_at = _as_utc(records[-1].created_at)
+        return "hour" if last_record_at - first_record_at <= timedelta(days=2) else "day"
+
+    return "day"
+
+
+def _truncate_bucket_start(
+    value: datetime,
+    *,
+    granularity: Literal["hour", "day"],
+) -> datetime:
+    normalized = _as_utc(value)
+    if granularity == "hour":
+        return normalized.replace(minute=0, second=0, microsecond=0)
+    return normalized.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _build_timeline(
+    records: list[WorkflowPublishedInvocation],
+    *,
+    granularity: Literal["hour", "day"],
+) -> list[PublishedInvocationTimeBucket]:
+    if not records:
+        return []
+
+    bucket_size = timedelta(hours=1 if granularity == "hour" else 24)
+    buckets: dict[datetime, dict[str, int]] = {}
+
+    for record in records:
+        bucket_start = _truncate_bucket_start(record.created_at, granularity=granularity)
+        bucket = buckets.setdefault(
+            bucket_start,
+            {
+                "total_count": 0,
+                "succeeded_count": 0,
+                "failed_count": 0,
+                "rejected_count": 0,
+            },
+        )
+        bucket["total_count"] += 1
+        bucket[f"{record.status}_count"] += 1
+
+    return [
+        PublishedInvocationTimeBucket(
+            bucket_start=bucket_start,
+            bucket_end=bucket_start + bucket_size,
+            total_count=counts["total_count"],
+            succeeded_count=counts["succeeded_count"],
+            failed_count=counts["failed_count"],
+            rejected_count=counts["rejected_count"],
+        )
+        for bucket_start, counts in sorted(buckets.items(), reverse=True)
+    ]
+
+
 class PublishedInvocationService:
     def _build_binding_statement(
         self,
@@ -145,6 +232,8 @@ class PublishedInvocationService:
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
         api_key_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
     ):
         statement = select(WorkflowPublishedInvocation).where(
             WorkflowPublishedInvocation.workflow_id == workflow_id,
@@ -158,6 +247,14 @@ class PublishedInvocationService:
             )
         if api_key_id is not None:
             statement = statement.where(WorkflowPublishedInvocation.api_key_id == api_key_id)
+        if created_from is not None:
+            statement = statement.where(
+                WorkflowPublishedInvocation.created_at >= _as_utc(created_from)
+            )
+        if created_to is not None:
+            statement = statement.where(
+                WorkflowPublishedInvocation.created_at <= _as_utc(created_to)
+            )
         return statement
 
     def record_invocation(
@@ -220,6 +317,8 @@ class PublishedInvocationService:
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
         api_key_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[WorkflowPublishedInvocation]:
         statement = (
@@ -229,6 +328,8 @@ class PublishedInvocationService:
                 status=status,
                 request_source=request_source,
                 api_key_id=api_key_id,
+                created_from=created_from,
+                created_to=created_to,
             )
             .order_by(
                 WorkflowPublishedInvocation.created_at.desc(),
@@ -247,6 +348,8 @@ class PublishedInvocationService:
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
         api_key_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
     ) -> PublishedInvocationAudit:
         records = db.scalars(
             self._build_binding_statement(
@@ -255,6 +358,8 @@ class PublishedInvocationService:
                 status=status,
                 request_source=request_source,
                 api_key_id=api_key_id,
+                created_from=created_from,
+                created_to=created_to,
             ).order_by(
                 WorkflowPublishedInvocation.created_at.desc(),
                 WorkflowPublishedInvocation.id.desc(),
@@ -375,6 +480,11 @@ class PublishedInvocationService:
                 item.message,
             ),
         )[:5]
+        timeline_granularity = _resolve_timeline_granularity(
+            created_from=created_from,
+            created_to=created_to,
+            records=records,
+        )
 
         return PublishedInvocationAudit(
             summary=summary,
@@ -382,6 +492,8 @@ class PublishedInvocationService:
             request_source_counts=request_source_counts,
             api_key_usage=api_key_usage,
             recent_failure_reasons=recent_failure_reasons,
+            timeline_granularity=timeline_granularity,
+            timeline=_build_timeline(records, granularity=timeline_granularity),
         )
 
     def summarize_for_bindings(

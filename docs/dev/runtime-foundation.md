@@ -370,7 +370,7 @@ uv run alembic upgrade head
   - request / response preview
 - `GET /api/workflows/{workflow_id}/published-endpoints` 当前会额外返回 `activity` 摘要，便于治理页直接显示最近调用情况
 - `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前支持读取 binding 级 activity summary + recent items
-- `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前还支持按 `status / request_source / api_key_id` 筛选，并返回失败原因聚合与 API key 维度使用统计
+- `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前还支持按 `status / request_source / api_key_id / created_from / created_to` 筛选，并返回失败原因聚合、API key 维度使用统计和 timeline buckets
 - `GET /api/workflows/{workflow_id}/runs` 当前会聚合返回 run 状态、版本、`node_run_count`、`event_count` 和 `last_event_at`，供 editor 选择最近执行上下文，而不是继续依赖首页摘要拼装
 - `GET /api/runs/{run_id}` 当前已支持 `include_events=false` 的摘要模式，供 run 诊断页等人类界面减少与 `/trace` 的重复数据搬运
 - `GET /api/runs/{run_id}/execution-view` 当前会把 `run_artifacts / tool_call_records / ai_call_records / run_callback_tickets` 聚合成节点级 execution facts
@@ -611,14 +611,14 @@ uv run alembic upgrade head
   - 为 publish binding 新增 `alias/path`
   - 补上 alias/path 对应的 native published invoke 入口
   - 补上 published binding 的跨 workflow 地址冲突校验
+- 最近一次已有 Git 提交 `2026-03-12 02:35:12 +0800` 的 `feat: add published endpoint audit filters`：
+  - 为 published activity 补上 `status / request_source / api_key_id` 筛选
+  - 补上 API key 维度使用可见性
+  - 补上最近失败原因聚合
 - 本轮继续承接这条发布主线，补上：
-  - `workflow_published_invocations`
-  - publish binding 列表上的 activity 摘要
-  - binding 级 published invocation 查询入口
-- 本轮继续承接发布治理主线，补上：
-  - published invocation 的 `status / request_source / api_key_id` 筛选
-  - API key 维度使用可见性
-  - 最近失败原因聚合
+  - published invocation 的 `created_from / created_to` 时间窗口筛选
+  - binding 级 timeline buckets
+  - route 侧时间窗口合法性校验
 - 当前真正需要持续承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
   - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
@@ -627,7 +627,7 @@ uv run alembic upgrade head
   - `应用新建编排` 这一条线已经有 `workflow library -> starter -> editor -> 保存版本 -> recent runs overlay`
   - `编排节点能力` 这一条线已经有 phase runtime、tool/evidence/artifact、scheduler resume 和 callback ingress
   - `Dify 插件兼容` 已有 registry / adapter / tool lane / workspace scope 的基础 contract，但生命周期仍未完整
-  - `API 调用开放` 已从纯设计占位推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit` 最小闭环；但限流/cache、时间范围审计与 OpenAI / Anthropic 映射还没真正接上
+  - `API 调用开放` 已从纯设计占位推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit + time window/timeline` 最小闭环；但限流/cache 和 OpenAI / Anthropic 映射还没真正接上
 - 当前架构方向整体是解耦的，但仍有未完全拆开的高风险边界：
   - 后端已经开始形成 `Flow Compiler -> RuntimeService -> AgentRuntime / ToolGateway / ContextService / RunResumeScheduler / RunCallbackTicketService / WorkflowPublishBindingService` 的分层
   - execution / evidence 查询也已独立落到 `RunViewService + run_views route`，没有继续把聚合逻辑塞回 `runs.py`
@@ -693,7 +693,7 @@ docker compose up -d --build
 - 外部 MCP Provider 接入
 - 完整插件兼容代理生命周期
 - publish endpoint 的限流、cache 与更细的审计治理
-- publish activity 的时间范围筛选、失败趋势与更细的 API key 观测
+- publish activity 趋势的前端消费、更细的 API key 观测与长期审计面板
 - `native` 发布调用的 streaming / SSE 与更完整发布管理
 - `openai / anthropic` 的正式协议映射与开放调用入口
 - scheduler 级 dead-letter / dedupe / metrics / 失败重投治理
@@ -711,7 +711,7 @@ docker compose up -d --build
 
 当前判断：
 
-- 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit filters`。
+- 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit filters + time window/timeline`。
 - 发布态现在已经具备最小 native 调用、API key 鉴权、alias/path 地址闭环和基础审计视图，但距离完整开放 API 仍差更完整托管能力、流式与兼容协议映射。
 - 现在还不适合一步到位宣称“完整 Durable Runtime 已完成”，原因是：
   - callback ingress 已经落地，但 callback bus、ticket 生命周期治理和更强鉴权还没有完成
@@ -726,7 +726,7 @@ docker compose up -d --build
    - 再把 OpenAI / Anthropic 协议映射挂到同一条发布链上
 2. 继续补 publish endpoint 的发布实体：
    - 限流与 cache
-   - 时间范围审计、失败趋势与更细的 API key 维度观测
+   - 更细的 API key 维度观测与趋势消费视图
    - 继续坚持绑定 `workflow_version + compiled_blueprint`
 3. 收口 callback ticket 的剩余治理：
    - 过期/清理策略

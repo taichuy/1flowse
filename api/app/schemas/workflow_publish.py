@@ -11,6 +11,7 @@ PublishedEndpointLifecycleStatus = Literal["draft", "published", "offline"]
 PublishedEndpointApiKeyStatus = Literal["active", "revoked"]
 PublishedEndpointInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedEndpointInvocationRequestSource = Literal["workflow", "alias", "path"]
+PublishedEndpointInvocationTimeBucketGranularity = Literal["hour", "day"]
 
 
 class WorkflowPublishedEndpointLifecycleUpdate(BaseModel):
@@ -119,6 +120,8 @@ class PublishedEndpointInvocationFilters(BaseModel):
     status: PublishedEndpointInvocationStatus | None = None
     request_source: PublishedEndpointInvocationRequestSource | None = None
     api_key_id: str | None = None
+    created_from: datetime | None = None
+    created_to: datetime | None = None
 
 
 class PublishedEndpointInvocationFacetItem(BaseModel):
@@ -144,6 +147,15 @@ class PublishedEndpointInvocationFailureReasonItem(BaseModel):
     last_invoked_at: datetime | None = None
 
 
+class PublishedEndpointInvocationTimeBucketItem(BaseModel):
+    bucket_start: datetime
+    bucket_end: datetime
+    total_count: int = 0
+    succeeded_count: int = 0
+    failed_count: int = 0
+    rejected_count: int = 0
+
+
 class PublishedEndpointInvocationFacets(BaseModel):
     status_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
     request_source_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
@@ -151,6 +163,8 @@ class PublishedEndpointInvocationFacets(BaseModel):
     recent_failure_reasons: list[PublishedEndpointInvocationFailureReasonItem] = Field(
         default_factory=list
     )
+    timeline_granularity: PublishedEndpointInvocationTimeBucketGranularity = "day"
+    timeline: list[PublishedEndpointInvocationTimeBucketItem] = Field(default_factory=list)
 
 
 class PublishedEndpointInvocationListResponse(BaseModel):

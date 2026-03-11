@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,7 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationRequestSource,
     PublishedEndpointInvocationStatus,
     PublishedEndpointInvocationSummary,
+    PublishedEndpointInvocationTimeBucketItem,
 )
 from app.services.published_invocations import PublishedInvocationService
 
@@ -95,6 +98,17 @@ def _serialize_failure_reason_item(item) -> PublishedEndpointInvocationFailureRe
     )
 
 
+def _serialize_timeline_item(item) -> PublishedEndpointInvocationTimeBucketItem:
+    return PublishedEndpointInvocationTimeBucketItem(
+        bucket_start=item.bucket_start,
+        bucket_end=item.bucket_end,
+        total_count=item.total_count,
+        succeeded_count=item.succeeded_count,
+        failed_count=item.failed_count,
+        rejected_count=item.rejected_count,
+    )
+
+
 @router.get(
     "/{workflow_id}/published-endpoints/{binding_id}/invocations",
     response_model=PublishedEndpointInvocationListResponse,
@@ -109,6 +123,8 @@ def list_published_endpoint_invocations(
     ),
     request_source: PublishedEndpointInvocationRequestSource | None = Query(default=None),
     api_key_id: str | None = Query(default=None, min_length=1, max_length=36),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> PublishedEndpointInvocationListResponse:
     workflow = db.get(Workflow, workflow_id)
@@ -122,6 +138,12 @@ def list_published_endpoint_invocations(
             detail="Published endpoint binding not found.",
         )
 
+    if created_from is not None and created_to is not None and created_from > created_to:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="'created_from' must be earlier than or equal to 'created_to'.",
+        )
+
     records = published_invocation_service.list_for_binding(
         db,
         workflow_id=workflow_id,
@@ -129,6 +151,8 @@ def list_published_endpoint_invocations(
         status=invocation_status,
         request_source=request_source,
         api_key_id=api_key_id,
+        created_from=created_from,
+        created_to=created_to,
         limit=limit,
     )
     audit = published_invocation_service.build_binding_audit(
@@ -138,10 +162,10 @@ def list_published_endpoint_invocations(
         status=invocation_status,
         request_source=request_source,
         api_key_id=api_key_id,
+        created_from=created_from,
+        created_to=created_to,
     )
-    api_key_usage_items = [
-        _serialize_api_key_usage_item(item) for item in audit.api_key_usage
-    ]
+    api_key_usage_items = [_serialize_api_key_usage_item(item) for item in audit.api_key_usage]
     api_key_lookup = {item.api_key_id: item for item in api_key_usage_items}
 
     return PublishedEndpointInvocationListResponse(
@@ -149,6 +173,8 @@ def list_published_endpoint_invocations(
             status=invocation_status,
             request_source=request_source,
             api_key_id=api_key_id,
+            created_from=created_from,
+            created_to=created_to,
         ),
         summary=_serialize_published_invocation_summary(audit.summary),
         facets=PublishedEndpointInvocationFacets(
@@ -160,6 +186,8 @@ def list_published_endpoint_invocations(
             recent_failure_reasons=[
                 _serialize_failure_reason_item(item) for item in audit.recent_failure_reasons
             ],
+            timeline_granularity=audit.timeline_granularity,
+            timeline=[_serialize_timeline_item(item) for item in audit.timeline],
         ),
         items=[
             _serialize_published_invocation_item(record, api_key_lookup=api_key_lookup)
