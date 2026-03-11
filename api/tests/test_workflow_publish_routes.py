@@ -7,12 +7,13 @@ def _publishable_definition(
     workflow_version: str | None = "0.1.0",
     alias: str | None = None,
     path: str | None = None,
+    auth_mode: str = "internal",
 ) -> dict:
     endpoint: dict[str, object] = {
         "id": "native-chat",
         "name": "Native Chat",
         "protocol": "native",
-        "authMode": "internal",
+        "authMode": auth_mode,
         "streaming": False,
         "inputSchema": {"type": "object"},
     }
@@ -483,6 +484,139 @@ def test_invoke_published_native_endpoint_supports_alias_and_path_routes(
     assert invocation_body["items"][1]["request_preview"]["sample"]["source"] == "alias"
     assert all(item["run_id"] for item in invocation_body["items"])
 
+
+def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Published Native Audit Workflow",
+            "definition": _publishable_definition(
+                answer="audit",
+                alias="native-chat-audit",
+                path="/team/native-audit",
+                auth_mode="api_key",
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding = bindings_response.json()[0]
+
+    primary_key_response = client.post(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/api-keys",
+        json={"name": "Primary Key"},
+    )
+    assert primary_key_response.status_code == 201
+    primary_key = primary_key_response.json()
+
+    fallback_key_response = client.post(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/api-keys",
+        json={"name": "Fallback Key"},
+    )
+    assert fallback_key_response.status_code == 201
+    fallback_key = fallback_key_response.json()
+
+    publish_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_response.status_code == 200
+
+    workflow_invoke = client.post(
+        f"/v1/workflows/{workflow_id}/published-endpoints/native-chat/run",
+        json={"input_payload": {"source": "workflow"}},
+        headers={"x-api-key": primary_key["secret_key"]},
+    )
+    assert workflow_invoke.status_code == 200
+
+    alias_invoke = client.post(
+        "/v1/published-aliases/native-chat-audit/run",
+        json={"input_payload": {"source": "alias"}},
+        headers={"x-api-key": fallback_key["secret_key"]},
+    )
+    assert alias_invoke.status_code == 200
+
+    path_invoke = client.post(
+        "/v1/published-paths/team/native-audit",
+        json={"input_payload": {"source": "path"}},
+        headers={"x-api-key": primary_key["secret_key"]},
+    )
+    assert path_invoke.status_code == 200
+
+    rejected_invoke = client.post(
+        f"/v1/workflows/{workflow_id}/published-endpoints/native-chat/run",
+        json={"input_payload": {"source": "rejected"}},
+        headers={"Authorization": "Bearer invalid-key"},
+    )
+    assert rejected_invoke.status_code == 401
+
+    all_activity_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations"
+    )
+    assert all_activity_response.status_code == 200
+    all_activity = all_activity_response.json()
+    assert all_activity["filters"] == {
+        "status": None,
+        "request_source": None,
+        "api_key_id": None,
+    }
+    assert all_activity["summary"]["total_count"] == 4
+    assert all_activity["summary"]["succeeded_count"] == 3
+    assert all_activity["summary"]["rejected_count"] == 1
+
+    status_counts = {
+        item["value"]: item["count"] for item in all_activity["facets"]["status_counts"]
+    }
+    assert status_counts == {"succeeded": 3, "failed": 0, "rejected": 1}
+
+    request_source_counts = {
+        item["value"]: item["count"]
+        for item in all_activity["facets"]["request_source_counts"]
+    }
+    assert request_source_counts == {"workflow": 2, "alias": 1, "path": 1}
+
+    api_key_usage = {
+        item["name"]: item["invocation_count"]
+        for item in all_activity["facets"]["api_key_usage"]
+    }
+    assert api_key_usage == {"Primary Key": 2, "Fallback Key": 1}
+    assert (
+        all_activity["facets"]["recent_failure_reasons"][0]["message"]
+        == "Published endpoint API key is invalid."
+    )
+
+    filtered_activity_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
+        params={
+            "status": "succeeded",
+            "api_key_id": primary_key["id"],
+        },
+    )
+    assert filtered_activity_response.status_code == 200
+    filtered_activity = filtered_activity_response.json()
+    assert filtered_activity["filters"] == {
+        "status": "succeeded",
+        "request_source": None,
+        "api_key_id": primary_key["id"],
+    }
+    assert filtered_activity["summary"]["total_count"] == 2
+    assert [item["request_source"] for item in filtered_activity["items"]] == [
+        "path",
+        "workflow",
+    ]
+    assert all(item["api_key_name"] == "Primary Key" for item in filtered_activity["items"])
+    assert all(
+        item["api_key_prefix"] == primary_key["key_prefix"]
+        for item in filtered_activity["items"]
+    )
 
 def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
     client: TestClient,

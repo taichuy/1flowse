@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
@@ -8,7 +9,11 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.workflow import WorkflowPublishedEndpoint, WorkflowPublishedInvocation
+from app.models.workflow import (
+    WorkflowPublishedApiKey,
+    WorkflowPublishedEndpoint,
+    WorkflowPublishedInvocation,
+)
 
 PublishedInvocationRequestSource = Literal["workflow", "alias", "path"]
 PublishedInvocationStatus = Literal["succeeded", "failed", "rejected"]
@@ -24,6 +29,41 @@ class PublishedInvocationSummary:
     last_status: PublishedInvocationStatus | None = None
     last_run_id: str | None = None
     last_run_status: str | None = None
+
+
+@dataclass(frozen=True)
+class PublishedInvocationFacet:
+    value: str
+    count: int = 0
+    last_invoked_at: datetime | None = None
+    last_status: PublishedInvocationStatus | None = None
+
+
+@dataclass(frozen=True)
+class PublishedInvocationApiKeyUsage:
+    api_key_id: str
+    name: str | None = None
+    key_prefix: str | None = None
+    status: str | None = None
+    invocation_count: int = 0
+    last_invoked_at: datetime | None = None
+    last_status: PublishedInvocationStatus | None = None
+
+
+@dataclass(frozen=True)
+class PublishedInvocationFailureReason:
+    message: str
+    count: int = 0
+    last_invoked_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class PublishedInvocationAudit:
+    summary: PublishedInvocationSummary
+    status_counts: list[PublishedInvocationFacet]
+    request_source_counts: list[PublishedInvocationFacet]
+    api_key_usage: list[PublishedInvocationApiKeyUsage]
+    recent_failure_reasons: list[PublishedInvocationFailureReason]
 
 
 def _utcnow() -> datetime:
@@ -67,7 +107,59 @@ def _build_payload_preview(payload: dict) -> dict:
     return preview
 
 
+def _summarize_records(
+    records: list[WorkflowPublishedInvocation],
+) -> PublishedInvocationSummary:
+    if not records:
+        return PublishedInvocationSummary()
+
+    counts = {
+        "total_count": 0,
+        "succeeded_count": 0,
+        "failed_count": 0,
+        "rejected_count": 0,
+    }
+    last_record = records[0]
+    for record in records:
+        counts["total_count"] += 1
+        counts[f"{record.status}_count"] += 1
+
+    return PublishedInvocationSummary(
+        total_count=counts["total_count"],
+        succeeded_count=counts["succeeded_count"],
+        failed_count=counts["failed_count"],
+        rejected_count=counts["rejected_count"],
+        last_invoked_at=last_record.created_at,
+        last_status=last_record.status,
+        last_run_id=last_record.run_id,
+        last_run_status=last_record.run_status,
+    )
+
+
 class PublishedInvocationService:
+    def _build_binding_statement(
+        self,
+        *,
+        workflow_id: str,
+        binding_id: str,
+        status: PublishedInvocationStatus | None = None,
+        request_source: PublishedInvocationRequestSource | None = None,
+        api_key_id: str | None = None,
+    ):
+        statement = select(WorkflowPublishedInvocation).where(
+            WorkflowPublishedInvocation.workflow_id == workflow_id,
+            WorkflowPublishedInvocation.binding_id == binding_id,
+        )
+        if status is not None:
+            statement = statement.where(WorkflowPublishedInvocation.status == status)
+        if request_source is not None:
+            statement = statement.where(
+                WorkflowPublishedInvocation.request_source == request_source
+            )
+        if api_key_id is not None:
+            statement = statement.where(WorkflowPublishedInvocation.api_key_id == api_key_id)
+        return statement
+
     def record_invocation(
         self,
         db: Session,
@@ -125,13 +217,18 @@ class PublishedInvocationService:
         *,
         workflow_id: str,
         binding_id: str,
+        status: PublishedInvocationStatus | None = None,
+        request_source: PublishedInvocationRequestSource | None = None,
+        api_key_id: str | None = None,
         limit: int = 20,
     ) -> list[WorkflowPublishedInvocation]:
         statement = (
-            select(WorkflowPublishedInvocation)
-            .where(
-                WorkflowPublishedInvocation.workflow_id == workflow_id,
-                WorkflowPublishedInvocation.binding_id == binding_id,
+            self._build_binding_statement(
+                workflow_id=workflow_id,
+                binding_id=binding_id,
+                status=status,
+                request_source=request_source,
+                api_key_id=api_key_id,
             )
             .order_by(
                 WorkflowPublishedInvocation.created_at.desc(),
@@ -140,6 +237,152 @@ class PublishedInvocationService:
             .limit(limit)
         )
         return db.scalars(statement).all()
+
+    def build_binding_audit(
+        self,
+        db: Session,
+        *,
+        workflow_id: str,
+        binding_id: str,
+        status: PublishedInvocationStatus | None = None,
+        request_source: PublishedInvocationRequestSource | None = None,
+        api_key_id: str | None = None,
+    ) -> PublishedInvocationAudit:
+        records = db.scalars(
+            self._build_binding_statement(
+                workflow_id=workflow_id,
+                binding_id=binding_id,
+                status=status,
+                request_source=request_source,
+                api_key_id=api_key_id,
+            ).order_by(
+                WorkflowPublishedInvocation.created_at.desc(),
+                WorkflowPublishedInvocation.id.desc(),
+            )
+        ).all()
+        summary = _summarize_records(records)
+
+        status_buckets: dict[str, dict[str, object]] = {
+            "succeeded": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "failed": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "rejected": {"count": 0, "last_invoked_at": None, "last_status": None},
+        }
+        request_source_buckets: dict[str, dict[str, object]] = {
+            "workflow": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "alias": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "path": {"count": 0, "last_invoked_at": None, "last_status": None},
+        }
+        api_key_buckets: dict[str, dict[str, object]] = defaultdict(
+            lambda: {
+                "count": 0,
+                "last_invoked_at": None,
+                "last_status": None,
+            }
+        )
+        failure_reason_buckets: dict[str, dict[str, object]] = defaultdict(
+            lambda: {
+                "count": 0,
+                "last_invoked_at": None,
+            }
+        )
+
+        for record in records:
+            status_bucket = status_buckets[record.status]
+            status_bucket["count"] += 1
+            if status_bucket["last_invoked_at"] is None:
+                status_bucket["last_invoked_at"] = record.created_at
+                status_bucket["last_status"] = record.status
+
+            source_bucket = request_source_buckets[record.request_source]
+            source_bucket["count"] += 1
+            if source_bucket["last_invoked_at"] is None:
+                source_bucket["last_invoked_at"] = record.created_at
+                source_bucket["last_status"] = record.status
+
+            if record.api_key_id:
+                api_key_bucket = api_key_buckets[record.api_key_id]
+                api_key_bucket["count"] += 1
+                if api_key_bucket["last_invoked_at"] is None:
+                    api_key_bucket["last_invoked_at"] = record.created_at
+                    api_key_bucket["last_status"] = record.status
+
+            if record.status != "succeeded" and record.error_message:
+                failure_bucket = failure_reason_buckets[record.error_message]
+                failure_bucket["count"] += 1
+                if failure_bucket["last_invoked_at"] is None:
+                    failure_bucket["last_invoked_at"] = record.created_at
+
+        api_key_lookup: dict[str, WorkflowPublishedApiKey] = {}
+        if api_key_buckets:
+            api_key_records = db.scalars(
+                select(WorkflowPublishedApiKey).where(
+                    WorkflowPublishedApiKey.id.in_(list(api_key_buckets.keys()))
+                )
+            ).all()
+            api_key_lookup = {record.id: record for record in api_key_records}
+
+        status_counts = [
+            PublishedInvocationFacet(
+                value=value,
+                count=int(bucket["count"]),
+                last_invoked_at=bucket["last_invoked_at"],
+                last_status=bucket["last_status"],
+            )
+            for value, bucket in status_buckets.items()
+        ]
+        request_source_counts = [
+            PublishedInvocationFacet(
+                value=value,
+                count=int(bucket["count"]),
+                last_invoked_at=bucket["last_invoked_at"],
+                last_status=bucket["last_status"],
+            )
+            for value, bucket in request_source_buckets.items()
+        ]
+        api_key_usage: list[PublishedInvocationApiKeyUsage] = []
+        for key_id, bucket in api_key_buckets.items():
+            key_record = api_key_lookup.get(key_id)
+            api_key_usage.append(
+                PublishedInvocationApiKeyUsage(
+                    api_key_id=key_id,
+                    name=key_record.name if key_record else None,
+                    key_prefix=key_record.key_prefix if key_record else None,
+                    status=key_record.status if key_record else None,
+                    invocation_count=int(bucket["count"]),
+                    last_invoked_at=bucket["last_invoked_at"],
+                    last_status=bucket["last_status"],
+                )
+            )
+        api_key_usage.sort(
+            key=lambda item: (
+                -item.invocation_count,
+                -(item.last_invoked_at.timestamp() if item.last_invoked_at else 0),
+                item.api_key_id,
+            ),
+        )
+        recent_failure_reasons = sorted(
+            (
+                PublishedInvocationFailureReason(
+                    message=message,
+                    count=int(bucket["count"]),
+                    last_invoked_at=bucket["last_invoked_at"],
+                )
+                for message, bucket in failure_reason_buckets.items()
+            ),
+            key=lambda item: (
+                -item.count,
+                -(item.last_invoked_at.timestamp() if item.last_invoked_at else 0),
+                item.message,
+            ),
+        )[:5]
+
+        return PublishedInvocationAudit(
+            summary=summary,
+            status_counts=status_counts,
+            request_source_counts=request_source_counts,
+            api_key_usage=api_key_usage,
+            recent_failure_reasons=recent_failure_reasons,
+        )
 
     def summarize_for_bindings(
         self,

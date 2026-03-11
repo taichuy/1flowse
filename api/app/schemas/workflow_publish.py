@@ -102,6 +102,9 @@ class PublishedEndpointInvocationItem(BaseModel):
     request_source: PublishedEndpointInvocationRequestSource
     status: PublishedEndpointInvocationStatus
     api_key_id: str | None = None
+    api_key_name: str | None = None
+    api_key_prefix: str | None = None
+    api_key_status: PublishedEndpointApiKeyStatus | None = None
     run_id: str | None = None
     run_status: str | None = None
     error_message: str | None = None
@@ -112,6 +115,46 @@ class PublishedEndpointInvocationItem(BaseModel):
     finished_at: datetime | None = None
 
 
+class PublishedEndpointInvocationFilters(BaseModel):
+    status: PublishedEndpointInvocationStatus | None = None
+    request_source: PublishedEndpointInvocationRequestSource | None = None
+    api_key_id: str | None = None
+
+
+class PublishedEndpointInvocationFacetItem(BaseModel):
+    value: str
+    count: int = 0
+    last_invoked_at: datetime | None = None
+    last_status: PublishedEndpointInvocationStatus | None = None
+
+
+class PublishedEndpointInvocationApiKeyUsageItem(BaseModel):
+    api_key_id: str
+    name: str | None = None
+    key_prefix: str | None = None
+    status: PublishedEndpointApiKeyStatus | None = None
+    invocation_count: int = 0
+    last_invoked_at: datetime | None = None
+    last_status: PublishedEndpointInvocationStatus | None = None
+
+
+class PublishedEndpointInvocationFailureReasonItem(BaseModel):
+    message: str
+    count: int = 0
+    last_invoked_at: datetime | None = None
+
+
+class PublishedEndpointInvocationFacets(BaseModel):
+    status_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
+    request_source_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
+    api_key_usage: list[PublishedEndpointInvocationApiKeyUsageItem] = Field(default_factory=list)
+    recent_failure_reasons: list[PublishedEndpointInvocationFailureReasonItem] = Field(
+        default_factory=list
+    )
+
+
 class PublishedEndpointInvocationListResponse(BaseModel):
+    filters: PublishedEndpointInvocationFilters
     summary: PublishedEndpointInvocationSummary
+    facets: PublishedEndpointInvocationFacets
     items: list[PublishedEndpointInvocationItem]
