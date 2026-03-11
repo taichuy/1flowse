@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -32,6 +33,34 @@ from app.services.workflow_publish import (
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 compiled_blueprint_service = CompiledBlueprintService()
 workflow_publish_service = WorkflowPublishBindingService(compiled_blueprint_service)
+
+
+def _normalize_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.min.replace(tzinfo=UTC)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _workflow_version_semver_key(version: str) -> tuple[int, int, int]:
+    parts = version.split(".")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return (0, 0, 0)
+    major, minor, patch = (int(part) for part in parts)
+    return (major, minor, patch)
+
+
+def _sort_workflow_versions(versions: list[WorkflowVersion]) -> list[WorkflowVersion]:
+    return sorted(
+        versions,
+        key=lambda item: (
+            _workflow_version_semver_key(item.version),
+            _normalize_datetime(item.created_at),
+            item.id,
+        ),
+        reverse=True,
+    )
 
 
 def _serialize_workflow_detail(
@@ -157,11 +186,10 @@ def get_workflow(workflow_id: str, db: Session = Depends(get_db)) -> WorkflowDet
     versions = db.scalars(
         select(WorkflowVersion)
         .where(WorkflowVersion.workflow_id == workflow_id)
-        .order_by(WorkflowVersion.created_at.desc())
     ).all()
     return _serialize_workflow_detail(
         workflow,
-        versions,
+        _sort_workflow_versions(versions),
         _load_compiled_blueprint_lookup(db, workflow_id),
     )
 
@@ -220,11 +248,10 @@ def update_workflow(
     versions = db.scalars(
         select(WorkflowVersion)
         .where(WorkflowVersion.workflow_id == workflow_id)
-        .order_by(WorkflowVersion.created_at.desc())
     ).all()
     return _serialize_workflow_detail(
         workflow,
-        versions,
+        _sort_workflow_versions(versions),
         _load_compiled_blueprint_lookup(db, workflow_id),
     )
 
@@ -241,7 +268,6 @@ def list_workflow_versions(
     versions = db.scalars(
         select(WorkflowVersion)
         .where(WorkflowVersion.workflow_id == workflow_id)
-        .order_by(WorkflowVersion.created_at.desc())
     ).all()
     compiled_blueprints = _load_compiled_blueprint_lookup(db, workflow_id)
     return [
@@ -260,8 +286,8 @@ def list_workflow_versions(
             if compiled_blueprints.get(version.id) is not None
             else None,
         )
-        for version in versions
-    ]
+            for version in _sort_workflow_versions(versions)
+        ]
 
 
 @router.get("/{workflow_id}/runs", response_model=list[WorkflowRunListItem])

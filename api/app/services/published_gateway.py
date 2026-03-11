@@ -13,7 +13,8 @@ from app.models.workflow import (
 )
 from app.services.published_api_keys import PublishedEndpointApiKeyService
 from app.services.published_invocations import PublishedInvocationService
-from app.services.runtime import ExecutionArtifacts, RuntimeService
+from app.services.runtime import RuntimeService
+from app.services.runtime_records import ExecutionArtifacts
 from app.services.workflow_publish import WorkflowPublishBindingService
 
 

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -1613,3 +1615,101 @@ def test_llm_agent_waiting_callback_can_resume_from_callback_ticket(
 
     assert duplicate.callback_status == "already_consumed"
     assert duplicate.artifacts.run.status == "succeeded"
+
+
+def test_expired_callback_ticket_is_rejected_without_resuming_run(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-agent-callback-expired",
+        name="Agent Callback Expired Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "assistant": {"enabled": False},
+                        "toolPolicy": {"allowedToolIds": ["native.search"]},
+                        "mockPlan": {
+                            "toolCalls": [
+                                {
+                                    "toolId": "native.search",
+                                    "inputs": {"query": "expired-ticket"},
+                                }
+                            ]
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-agent-callback-expired-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    sqlite_session.commit()
+
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(id="native.search", name="Native Search"),
+        invoker=lambda _request: {
+            "status": "waiting",
+            "content_type": "json",
+            "summary": "waiting for external callback",
+            "structured": {"ticket": "external-expired"},
+            "meta": {
+                "tool_name": "Native Search",
+                "waiting_reason": "external callback pending",
+                "waiting_status": "waiting_callback",
+            },
+        },
+    )
+    runtime = RuntimeService(plugin_call_proxy=PluginCallProxy(registry))
+
+    first_pass = runtime.execute_workflow(sqlite_session, workflow, {"topic": "callback"})
+    waiting_run = next(node_run for node_run in first_pass.node_runs if node_run.node_id == "agent")
+    callback_ticket = waiting_run.checkpoint_payload["callback_ticket"]
+    ticket_record = sqlite_session.get(RunCallbackTicket, callback_ticket["ticket"])
+    assert ticket_record is not None
+    ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    sqlite_session.commit()
+
+    callback_result = runtime.receive_callback(
+        sqlite_session,
+        callback_ticket["ticket"],
+        payload={
+            "status": "success",
+            "content_type": "json",
+            "summary": "callback arrived too late",
+            "structured": {"documents": ["ignored"]},
+            "meta": {"tool_name": "Native Search"},
+        },
+        source="expired_callback_test",
+    )
+
+    sqlite_session.refresh(ticket_record)
+    refreshed_run = sqlite_session.get(type(first_pass.run), first_pass.run.id)
+    assert refreshed_run is not None
+
+    assert callback_result.callback_status == "expired"
+    assert refreshed_run.status == "waiting"
+    assert ticket_record.status == "expired"
+    assert ticket_record.expired_at is not None
+    assert ticket_record.callback_payload == {"reason": "callback_ticket_expired"}
+    assert "run.callback.ticket.expired" in [
+        event.event_type for event in callback_result.artifacts.events
+    ]

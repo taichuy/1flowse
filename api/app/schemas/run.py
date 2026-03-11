@@ -175,7 +175,7 @@ class RunDetail(BaseModel):
 
 
 class RunCallbackResponse(BaseModel):
-    callback_status: Literal["accepted", "already_consumed", "ignored"]
+    callback_status: Literal["accepted", "already_consumed", "ignored", "expired"]
     ticket: str
     run_id: str
     node_run_id: str

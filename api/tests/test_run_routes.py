@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.run import Run, RunEvent
+from app.models.run import Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
 from app.services.runtime import RuntimeService
@@ -1090,3 +1090,100 @@ def test_receive_run_callback_route_resumes_waiting_callback_run(
     duplicate_body = duplicate_response.json()
     assert duplicate_body["callback_status"] == "already_consumed"
     assert duplicate_body["run"]["status"] == "succeeded"
+
+
+def test_receive_run_callback_route_returns_expired_for_stale_ticket(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-route-callback-expired",
+        name="Route Callback Expired Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "assistant": {"enabled": False},
+                        "toolPolicy": {"allowedToolIds": ["native.search"]},
+                        "mockPlan": {
+                            "toolCalls": [
+                                {
+                                    "toolId": "native.search",
+                                    "inputs": {"query": "route-expired"},
+                                }
+                            ]
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-route-callback-expired-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    sqlite_session.commit()
+
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(id="native.search", name="Native Search"),
+        invoker=lambda _request: {
+            "status": "waiting",
+            "content_type": "json",
+            "summary": "waiting for callback",
+            "structured": {"externalTicket": "route-expired"},
+            "meta": {
+                "tool_name": "Native Search",
+                "waiting_reason": "route callback pending",
+                "waiting_status": "waiting_callback",
+            },
+        },
+    )
+    first_pass = RuntimeService(plugin_call_proxy=PluginCallProxy(registry)).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "route-callback"},
+    )
+    waiting_run = next(node_run for node_run in first_pass.node_runs if node_run.node_id == "agent")
+    callback_ticket = waiting_run.checkpoint_payload["callback_ticket"]["ticket"]
+    ticket_record = sqlite_session.get(RunCallbackTicket, callback_ticket)
+    assert ticket_record is not None
+    ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/runs/callbacks/{callback_ticket}",
+        json={
+            "source": "route_test",
+            "result": {
+                "status": "success",
+                "content_type": "json",
+                "summary": "late callback",
+                "structured": {"documents": ["ignored"]},
+                "meta": {"tool_name": "Native Search"},
+            },
+        },
+    )
+
+    sqlite_session.refresh(ticket_record)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["callback_status"] == "expired"
+    assert body["run"]["status"] == "waiting"
+    assert ticket_record.status == "expired"
+    assert ticket_record.expired_at is not None

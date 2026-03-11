@@ -26,6 +26,7 @@
 - `api/migrations/versions/20260312_0011_publish_endpoint_lifecycle.py`
 - `api/migrations/versions/20260312_0012_published_endpoint_api_keys.py`
 - `api/migrations/versions/20260312_0013_published_endpoint_alias_path.py`
+- `api/migrations/versions/20260312_0015_run_callback_ticket_expiry.py`
 
 当前迁移会创建以下表：
 
@@ -113,6 +114,7 @@ uv run alembic upgrade head
 - `node.join.unmet`
 - `tool.completed`
 - `run.callback.ticket.issued`
+- `run.callback.ticket.expired`
 - `run.callback.received`
 - `assistant.completed`
 - `node.failed`
@@ -156,6 +158,7 @@ uv run alembic upgrade head
 - `run_id / node_run_id / tool_call_id / tool_id`
 - waiting 状态与对应的 tool index
 - ticket 生命周期状态（`pending / consumed / canceled`）
+- ticket TTL 与到期时间（`expires_at / expired_at`）
 - callback payload 与消费时间
 
 ### 4. 工作流定义校验与版本快照
@@ -281,6 +284,10 @@ uv run alembic upgrade head
   - `api/app/services/run_callback_tickets.py`
   - `POST /api/runs/callbacks/{ticket}`
   - `waiting_callback` 现在会签发 ticket，并可通过 callback 结果自动恢复 run
+- callback ticket 当前已补上最小生命周期治理
+  - `SEVENFLOWS_CALLBACK_TICKET_TTL_SECONDS` 用于控制 ticket TTL
+  - `run_callback_tickets` 已保存 `expires_at / expired_at`
+  - 过期 callback 会返回 `expired`，并写入 `run.callback.ticket.expired`
 - 新增最小 `Run Resume Scheduler`
   - `api/app/services/run_resume_scheduler.py`
   - 把 runtime waiting 的恢复请求收口到独立调度层，默认投递给 Celery
@@ -296,7 +303,7 @@ uv run alembic upgrade head
 - callback 结果已开始复用既有运行态事实层
   - callback tool result 会回写 `tool_call_records` 与 `run_artifacts`
   - callback 生命周期会补到 `run_events`
-  - 重复 callback 当前会按 `accepted / already_consumed / ignored` 做最小幂等处理
+  - 重复/过期 callback 当前会按 `accepted / already_consumed / expired / ignored` 做最小幂等处理
 
 这让我们可以先验证：
 
@@ -622,6 +629,7 @@ uv run alembic upgrade head
 - 当前真正需要持续承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
   - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
+  - 本轮继续把 callback ticket 收口为带 TTL/过期态的生命周期对象，并让 execution view 与统一事件流直接复用这批事实
   - 最近几轮把 publish binding、publish lifecycle、alias/path、activity audit 和最小 native publish invoke 接到 compiled blueprint 主线上，为开放 API 做最小承接
 - 当前基础框架已经写到“可以继续推进主业务”的阶段：
   - `应用新建编排` 这一条线已经有 `workflow library -> starter -> editor -> 保存版本 -> recent runs overlay`
@@ -636,15 +644,16 @@ uv run alembic upgrade head
   - published API key 生命周期也已独立落到 `PublishedEndpointApiKeyService + published_endpoint_keys route`，没有塞回 runtime 或 workflow CRUD
   - published activity 现在也已独立落到 `PublishedInvocationService + published_endpoint_activity route`，没有把调用审计继续塞回 gateway route 或 runtime 主循环
   - worker 恢复入口已经从运行主循环里旁路出来，没有继续把后台调度写死在 API 或 `RuntimeService` 单点内
+  - `ExecutionArtifacts / CallbackHandleResult` 这类 runtime 返回模型已从 `runtime.py` 抽到 `runtime_records.py`，避免主执行器继续堆叠非执行职责
   - 前端创建页、editor、starter 治理也已开始围绕共享 snapshot 演进，而不是各自维护私有常量
   - `run diagnostics` 新增 execution/evidence sections，但通过独立组件承接，没有继续把 `run-diagnostics-panel.tsx` 变成新的页面级大文件
-  - 但 publish endpoint 的 protocol mapping、callback ticket 生命周期治理和节点插件注册中心仍未彻底拆清
+  - 但 publish endpoint 的 protocol mapping、callback ticket 自动清理/来源审计/更强鉴权，以及节点插件注册中心仍未彻底拆清
 - 当前需要显式盯住的长文件：
-  - `api/app/services/runtime.py` 当前约 1457 行，虽然仍在后端 1500 行偏好阈值内，但已经非常接近上限；下一轮若继续补 scheduler、callback 治理或 publish gateway，应优先拆 execution / waiting / resume orchestration
+  - `api/app/services/runtime.py` 当前约 1496 行，已通过抽离 runtime 返回模型重新压回后端 1500 行偏好阈值内；下一轮若继续补 scheduler、callback 治理或 publish gateway，应优先拆 execution / waiting / resume orchestration
   - `api/app/api/routes/runs.py` 仍然偏长，但本轮已把 execution / evidence 聚合和 RunDetail 序列化拆出；下一轮若继续扩展 trace/export/callback，应进一步考虑 trace/export/callback 子模块拆分
   - `api/app/services/agent_runtime.py` 当前约 628 行，已经承载 phase pipeline、tool waiting 恢复和 evidence 组装；若继续长出 assistant 策略与 subflow 候选能力，应提前拆 plan/tool/finalize 子阶段
   - `api/app/services/workflow_library.py` 当前约 650 行，仍适合继续演进，但若再接 adapter health / node plugin registry，应优先拆 source assembly 与 starter builder
-  - `web/components/workspace-starter-library.tsx` 当前约 1042 行，是前端体量最大的真实业务文件；虽然还在前端 2000 行偏好之内，但后续继续补批量结果钻取时仍应继续拆
+  - `web/components/workspace-starter-library.tsx` 当前约 1035 行，是前端体量最大的真实业务文件；虽然还在前端 2000 行偏好之内，但后续继续补批量结果钻取时仍应继续拆
   - `web/components/workflow-editor-workbench.tsx` 当前约 528 行，下一轮若继续把 execution / evidence view 接回 editor overlay，要避免重新长回页面级混排组件
 
 ## 推荐开发命令
@@ -697,7 +706,7 @@ docker compose up -d --build
 - `native` 发布调用的 streaming / SSE 与更完整发布管理
 - `openai / anthropic` 的正式协议映射与开放调用入口
 - scheduler 级 dead-letter / dedupe / metrics / 失败重投治理
-- callback ticket 的过期、清理、来源审计与更强鉴权
+- callback ticket 的自动清理、来源审计与更强鉴权
 - 回放调试面板
 - 更完整的节点结构化配置抽屉
 - editor 内消费 execution/evidence view、逐事件回放、trace 过滤和实时调试联动
@@ -714,7 +723,7 @@ docker compose up -d --build
 - 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit filters + time window/timeline`。
 - 发布态现在已经具备最小 native 调用、API key 鉴权、alias/path 地址闭环和基础审计视图，但距离完整开放 API 仍差更完整托管能力、流式与兼容协议映射。
 - 现在还不适合一步到位宣称“完整 Durable Runtime 已完成”，原因是：
-  - callback ingress 已经落地，但 callback bus、ticket 生命周期治理和更强鉴权还没有完成
+  - callback ingress 与 ticket TTL/过期态已经落地，但 callback bus、自动清理和更强鉴权还没有完成
   - scheduler 还只有最小任务投递，没有 dead-letter、去重、重投和系统化观测
   - publish binding 虽然已经接上 compiled blueprint、lifecycle、alias/path、最小 native invoke 和 API key 实体，但发布托管能力与协议映射还没有完全接上
 - 因此后续应按 “Phase 1 MVP 稳定化 -> Phase 2 完整耐久化” 的路线推进，而不是再把所有能力堆回 `runtime.py`
@@ -729,7 +738,7 @@ docker compose up -d --build
    - 更细的 API key 维度观测与趋势消费视图
    - 继续坚持绑定 `workflow_version + compiled_blueprint`
 3. 收口 callback ticket 的剩余治理：
-   - 过期/清理策略
+   - 自动清理策略
    - 来源审计
    - 更强鉴权形态
 
@@ -737,7 +746,7 @@ docker compose up -d --build
 
 - 最小 `native` 调用入口、`api_key` 鉴权实体、alias/path 地址语义和基础 activity audit 都已经落地，当前最该补的是发布托管能力与兼容协议映射，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
 - run 侧虽然已经绑定 compiled blueprint，execution/evidence 视图也已经开始消费这些事实，但发布层仍需要继续承接，稳定执行边界才能真正服务主业务。
-- callback ingress 虽然已打通，但 ticket 生命周期治理仍属于 durable runtime 稳定化的一部分。
+- callback ingress 与 ticket TTL/expired 状态虽然已打通，但自动清理、来源审计和更强鉴权仍属于 durable runtime 稳定化的一部分。
 
 ### P1 次高优先级
 

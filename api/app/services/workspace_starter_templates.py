@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from uuid import uuid4
 
@@ -28,6 +28,33 @@ from app.services.workflow_definitions import validate_workflow_definition
 
 
 class WorkspaceStarterTemplateService:
+    def _normalize_datetime(self, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    def _next_history_timestamp(
+        self,
+        db: Session,
+        *,
+        template_id: str,
+        workspace_id: str,
+    ) -> datetime:
+        timestamp = datetime.now(UTC)
+        latest_created_at = db.scalar(
+            select(WorkspaceStarterHistoryRecord.created_at)
+            .where(WorkspaceStarterHistoryRecord.template_id == template_id)
+            .where(WorkspaceStarterHistoryRecord.workspace_id == workspace_id)
+            .order_by(WorkspaceStarterHistoryRecord.created_at.desc())
+            .limit(1)
+        )
+        normalized_latest = self._normalize_datetime(latest_created_at)
+        if normalized_latest is not None and normalized_latest >= timestamp:
+            return normalized_latest + timedelta(microseconds=1)
+        return timestamp
+
     def list_history(
         self,
         db: Session,
@@ -40,7 +67,10 @@ class WorkspaceStarterTemplateService:
             select(WorkspaceStarterHistoryRecord)
             .where(WorkspaceStarterHistoryRecord.template_id == template_id)
             .where(WorkspaceStarterHistoryRecord.workspace_id == workspace_id)
-            .order_by(WorkspaceStarterHistoryRecord.created_at.desc())
+            .order_by(
+                WorkspaceStarterHistoryRecord.created_at.desc(),
+                WorkspaceStarterHistoryRecord.id.desc(),
+            )
             .limit(limit)
         ).all()
 
@@ -313,6 +343,11 @@ class WorkspaceStarterTemplateService:
             action=action,
             summary=summary,
             payload=deepcopy(payload or {}),
+            created_at=self._next_history_timestamp(
+                db,
+                template_id=template_id,
+                workspace_id=workspace_id,
+            ),
         )
         db.add(history)
         db.flush()

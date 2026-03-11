@@ -17,8 +17,10 @@ class RunCallbackTicketItem(BaseModel):
     reason: str | None = None
     callback_payload: dict | None = None
     created_at: datetime
+    expires_at: datetime | None = None
     consumed_at: datetime | None = None
     canceled_at: datetime | None = None
+    expired_at: datetime | None = None
 
 
 class RunExecutionSummary(BaseModel):

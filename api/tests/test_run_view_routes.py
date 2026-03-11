@@ -122,6 +122,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                 status="pending",
                 reason="search callback pending",
                 created_at=datetime(2026, 3, 11, 10, 1, tzinfo=UTC),
+                expires_at=datetime(2026, 3, 12, 10, 1, tzinfo=UTC),
             ),
             RunEvent(
                 run_id=run.id,
@@ -180,6 +181,8 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert len(node["ai_calls"]) == 2
     assert len(node["callback_tickets"]) == 1
     assert node["callback_tickets"][0]["ticket"] == "ticket-agent"
+    assert node["callback_tickets"][0]["expires_at"] == "2026-03-12T10:01:00Z"
+    assert node["callback_tickets"][0]["expired_at"] is None
 
 
 def test_get_run_evidence_view_returns_evidence_nodes_only(

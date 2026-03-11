@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -25,6 +24,7 @@ from app.services.plugin_runtime import (
     get_plugin_registry,
 )
 from app.services.run_callback_tickets import RunCallbackTicketService
+from app.services.runtime_records import CallbackHandleResult, ExecutionArtifacts
 from app.services.run_resume_scheduler import (
     RunResumeScheduler,
     get_run_resume_scheduler,
@@ -43,25 +43,6 @@ from app.services.runtime_types import (
     WorkflowExecutionError,
 )
 from app.services.tool_gateway import ToolGateway
-
-
-@dataclass
-class ExecutionArtifacts:
-    run: Run
-    node_runs: list[NodeRun]
-    events: list[RunEvent]
-    artifacts: list[RunArtifact] = field(default_factory=list)
-    tool_calls: list[ToolCallRecord] = field(default_factory=list)
-    ai_calls: list[AICallRecord] = field(default_factory=list)
-
-
-@dataclass
-class CallbackHandleResult:
-    callback_status: str
-    ticket: str
-    run_id: str
-    node_run_id: str
-    artifacts: ExecutionArtifacts
 
 
 def _utcnow() -> datetime:
@@ -356,10 +337,66 @@ class RuntimeService(RuntimeGraphSupportMixin):
                 artifacts=artifacts,
             )
 
+        if ticket_record.status == "expired":
+            artifacts = self.load_run(db, ticket_record.run_id)
+            if artifacts is None:
+                raise WorkflowExecutionError("Run not found for callback ticket.")
+            return CallbackHandleResult(
+                callback_status="expired",
+                ticket=ticket_record.id,
+                run_id=ticket_record.run_id,
+                node_run_id=ticket_record.node_run_id,
+                artifacts=artifacts,
+            )
+
         run = db.get(Run, ticket_record.run_id)
         node_run = db.get(NodeRun, ticket_record.node_run_id)
         if run is None or node_run is None:
             raise WorkflowExecutionError("Run callback ticket points to missing runtime records.")
+
+        if self._callback_tickets.is_ticket_expired(ticket_record):
+            callback_snapshot = self._callback_tickets.expire_ticket(
+                ticket_record,
+                reason="callback_ticket_expired",
+            )
+            self._persist_events(
+                db,
+                [
+                    self._build_event(
+                        ticket_record.run_id,
+                        ticket_record.node_run_id,
+                        "run.callback.ticket.expired",
+                        {
+                            "ticket": callback_snapshot.ticket,
+                            "node_id": node_run.node_id,
+                            "tool_id": ticket_record.tool_id,
+                            "tool_call_id": ticket_record.tool_call_id,
+                            "expires_at": (
+                                callback_snapshot.expires_at.isoformat().replace("+00:00", "Z")
+                                if callback_snapshot.expires_at is not None
+                                else None
+                            ),
+                            "expired_at": (
+                                callback_snapshot.expired_at.isoformat().replace("+00:00", "Z")
+                                if callback_snapshot.expired_at is not None
+                                else None
+                            ),
+                            "source": source,
+                        },
+                    )
+                ],
+            )
+            db.commit()
+            artifacts = self.load_run(db, ticket_record.run_id)
+            if artifacts is None:
+                raise WorkflowExecutionError("Run not found for callback ticket.")
+            return CallbackHandleResult(
+                callback_status="expired",
+                ticket=ticket_record.id,
+                run_id=ticket_record.run_id,
+                node_run_id=ticket_record.node_run_id,
+                artifacts=artifacts,
+            )
 
         if ticket_record.status != "pending":
             artifacts = self.load_run(db, ticket_record.run_id)

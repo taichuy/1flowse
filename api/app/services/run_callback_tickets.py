@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.run import RunCallbackTicket
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 @dataclass(frozen=True)
@@ -26,9 +35,11 @@ class CallbackTicketSnapshot:
     reason: str | None
     status: str
     created_at: datetime
+    expires_at: datetime | None
+    expired_at: datetime | None
 
     def as_checkpoint_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "ticket": self.ticket,
             "run_id": self.run_id,
             "node_run_id": self.node_run_id,
@@ -40,9 +51,22 @@ class CallbackTicketSnapshot:
             "status": self.status,
             "created_at": self.created_at.isoformat().replace("+00:00", "Z"),
         }
+        if self.expires_at is not None:
+            payload["expires_at"] = self.expires_at.isoformat().replace("+00:00", "Z")
+        if self.expired_at is not None:
+            payload["expired_at"] = self.expired_at.isoformat().replace("+00:00", "Z")
+        return payload
 
 
 class RunCallbackTicketService:
+    def __init__(self, *, ticket_ttl_seconds: int | None = None) -> None:
+        resolved_ttl = (
+            get_settings().callback_ticket_ttl_seconds
+            if ticket_ttl_seconds is None
+            else ticket_ttl_seconds
+        )
+        self._ticket_ttl_seconds = max(int(resolved_ttl), 0)
+
     def issue_ticket(
         self,
         db: Session,
@@ -60,6 +84,7 @@ class RunCallbackTicketService:
             node_run_id=node_run_id,
             reason="superseded_by_new_waiting_callback",
         )
+        created_at = _utcnow()
         record = RunCallbackTicket(
             id=token_urlsafe(24),
             run_id=run_id,
@@ -71,7 +96,8 @@ class RunCallbackTicketService:
             status="pending",
             reason=reason,
             callback_payload=None,
-            created_at=_utcnow(),
+            created_at=created_at,
+            expires_at=created_at + timedelta(seconds=self._ticket_ttl_seconds),
         )
         db.add(record)
         db.flush()
@@ -89,6 +115,33 @@ class RunCallbackTicketService:
         record.status = "consumed"
         record.callback_payload = callback_payload
         record.consumed_at = _utcnow()
+        return self._snapshot(record)
+
+    def is_ticket_expired(
+        self,
+        record: RunCallbackTicket,
+        *,
+        now: datetime | None = None,
+    ) -> bool:
+        if record.status != "pending" or record.expires_at is None:
+            return False
+        effective_now = _normalize_datetime(now or _utcnow())
+        expires_at = _normalize_datetime(record.expires_at)
+        if effective_now is None or expires_at is None:
+            return False
+        return expires_at <= effective_now
+
+    def expire_ticket(
+        self,
+        record: RunCallbackTicket,
+        *,
+        reason: str,
+        expired_at: datetime | None = None,
+    ) -> CallbackTicketSnapshot:
+        timestamp = expired_at or _utcnow()
+        record.status = "expired"
+        record.callback_payload = {"reason": reason}
+        record.expired_at = timestamp
         return self._snapshot(record)
 
     def cancel_pending_for_node_run(
@@ -122,4 +175,6 @@ class RunCallbackTicketService:
             reason=record.reason,
             status=record.status,
             created_at=record.created_at,
+            expires_at=record.expires_at,
+            expired_at=record.expired_at,
         )

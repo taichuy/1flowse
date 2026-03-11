@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,7 +31,16 @@ from app.schemas.run_views import (
     RunExecutionSummary,
     RunExecutionView,
 )
-from app.services.runtime import ExecutionArtifacts, RuntimeService
+from app.services.runtime import RuntimeService
+from app.services.runtime_records import ExecutionArtifacts
+
+
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def serialize_run_event(event: RunEvent) -> RunEventItem:
@@ -381,9 +391,11 @@ class RunViewService:
             status=ticket.status,
             reason=ticket.reason,
             callback_payload=ticket.callback_payload,
-            created_at=ticket.created_at,
-            consumed_at=ticket.consumed_at,
-            canceled_at=ticket.canceled_at,
+            created_at=_normalize_datetime(ticket.created_at),
+            expires_at=_normalize_datetime(ticket.expires_at),
+            consumed_at=_normalize_datetime(ticket.consumed_at),
+            canceled_at=_normalize_datetime(ticket.canceled_at),
+            expired_at=_normalize_datetime(ticket.expired_at),
         )
 
     def _resolve_supporting_artifacts(
