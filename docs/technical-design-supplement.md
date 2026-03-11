@@ -1,7 +1,7 @@
 # 7Flows 技术设计补充文档
 
-> 本文档是 [7Flows 产品设计方案](./product-design.md) 的技术细化补充，覆盖 6 个关键设计领域。
-> 所有 IR 类型与 `product-design.md` 中定义的 `Node`、`Edge`、`RuntimeContext`、`AuthorizedContextRefs`、`PublishedEndpoint` 保持兼容。
+> 本文档是 [7Flows 产品设计方案](./product-design.md) 的技术细化补充，覆盖当前关键设计补充主题。
+> 所有 IR 类型与 `product-design.md` 中定义的 `Node`、`Edge`、`RuntimeContext`、`EvidencePack`、`ArtifactReference`、`AuthorizedContextRefs`、`PublishedEndpoint` 保持兼容。
 
 ---
 
@@ -13,6 +13,10 @@
 - [17. 节点间变量传递（Inter-Node Variable Passing）](#17-节点间变量传递inter-node-variable-passing)
 - [18. 节点调试模式（Node Debug Mode）](#18-节点调试模式node-debug-mode)
 - [19. 值缓存（Value Caching）](#19-值缓存value-caching)
+- [20. Durable Runtime 与 Phase State Machine](#20-durable-runtime-与-phase-state-machine)
+- [21. Composite Agent Node Pipeline](#21-composite-agent-node-pipeline)
+- [22. 上下文分层与 Artifact/Evidence](#22-上下文分层与-artifactevidence)
+- [23. Tool Gateway 与执行追踪](#23-tool-gateway-与执行追踪)
 
 ---
 
@@ -833,7 +837,7 @@ type NodeDebugData = {
 | Input | 节点实际接收到的输入值（解析后的变量引用） |
 | Output | 节点执行产出 |
 | Logs | 节点运行日志（按时间排序） |
-| Intermediates | 中间变量快照（LLM 节点的 prompt / tool calls 等） |
+| Intermediates | 中间变量快照（LLM 节点的 prompt / tool calls / evidence / artifact refs 等） |
 | Metrics | 执行耗时、Token 用量、API 调用次数等 |
 
 ### 18.5 参考代码
@@ -1011,3 +1015,325 @@ type CacheInvalidateEvent = {
 | n8n 前端 Pin Data Store | `n8n/packages/frontend/editor-ui/src/app/stores/workflowDocument/useWorkflowDocumentPinData.ts` |
 | n8n Pin Data UI 组件 | `n8n/packages/frontend/editor-ui/src/features/ndv/runData/components/RunDataPinButton.vue` |
 | n8n Pin Data 逻辑 | `n8n/packages/frontend/editor-ui/src/app/composables/usePinnedData.ts` |
+
+---
+
+## 20. Durable Runtime 与 Phase State Machine
+
+### 20.1 设计目标
+
+7Flows 的运行时目标不是“单个同步 HTTP 请求驱动整条链式执行”，而是 Durable Agent Workflow Runtime：
+
+- 节点可以进入 waiting 状态
+- waiting 后能通过 checkpoint 恢复
+- 工具慢、assistant 慢、外部回调慢时，主流程实例不丢失
+- 运行态、事件流、artifact、AI/tool 调用都可追溯
+
+### 20.2 当前 Phase 1 落地事实（2026-03-11）
+
+当前已经落地的 Phase 1 MVP：
+
+- 最小 `Flow Compiler`：把 workflow/version 快照编译为运行时 blueprint
+- `RuntimeService`：以 phase state machine 风格驱动节点执行
+- `POST /api/runs/{run_id}/resume`：作为最小恢复入口
+- `run_artifacts`、`tool_call_records`、`ai_call_records`：作为独立运行态事实表
+
+当前还未完整落地、不能假装已完成的部分：
+
+- 独立 queue / scheduler
+- `WAITING_CALLBACK` 的后台自动唤醒
+- 延迟重试和 timeout 的统一调度器
+- Loop 的正式 durable 运行语义
+
+### 20.3 FlowRun / NodeRun 双层状态模型
+
+推荐 `FlowRun` 状态：
+
+```ts
+type FlowRunStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting'
+  | 'succeeded'
+  | 'failed'
+  | 'canceled'
+  | 'timed_out'
+```
+
+推荐 `NodeRun` 采用 `status + phase` 双层表达：
+
+```ts
+type NodeRunStatus =
+  | 'pending'
+  | 'ready'
+  | 'running'
+  | 'retrying'
+  | 'skipped'
+  | 'succeeded'
+  | 'failed'
+  | 'blocked'
+  | 'need_review'
+  | 'canceled'
+
+type NodeRunPhase =
+  | 'preparing'
+  | 'running_main'
+  | 'waiting_tool'
+  | 'running_assistant'
+  | 'waiting_callback'
+  | 'finalizing'
+```
+
+持久化层建议至少保存：
+
+- `runs.current_node_id`
+- `runs.checkpoint_payload`
+- `node_runs.phase`
+- `node_runs.retry_count`
+- `node_runs.phase_started_at`
+- `node_runs.checkpoint_payload`
+- `node_runs.waiting_reason`
+
+### 20.4 Checkpoint / Resume
+
+最小 checkpoint 建议形态：
+
+```ts
+type FlowCheckpointState = {
+  orderedNodeIds: string[]
+  activatedBy: Record<string, string[]>
+  upstreamInputs: Record<string, Record<string, unknown>>
+  mappedInputs: Record<string, Record<string, unknown>>
+  completedNodeIds: string[]
+}
+```
+
+恢复规则：
+
+1. 先读取 `runs.checkpoint_payload`
+2. 再读取当前 `node_runs` 的 phase 与 node-level checkpoint
+3. 依据 phase 决定从 `tool_execute`、`assistant_distill` 或 `main_finalize` 继续
+4. 恢复后继续写统一 `run_events`
+
+### 20.5 Phase 2 演进方向
+
+Phase 2 才补完整 durable 语义：
+
+- scheduler / callback bus
+- 自动重试调度
+- 后台 timeout / fallback
+- worker 侧自动 resume
+
+---
+
+## 21. Composite Agent Node Pipeline
+
+### 21.1 设计目标
+
+`llm_agent` 不应只是“一次模型调用”，而应是节点内复合 pipeline：
+
+1. `Prepare`
+2. `Main Plan`
+3. `Tool Execute`
+4. `Assistant Distill`
+5. `Main Finalize`
+6. `Emit Output`
+
+### 21.2 配置模型
+
+```ts
+type AgentNodeExecutionConfig = {
+  provider?: string
+  modelId?: string
+  systemPrompt?: string
+  prompt?: string
+  toolPolicy?: {
+    allowedToolIds?: string[]
+  }
+  assistant?: {
+    enabled: boolean
+    trigger:
+      | 'always'
+      | 'on_large_payload'
+      | 'on_search_result'
+      | 'on_multi_tool_results'
+      | 'on_high_risk_mode'
+  }
+  fallbackOutput?: Record<string, unknown>
+}
+```
+
+### 21.3 assistant 边界
+
+assistant 的职责：
+
+- 整理工具返回
+- 压缩长文本
+- 生成 `EvidencePack`
+- 标记冲突与未知项
+
+assistant 不负责：
+
+- 决定流程下一步
+- 直接输出给最终用户
+- 默认调用额外工具
+
+### 21.4 主 AI 与 assistant 的控制边界
+
+关键约束：
+
+- 主 AI 始终保留最终控制权
+- assistant 是节点内辅助认知层，不是第二主 AI
+- assistant 关闭时应退化兼容旧式单主 AI 路径
+
+---
+
+## 22. 上下文分层与 Artifact/Evidence
+
+### 22.1 四层上下文模型
+
+```ts
+type GlobalContext = Record<string, unknown>
+type NodeWorkingContext = Record<string, unknown>
+
+type EvidencePack = {
+  summary: string
+  keyPoints: string[]
+  evidence: Array<{
+    title: string
+    detail: string
+    sourceRef?: string
+  }>
+  conflicts: string[]
+  unknowns: string[]
+  recommendedFocus: string[]
+  confidence?: number
+}
+
+type ArtifactReference = {
+  uri: string
+  type: 'text' | 'json' | 'file' | 'tool_result' | 'message' | 'llm_io'
+  summary?: string
+  contentType?: string
+}
+```
+
+四层分别承担：
+
+- `Global Context`：工作流级共享输入、变量、约束
+- `Node Working Context`：节点内部阶段性状态
+- `Evidence Context`：供主 AI 消费的高质量证据
+- `Artifact Store`：原始大结果与文件引用
+
+### 22.2 Prompt 构建原则
+
+主 AI prompt 构建应遵循：
+
+1. 优先读取 `EvidencePack`
+2. 再读取必要的 working context
+3. 原始大结果只通过 artifact 引用或短摘要进入 prompt
+4. 不允许把工具原始大 JSON / 长文全文无节制直接塞给主 AI
+
+### 22.3 Artifact Store 职责
+
+Artifact Store 负责保存：
+
+- 工具原始返回
+- AI 输入 / 输出快照
+- 大 JSON
+- 长文本
+- 文件或二进制结果
+
+它既服务：
+
+- 调试与审计
+- AI / 自动化追溯
+- execution view / evidence view
+
+---
+
+## 23. Tool Gateway 与执行追踪
+
+### 23.1 Tool Gateway 职责
+
+所有工具调用都应经过 Tool Gateway，而不是散落在节点执行器内部。
+
+Tool Gateway 至少负责：
+
+- 工具注册入口复用
+- 参数校验
+- 权限控制
+- 超时
+- 重试
+- 结果标准化
+- artifact 持久化
+- 调用追踪
+- native / compat / local agent / remote API 桥接
+
+### 23.2 标准化工具返回
+
+```ts
+type ToolExecutionResult = {
+  status: 'success' | 'failed' | 'partial'
+  contentType: 'text' | 'json' | 'file' | 'table' | 'binary' | 'mixed'
+  summary: string
+  rawRef?: string
+  structured?: Record<string, unknown>
+  meta: {
+    toolName: string
+    latencyMs: number
+    truncated: boolean
+  }
+}
+```
+
+### 23.3 运行追踪事实
+
+建议把下面几类事实拆开持久化：
+
+```ts
+type RunArtifactRecord = {
+  id: string
+  runId: string
+  nodeRunId?: string
+  scope: 'tool' | 'assistant' | 'main_ai' | 'runtime'
+  uri: string
+  summary?: string
+  contentType?: string
+}
+
+type ToolCallTrace = {
+  toolName: string
+  inputSummary: string
+  outputSummary?: string
+  rawRef?: string
+  latencyMs?: number
+  error?: string
+}
+
+type AICallTrace = {
+  role: 'main' | 'assistant'
+  phase: string
+  inputSummary: string
+  outputSummary?: string
+  promptRef?: string
+  responseRef?: string
+  latencyMs?: number
+  tokenUsage?: {
+    prompt?: number
+    completion?: number
+    total?: number
+  }
+}
+```
+
+### 23.4 日志粒度原则
+
+执行追踪默认记录：
+
+- 摘要
+- 引用
+- phase 转换
+- latency / error
+
+而不是默认把超长原文直接写进事件流或前端面板。

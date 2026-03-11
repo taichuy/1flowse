@@ -201,6 +201,7 @@
 - 路由输出：`api/app/api/routes/runs.py`
 - 工作流 schema：`api/app/schemas/workflow.py`
 - 节点配置 UI：`web/components/workflow-node-config-form/llm-agent-node-config-form.tsx`
+- 产品与技术设计基线：`docs/product-design.md`、`docs/technical-design-supplement.md`
 
 ## 验证
 
