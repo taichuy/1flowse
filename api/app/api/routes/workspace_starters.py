@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.workflow import Workflow
 from app.schemas.workspace_starter import (
     WorkflowBusinessTrack,
+    WorkspaceStarterHistoryItem,
     WorkspaceStarterTemplateCreate,
     WorkspaceStarterTemplateItem,
     WorkspaceStarterTemplateUpdate,
@@ -54,6 +56,35 @@ def get_workspace_starter(
     return service.serialize(record)
 
 
+@router.get(
+    "/{template_id}/history",
+    response_model=list[WorkspaceStarterHistoryItem],
+)
+def list_workspace_starter_history(
+    template_id: str,
+    workspace_id: str = Query(default="default", min_length=1, max_length=64),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> list[WorkspaceStarterHistoryItem]:
+    service = get_workspace_starter_template_service()
+    record = service.get_template(db, template_id, workspace_id=workspace_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace starter template not found.",
+        )
+
+    return [
+        service.serialize_history(item)
+        for item in service.list_history(
+            db,
+            template_id,
+            workspace_id=workspace_id,
+            limit=limit,
+        )
+    ]
+
+
 @router.post(
     "",
     response_model=WorkspaceStarterTemplateItem,
@@ -72,6 +103,18 @@ def create_workspace_starter(
             detail=str(exc),
         ) from exc
 
+    service.record_history(
+        db,
+        template_id=record.id,
+        workspace_id=record.workspace_id,
+        action="created",
+        summary=f"创建了 workspace starter「{record.name}」。",
+        payload={
+            "business_track": record.business_track,
+            "created_from_workflow_id": record.created_from_workflow_id,
+            "created_from_workflow_version": record.created_from_workflow_version,
+        },
+    )
     db.commit()
     db.refresh(record)
     return service.serialize(record)
@@ -99,6 +142,15 @@ def update_workspace_starter(
             detail=str(exc),
         ) from exc
 
+    changed_fields = sorted(payload.model_dump(exclude_none=True).keys())
+    service.record_history(
+        db,
+        template_id=record.id,
+        workspace_id=record.workspace_id,
+        action="updated",
+        summary=f"更新了 workspace starter「{record.name}」的治理元数据。",
+        payload={"fields": changed_fields},
+    )
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -120,6 +172,13 @@ def archive_workspace_starter(
         )
 
     service.archive_template(record)
+    service.record_history(
+        db,
+        template_id=record.id,
+        workspace_id=record.workspace_id,
+        action="archived",
+        summary=f"归档了 workspace starter「{record.name}」。",
+    )
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -141,6 +200,64 @@ def restore_workspace_starter(
         )
 
     service.restore_template(record)
+    service.record_history(
+        db,
+        template_id=record.id,
+        workspace_id=record.workspace_id,
+        action="restored",
+        summary=f"恢复了 workspace starter「{record.name}」。",
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return service.serialize(record)
+
+
+@router.post("/{template_id}/refresh", response_model=WorkspaceStarterTemplateItem)
+def refresh_workspace_starter(
+    template_id: str,
+    workspace_id: str = Query(default="default", min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+) -> WorkspaceStarterTemplateItem:
+    service = get_workspace_starter_template_service()
+    record = service.get_template(db, template_id, workspace_id=workspace_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace starter template not found.",
+        )
+    if record.created_from_workflow_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This workspace starter has no source workflow to refresh from.",
+        )
+
+    source_workflow = db.get(Workflow, record.created_from_workflow_id)
+    if source_workflow is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source workflow not found.",
+        )
+
+    previous_version = record.created_from_workflow_version
+    changed = service.refresh_from_workflow(record, source_workflow)
+    service.record_history(
+        db,
+        template_id=record.id,
+        workspace_id=record.workspace_id,
+        action="refreshed",
+        summary=(
+            f"从源 workflow「{source_workflow.name}」刷新了模板快照。"
+            if changed
+            else f"检查了源 workflow「{source_workflow.name}」，模板快照已是最新。"
+        ),
+        payload={
+            "source_workflow_id": source_workflow.id,
+            "previous_workflow_version": previous_version,
+            "source_workflow_version": source_workflow.version,
+            "changed": changed,
+        },
+    )
     db.add(record)
     db.commit()
     db.refresh(record)

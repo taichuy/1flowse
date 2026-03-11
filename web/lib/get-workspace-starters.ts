@@ -21,6 +21,16 @@ export type WorkspaceStarterTemplateItem = {
   updated_at: string;
 };
 
+export type WorkspaceStarterHistoryItem = {
+  id: string;
+  template_id: string;
+  workspace_id: string;
+  action: "created" | "updated" | "archived" | "restored" | "refreshed";
+  summary: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
 export async function getWorkspaceStarterTemplates(): Promise<
   WorkspaceStarterTemplateItem[]
 > {
@@ -68,6 +78,45 @@ export async function getWorkspaceStarterTemplatesWithFilters({
     }
 
     return (await response.json()) as WorkspaceStarterTemplateItem[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getWorkspaceStarterHistory(
+  templateId: string,
+  {
+    workspaceId = "default",
+    limit = 20
+  }: {
+    workspaceId?: string;
+    limit?: number;
+  } = {}
+): Promise<WorkspaceStarterHistoryItem[]> {
+  const normalizedTemplateId = templateId.trim();
+  if (!normalizedTemplateId) {
+    return [];
+  }
+
+  const params = new URLSearchParams();
+  params.set("workspace_id", workspaceId);
+  params.set("limit", String(limit));
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/workspace-starters/${encodeURIComponent(
+        normalizedTemplateId
+      )}/history?${params.toString()}`,
+      {
+        cache: "no-store"
+      }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return (await response.json()) as WorkspaceStarterHistoryItem[];
   } catch {
     return [];
   }

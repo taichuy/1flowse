@@ -305,6 +305,11 @@ uv run alembic upgrade head
       - 治理页已支持归档、恢复、删除操作
       - 治理页会复用 `/api/workflows/{workflow_id}` 展示来源 workflow 漂移摘要
       - 创建页已支持通过 `starter` 查询参数回填选中的 workspace starter
+    - 当前已开始进入 workspace starter 第三阶段治理：
+      - 后端已新增 `workspace_starter_history`，把 create / update / archive / restore / refresh 变成可追溯治理事实
+      - `/api/workspace-starters/{template_id}/history` 已支持读取模板治理历史
+      - `/api/workspace-starters/{template_id}/refresh` 已支持从源 workflow 刷新模板 definition 快照
+      - 治理页已支持执行来源刷新，并在独立历史面板查看最近治理动作
   - 当前创建页已把 starter 浏览逻辑拆到独立组件，避免 `/workflows/new` 再次长成页面级杂糅入口
   - 当前已支持把 workflow definition 映射为画布节点与连线
   - 当前已支持新增 `llm_agent` / `tool` / `mcp_query` / `condition` / `router` / `output`
@@ -355,6 +360,7 @@ uv run alembic upgrade head
 - `web/components/workflow-editor-inspector.tsx`
 - `web/components/workflow-run-overlay-panel.tsx`
 - `web/components/workspace-starter-library.tsx`
+- `web/components/workspace-starter-library/*`
 - `web/components/workflow-node-config-form.tsx`
 - `web/components/workflow-node-config-form/*`
 - `web/lib/get-workflow-runs.ts`
@@ -369,7 +375,7 @@ uv run alembic upgrade head
 当前边界：
 
 - 仍然是“最小骨架”，不是完整节点配置系统
-- workspace starter 已补齐归档 / 删除、来源漂移摘要和创建页深链回填，但仍未补治理历史、来源 refresh / rebase 和批量操作
+- workspace starter 已补齐归档 / 删除、来源漂移摘要、来源 refresh、治理历史和创建页深链回填，但 `rebase`、批量操作和更细的 diff 仍未补齐
 - ecosystem 模板仍然只是规划态，还没有真实数据源
 - 统一 node catalog / starter / tool lanes 已进入共享后端 contract，但尚未和未来节点插件注册中心、plugin-backed node source 和 ecosystem starter 打通
 - `runtimePolicy` / edge `mapping[]` / 更细的节点输入输出 schema 仍未结构化
@@ -379,21 +385,22 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 最近一次 Git 提交 `feat: add workflow library snapshot` 与本轮实现是直接衔接的：
-  - 上一次提交把 `builtin starter / workspace starter / node catalog / tool lanes` 收到统一 `workflow library snapshot`
-  - 本轮继续顺着这条线，把 editor 的大组件拆开，并补上 `llm_agent` / `output` 的结构化配置入口，避免共享 contract 刚落地就又在前端长回第二层耦合
+- 上一轮 Git 提交 `refactor: split workflow editor forms and workbench` 与本轮实现是直接衔接的：
+  - 上一轮先把 workflow editor 的大组件拆到更清晰的 form / workbench 子模块
+  - 本轮继续顺着这条线，把 workspace starter 从“可看漂移”推进到“可刷新、可追溯”，避免治理能力重新堆回 editor 或单页大组件
 - 当前基础框架已经足够继续推进主业务完整度：
   - 新建应用 -> shared workflow library -> starter -> editor -> 保存版本 -> workspace starter 治理 -> 创建页复用 -> recent runs overlay 这条链路已连续
-  - workspace starter 也已经具备 active / archived 资产治理、来源漂移摘要和创建页深链回填
-  - 但 `plugin-backed node source`、`publish config` 和 starter 来源 refresh / rebase 仍未接上
+  - workspace starter 现在已经具备 active / archived 治理、来源漂移摘要、来源 refresh、治理历史和创建页深链回填
+  - 但 `plugin-backed node source`、`publish config` 和 starter 来源 `rebase` / batch governance 仍未接上
 - 当前架构方向整体是解耦的，但还没完全拆开：
   - `workflow business tracks`、`workflow library snapshot`、`workspace starter API`、`workspace starter governance page` 已开始分层
   - 创建页和 editor 现在已经优先消费同一份后端 snapshot，而不是各自靠前端常量拼装 starter / node / tool lane
   - editor 内部也已从“单文件混排 UI + 状态 + 运行态附着”转成“顶层状态编排 + UI 子模块”
+  - workspace starter 治理态也已经从模板记录扩展到“模板 + 历史事件”，没有继续把设计态资产治理塞进运行态事实表
   - 但 `plugin-backed node source`、节点插件注册中心和 ecosystem starter 仍未进入这份 contract
 - 当前需要显式盯住的长文件：
   - `api/app/services/runtime.py` 当前约 1387 行，已低于后端 1500 行偏好阈值，但仍然偏大，后续应继续拆执行规划、事件写入、节点执行策略
-  - `web/components/workspace-starter-library.tsx` 约 848 行，仍低于前端 2000 行偏好阈值，但如果继续叠治理动作，需要尽早拆分详情、操作栏和来源状态区块
+  - `web/components/workspace-starter-library.tsx` 当前约 828 行，虽然仍低于前端 2000 行偏好阈值，但仍是治理页的最大单文件；本轮已拆出来源状态卡片和历史面板，后续若再补 batch / diff，建议继续抽离筛选栏和详情表单
   - `web/components/workflow-node-config-form/shared.ts` 约 321 行，当前是前端节点配置的共享工具汇聚点，后续若继续长出更多 schema / mapping 工具，需要及时再拆
   - `web/components/workflow-editor-workbench.tsx` 当前约 529 行，主文件已明显收缩，但若后续继续增加保存流程和 run overlay 状态，仍需继续盯住
 
@@ -445,7 +452,7 @@ docker compose up -d --build
 - 更完整的节点结构化配置抽屉
 - editor 内逐事件回放、trace 过滤和实时调试联动
 - 节点目录与插件注册中心打通后的动态 starter / 节点库模型
-- workspace starter 的归档 / 删除、来源 diff 和治理历史
+- workspace starter 的 `rebase`、批量治理和更细的来源 diff
 - 前端 editor 测试基线
 
 ## 下一步建议
@@ -454,13 +461,13 @@ docker compose up -d --build
 
 ### P0 当前最高优先级
 
-1. 继续完善 workspace starter 治理第三阶段：补来源 refresh / rebase、治理历史和批量操作，让 starter library 从“可治理”继续走向“团队级资产”。
+1. 继续完善 workspace starter 治理第三阶段：在已落地 refresh / history 的基础上，补 `rebase`、批量操作和更清晰的来源 diff，让 starter library 从“可治理”继续走向“团队级资产”。
 2. 把新的 `workflow library snapshot` 继续推进到 `plugin-backed node source` 和统一 node/tool source contract：明确哪些能力来自 native node、plugin registry、compat adapter 和未来节点插件注册中心。
 
 原因：
 
 - `workflow library` 的共享后端 contract 已经落地，P0 的缺口自然转到“团队级治理能力补完”和“把更多真实来源接进同一份 contract”。
-- workspace starter 当前已经不是单纯可保存，而是团队资产入口；如果没有 refresh / rebase / history，很快会在多人复用时失去可维护性。
+- workspace starter 当前已经不是单纯可保存，而是团队资产入口；refresh / history 已经补上，但如果没有 `rebase`、批量治理和更细的 diff，多人复用时仍会很快失去可维护性。
 - 如果 `plugin-backed node source` 继续留在 contract 外，后续节点、插件兼容和开放调用仍会在入口层反复返工。
 
 ### P1 次高优先级

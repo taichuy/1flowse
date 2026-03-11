@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 
 def _valid_definition() -> dict:
@@ -109,6 +110,18 @@ def test_workspace_starter_update_persists_metadata_changes(client: TestClient) 
     assert body["recommended_next_step"] == "Updated next step"
     assert body["tags"] == ["updated", "workspace starter"]
 
+    history_response = client.get(f"/api/workspace-starters/{created['id']}/history")
+    assert history_response.status_code == 200
+    history_items = history_response.json()
+    assert [item["action"] for item in history_items[:2]] == ["updated", "created"]
+    assert history_items[0]["payload"]["fields"] == [
+        "description",
+        "name",
+        "recommended_next_step",
+        "tags",
+        "workflow_focus",
+    ]
+
 
 def test_workspace_starter_archive_and_restore_change_visibility(
     client: TestClient,
@@ -146,6 +159,69 @@ def test_workspace_starter_archive_and_restore_change_visibility(
     active_list = client.get("/api/workspace-starters")
     assert active_list.status_code == 200
     assert [item["id"] for item in active_list.json()] == [created["id"]]
+
+    history_response = client.get(f"/api/workspace-starters/{created['id']}/history")
+    assert history_response.status_code == 200
+    history_items = history_response.json()
+    assert [item["action"] for item in history_items[:3]] == [
+        "restored",
+        "archived",
+        "created",
+    ]
+
+
+def test_workspace_starter_refresh_updates_snapshot_and_records_history(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow,
+) -> None:
+    created = _create_workspace_starter(
+        client,
+        name="Refresh Starter",
+        business_track="编排节点能力",
+        description="Template for refresh flow",
+    )
+
+    sample_workflow.version = "0.1.1"
+    sample_workflow.definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "agent",
+                "type": "llm_agent",
+                "name": "Agent",
+                "config": {"prompt": "Refresh me"},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+        ],
+    }
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    refresh_response = client.post(f"/api/workspace-starters/{created['id']}/refresh")
+    assert refresh_response.status_code == 200
+    refreshed = refresh_response.json()
+    assert refreshed["created_from_workflow_version"] == "0.1.1"
+    assert [node["id"] for node in refreshed["definition"]["nodes"]] == [
+        "trigger",
+        "agent",
+        "output",
+    ]
+
+    history_response = client.get(f"/api/workspace-starters/{created['id']}/history")
+    assert history_response.status_code == 200
+    history_items = history_response.json()
+    assert history_items[0]["action"] == "refreshed"
+    assert history_items[0]["payload"] == {
+        "source_workflow_id": "wf-demo",
+        "previous_workflow_version": "0.1.0",
+        "source_workflow_version": "0.1.1",
+        "changed": True,
+    }
 
 
 def test_workspace_starter_delete_requires_archive_first(client: TestClient) -> None:

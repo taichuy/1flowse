@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from functools import lru_cache
 from uuid import uuid4
@@ -7,9 +8,15 @@ from uuid import uuid4
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.workspace_starter import WorkspaceStarterTemplateRecord
+from app.models.workflow import Workflow
+from app.models.workspace_starter import (
+    WorkspaceStarterHistoryRecord,
+    WorkspaceStarterTemplateRecord,
+)
 from app.schemas.workspace_starter import (
     WorkflowBusinessTrack,
+    WorkspaceStarterHistoryAction,
+    WorkspaceStarterHistoryItem,
     WorkspaceStarterTemplateCreate,
     WorkspaceStarterTemplateItem,
     WorkspaceStarterTemplateUpdate,
@@ -18,6 +25,22 @@ from app.services.workflow_definitions import validate_workflow_definition
 
 
 class WorkspaceStarterTemplateService:
+    def list_history(
+        self,
+        db: Session,
+        template_id: str,
+        *,
+        workspace_id: str = "default",
+        limit: int = 20,
+    ) -> list[WorkspaceStarterHistoryRecord]:
+        return db.scalars(
+            select(WorkspaceStarterHistoryRecord)
+            .where(WorkspaceStarterHistoryRecord.template_id == template_id)
+            .where(WorkspaceStarterHistoryRecord.workspace_id == workspace_id)
+            .order_by(WorkspaceStarterHistoryRecord.created_at.desc())
+            .limit(limit)
+        ).all()
+
     def list_templates(
         self,
         db: Session,
@@ -130,6 +153,20 @@ class WorkspaceStarterTemplateService:
             updated_at=record.updated_at,
         )
 
+    def serialize_history(
+        self,
+        record: WorkspaceStarterHistoryRecord,
+    ) -> WorkspaceStarterHistoryItem:
+        return WorkspaceStarterHistoryItem(
+            id=record.id,
+            template_id=record.template_id,
+            workspace_id=record.workspace_id,
+            action=record.action,
+            summary=record.summary,
+            payload=deepcopy(record.payload or {}),
+            created_at=record.created_at,
+        )
+
     def archive_template(
         self,
         record: WorkspaceStarterTemplateRecord,
@@ -151,6 +188,43 @@ class WorkspaceStarterTemplateService:
         record: WorkspaceStarterTemplateRecord,
     ) -> None:
         db.delete(record)
+
+    def refresh_from_workflow(
+        self,
+        record: WorkspaceStarterTemplateRecord,
+        workflow: Workflow,
+    ) -> bool:
+        validated_definition = validate_workflow_definition(workflow.definition)
+        changed = (
+            record.created_from_workflow_version != workflow.version
+            or record.definition != validated_definition
+        )
+        if changed:
+            record.definition = deepcopy(validated_definition)
+            record.created_from_workflow_version = workflow.version
+        return changed
+
+    def record_history(
+        self,
+        db: Session,
+        *,
+        template_id: str,
+        workspace_id: str,
+        action: WorkspaceStarterHistoryAction,
+        summary: str,
+        payload: dict | None = None,
+    ) -> WorkspaceStarterHistoryRecord:
+        history = WorkspaceStarterHistoryRecord(
+            id=str(uuid4()),
+            template_id=template_id,
+            workspace_id=workspace_id,
+            action=action,
+            summary=summary,
+            payload=deepcopy(payload or {}),
+        )
+        db.add(history)
+        db.flush()
+        return history
 
     def _apply_create_payload(
         self,

@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
-import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import {
+  getWorkspaceStarterHistory,
+  type WorkspaceStarterHistoryItem,
+  type WorkspaceStarterTemplateItem
+} from "@/lib/get-workspace-starters";
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import {
   WORKFLOW_BUSINESS_TRACKS,
@@ -12,6 +16,8 @@ import {
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import { summarizeWorkspaceStarterSourceStatus } from "@/lib/workspace-starter-source-status";
+import { WorkspaceStarterHistoryPanel } from "@/components/workspace-starter-library/history-panel";
+import { WorkspaceStarterSourceCard } from "@/components/workspace-starter-library/source-status-card";
 
 type WorkspaceStarterLibraryProps = {
   initialTemplates: WorkspaceStarterTemplateItem[];
@@ -47,9 +53,12 @@ export function WorkspaceStarterLibrary({
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [isSaving, startSavingTransition] = useTransition();
   const [isMutating, startMutatingTransition] = useTransition();
+  const [isRefreshing, startRefreshingTransition] = useTransition();
   const [sourceWorkflow, setSourceWorkflow] = useState<WorkflowDetail | null>(null);
   const [sourceStatusMessage, setSourceStatusMessage] = useState<string | null>(null);
   const [isLoadingSourceWorkflow, setIsLoadingSourceWorkflow] = useState(false);
+  const [historyItems, setHistoryItems] = useState<WorkspaceStarterHistoryItem[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const filteredTemplates = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -196,6 +205,39 @@ export function WorkspaceStarterLibrary({
     };
   }, [selectedTemplate?.created_from_workflow_id]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedTemplate) {
+      setHistoryItems([]);
+      setIsLoadingHistory(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsLoadingHistory(true);
+    void getWorkspaceStarterHistory(selectedTemplate.id)
+      .then((items) => {
+        if (cancelled) {
+          return;
+        }
+        setHistoryItems(items);
+        setIsLoadingHistory(false);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setHistoryItems([]);
+        setIsLoadingHistory(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTemplate]);
+
   const handleSave = () => {
     if (!selectedTemplate || !formState) {
       return;
@@ -306,6 +348,53 @@ export function WorkspaceStarterLibrary({
         setMessageTone("success");
       } catch {
         setMessage(`无法连接后端${actionLabel} workspace starter，请确认 API 已启动。`);
+        setMessageTone("error");
+      }
+    });
+  };
+
+  const reloadHistory = async (templateId: string) => {
+    setIsLoadingHistory(true);
+    setHistoryItems(await getWorkspaceStarterHistory(templateId));
+    setIsLoadingHistory(false);
+  };
+
+  const handleRefreshFromSource = () => {
+    if (!selectedTemplate?.created_from_workflow_id) {
+      return;
+    }
+
+    startRefreshingTransition(async () => {
+      setMessage("正在从源 workflow 刷新 starter 快照...");
+      setMessageTone("idle");
+
+      try {
+        const response = await fetch(
+          `${getApiBaseUrl()}/api/workspace-starters/${encodeURIComponent(selectedTemplate.id)}/refresh`,
+          {
+            method: "POST"
+          }
+        );
+        const body = (await response.json().catch(() => null)) as
+          | WorkspaceStarterTemplateItem
+          | { detail?: string }
+          | null;
+
+        if (!response.ok || !body || !("id" in body)) {
+          setMessage(body && "detail" in body ? body.detail ?? "刷新失败。" : "刷新失败。");
+          setMessageTone("error");
+          return;
+        }
+
+        setTemplates((current) =>
+          current.map((template) => (template.id === body.id ? body : template))
+        );
+        setSelectedTemplateId(body.id);
+        await reloadHistory(body.id);
+        setMessage(`已刷新 workspace starter：${body.name}。`);
+        setMessageTone("success");
+      } catch {
+        setMessage("无法连接后端刷新 starter，请确认 API 已启动。");
         setMessageTone("error");
       }
     });
@@ -740,46 +829,14 @@ export function WorkspaceStarterLibrary({
                   ))}
                 </div>
 
-                <div className="binding-card compact-card">
-                  <div className="binding-card-header">
-                    <div>
-                      <p className="entry-card-title">Source workflow drift</p>
-                      <p className="binding-meta">
-                        {selectedTemplate.created_from_workflow_id ?? "no workflow binding"}
-                      </p>
-                    </div>
-                    <span className="health-pill">
-                      {isLoadingSourceWorkflow ? "loading" : sourceStatus?.label ?? "-"}
-                    </span>
-                  </div>
-                  <p className="section-copy starter-summary-copy">
-                    {sourceStatusMessage ?? sourceStatus?.summary ?? "暂无来源状态。"}
-                  </p>
-                  {sourceStatus ? (
-                    <div className="summary-strip compact-strip">
-                      <div className="summary-card">
-                        <span>Template ver</span>
-                        <strong>{sourceStatus.templateVersion ?? "n/a"}</strong>
-                      </div>
-                      <div className="summary-card">
-                        <span>Source ver</span>
-                        <strong>{sourceStatus.sourceVersion ?? "n/a"}</strong>
-                      </div>
-                      <div className="summary-card">
-                        <span>Node delta</span>
-                        <strong>
-                          {sourceStatus.sourceNodeCount - sourceStatus.templateNodeCount}
-                        </strong>
-                      </div>
-                      <div className="summary-card">
-                        <span>Edge delta</span>
-                        <strong>
-                          {sourceStatus.sourceEdgeCount - sourceStatus.templateEdgeCount}
-                        </strong>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                <WorkspaceStarterSourceCard
+                  template={selectedTemplate}
+                  sourceStatus={sourceStatus}
+                  sourceStatusMessage={sourceStatusMessage}
+                  isLoadingSourceWorkflow={isLoadingSourceWorkflow}
+                  isRefreshing={isRefreshing}
+                  onRefresh={handleRefreshFromSource}
+                />
 
                 <div className="governance-node-list">
                   {(selectedTemplate.definition.nodes ?? []).map((node) => (
@@ -799,6 +856,11 @@ export function WorkspaceStarterLibrary({
               </>
             )}
           </article>
+
+          <WorkspaceStarterHistoryPanel
+            historyItems={historyItems}
+            isLoading={isLoadingHistory}
+          />
         </div>
       </section>
     </main>

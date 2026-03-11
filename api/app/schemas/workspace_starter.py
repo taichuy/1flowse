@@ -11,6 +11,13 @@ WorkflowBusinessTrack = Literal[
     "Dify 插件兼容",
     "API 调用开放",
 ]
+WorkspaceStarterHistoryAction = Literal[
+    "created",
+    "updated",
+    "archived",
+    "restored",
+    "refreshed",
+]
 
 
 class WorkspaceStarterTemplateBase(BaseModel):
@@ -24,7 +31,7 @@ class WorkspaceStarterTemplateBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def normalize_tags(self) -> "WorkspaceStarterTemplateBase":
+    def normalize_tags(self) -> WorkspaceStarterTemplateBase:
         normalized_tags: list[str] = []
         for tag in self.tags:
             normalized = tag.strip()
@@ -53,7 +60,7 @@ class WorkspaceStarterTemplateUpdate(BaseModel):
     definition: dict[str, Any] | None = None
 
     @model_validator(mode="after")
-    def ensure_update_payload(self) -> "WorkspaceStarterTemplateUpdate":
+    def ensure_update_payload(self) -> WorkspaceStarterTemplateUpdate:
         if not any(
             value is not None
             for value in (
@@ -80,3 +87,13 @@ class WorkspaceStarterTemplateItem(WorkspaceStarterTemplateBase):
     archived_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class WorkspaceStarterHistoryItem(BaseModel):
+    id: str
+    template_id: str
+    workspace_id: str
+    action: WorkspaceStarterHistoryAction
+    summary: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
