@@ -18,6 +18,17 @@ export type WorkflowPublishGovernanceSnapshot = {
   >;
 };
 
+type WorkflowPublishInvocationFilter = {
+  bindingId: string;
+  status?: "succeeded" | "failed" | "rejected";
+  requestSource?: "workflow" | "alias" | "path";
+  apiKeyId?: string;
+  reasonCode?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  limit?: number;
+};
+
 function toRecord<T>(
   entries: ReadonlyArray<readonly [string, T]>
 ): Record<string, T> {
@@ -26,7 +37,10 @@ function toRecord<T>(
 
 export async function getWorkflowPublishGovernanceSnapshot(
   workflowId: string,
-  bindings: WorkflowPublishedEndpointItem[]
+  bindings: WorkflowPublishedEndpointItem[],
+  options?: {
+    activeInvocationFilter?: WorkflowPublishInvocationFilter | null;
+  }
 ): Promise<WorkflowPublishGovernanceSnapshot> {
   const [
     cacheInventoryEntries,
@@ -53,9 +67,23 @@ export async function getWorkflowPublishGovernanceSnapshot(
     Promise.all(
       bindings.map(async (binding) => [
         binding.id,
-        await getPublishedEndpointInvocations(workflowId, binding.id, {
-          limit: 5
-        })
+        await getPublishedEndpointInvocations(
+          workflowId,
+          binding.id,
+          options?.activeInvocationFilter?.bindingId === binding.id
+            ? {
+                limit: options.activeInvocationFilter.limit ?? 12,
+                status: options.activeInvocationFilter.status,
+                requestSource: options.activeInvocationFilter.requestSource,
+                apiKeyId: options.activeInvocationFilter.apiKeyId,
+                reasonCode: options.activeInvocationFilter.reasonCode,
+                createdFrom: options.activeInvocationFilter.createdFrom,
+                createdTo: options.activeInvocationFilter.createdTo
+              }
+            : {
+                limit: 5
+              }
+        )
       ] as const)
     ),
     Promise.all(

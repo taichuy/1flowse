@@ -16,6 +16,23 @@ PublishedEndpointApiKeyStatus = Literal["active", "revoked"]
 PublishedEndpointInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedEndpointInvocationRequestSource = Literal["workflow", "alias", "path"]
 PublishedEndpointInvocationCacheStatus = Literal["hit", "miss", "bypass"]
+PublishedEndpointInvocationReasonCode = Literal[
+    "api_key_invalid",
+    "api_key_required",
+    "auth_mode_unsupported",
+    "binding_inactive",
+    "compiled_blueprint_missing",
+    "protocol_mismatch",
+    "rate_limit_exceeded",
+    "rejected_other",
+    "run_status_unsupported",
+    "runtime_failed",
+    "streaming_unsupported",
+    "sync_waiting_unsupported",
+    "target_version_missing",
+    "unknown",
+    "workflow_missing",
+]
 PublishedEndpointInvocationTimeBucketGranularity = Literal["hour", "day"]
 
 
@@ -248,6 +265,7 @@ class PublishedEndpointInvocationFilters(BaseModel):
     status: PublishedEndpointInvocationStatus | None = None
     request_source: PublishedEndpointInvocationRequestSource | None = None
     api_key_id: str | None = None
+    reason_code: PublishedEndpointInvocationReasonCode | None = None
     created_from: datetime | None = None
     created_to: datetime | None = None
 

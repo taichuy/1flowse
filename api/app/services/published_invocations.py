@@ -18,6 +18,23 @@ from app.models.workflow import (
 PublishedInvocationRequestSource = Literal["workflow", "alias", "path"]
 PublishedInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedInvocationCacheStatus = Literal["hit", "miss", "bypass"]
+PublishedInvocationReasonCode = Literal[
+    "api_key_invalid",
+    "api_key_required",
+    "auth_mode_unsupported",
+    "binding_inactive",
+    "compiled_blueprint_missing",
+    "protocol_mismatch",
+    "rate_limit_exceeded",
+    "rejected_other",
+    "run_status_unsupported",
+    "runtime_failed",
+    "streaming_unsupported",
+    "sync_waiting_unsupported",
+    "target_version_missing",
+    "unknown",
+    "workflow_missing",
+]
 
 
 def classify_invocation_reason(
@@ -172,6 +189,16 @@ def _build_payload_preview(payload: dict) -> dict:
     if scalar_preview:
         preview["sample"] = scalar_preview
     return preview
+
+
+def _resolve_record_reason_code(
+    record: WorkflowPublishedInvocation,
+) -> PublishedInvocationReasonCode | None:
+    return classify_invocation_reason(
+        status=record.status,
+        error_message=record.error_message,
+        run_status=record.run_status,
+    )
 
 
 def _summarize_records(
@@ -343,6 +370,47 @@ class PublishedInvocationService:
             )
         return statement
 
+    def _list_binding_records(
+        self,
+        db: Session,
+        *,
+        workflow_id: str,
+        binding_id: str,
+        status: PublishedInvocationStatus | None = None,
+        request_source: PublishedInvocationRequestSource | None = None,
+        api_key_id: str | None = None,
+        reason_code: PublishedInvocationReasonCode | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[WorkflowPublishedInvocation]:
+        statement = self._build_binding_statement(
+            workflow_id=workflow_id,
+            binding_id=binding_id,
+            status=status,
+            request_source=request_source,
+            api_key_id=api_key_id,
+            created_from=created_from,
+            created_to=created_to,
+        ).order_by(
+            WorkflowPublishedInvocation.created_at.desc(),
+            WorkflowPublishedInvocation.id.desc(),
+        )
+
+        if reason_code is None and limit is not None:
+            return db.scalars(statement.limit(limit)).all()
+
+        records = db.scalars(statement).all()
+        if reason_code is not None:
+            records = [
+                record
+                for record in records
+                if _resolve_record_reason_code(record) == reason_code
+            ]
+        if limit is not None:
+            return records[:limit]
+        return records
+
     def record_invocation(
         self,
         db: Session,
@@ -405,27 +473,23 @@ class PublishedInvocationService:
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
         api_key_id: str | None = None,
+        reason_code: PublishedInvocationReasonCode | None = None,
         created_from: datetime | None = None,
         created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[WorkflowPublishedInvocation]:
-        statement = (
-            self._build_binding_statement(
-                workflow_id=workflow_id,
-                binding_id=binding_id,
-                status=status,
-                request_source=request_source,
-                api_key_id=api_key_id,
-                created_from=created_from,
-                created_to=created_to,
-            )
-            .order_by(
-                WorkflowPublishedInvocation.created_at.desc(),
-                WorkflowPublishedInvocation.id.desc(),
-            )
-            .limit(limit)
+        return self._list_binding_records(
+            db,
+            workflow_id=workflow_id,
+            binding_id=binding_id,
+            status=status,
+            request_source=request_source,
+            api_key_id=api_key_id,
+            reason_code=reason_code,
+            created_from=created_from,
+            created_to=created_to,
+            limit=limit,
         )
-        return db.scalars(statement).all()
 
     def build_binding_audit(
         self,
@@ -436,23 +500,21 @@ class PublishedInvocationService:
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
         api_key_id: str | None = None,
+        reason_code: PublishedInvocationReasonCode | None = None,
         created_from: datetime | None = None,
         created_to: datetime | None = None,
     ) -> PublishedInvocationAudit:
-        records = db.scalars(
-            self._build_binding_statement(
-                workflow_id=workflow_id,
-                binding_id=binding_id,
-                status=status,
-                request_source=request_source,
-                api_key_id=api_key_id,
-                created_from=created_from,
-                created_to=created_to,
-            ).order_by(
-                WorkflowPublishedInvocation.created_at.desc(),
-                WorkflowPublishedInvocation.id.desc(),
-            )
-        ).all()
+        records = self._list_binding_records(
+            db,
+            workflow_id=workflow_id,
+            binding_id=binding_id,
+            status=status,
+            request_source=request_source,
+            api_key_id=api_key_id,
+            reason_code=reason_code,
+            created_from=created_from,
+            created_to=created_to,
+        )
         summary = _summarize_records(records)
 
         status_buckets: dict[str, dict[str, object]] = {
@@ -523,11 +585,7 @@ class PublishedInvocationService:
                 if failure_bucket["last_invoked_at"] is None:
                     failure_bucket["last_invoked_at"] = record.created_at
 
-            reason_code = classify_invocation_reason(
-                status=record.status,
-                error_message=record.error_message,
-                run_status=record.run_status,
-            )
+            reason_code = _resolve_record_reason_code(record)
             if reason_code is not None:
                 reason_bucket = reason_buckets[reason_code]
                 reason_bucket["count"] += 1

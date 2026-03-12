@@ -87,6 +87,7 @@ export type PublishedEndpointInvocationFilters = {
   status?: PublishedEndpointInvocationStatus | null;
   request_source?: PublishedEndpointInvocationRequestSource | null;
   api_key_id?: string | null;
+  reason_code?: string | null;
   created_from?: string | null;
   created_to?: string | null;
 };
@@ -289,6 +290,7 @@ export async function getPublishedEndpointInvocations(
     status?: PublishedEndpointInvocationStatus;
     requestSource?: PublishedEndpointInvocationRequestSource;
     apiKeyId?: string;
+    reasonCode?: string;
     createdFrom?: string;
     createdTo?: string;
   }
@@ -307,6 +309,9 @@ export async function getPublishedEndpointInvocations(
     }
     if (options?.apiKeyId) {
       searchParams.set("api_key_id", options.apiKeyId);
+    }
+    if (options?.reasonCode) {
+      searchParams.set("reason_code", options.reasonCode);
     }
     if (options?.createdFrom) {
       searchParams.set("created_from", options.createdFrom);

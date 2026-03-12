@@ -17,6 +17,14 @@ type WorkflowPublishPanelProps = {
     string,
     PublishedEndpointInvocationListResponse | null
   >;
+  activeInvocationFilter: {
+    bindingId: string | null;
+    status: "succeeded" | "failed" | "rejected" | null;
+    requestSource: "workflow" | "alias" | "path" | null;
+    apiKeyId: string | null;
+    reasonCode: string | null;
+    timeWindow: "24h" | "7d" | "30d" | "all";
+  };
 };
 
 export function WorkflowPublishPanel({
@@ -25,7 +33,8 @@ export function WorkflowPublishPanel({
   cacheInventories,
   apiKeysByBinding,
   invocationAuditsByBinding,
-  rateLimitWindowAuditsByBinding
+  rateLimitWindowAuditsByBinding,
+  activeInvocationFilter
 }: WorkflowPublishPanelProps) {
   const publishedCount = bindings.filter(
     (binding) => binding.lifecycle_status === "published"
@@ -97,6 +106,11 @@ export function WorkflowPublishPanel({
                 apiKeys={apiKeysByBinding[binding.id] ?? []}
                 invocationAudit={invocationAuditsByBinding[binding.id] ?? null}
                 rateLimitWindowAudit={rateLimitWindowAuditsByBinding[binding.id] ?? null}
+                activeInvocationFilter={
+                  activeInvocationFilter.bindingId === binding.id
+                    ? activeInvocationFilter
+                    : null
+                }
               />
             ))}
           </div>

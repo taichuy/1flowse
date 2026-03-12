@@ -1,19 +1,40 @@
+import Link from "next/link";
+
 import type {
+  PublishedEndpointApiKeyItem,
   PublishedEndpointInvocationFacetItem,
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
 import {
+  PUBLISHED_INVOCATION_REASON_CODES,
   formatPublishedInvocationReasonLabel,
   formatRateLimitPressure
 } from "@/lib/published-invocation-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
 type WorkflowPublishActivityPanelProps = {
+  workflowId: string;
   binding: WorkflowPublishedEndpointItem;
+  apiKeys: PublishedEndpointApiKeyItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
+  activeInvocationFilter: {
+    bindingId: string | null;
+    status: "succeeded" | "failed" | "rejected" | null;
+    requestSource: "workflow" | "alias" | "path" | null;
+    apiKeyId: string | null;
+    reasonCode: string | null;
+    timeWindow: "24h" | "7d" | "30d" | "all";
+  } | null;
 };
+
+const TIME_WINDOW_OPTIONS = [
+  { value: "all", label: "全部时间" },
+  { value: "24h", label: "最近 24 小时" },
+  { value: "7d", label: "最近 7 天" },
+  { value: "30d", label: "最近 30 天" }
+] as const;
 
 function formatTimelineBucketLabel(
   value: string,
@@ -40,10 +61,47 @@ function facetCount(
   return facets?.find((item) => item.value === value)?.count ?? 0;
 }
 
+function formatTimeWindowLabel(value: "24h" | "7d" | "30d" | "all") {
+  return (
+    TIME_WINDOW_OPTIONS.find((option) => option.value === value)?.label ?? "全部时间"
+  );
+}
+
+function buildActiveFilterChips(
+  activeInvocationFilter: WorkflowPublishActivityPanelProps["activeInvocationFilter"],
+  apiKeys: PublishedEndpointApiKeyItem[]
+) {
+  if (!activeInvocationFilter) {
+    return [];
+  }
+
+  const chips: string[] = [];
+  if (activeInvocationFilter.status) {
+    chips.push(`status ${activeInvocationFilter.status}`);
+  }
+  if (activeInvocationFilter.requestSource) {
+    chips.push(`source ${activeInvocationFilter.requestSource}`);
+  }
+  if (activeInvocationFilter.reasonCode) {
+    chips.push(formatPublishedInvocationReasonLabel(activeInvocationFilter.reasonCode));
+  }
+  if (activeInvocationFilter.apiKeyId) {
+    const apiKey = apiKeys.find((item) => item.id === activeInvocationFilter.apiKeyId);
+    chips.push(`key ${apiKey?.name ?? apiKey?.key_prefix ?? activeInvocationFilter.apiKeyId}`);
+  }
+  if (activeInvocationFilter.timeWindow !== "all") {
+    chips.push(formatTimeWindowLabel(activeInvocationFilter.timeWindow));
+  }
+  return chips;
+}
+
 export function WorkflowPublishActivityPanel({
+  workflowId,
   binding,
+  apiKeys,
   invocationAudit,
-  rateLimitWindowAudit
+  rateLimitWindowAudit,
+  activeInvocationFilter
 }: WorkflowPublishActivityPanelProps) {
   const summary = invocationAudit?.summary;
   const items = invocationAudit?.items ?? [];
@@ -70,6 +128,8 @@ export function WorkflowPublishActivityPanel({
   const pressure = rateLimitPolicy
     ? formatRateLimitPressure(rateLimitPolicy.requests, windowUsed)
     : null;
+  const activeFilterChips = buildActiveFilterChips(activeInvocationFilter, apiKeys);
+  const formAction = `/workflows/${workflowId}`;
 
   return (
     <div className="entry-card compact-card">
@@ -77,6 +137,104 @@ export function WorkflowPublishActivityPanel({
       <p className="section-copy entry-copy">
         这里消费独立的 published invocation audit，用于回答“谁在调、有没有被限流、最近失败因为什么”。
       </p>
+
+      <form action={formAction} className="trace-filter-form governance-filter-form" method="get">
+        <input type="hidden" name="publish_binding" value={binding.id} />
+
+        <label className="binding-field">
+          <span className="binding-label">Status</span>
+          <select
+            className="binding-select"
+            name="publish_status"
+            defaultValue={activeInvocationFilter?.status ?? ""}
+          >
+            <option value="">全部状态</option>
+            <option value="succeeded">succeeded</option>
+            <option value="failed">failed</option>
+            <option value="rejected">rejected</option>
+          </select>
+        </label>
+
+        <label className="binding-field">
+          <span className="binding-label">Request source</span>
+          <select
+            className="binding-select"
+            name="publish_request_source"
+            defaultValue={activeInvocationFilter?.requestSource ?? ""}
+          >
+            <option value="">全部入口</option>
+            <option value="workflow">workflow</option>
+            <option value="alias">alias</option>
+            <option value="path">path</option>
+          </select>
+        </label>
+
+        <label className="binding-field">
+          <span className="binding-label">Reason code</span>
+          <select
+            className="binding-select"
+            name="publish_reason_code"
+            defaultValue={activeInvocationFilter?.reasonCode ?? ""}
+          >
+            <option value="">全部问题</option>
+            {PUBLISHED_INVOCATION_REASON_CODES.map((reasonCode) => (
+              <option key={reasonCode} value={reasonCode}>
+                {formatPublishedInvocationReasonLabel(reasonCode)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="binding-field">
+          <span className="binding-label">API key</span>
+          <select
+            className="binding-select"
+            name="publish_api_key_id"
+            defaultValue={activeInvocationFilter?.apiKeyId ?? ""}
+          >
+            <option value="">全部 key</option>
+            {apiKeys.map((apiKey) => (
+              <option key={apiKey.id} value={apiKey.id}>
+                {apiKey.name} · {apiKey.key_prefix}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="binding-field trace-field-span">
+          <span className="binding-label">Time window</span>
+          <select
+            className="binding-select"
+            name="publish_window"
+            defaultValue={activeInvocationFilter?.timeWindow ?? "all"}
+          >
+            {TIME_WINDOW_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="trace-filter-actions trace-field-span">
+          <button className="sync-button" type="submit">
+            应用治理过滤
+          </button>
+          <Link className="inline-link" href={formAction}>
+            重置过滤
+          </Link>
+        </div>
+      </form>
+
+      {activeFilterChips.length ? (
+        <div className="trace-active-filter-row">
+          {activeFilterChips.map((chip) => (
+            <span className="event-chip" key={chip}>
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="summary-strip compact-strip">
         <article className="summary-card">
@@ -174,7 +332,8 @@ export function WorkflowPublishActivityPanel({
         <p className="entry-card-title">Traffic timeline</p>
         <p className="section-copy entry-copy">
           按 {timelineGranularity === "hour" ? "小时" : "天"} 聚合最近调用，补足 publish
-          activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。
+          activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：
+          {formatTimeWindowLabel(activeInvocationFilter?.timeWindow ?? "all")}。
         </p>
 
         {timeline.length ? (

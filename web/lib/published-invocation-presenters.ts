@@ -1,3 +1,24 @@
+export const PUBLISHED_INVOCATION_REASON_CODES = [
+  "api_key_invalid",
+  "api_key_required",
+  "auth_mode_unsupported",
+  "binding_inactive",
+  "compiled_blueprint_missing",
+  "protocol_mismatch",
+  "rate_limit_exceeded",
+  "rejected_other",
+  "run_status_unsupported",
+  "runtime_failed",
+  "streaming_unsupported",
+  "sync_waiting_unsupported",
+  "target_version_missing",
+  "unknown",
+  "workflow_missing"
+] as const;
+
+export type PublishedInvocationReasonCode =
+  (typeof PUBLISHED_INVOCATION_REASON_CODES)[number];
+
 const REASON_LABELS: Record<string, string> = {
   api_key_invalid: "Invalid API key",
   api_key_required: "Missing API key",

@@ -1087,6 +1087,7 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
         "status": None,
         "request_source": None,
         "api_key_id": None,
+        "reason_code": None,
         "created_from": None,
         "created_to": None,
     }
@@ -1133,6 +1134,7 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
         "status": "succeeded",
         "request_source": None,
         "api_key_id": primary_key["id"],
+        "reason_code": None,
         "created_from": None,
         "created_to": None,
     }
@@ -1247,6 +1249,7 @@ def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
         "status": None,
         "request_source": None,
         "api_key_id": None,
+        "reason_code": None,
         "created_from": "2026-03-12T08:30:00Z",
         "created_to": "2026-03-12T23:59:59Z",
     }
@@ -1511,3 +1514,25 @@ def test_rejected_published_invocation_does_not_consume_rate_limit_quota(
         item["value"]: item["count"] for item in activity["facets"]["reason_counts"]
     } == {"rate_limit_exceeded": 1, "api_key_invalid": 1}
     assert activity["facets"]["recent_failure_reasons"][0]["message"] == detail
+    reason_filtered_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
+        params={
+            "reason_code": "api_key_invalid",
+        },
+    )
+    assert reason_filtered_response.status_code == 200
+    reason_filtered = reason_filtered_response.json()
+    assert reason_filtered["filters"] == {
+        "status": None,
+        "request_source": None,
+        "api_key_id": None,
+        "reason_code": "api_key_invalid",
+        "created_from": None,
+        "created_to": None,
+    }
+    assert reason_filtered["summary"]["total_count"] == 1
+    assert reason_filtered["summary"]["rejected_count"] == 1
+    assert reason_filtered["summary"]["last_reason_code"] == "api_key_invalid"
+    assert [item["reason_code"] for item in reason_filtered["items"]] == [
+        "api_key_invalid"
+    ]

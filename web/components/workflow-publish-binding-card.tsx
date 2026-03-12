@@ -18,6 +18,14 @@ type WorkflowPublishBindingCardProps = {
   apiKeys: PublishedEndpointApiKeyItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
+  activeInvocationFilter: {
+    bindingId: string | null;
+    status: "succeeded" | "failed" | "rejected" | null;
+    requestSource: "workflow" | "alias" | "path" | null;
+    apiKeyId: string | null;
+    reasonCode: string | null;
+    timeWindow: "24h" | "7d" | "30d" | "all";
+  } | null;
 };
 
 export function WorkflowPublishBindingCard({
@@ -26,7 +34,8 @@ export function WorkflowPublishBindingCard({
   cacheInventory,
   apiKeys,
   invocationAudit,
-  rateLimitWindowAudit
+  rateLimitWindowAudit,
+  activeInvocationFilter
 }: WorkflowPublishBindingCardProps) {
   const cacheSummary = binding.cache_inventory;
   const activity = binding.activity;
@@ -124,9 +133,12 @@ export function WorkflowPublishBindingCard({
       </div>
 
       <WorkflowPublishActivityPanel
+        workflowId={workflow.id}
         binding={binding}
+        apiKeys={apiKeys}
         invocationAudit={invocationAudit}
         rateLimitWindowAudit={rateLimitWindowAudit}
+        activeInvocationFilter={activeInvocationFilter}
       />
 
       <div className="entry-card compact-card">
