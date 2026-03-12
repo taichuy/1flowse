@@ -54,6 +54,43 @@ class PublishedEndpointGatewayService:
         self._cache_service = cache_service or PublishedEndpointCacheService()
         self._runtime_service = runtime_service or RuntimeService()
 
+    def record_protocol_rejection_by_alias(
+        self,
+        db: Session,
+        *,
+        model: str,
+        expected_protocol: str,
+        request_payload: dict,
+        error_detail: str,
+        presented_api_key: str | None = None,
+    ) -> None:
+        binding = self._workflow_publish_service.get_published_binding_by_alias(
+            db,
+            endpoint_alias=model,
+        )
+        if binding is None or binding.protocol != expected_protocol:
+            return
+
+        authenticated_key = None
+        if binding.auth_mode == "api_key" and presented_api_key and presented_api_key.strip():
+            authenticated_key = self._api_key_service.authenticate_key(
+                db,
+                workflow_id=binding.workflow_id,
+                endpoint_id=binding.endpoint_id,
+                secret_key=presented_api_key,
+            )
+
+        self._invocation_service.record_invocation(
+            db,
+            binding=binding,
+            request_source="alias",
+            input_payload=request_payload,
+            status="rejected",
+            cache_status="bypass",
+            api_key_id=authenticated_key.id if authenticated_key is not None else None,
+            error_message=error_detail,
+        )
+
     def invoke_native_endpoint(
         self,
         db: Session,

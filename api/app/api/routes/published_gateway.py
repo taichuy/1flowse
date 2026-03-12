@@ -149,6 +149,14 @@ def invoke_published_openai_chat_completion(
     db: Session = Depends(get_db),
 ) -> OpenAIChatCompletionResponse:
     if payload.stream:
+        published_gateway_service.record_protocol_rejection_by_alias(
+            db,
+            model=payload.model,
+            expected_protocol="openai",
+            request_payload=payload.model_dump(mode="json", exclude_none=True),
+            error_detail="Streaming chat completions are not supported yet.",
+            presented_api_key=_extract_presented_api_key(request),
+        )
         raise HTTPException(
             status_code=422,
             detail="Streaming chat completions are not supported yet.",
@@ -180,6 +188,14 @@ def invoke_published_openai_response(
     db: Session = Depends(get_db),
 ) -> OpenAIResponseResponse:
     if payload.stream:
+        published_gateway_service.record_protocol_rejection_by_alias(
+            db,
+            model=payload.model,
+            expected_protocol="openai",
+            request_payload=payload.model_dump(mode="json", exclude_none=True),
+            error_detail="Streaming responses are not supported yet.",
+            presented_api_key=_extract_presented_api_key(request),
+        )
         raise HTTPException(
             status_code=422,
             detail="Streaming responses are not supported yet.",
@@ -211,6 +227,14 @@ def invoke_published_anthropic_message(
     db: Session = Depends(get_db),
 ) -> AnthropicMessageResponse:
     if payload.stream:
+        published_gateway_service.record_protocol_rejection_by_alias(
+            db,
+            model=payload.model,
+            expected_protocol="anthropic",
+            request_payload=payload.model_dump(mode="json", exclude_none=True),
+            error_detail="Streaming Anthropic messages are not supported yet.",
+            presented_api_key=_extract_presented_api_key(request),
+        )
         raise HTTPException(
             status_code=422,
             detail="Streaming Anthropic messages are not supported yet.",

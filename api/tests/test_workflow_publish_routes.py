@@ -874,6 +874,145 @@ def test_published_openai_routes_reject_streaming_requests(
     assert response.status_code == 422
     assert response.json()["detail"] == "Streaming chat completions are not supported yet."
 
+
+def test_protocol_streaming_rejections_are_recorded_in_publish_audit(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Published Protocol Streaming Audit Workflow",
+            "definition": {
+                **_publishable_definition(
+                    endpoint_id="openai-chat",
+                    endpoint_name="OpenAI Chat",
+                    protocol="openai",
+                    alias="openai-stream-audit",
+                    path="/openai-stream-audit",
+                    auth_mode="api_key",
+                ),
+                "publish": [
+                    {
+                        "id": "openai-chat",
+                        "name": "OpenAI Chat",
+                        "alias": "openai-stream-audit",
+                        "path": "/openai-stream-audit",
+                        "protocol": "openai",
+                        "workflowVersion": "0.1.0",
+                        "authMode": "api_key",
+                        "streaming": False,
+                        "inputSchema": {"type": "object"},
+                    },
+                    {
+                        "id": "anthropic-chat",
+                        "name": "Anthropic Chat",
+                        "alias": "anthropic-stream-audit",
+                        "path": "/anthropic-stream-audit",
+                        "protocol": "anthropic",
+                        "workflowVersion": "0.1.0",
+                        "authMode": "internal",
+                        "streaming": False,
+                        "inputSchema": {"type": "object"},
+                    },
+                ],
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    bindings = {item["endpoint_id"]: item for item in bindings_response.json()}
+
+    api_key_response = client.post(
+        f"/api/workflows/{workflow_id}/published-endpoints/{bindings['openai-chat']['id']}/api-keys",
+        json={"name": "Streaming Audit Key"},
+    )
+    assert api_key_response.status_code == 201
+    api_key = api_key_response.json()
+
+    for binding in bindings.values():
+        publish_response = client.patch(
+            f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/lifecycle",
+            json={"status": "published"},
+        )
+        assert publish_response.status_code == 200
+
+    chat_stream_response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openai-stream-audit",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": True,
+        },
+        headers={"x-api-key": api_key["secret_key"]},
+    )
+    assert chat_stream_response.status_code == 422
+
+    response_stream_response = client.post(
+        "/v1/responses",
+        json={
+            "model": "openai-stream-audit",
+            "input": "hello",
+            "stream": True,
+        },
+        headers={"x-api-key": api_key["secret_key"]},
+    )
+    assert response_stream_response.status_code == 422
+
+    anthropic_stream_response = client.post(
+        "/v1/messages",
+        json={
+            "model": "anthropic-stream-audit",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": True,
+            "max_tokens": 128,
+        },
+    )
+    assert anthropic_stream_response.status_code == 422
+
+    openai_activity_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{bindings['openai-chat']['id']}/invocations"
+    )
+    assert openai_activity_response.status_code == 200
+    openai_activity = openai_activity_response.json()
+    assert openai_activity["summary"]["total_count"] == 2
+    assert openai_activity["summary"]["rejected_count"] == 2
+    assert openai_activity["summary"]["last_reason_code"] == "streaming_unsupported"
+    assert {
+        item["value"]: item["count"] for item in openai_activity["facets"]["reason_counts"]
+    } == {"streaming_unsupported": 2}
+    assert {
+        item["value"]: item["count"]
+        for item in openai_activity["facets"]["request_surface_counts"]
+    } == {
+        "openai.chat.completions": 1,
+        "openai.responses": 1,
+    }
+    assert {
+        item["name"]: item["invocation_count"]
+        for item in openai_activity["facets"]["api_key_usage"]
+    } == {"Streaming Audit Key": 2}
+    assert [item["request_surface"] for item in openai_activity["items"]] == [
+        "openai.responses",
+        "openai.chat.completions",
+    ]
+
+    anthropic_activity_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{bindings['anthropic-chat']['id']}/invocations"
+    )
+    assert anthropic_activity_response.status_code == 200
+    anthropic_activity = anthropic_activity_response.json()
+    assert anthropic_activity["summary"]["total_count"] == 1
+    assert anthropic_activity["summary"]["rejected_count"] == 1
+    assert anthropic_activity["summary"]["last_reason_code"] == "streaming_unsupported"
+    assert anthropic_activity["items"][0]["request_surface"] == "anthropic.messages"
+    assert anthropic_activity["items"][0]["reason_code"] == "streaming_unsupported"
+
 def test_invoke_published_native_endpoint_uses_response_cache(
     client: TestClient,
     sqlite_session,
