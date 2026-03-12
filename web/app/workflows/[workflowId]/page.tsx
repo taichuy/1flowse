@@ -5,21 +5,27 @@ import { WorkflowEditorWorkbench } from "@/components/workflow-editor-workbench"
 import { WorkflowPublishPanel } from "@/components/workflow-publish-panel";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import {
+  type PublishedEndpointInvocationRequestSurface,
   type PublishedEndpointInvocationRequestSource,
   type PublishedEndpointInvocationStatus,
   getWorkflowPublishedEndpoints
 } from "@/lib/get-workflow-publish";
 import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
-import { PUBLISHED_INVOCATION_REASON_CODES } from "@/lib/published-invocation-presenters";
+import type {
+  PublishTimeWindow,
+  WorkflowPublishInvocationActiveFilter
+} from "@/lib/workflow-publish-governance";
+import {
+  PUBLISHED_INVOCATION_REASON_CODES,
+  PUBLISHED_INVOCATION_REQUEST_SURFACES
+} from "@/lib/published-invocation-presenters";
 import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 
 type WorkflowEditorPageProps = {
   params: Promise<{ workflowId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-type PublishTimeWindow = "24h" | "7d" | "30d" | "all";
 
 const PUBLISH_STATUSES: PublishedEndpointInvocationStatus[] = [
   "succeeded",
@@ -93,6 +99,9 @@ export default async function WorkflowEditorPage({
   const requestedRequestSource = firstSearchValue(
     resolvedSearchParams.publish_request_source
   );
+  const requestedRequestSurface = firstSearchValue(
+    resolvedSearchParams.publish_request_surface
+  );
   const requestedApiKeyId = firstSearchValue(resolvedSearchParams.publish_api_key_id);
   const requestedReasonCode = firstSearchValue(
     resolvedSearchParams.publish_reason_code
@@ -100,6 +109,11 @@ export default async function WorkflowEditorPage({
   const publishTimeWindow = resolvePublishTimeWindow(
     firstSearchValue(resolvedSearchParams.publish_window)
   );
+  const selectedRequestSurface = PUBLISHED_INVOCATION_REQUEST_SURFACES.includes(
+    requestedRequestSurface as PublishedEndpointInvocationRequestSurface
+  )
+    ? (requestedRequestSurface as PublishedEndpointInvocationRequestSurface)
+    : null;
   const activeInvocationFilter =
     activeBindingId && publishedEndpoints.some((binding) => binding.id === activeBindingId)
       ? {
@@ -114,6 +128,7 @@ export default async function WorkflowEditorPage({
           )
             ? (requestedRequestSource as PublishedEndpointInvocationRequestSource)
             : undefined,
+          requestSurface: selectedRequestSurface ?? undefined,
           apiKeyId: requestedApiKeyId?.trim() ? requestedApiKeyId.trim() : undefined,
           reasonCode: PUBLISHED_INVOCATION_REASON_CODES.includes(
             requestedReasonCode as (typeof PUBLISHED_INVOCATION_REASON_CODES)[number]
@@ -155,10 +170,11 @@ export default async function WorkflowEditorPage({
           bindingId: activeInvocationFilter?.bindingId ?? null,
           status: activeInvocationFilter?.status ?? null,
           requestSource: activeInvocationFilter?.requestSource ?? null,
+          requestSurface: activeInvocationFilter?.requestSurface ?? selectedRequestSurface,
           apiKeyId: activeInvocationFilter?.apiKeyId ?? null,
           reasonCode: activeInvocationFilter?.reasonCode ?? null,
           timeWindow: publishTimeWindow
-        }}
+        } satisfies WorkflowPublishInvocationActiveFilter}
       />
     </>
   );

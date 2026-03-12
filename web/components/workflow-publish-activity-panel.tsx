@@ -6,9 +6,12 @@ import type {
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
+import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import {
   PUBLISHED_INVOCATION_REASON_CODES,
+  PUBLISHED_INVOCATION_REQUEST_SURFACES,
   formatPublishedInvocationReasonLabel,
+  formatPublishedInvocationSurfaceLabel,
   formatRateLimitPressure
 } from "@/lib/published-invocation-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
@@ -19,14 +22,7 @@ type WorkflowPublishActivityPanelProps = {
   apiKeys: PublishedEndpointApiKeyItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
-  activeInvocationFilter: {
-    bindingId: string | null;
-    status: "succeeded" | "failed" | "rejected" | null;
-    requestSource: "workflow" | "alias" | "path" | null;
-    apiKeyId: string | null;
-    reasonCode: string | null;
-    timeWindow: "24h" | "7d" | "30d" | "all";
-  } | null;
+  activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
 };
 
 const TIME_WINDOW_OPTIONS = [
@@ -82,6 +78,9 @@ function buildActiveFilterChips(
   if (activeInvocationFilter.requestSource) {
     chips.push(`source ${activeInvocationFilter.requestSource}`);
   }
+  if (activeInvocationFilter.requestSurface) {
+    chips.push(formatPublishedInvocationSurfaceLabel(activeInvocationFilter.requestSurface));
+  }
   if (activeInvocationFilter.reasonCode) {
     chips.push(formatPublishedInvocationReasonLabel(activeInvocationFilter.reasonCode));
   }
@@ -106,6 +105,7 @@ export function WorkflowPublishActivityPanel({
   const summary = invocationAudit?.summary;
   const items = invocationAudit?.items ?? [];
   const requestSourceCounts = invocationAudit?.facets.request_source_counts ?? [];
+  const requestSurfaceCounts = invocationAudit?.facets.request_surface_counts ?? [];
   const cacheStatusCounts = invocationAudit?.facets.cache_status_counts ?? [];
   const reasonCounts = invocationAudit?.facets.reason_counts ?? [];
   const apiKeyUsage = invocationAudit?.facets.api_key_usage ?? [];
@@ -166,6 +166,22 @@ export function WorkflowPublishActivityPanel({
             <option value="workflow">workflow</option>
             <option value="alias">alias</option>
             <option value="path">path</option>
+          </select>
+        </label>
+
+        <label className="binding-field">
+          <span className="binding-label">Request surface</span>
+          <select
+            className="binding-select"
+            name="publish_request_surface"
+            defaultValue={activeInvocationFilter?.requestSurface ?? ""}
+          >
+            <option value="">全部协议面</option>
+            {PUBLISHED_INVOCATION_REQUEST_SURFACES.map((requestSurface) => (
+              <option key={requestSurface} value={requestSurface}>
+                {formatPublishedInvocationSurfaceLabel(requestSurface)}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -282,6 +298,15 @@ export function WorkflowPublishActivityPanel({
               </dd>
             </div>
           </dl>
+          {requestSurfaceCounts.length ? (
+            <div className="tool-badge-row">
+              {requestSurfaceCounts.map((item) => (
+                <span className="event-chip" key={item.value}>
+                  {formatPublishedInvocationSurfaceLabel(item.value)} {item.count}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="payload-card compact-card">
@@ -456,8 +481,8 @@ export function WorkflowPublishActivityPanel({
                 </div>
               </div>
               <p className="binding-meta">
-                {item.request_source} · {formatTimestamp(item.created_at)} ·{" "}
-                {formatDurationMs(item.duration_ms)}
+                {formatPublishedInvocationSurfaceLabel(item.request_surface)} ·{" "}
+                {item.request_source} · {formatTimestamp(item.created_at)} · {formatDurationMs(item.duration_ms)}
               </p>
               <dl className="compact-meta-list">
                 <div>

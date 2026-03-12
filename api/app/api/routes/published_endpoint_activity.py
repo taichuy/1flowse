@@ -14,6 +14,7 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationItem,
     PublishedEndpointInvocationReasonCode,
     PublishedEndpointInvocationListResponse,
+    PublishedEndpointInvocationRequestSurface,
     PublishedEndpointInvocationRequestSource,
     PublishedEndpointInvocationStatus,
     PublishedEndpointInvocationSummary,
@@ -62,6 +63,7 @@ def _serialize_published_invocation_item(
         protocol=record.protocol,
         auth_mode=record.auth_mode,
         request_source=record.request_source,
+        request_surface=published_invocation_service.resolve_request_surface(record),
         status=record.status,
         cache_status=record.cache_status or "bypass",
         api_key_id=record.api_key_id,
@@ -137,6 +139,7 @@ def list_published_endpoint_invocations(
         alias="status",
     ),
     request_source: PublishedEndpointInvocationRequestSource | None = Query(default=None),
+    request_surface: PublishedEndpointInvocationRequestSurface | None = Query(default=None),
     api_key_id: str | None = Query(default=None, min_length=1, max_length=36),
     reason_code: PublishedEndpointInvocationReasonCode | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
@@ -166,6 +169,7 @@ def list_published_endpoint_invocations(
         binding_id=binding_id,
         status=invocation_status,
         request_source=request_source,
+        request_surface=request_surface,
         api_key_id=api_key_id,
         reason_code=reason_code,
         created_from=created_from,
@@ -178,6 +182,7 @@ def list_published_endpoint_invocations(
         binding_id=binding_id,
         status=invocation_status,
         request_source=request_source,
+        request_surface=request_surface,
         api_key_id=api_key_id,
         reason_code=reason_code,
         created_from=created_from,
@@ -190,6 +195,7 @@ def list_published_endpoint_invocations(
         filters=PublishedEndpointInvocationFilters(
             status=invocation_status,
             request_source=request_source,
+            request_surface=request_surface,
             api_key_id=api_key_id,
             reason_code=reason_code,
             created_from=created_from,
@@ -200,6 +206,9 @@ def list_published_endpoint_invocations(
             status_counts=[_serialize_facet_item(item) for item in audit.status_counts],
             request_source_counts=[
                 _serialize_facet_item(item) for item in audit.request_source_counts
+            ],
+            request_surface_counts=[
+                _serialize_facet_item(item) for item in audit.request_surface_counts
             ],
             cache_status_counts=[
                 _serialize_facet_item(item) for item in audit.cache_status_counts

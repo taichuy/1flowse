@@ -637,6 +637,7 @@ def test_invoke_published_openai_chat_completion_uses_model_alias(
     activity = activity_response.json()
     assert activity["summary"]["total_count"] == 1
     assert activity["summary"]["succeeded_count"] == 1
+    assert activity["items"][0]["request_surface"] == "openai.chat.completions"
     assert activity["facets"]["request_source_counts"] == [
         {
             "value": "workflow",
@@ -656,6 +657,14 @@ def test_invoke_published_openai_chat_completion_uses_model_alias(
             "last_invoked_at": None,
             "last_status": None,
         },
+    ]
+    assert activity["facets"]["request_surface_counts"] == [
+        {
+            "value": "openai.chat.completions",
+            "count": 1,
+            "last_invoked_at": activity["summary"]["last_invoked_at"],
+            "last_status": "succeeded",
+        }
     ]
 
 
@@ -1086,6 +1095,7 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
     assert all_activity["filters"] == {
         "status": None,
         "request_source": None,
+        "request_surface": None,
         "api_key_id": None,
         "reason_code": None,
         "created_from": None,
@@ -1105,6 +1115,14 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
         item["value"]: item["count"] for item in all_activity["facets"]["request_source_counts"]
     }
     assert request_source_counts == {"workflow": 2, "alias": 1, "path": 1}
+    request_surface_counts = {
+        item["value"]: item["count"] for item in all_activity["facets"]["request_surface_counts"]
+    }
+    assert request_surface_counts == {
+        "native.workflow": 2,
+        "native.alias": 1,
+        "native.path": 1,
+    }
 
     api_key_usage = {
         item["name"]: item["invocation_count"] for item in all_activity["facets"]["api_key_usage"]
@@ -1133,6 +1151,7 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
     assert filtered_activity["filters"] == {
         "status": "succeeded",
         "request_source": None,
+        "request_surface": None,
         "api_key_id": primary_key["id"],
         "reason_code": None,
         "created_from": None,
@@ -1147,6 +1166,29 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
     assert all(
         item["api_key_prefix"] == primary_key["key_prefix"] for item in filtered_activity["items"]
     )
+
+    surface_filtered_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
+        params={
+            "request_surface": "native.workflow",
+        },
+    )
+    assert surface_filtered_response.status_code == 200
+    surface_filtered = surface_filtered_response.json()
+    assert surface_filtered["filters"] == {
+        "status": None,
+        "request_source": None,
+        "request_surface": "native.workflow",
+        "api_key_id": None,
+        "reason_code": None,
+        "created_from": None,
+        "created_to": None,
+    }
+    assert surface_filtered["summary"]["total_count"] == 2
+    assert [item["request_surface"] for item in surface_filtered["items"]] == [
+        "native.workflow",
+        "native.workflow",
+    ]
 
 
 def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
@@ -1248,6 +1290,7 @@ def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
     assert filtered_body["filters"] == {
         "status": None,
         "request_source": None,
+        "request_surface": None,
         "api_key_id": None,
         "reason_code": None,
         "created_from": "2026-03-12T08:30:00Z",
@@ -1525,6 +1568,7 @@ def test_rejected_published_invocation_does_not_consume_rate_limit_quota(
     assert reason_filtered["filters"] == {
         "status": None,
         "request_source": None,
+        "request_surface": None,
         "api_key_id": None,
         "reason_code": "api_key_invalid",
         "created_from": None,

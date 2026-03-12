@@ -16,8 +16,21 @@ export const PUBLISHED_INVOCATION_REASON_CODES = [
   "workflow_missing"
 ] as const;
 
+export const PUBLISHED_INVOCATION_REQUEST_SURFACES = [
+  "native.workflow",
+  "native.alias",
+  "native.path",
+  "openai.chat.completions",
+  "openai.responses",
+  "openai.unknown",
+  "anthropic.messages",
+  "unknown"
+] as const;
+
 export type PublishedInvocationReasonCode =
   (typeof PUBLISHED_INVOCATION_REASON_CODES)[number];
+export type PublishedInvocationRequestSurface =
+  (typeof PUBLISHED_INVOCATION_REQUEST_SURFACES)[number];
 
 const REASON_LABELS: Record<string, string> = {
   api_key_invalid: "Invalid API key",
@@ -37,6 +50,17 @@ const REASON_LABELS: Record<string, string> = {
   workflow_missing: "Workflow missing"
 };
 
+const REQUEST_SURFACE_LABELS: Record<string, string> = {
+  "native.workflow": "Native workflow route",
+  "native.alias": "Native alias route",
+  "native.path": "Native path route",
+  "openai.chat.completions": "OpenAI chat.completions",
+  "openai.responses": "OpenAI responses",
+  "openai.unknown": "OpenAI unknown surface",
+  "anthropic.messages": "Anthropic messages",
+  unknown: "Unknown surface"
+};
+
 export function formatPublishedInvocationReasonLabel(
   reasonCode: string | null | undefined
 ) {
@@ -45,6 +69,16 @@ export function formatPublishedInvocationReasonLabel(
   }
 
   return REASON_LABELS[reasonCode] ?? reasonCode.replaceAll("_", " ");
+}
+
+export function formatPublishedInvocationSurfaceLabel(
+  requestSurface: string | null | undefined
+) {
+  if (!requestSurface) {
+    return "Unknown surface";
+  }
+
+  return REQUEST_SURFACE_LABELS[requestSurface] ?? requestSurface;
 }
 
 export function formatRateLimitPressure(

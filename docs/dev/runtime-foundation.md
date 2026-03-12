@@ -430,8 +430,8 @@ uv run alembic upgrade head
   - request / response preview
 - `GET /api/workflows/{workflow_id}/published-endpoints` 当前会额外返回 `activity` 摘要，便于治理页直接显示最近调用情况
 - `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前支持读取 binding 级 activity summary + recent items
-- `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前还支持按 `status / request_source / api_key_id / created_from / created_to` 筛选，并返回失败原因聚合、原因码聚合、API key 维度使用统计和 timeline buckets
-- published invocation audit 当前已补上 `summary.last_reason_code`、`facets.reason_counts` 与 `items[].reason_code`，可直接区分 `rate_limit / api_key / sync waiting / auth mode` 等治理信号，而不是只看原始 `error_message`
+- `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前还支持按 `status / request_source / request_surface / api_key_id / reason_code / created_from / created_to` 筛选，并返回失败原因聚合、原因码聚合、request surface facets、API key 维度使用统计和 timeline buckets
+- published invocation audit 当前已补上 `summary.last_reason_code`、`facets.reason_counts`、`facets.request_surface_counts`、`items[].reason_code` 与 `items[].request_surface`，可直接区分 `rate_limit / api_key / sync waiting / auth mode / protocol surface` 等治理信号，而不是只看原始 `error_message`
 - `GET /api/workflows/{workflow_id}/runs` 当前会聚合返回 run 状态、版本、`node_run_count`、`event_count` 和 `last_event_at`，供 editor 选择最近执行上下文，而不是继续依赖首页摘要拼装
 - `GET /api/runs/{run_id}` 当前已支持 `include_events=false` 的摘要模式，供 run 诊断页等人类界面减少与 `/trace` 的重复数据搬运
 - `GET /api/runs/{run_id}/execution-view` 当前会把 `run_artifacts / tool_call_records / ai_call_records / run_callback_tickets` 聚合成节点级 execution facts
@@ -606,13 +606,13 @@ uv run alembic upgrade head
 - 当前 workflow 页面还会并行读取 `/api/workflows/{workflow_id}/published-endpoints`，在 editor 下方挂独立 publish governance panel
 - 对启用 cache 的 binding，workflow 页面会进一步读取 `/cache-entries`，展示 active cache inventory 摘要与条目预览
 - 对 `auth_mode=api_key` 的 binding，workflow 页面会进一步读取 active API key 列表，并提供 create / revoke / one-time secret 展示
-- workflow 页面当前还会继续读取 `/invocations`，把最近调用审计、API key 使用、最近失败原因与 request source / cache facet 接回 publish panel
+- workflow 页面当前还会继续读取 `/invocations`，把最近调用审计、API key 使用、最近失败原因与 request source / request surface / cache facet 接回 publish panel
 - 对启用 `rate_limit_policy` 的 binding，workflow 页面会按当前限流窗口再次读取 `/invocations`，直接展示 window used / remaining / rejected 的治理信号
 - workflow 页面当前已把 cache inventory、API key、invocation audit 与 rate-limit window 的并行装配收口到 `web/lib/get-workflow-publish-governance.ts`，让页面继续保持“数据装配 + 区块拼接”的薄层职责
 - publish governance panel 当前已按职责拆成 `panel -> binding card -> invocation activity` 子组件，避免 workflow 页继续长回单文件混排
-- `invocation activity` 当前会直接展示 traffic mix、rate-limit window、API key usage、失败原因和 timeline buckets，开放 API 的治理反馈不再只停留在基础统计摘要
+- `invocation activity` 当前会直接展示 traffic mix、request surface、rate-limit window、API key usage、失败原因和 timeline buckets，开放 API 的治理反馈不再只停留在基础统计摘要
 - workflow 页面当前已支持按 binding 级 query 参数驱动 invocation audit 筛选：
-  - 支持 `status / request_source / reason_code / api_key_id / time window`
+  - 支持 `status / request_source / request_surface / reason_code / api_key_id / time window`
   - 当前筛选仍保持 server-driven，继续复用后端 `/invocations` 事实层，而不是在前端再复制一套治理状态
   - 当前默认只对被选中的 binding 应用筛选，其余 binding 继续维持最近调用摘要，避免 workflow 页面一次性拉高所有 binding 的查询体量
 - 当前 `llm_agent` / `tool` / `mcp_query` / `condition` / `router` / `output` 节点已开始进入结构化配置表单，并保留高级 JSON 兜底：
@@ -682,17 +682,18 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 最近一次正式 Git 提交是 `2026-03-12 13:21:57 +0800` 的 `feat: add publish governance reason signals`：
-  - published invocation audit 已补上 `reason_code` 层，能把 `rate_limit / api_key / sync waiting / auth mode` 等问题收口为稳定治理信号
-  - workflow 页的 publish activity 已开始显示 issue signals、recent item reason label 和 rate limit pressure，而不是只堆 raw error message
-- 当前工作区对这次提交的直接承接是继续把治理信号推进成可消费过滤：
-  - `/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前已支持 `reason_code` 查询参数
-  - workflow 页面当前已把 `status / request_source / reason_code / api_key_id / time window` 接成 binding 级服务器端过滤表单
-  - 这让 publish governance 从“有信号可看”推进到“能按问题聚焦与钻取”
+- 本轮承接的上一条正式 Git 提交是 `feat: add publish invocation governance filters`：
+  - published invocation audit 已补上 binding 级 `status / request_source / reason_code / api_key_id / time window` 过滤
+  - workflow 页已经能围绕 invocation audit 做最小问题聚焦与钻取，而不再只看聚合摘要
+- 当前工作区对这条主线的继续承接是把治理维度补到协议面：
+  - `/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations` 当前已支持 `request_surface` 查询参数，并返回 `items[].request_surface + facets.request_surface_counts`
+  - workflow 页面当前已把 `request_surface` 接成 binding 级服务器端过滤表单、active chips 和 recent item 展示
+  - 这让 publish governance 从“按入口和原因码筛选”继续推进到“按协议面排障与治理”
 - 这次承接判断仍然是：需要衔接，而且主线仍然是 `API 调用开放` 的 P0 发布治理，而不是再回到 callback cleanup 深挖
 - 当前前端承接仍保持解耦方向：
   - `web/app/actions.ts` 已拆成 `workflow` / `publish` 两组 server actions
   - plugin registry / tool binding 与 publish lifecycle / API key 现在按业务模块分别消费自己的 action 文件
+  - publish governance 的 active filter 类型已收口到 `web/lib/workflow-publish-governance.ts`，避免 page / panel / binding card / activity panel 继续复制同一组筛选边界
 - 当前真正需要持续承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
   - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
@@ -702,7 +703,7 @@ uv run alembic upgrade head
   - `应用新建编排` 这一条线已经有 `workflow library -> starter -> editor -> 保存版本 -> recent runs overlay`
   - `编排节点能力` 这一条线已经有 phase runtime、tool/evidence/artifact、scheduler resume 和 callback ingress
   - `Dify 插件兼容` 已有 registry / adapter / tool lane / workspace scope 的基础 contract，但生命周期仍未完整
-  - `API 调用开放` 已从纯设计占位推进到 `publish binding + lifecycle + alias/path + native invoke + OpenAI / Anthropic 非流式入口 + api_key auth + activity audit + time window/timeline + binding rate limit + cache inventory + workflow 页面治理入口 + binding 级 invocation filters` 最小闭环；但 streaming、协议字段完整度和更细治理消费还没真正接上
+  - `API 调用开放` 已从纯设计占位推进到 `publish binding + lifecycle + alias/path + native invoke + OpenAI / Anthropic 非流式入口 + api_key auth + activity audit + request surface + time window/timeline + binding rate limit + cache inventory + workflow 页面治理入口 + binding 级 invocation filters` 最小闭环；但 streaming、协议字段完整度和更细治理消费还没真正接上
 - 当前架构方向整体是解耦的，但仍有未完全拆开的高风险边界：
   - 后端已经开始形成 `Flow Compiler -> RuntimeService -> AgentRuntime / ToolGateway / ContextService / RunResumeScheduler / RunCallbackTicketService / WorkflowPublishBindingService` 的分层
   - execution / evidence 查询也已独立落到 `RunViewService + run_views route`，没有继续把聚合逻辑塞回 `runs.py`
@@ -788,8 +789,8 @@ docker compose up -d --build
 - 外部 MCP Provider 接入
 - 完整插件兼容代理生命周期
 - publish endpoint 的 cache 与更细的审计治理
-- publish activity 的更细 timeline 可视化、前端筛选钻取与长期审计面板
-- publish activity 按 `reason_code`、API key、时间窗的交互式筛选与钻取
+- publish activity 的更细 timeline 可视化、长期审计面板与更深的 protocol surface 趋势治理
+- publish activity 按 `protocol surface`、reason timeline、API key 趋势的更细交互式筛选与钻取
 - `native / openai / anthropic` 发布调用的 streaming / SSE 与更完整发布管理
 - OpenAI / Anthropic 更完整的字段透传、usage 映射与协议面治理可见性
 - sync published endpoint 对 waiting run 现在只会明确拒绝，还没有正式的异步 published invoke / callback 承接链路
@@ -808,8 +809,8 @@ docker compose up -d --build
 
 当前判断：
 
-- 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + OpenAI/Anthropic 非流式兼容入口 + api_key auth + activity audit filters + time window/timeline + binding rate limit + cache inventory + workflow 页面治理 + binding 级 invocation drilldown`。
-- 发布态现在已经具备最小 native 调用、OpenAI / Anthropic 非流式入口、API key 鉴权、alias/path 地址闭环、基础审计视图、最小 binding 级限流，以及 workflow 页的 lifecycle / cache / API key 治理入口；这轮已经把 rejection reason signals 与 rate limit pressure 继续推进到可筛选、可钻取的治理视图，但距离完整开放 API 仍差 streaming、协议字段完整度和更细趋势治理。
+- 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + OpenAI/Anthropic 非流式兼容入口 + api_key auth + activity audit filters + request surface + time window/timeline + binding rate limit + cache inventory + workflow 页面治理 + binding 级 invocation drilldown`。
+- 发布态现在已经具备最小 native 调用、OpenAI / Anthropic 非流式入口、API key 鉴权、alias/path 地址闭环、基础审计视图、最小 binding 级限流，以及 workflow 页的 lifecycle / cache / API key 治理入口；这轮已经把 rejection reason signals、request surface 与 rate limit pressure 继续推进到可筛选、可钻取的治理视图，但距离完整开放 API 仍差 streaming、协议字段完整度和更细趋势治理。
 - 现在还不适合一步到位宣称“完整 Durable Runtime 已完成”，原因是：
   - callback ingress、ticket TTL/过期态和周期自动清理已经落地，但 callback bus、更强鉴权和系统诊断治理可见性还没有完成
   - scheduler 还只有最小任务投递，没有 dead-letter、去重、重投和系统化观测
@@ -822,7 +823,7 @@ docker compose up -d --build
    - 继续把最小 `native / openai / anthropic` endpoint 演进成更完整的发布实体
    - 把 streaming / SSE 挂到同一条发布链和统一事件流上
 2. 继续补 publish endpoint 的发布实体：
-   - 在已落地的 binding 级筛选钻取基础上，继续补更细的 API key 趋势、reason timeline 和协议面可见性
+   - 在已落地的 binding 级筛选钻取基础上，继续补更细的 API key 趋势、reason timeline、protocol surface 趋势和 streaming 治理可见性
    - streaming / SSE 的协议面可见性与 invocation / cache / API key / protocol surface 的统一前端治理区块
    - 继续坚持绑定 `workflow_version + compiled_blueprint`
 3. 延续当前前端解耦方向：
@@ -831,7 +832,7 @@ docker compose up -d --build
 
 原因：
 
-- 最小 `native` 调用入口、OpenAI / Anthropic 非流式入口、`api_key` 鉴权实体、alias/path 地址语义、基础 activity audit、publish cache inventory，以及 workflow 页治理入口都已经落地；现在又补上了 binding 级筛选钻取，但更细的治理反馈与流式/协议完整度仍未接上，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
+- 最小 `native` 调用入口、OpenAI / Anthropic 非流式入口、`api_key` 鉴权实体、alias/path 地址语义、基础 activity audit、publish cache inventory，以及 workflow 页治理入口都已经落地；现在又补上了 binding 级筛选钻取和 request surface 可见性，但更细的治理反馈与流式/协议完整度仍未接上，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
 - run 侧虽然已经绑定 compiled blueprint，execution/evidence 视图也已经开始消费这些事实，但发布层仍需要继续承接，稳定执行边界才能真正服务主业务。
 - 本轮已经把 publish governance 的页面拆分继续落实到 server actions 边界，下一轮应继续沿这个方向演进，而不是在新增治理能力时回退到单点混排。
 

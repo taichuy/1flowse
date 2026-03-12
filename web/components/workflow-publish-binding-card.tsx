@@ -8,6 +8,7 @@ import type {
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
+import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 
@@ -18,14 +19,7 @@ type WorkflowPublishBindingCardProps = {
   apiKeys: PublishedEndpointApiKeyItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
-  activeInvocationFilter: {
-    bindingId: string | null;
-    status: "succeeded" | "failed" | "rejected" | null;
-    requestSource: "workflow" | "alias" | "path" | null;
-    apiKeyId: string | null;
-    reasonCode: string | null;
-    timeWindow: "24h" | "7d" | "30d" | "all";
-  } | null;
+  activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
 };
 
 export function WorkflowPublishBindingCard({

@@ -3,6 +3,15 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 export type PublishedEndpointInvocationStatus = "succeeded" | "failed" | "rejected";
 export type PublishedEndpointInvocationRequestSource = "workflow" | "alias" | "path";
 export type PublishedEndpointInvocationCacheStatus = "hit" | "miss" | "bypass";
+export type PublishedEndpointInvocationRequestSurface =
+  | "native.workflow"
+  | "native.alias"
+  | "native.path"
+  | "openai.chat.completions"
+  | "openai.responses"
+  | "openai.unknown"
+  | "anthropic.messages"
+  | "unknown";
 
 export type PublishedEndpointInvocationSummary = {
   total_count: number;
@@ -30,6 +39,7 @@ export type PublishedEndpointInvocationItem = {
   protocol: string;
   auth_mode: string;
   request_source: PublishedEndpointInvocationRequestSource;
+  request_surface: PublishedEndpointInvocationRequestSurface;
   status: PublishedEndpointInvocationStatus;
   cache_status: PublishedEndpointInvocationCacheStatus;
   api_key_id?: string | null;
@@ -86,6 +96,7 @@ export type PublishedEndpointInvocationTimeBucketItem = {
 export type PublishedEndpointInvocationFilters = {
   status?: PublishedEndpointInvocationStatus | null;
   request_source?: PublishedEndpointInvocationRequestSource | null;
+  request_surface?: PublishedEndpointInvocationRequestSurface | null;
   api_key_id?: string | null;
   reason_code?: string | null;
   created_from?: string | null;
@@ -95,6 +106,7 @@ export type PublishedEndpointInvocationFilters = {
 export type PublishedEndpointInvocationFacets = {
   status_counts: PublishedEndpointInvocationFacetItem[];
   request_source_counts: PublishedEndpointInvocationFacetItem[];
+  request_surface_counts: PublishedEndpointInvocationFacetItem[];
   cache_status_counts: PublishedEndpointInvocationFacetItem[];
   reason_counts: PublishedEndpointInvocationFacetItem[];
   api_key_usage: PublishedEndpointInvocationApiKeyUsageItem[];
@@ -289,6 +301,7 @@ export async function getPublishedEndpointInvocations(
     limit?: number;
     status?: PublishedEndpointInvocationStatus;
     requestSource?: PublishedEndpointInvocationRequestSource;
+    requestSurface?: PublishedEndpointInvocationRequestSurface;
     apiKeyId?: string;
     reasonCode?: string;
     createdFrom?: string;
@@ -306,6 +319,9 @@ export async function getPublishedEndpointInvocations(
     }
     if (options?.requestSource) {
       searchParams.set("request_source", options.requestSource);
+    }
+    if (options?.requestSurface) {
+      searchParams.set("request_surface", options.requestSurface);
     }
     if (options?.apiKeyId) {
       searchParams.set("api_key_id", options.apiKeyId);

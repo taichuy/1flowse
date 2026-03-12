@@ -22,6 +22,15 @@ type WorkflowPublishInvocationFilter = {
   bindingId: string;
   status?: "succeeded" | "failed" | "rejected";
   requestSource?: "workflow" | "alias" | "path";
+  requestSurface?:
+    | "native.workflow"
+    | "native.alias"
+    | "native.path"
+    | "openai.chat.completions"
+    | "openai.responses"
+    | "openai.unknown"
+    | "anthropic.messages"
+    | "unknown";
   apiKeyId?: string;
   reasonCode?: string;
   createdFrom?: string;
@@ -75,6 +84,7 @@ export async function getWorkflowPublishGovernanceSnapshot(
                 limit: options.activeInvocationFilter.limit ?? 12,
                 status: options.activeInvocationFilter.status,
                 requestSource: options.activeInvocationFilter.requestSource,
+                requestSurface: options.activeInvocationFilter.requestSurface,
                 apiKeyId: options.activeInvocationFilter.apiKeyId,
                 reasonCode: options.activeInvocationFilter.reasonCode,
                 createdFrom: options.activeInvocationFilter.createdFrom,

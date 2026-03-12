@@ -18,6 +18,16 @@ from app.models.workflow import (
 PublishedInvocationRequestSource = Literal["workflow", "alias", "path"]
 PublishedInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedInvocationCacheStatus = Literal["hit", "miss", "bypass"]
+PublishedInvocationRequestSurface = Literal[
+    "native.workflow",
+    "native.alias",
+    "native.path",
+    "openai.chat.completions",
+    "openai.responses",
+    "openai.unknown",
+    "anthropic.messages",
+    "unknown",
+]
 PublishedInvocationReasonCode = Literal[
     "api_key_invalid",
     "api_key_required",
@@ -136,6 +146,7 @@ class PublishedInvocationAudit:
     summary: PublishedInvocationSummary
     status_counts: list[PublishedInvocationFacet]
     request_source_counts: list[PublishedInvocationFacet]
+    request_surface_counts: list[PublishedInvocationFacet]
     cache_status_counts: list[PublishedInvocationFacet]
     reason_counts: list[PublishedInvocationFacet]
     api_key_usage: list[PublishedInvocationApiKeyUsage]
@@ -199,6 +210,32 @@ def _resolve_record_reason_code(
         error_message=record.error_message,
         run_status=record.run_status,
     )
+
+
+def _resolve_request_surface(
+    record: WorkflowPublishedInvocation,
+) -> PublishedInvocationRequestSurface:
+    if record.protocol == "native":
+        if record.request_source == "workflow":
+            return "native.workflow"
+        if record.request_source == "alias":
+            return "native.alias"
+        if record.request_source == "path":
+            return "native.path"
+        return "unknown"
+
+    request_keys = set(record.request_preview.get("keys") or [])
+    if record.protocol == "openai":
+        if "messages" in request_keys:
+            return "openai.chat.completions"
+        if "input" in request_keys:
+            return "openai.responses"
+        return "openai.unknown"
+
+    if record.protocol == "anthropic":
+        return "anthropic.messages"
+
+    return "unknown"
 
 
 def _summarize_records(
@@ -314,6 +351,12 @@ def _build_timeline(
 
 
 class PublishedInvocationService:
+    def resolve_request_surface(
+        self,
+        record: WorkflowPublishedInvocation,
+    ) -> PublishedInvocationRequestSurface:
+        return _resolve_request_surface(record)
+
     def count_recent_for_binding(
         self,
         db: Session,
@@ -378,6 +421,7 @@ class PublishedInvocationService:
         binding_id: str,
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
+        request_surface: PublishedInvocationRequestSurface | None = None,
         api_key_id: str | None = None,
         reason_code: PublishedInvocationReasonCode | None = None,
         created_from: datetime | None = None,
@@ -397,10 +441,16 @@ class PublishedInvocationService:
             WorkflowPublishedInvocation.id.desc(),
         )
 
-        if reason_code is None and limit is not None:
+        if reason_code is None and request_surface is None and limit is not None:
             return db.scalars(statement.limit(limit)).all()
 
         records = db.scalars(statement).all()
+        if request_surface is not None:
+            records = [
+                record
+                for record in records
+                if _resolve_request_surface(record) == request_surface
+            ]
         if reason_code is not None:
             records = [
                 record
@@ -472,6 +522,7 @@ class PublishedInvocationService:
         binding_id: str,
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
+        request_surface: PublishedInvocationRequestSurface | None = None,
         api_key_id: str | None = None,
         reason_code: PublishedInvocationReasonCode | None = None,
         created_from: datetime | None = None,
@@ -484,6 +535,7 @@ class PublishedInvocationService:
             binding_id=binding_id,
             status=status,
             request_source=request_source,
+            request_surface=request_surface,
             api_key_id=api_key_id,
             reason_code=reason_code,
             created_from=created_from,
@@ -499,6 +551,7 @@ class PublishedInvocationService:
         binding_id: str,
         status: PublishedInvocationStatus | None = None,
         request_source: PublishedInvocationRequestSource | None = None,
+        request_surface: PublishedInvocationRequestSurface | None = None,
         api_key_id: str | None = None,
         reason_code: PublishedInvocationReasonCode | None = None,
         created_from: datetime | None = None,
@@ -510,6 +563,7 @@ class PublishedInvocationService:
             binding_id=binding_id,
             status=status,
             request_source=request_source,
+            request_surface=request_surface,
             api_key_id=api_key_id,
             reason_code=reason_code,
             created_from=created_from,
@@ -526,6 +580,20 @@ class PublishedInvocationService:
             "workflow": {"count": 0, "last_invoked_at": None, "last_status": None},
             "alias": {"count": 0, "last_invoked_at": None, "last_status": None},
             "path": {"count": 0, "last_invoked_at": None, "last_status": None},
+        }
+        request_surface_buckets: dict[str, dict[str, object]] = {
+            "native.workflow": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "native.alias": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "native.path": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "openai.chat.completions": {
+                "count": 0,
+                "last_invoked_at": None,
+                "last_status": None,
+            },
+            "openai.responses": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "openai.unknown": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "anthropic.messages": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "unknown": {"count": 0, "last_invoked_at": None, "last_status": None},
         }
         cache_status_buckets: dict[str, dict[str, object]] = {
             "hit": {"count": 0, "last_invoked_at": None, "last_status": None},
@@ -565,6 +633,13 @@ class PublishedInvocationService:
             if source_bucket["last_invoked_at"] is None:
                 source_bucket["last_invoked_at"] = record.created_at
                 source_bucket["last_status"] = record.status
+
+            request_surface = _resolve_request_surface(record)
+            surface_bucket = request_surface_buckets[request_surface]
+            surface_bucket["count"] += 1
+            if surface_bucket["last_invoked_at"] is None:
+                surface_bucket["last_invoked_at"] = record.created_at
+                surface_bucket["last_status"] = record.status
 
             cache_bucket = cache_status_buckets[record.cache_status or "bypass"]
             cache_bucket["count"] += 1
@@ -619,6 +694,16 @@ class PublishedInvocationService:
                 last_status=bucket["last_status"],
             )
             for value, bucket in request_source_buckets.items()
+        ]
+        request_surface_counts = [
+            PublishedInvocationFacet(
+                value=value,
+                count=int(bucket["count"]),
+                last_invoked_at=bucket["last_invoked_at"],
+                last_status=bucket["last_status"],
+            )
+            for value, bucket in request_surface_buckets.items()
+            if int(bucket["count"]) > 0
         ]
         cache_status_counts = [
             PublishedInvocationFacet(
@@ -691,6 +776,7 @@ class PublishedInvocationService:
             summary=summary,
             status_counts=status_counts,
             request_source_counts=request_source_counts,
+            request_surface_counts=request_surface_counts,
             cache_status_counts=cache_status_counts,
             reason_counts=reason_counts,
             api_key_usage=api_key_usage,

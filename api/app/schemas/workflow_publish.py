@@ -16,6 +16,16 @@ PublishedEndpointApiKeyStatus = Literal["active", "revoked"]
 PublishedEndpointInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedEndpointInvocationRequestSource = Literal["workflow", "alias", "path"]
 PublishedEndpointInvocationCacheStatus = Literal["hit", "miss", "bypass"]
+PublishedEndpointInvocationRequestSurface = Literal[
+    "native.workflow",
+    "native.alias",
+    "native.path",
+    "openai.chat.completions",
+    "openai.responses",
+    "openai.unknown",
+    "anthropic.messages",
+    "unknown",
+]
 PublishedEndpointInvocationReasonCode = Literal[
     "api_key_invalid",
     "api_key_required",
@@ -244,6 +254,7 @@ class PublishedEndpointInvocationItem(BaseModel):
     protocol: str
     auth_mode: str
     request_source: PublishedEndpointInvocationRequestSource
+    request_surface: PublishedEndpointInvocationRequestSurface
     status: PublishedEndpointInvocationStatus
     cache_status: PublishedEndpointInvocationCacheStatus = "bypass"
     api_key_id: str | None = None
@@ -264,6 +275,7 @@ class PublishedEndpointInvocationItem(BaseModel):
 class PublishedEndpointInvocationFilters(BaseModel):
     status: PublishedEndpointInvocationStatus | None = None
     request_source: PublishedEndpointInvocationRequestSource | None = None
+    request_surface: PublishedEndpointInvocationRequestSurface | None = None
     api_key_id: str | None = None
     reason_code: PublishedEndpointInvocationReasonCode | None = None
     created_from: datetime | None = None
@@ -305,6 +317,9 @@ class PublishedEndpointInvocationTimeBucketItem(BaseModel):
 class PublishedEndpointInvocationFacets(BaseModel):
     status_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
     request_source_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
+    request_surface_counts: list[PublishedEndpointInvocationFacetItem] = Field(
+        default_factory=list
+    )
     cache_status_counts: list[PublishedEndpointInvocationFacetItem] = Field(
         default_factory=list
     )
