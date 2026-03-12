@@ -214,6 +214,7 @@ class PublishedEndpointInvocationSummary(BaseModel):
     last_cache_status: PublishedEndpointInvocationCacheStatus | None = None
     last_run_id: str | None = None
     last_run_status: str | None = None
+    last_reason_code: str | None = None
 
 
 class PublishedEndpointInvocationItem(BaseModel):
@@ -234,6 +235,7 @@ class PublishedEndpointInvocationItem(BaseModel):
     api_key_status: PublishedEndpointApiKeyStatus | None = None
     run_id: str | None = None
     run_status: str | None = None
+    reason_code: str | None = None
     error_message: str | None = None
     request_preview: dict
     response_preview: dict | None = None
@@ -288,6 +290,7 @@ class PublishedEndpointInvocationFacets(BaseModel):
     cache_status_counts: list[PublishedEndpointInvocationFacetItem] = Field(
         default_factory=list
     )
+    reason_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
     api_key_usage: list[PublishedEndpointInvocationApiKeyUsageItem] = Field(default_factory=list)
     recent_failure_reasons: list[PublishedEndpointInvocationFailureReasonItem] = Field(
         default_factory=list

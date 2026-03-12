@@ -18,7 +18,10 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSummary,
     PublishedEndpointInvocationTimeBucketItem,
 )
-from app.services.published_invocations import PublishedInvocationService
+from app.services.published_invocations import (
+    PublishedInvocationService,
+    classify_invocation_reason,
+)
 
 router = APIRouter(prefix="/workflows", tags=["published-endpoint-activity"])
 published_invocation_service = PublishedInvocationService()
@@ -38,6 +41,7 @@ def _serialize_published_invocation_summary(summary) -> PublishedEndpointInvocat
         last_cache_status=summary.last_cache_status,
         last_run_id=summary.last_run_id,
         last_run_status=summary.last_run_status,
+        last_reason_code=summary.last_reason_code,
     )
 
 
@@ -65,6 +69,11 @@ def _serialize_published_invocation_item(
         api_key_status=api_key_metadata.status if api_key_metadata else None,
         run_id=record.run_id,
         run_status=record.run_status,
+        reason_code=classify_invocation_reason(
+            status=record.status,
+            error_message=record.error_message,
+            run_status=record.run_status,
+        ),
         error_message=record.error_message,
         request_preview=record.request_preview or {},
         response_preview=record.response_preview,
@@ -190,6 +199,7 @@ def list_published_endpoint_invocations(
             cache_status_counts=[
                 _serialize_facet_item(item) for item in audit.cache_status_counts
             ],
+            reason_counts=[_serialize_facet_item(item) for item in audit.reason_counts],
             api_key_usage=api_key_usage_items,
             recent_failure_reasons=[
                 _serialize_failure_reason_item(item) for item in audit.recent_failure_reasons

@@ -17,6 +17,7 @@ export type PublishedEndpointInvocationSummary = {
   last_cache_status?: "hit" | "miss" | "bypass" | null;
   last_run_id?: string | null;
   last_run_status?: string | null;
+  last_reason_code?: string | null;
 };
 
 export type PublishedEndpointInvocationItem = {
@@ -37,6 +38,7 @@ export type PublishedEndpointInvocationItem = {
   api_key_status?: "active" | "revoked" | null;
   run_id?: string | null;
   run_status?: string | null;
+  reason_code?: string | null;
   error_message?: string | null;
   request_preview: {
     key_count?: number;
@@ -93,6 +95,7 @@ export type PublishedEndpointInvocationFacets = {
   status_counts: PublishedEndpointInvocationFacetItem[];
   request_source_counts: PublishedEndpointInvocationFacetItem[];
   cache_status_counts: PublishedEndpointInvocationFacetItem[];
+  reason_counts: PublishedEndpointInvocationFacetItem[];
   api_key_usage: PublishedEndpointInvocationApiKeyUsageItem[];
   recent_failure_reasons: PublishedEndpointInvocationFailureReasonItem[];
   timeline_granularity: "hour" | "day";

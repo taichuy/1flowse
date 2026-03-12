@@ -20,6 +20,47 @@ PublishedInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedInvocationCacheStatus = Literal["hit", "miss", "bypass"]
 
 
+def classify_invocation_reason(
+    *,
+    status: PublishedInvocationStatus,
+    error_message: str | None,
+    run_status: str | None = None,
+) -> str | None:
+    if status == "succeeded":
+        return None
+
+    message = (error_message or "").strip().lower()
+    if "rate limit exceeded" in message:
+        return "rate_limit_exceeded"
+    if "api key is invalid" in message:
+        return "api_key_invalid"
+    if "api key is required" in message:
+        return "api_key_required"
+    if "entered waiting state" in message:
+        return "sync_waiting_unsupported"
+    if "streaming invocation is not supported yet" in message:
+        return "streaming_unsupported"
+    if "auth mode" in message and "is not supported yet" in message:
+        return "auth_mode_unsupported"
+    if "uses protocol" in message and "not" in message:
+        return "protocol_mismatch"
+    if "not currently active" in message:
+        return "binding_inactive"
+    if "workflow not found" in message:
+        return "workflow_missing"
+    if "target workflow version is missing" in message:
+        return "target_version_missing"
+    if "compiled blueprint is missing" in message:
+        return "compiled_blueprint_missing"
+    if "unsupported run status" in message:
+        return "run_status_unsupported"
+    if run_status == "failed" or status == "failed":
+        return "runtime_failed"
+    if status == "rejected":
+        return "rejected_other"
+    return "unknown"
+
+
 @dataclass(frozen=True)
 class PublishedInvocationSummary:
     total_count: int = 0
@@ -34,6 +75,7 @@ class PublishedInvocationSummary:
     last_cache_status: PublishedInvocationCacheStatus | None = None
     last_run_id: str | None = None
     last_run_status: str | None = None
+    last_reason_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +120,7 @@ class PublishedInvocationAudit:
     status_counts: list[PublishedInvocationFacet]
     request_source_counts: list[PublishedInvocationFacet]
     cache_status_counts: list[PublishedInvocationFacet]
+    reason_counts: list[PublishedInvocationFacet]
     api_key_usage: list[PublishedInvocationApiKeyUsage]
     recent_failure_reasons: list[PublishedInvocationFailureReason]
     timeline_granularity: Literal["hour", "day"]
@@ -166,6 +209,11 @@ def _summarize_records(
         last_cache_status=last_record.cache_status or "bypass",
         last_run_id=last_record.run_id,
         last_run_status=last_record.run_status,
+        last_reason_code=classify_invocation_reason(
+            status=last_record.status,
+            error_message=last_record.error_message,
+            run_status=last_record.run_status,
+        ),
     )
 
 
@@ -435,6 +483,13 @@ class PublishedInvocationService:
                 "last_invoked_at": None,
             }
         )
+        reason_buckets: dict[str, dict[str, object]] = defaultdict(
+            lambda: {
+                "count": 0,
+                "last_invoked_at": None,
+                "last_status": None,
+            }
+        )
 
         for record in records:
             status_bucket = status_buckets[record.status]
@@ -467,6 +522,18 @@ class PublishedInvocationService:
                 failure_bucket["count"] += 1
                 if failure_bucket["last_invoked_at"] is None:
                     failure_bucket["last_invoked_at"] = record.created_at
+
+            reason_code = classify_invocation_reason(
+                status=record.status,
+                error_message=record.error_message,
+                run_status=record.run_status,
+            )
+            if reason_code is not None:
+                reason_bucket = reason_buckets[reason_code]
+                reason_bucket["count"] += 1
+                if reason_bucket["last_invoked_at"] is None:
+                    reason_bucket["last_invoked_at"] = record.created_at
+                    reason_bucket["last_status"] = record.status
 
         api_key_lookup: dict[str, WorkflowPublishedApiKey] = {}
         if api_key_buckets:
@@ -504,6 +571,22 @@ class PublishedInvocationService:
             )
             for value, bucket in cache_status_buckets.items()
         ]
+        reason_counts = sorted(
+            (
+                PublishedInvocationFacet(
+                    value=value,
+                    count=int(bucket["count"]),
+                    last_invoked_at=bucket["last_invoked_at"],
+                    last_status=bucket["last_status"],
+                )
+                for value, bucket in reason_buckets.items()
+            ),
+            key=lambda item: (
+                -item.count,
+                -(item.last_invoked_at.timestamp() if item.last_invoked_at else 0),
+                item.value,
+            ),
+        )
         api_key_usage: list[PublishedInvocationApiKeyUsage] = []
         for key_id, bucket in api_key_buckets.items():
             key_record = api_key_lookup.get(key_id)
@@ -551,6 +634,7 @@ class PublishedInvocationService:
             status_counts=status_counts,
             request_source_counts=request_source_counts,
             cache_status_counts=cache_status_counts,
+            reason_counts=reason_counts,
             api_key_usage=api_key_usage,
             recent_failure_reasons=recent_failure_reasons,
             timeline_granularity=timeline_granularity,
@@ -617,6 +701,11 @@ class PublishedInvocationService:
                 last_cache_status=record.cache_status or "bypass",
                 last_run_id=record.run_id,
                 last_run_status=record.run_status,
+                last_reason_code=classify_invocation_reason(
+                    status=record.status,
+                    error_message=record.error_message,
+                    run_status=record.run_status,
+                ),
             )
             last_seen.add(record.binding_id)
 
@@ -646,6 +735,7 @@ class PublishedInvocationService:
                 last_cache_status=existing.last_cache_status,
                 last_run_id=existing.last_run_id,
                 last_run_status=existing.last_run_status,
+                last_reason_code=existing.last_reason_code,
             )
 
         return summaries

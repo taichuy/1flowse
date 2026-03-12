@@ -41,6 +41,7 @@ def _serialize_published_invocation_summary(
         last_cache_status=summary.last_cache_status,
         last_run_id=summary.last_run_id,
         last_run_status=summary.last_run_status,
+        last_reason_code=summary.last_reason_code,
     )
 
 

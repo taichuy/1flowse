@@ -3,6 +3,10 @@ import type {
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
+import {
+  formatPublishedInvocationReasonLabel,
+  formatRateLimitPressure
+} from "@/lib/published-invocation-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
 type WorkflowPublishActivityPanelProps = {
@@ -45,6 +49,7 @@ export function WorkflowPublishActivityPanel({
   const items = invocationAudit?.items ?? [];
   const requestSourceCounts = invocationAudit?.facets.request_source_counts ?? [];
   const cacheStatusCounts = invocationAudit?.facets.cache_status_counts ?? [];
+  const reasonCounts = invocationAudit?.facets.reason_counts ?? [];
   const apiKeyUsage = invocationAudit?.facets.api_key_usage ?? [];
   const failureReasons = invocationAudit?.facets.recent_failure_reasons ?? [];
   const timeline = invocationAudit?.facets.timeline ?? [];
@@ -61,6 +66,9 @@ export function WorkflowPublishActivityPanel({
   const windowRejected = rateLimitWindowAudit?.summary.rejected_count ?? 0;
   const remainingQuota = rateLimitPolicy
     ? Math.max(rateLimitPolicy.requests - windowUsed, 0)
+    : null;
+  const pressure = rateLimitPolicy
+    ? formatRateLimitPressure(rateLimitPolicy.requests, windowUsed)
     : null;
 
   return (
@@ -84,8 +92,8 @@ export function WorkflowPublishActivityPanel({
           <strong>{summary?.last_status ?? "none"}</strong>
         </article>
         <article className="summary-card">
-          <span>Last cache</span>
-          <strong>{summary?.last_cache_status ?? "n/a"}</strong>
+          <span>Last issue</span>
+          <strong>{formatPublishedInvocationReasonLabel(summary?.last_reason_code)}</strong>
         </article>
       </div>
 
@@ -138,6 +146,10 @@ export function WorkflowPublishActivityPanel({
                 <div>
                   <dt>Remaining</dt>
                   <dd>{remainingQuota}</dd>
+                </div>
+                <div>
+                  <dt>Pressure</dt>
+                  <dd>{pressure?.label ?? "0%"}</dd>
                 </div>
                 <div>
                   <dt>Rejected</dt>
@@ -209,6 +221,22 @@ export function WorkflowPublishActivityPanel({
         )}
       </div>
 
+      {reasonCounts.length ? (
+        <div className="entry-card compact-card">
+          <p className="entry-card-title">Issue signals</p>
+          <p className="section-copy entry-copy">
+            把 `rejected / failed` 聚合为稳定原因码，便于区分限流、鉴权和当前同步协议边界。
+          </p>
+          <div className="tool-badge-row">
+            {reasonCounts.map((item) => (
+              <span className="event-chip" key={item.value}>
+                {formatPublishedInvocationReasonLabel(item.value)} {item.count}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {apiKeyUsage.length ? (
         <div className="publish-cache-list">
           {apiKeyUsage.map((item) => (
@@ -259,7 +287,14 @@ export function WorkflowPublishActivityPanel({
             <article className="payload-card compact-card" key={item.id}>
               <div className="payload-card-header">
                 <span className={`health-pill ${item.status}`}>{item.status}</span>
-                <span className="event-chip">{item.cache_status}</span>
+                <div className="tool-badge-row">
+                  <span className="event-chip">{item.cache_status}</span>
+                  {item.reason_code ? (
+                    <span className="event-chip">
+                      {formatPublishedInvocationReasonLabel(item.reason_code)}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <p className="binding-meta">
                 {item.request_source} · {formatTimestamp(item.created_at)} ·{" "}

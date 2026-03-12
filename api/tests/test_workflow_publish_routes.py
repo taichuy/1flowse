@@ -840,7 +840,12 @@ def test_published_sync_routes_reject_waiting_runs(
         activity = activity_response.json()
         assert activity["summary"]["total_count"] == 1
         assert activity["summary"]["rejected_count"] == 1
+        assert activity["summary"]["last_reason_code"] == "sync_waiting_unsupported"
+        assert {
+            item["value"]: item["count"] for item in activity["facets"]["reason_counts"]
+        } == {"sync_waiting_unsupported": 1}
         assert activity["items"][0]["status"] == "rejected"
+        assert activity["items"][0]["reason_code"] == "sync_waiting_unsupported"
         assert activity["items"][0]["run_id"] is None
     finally:
         reset_plugin_registry()
@@ -1088,6 +1093,7 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
     assert all_activity["summary"]["total_count"] == 4
     assert all_activity["summary"]["succeeded_count"] == 3
     assert all_activity["summary"]["rejected_count"] == 1
+    assert all_activity["summary"]["last_reason_code"] == "api_key_invalid"
 
     status_counts = {
         item["value"]: item["count"] for item in all_activity["facets"]["status_counts"]
@@ -1103,12 +1109,16 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
         item["name"]: item["invocation_count"] for item in all_activity["facets"]["api_key_usage"]
     }
     assert api_key_usage == {"Primary Key": 2, "Fallback Key": 1}
+    assert {
+        item["value"]: item["count"] for item in all_activity["facets"]["reason_counts"]
+    } == {"api_key_invalid": 1}
     assert (
         all_activity["facets"]["recent_failure_reasons"][0]["message"]
         == "Published endpoint API key is invalid."
     )
     assert all_activity["facets"]["timeline_granularity"] in {"hour", "day"}
     assert len(all_activity["facets"]["timeline"]) >= 1
+    assert all_activity["items"][0]["reason_code"] == "api_key_invalid"
 
     filtered_activity_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
@@ -1417,7 +1427,11 @@ def test_invoke_published_native_endpoint_enforces_rate_limit(
     assert activity["summary"]["total_count"] == 3
     assert activity["summary"]["succeeded_count"] == 2
     assert activity["summary"]["rejected_count"] == 1
+    assert activity["summary"]["last_reason_code"] == "rate_limit_exceeded"
     assert any(item["status"] == "rejected" for item in activity["items"])
+    assert {
+        item["value"]: item["count"] for item in activity["facets"]["reason_counts"]
+    } == {"rate_limit_exceeded": 1}
     assert activity["facets"]["recent_failure_reasons"][0]["message"] == detail
 
 
@@ -1492,4 +1506,8 @@ def test_rejected_published_invocation_does_not_consume_rate_limit_quota(
     assert activity["summary"]["total_count"] == 3
     assert activity["summary"]["succeeded_count"] == 1
     assert activity["summary"]["rejected_count"] == 2
+    assert activity["summary"]["last_reason_code"] == "rate_limit_exceeded"
+    assert {
+        item["value"]: item["count"] for item in activity["facets"]["reason_counts"]
+    } == {"rate_limit_exceeded": 1, "api_key_invalid": 1}
     assert activity["facets"]["recent_failure_reasons"][0]["message"] == detail
