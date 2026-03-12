@@ -74,6 +74,9 @@ export type PublishedEndpointInvocationApiKeyUsageItem = {
   key_prefix?: string | null;
   status?: "active" | "revoked" | null;
   invocation_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  rejected_count: number;
   last_invoked_at?: string | null;
   last_status?: PublishedEndpointInvocationStatus | null;
 };
@@ -89,6 +92,13 @@ export type PublishedEndpointInvocationBucketFacetItem = {
   count: number;
 };
 
+export type PublishedEndpointInvocationApiKeyBucketFacetItem = {
+  api_key_id: string;
+  name?: string | null;
+  key_prefix?: string | null;
+  count: number;
+};
+
 export type PublishedEndpointInvocationTimeBucketItem = {
   bucket_start: string;
   bucket_end: string;
@@ -96,6 +106,7 @@ export type PublishedEndpointInvocationTimeBucketItem = {
   succeeded_count: number;
   failed_count: number;
   rejected_count: number;
+  api_key_counts: PublishedEndpointInvocationApiKeyBucketFacetItem[];
   request_surface_counts: PublishedEndpointInvocationBucketFacetItem[];
   reason_counts: PublishedEndpointInvocationBucketFacetItem[];
 };

@@ -295,6 +295,9 @@ class PublishedEndpointInvocationApiKeyUsageItem(BaseModel):
     key_prefix: str | None = None
     status: PublishedEndpointApiKeyStatus | None = None
     invocation_count: int = 0
+    succeeded_count: int = 0
+    failed_count: int = 0
+    rejected_count: int = 0
     last_invoked_at: datetime | None = None
     last_status: PublishedEndpointInvocationStatus | None = None
 
@@ -310,6 +313,13 @@ class PublishedEndpointInvocationBucketFacetItem(BaseModel):
     count: int = 0
 
 
+class PublishedEndpointInvocationApiKeyBucketFacetItem(BaseModel):
+    api_key_id: str
+    name: str | None = None
+    key_prefix: str | None = None
+    count: int = 0
+
+
 class PublishedEndpointInvocationTimeBucketItem(BaseModel):
     bucket_start: datetime
     bucket_end: datetime
@@ -317,6 +327,9 @@ class PublishedEndpointInvocationTimeBucketItem(BaseModel):
     succeeded_count: int = 0
     failed_count: int = 0
     rejected_count: int = 0
+    api_key_counts: list[PublishedEndpointInvocationApiKeyBucketFacetItem] = Field(
+        default_factory=list
+    )
     request_surface_counts: list[PublishedEndpointInvocationBucketFacetItem] = Field(
         default_factory=list
     )

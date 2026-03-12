@@ -368,6 +368,13 @@ export function WorkflowPublishActivityPanel({
                   <dd>{item.invocation_count}</dd>
                 </div>
                 <div>
+                  <dt>Status mix</dt>
+                  <dd>
+                    ok {item.succeeded_count} / failed {item.failed_count} / rejected{" "}
+                    {item.rejected_count}
+                  </dd>
+                </div>
+                <div>
                   <dt>Status</dt>
                   <dd>{item.last_status ?? item.status ?? "n/a"}</dd>
                 </div>

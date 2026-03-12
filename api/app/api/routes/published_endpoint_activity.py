@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.workflow import Workflow, WorkflowPublishedEndpoint
 from app.schemas.workflow_publish import (
+    PublishedEndpointInvocationApiKeyBucketFacetItem,
     PublishedEndpointInvocationBucketFacetItem,
     PublishedEndpointInvocationApiKeyUsageItem,
     PublishedEndpointInvocationFacetItem,
@@ -103,8 +104,20 @@ def _serialize_api_key_usage_item(item) -> PublishedEndpointInvocationApiKeyUsag
         key_prefix=item.key_prefix,
         status=item.status,
         invocation_count=item.invocation_count,
+        succeeded_count=item.succeeded_count,
+        failed_count=item.failed_count,
+        rejected_count=item.rejected_count,
         last_invoked_at=item.last_invoked_at,
         last_status=item.last_status,
+    )
+
+
+def _serialize_api_key_bucket_item(item) -> PublishedEndpointInvocationApiKeyBucketFacetItem:
+    return PublishedEndpointInvocationApiKeyBucketFacetItem(
+        api_key_id=item.api_key_id,
+        name=item.name,
+        key_prefix=item.key_prefix,
+        count=item.count,
     )
 
 
@@ -124,6 +137,7 @@ def _serialize_timeline_item(item) -> PublishedEndpointInvocationTimeBucketItem:
         succeeded_count=item.succeeded_count,
         failed_count=item.failed_count,
         rejected_count=item.rejected_count,
+        api_key_counts=[_serialize_api_key_bucket_item(facet) for facet in item.api_key_counts],
         request_surface_counts=[
             PublishedEndpointInvocationBucketFacetItem(value=facet.value, count=facet.count)
             for facet in item.request_surface_counts

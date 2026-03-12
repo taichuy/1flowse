@@ -36,6 +36,14 @@ function topBucketLabels(
   return items.slice(0, 2).map((item) => `${formatter(item.value)} ${item.count}`);
 }
 
+function topApiKeyLabels(
+  items: PublishedEndpointInvocationTimeBucketItem["api_key_counts"]
+) {
+  return items
+    .slice(0, 2)
+    .map((item) => `${item.name ?? item.key_prefix ?? item.api_key_id} ${item.count}`);
+}
+
 export function WorkflowPublishTrafficTimeline({
   timeline,
   timelineGranularity,
@@ -70,6 +78,7 @@ export function WorkflowPublishTrafficTimeline({
               bucket.reason_counts,
               formatPublishedInvocationReasonLabel
             );
+            const apiKeyLabels = topApiKeyLabels(bucket.api_key_counts);
 
             return (
               <article className="payload-card compact-card" key={bucket.bucket_start}>
@@ -112,6 +121,16 @@ export function WorkflowPublishTrafficTimeline({
                     {reasonLabels.map((label) => (
                       <span className="event-chip" key={label}>
                         {label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                {apiKeyLabels.length ? (
+                  <div className="tool-badge-row">
+                    {apiKeyLabels.map((label) => (
+                      <span className="event-chip" key={label}>
+                        key {label}
                       </span>
                     ))}
                   </div>

@@ -130,6 +130,9 @@ class PublishedInvocationApiKeyUsage:
     key_prefix: str | None = None
     status: str | None = None
     invocation_count: int = 0
+    succeeded_count: int = 0
+    failed_count: int = 0
+    rejected_count: int = 0
     last_invoked_at: datetime | None = None
     last_status: PublishedInvocationStatus | None = None
 
@@ -148,6 +151,14 @@ class PublishedInvocationBucketFacet:
 
 
 @dataclass(frozen=True)
+class PublishedInvocationApiKeyBucketFacet:
+    api_key_id: str
+    name: str | None = None
+    key_prefix: str | None = None
+    count: int = 0
+
+
+@dataclass(frozen=True)
 class PublishedInvocationTimeBucket:
     bucket_start: datetime
     bucket_end: datetime
@@ -155,6 +166,9 @@ class PublishedInvocationTimeBucket:
     succeeded_count: int = 0
     failed_count: int = 0
     rejected_count: int = 0
+    api_key_counts: list[PublishedInvocationApiKeyBucketFacet] = field(
+        default_factory=list
+    )
     request_surface_counts: list[PublishedInvocationBucketFacet] = field(
         default_factory=list
     )
@@ -351,10 +365,45 @@ def _build_bucket_facets(
     ]
 
 
+def _build_api_key_bucket_facets(
+    counts: dict[str, int],
+    *,
+    api_key_lookup: dict[str, WorkflowPublishedApiKey],
+    limit: int = 3,
+) -> list[PublishedInvocationApiKeyBucketFacet]:
+    items = sorted(
+        (
+            (
+                api_key_id,
+                count,
+                api_key_lookup.get(api_key_id),
+            )
+            for api_key_id, count in counts.items()
+            if count > 0
+        ),
+        key=lambda item: (
+            -item[1],
+            item[2].name if item[2] and item[2].name else "",
+            item[2].key_prefix if item[2] and item[2].key_prefix else "",
+            item[0],
+        ),
+    )
+    return [
+        PublishedInvocationApiKeyBucketFacet(
+            api_key_id=api_key_id,
+            name=key_record.name if key_record else None,
+            key_prefix=key_record.key_prefix if key_record else None,
+            count=count,
+        )
+        for api_key_id, count, key_record in items[:limit]
+    ]
+
+
 def _build_timeline(
     records: list[WorkflowPublishedInvocation],
     *,
     granularity: Literal["hour", "day"],
+    api_key_lookup: dict[str, WorkflowPublishedApiKey],
 ) -> list[PublishedInvocationTimeBucket]:
     if not records:
         return []
@@ -371,12 +420,15 @@ def _build_timeline(
                 "succeeded_count": 0,
                 "failed_count": 0,
                 "rejected_count": 0,
+                "api_key_counts": defaultdict(int),
                 "request_surface_counts": defaultdict(int),
                 "reason_counts": defaultdict(int),
             },
         )
         bucket["total_count"] += 1
         bucket[f"{record.status}_count"] += 1
+        if record.api_key_id:
+            bucket["api_key_counts"][record.api_key_id] += 1
         bucket["request_surface_counts"][_resolve_request_surface(record)] += 1
 
         reason_code = _resolve_record_reason_code(record)
@@ -391,6 +443,10 @@ def _build_timeline(
             succeeded_count=int(counts["succeeded_count"]),
             failed_count=int(counts["failed_count"]),
             rejected_count=int(counts["rejected_count"]),
+            api_key_counts=_build_api_key_bucket_facets(
+                counts["api_key_counts"],
+                api_key_lookup=api_key_lookup,
+            ),
             request_surface_counts=_build_bucket_facets(
                 counts["request_surface_counts"],
                 ordered_values=REQUEST_SURFACE_ORDER,
@@ -654,6 +710,9 @@ class PublishedInvocationService:
         api_key_buckets: dict[str, dict[str, object]] = defaultdict(
             lambda: {
                 "count": 0,
+                "succeeded_count": 0,
+                "failed_count": 0,
+                "rejected_count": 0,
                 "last_invoked_at": None,
                 "last_status": None,
             }
@@ -701,6 +760,7 @@ class PublishedInvocationService:
             if record.api_key_id:
                 api_key_bucket = api_key_buckets[record.api_key_id]
                 api_key_bucket["count"] += 1
+                api_key_bucket[f"{record.status}_count"] += 1
                 if api_key_bucket["last_invoked_at"] is None:
                     api_key_bucket["last_invoked_at"] = record.created_at
                     api_key_bucket["last_status"] = record.status
@@ -791,6 +851,9 @@ class PublishedInvocationService:
                     key_prefix=key_record.key_prefix if key_record else None,
                     status=key_record.status if key_record else None,
                     invocation_count=int(bucket["count"]),
+                    succeeded_count=int(bucket["succeeded_count"]),
+                    failed_count=int(bucket["failed_count"]),
+                    rejected_count=int(bucket["rejected_count"]),
                     last_invoked_at=bucket["last_invoked_at"],
                     last_status=bucket["last_status"],
                 )
@@ -833,7 +896,11 @@ class PublishedInvocationService:
             api_key_usage=api_key_usage,
             recent_failure_reasons=recent_failure_reasons,
             timeline_granularity=timeline_granularity,
-            timeline=_build_timeline(records, granularity=timeline_granularity),
+            timeline=_build_timeline(
+                records,
+                granularity=timeline_granularity,
+                api_key_lookup=api_key_lookup,
+            ),
         )
 
     def summarize_for_bindings(
