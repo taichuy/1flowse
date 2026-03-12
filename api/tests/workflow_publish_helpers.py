@@ -57,7 +57,21 @@ def waiting_agent_publishable_definition(
     endpoint_id: str,
     endpoint_name: str,
     protocol: str = "openai",
+    cache: dict | None = None,
 ) -> dict:
+    endpoint: dict[str, object] = {
+        "id": endpoint_id,
+        "name": endpoint_name,
+        "alias": alias,
+        "path": path,
+        "protocol": protocol,
+        "authMode": "internal",
+        "streaming": False,
+        "inputSchema": {"type": "object"},
+    }
+    if cache is not None:
+        endpoint["cache"] = cache
+
     return {
         "nodes": [
             {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
@@ -85,15 +99,6 @@ def waiting_agent_publishable_definition(
             {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
         ],
         "publish": [
-            {
-                "id": endpoint_id,
-                "name": endpoint_name,
-                "alias": alias,
-                "path": path,
-                "protocol": protocol,
-                "authMode": "internal",
-                "streaming": False,
-                "inputSchema": {"type": "object"},
-            }
+            endpoint
         ],
     }

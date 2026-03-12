@@ -262,12 +262,12 @@ export function WorkflowPublishActivityPanel({
           <strong>{summary?.rejected_count ?? 0}</strong>
         </article>
         <article className="summary-card">
-          <span>Last status</span>
+          <span>Last request</span>
           <strong>{summary?.last_status ?? "none"}</strong>
         </article>
         <article className="summary-card">
-          <span>Last issue</span>
-          <strong>{formatPublishedInvocationReasonLabel(summary?.last_reason_code)}</strong>
+          <span>Last run</span>
+          <strong>{summary?.last_run_status ?? "n/a"}</strong>
         </article>
       </div>
 
@@ -460,7 +460,16 @@ export function WorkflowPublishActivityPanel({
                   <dt>Run</dt>
                   <dd>{item.run_id ?? "not-started"}</dd>
                 </div>
+                <div>
+                  <dt>Run status</dt>
+                  <dd>{item.run_status ?? "n/a"}</dd>
+                </div>
               </dl>
+              {item.run_status === "waiting" ? (
+                <p className="section-copy entry-copy">
+                  该请求已成功接入住 durable runtime，当前仍处于 waiting，后续应结合 run detail 继续追踪。
+                </p>
+              ) : null}
               {item.error_message ? (
                 <p className="section-copy entry-copy">error: {item.error_message}</p>
               ) : null}

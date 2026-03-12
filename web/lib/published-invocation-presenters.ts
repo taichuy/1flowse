@@ -18,8 +18,11 @@ export const PUBLISHED_INVOCATION_REASON_CODES = [
 
 export const PUBLISHED_INVOCATION_REQUEST_SURFACES = [
   "native.workflow",
+  "native.workflow.async",
   "native.alias",
+  "native.alias.async",
   "native.path",
+  "native.path.async",
   "openai.chat.completions",
   "openai.responses",
   "openai.unknown",
@@ -55,8 +58,11 @@ const REASON_LABELS: Record<string, string> = {
 
 const REQUEST_SURFACE_LABELS: Record<string, string> = {
   "native.workflow": "Native workflow route",
+  "native.workflow.async": "Native workflow async route",
   "native.alias": "Native alias route",
+  "native.alias.async": "Native alias async route",
   "native.path": "Native path route",
+  "native.path.async": "Native path async route",
   "openai.chat.completions": "OpenAI chat.completions",
   "openai.responses": "OpenAI responses",
   "openai.unknown": "OpenAI unknown surface",

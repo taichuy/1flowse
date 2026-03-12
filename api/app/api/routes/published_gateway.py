@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -61,6 +61,18 @@ def _build_anthropic_message_input_payload(payload: AnthropicMessageRequest) -> 
         "metadata": payload.metadata,
     }
 
+
+def _apply_native_publish_response_headers(
+    response: Response,
+    *,
+    cache_status: str,
+    run_status: str | None,
+) -> None:
+    response.headers["X-7Flows-Cache"] = cache_status.upper()
+    if run_status:
+        response.headers["X-7Flows-Run-Status"] = run_status.upper()
+
+
 @router.post(
     "/workflows/{workflow_id}/published-endpoints/{endpoint_id}/run",
     response_model=PublishedNativeRunResponse,
@@ -84,7 +96,11 @@ def invoke_published_native_endpoint(
     except PublishedEndpointGatewayError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    response.headers["X-7Flows-Cache"] = result.cache_status.upper()
+    _apply_native_publish_response_headers(
+        response,
+        cache_status=result.cache_status,
+        run_status=result.response_payload.get("run", {}).get("status"),
+    )
     return PublishedNativeRunResponse.model_validate(result.response_payload)
 
 
@@ -109,7 +125,77 @@ def invoke_published_native_endpoint_by_alias(
     except PublishedEndpointGatewayError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    response.headers["X-7Flows-Cache"] = result.cache_status.upper()
+    _apply_native_publish_response_headers(
+        response,
+        cache_status=result.cache_status,
+        run_status=result.response_payload.get("run", {}).get("status"),
+    )
+    return PublishedNativeRunResponse.model_validate(result.response_payload)
+
+
+@router.post(
+    "/workflows/{workflow_id}/published-endpoints/{endpoint_id}/run-async",
+    response_model=PublishedNativeRunResponse,
+)
+def invoke_published_native_endpoint_async(
+    workflow_id: str,
+    endpoint_id: str,
+    payload: PublishedNativeRunRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> PublishedNativeRunResponse:
+    try:
+        result = published_gateway_service.invoke_native_endpoint_async(
+            db,
+            workflow_id=workflow_id,
+            endpoint_id=endpoint_id,
+            input_payload=payload.input_payload,
+            presented_api_key=_extract_presented_api_key(request),
+        )
+    except PublishedEndpointGatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    run_status = result.response_payload.get("run", {}).get("status")
+    if run_status == "waiting":
+        response.status_code = status.HTTP_202_ACCEPTED
+    _apply_native_publish_response_headers(
+        response,
+        cache_status=result.cache_status,
+        run_status=run_status,
+    )
+    return PublishedNativeRunResponse.model_validate(result.response_payload)
+
+
+@router.post(
+    "/published-aliases/{endpoint_alias}/run-async",
+    response_model=PublishedNativeRunResponse,
+)
+def invoke_published_native_endpoint_by_alias_async(
+    endpoint_alias: str,
+    payload: PublishedNativeRunRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> PublishedNativeRunResponse:
+    try:
+        result = published_gateway_service.invoke_native_endpoint_by_alias_async(
+            db,
+            endpoint_alias=endpoint_alias,
+            input_payload=payload.input_payload,
+            presented_api_key=_extract_presented_api_key(request),
+        )
+    except PublishedEndpointGatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    run_status = result.response_payload.get("run", {}).get("status")
+    if run_status == "waiting":
+        response.status_code = status.HTTP_202_ACCEPTED
+    _apply_native_publish_response_headers(
+        response,
+        cache_status=result.cache_status,
+        run_status=run_status,
+    )
     return PublishedNativeRunResponse.model_validate(result.response_payload)
 
 
@@ -134,7 +220,43 @@ def invoke_published_native_endpoint_by_path(
     except PublishedEndpointGatewayError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
-    response.headers["X-7Flows-Cache"] = result.cache_status.upper()
+    _apply_native_publish_response_headers(
+        response,
+        cache_status=result.cache_status,
+        run_status=result.response_payload.get("run", {}).get("status"),
+    )
+    return PublishedNativeRunResponse.model_validate(result.response_payload)
+
+
+@router.post(
+    "/published-paths-async/{route_path:path}",
+    response_model=PublishedNativeRunResponse,
+)
+def invoke_published_native_endpoint_by_path_async(
+    route_path: str,
+    payload: PublishedNativeRunRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> PublishedNativeRunResponse:
+    try:
+        result = published_gateway_service.invoke_native_endpoint_by_path_async(
+            db,
+            route_path=route_path,
+            input_payload=payload.input_payload,
+            presented_api_key=_extract_presented_api_key(request),
+        )
+    except PublishedEndpointGatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    run_status = result.response_payload.get("run", {}).get("status")
+    if run_status == "waiting":
+        response.status_code = status.HTTP_202_ACCEPTED
+    _apply_native_publish_response_headers(
+        response,
+        cache_status=result.cache_status,
+        run_status=run_status,
+    )
     return PublishedNativeRunResponse.model_validate(result.response_payload)
 
 

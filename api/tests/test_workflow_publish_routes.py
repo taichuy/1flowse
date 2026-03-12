@@ -1156,6 +1156,7 @@ def test_rejected_published_invocation_does_not_consume_rate_limit_quota(
         "status": None,
         "request_source": None,
         "request_surface": None,
+        "cache_status": None,
         "api_key_id": None,
         "reason_code": "api_key_invalid",
         "created_from": None,

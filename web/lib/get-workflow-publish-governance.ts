@@ -4,6 +4,7 @@ import {
   getPublishedEndpointInvocations,
   type PublishedEndpointApiKeyItem,
   type PublishedEndpointCacheInventoryResponse,
+  type PublishedEndpointInvocationRequestSurface,
   type PublishedEndpointInvocationListResponse,
   type WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
@@ -22,15 +23,7 @@ type WorkflowPublishInvocationFilter = {
   bindingId: string;
   status?: "succeeded" | "failed" | "rejected";
   requestSource?: "workflow" | "alias" | "path";
-  requestSurface?:
-    | "native.workflow"
-    | "native.alias"
-    | "native.path"
-    | "openai.chat.completions"
-    | "openai.responses"
-    | "openai.unknown"
-    | "anthropic.messages"
-    | "unknown";
+  requestSurface?: PublishedEndpointInvocationRequestSurface;
   cacheStatus?: "hit" | "miss" | "bypass";
   apiKeyId?: string;
   reasonCode?: string;

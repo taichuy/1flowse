@@ -18,8 +18,11 @@ PublishedEndpointInvocationRequestSource = Literal["workflow", "alias", "path"]
 PublishedEndpointInvocationCacheStatus = Literal["hit", "miss", "bypass"]
 PublishedEndpointInvocationRequestSurface = Literal[
     "native.workflow",
+    "native.workflow.async",
     "native.alias",
+    "native.alias.async",
     "native.path",
+    "native.path.async",
     "openai.chat.completions",
     "openai.responses",
     "openai.unknown",

@@ -20,8 +20,11 @@ PublishedInvocationStatus = Literal["succeeded", "failed", "rejected"]
 PublishedInvocationCacheStatus = Literal["hit", "miss", "bypass"]
 PublishedInvocationRequestSurface = Literal[
     "native.workflow",
+    "native.workflow.async",
     "native.alias",
+    "native.alias.async",
     "native.path",
+    "native.path.async",
     "openai.chat.completions",
     "openai.responses",
     "openai.unknown",
@@ -47,8 +50,11 @@ PublishedInvocationReasonCode = Literal[
 ]
 REQUEST_SURFACE_ORDER: tuple[PublishedInvocationRequestSurface, ...] = (
     "native.workflow",
+    "native.workflow.async",
     "native.alias",
+    "native.alias.async",
     "native.path",
+    "native.path.async",
     "openai.chat.completions",
     "openai.responses",
     "openai.unknown",
@@ -255,6 +261,10 @@ def _resolve_record_reason_code(
 def _resolve_request_surface(
     record: WorkflowPublishedInvocation,
 ) -> PublishedInvocationRequestSurface:
+    surface_hint = record.request_preview.get("surface_hint")
+    if isinstance(surface_hint, str) and surface_hint in REQUEST_SURFACE_ORDER:
+        return surface_hint
+
     if record.protocol == "native":
         if record.request_source == "workflow":
             return "native.workflow"
@@ -598,6 +608,7 @@ class PublishedInvocationService:
         input_payload: dict,
         status: PublishedInvocationStatus,
         cache_status: PublishedInvocationCacheStatus = "bypass",
+        request_surface_override: PublishedInvocationRequestSurface | None = None,
         api_key_id: str | None = None,
         run_id: str | None = None,
         run_status: str | None = None,
@@ -612,6 +623,10 @@ class PublishedInvocationService:
             int((effective_finished_at - effective_started_at).total_seconds() * 1000),
             0,
         )
+        request_preview = _build_payload_preview(input_payload)
+        if request_surface_override is not None:
+            request_preview["surface_hint"] = request_surface_override
+
         record = WorkflowPublishedInvocation(
             id=str(uuid4()),
             workflow_id=binding.workflow_id,
@@ -628,7 +643,7 @@ class PublishedInvocationService:
             run_id=run_id,
             run_status=run_status,
             error_message=error_message[:512] if error_message else None,
-            request_preview=_build_payload_preview(input_payload),
+            request_preview=request_preview,
             response_preview=(
                 _build_payload_preview(response_payload)
                 if isinstance(response_payload, dict)
@@ -715,8 +730,23 @@ class PublishedInvocationService:
         }
         request_surface_buckets: dict[str, dict[str, object]] = {
             "native.workflow": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "native.workflow.async": {
+                "count": 0,
+                "last_invoked_at": None,
+                "last_status": None,
+            },
             "native.alias": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "native.alias.async": {
+                "count": 0,
+                "last_invoked_at": None,
+                "last_status": None,
+            },
             "native.path": {"count": 0, "last_invoked_at": None, "last_status": None},
+            "native.path.async": {
+                "count": 0,
+                "last_invoked_at": None,
+                "last_status": None,
+            },
             "openai.chat.completions": {
                 "count": 0,
                 "last_invoked_at": None,

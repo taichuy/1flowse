@@ -5,8 +5,11 @@ export type PublishedEndpointInvocationRequestSource = "workflow" | "alias" | "p
 export type PublishedEndpointInvocationCacheStatus = "hit" | "miss" | "bypass";
 export type PublishedEndpointInvocationRequestSurface =
   | "native.workflow"
+  | "native.workflow.async"
   | "native.alias"
+  | "native.alias.async"
   | "native.path"
+  | "native.path.async"
   | "openai.chat.completions"
   | "openai.responses"
   | "openai.unknown"
