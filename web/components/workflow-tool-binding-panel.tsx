@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { updateWorkflowToolBinding } from "@/app/actions";
+import { updateWorkflowToolBinding } from "@/app/actions/workflow";
 import { WorkflowToolBindingForm } from "@/components/workflow-tool-binding-form";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";

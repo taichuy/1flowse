@@ -1,4 +1,4 @@
-import { syncAdapterTools } from "@/app/actions";
+import { syncAdapterTools } from "@/app/actions/workflow";
 import { AdapterSyncForm } from "@/components/adapter-sync-form";
 import type {
   PluginAdapterRegistryItem,

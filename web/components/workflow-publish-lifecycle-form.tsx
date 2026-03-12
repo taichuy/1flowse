@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import type { UpdatePublishedEndpointLifecycleState } from "@/app/actions";
+import type { UpdatePublishedEndpointLifecycleState } from "@/app/actions/publish";
 
 type WorkflowPublishLifecycleFormProps = {
   workflowId: string;

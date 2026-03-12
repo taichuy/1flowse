@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import type { SyncAdapterToolsState } from "@/app/actions";
+import type { SyncAdapterToolsState } from "@/app/actions/workflow";
 
 type AdapterSyncFormProps = {
   adapterId: string;

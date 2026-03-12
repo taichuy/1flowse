@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import type { UpdateWorkflowToolBindingState } from "@/app/actions";
+import type { UpdateWorkflowToolBindingState } from "@/app/actions/workflow";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 
 type WorkflowToolBindingFormProps = {

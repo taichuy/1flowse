@@ -8,7 +8,7 @@ import {
   revokePublishedEndpointApiKey,
   type CreatePublishedEndpointApiKeyState,
   type RevokePublishedEndpointApiKeyState
-} from "@/app/actions";
+} from "@/app/actions/publish";
 import type { PublishedEndpointApiKeyItem } from "@/lib/get-workflow-publish";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 

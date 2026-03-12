@@ -1,4 +1,4 @@
-import { updatePublishedEndpointLifecycle } from "@/app/actions";
+import { updatePublishedEndpointLifecycle } from "@/app/actions/publish";
 import { WorkflowPublishActivityPanel } from "@/components/workflow-publish-activity-panel";
 import { WorkflowPublishApiKeyManager } from "@/components/workflow-publish-api-key-manager";
 import { WorkflowPublishLifecycleForm } from "@/components/workflow-publish-lifecycle-form";

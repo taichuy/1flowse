@@ -676,17 +676,18 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 最近一次正式 Git 提交是 `2026-03-12 11:39:18 +0800` 的 `feat: add published openai anthropic gateway`：
-  - 发布层正式接入 `native / openai / anthropic` 三类入口
-  - `published_protocol_mapper` 把协议映射继续限制在发布层，而没有反向侵入 runtime 核心
-- 当前工作区里的后续承接则继续把发布治理前端接回 workflow 主路径：
-  - workflow 页面通过独立 governance loader 并行装配 cache / api key / invocation / rate-limit window
-  - publish governance UI 已拆成 `panel -> binding card -> invocation activity`，并补上 timeline 与窗口治理反馈
-- 这次承接判断是：需要衔接，而且主线仍然是 `API 调用开放` 的 P0 发布治理，而不是再回到 callback cleanup 深挖
+- 最近一次正式 Git 提交是 `2026-03-12 12:26:26 +0800` 的 `feat: split publish governance activity views`：
+  - workflow 页把 publish 治理继续拆成 `panel -> binding card -> invocation activity`
+  - 页面级 publish 数据装配已抽到独立 governance loader，避免 workflow detail 再次长回单文件混排
+  - publish activity 已补上 timeline、失败原因、API key 使用和 rate-limit window 的治理可见性
+- 当前工作区里的后续承接则继续把这次 UI 拆分落到 action 层：
+  - `web/app/actions.ts` 已拆成 `workflow` / `publish` 两组 server actions
+  - plugin registry / tool binding 与 publish lifecycle / API key 现在按业务模块分别消费自己的 action 文件
+- 这次承接判断仍然是：需要衔接，而且主线仍然是 `API 调用开放` 的 P0 发布治理，而不是再回到 callback cleanup 深挖
 - 本轮继续承接开放 API 主线，补上：
-  - workflow 页的 invocation / rate-limit / cache / api key 统一治理消费
-  - publish activity 的 timeline、失败原因与 API key 使用可见性
-  - 页面级 publish 数据装配与展示职责分层，避免 workflow detail 再次长回单文件混排
+  - publish governance 的 action 层解耦
+  - workflow 编辑动作与 publish 治理动作的职责分离
+  - `web/app/actions.ts` 从 444 行收口为兼容 barrel，避免前端 server actions 重新长成单点耦合
 - 当前真正需要持续承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
   - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
@@ -720,11 +721,12 @@ uv run alembic upgrade head
   - `api/app/services/workflow_library.py` 当前约 650 行，仍适合继续演进，但若再接 adapter health / node plugin registry，应优先拆 source assembly 与 starter builder
   - `api/app/services/published_invocations.py` 当前约 588 行，已经承载 activity summary、time window、timeline、API key 维度统计和 rate limit 计数；若继续长出 cache 命中统计或更细趋势分析，应提前拆 query/audit aggregation
   - `api/tests/test_runtime_service.py` 当前约 1595 行，测试体量已经过载；下一轮若继续补 waiting/resume/error path，应优先按执行路径拆分测试文件
-  - `web/app/actions.ts` 当前约 444 行，已经同时承载工具绑定、publish lifecycle 和 API key server actions；下一轮若继续补 publish 治理动作，应优先拆成 workflow / publish 两个 action 模块
+  - `web/app/actions.ts` 当前已收口为极薄兼容 barrel；真正的 server actions 已拆到 `web/app/actions/workflow.ts` 与 `web/app/actions/publish.ts`
   - `web/components/workspace-starter-library.tsx` 当前约 1042 行，是前端体量最大的真实业务文件；虽然还在前端 2000 行偏好之内，但后续继续补批量结果钻取时仍应继续拆
   - `web/components/workflow-editor-workbench.tsx` 当前约 528 行，下一轮若继续把 execution / evidence view 接回 editor overlay，要避免重新长回页面级混排组件
   - `web/components/run-diagnostics-panel.tsx` 当前约 645 行，若继续塞 trace/export/filter 状态，应优先拆筛选器和时间线区块
   - `web/components/workflow-publish-activity-panel.tsx` 当前约 278 行，已经承载 timeline、失败原因、API key 使用和窗口治理；若后续继续长出筛选交互，应优先拆 summary / timeline / recent-items 区块
+  - `web/components/workflow-publish-binding-card.tsx` 当前约 209 行，仍在健康范围内；若继续长出更多 publish 子治理区块，应优先把 cache / lifecycle / api-key 管理进一步拆开
 
 ## 推荐开发命令
 
@@ -816,15 +818,15 @@ docker compose up -d --build
    - 更细的 API key 维度观测与趋势消费视图
    - streaming / SSE 的协议面可见性与 invocation / cache / API key / protocol surface 的统一前端治理区块
    - 继续坚持绑定 `workflow_version + compiled_blueprint`
-3. 收口 callback ticket 的剩余治理：
-   - 更强鉴权形态
-   - 系统诊断侧的治理可见性
+3. 延续当前前端解耦方向：
+   - 若 publish 治理继续扩张，优先把 `binding card` 内的 cache / lifecycle / API key 区块继续细拆
+   - 继续避免把 workflow 编辑与 publish 治理动作重新堆回同一 server actions 文件
 
 原因：
 
 - 最小 `native` 调用入口、OpenAI / Anthropic 非流式入口、`api_key` 鉴权实体、alias/path 地址语义、基础 activity audit、publish cache inventory，以及 workflow 页治理入口都已经落地，当前最该补的是更细的治理反馈与流式/协议完整度，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
 - run 侧虽然已经绑定 compiled blueprint，execution/evidence 视图也已经开始消费这些事实，但发布层仍需要继续承接，稳定执行边界才能真正服务主业务。
-- callback ingress 与 ticket TTL/expired 状态已经补到“手动/API/worker cleanup + beat 周期调度 + 来源审计”，但更强鉴权与治理可见性仍属于 durable runtime 稳定化的剩余工作。
+- 本轮已经把 publish governance 的页面拆分继续落实到 server actions 边界，下一轮应继续沿这个方向演进，而不是在新增治理能力时回退到单点混排。
 
 ### P1 次高优先级
 
@@ -846,6 +848,10 @@ docker compose up -d --build
    - tool 调用摘要
    - assistant evidence 展示
    - artifact 引用跳转
+5. 继续控制长文件体量：
+   - `web/components/workspace-starter-library.tsx`
+   - `api/app/services/runtime.py`
+   - `api/tests/test_runtime_service.py`
 
 原因：
 
@@ -853,6 +859,7 @@ docker compose up -d --build
 - 当前 `llm_agent` 已从单次调用器升级为复合节点，但还需要更多结构化配置才能真正承载“节点级智能性”。
 - Tool Gateway 已经建立统一入口，应该继续成为所有工具能力的唯一穿透点，避免重新散落调用。
 - execution/evidence 视图已经先接到 run diagnostics，下一步要把这套聚合事实继续回接 editor，而不是重新在画布侧拼第二套运行态协议。
+- 当前前端 server actions 已按业务边界拆开，说明“先收口耦合点再继续加功能”是有效路径；同样策略应继续用于 runtime 与大型测试文件。
 
 ### P2 中优先级
 
