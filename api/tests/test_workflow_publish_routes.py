@@ -13,15 +13,19 @@ def _publishable_definition(
     alias: str | None = None,
     path: str | None = None,
     auth_mode: str = "internal",
+    endpoint_id: str = "native-chat",
+    endpoint_name: str = "Native Chat",
+    protocol: str = "native",
+    streaming: bool = False,
     rate_limit: dict | None = None,
     cache: dict | None = None,
 ) -> dict:
     endpoint: dict[str, object] = {
-        "id": "native-chat",
-        "name": "Native Chat",
-        "protocol": "native",
+        "id": endpoint_id,
+        "name": endpoint_name,
+        "protocol": protocol,
         "authMode": auth_mode,
-        "streaming": False,
+        "streaming": streaming,
         "inputSchema": {"type": "object"},
     }
     if alias is not None:
@@ -525,6 +529,211 @@ def test_invoke_published_native_endpoint_supports_alias_and_path_routes(
     assert invocation_body["items"][1]["request_preview"]["sample"]["source"] == "alias"
     assert all(item["run_id"] for item in invocation_body["items"])
 
+
+def test_invoke_published_openai_chat_completion_uses_model_alias(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Published OpenAI Chat Workflow",
+            "definition": _publishable_definition(
+                answer="openai-chat-answer",
+                endpoint_id="openai-chat",
+                endpoint_name="OpenAI Chat",
+                alias="openai.chat.workflow",
+                path="/openai/chat",
+                protocol="openai",
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding = bindings_response.json()[0]
+
+    publish_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_response.status_code == 200
+
+    invoke_response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "openai.chat.workflow",
+            "messages": [{"role": "user", "content": "hello"}],
+        },
+    )
+    assert invoke_response.status_code == 200
+    assert invoke_response.headers["X-7Flows-Cache"] == "BYPASS"
+    body = invoke_response.json()
+    assert body["object"] == "chat.completion"
+    assert body["model"] == "openai.chat.workflow"
+    assert body["choices"][0]["message"] == {
+        "role": "assistant",
+        "content": "openai-chat-answer",
+    }
+
+    activity_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations"
+    )
+    assert activity_response.status_code == 200
+    activity = activity_response.json()
+    assert activity["summary"]["total_count"] == 1
+    assert activity["summary"]["succeeded_count"] == 1
+    assert activity["facets"]["request_source_counts"] == [
+        {
+            "value": "workflow",
+            "count": 0,
+            "last_invoked_at": None,
+            "last_status": None,
+        },
+        {
+            "value": "alias",
+            "count": 1,
+            "last_invoked_at": activity["summary"]["last_invoked_at"],
+            "last_status": "succeeded",
+        },
+        {
+            "value": "path",
+            "count": 0,
+            "last_invoked_at": None,
+            "last_status": None,
+        },
+    ]
+
+
+def test_openai_chat_and_responses_use_surface_specific_publish_cache(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Published OpenAI Cache Workflow",
+            "definition": _publishable_definition(
+                answer="surface-cache-answer",
+                endpoint_id="openai-cache",
+                endpoint_name="OpenAI Cache",
+                alias="openai.cache.workflow",
+                path="/openai/cache",
+                protocol="openai",
+                cache={"ttl": 300, "maxEntries": 8},
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding = bindings_response.json()[0]
+
+    publish_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_response.status_code == 200
+
+    chat_payload = {
+        "model": "openai.cache.workflow",
+        "messages": [{"role": "user", "content": "same-input"}],
+    }
+    first_chat = client.post("/v1/chat/completions", json=chat_payload)
+    assert first_chat.status_code == 200
+    assert first_chat.headers["X-7Flows-Cache"] == "MISS"
+
+    second_chat = client.post("/v1/chat/completions", json=chat_payload)
+    assert second_chat.status_code == 200
+    assert second_chat.headers["X-7Flows-Cache"] == "HIT"
+
+    response_payload = {
+        "model": "openai.cache.workflow",
+        "input": [{"role": "user", "content": "same-input"}],
+    }
+    responses_invoke = client.post("/v1/responses", json=response_payload)
+    assert responses_invoke.status_code == 200
+    assert responses_invoke.headers["X-7Flows-Cache"] == "MISS"
+    assert responses_invoke.json()["object"] == "response"
+    assert responses_invoke.json()["output_text"] == "surface-cache-answer"
+
+    cache_inventory_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/cache-entries"
+    )
+    assert cache_inventory_response.status_code == 200
+    cache_inventory = cache_inventory_response.json()
+    assert cache_inventory["summary"]["active_entry_count"] == 2
+
+
+def test_invoke_published_anthropic_message_uses_model_alias(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Published Anthropic Workflow",
+            "definition": _publishable_definition(
+                answer="anthropic-answer",
+                endpoint_id="anthropic-message",
+                endpoint_name="Anthropic Message",
+                alias="anthropic.message.workflow",
+                path="/anthropic/message",
+                protocol="anthropic",
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding = bindings_response.json()[0]
+
+    publish_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_response.status_code == 200
+
+    invoke_response = client.post(
+        "/v1/messages",
+        json={
+            "model": "anthropic.message.workflow",
+            "max_tokens": 128,
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
+    assert invoke_response.status_code == 200
+    body = invoke_response.json()
+    assert body["type"] == "message"
+    assert body["model"] == "anthropic.message.workflow"
+    assert body["content"] == [{"type": "text", "text": "anthropic-answer"}]
+
+
+def test_published_openai_routes_reject_streaming_requests(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "missing.model",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": True,
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Streaming chat completions are not supported yet."
 
 def test_invoke_published_native_endpoint_uses_response_cache(
     client: TestClient,

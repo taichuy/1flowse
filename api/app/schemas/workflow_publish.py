@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -65,6 +65,119 @@ class PublishedNativeRunResponse(BaseModel):
     workflow_version: str
     compiled_blueprint_id: str
     run: RunDetail
+
+
+class OpenAIChatCompletionRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=128)
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    stream: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    temperature: float | None = None
+
+
+class OpenAIChatCompletionChoiceMessage(BaseModel):
+    role: Literal["assistant"] = "assistant"
+    content: str
+
+
+class OpenAIChatCompletionChoice(BaseModel):
+    index: int
+    message: OpenAIChatCompletionChoiceMessage
+    finish_reason: Literal["stop"] = "stop"
+
+
+class OpenAIChatCompletionUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class OpenAIChatCompletionResponse(BaseModel):
+    id: str
+    object: Literal["chat.completion"] = "chat.completion"
+    created: int
+    model: str
+    choices: list[OpenAIChatCompletionChoice]
+    usage: OpenAIChatCompletionUsage = Field(
+        default_factory=OpenAIChatCompletionUsage
+    )
+
+
+class OpenAIResponseRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=128)
+    input: Any
+    stream: bool = False
+    instructions: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OpenAIResponseOutputContent(BaseModel):
+    type: Literal["output_text"] = "output_text"
+    text: str
+    annotations: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class OpenAIResponseMessage(BaseModel):
+    role: Literal["assistant"] = "assistant"
+    content: str
+
+
+class OpenAIResponseOutputItem(BaseModel):
+    id: str
+    type: Literal["message"] = "message"
+    status: Literal["completed"] = "completed"
+    role: Literal["assistant"] = "assistant"
+    content: list[OpenAIResponseOutputContent]
+    message: OpenAIResponseMessage
+
+
+class OpenAIResponseUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class OpenAIResponseResponse(BaseModel):
+    id: str
+    object: Literal["response"] = "response"
+    created_at: int
+    status: Literal["completed"] = "completed"
+    model: str
+    output: list[OpenAIResponseOutputItem]
+    output_text: str
+    usage: OpenAIResponseUsage = Field(default_factory=OpenAIResponseUsage)
+
+
+class AnthropicMessageRequest(BaseModel):
+    model: str = Field(min_length=1, max_length=128)
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+    max_tokens: int | None = Field(default=None, ge=1)
+    stream: bool = False
+    system: str | list[dict[str, Any]] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AnthropicMessageResponseContentBlock(BaseModel):
+    type: Literal["text"] = "text"
+    text: str
+
+
+class AnthropicMessageResponseUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class AnthropicMessageResponse(BaseModel):
+    id: str
+    type: Literal["message"] = "message"
+    role: Literal["assistant"] = "assistant"
+    model: str
+    content: list[AnthropicMessageResponseContentBlock]
+    stop_reason: Literal["end_turn"] = "end_turn"
+    stop_sequence: str | None = None
+    usage: AnthropicMessageResponseUsage = Field(
+        default_factory=AnthropicMessageResponseUsage
+    )
 
 
 class PublishedEndpointApiKeyCreateRequest(BaseModel):

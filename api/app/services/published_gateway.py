@@ -15,6 +15,12 @@ from app.schemas.workflow_publish import PublishedNativeRunResponse
 from app.services.published_cache import PublishedEndpointCacheService
 from app.services.published_api_keys import PublishedEndpointApiKeyService
 from app.services.published_invocations import PublishedInvocationService
+from app.services.published_protocol_mapper import (
+    build_anthropic_message_response,
+    build_cache_identity_payload,
+    build_openai_chat_completion_response,
+    build_openai_response_api_response,
+)
 from app.services.runtime import RuntimeService
 from app.services.run_views import serialize_run_detail
 from app.services.workflow_publish import WorkflowPublishBindingService
@@ -27,7 +33,7 @@ class PublishedEndpointGatewayError(ValueError):
 
 
 @dataclass
-class PublishedNativeInvokeResult:
+class PublishedGatewayInvokeResult:
     response_payload: dict
     cache_status: str
 
@@ -56,19 +62,24 @@ class PublishedEndpointGatewayService:
         endpoint_id: str,
         input_payload: dict,
         presented_api_key: str | None = None,
-    ) -> PublishedNativeInvokeResult:
+    ) -> PublishedGatewayInvokeResult:
         binding = self._workflow_publish_service.get_published_binding(
             db,
             workflow_id=workflow_id,
             endpoint_id=endpoint_id,
         )
-        return self._invoke_native_binding(
+        return self._invoke_binding(
             db,
             binding=binding,
             missing_detail="Published endpoint binding is not currently active.",
-            input_payload=input_payload,
+            expected_protocol="native",
+            workflow_input_payload=input_payload,
+            cache_input_payload=input_payload,
+            request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="workflow",
+            response_builder=self._build_native_response_payload,
+            response_preview_builder=self._build_native_response_preview,
         )
 
     def invoke_native_endpoint_by_alias(
@@ -78,18 +89,23 @@ class PublishedEndpointGatewayService:
         endpoint_alias: str,
         input_payload: dict,
         presented_api_key: str | None = None,
-    ) -> PublishedNativeInvokeResult:
+    ) -> PublishedGatewayInvokeResult:
         binding = self._workflow_publish_service.get_published_binding_by_alias(
             db,
             endpoint_alias=endpoint_alias,
         )
-        return self._invoke_native_binding(
+        return self._invoke_binding(
             db,
             binding=binding,
             missing_detail="Published endpoint alias is not currently active.",
-            input_payload=input_payload,
+            expected_protocol="native",
+            workflow_input_payload=input_payload,
+            cache_input_payload=input_payload,
+            request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="alias",
+            response_builder=self._build_native_response_payload,
+            response_preview_builder=self._build_native_response_preview,
         )
 
     def invoke_native_endpoint_by_path(
@@ -99,30 +115,152 @@ class PublishedEndpointGatewayService:
         route_path: str,
         input_payload: dict,
         presented_api_key: str | None = None,
-    ) -> PublishedNativeInvokeResult:
+    ) -> PublishedGatewayInvokeResult:
         binding = self._workflow_publish_service.get_published_binding_by_path(
             db,
             route_path=route_path,
         )
-        return self._invoke_native_binding(
+        return self._invoke_binding(
             db,
             binding=binding,
             missing_detail="Published endpoint path is not currently active.",
-            input_payload=input_payload,
+            expected_protocol="native",
+            workflow_input_payload=input_payload,
+            cache_input_payload=input_payload,
+            request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="path",
+            response_builder=self._build_native_response_payload,
+            response_preview_builder=self._build_native_response_preview,
         )
 
-    def _invoke_native_binding(
+    def invoke_openai_chat_completion(
+        self,
+        db: Session,
+        *,
+        model: str,
+        input_payload: dict,
+        request_payload: dict,
+        presented_api_key: str | None = None,
+    ) -> PublishedGatewayInvokeResult:
+        return self._invoke_protocol_binding_by_alias(
+            db,
+            model=model,
+            expected_protocol="openai",
+            missing_detail="Published OpenAI model is not currently active.",
+            workflow_input_payload=input_payload,
+            cache_input_payload=build_cache_identity_payload(
+                surface="openai.chat.completions",
+                request_payload=request_payload,
+            ),
+            request_preview_payload=request_payload,
+            presented_api_key=presented_api_key,
+            response_builder=lambda **kwargs: build_openai_chat_completion_response(
+                model=model,
+                output_payload=kwargs["artifacts"].run.output_payload,
+            ),
+        )
+
+    def invoke_openai_response(
+        self,
+        db: Session,
+        *,
+        model: str,
+        input_payload: dict,
+        request_payload: dict,
+        presented_api_key: str | None = None,
+    ) -> PublishedGatewayInvokeResult:
+        return self._invoke_protocol_binding_by_alias(
+            db,
+            model=model,
+            expected_protocol="openai",
+            missing_detail="Published OpenAI model is not currently active.",
+            workflow_input_payload=input_payload,
+            cache_input_payload=build_cache_identity_payload(
+                surface="openai.responses",
+                request_payload=request_payload,
+            ),
+            request_preview_payload=request_payload,
+            presented_api_key=presented_api_key,
+            response_builder=lambda **kwargs: build_openai_response_api_response(
+                model=model,
+                output_payload=kwargs["artifacts"].run.output_payload,
+            ),
+        )
+
+    def invoke_anthropic_message(
+        self,
+        db: Session,
+        *,
+        model: str,
+        input_payload: dict,
+        request_payload: dict,
+        presented_api_key: str | None = None,
+    ) -> PublishedGatewayInvokeResult:
+        return self._invoke_protocol_binding_by_alias(
+            db,
+            model=model,
+            expected_protocol="anthropic",
+            missing_detail="Published Anthropic model is not currently active.",
+            workflow_input_payload=input_payload,
+            cache_input_payload=build_cache_identity_payload(
+                surface="anthropic.messages",
+                request_payload=request_payload,
+            ),
+            request_preview_payload=request_payload,
+            presented_api_key=presented_api_key,
+            response_builder=lambda **kwargs: build_anthropic_message_response(
+                model=model,
+                output_payload=kwargs["artifacts"].run.output_payload,
+            ),
+        )
+
+    def _invoke_protocol_binding_by_alias(
+        self,
+        db: Session,
+        *,
+        model: str,
+        expected_protocol: str,
+        missing_detail: str,
+        workflow_input_payload: dict,
+        cache_input_payload: dict,
+        request_preview_payload: dict,
+        presented_api_key: str | None,
+        response_builder,
+    ) -> PublishedGatewayInvokeResult:
+        binding = self._workflow_publish_service.get_published_binding_by_alias(
+            db,
+            endpoint_alias=model,
+        )
+        return self._invoke_binding(
+            db,
+            binding=binding,
+            missing_detail=missing_detail,
+            expected_protocol=expected_protocol,
+            workflow_input_payload=workflow_input_payload,
+            cache_input_payload=cache_input_payload,
+            request_preview_payload=request_preview_payload,
+            presented_api_key=presented_api_key,
+            request_source="alias",
+            response_builder=response_builder,
+            response_preview_builder=self._build_passthrough_response_preview,
+        )
+
+    def _invoke_binding(
         self,
         db: Session,
         *,
         binding: WorkflowPublishedEndpoint | None,
         missing_detail: str,
-        input_payload: dict,
+        expected_protocol: str,
+        workflow_input_payload: dict,
+        cache_input_payload: dict,
+        request_preview_payload: dict,
         presented_api_key: str | None,
         request_source: str,
-    ) -> PublishedNativeInvokeResult:
+        response_builder,
+        response_preview_builder,
+    ) -> PublishedGatewayInvokeResult:
         if binding is None:
             raise PublishedEndpointGatewayError(missing_detail, status_code=404)
 
@@ -134,12 +272,13 @@ class PublishedEndpointGatewayService:
         blueprint_record = None
         response_payload = None
         cache_status = "bypass"
+        response_preview_payload = None
 
         try:
-            if binding.protocol != "native":
+            if binding.protocol != expected_protocol:
                 raise PublishedEndpointGatewayError(
                     f"Published endpoint '{binding.endpoint_id}' uses protocol "
-                    f"'{binding.protocol}', not 'native'."
+                    f"'{binding.protocol}', not '{expected_protocol}'."
                 )
 
             workflow = db.get(Workflow, binding.workflow_id)
@@ -165,12 +304,12 @@ class PublishedEndpointGatewayService:
                     )
             elif binding.auth_mode != "internal":
                 raise PublishedEndpointGatewayError(
-                    "Published native endpoint auth mode "
+                    "Published endpoint auth mode "
                     f"'{binding.auth_mode}' is not supported yet."
                 )
             if binding.streaming:
                 raise PublishedEndpointGatewayError(
-                    "Published native endpoint streaming invocation is not supported yet."
+                    "Published endpoint streaming invocation is not supported yet."
                 )
             self._enforce_rate_limit(db, binding=binding)
 
@@ -192,7 +331,7 @@ class PublishedEndpointGatewayService:
                 cache_hit = self._cache_service.get_hit(
                     db,
                     binding=binding,
-                    input_payload=input_payload,
+                    input_payload=cache_input_payload,
                     now=started_at,
                 )
             else:
@@ -207,20 +346,21 @@ class PublishedEndpointGatewayService:
                     workflow=workflow,
                     workflow_version=workflow_version,
                     blueprint_record=blueprint_record,
-                    input_payload=input_payload,
+                    input_payload=workflow_input_payload,
                 )
-                response_payload = self._build_native_response_payload(
+                response_payload = response_builder(
                     binding=binding,
                     workflow=workflow,
                     workflow_version=workflow_version,
                     blueprint_record=blueprint_record,
                     artifacts=artifacts,
                 )
+                response_preview_payload = response_preview_builder(response_payload)
                 if cache_enabled:
                     self._cache_service.store_response(
                         db,
                         binding=binding,
-                        input_payload=input_payload,
+                        input_payload=cache_input_payload,
                         response_payload=response_payload,
                     )
         except PublishedEndpointGatewayError as exc:
@@ -234,7 +374,7 @@ class PublishedEndpointGatewayService:
                 db,
                 binding=binding,
                 request_source=request_source,
-                input_payload=input_payload,
+                input_payload=request_preview_payload,
                 status="rejected" if invocation_error.status_code < 500 else "failed",
                 cache_status=cache_status,
                 api_key_id=authenticated_key.id if authenticated_key is not None else None,
@@ -255,26 +395,43 @@ class PublishedEndpointGatewayService:
                 status_code=500,
             )
 
+        if response_preview_payload is None:
+            response_preview_payload = response_preview_builder(response_payload)
+
         self._invocation_service.record_invocation(
             db,
             binding=binding,
             request_source=request_source,
-            input_payload=input_payload,
+            input_payload=request_preview_payload,
             status=(
                 "failed"
                 if response_payload["run"]["status"] == "failed"
                 else "succeeded"
-            ),
+            )
+            if expected_protocol == "native"
+            else "succeeded",
             cache_status=cache_status,
             api_key_id=authenticated_key.id if authenticated_key is not None else None,
-            run_id=response_payload["run"]["id"],
-            run_status=response_payload["run"]["status"],
-            response_payload=response_payload["run"].get("output_payload") or {},
-            error_message=response_payload["run"].get("error_message"),
+            run_id=(
+                response_payload["run"]["id"]
+                if expected_protocol == "native"
+                else None
+            ),
+            run_status=(
+                response_payload["run"]["status"]
+                if expected_protocol == "native"
+                else None
+            ),
+            response_payload=response_preview_payload,
+            error_message=(
+                response_payload["run"].get("error_message")
+                if expected_protocol == "native"
+                else None
+            ),
             started_at=started_at,
             finished_at=finished_at,
         )
-        return PublishedNativeInvokeResult(
+        return PublishedGatewayInvokeResult(
             response_payload=response_payload,
             cache_status=cache_status,
         )
@@ -300,6 +457,16 @@ class PublishedEndpointGatewayService:
             run=serialize_run_detail(artifacts),
         )
         return response.model_dump(mode="json")
+
+    def _build_native_response_preview(self, response_payload: dict) -> dict:
+        run_payload = response_payload.get("run")
+        if not isinstance(run_payload, dict):
+            return {}
+        output_payload = run_payload.get("output_payload")
+        return output_payload if isinstance(output_payload, dict) else {}
+
+    def _build_passthrough_response_preview(self, response_payload: dict) -> dict:
+        return response_payload
 
     def _enforce_rate_limit(
         self,

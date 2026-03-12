@@ -228,7 +228,7 @@ uv run alembic upgrade head
   - request / response 的摘要预览与 duration
 - `workflow_published_cache_entries` 用于保存 published endpoint 的响应缓存事实：
   - `binding_id + cache_key` 唯一键
-  - 完整 native 响应 payload
+  - 完整 published response payload
   - `hit_count / last_hit_at`
   - `expires_at`
 
@@ -359,6 +359,9 @@ uv run alembic upgrade head
 - `POST /v1/workflows/{workflow_id}/published-endpoints/{endpoint_id}/run`
 - `POST /v1/published-aliases/{endpoint_alias}/run`
 - `POST /v1/published-paths/{route_path:path}`
+- `POST /v1/chat/completions`
+- `POST /v1/responses`
+- `POST /v1/messages`
 - `GET /api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations`
 
 用途：
@@ -380,6 +383,7 @@ uv run alembic upgrade head
 - 为发布态治理提供最小 lifecycle 更新入口
 - 沿 active publish binding 触发最小 native 发布调用
 - 为 published endpoint 提供最小稳定外部地址入口（alias/path）
+- 沿已发布 binding 触发最小 OpenAI / Anthropic 兼容调用入口
 - 为 publish binding 提供最小活动查询入口，支撑开放 API 治理与审计
 - `GET /api/workflow-library` 当前已开始按 `workspace_id` 过滤 adapter 绑定的 compat 工具，并把 `tool` 节点的 `binding_required` / `binding_source_lanes` 一并返回给 editor
 - `GET /api/workflows/{workflow_id}/published-endpoints` 当前默认返回 workflow 最新版本声明的 publish bindings，也支持按 `workflow_version` 或 `include_all_versions=true` 查看历史绑定
@@ -392,7 +396,12 @@ uv run alembic upgrade head
 - `POST /v1/workflows/{workflow_id}/published-endpoints/{endpoint_id}/run` 当前只会命中 `published` binding，并固定执行 binding 指向的 `target_workflow_version + compiled_blueprint`
 - `POST /v1/published-aliases/{endpoint_alias}/run` 当前会按 active publish binding 的 `endpoint_alias` 命中 native endpoint
 - `POST /v1/published-paths/{route_path:path}` 当前会按 active publish binding 的 `route_path` 命中 native endpoint
-- 当前 `native` 发布调用仍保持 MVP 诚实边界：仅支持 `protocol=native`、`auth_mode=internal/api_key`、`streaming=false`
+- `POST /v1/chat/completions` 与 `POST /v1/responses` 当前会通过 `model -> published endpoint alias` 命中 `protocol=openai` 的 active binding
+- `POST /v1/messages` 当前会通过 `model -> published endpoint alias` 命中 `protocol=anthropic` 的 active binding
+- 当前开放 API 仍保持 MVP 诚实边界：
+  - `native/openai/anthropic` 入口都只支持 `auth_mode=internal/api_key`
+  - 当前都只支持 `streaming=false`
+  - OpenAI / Anthropic 当前只实现最小非流式返回体，不假装已经覆盖完整协议字段
 - `auth_mode=api_key` 当前已支持 `x-api-key`，并兼容 `Authorization: Bearer <key>` 的最小 header 形态
 - publish definition 当前已支持 `alias/path`，缺省会回退到 `endpoint_id` 与 `/{endpoint_id}`
 - publish definition 当前已支持声明 `rateLimit.requests + rateLimit.windowSeconds`
@@ -404,8 +413,9 @@ uv run alembic upgrade head
 - `PublishedEndpointGatewayService` 当前已开始通过独立 `PublishedEndpointCacheService` 处理 binding 级 response cache：
   - 缓存键默认绑定 `binding_id + stable input payload`
   - 若声明 `cache.varyBy`，则只按指定字段路径参与缓存键计算
-  - 缓存命中时直接复用已缓存的 native 响应 payload，不重复执行 workflow
-- `POST /v1/workflows/{workflow_id}/published-endpoints/{endpoint_id}/run`、alias/path 入口当前都会返回 `X-7Flows-Cache: HIT/MISS`
+  - OpenAI / Anthropic 会继续在 cache identity 中补上 protocol surface，避免 `/chat/completions` 与 `/responses` 串用同一份缓存
+  - 缓存命中时直接复用已缓存的 published response payload，不重复执行 workflow
+- `POST /v1/workflows/{workflow_id}/published-endpoints/{endpoint_id}/run`、alias/path、OpenAI / Anthropic 入口当前都会返回 `X-7Flows-Cache: HIT/MISS`
 - published invocation audit 当前已区分 `cache_status=hit/miss/bypass`
 - `GET /api/workflows/{workflow_id}/published-endpoints` 当前返回的 `activity` 摘要已带 cache hit/miss/bypass 统计
 - `GET /api/workflows/{workflow_id}/published-endpoints` 当前还会返回 binding 级 `cache_inventory` 摘要，供 workflow 页治理区直接消费
@@ -594,6 +604,9 @@ uv run alembic upgrade head
 - 当前 workflow 页面还会并行读取 `/api/workflows/{workflow_id}/published-endpoints`，在 editor 下方挂独立 publish governance panel
 - 对启用 cache 的 binding，workflow 页面会进一步读取 `/cache-entries`，展示 active cache inventory 摘要与条目预览
 - 对 `auth_mode=api_key` 的 binding，workflow 页面会进一步读取 active API key 列表，并提供 create / revoke / one-time secret 展示
+- workflow 页面当前还会继续读取 `/invocations`，把最近调用审计、API key 使用、最近失败原因与 request source / cache facet 接回 publish panel
+- 对启用 `rate_limit_policy` 的 binding，workflow 页面会按当前限流窗口再次读取 `/invocations`，直接展示 window used / remaining / rejected 的治理信号
+- publish governance panel 当前已按职责拆成 `panel -> binding card -> invocation activity` 子组件，避免 workflow 页继续长回单文件混排
 - 当前 `llm_agent` / `tool` / `mcp_query` / `condition` / `router` / `output` 节点已开始进入结构化配置表单，并保留高级 JSON 兜底：
     - `llm_agent`
       - 可编辑 `provider` / `modelId` / `temperature`
@@ -661,25 +674,26 @@ uv run alembic upgrade head
 
 ### 当前架构与体量判断
 
-- 最近一次 Git 提交是 `2026-03-12 04:30:07 +0800` 的 `feat: add published endpoint cache observability`：
-  - 给 publish binding 补上 cache inventory 的持久化事实与摘要能力
-  - 扩展 published activity，把 cache `hit / miss / bypass` 统计显式暴露出来
-  - 补齐 publish cache observability 的后端契约与测试
+- 最近一次正式 Git 提交是 `2026-03-12 10:57:22 +0800` 的 `feat: add workflow publish governance panel`：
+  - workflow 页面开始直接消费 publish binding、cache inventory 与 API key 治理入口
+  - publish governance panel 已经接回 editor 主路径，而不是继续停留在后端可用、前端不可见
 - 这次承接判断是：需要衔接，而且主线仍然是 `API 调用开放` 的 P0 发布治理，而不是再回到 callback cleanup 深挖
 - 本轮继续承接开放 API 主线，补上：
-  - binding 级 `cache-entries` 查询接口
-  - workflow 页面独立 publish governance panel
-  - `auth_mode=api_key` 的前端 create / revoke / one-time secret 治理入口
+  - `POST /v1/chat/completions`
+  - `POST /v1/responses`
+  - `POST /v1/messages`
+  - `protocol=openai/anthropic` 的 `model -> published binding alias` 映射
+  - protocol surface 级 publish cache identity，避免 OpenAI `chat/responses` 串用缓存
 - 当前真正需要持续承接的实现主线仍是 `feat: add durable agent runtime phase1`：
   - Phase 1 已经把 `compiler / runtime / agent runtime / tool gateway / context / artifact` 这套后端基础拆出来
   - 前几轮沿这条线补上了 `run_callback_tickets + callback ingress`
   - 最近两轮继续把 callback ticket 收口为带 TTL/过期态、cleanup 和周期调度的生命周期对象，并让 execution view 与统一事件流直接复用这批事实
-  - 最近几轮把 publish binding、publish lifecycle、alias/path、activity audit、最小 native publish invoke 与 binding 级 rate limit 接到 compiled blueprint 主线上，为开放 API 做最小承接
+  - 最近几轮把 publish binding、publish lifecycle、alias/path、activity audit、最小 native publish invoke、OpenAI / Anthropic 最小兼容入口与 binding 级 rate limit 接到 compiled blueprint 主线上，为开放 API 做最小承接
 - 当前基础框架已经写到“可以继续推进主业务”的阶段：
   - `应用新建编排` 这一条线已经有 `workflow library -> starter -> editor -> 保存版本 -> recent runs overlay`
   - `编排节点能力` 这一条线已经有 phase runtime、tool/evidence/artifact、scheduler resume 和 callback ingress
   - `Dify 插件兼容` 已有 registry / adapter / tool lane / workspace scope 的基础 contract，但生命周期仍未完整
-  - `API 调用开放` 已从纯设计占位推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit + time window/timeline + binding rate limit + cache inventory + workflow 页面治理入口` 最小闭环；但 rate limit 诊断消费和 OpenAI / Anthropic 映射还没真正接上
+  - `API 调用开放` 已从纯设计占位推进到 `publish binding + lifecycle + alias/path + native invoke + OpenAI / Anthropic 非流式入口 + api_key auth + activity audit + time window/timeline + binding rate limit + cache inventory + workflow 页面治理入口` 最小闭环；但 streaming、协议字段完整度和更细治理消费还没真正接上
 - 当前架构方向整体是解耦的，但仍有未完全拆开的高风险边界：
   - 后端已经开始形成 `Flow Compiler -> RuntimeService -> AgentRuntime / ToolGateway / ContextService / RunResumeScheduler / RunCallbackTicketService / WorkflowPublishBindingService` 的分层
   - execution / evidence 查询也已独立落到 `RunViewService + run_views route`，没有继续把聚合逻辑塞回 `runs.py`
@@ -694,7 +708,7 @@ uv run alembic upgrade head
   - 前端创建页、editor、starter 治理也已开始围绕共享 snapshot 演进，而不是各自维护私有常量
   - `run diagnostics` 新增 execution/evidence sections，但通过独立组件承接，没有继续把 `run-diagnostics-panel.tsx` 变成新的页面级大文件
   - callback ticket cleanup 现在也已接入独立 scheduler 进程，避免再把周期治理塞回 API 或 `RuntimeService`
-  - 但 publish endpoint 的 cache/protocol mapping、callback ticket 更强鉴权/系统诊断可见性，以及节点插件注册中心仍未彻底拆清
+  - 但 publish endpoint 的更完整 protocol mapping / streaming、callback ticket 更强鉴权/系统诊断可见性，以及节点插件注册中心仍未彻底拆清
 - 当前需要显式盯住的长文件：
   - `api/app/services/runtime.py` 当前约 1595 行，已经重新越过后端 1500 行偏好阈值；下一轮若继续补 scheduler、callback 治理或 publish gateway，应优先拆 execution / waiting / resume orchestration
   - `api/app/api/routes/runs.py` 仍然偏长，但本轮已把 execution / evidence 聚合和 RunDetail 序列化拆出；下一轮若继续扩展 trace/export/callback，应进一步考虑 trace/export/callback 子模块拆分
@@ -760,9 +774,9 @@ docker compose up -d --build
 - 外部 MCP Provider 接入
 - 完整插件兼容代理生命周期
 - publish endpoint 的 cache 与更细的审计治理
-- publish activity 趋势的前端消费、更细的 API key 观测与长期审计面板
-- `native` 发布调用的 streaming / SSE 与更完整发布管理
-- `openai / anthropic` 的正式协议映射与开放调用入口
+- publish activity 的更细 timeline 可视化、前端筛选钻取与长期审计面板
+- `native / openai / anthropic` 发布调用的 streaming / SSE 与更完整发布管理
+- OpenAI / Anthropic 更完整的字段透传、usage 映射与协议面治理可见性
 - scheduler 级 dead-letter / dedupe / metrics / 失败重投治理
 - callback ticket 的更强鉴权与系统诊断治理可见性
 - 回放调试面板
@@ -778,23 +792,23 @@ docker compose up -d --build
 
 当前判断：
 
-- 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + api_key auth + activity audit filters + time window/timeline + binding rate limit + cache inventory + workflow 页面治理`。
-- 发布态现在已经具备最小 native 调用、API key 鉴权、alias/path 地址闭环、基础审计视图、最小 binding 级限流，以及 workflow 页的 lifecycle / cache / API key 治理入口，但距离完整开放 API 仍差 rate limit 面板化消费、流式与兼容协议映射。
+- 本轮已经把 `compiled blueprint / version snapshot / run binding` 继续推进到 `publish binding + lifecycle + alias/path + native invoke + OpenAI/Anthropic 非流式兼容入口 + api_key auth + activity audit filters + time window/timeline + binding rate limit + cache inventory + workflow 页面治理`。
+- 发布态现在已经具备最小 native 调用、OpenAI / Anthropic 非流式入口、API key 鉴权、alias/path 地址闭环、基础审计视图、最小 binding 级限流，以及 workflow 页的 lifecycle / cache / API key 治理入口，但距离完整开放 API 仍差 rate limit 面板化消费、协议字段完整度和流式能力。
 - 现在还不适合一步到位宣称“完整 Durable Runtime 已完成”，原因是：
   - callback ingress、ticket TTL/过期态和周期自动清理已经落地，但 callback bus、更强鉴权和系统诊断治理可见性还没有完成
   - scheduler 还只有最小任务投递，没有 dead-letter、去重、重投和系统化观测
-  - publish binding 虽然已经接上 compiled blueprint、lifecycle、alias/path、最小 native invoke、API key 实体和最小 rate limit，但发布托管能力与协议映射还没有完全接上
+  - publish binding 虽然已经接上 compiled blueprint、lifecycle、alias/path、最小 native invoke、OpenAI / Anthropic 非流式入口、API key 实体和最小 rate limit，但发布托管能力与 streaming / 更完整协议映射还没有完全接上
 - 因此后续应按 “Phase 1 MVP 稳定化 -> Phase 2 完整耐久化” 的路线推进，而不是再把所有能力堆回 `runtime.py`
 
 ### P0 当前最高优先级
 
 1. 把开放 API 建在 publish binding + lifecycle + activity 上：
-   - 继续把最小 `native` endpoint 演进成更完整的发布实体
-   - 再把 OpenAI / Anthropic 协议映射挂到同一条发布链上
+   - 继续把最小 `native / openai / anthropic` endpoint 演进成更完整的发布实体
+   - 把 streaming / SSE 挂到同一条发布链和统一事件流上
 2. 继续补 publish endpoint 的发布实体：
    - rate limit 的系统诊断可见性与更细治理反馈
    - 更细的 API key 维度观测与趋势消费视图
-   - invocation / cache / API key 的统一前端治理区块
+   - invocation / cache / API key / protocol surface 的统一前端治理区块
    - 继续坚持绑定 `workflow_version + compiled_blueprint`
 3. 收口 callback ticket 的剩余治理：
    - 更强鉴权形态
@@ -802,7 +816,7 @@ docker compose up -d --build
 
 原因：
 
-- 最小 `native` 调用入口、`api_key` 鉴权实体、alias/path 地址语义、基础 activity audit、publish cache inventory，以及 workflow 页治理入口都已经落地，当前最该补的是更细的治理反馈与兼容协议映射，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
+- 最小 `native` 调用入口、OpenAI / Anthropic 非流式入口、`api_key` 鉴权实体、alias/path 地址语义、基础 activity audit、publish cache inventory，以及 workflow 页治理入口都已经落地，当前最该补的是更细的治理反馈与流式/协议完整度，否则 `API 调用开放` 仍然无法从 MVP 走向可集成状态。
 - run 侧虽然已经绑定 compiled blueprint，execution/evidence 视图也已经开始消费这些事实，但发布层仍需要继续承接，稳定执行边界才能真正服务主业务。
 - callback ingress 与 ticket TTL/expired 状态已经补到“手动/API/worker cleanup + beat 周期调度 + 来源审计”，但更强鉴权与治理可见性仍属于 durable runtime 稳定化的剩余工作。
 
