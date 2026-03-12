@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
 import type {
   PublishedEndpointApiKeyItem,
   PublishedEndpointInvocationFacetItem,
@@ -31,24 +32,6 @@ const TIME_WINDOW_OPTIONS = [
   { value: "7d", label: "最近 7 天" },
   { value: "30d", label: "最近 30 天" }
 ] as const;
-
-function formatTimelineBucketLabel(
-  value: string,
-  granularity: "hour" | "day"
-) {
-  const date = new Date(value);
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    ...(granularity === "hour"
-      ? {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false
-        }
-      : {})
-  }).format(date);
-}
 
 function facetCount(
   facets: PublishedEndpointInvocationFacetItem[] | undefined,
@@ -112,10 +95,6 @@ export function WorkflowPublishActivityPanel({
   const failureReasons = invocationAudit?.facets.recent_failure_reasons ?? [];
   const timeline = invocationAudit?.facets.timeline ?? [];
   const timelineGranularity = invocationAudit?.facets.timeline_granularity ?? "hour";
-  const timelineMaxCount = timeline.reduce(
-    (max, bucket) => Math.max(max, bucket.total_count),
-    0
-  );
   const rateLimitPolicy = binding.rate_limit_policy;
   const windowUsed = rateLimitWindowAudit
     ? rateLimitWindowAudit.summary.succeeded_count +
@@ -353,57 +332,11 @@ export function WorkflowPublishActivityPanel({
         </div>
       </div>
 
-      <div className="entry-card compact-card">
-        <p className="entry-card-title">Traffic timeline</p>
-        <p className="section-copy entry-copy">
-          按 {timelineGranularity === "hour" ? "小时" : "天"} 聚合最近调用，补足 publish
-          activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：
-          {formatTimeWindowLabel(activeInvocationFilter?.timeWindow ?? "all")}。
-        </p>
-
-        {timeline.length ? (
-          <div className="publish-timeline">
-            {timeline.map((bucket) => {
-              const width =
-                timelineMaxCount > 0
-                  ? Math.max((bucket.total_count / timelineMaxCount) * 100, bucket.total_count > 0 ? 12 : 0)
-                  : 0;
-
-              return (
-                <article className="payload-card compact-card" key={bucket.bucket_start}>
-                  <div className="payload-card-header">
-                    <span className="status-meta">
-                      {formatTimelineBucketLabel(bucket.bucket_start, timelineGranularity)}
-                    </span>
-                    <span className="event-chip">total {bucket.total_count}</span>
-                  </div>
-
-                  <div className="publish-timeline-bar" aria-hidden="true">
-                    <span
-                      className="publish-timeline-bar-fill"
-                      style={{ width: `${width}%` }}
-                    />
-                  </div>
-
-                  <p className="section-copy entry-copy publish-timeline-copy">
-                    {formatTimestamp(bucket.bucket_start)} - {formatTimestamp(bucket.bucket_end)}
-                  </p>
-
-                  <div className="tool-badge-row">
-                    <span className="event-chip">success {bucket.succeeded_count}</span>
-                    <span className="event-chip">failed {bucket.failed_count}</span>
-                    <span className="event-chip">rejected {bucket.rejected_count}</span>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="empty-state compact">
-            当前还没有足够的 invocation timeline 数据，后续命中 published endpoint 后这里会显示趋势桶。
-          </p>
-        )}
-      </div>
+      <WorkflowPublishTrafficTimeline
+        timeline={timeline}
+        timelineGranularity={timelineGranularity}
+        timeWindowLabel={formatTimeWindowLabel(activeInvocationFilter?.timeWindow ?? "all")}
+      />
 
       {reasonCounts.length ? (
         <div className="entry-card compact-card">

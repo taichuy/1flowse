@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import uuid4
@@ -45,6 +45,16 @@ PublishedInvocationReasonCode = Literal[
     "unknown",
     "workflow_missing",
 ]
+REQUEST_SURFACE_ORDER: tuple[PublishedInvocationRequestSurface, ...] = (
+    "native.workflow",
+    "native.alias",
+    "native.path",
+    "openai.chat.completions",
+    "openai.responses",
+    "openai.unknown",
+    "anthropic.messages",
+    "unknown",
+)
 
 
 def classify_invocation_reason(
@@ -132,6 +142,12 @@ class PublishedInvocationFailureReason:
 
 
 @dataclass(frozen=True)
+class PublishedInvocationBucketFacet:
+    value: str
+    count: int = 0
+
+
+@dataclass(frozen=True)
 class PublishedInvocationTimeBucket:
     bucket_start: datetime
     bucket_end: datetime
@@ -139,6 +155,10 @@ class PublishedInvocationTimeBucket:
     succeeded_count: int = 0
     failed_count: int = 0
     rejected_count: int = 0
+    request_surface_counts: list[PublishedInvocationBucketFacet] = field(
+        default_factory=list
+    )
+    reason_counts: list[PublishedInvocationBucketFacet] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -312,6 +332,25 @@ def _truncate_bucket_start(
     return normalized.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def _build_bucket_facets(
+    counts: dict[str, int],
+    *,
+    ordered_values: tuple[str, ...] | None = None,
+) -> list[PublishedInvocationBucketFacet]:
+    if ordered_values is not None:
+        return [
+            PublishedInvocationBucketFacet(value=value, count=counts[value])
+            for value in ordered_values
+            if counts.get(value, 0) > 0
+        ]
+
+    return [
+        PublishedInvocationBucketFacet(value=value, count=count)
+        for value, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        if count > 0
+    ]
+
+
 def _build_timeline(
     records: list[WorkflowPublishedInvocation],
     *,
@@ -321,7 +360,7 @@ def _build_timeline(
         return []
 
     bucket_size = timedelta(hours=1 if granularity == "hour" else 24)
-    buckets: dict[datetime, dict[str, int]] = {}
+    buckets: dict[datetime, dict[str, object]] = {}
 
     for record in records:
         bucket_start = _truncate_bucket_start(record.created_at, granularity=granularity)
@@ -332,19 +371,31 @@ def _build_timeline(
                 "succeeded_count": 0,
                 "failed_count": 0,
                 "rejected_count": 0,
+                "request_surface_counts": defaultdict(int),
+                "reason_counts": defaultdict(int),
             },
         )
         bucket["total_count"] += 1
         bucket[f"{record.status}_count"] += 1
+        bucket["request_surface_counts"][_resolve_request_surface(record)] += 1
+
+        reason_code = _resolve_record_reason_code(record)
+        if reason_code is not None:
+            bucket["reason_counts"][reason_code] += 1
 
     return [
         PublishedInvocationTimeBucket(
             bucket_start=bucket_start,
             bucket_end=bucket_start + bucket_size,
-            total_count=counts["total_count"],
-            succeeded_count=counts["succeeded_count"],
-            failed_count=counts["failed_count"],
-            rejected_count=counts["rejected_count"],
+            total_count=int(counts["total_count"]),
+            succeeded_count=int(counts["succeeded_count"]),
+            failed_count=int(counts["failed_count"]),
+            rejected_count=int(counts["rejected_count"]),
+            request_surface_counts=_build_bucket_facets(
+                counts["request_surface_counts"],
+                ordered_values=REQUEST_SURFACE_ORDER,
+            ),
+            reason_counts=_build_bucket_facets(counts["reason_counts"]),
         )
         for bucket_start, counts in sorted(buckets.items(), reverse=True)
     ]

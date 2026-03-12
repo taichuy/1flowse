@@ -305,6 +305,11 @@ class PublishedEndpointInvocationFailureReasonItem(BaseModel):
     last_invoked_at: datetime | None = None
 
 
+class PublishedEndpointInvocationBucketFacetItem(BaseModel):
+    value: str
+    count: int = 0
+
+
 class PublishedEndpointInvocationTimeBucketItem(BaseModel):
     bucket_start: datetime
     bucket_end: datetime
@@ -312,6 +317,12 @@ class PublishedEndpointInvocationTimeBucketItem(BaseModel):
     succeeded_count: int = 0
     failed_count: int = 0
     rejected_count: int = 0
+    request_surface_counts: list[PublishedEndpointInvocationBucketFacetItem] = Field(
+        default_factory=list
+    )
+    reason_counts: list[PublishedEndpointInvocationBucketFacetItem] = Field(
+        default_factory=list
+    )
 
 
 class PublishedEndpointInvocationFacets(BaseModel):

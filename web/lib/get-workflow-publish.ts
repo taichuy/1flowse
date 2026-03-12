@@ -84,6 +84,11 @@ export type PublishedEndpointInvocationFailureReasonItem = {
   last_invoked_at?: string | null;
 };
 
+export type PublishedEndpointInvocationBucketFacetItem = {
+  value: string;
+  count: number;
+};
+
 export type PublishedEndpointInvocationTimeBucketItem = {
   bucket_start: string;
   bucket_end: string;
@@ -91,6 +96,8 @@ export type PublishedEndpointInvocationTimeBucketItem = {
   succeeded_count: number;
   failed_count: number;
   rejected_count: number;
+  request_surface_counts: PublishedEndpointInvocationBucketFacetItem[];
+  reason_counts: PublishedEndpointInvocationBucketFacetItem[];
 };
 
 export type PublishedEndpointInvocationFilters = {

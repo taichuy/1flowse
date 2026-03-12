@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.workflow import Workflow, WorkflowPublishedEndpoint
 from app.schemas.workflow_publish import (
+    PublishedEndpointInvocationBucketFacetItem,
     PublishedEndpointInvocationApiKeyUsageItem,
     PublishedEndpointInvocationFacetItem,
     PublishedEndpointInvocationFacets,
@@ -123,6 +124,14 @@ def _serialize_timeline_item(item) -> PublishedEndpointInvocationTimeBucketItem:
         succeeded_count=item.succeeded_count,
         failed_count=item.failed_count,
         rejected_count=item.rejected_count,
+        request_surface_counts=[
+            PublishedEndpointInvocationBucketFacetItem(value=facet.value, count=facet.count)
+            for facet in item.request_surface_counts
+        ],
+        reason_counts=[
+            PublishedEndpointInvocationBucketFacetItem(value=facet.value, count=facet.count)
+            for facet in item.reason_counts
+        ],
     )
 
 

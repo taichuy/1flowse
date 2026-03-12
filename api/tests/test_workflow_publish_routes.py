@@ -1137,6 +1137,10 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
     )
     assert all_activity["facets"]["timeline_granularity"] in {"hour", "day"}
     assert len(all_activity["facets"]["timeline"]) >= 1
+    assert all_activity["facets"]["timeline"][0]["request_surface_counts"]
+    assert all_activity["facets"]["timeline"][0]["reason_counts"] == [
+        {"value": "api_key_invalid", "count": 1}
+    ]
     assert all_activity["items"][0]["reason_code"] == "api_key_invalid"
 
     filtered_activity_response = client.get(
@@ -1312,6 +1316,13 @@ def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
             "succeeded_count": 1,
             "failed_count": 0,
             "rejected_count": 1,
+            "request_surface_counts": [
+                {"value": "native.workflow", "count": 1},
+                {"value": "native.alias", "count": 1},
+            ],
+            "reason_counts": [
+                {"value": "api_key_invalid", "count": 1},
+            ],
         }
     ]
 
