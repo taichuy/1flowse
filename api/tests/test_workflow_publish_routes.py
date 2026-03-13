@@ -530,12 +530,17 @@ def test_invoke_published_native_endpoint_stream_returns_event_stream(
 
     event_names = [line.removeprefix("event: ") for line in lines if line.startswith("event: ")]
     assert event_names[0] == "run.started"
+    assert "node.started" in event_names
+    assert "node.output.completed" in event_names
     assert "run.output.delta" in event_names
     assert event_names[-1] == "run.completed"
 
     data_lines = [line.removeprefix("data: ") for line in lines if line.startswith("data: ")]
     assert data_lines[-1] == "[DONE]"
-    completed_payload = json.loads(data_lines[-2])
+    streamed_payloads = [json.loads(line) for line in data_lines[:-1]]
+    assert streamed_payloads[0]["type"] == "run.started"
+    assert any(item["type"] == "node.output.completed" for item in streamed_payloads)
+    completed_payload = streamed_payloads[-1]
     assert completed_payload["type"] == "run.completed"
     assert completed_payload["status"] == "succeeded"
     assert completed_payload["output_payload"] == {"tool": {"answer": "native streamed hello"}}

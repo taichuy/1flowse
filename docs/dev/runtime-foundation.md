@@ -1137,3 +1137,24 @@ docker compose up -d --build
 1. 继续把 replay-style SSE 演进到统一事件流映射：优先补 `run_events -> native / openai / anthropic delta` 的实时/准实时转换，而不是长期停留在最终输出重放。
 2. 继续深化 publish governance：补 waiting / async lifecycle detail、单次 invocation detail，以及 publish invocation 到 `run / callback ticket / cache` 的稳定追踪入口。
 3. 若 publish surface 因 native/protocol streaming 与治理继续膨胀，优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`，避免新的 God object 转移到发布层。
+
+## 2026-03-14 Native Published Run Event Replay 事实
+
+- 在 `HEAD=cbb2b60 feat: add native published sse replay` 的基础上，这轮没有再去扩大 publish route 或 runtime 主流程，而是先把 native stream 的事实来源往统一事件流方向收口。
+- 当前 `api/app/services/published_protocol_streaming.py` 已开始优先消费 `PublishedNativeRunResponse.run.events`：
+  - native SSE 会先回放真实的 `run.started / node.started / node.output.completed / run.completed`
+  - 若响应里缺失起止事件，才退回最小兜底事件
+  - 为兼容现有客户端，`run.output.delta` 仍保留为 publish 层合成桥接事件，并位于真实事件回放之后、`run.completed` 之前
+- 这次调整没有新造第二套运行态存储，也没有要求 runtime 额外暴露旁路接口；发布层只是开始复用已经写进 `RunDetail.events` 的统一事实。
+- 当前边界仍需明确：
+  - native stream 仍然是 replay-style，而不是实时 `run_events` 推送
+  - OpenAI / Anthropic stream 还没有共享这套 native run event replay
+  - runtime 侧仍未原生写入 `node.output.delta`
+- 定向验证继续优先使用 `api/.venv` + `uv`：
+  - `./.venv/Scripts/uv.exe run pytest tests/test_workflow_publish_routes.py -q`
+
+### 本轮补充后的下一步规划
+
+1. 继续把 `run_events -> native / openai / anthropic delta` 往统一 mapper 推进，避免三条 publish surface 各自维护一套流式拼装逻辑。
+2. 评估在 runtime 中补真实 `node.output.delta`，让 protocol streaming 不必长期依赖 publish 层合成 delta。
+3. 继续深化 publish governance：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口。
