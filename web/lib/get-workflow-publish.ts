@@ -54,6 +54,8 @@ export type PublishedEndpointInvocationItem = {
   api_key_status?: "active" | "revoked" | null;
   run_id?: string | null;
   run_status?: string | null;
+  run_current_node_id?: string | null;
+  run_waiting_reason?: string | null;
   reason_code?: string | null;
   error_message?: string | null;
   request_preview: {

@@ -769,7 +769,7 @@ uv run alembic upgrade head
   - `api/tests/test_workflow_publish_routes.py` 当前约 1045 行；这轮没有继续往里堆 protocol async 测试，而是新增 `api/tests/test_published_protocol_async_routes.py`（约 181 行）承接 async bridge 验证；后续若继续补 streaming / more protocol audit，应继续沿 native/openai/anthropic 与 governance/query 边界拆分
 - `api/tests/test_workflow_publish_activity.py` 当前约 595 行，专门承接 publish activity / audit / timeline 治理验证；后续若继续长出更多时间序列与 API key drilldown，可考虑再拆 `timeline` 与 `filtering` 两组测试
   - `web/app/actions.ts` 当前已收口为极薄兼容 barrel；真正的 server actions 已拆到 `web/app/actions/workflow.ts` 与 `web/app/actions/publish.ts`
-  - `web/components/workspace-starter-library.tsx` 当前约 1042 行，是前端体量最大的真实业务文件；虽然还在前端 2000 行偏好之内，但后续继续补批量结果钻取时仍应继续拆
+  - `web/components/workspace-starter-library.tsx` 已在 2026-03-13 拆出 `shared.ts` 与 `use-workspace-starter-source.ts`，当前约 795 行；虽然压力已明显下降，但后续若继续补筛选/列表治理或详情编辑能力，仍应优先按 section 继续拆，而不是把 source-derived 治理重新揉回主组件
   - `web/components/workflow-editor-workbench.tsx` 当前约 528 行，下一轮若继续把 execution / evidence view 接回 editor overlay，要避免重新长回页面级混排组件
   - `web/components/run-diagnostics-panel.tsx` 当前约 645 行，若继续塞 trace/export/filter 状态，应优先拆筛选器和时间线区块
 - `web/components/workflow-publish-activity-panel.tsx` 当前约 510 行，这轮继续承接 cache status、native async surface 和 run status 可见性；后续若继续长出更多治理消费，应优先拆 filter form / summary / recent-items 区块，而不是再把趋势渲染塞回主面板
@@ -898,7 +898,6 @@ docker compose up -d --build
    - assistant evidence 展示
    - artifact 引用跳转
 5. 继续控制长文件体量：
-   - `web/components/workspace-starter-library.tsx`
    - `api/app/services/runtime.py`
    - `api/tests/test_runtime_service.py`
 
@@ -945,3 +944,90 @@ docker compose up -d --build
 - Durable Runtime 最终不是独立产品，而是要服务 7Flows 的四条主业务线。
 - 发布层与兼容层必须建立在内部 runtime 边界稳定之后，不能反向主导内部设计。
 - 人工全链路测试仍保留为阶段性收尾动作，但应放在主要闭环站稳之后。
+
+## 2026-03-12 发布治理面板解耦事实
+
+- 本轮已先把 `web/components/workflow-publish-activity-panel.tsx` 按“筛选 / 概览 / 明细”拆到 helpers、filter form 和 sections 三层，不再让 publish governance 继续回到单文件堆叠。
+- 这次变更属于 P1“继续控制长文件体量”的具体落地，也是在为 P0 的 `streaming / SSE` 与 async lifecycle drilldown 预留稳定插槽。
+- 后续若继续扩展 publish governance，优先顺序调整为：
+  1. `streaming / SSE` 发布链路与统一事件流映射
+  2. waiting / async lifecycle 治理明细
+  3. `web/lib/get-workflow-publish.ts` 按数据域进一步拆分
+
+## 2026-03-13 Workspace Starter Governance 解耦事实
+
+- 本轮已把 `web/components/workspace-starter-library.tsx` 中最稳定的一层 source-derived 编排抽到 `web/components/workspace-starter-library/use-workspace-starter-source.ts`，并把表单/筛选共享类型与 helper 收口到 `web/components/workspace-starter-library/shared.ts`。
+- 这次变更没有改变 starter governance 的页面职责，而是把 source workflow、history、source diff、refresh/rebase 这些易继续膨胀的副作用从主组件剥离出来，让主组件回到“筛选 + 编辑 + 批量治理 + 页面装配”的职责边界。
+- 这次变更属于 P1“继续控制长文件体量”的具体落地，也是在为 P0 的“应用新建编排”主线继续补 source-derived governance、批量结果钻取和创建页承接能力预留稳定插槽。
+- `workspace-starter-library.tsx` 本轮继续沿 `hero / list / metadata / snapshot` 四个稳定面板拆分，主壳层当前约 402 行；下一步如果继续扩展 starter library，优先顺序调整为：
+  1. 先控制 mutation handler 与数据获取继续膨胀，必要时抽专用 hook
+  2. 再补 bulk governance drilldown / result breakdown
+  3. 最后再考虑更高层的通用抽象，避免过早设计
+
+## 2026-03-13 项目现状复核与衔接判断
+
+- 当前 `HEAD` 为 `a0dc29c feat: add publish run status governance`，它继续承接了 `published protocol async bridge` 这条连续主线，而不是一个孤立功能点。
+- 这次承接后的事实是：published endpoint governance 已经能同时从 `api key / cache / protocol surface / run_status` 四个维度观察请求，但还没有走到 `streaming / SSE`、waiting lifecycle drilldown 与统一事件流完全对齐的阶段。
+- 当前基础框架已经达到“可持续推进”的程度：
+  - 后端已有 `compiler / runtime / agent runtime / tool gateway / context / artifact / publish gateway`
+  - 前端已有 editor skeleton、run diagnostics、publish governance、starter governance 等骨架
+  - 运行态事实源 `runs / node_runs / run_events / run_artifacts` 已能支撑继续演进
+- 当前判断不是“框架是否存在”，而是“应该沿现有边界继续补闭环，不要重新发明第二套结构”。
+- 当前解�������方向整体正确，但仍有几个需要持续收口的集中热点：
+  - `api/app/services/runtime.py`
+  - `api/tests/test_runtime_service.py`
+  - `api/app/services/published_invocations.py`
+  - `web/components/run-diagnostics-panel.tsx`
+  - `web/components/workspace-starter-library.tsx`
+- 其中前两项仍然是最值得优先治理的结构风险点；如果 Durable Runtime 继续长在单文件上，后续 scheduler、Loop、plugin compat 与 editor 回接都会继续变慢。
+
+### 本轮复核后的优先级重申
+
+1. 先继续承接 `API 调用开放` 主线：
+   - `streaming / SSE` 发布链路
+   - waiting / async lifecycle drilldown
+   - published invocation 与 run / callback ticket / cache 的可追踪链路
+2. 紧接着治理 Durable Runtime 集中点：
+   - 拆 `api/app/services/runtime.py`
+   - 拆 `api/tests/test_runtime_service.py`
+   - 补 `Tool Gateway` 与 `llm_agent` 的结构化策略
+3. 再把 diagnostics 的 phase / evidence / artifact 继续回接 editor / overlay：
+   - 节点 phase timeline
+
+## 2026-03-13 发布等待态治理回归修复事实
+
+- 在承接 `a0dc29c feat: add publish run status governance` 的过程中，定向回归暴露出一个真实衔接问题：`published_endpoint_activity` 在 waiting run 场景下尝试直接从 `Run` 读取 `waiting_reason`，但等待原因事实实际存放在 `NodeRun.waiting_reason`。
+- 这说明当前发布治理虽然已经把 `run_status` 维度接进了 summary / facets / timeline / invocation items，但 waiting lifecycle drilldown 仍必须继续复用 `runs / node_runs / run_events` 这一套统一事实源，不能为了页面便利再造平铺字段。
+- 当前已在 `api/app/api/routes/published_endpoint_activity.py` 改为同时查询 `Run + NodeRun`：
+  - `run_current_node_id` 继续来自 `Run.current_node_id`
+  - `run_waiting_reason` 优先取当前节点对应的 `NodeRun.waiting_reason`
+  - 若当前节点未命中，再退回同一 run 下 `status=waiting` 的 node run
+- 这次修复属于 P0 发布主线的必要承接，而不是额外插队需求：publish governance 若无法稳定回答“当前卡在哪个 waiting 节点、为什么等待”，后续 `streaming / SSE` 与 async lifecycle drilldown 就会缺乏可靠事实基础。
+- 定向回归结果：在 `api/` 下执行 `python -m pytest tests/test_published_native_async_routes.py tests/test_workflow_publish_activity.py -q`，当前为 `5 passed`。
+   - tool 调用摘要
+   - assistant evidence 展示
+   - artifact 引用跳转
+
+原因：
+
+- 最近 5 次提交已经证明 publish governance 是当前最稳定的业务主线，继续承接的收益最大。
+- Durable Runtime 已可工作，但要继续承载主业务线，必须先控制集中耦合与超长文件。
+- editor / diagnostics / runtime 的统一，应建立在前两项继续站稳之后，而不是反向发散出新的前端运行态协议。
+
+### 本轮补充验证
+
+- 已为 waiting drilldown 的退回分支补充更精确的回归覆盖：当 `Run.current_node_id` 已偏离当前等待节点时，publish activity 仍需从同一 run 下 `status=waiting` 的 `NodeRun` 回填 `run_waiting_reason`，不能因为 run-level 指针漂移而丢失等待原因。
+- 当前工作区也已经验证“先拆热点文件，再补主线闭环”的方向有效：`web/components/workflow-publish-activity-panel.tsx` 已显著收口；`web/components/workspace-starter-library.tsx` 仍需继续拆分，但已开始沿 `hero / list / metadata / snapshot` 四个稳定边界收口。
+- 因此下一步优先级保持不变：
+  1. 继续承接发布主线，补 `streaming / SSE` 与更完整的 waiting lifecycle drilldown
+  2. 立即治理 `api/app/services/runtime.py` 与 `api/tests/test_runtime_service.py`
+  3. 再把 diagnostics 的 phase / evidence / artifact 统一回接 editor
+
+## 2026-03-13 开发闭环协作补充
+
+- 本轮没有新增运行时能力，但补充确认了一个会直接影响后续可追溯性的协作事实：每轮开发闭环默认应包含“代码与文档更新 + 必要验证 + 非交互式 Git 提交”。
+- 这项补充不改变当前 `runtime / publish / diagnostics` 的技术优先级，只是把已有开发留痕要求继续推进到最终提交这一环，避免当前事实已经落地却停留在未提交工作区。
+- 当前优先级顺序保持不变：
+  1. 继续承接 `API 调用开放` 主线，补 `streaming / SSE` 与 waiting / async lifecycle drilldown
+  2. 继续治理 Durable Runtime 的集中热点，优先拆 `api/app/services/runtime.py` 与 `api/tests/test_runtime_service.py`
+  3. 再把 diagnostics 的 phase / evidence / artifact 聚合事实统一回接 editor / overlay

@@ -1,0 +1,80 @@
+import Link from "next/link";
+
+import { getWorkflowBusinessTrack, WORKFLOW_BUSINESS_TRACKS } from "@/lib/workflow-business-tracks";
+
+import type { TrackFilter } from "./shared";
+
+type WorkspaceStarterHeroSectionProps = {
+  activeTemplateCount: number;
+  archivedTemplateCount: number;
+  filteredTemplateCount: number;
+  selectedTemplateName: string | null;
+  activeTrack: TrackFilter;
+};
+
+export function WorkspaceStarterHeroSection({
+  activeTemplateCount,
+  archivedTemplateCount,
+  filteredTemplateCount,
+  selectedTemplateName,
+  activeTrack
+}: WorkspaceStarterHeroSectionProps) {
+  return (
+    <section className="hero creation-hero">
+      <div className="hero-copy">
+        <p className="eyebrow">Workspace Starter Governance</p>
+        <h1>把模板从“能保存”推进到“能治理”</h1>
+        <p className="hero-text">
+          这条链路专门承接 editor 保存出来的 workspace starter，让团队能按业务主线查看、
+          筛选、校对和更新模板元数据，而不是继续把模板治理留在编辑器里的单个按钮。
+        </p>
+        <div className="pill-row">
+          <span className="pill">{activeTemplateCount} active starters</span>
+          <span className="pill">{archivedTemplateCount} archived starters</span>
+          <span className="pill">{filteredTemplateCount} visible templates</span>
+          <span className="pill">{WORKFLOW_BUSINESS_TRACKS.length} business tracks</span>
+        </div>
+        <div className="hero-actions">
+          <Link className="inline-link" href="/workflows/new">
+            返回创建页
+          </Link>
+          <Link className="inline-link secondary" href="/">
+            返回系统首页
+          </Link>
+        </div>
+      </div>
+
+      <div className="hero-panel">
+        <div className="panel-label">Governance state</div>
+        <div className="panel-value">{activeTemplateCount + archivedTemplateCount > 0 ? "Ready" : "Empty"}</div>
+        <p className="panel-text">
+          当前主线：<strong>P0 应用新建编排</strong>
+        </p>
+        <p className="panel-text">
+          视图能力：<strong>列表 / 筛选 / 详情 / 批量治理 / 删除</strong>
+        </p>
+        <p className="panel-text">
+          当前选中：<strong>{selectedTemplateName ?? "暂无模板"}</strong>
+        </p>
+        <dl className="signal-list">
+          <div>
+            <dt>Templates</dt>
+            <dd>{activeTemplateCount + archivedTemplateCount}</dd>
+          </div>
+          <div>
+            <dt>Active</dt>
+            <dd>{activeTemplateCount}</dd>
+          </div>
+          <div>
+            <dt>Archived</dt>
+            <dd>{archivedTemplateCount}</dd>
+          </div>
+          <div>
+            <dt>Track</dt>
+            <dd>{activeTrack === "all" ? "All" : getWorkflowBusinessTrack(activeTrack).priority}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+}

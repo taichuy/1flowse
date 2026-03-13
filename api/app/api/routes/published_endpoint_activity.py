@@ -1,9 +1,11 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.run import NodeRun, Run
 from app.models.workflow import Workflow, WorkflowPublishedEndpoint
 from app.schemas.workflow_publish import (
     PublishedEndpointInvocationApiKeyBucketFacetItem,
@@ -54,8 +56,16 @@ def _serialize_published_invocation_item(
     record,
     *,
     api_key_lookup: dict[str, PublishedEndpointInvocationApiKeyUsageItem] | None = None,
+    run_lookup: dict[str, Run] | None = None,
+    waiting_reason_lookup: dict[str, str | None] | None = None,
 ) -> PublishedEndpointInvocationItem:
     api_key_metadata = api_key_lookup.get(record.api_key_id) if api_key_lookup else None
+    run = run_lookup.get(record.run_id) if run_lookup and record.run_id else None
+    waiting_reason = (
+        waiting_reason_lookup.get(record.run_id)
+        if waiting_reason_lookup and record.run_id
+        else None
+    )
     return PublishedEndpointInvocationItem(
         id=record.id,
         workflow_id=record.workflow_id,
@@ -75,6 +85,8 @@ def _serialize_published_invocation_item(
         api_key_status=api_key_metadata.status if api_key_metadata else None,
         run_id=record.run_id,
         run_status=record.run_status,
+        run_current_node_id=run.current_node_id if run else None,
+        run_waiting_reason=waiting_reason,
         reason_code=classify_invocation_reason(
             status=record.status,
             error_message=record.error_message,
@@ -228,6 +240,27 @@ def list_published_endpoint_invocations(
     )
     api_key_usage_items = [_serialize_api_key_usage_item(item) for item in audit.api_key_usage]
     api_key_lookup = {item.api_key_id: item for item in api_key_usage_items}
+    run_ids = [record.run_id for record in records if record.run_id]
+    run_lookup = (
+        {item.id: item for item in db.scalars(select(Run).where(Run.id.in_(run_ids))).all()}
+        if run_ids
+        else {}
+    )
+    waiting_reason_lookup = {}
+    if run_ids:
+        node_runs = db.scalars(select(NodeRun).where(NodeRun.run_id.in_(run_ids))).all()
+        waiting_reason_lookup = {
+            run_id: None for run_id in run_ids
+        }
+        for node_run in node_runs:
+            if node_run.waiting_reason is None:
+                continue
+            current_run = run_lookup.get(node_run.run_id)
+            if current_run and current_run.current_node_id == node_run.node_id:
+                waiting_reason_lookup[node_run.run_id] = node_run.waiting_reason
+                continue
+            if waiting_reason_lookup.get(node_run.run_id) is None and node_run.status == "waiting":
+                waiting_reason_lookup[node_run.run_id] = node_run.waiting_reason
 
     return PublishedEndpointInvocationListResponse(
         filters=PublishedEndpointInvocationFilters(
@@ -263,7 +296,12 @@ def list_published_endpoint_invocations(
             timeline=[_serialize_timeline_item(item) for item in audit.timeline],
         ),
         items=[
-            _serialize_published_invocation_item(record, api_key_lookup=api_key_lookup)
+            _serialize_published_invocation_item(
+                record,
+                api_key_lookup=api_key_lookup,
+                run_lookup=run_lookup,
+                waiting_reason_lookup=waiting_reason_lookup,
+            )
             for record in records
         ],
     )
