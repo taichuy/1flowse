@@ -42,6 +42,7 @@
 - 工作流创建/更新已执行最小结构校验，并自动生成 immutable version snapshot 与 compiled blueprint。
 - 发布治理已落到独立事实层：binding lifecycle、API keys、cache entries、invocation activity、invocation detail 都有对应 route/service/migration。
 - 发布网关已从单体中拆出 `binding resolver`、`cache orchestrator`、`invocation recorder`、`response builder`、`protocol surface` 与 `binding invoker`；publish invocation audit 也已进一步拆成 mixin orchestration、facet/summary aggregation、timeline helpers 三层，发布治理的结构边界比前几轮更清晰。
+- 2026-03-14 晚间继续把 published route surface 从单文件拆成 `published_gateway_native_routes.py`、`published_gateway_openai_routes.py`、`published_gateway_anthropic_routes.py` 与共享 `published_gateway_shared.py`；`api/app/api/routes/published_gateway.py` 已收口为聚合入口。
 - 已开放 native / OpenAI / Anthropic 的 published surface，含 sync、async、alias/path 入口，以及基于 runtime delta / 最终结果映射的最小 SSE。
 
 ### 5. 面向工作台与诊断的接口
@@ -61,7 +62,9 @@
 - `web/components/run-diagnostics-panel.tsx`：152 行，本轮已收口为 orchestrator；原先的 summary / filter / trace result 已拆到 `web/components/run-diagnostics-panel/` 目录下，不再是主要结构热点。
 - `web/components/run-diagnostics-panel/trace-results-section.tsx`：183 行，当前承接 trace summary、cursor 翻页与 event list，是 run diagnostics 下一阶段更适合继续细拆的稳定区块。
 - `web/components/run-diagnostics-execution-sections.tsx`：477 行，execution / evidence 详情层仍偏重，后续适合继续按 payload、metrics、artifact、evidence drilldown 拆层。
-- `api/app/api/routes/published_gateway.py`：516 行，native / OpenAI / Anthropic 多协议入口仍集中在同一 route 文件，当前已成为更明显的后端结构热点之一。
+- `api/app/api/routes/published_gateway.py`：10 行，当前仅保留 `/v1` 聚合入口；native / OpenAI / Anthropic surface 已分别拆到独立 route 文件，route 层最显著的单文件热点已解除。
+- `api/app/services/published_protocol_streaming.py`：459 行，仍集中承接 native / OpenAI / Anthropic 三类 SSE 映射，是发布层下一阶段更值得继续拆层的后端热点。
+- `api/app/services/published_gateway.py`：338 行，虽然 service 主体已明显比前期收敛，但 native / OpenAI / Anthropic surface orchestration 仍集中在同一服务里，后续可继续按 surface/helper 分层。
 - `web/components/workflow-editor-workbench.tsx`：528 行，虽然已有目录化拆分，但状态编排和运行 overlay 仍然偏重，后续需要继续收紧职责。
 - `api/app/services/published_invocation_audit.py` 已收口到 197 行，但 publish governance 仍由 `published_invocation_audit_aggregation.py`（340 行）和 `published_invocation_audit_timeline.py`（206 行）承接；后续应继续防止查询、facet、timeline 再次回流单文件。
 - 当前项目整体判断不变：基础框架足够继续推主业务完整度，但还没到“只剩人工界面设计 / 全链路人工验收”的阶段。
@@ -74,11 +77,11 @@
 
 ## 下一步规划
 
-1. **P0：拆分 `api/app/api/routes/published_gateway.py`**
-   - 按 native / openai / anthropic surface 继续拆 route 层，保留共享 helper，避免多协议入口继续堆在单文件里。
-2. **P1：继续补节点配置与 workflow editor 完整度**
+1. **P0：继续补节点配置与 workflow editor 完整度**
    - 把 provider / model / tool / publish 配置继续做成结构化配置段，并继续收紧 `workflow-editor-workbench` 的状态编排职责。
-3. **P1：补齐 `WAITING_CALLBACK` 的后台唤醒闭环**
+2. **P1：补齐 `WAITING_CALLBACK` 的后台唤醒闭环**
    - 继续把 callback ticket、scheduler 和 resume orchestration 衔接成更完整的 durable execution 主链。
-4. **P1：继续治理 run diagnostics 详情层**
+3. **P1：继续治理 run diagnostics 详情层**
    - 下一阶段可优先拆 `web/components/run-diagnostics-execution-sections.tsx` 与 `trace-results-section.tsx`，继续保持摘要优先、详情可钻取。
+4. **P1：继续治理 published service / streaming 热点**
+   - route 层已拆开，下一阶段可进一步收紧 `published_gateway.py` 与 `published_protocol_streaming.py` 的 surface orchestration 和 SSE 映射职责。
