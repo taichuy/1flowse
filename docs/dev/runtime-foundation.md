@@ -58,7 +58,11 @@
 - `api/app/services/runtime_node_execution_support.py`：183 行，已收口为重试循环、失败输出、最终输出解析和下游激活 support，不再是主要结构热点。
 - `api/app/services/runtime_run_support.py`：403 行，run load / resume / callback 已独立成层，后续应保持 helper 化演进，避免 callback orchestration 再次回流主文件或重新膨胀成新热点。
 - `api/app/services/runtime_graph_support.py`：292 行，已从总装热点收口为 graph orchestration 组合层；`runtime_branch_support.py`（262 行）与 `runtime_mapping_support.py`（176 行）分别承接 branch/selector 与 mapping/merge 逻辑，边界比上一轮更清晰。
-- `web/components/run-diagnostics-panel.tsx`：688 行，当前已成为更明显的前端结构热点，调试面板仍需按摘要、时间线、钻取入口继续拆层。
+- `web/components/run-diagnostics-panel.tsx`：152 行，本轮已收口为 orchestrator；原先的 summary / filter / trace result 已拆到 `web/components/run-diagnostics-panel/` 目录下，不再是主要结构热点。
+- `web/components/run-diagnostics-panel/trace-results-section.tsx`：183 行，当前承接 trace summary、cursor 翻页与 event list，是 run diagnostics 下一阶段更适合继续细拆的稳定区块。
+- `web/components/run-diagnostics-execution-sections.tsx`：477 行，execution / evidence 详情层仍偏重，后续适合继续按 payload、metrics、artifact、evidence drilldown 拆层。
+- `api/app/api/routes/published_gateway.py`：516 行，native / OpenAI / Anthropic 多协议入口仍集中在同一 route 文件，当前已成为更明显的后端结构热点之一。
+- `web/components/workflow-editor-workbench.tsx`：528 行，虽然已有目录化拆分，但状态编排和运行 overlay 仍然偏重，后续需要继续收紧职责。
 - `api/app/services/published_invocation_audit.py` 已收口到 197 行，但 publish governance 仍由 `published_invocation_audit_aggregation.py`（340 行）和 `published_invocation_audit_timeline.py`（206 行）承接；后续应继续防止查询、facet、timeline 再次回流单文件。
 - 当前项目整体判断不变：基础框架足够继续推主业务完整度，但还没到“只剩人工界面设计 / 全链路人工验收”的阶段。
 
@@ -70,11 +74,11 @@
 
 ## 下一步规划
 
-1. **P0：继续治理 `web/components/run-diagnostics-panel.tsx`**
-   - 进一步拆 summary / sections / detail drilldown，保持调试面板聚合摘要优先。
-2. **P1：继续补节点配置完整度**
-   - 把 provider / model / tool / publish 配置继续做成结构化配置段，而不是留在大表单里。
-3. **P1：继续收紧 publish governance 聚合边界**
-   - 保持 `published_invocation_audit.py` 只做 orchestration，新增查询或图表统计时优先落到 aggregation / timeline helpers，而不是回流 mixin。
-4. **P1：按需继续收紧 runtime support 边界**
-   - 保持 preparation / dispatch / execution progress / graph / run support 的组合式演进，避免重试、等待调度或下游激活再次回流单文件。
+1. **P0：拆分 `api/app/api/routes/published_gateway.py`**
+   - 按 native / openai / anthropic surface 继续拆 route 层，保留共享 helper，避免多协议入口继续堆在单文件里。
+2. **P1：继续补节点配置与 workflow editor 完整度**
+   - 把 provider / model / tool / publish 配置继续做成结构化配置段，并继续收紧 `workflow-editor-workbench` 的状态编排职责。
+3. **P1：补齐 `WAITING_CALLBACK` 的后台唤醒闭环**
+   - 继续把 callback ticket、scheduler 和 resume orchestration 衔接成更完整的 durable execution 主链。
+4. **P1：继续治理 run diagnostics 详情层**
+   - 下一阶段可优先拆 `web/components/run-diagnostics-execution-sections.tsx` 与 `trace-results-section.tsx`，继续保持摘要优先、详情可钻取。
