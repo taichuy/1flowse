@@ -16,9 +16,16 @@ from app.services.published_invocations import PublishedInvocationService
 
 
 class PublishedGatewayBindingResolverError(ValueError):
-    def __init__(self, detail: str, *, status_code: int = 422) -> None:
+    def __init__(
+        self,
+        detail: str,
+        *,
+        status_code: int = 422,
+        authenticated_key: WorkflowPublishedApiKey | None = None,
+    ) -> None:
         super().__init__(detail)
         self.status_code = status_code
+        self.authenticated_key = authenticated_key
 
 
 @dataclass(frozen=True)
@@ -71,7 +78,8 @@ class PublishedGatewayBindingResolver:
 
         if require_streaming_enabled and not binding.streaming:
             raise PublishedGatewayBindingResolverError(
-                "Streaming is not supported for this published endpoint."
+                "Streaming is not supported for this published endpoint.",
+                authenticated_key=authenticated_key,
             )
 
         workflow_version = db.get(WorkflowVersion, binding.target_workflow_version_id)

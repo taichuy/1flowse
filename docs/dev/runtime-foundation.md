@@ -40,7 +40,7 @@
 
 - 工作流创建/更新已执行最小结构校验，并自动生成 immutable version snapshot 与 compiled blueprint。
 - 发布治理已落到独立事实层：binding lifecycle、API keys、cache entries、invocation activity、invocation detail 都有对应 route/service/migration。
-- 发布网关已从单体中拆出 `binding resolver`、`cache orchestrator`、`invocation recorder`、`response builder`、`protocol surface`，但主网关仍是后续结构治理重点。
+- 发布网关已从单体中拆出 `binding resolver`、`cache orchestrator`、`invocation recorder`、`response builder`、`protocol surface` 与 `binding invoker`；主网关已明显收口，但 publish governance 的 audit 聚合仍是后续结构治理重点。
 - 已开放 native / OpenAI / Anthropic 的 published surface，含 sync、async、alias/path 入口，以及基于 runtime delta / 最终结果映射的最小 SSE。
 
 ### 5. 面向工作台与诊断的接口
@@ -51,10 +51,10 @@
 
 ## 当前结构热点
 
-- `api/app/services/runtime.py`：766 行，后续优先沿 graph scheduling / lifecycle / resume orchestration 继续拆分。
-- `api/app/services/published_invocation_audit.py`：663 行，仍是发布治理的聚合热点。
-- `web/components/run-diagnostics-panel.tsx`：645 行，调试面板仍需按摘要、时间线、钻取入口继续拆层。
-- `api/app/services/published_gateway.py`：528 行，已明显收口，但仍需防止协议映射和审计逻辑回流。
+- `api/app/services/runtime.py`：818 行，后续优先沿 graph scheduling / lifecycle / resume orchestration 继续拆分。
+- `api/app/services/published_invocation_audit.py`：732 行，当前已成为发布治理最突出的聚合热点。
+- `web/components/run-diagnostics-panel.tsx`：688 行，调试面板仍需按摘要、时间线、钻取入口继续拆层。
+- `api/app/services/published_gateway.py`：354 行，主网关已从执行细节中明显收口；新的执行热点转移到 `api/app/services/published_gateway_binding_invoker.py`（315 行），后续应继续防止审计聚合和协议拒绝逻辑重新回流。
 - 当前项目整体判断不变：基础框架足够继续推主业务完整度，但还没到“只剩人工界面设计 / 全链路人工验收”的阶段。
 
 ## 本轮压缩说明
@@ -65,8 +65,8 @@
 
 ## 下一步规划
 
-1. **P0：继续拆 `api/app/services/published_gateway.py`**
-   - 优先处理 protocol mapper handoff / invocation audit 边界，避免协议映射与审计细节重新回流主网关。
+1. **P0：继续治理 `api/app/services/published_invocation_audit.py`**
+   - 优先把 facet / timeline / summary 聚合继续拆边界，避免 publish governance 热点从主网关平移到 audit 聚合文件。
 2. **P1：继续治理 `api/app/services/runtime.py`**
    - 沿 graph scheduling / lifecycle / resume orchestration 拆边界，继续防止 runtime service 膨胀。
 3. **P1：继续治理 `web/components/run-diagnostics-panel.tsx`**
