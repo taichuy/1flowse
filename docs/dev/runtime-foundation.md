@@ -967,7 +967,7 @@ docker compose up -d --build
 - 这次变更没有改变 starter governance 的页面职责，而是把 source workflow、history、source diff、refresh/rebase 这些易继续膨胀的副作用从主组件剥离出来，让主组件回到“筛选 + 编辑 + 批量治理 + 页面装配”的职责边界。
 - 这次变更属于 P1“继续控制长文件体量”的具体落地，也是在为 P0 的“应用新建编排”主线继续补 source-derived governance、批量结果钻取和创建页承接能力预留稳定插槽。
 - `workspace-starter-library.tsx` 本轮继续沿 `hero / list / metadata / snapshot` 四个稳定面板拆分，主壳层当前约 402 行；下一步如果继续扩展 starter library，优先顺序调整为：
-  1. 先控制 mutation handler 与数据获取继续膨胀，必要时抽专用 hook
+  1. 先控制 mutation handler 与数据获取���续膨胀，必要时抽专用 hook
   2. 再补 bulk governance drilldown / result breakdown
   3. 最后再考虑更高层的通用抽象，避免过早设计
 
@@ -1653,6 +1653,48 @@ docker compose up -d --build
 
 1. **P0：继续拆 `api/app/services/published_gateway.py`**
    - 优先继续抽离 protocol surface / binding resolution / cache orchestration，避免 publish gateway 再次膨胀。
+2. **P1：补流式 `stream_options.include_usage` 支持**
+   - 让 `AICallRecord` 与后续成本分析拿到完整 token usage，而不只停留在 latency。
+3. **P1：继续治理结构热点**
+   - `api/app/services/runtime.py`
+   - `api/app/services/published_invocation_audit.py`
+   - `web/components/run-diagnostics-panel.tsx`
+4. **P1：继续补节点配置完整度**
+   - 把 provider / model / 参数配置做成更结构化的交互层，而不是继续堆叠在单一表单组件里。
+## 2026-03-14 Published Gateway Binding Resolver Split 事实
+
+### 背景
+
+- 最近提交 `c42f6a8 refactor: split published gateway invocation recorder` 已经把 invocation 审计记录从 `api/app/services/published_gateway.py` 主链路中抽离。
+- 这说明 publish gateway 当前仍处于连续结构治理阶段；如果不继续承接，主服务很容易重新回到“大而全”状态。
+- 因此这轮继续沿同一主线推进，优先收口 binding resolution / auth / workflow resource preload 预检职责。
+
+### 当前事实
+
+- 新增 `api/app/services/published_gateway_binding_resolver.py`：
+  - 统一处理协议校验
+  - 统一处理发布端点鉴权
+  - 统一装载 `workflow` / `workflow_version` / `compiled_blueprint`
+  - 统一暴露解析结果对象供 publish gateway 主链路消费
+- `api/app/services/published_gateway.py` 现通过 resolver 拿到预检结果，再进入 rate limit / cache / runtime / response builder 链路。
+- 当前这轮没有改变发布 API 契约、缓存命中/写回策略、运行语义与 invocation 持久化结构，属于纯结构治理。
+- 基于当前仓库事实，结论维持不变：
+  - 基础框架已经写到可以持续推进产品完整度，而不是停在“是否有框架”阶段。
+  - 解耦方向是正确的，且最近几轮确实在持续落地，而不是只停留在设计文档。
+  - 仍需持续治理的结构热点包括：
+    - `api/app/services/published_gateway.py`
+    - `api/app/services/runtime.py`
+    - `api/app/services/published_invocation_audit.py`
+    - `web/components/run-diagnostics-panel.tsx`
+
+### 验证
+
+- `cd api; .\.venv\Scripts\uv.exe run pytest tests/test_workflow_publish_routes.py tests/test_published_native_async_routes.py tests/test_published_protocol_async_routes.py -q`：29 passed
+
+### 本轮补充后的下一步规划
+
+1. **P0：继续拆 `api/app/services/published_gateway.py`**
+   - 优先抽离 protocol surface / cache orchestration，避免 publish gateway 再次膨胀。
 2. **P1：补流式 `stream_options.include_usage` 支持**
    - 让 `AICallRecord` 与后续成本分析拿到完整 token usage，而不只停留在 latency。
 3. **P1：继续治理结构热点**

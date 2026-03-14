@@ -21,6 +21,10 @@ from app.services.published_gateway_invocation_recorder import (
     PublishedGatewayInvocationRecorder,
     PublishedGatewayInvocationSuccess,
 )
+from app.services.published_gateway_binding_resolver import (
+    PublishedGatewayBindingResolver,
+    PublishedGatewayBindingResolverError,
+)
 from app.services.published_invocations import PublishedInvocationService
 from app.services.published_protocol_mapper import (
     build_anthropic_message_response,
@@ -59,6 +63,7 @@ class PublishedEndpointGatewayService:
         runtime_service: RuntimeService | None = None,
         response_builder: PublishedGatewayResponseBuilder | None = None,
         invocation_recorder: PublishedGatewayInvocationRecorder | None = None,
+        binding_resolver: PublishedGatewayBindingResolver | None = None,
     ) -> None:
         self._workflow_publish_service = workflow_publish_service or WorkflowPublishBindingService()
         self._api_key_service = api_key_service or PublishedEndpointApiKeyService()
@@ -68,6 +73,10 @@ class PublishedEndpointGatewayService:
         self._response_builder = response_builder or PublishedGatewayResponseBuilder()
         self._invocation_recorder = invocation_recorder or PublishedGatewayInvocationRecorder(
             invocation_service=self._invocation_service
+        )
+        self._binding_resolver = binding_resolver or PublishedGatewayBindingResolver(
+            api_key_service=self._api_key_service,
+            invocation_service=self._invocation_service,
         )
 
     def record_protocol_rejection_by_alias(
@@ -548,55 +557,18 @@ class PublishedEndpointGatewayService:
         stream_run_payload: dict | None = None
 
         try:
-            if binding.protocol != expected_protocol:
-                raise PublishedEndpointGatewayError(
-                    f"Published endpoint '{binding.endpoint_id}' uses protocol "
-                    f"'{binding.protocol}', not '{expected_protocol}'."
-                )
-
-            workflow = db.get(Workflow, binding.workflow_id)
-            if workflow is None:
-                raise PublishedEndpointGatewayError("Workflow not found.", status_code=404)
-
-            if binding.auth_mode == "api_key":
-                if presented_api_key is None or not presented_api_key.strip():
-                    raise PublishedEndpointGatewayError(
-                        "Published endpoint API key is required.",
-                        status_code=401,
-                    )
-                authenticated_key = self._api_key_service.authenticate_key(
-                    db,
-                    workflow_id=workflow.id,
-                    endpoint_id=binding.endpoint_id,
-                    secret_key=presented_api_key,
-                )
-                if authenticated_key is None:
-                    raise PublishedEndpointGatewayError(
-                        "Published endpoint API key is invalid.",
-                        status_code=401,
-                    )
-            elif binding.auth_mode != "internal":
-                raise PublishedEndpointGatewayError(
-                    "Published endpoint auth mode "
-                    f"'{binding.auth_mode}' is not supported yet."
-                )
-            if require_streaming_enabled and not binding.streaming:
-                raise PublishedEndpointGatewayError(
-                    "Streaming is not supported for this published endpoint."
-                )
+            resolved_binding = self._binding_resolver.resolve(
+                db,
+                binding=binding,
+                expected_protocol=expected_protocol,
+                presented_api_key=presented_api_key,
+                require_streaming_enabled=require_streaming_enabled,
+            )
+            workflow = resolved_binding.workflow
+            workflow_version = resolved_binding.workflow_version
+            blueprint_record = resolved_binding.blueprint_record
+            authenticated_key = resolved_binding.authenticated_key
             self._enforce_rate_limit(db, binding=binding)
-
-            workflow_version = db.get(WorkflowVersion, binding.target_workflow_version_id)
-            if workflow_version is None:
-                raise PublishedEndpointGatewayError(
-                    "Published endpoint target workflow version is missing."
-                )
-
-            blueprint_record = db.get(WorkflowCompiledBlueprint, binding.compiled_blueprint_id)
-            if blueprint_record is None:
-                raise PublishedEndpointGatewayError(
-                    "Published endpoint compiled blueprint is missing."
-                )
 
             cache_enabled = self._cache_service.is_enabled(binding)
             if cache_enabled:
@@ -656,6 +628,11 @@ class PublishedEndpointGatewayService:
                         cache_entry_id = cache_entry.id
                 elif cache_enabled and cache_status != "hit":
                     cache_status = "bypass"
+        except PublishedGatewayBindingResolverError as exc:
+            invocation_error = PublishedEndpointGatewayError(
+                str(exc),
+                status_code=exc.status_code,
+            )
         except PublishedEndpointGatewayError as exc:
             invocation_error = exc
         except Exception as exc:  # pragma: no cover - defensive audit hook
@@ -766,10 +743,9 @@ class PublishedEndpointGatewayService:
             return
 
         window_start = datetime.now(UTC) - timedelta(seconds=window_seconds)
-        recent_invocation_count = self._invocation_service.count_recent_for_binding(
+        recent_invocation_count = self._binding_resolver.count_recent_invocations(
             db,
-            workflow_id=binding.workflow_id,
-            binding_id=binding.id,
+            binding=binding,
             created_from=window_start,
         )
         if recent_invocation_count >= requests:
