@@ -18,6 +18,7 @@ from app.services.llm_provider import (
     LLMProviderError,
     LLMProviderService,
     LLMResponse,
+    LLMStreamChunk,
     build_llm_call_config,
 )
 from app.services.runtime_types import (
@@ -341,7 +342,7 @@ class AgentRuntime:
             )
 
         self._transition_phase(node_run, "main_finalize", events, node)
-        final_output, finalize_llm_response = self._finalize_output(
+        final_output, finalize_llm_response, streaming_deltas_emitted = self._finalize_output(
             config=config,
             model_config=model_config,
             plan=plan,
@@ -349,6 +350,8 @@ class AgentRuntime:
             evidence_pack=evidence_pack,
             artifact_refs=artifact_refs,
             node_input=node_input,
+            events=events,
+            node=node,
         )
         self._record_ai_call(
             db,
@@ -365,7 +368,8 @@ class AgentRuntime:
             assistant=False,
             llm_response=finalize_llm_response,
         )
-        self._emit_output_deltas(final_output, events, node)
+        if not streaming_deltas_emitted:
+            self._emit_output_deltas(final_output, events, node)
         self._transition_phase(node_run, "emit_output", events, node)
         node_run.waiting_reason = None
         self._context_service.update_working_context(
@@ -664,13 +668,15 @@ class AgentRuntime:
         evidence_pack: dict[str, Any] | None,
         artifact_refs: list[str],
         node_input: dict[str, Any],
-    ) -> tuple[dict[str, Any], LLMResponse | None]:
+        events: list[RuntimeEvent],
+        node: dict[str, Any],
+    ) -> tuple[dict[str, Any], LLMResponse | None, bool]:
         mock_final_output = self._to_dict(config.get("mockFinalOutput"))
         if mock_final_output:
             output = deepcopy(mock_final_output)
             output.setdefault("decision_basis", "evidence" if evidence_pack else "tool_results")
             output.setdefault("artifact_refs", artifact_refs)
-            return output, None
+            return output, None, False
 
         if self._has_valid_model_config(model_config):
             return self._finalize_output_via_llm(
@@ -681,6 +687,8 @@ class AgentRuntime:
                 evidence_pack=evidence_pack,
                 artifact_refs=artifact_refs,
                 node_input=node_input,
+                events=events,
+                node=node,
             )
 
         if evidence_pack:
@@ -691,23 +699,23 @@ class AgentRuntime:
                 "tool_summaries": [result.summary for result in tool_results],
                 "artifact_refs": artifact_refs,
                 "finalize_from": plan.finalize_from,
-            }, None
+            }, None, False
         if tool_results:
             return {
                 "result": " | ".join(result.summary for result in tool_results if result.summary),
                 "decision_basis": "tool_results",
                 "tool_results": [self._tool_result_to_dict(result) for result in tool_results],
                 "artifact_refs": artifact_refs,
-            }, None
+            }, None, False
         mock_output = config.get("mock_output")
         if isinstance(mock_output, dict):
-            return deepcopy(mock_output), None
+            return deepcopy(mock_output), None, False
         return {
             "result": str(config.get("prompt") or config.get("systemPrompt") or ""),
             "decision_basis": "working_context",
             "received": self._to_dict(node_input.get("accumulated")),
             "artifact_refs": artifact_refs,
-        }, None
+        }, None, False
 
     def _finalize_output_via_llm(
         self,
@@ -719,7 +727,9 @@ class AgentRuntime:
         evidence_pack: dict[str, Any] | None,
         artifact_refs: list[str],
         node_input: dict[str, Any],
-    ) -> tuple[dict[str, Any], LLMResponse | None]:
+        events: list[RuntimeEvent],
+        node: dict[str, Any],
+    ) -> tuple[dict[str, Any], LLMResponse | None, bool]:
         system_prompt = config.get("systemPrompt") or None
         prompt = str(config.get("prompt") or "")
 
@@ -742,6 +752,68 @@ class AgentRuntime:
         if not user_prompt.strip():
             user_prompt = "Generate a response based on the provided context."
 
+        decision_basis = "llm"
+        if evidence_pack:
+            decision_basis = "llm_with_evidence"
+        elif tool_results:
+            decision_basis = "llm_with_tools"
+
+        # Try streaming first for real-time delta events
+        call_config = build_llm_call_config(
+            model_config=model_config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            node_input=node_input,
+        )
+        node_id = node["id"]
+        start = time.monotonic()
+
+        try:
+            accumulated_chunks: list[str] = []
+            model = ""
+            finish_reason = ""
+
+            for chunk in self._llm_provider.chat_stream(call_config):
+                if chunk.delta:
+                    accumulated_chunks.append(chunk.delta)
+                    events.append(
+                        RuntimeEvent(
+                            "node.output.delta",
+                            {"node_id": node_id, "delta": chunk.delta},
+                        )
+                    )
+                if chunk.finish_reason:
+                    finish_reason = chunk.finish_reason
+                if chunk.model:
+                    model = chunk.model
+
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            final_text = "".join(accumulated_chunks)
+
+            if not final_text:
+                raise LLMProviderError("LLM stream returned empty content")
+
+            llm_response = LLMResponse(
+                text=final_text,
+                model=model or call_config.model_id,
+                finish_reason=finish_reason,
+                usage={"latency_ms": elapsed_ms},
+            )
+
+            return {
+                "result": final_text,
+                "decision_basis": decision_basis,
+                "model": llm_response.model,
+                "finish_reason": llm_response.finish_reason,
+                "usage": llm_response.usage,
+                "artifact_refs": artifact_refs,
+                "streaming": True,
+            }, llm_response, True
+
+        except (LLMProviderError, WorkflowExecutionError) as stream_err:
+            _log.warning("LLM stream failed (%s), falling back to sync call", stream_err)
+
+        # Fallback to synchronous call
         try:
             llm_response = self._call_llm(
                 model_config=model_config,
@@ -757,18 +829,12 @@ class AgentRuntime:
                     "decision_basis": "evidence",
                     "evidence": evidence_pack,
                     "artifact_refs": artifact_refs,
-                }, None
+                }, None, False
             return {
                 "result": prompt or "LLM call failed.",
                 "decision_basis": "working_context",
                 "artifact_refs": artifact_refs,
-            }, None
-
-        decision_basis = "llm"
-        if evidence_pack:
-            decision_basis = "llm_with_evidence"
-        elif tool_results:
-            decision_basis = "llm_with_tools"
+            }, None, False
 
         return {
             "result": llm_response.text,
@@ -777,7 +843,7 @@ class AgentRuntime:
             "finish_reason": llm_response.finish_reason,
             "usage": llm_response.usage,
             "artifact_refs": artifact_refs,
-        }, llm_response
+        }, llm_response, False
 
     def _fallback_output(
         self,

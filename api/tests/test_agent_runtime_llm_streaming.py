@@ -1,14 +1,21 @@
-"""Tests for AgentRuntime with real LLM provider integration via mock HTTP."""
+"""Tests for AgentRuntime LLM streaming integration.
+
+Validates that when real LLM model config is provided and no mock config exists,
+the finalize phase uses chat_stream() to produce real-time node.output.delta events
+instead of post-hoc text chunking.
+"""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Generator
 
 import httpx
 from sqlalchemy.orm import Session
 
+from app.models.run import RunEvent
 from app.models.workflow import Workflow
-from app.services.llm_provider import LLMProviderService
+from app.services.llm_provider import LLMProviderService, LLMStreamChunk
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
 from app.services.runtime import RuntimeService
 
@@ -29,21 +36,25 @@ def _openai_response(content: str, model: str = "gpt-4o") -> dict:
     }
 
 
-def _response_to_sse(resp_json: dict) -> str:
-    """Convert a sync OpenAI response to SSE format for streaming mock."""
-    choice = (resp_json.get("choices") or [{}])[0]
-    message = choice.get("message") or {}
-    content = message.get("content") or ""
-    model = resp_json.get("model") or "gpt-4o"
+def _openai_stream_lines(content: str, model: str = "gpt-4o", chunk_size: int = 10) -> list[str]:
+    """Build SSE lines that simulate an OpenAI streaming response."""
     lines: list[str] = []
-    if content:
+    for i in range(0, len(content), chunk_size):
+        chunk_text = content[i : i + chunk_size]
         chunk_data = {
             "id": "chatcmpl-stream",
             "object": "chat.completion.chunk",
             "model": model,
-            "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {"content": chunk_text},
+                    "finish_reason": None,
+                }
+            ],
         }
         lines.append(f"data: {json.dumps(chunk_data)}")
+    # Final chunk with finish_reason
     final_data = {
         "id": "chatcmpl-stream",
         "object": "chat.completion.chunk",
@@ -52,77 +63,84 @@ def _response_to_sse(resp_json: dict) -> str:
     }
     lines.append(f"data: {json.dumps(final_data)}")
     lines.append("data: [DONE]")
-    return "\n".join(lines) + "\n"
+    return lines
 
 
-def _make_llm_provider(responses: list[dict]) -> LLMProviderService:
-    """Create an LLMProviderService that returns pre-defined responses in order.
+def _make_streaming_llm_provider(
+    sync_responses: list[dict],
+    stream_responses: dict[int, list[str]] | None = None,
+) -> LLMProviderService:
+    """Create an LLMProviderService with mock transport supporting both sync and stream.
 
-    Automatically converts sync responses to SSE format when the request
-    has stream=true, so that streaming-first finalize works correctly.
+    sync_responses: list of JSON responses for non-streaming calls.
+    stream_responses: maps call index -> SSE lines for streaming calls.
     """
     call_index = {"i": 0}
-    captured_requests: list[dict] = []
+    stream_map = stream_responses or {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         idx = call_index["i"]
         call_index["i"] += 1
         body = json.loads(request.content)
-        captured_requests.append({
-            "url": str(request.url),
-            "body": body,
-        })
-        resp_json = responses[idx] if idx < len(responses) else _openai_response("fallback")
-        if body.get("stream"):
-            sse_text = _response_to_sse(resp_json)
+
+        if body.get("stream") and idx in stream_map:
+            sse_text = "\n".join(stream_map[idx]) + "\n"
             return httpx.Response(
                 200,
                 content=sse_text.encode(),
                 headers={"content-type": "text/event-stream"},
             )
-        return httpx.Response(200, json=resp_json)
 
-    provider = LLMProviderService(
+        if idx < len(sync_responses):
+            return httpx.Response(200, json=sync_responses[idx])
+        return httpx.Response(200, json=_openai_response("fallback"))
+
+    return LLMProviderService(
         client_factory=lambda: httpx.Client(
             transport=httpx.MockTransport(handler),
         ),
     )
-    provider._captured_requests = captured_requests  # type: ignore[attr-defined]
-    return provider
 
 
-def _create_runtime_with_llm(
-    llm_responses: list[dict],
+def _create_streaming_runtime(
+    sync_responses: list[dict],
+    stream_responses: dict[int, list[str]] | None = None,
     registry: PluginRegistry | None = None,
 ) -> RuntimeService:
-    """Create a RuntimeService with injected LLM provider."""
     if registry is None:
         registry = PluginRegistry()
     proxy = PluginCallProxy(registry)
     runtime = RuntimeService(plugin_call_proxy=proxy)
-    llm_provider = _make_llm_provider(llm_responses)
+    llm_provider = _make_streaming_llm_provider(sync_responses, stream_responses)
     runtime._llm_provider = llm_provider
     runtime._agent_runtime._llm_provider = llm_provider
     return runtime
 
 
 # ---------------------------------------------------------------------------
-# Test: finalize output via LLM (no mock config, valid model config)
+# Test: streaming finalize produces real-time node.output.delta events
 # ---------------------------------------------------------------------------
 
-def test_finalize_via_llm_when_no_mock(sqlite_session: Session) -> None:
-    """When model config has valid apiKey/modelId and no mockFinalOutput,
-    the finalize phase should call the LLM and produce real output."""
-    runtime = _create_runtime_with_llm([
-        # Plan call response
-        _openai_response("I will analyze the topic."),
-        # Finalize call response
-        _openai_response("The answer to everything is 42."),
-    ])
+def test_streaming_finalize_produces_realtime_deltas(sqlite_session: Session) -> None:
+    """When LLM streaming is available, finalize phase should produce
+    per-chunk node.output.delta events instead of post-hoc chunking."""
+    full_answer = "The answer to everything is 42."
+    stream_lines = _openai_stream_lines(full_answer, chunk_size=10)
+
+    runtime = _create_streaming_runtime(
+        sync_responses=[
+            # Plan call (sync) - call index 0
+            _openai_response("I will analyze the topic."),
+        ],
+        stream_responses={
+            # Finalize call (streaming) - call index 1
+            1: stream_lines,
+        },
+    )
 
     workflow = Workflow(
-        id="wf-llm-finalize",
-        name="LLM Finalize Test",
+        id="wf-stream-finalize",
+        name="Streaming Finalize Test",
         version="0.1.0",
         status="draft",
         definition={
@@ -158,34 +176,49 @@ def test_finalize_via_llm_when_no_mock(sqlite_session: Session) -> None:
 
     assert artifacts.run.status == "succeeded"
     agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
-    assert agent_run.phase == "emit_output"
     output = agent_run.output_payload
-    assert output["result"] == "The answer to everything is 42."
+    assert output["result"] == full_answer
     assert output["decision_basis"] == "llm"
-    assert output["model"] == "gpt-4o"
-    assert [r.role for r in artifacts.ai_calls] == ["main_plan", "main_finalize"]
+    assert output.get("streaming") is True
 
-    # Verify the finalize AI call record captured real metrics
-    finalize_call = next(r for r in artifacts.ai_calls if r.role == "main_finalize")
-    assert finalize_call.model_id == "gpt-4o"
-    # Streaming mode records latency but not per-token usage
-    assert finalize_call.token_usage.get("latency_ms") is not None or finalize_call.token_usage == {}
+    # Check that real-time delta events were persisted
+    delta_events = [
+        e for e in artifacts.events
+        if e.event_type == "node.output.delta"
+        and (e.payload or {}).get("node_id") == "agent"
+    ]
+    assert len(delta_events) >= 2, "Should have multiple streaming delta events"
+
+    # Verify delta content concatenates to full answer
+    delta_text = "".join(
+        (e.payload or {}).get("delta", "") for e in delta_events
+    )
+    assert delta_text == full_answer
 
 
 # ---------------------------------------------------------------------------
-# Test: mock config still takes priority over LLM
+# Test: streaming fallback to sync when stream fails
 # ---------------------------------------------------------------------------
 
-def test_mock_config_takes_priority_over_llm(sqlite_session: Session) -> None:
-    """When mockFinalOutput is present, LLM should NOT be called for finalize."""
-    runtime = _create_runtime_with_llm([
-        # Plan call response (will be called since no mockPlan)
-        _openai_response("Planning..."),
-    ])
+def test_streaming_fallback_to_sync_on_error(sqlite_session: Session) -> None:
+    """When streaming fails, finalize should fall back to sync LLM call
+    and produce post-hoc delta events."""
+    runtime = _create_streaming_runtime(
+        sync_responses=[
+            # Plan call (sync) - call index 0
+            _openai_response("Planning..."),
+            # Finalize sync fallback - call index 1 (stream will fail, retry sync)
+            _openai_response("Sync fallback answer."),
+        ],
+        stream_responses={
+            # Finalize streaming will return error
+            1: [],  # Empty stream → LLMProviderError("empty content")
+        },
+    )
 
     workflow = Workflow(
-        id="wf-mock-priority",
-        name="Mock Priority Test",
+        id="wf-stream-fallback",
+        name="Stream Fallback Test",
         version="0.1.0",
         status="draft",
         definition={
@@ -203,6 +236,62 @@ def test_mock_config_takes_priority_over_llm(sqlite_session: Session) -> None:
                             "apiKey": "sk-test-key",
                         },
                         "assistant": {"enabled": False},
+                        "mockPlan": {"toolCalls": []},
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = runtime.execute_workflow(sqlite_session, workflow, {})
+
+    assert artifacts.run.status == "succeeded"
+    agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
+    output = agent_run.output_payload
+    # Should have gotten sync fallback result
+    assert output["decision_basis"] == "llm"
+    assert output.get("streaming") is None  # Not streaming since fell back
+
+
+# ---------------------------------------------------------------------------
+# Test: mock config still bypasses streaming
+# ---------------------------------------------------------------------------
+
+def test_mock_config_bypasses_streaming(sqlite_session: Session) -> None:
+    """When mockFinalOutput is present, streaming should NOT be attempted."""
+    runtime = _create_streaming_runtime(
+        sync_responses=[],
+        stream_responses={},
+    )
+
+    workflow = Workflow(
+        id="wf-mock-no-stream",
+        name="Mock No Stream Test",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "prompt": "Hello",
+                        "model": {
+                            "provider": "openai",
+                            "modelId": "gpt-4o",
+                            "apiKey": "sk-test-key",
+                        },
+                        "assistant": {"enabled": False},
+                        "mockPlan": {"toolCalls": []},
                         "mockFinalOutput": {"result": "mock-output"},
                     },
                 },
@@ -222,58 +311,16 @@ def test_mock_config_takes_priority_over_llm(sqlite_session: Session) -> None:
     assert artifacts.run.status == "succeeded"
     agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
     assert agent_run.output_payload["result"] == "mock-output"
+    assert agent_run.output_payload.get("streaming") is None
 
 
 # ---------------------------------------------------------------------------
-# Test: no model config falls back to synthetic output
+# Test: streaming with tools produces correct delta events
 # ---------------------------------------------------------------------------
 
-def test_no_model_config_falls_back_gracefully(sqlite_session: Session) -> None:
-    """When no model config (no apiKey/modelId), fall back to legacy behavior."""
-    runtime = _create_runtime_with_llm([])
-
-    workflow = Workflow(
-        id="wf-no-model",
-        name="No Model Test",
-        version="0.1.0",
-        status="draft",
-        definition={
-            "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-                {
-                    "id": "agent",
-                    "type": "llm_agent",
-                    "name": "Agent",
-                    "config": {
-                        "prompt": "Say hello",
-                        "assistant": {"enabled": False},
-                        "mock_output": {"answer": "fallback"},
-                    },
-                },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
-            ],
-            "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
-            ],
-        },
-    )
-    sqlite_session.add(workflow)
-    sqlite_session.commit()
-
-    artifacts = runtime.execute_workflow(sqlite_session, workflow, {})
-
-    assert artifacts.run.status == "succeeded"
-    agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
-    assert agent_run.output_payload == {"answer": "fallback"}
-
-
-# ---------------------------------------------------------------------------
-# Test: LLM finalize with tools
-# ---------------------------------------------------------------------------
-
-def test_llm_finalize_with_tool_results(sqlite_session: Session) -> None:
-    """When tools execute and model config is valid, finalize via LLM with tool context."""
+def test_streaming_finalize_with_tool_results(sqlite_session: Session) -> None:
+    """When tools execute and streaming LLM is available, finalize via streaming
+    with tool context included."""
     registry = PluginRegistry()
     registry.register_tool(
         PluginToolDefinition(id="native.search", name="Native Search"),
@@ -286,18 +333,21 @@ def test_llm_finalize_with_tool_results(sqlite_session: Session) -> None:
         },
     )
 
-    runtime = _create_runtime_with_llm(
-        [
-            # Plan - no LLM call since mockPlan is used
-            # Finalize call response
-            _openai_response("Based on the search results, I found 3 items."),
-        ],
+    full_answer = "Based on search results, I found 3 items."
+    stream_lines = _openai_stream_lines(full_answer, chunk_size=15)
+
+    runtime = _create_streaming_runtime(
+        sync_responses=[],
+        stream_responses={
+            # Finalize streaming - call index 0 (no plan LLM since mockPlan)
+            0: stream_lines,
+        },
         registry=registry,
     )
 
     workflow = Workflow(
-        id="wf-llm-tools",
-        name="LLM With Tools Test",
+        id="wf-stream-tools",
+        name="Stream With Tools Test",
         version="0.1.0",
         status="draft",
         definition={
@@ -338,108 +388,25 @@ def test_llm_finalize_with_tool_results(sqlite_session: Session) -> None:
     assert artifacts.run.status == "succeeded"
     agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
     output = agent_run.output_payload
-    assert output["result"] == "Based on the search results, I found 3 items."
+    assert output["result"] == full_answer
     assert output["decision_basis"] == "llm_with_tools"
+    assert output.get("streaming") is True
+
+    # Should have streaming delta events
+    delta_events = [
+        e for e in artifacts.events
+        if e.event_type == "node.output.delta"
+        and (e.payload or {}).get("node_id") == "agent"
+    ]
+    assert len(delta_events) >= 2
 
 
 # ---------------------------------------------------------------------------
-# Test: LLM distill evidence
+# Test: streaming HTTP 500 falls back to synthetic output
 # ---------------------------------------------------------------------------
 
-def test_llm_distill_evidence_with_valid_model(sqlite_session: Session) -> None:
-    """When assistant is enabled and model config valid, distill evidence via LLM."""
-    registry = PluginRegistry()
-    registry.register_tool(
-        PluginToolDefinition(id="native.search", name="Native Search"),
-        invoker=lambda request: {
-            "status": "success",
-            "content_type": "json",
-            "summary": "search results ready",
-            "structured": {"documents": ["doc1"]},
-            "meta": {"tool_name": "Native Search"},
-        },
-    )
-
-    evidence_json = json.dumps({
-        "summary": "LLM-distilled evidence from search",
-        "key_points": ["Found doc1"],
-        "conflicts": [],
-        "unknowns": [],
-        "confidence": 0.95,
-    })
-
-    runtime = _create_runtime_with_llm(
-        [
-            # Distill evidence call
-            _openai_response(evidence_json),
-            # Finalize call
-            _openai_response("Final answer based on evidence."),
-        ],
-        registry=registry,
-    )
-
-    workflow = Workflow(
-        id="wf-llm-distill",
-        name="LLM Distill Test",
-        version="0.1.0",
-        status="draft",
-        definition={
-            "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-                {
-                    "id": "agent",
-                    "type": "llm_agent",
-                    "name": "Agent",
-                    "config": {
-                        "prompt": "Analyze search results",
-                        "model": {
-                            "provider": "openai",
-                            "modelId": "gpt-4o",
-                            "apiKey": "sk-test-key",
-                        },
-                        "assistant": {"enabled": True, "trigger": "always"},
-                        "mockPlan": {
-                            "toolCalls": [
-                                {"toolId": "native.search", "inputs": {"query": "test"}}
-                            ],
-                            "needAssistant": True,
-                        },
-                    },
-                },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
-            ],
-            "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
-            ],
-        },
-    )
-    sqlite_session.add(workflow)
-    sqlite_session.commit()
-
-    artifacts = runtime.execute_workflow(sqlite_session, workflow, {})
-
-    assert artifacts.run.status == "succeeded"
-    agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
-
-    # Evidence should come from LLM
-    evidence = agent_run.evidence_context
-    assert evidence is not None
-    assert evidence["summary"] == "LLM-distilled evidence from search"
-    assert evidence["confidence"] == 0.95
-
-    # Roles should include assistant_distill
-    roles = [r.role for r in artifacts.ai_calls]
-    assert "assistant_distill" in roles
-    assert "main_finalize" in roles
-
-
-# ---------------------------------------------------------------------------
-# Test: LLM error in finalize degrades gracefully
-# ---------------------------------------------------------------------------
-
-def test_llm_finalize_error_degrades_gracefully(sqlite_session: Session) -> None:
-    """When LLM call fails during finalize, fall back to synthetic output."""
+def test_streaming_http_error_degrades_gracefully(sqlite_session: Session) -> None:
+    """When both streaming and sync LLM calls fail, fall back to synthetic output."""
 
     def error_handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="Internal Server Error")
@@ -456,8 +423,8 @@ def test_llm_finalize_error_degrades_gracefully(sqlite_session: Session) -> None
     runtime._agent_runtime._llm_provider = llm_provider
 
     workflow = Workflow(
-        id="wf-llm-error",
-        name="LLM Error Test",
+        id="wf-stream-error",
+        name="Stream Error Test",
         version="0.1.0",
         status="draft",
         definition={
@@ -491,7 +458,7 @@ def test_llm_finalize_error_degrades_gracefully(sqlite_session: Session) -> None
 
     artifacts = runtime.execute_workflow(sqlite_session, workflow, {})
 
-    # Should still succeed with fallback
+    # Should still succeed via synthetic fallback
     assert artifacts.run.status == "succeeded"
     agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
     assert agent_run.output_payload["decision_basis"] == "working_context"

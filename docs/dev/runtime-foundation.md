@@ -1390,9 +1390,78 @@ docker compose up -d --build
 
 ### 本轮补充后的下一步规划
 
-1. **把 LLM 调用从同步推进到流式**（P0）：在 `_finalize_output_via_llm` 中接入 `chat_stream`，每个 chunk 直接产出 `node.output.delta` 事件，实现真正的 token 级实时流式输出。
+1. **把 LLM 调用从同步推进到流式**（P0）：~~在 `_finalize_output_via_llm` 中接入 `chat_stream`，每个 chunk 直接产出 `node.output.delta` 事件，实现真正的 token 级实时流式输出。~~ → 已于 2026-03-14 完成。
 2. **继续深化 publish governance**（P0）：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口。
 3. **若 publish surface 继续膨胀**（P1），优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 837 行）。
 4. **继续治理后端结构热点**（P1）：`api/app/services/published_invocations.py`（1141 行）若继续补长期趋势，应优先拆 query/filtering。
 5. **凭证进阶功能**（P2）：workspace 级隔离、Redis 缓存、审计日志。
 6. **节点配置体验**（P2）：把 model provider 配置表单做成更结构化的组件（provider 选择 → model 选择 → 参数配置）。
+
+---
+
+## 2026-03-14 LLM Streaming Finalize 实时 Delta 事件
+
+### 背景
+
+上一轮（LLM Provider 真实调用集成）落地后，AgentRuntime 的 `_finalize_output_via_llm` 仍然使用同步 `chat()` 调用，输出 delta 依赖 post-hoc 文本切块（`_emit_output_deltas`）。这意味着 publish SSE 收到的 delta 事件不是真实 token 级粒度，而是最终文本的人工分段。
+
+### 目标
+
+1. 让 `_finalize_output_via_llm` 优先使用 `chat_stream()` 产出真实 LLM token 级 `node.output.delta` 事件
+2. 流式失败时自动降级到同步调用，保持向后兼容
+3. mock config 不受影响，继续走原有路径
+
+### 实现方式
+
+#### AgentRuntime 流式 Finalize (`agent_runtime.py`)
+
+核心策略是 **streaming 优先降级**：
+- 当 model config 有效 → 先尝试 `chat_stream()`
+- 每个 `LLMStreamChunk.delta` 直接 append 到 events 列表，作为 `node.output.delta` 事件
+- 累积所有 chunk 构建 `LLMResponse` 用于 `AICallRecord` 记录
+- 当流式返回空内容或抛出 `LLMProviderError` → 降级到同步 `chat()` 调用
+- 当同步也失败 → 降级到合成输出（与之前行为一致）
+
+改造的方法签名：
+- `_finalize_output()` 返回类型从 `tuple[dict, LLMResponse | None]` 扩展为 `tuple[dict, LLMResponse | None, bool]`
+  - 第三个值 `streaming_deltas_emitted` 标记是否已通过流式产出 delta
+- `_finalize_output_via_llm()` 同样扩展签名，新增 `events` 和 `node` 参数
+- `execute()` 根据 `streaming_deltas_emitted` 决定是否跳过 post-hoc `_emit_output_deltas()`
+
+流式输出标记：
+- 当流式成功时，`output["streaming"] = True`，方便下游（publish protocol streaming、run diagnostics）区分真实流式与合成 delta
+
+#### 已有测试适配
+
+- `test_agent_runtime_llm_integration.py` 的 mock HTTP handler 已升级为自动检测 `stream: true` 请求，将 sync JSON 响应转换为 SSE 格式返回
+- token usage 断言已更新：流式模式下 `prompt_tokens` 等字段不由 LLM 返回，改为验证 `latency_ms`
+
+### 已落地文件
+
+| 文件 | 变更 |
+|------|------|
+| `api/app/services/agent_runtime.py` | `_finalize_output_via_llm` 改为 streaming-first + sync fallback；`_finalize_output` 返回三元组；`execute()` 条件跳过 `_emit_output_deltas`；导入 `LLMStreamChunk` |
+| `api/tests/test_agent_runtime_llm_integration.py` | mock handler 支持 SSE 自动转换；token usage 断言更新 |
+| `api/tests/test_agent_runtime_llm_streaming.py` | 新增 5 项流式集成测试 |
+
+### 当前边界
+
+- 流式 delta 粒度取决于 LLM provider 的 chunk 大小，不是固定切块
+- `_build_plan` 和 `_distill_evidence` 仍使用同步调用，因为它们的输出需要完整解析（JSON 结构化数据）
+- 流式模式下 `AICallRecord.token_usage` 不含 `prompt_tokens` / `completion_tokens`，只有 `latency_ms`；未来可通过 OpenAI 的 `stream_options.include_usage` 参数获取
+- 现有 publish protocol streaming 已能自动检测并优先使用真实 `node.output.delta` 事件，无需额外改动
+
+### 定向验证
+
+- `pytest tests/test_agent_runtime_llm_streaming.py -v`：5 passed
+- `pytest tests/test_agent_runtime_llm_integration.py -v`：6 passed
+- `pytest tests/ -q`：212 passed（全量无回归）
+
+### 本轮补充后的下一步规划
+
+1. **继续深化 publish governance**（P0）：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口；现在流式 delta 已经是真实 LLM token，publish SSE 不再需要 publish 层切块兜底。
+2. **补 `stream_options.include_usage` 支持**（P1）：在 `LLMProviderService._openai_body` 中添加 `stream_options: {"include_usage": true}`，让流式模式也能拿到 token usage 用于 `AICallRecord` 记录和成本分析。
+3. **若 publish surface 继续膨胀**（P1），优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 837 行）。
+4. **继续治理后端结构热点**（P1）：`api/app/services/published_invocations.py`（1141 行）若继续补长期趋势，应优先拆 query/filtering 与 audit aggregation。
+5. **节点配置体验**（P2）：把 model provider 配置表单做成更结构化的组件（provider 选择 → model 选择 → 参数配置）。
+6. **凭证进阶功能**（P2）：workspace 级隔离、Redis 缓存、审计日志。
