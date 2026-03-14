@@ -1580,3 +1580,44 @@ docker compose up -d --build
    - 优先拆 `web/components/run-diagnostics-panel.tsx`，避免调试面板继续膨胀。
 4. **P1：继续补节点配置完整度**
    - 把 provider / model / 参数配置做成更结构化的交互层。
+
+## 2026-03-14 Published Gateway Response Builder Split 事实
+
+### 背景
+
+- 最近产品代码提交 `2a5610d feat: bridge publish panel invocation detail` 已补齐前端 publish panel 对 invocation detail 的承接，说明发布治理主线仍在连续推进。
+- 但 `api/app/services/published_gateway.py` 依旧同时承担 protocol surface、主执行编排、response builder 与 invocation audit handoff，和上一轮 runtime foundation 标记的结构热点判断一致。
+- 因此这轮不新增发布能力，而是直接承接上一轮写明的 P0/P1：先对 publish gateway 做第一刀结构拆分。
+
+### 当前事实
+
+- 新增 `api/app/services/published_gateway_response_builders.py`，把以下职责从 `PublishedEndpointGatewayService` 中剥离：
+  - native response payload 构建
+  - protocol async response payload 构建
+  - response preview 提取
+  - run payload 提取
+- `api/app/services/published_gateway.py` 现通过注入 `PublishedGatewayResponseBuilder` 复用构建逻辑：
+  - native workflow / alias / path surface 不再直接内嵌响应组装细节
+  - OpenAI / Anthropic async surface 不再直接内嵌协议 async 响应组装细节
+  - cache store 判断与 invocation record 对 run payload 的读取也改为走统一 builder
+- 当前这轮没有改变发布 API 契约、cache 命中/回填策略、runtime 执行语义或 invocation 持久化结构，属于纯结构治理。
+- 从当前仓库整体看：
+  - 基础框架已经足够继续推进产品完整度，不需要切换到“只剩界面设计”的阶段。
+  - 架构解耦方向正确，但 `api/app/services/published_gateway.py`、`api/app/services/runtime.py`、`api/app/services/published_invocation_audit.py`、`web/components/run-diagnostics-panel.tsx` 仍是主要结构热点。
+
+### 验证
+
+- `./.venv/Scripts/uv.exe run pytest tests/test_workflow_publish_routes.py -q`：24 passed
+
+### 本轮补充后的下一步规划
+
+1. **P0：继续拆 `api/app/services/published_gateway.py`**
+   - 优先把 invocation audit handoff 从主执行链路中剥离，避免 publish gateway 再次回到“大而全”服务
+2. **P1：补流式 `stream_options.include_usage` 支持**
+   - 让 `AICallRecord` 与后续成本分析拿到完整 token usage，而不只停留在 latency
+3. **P1：继续治理结构热点**
+   - `api/app/services/runtime.py`
+   - `api/app/services/published_invocation_audit.py`
+   - `web/components/run-diagnostics-panel.tsx`
+4. **P1：继续补节点配置完整度**
+   - 把 provider / model / 参数配置做成更结构化的交互层，而不是继续堆叠在单一表单组件里

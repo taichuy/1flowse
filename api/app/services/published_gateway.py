@@ -11,12 +11,11 @@ from app.models.workflow import (
     WorkflowPublishedEndpoint,
     WorkflowVersion,
 )
-from app.schemas.workflow_publish import (
-    PublishedNativeRunResponse,
-    PublishedProtocolAsyncRunResponse,
-)
 from app.services.published_api_keys import PublishedEndpointApiKeyService
 from app.services.published_cache import PublishedEndpointCacheService
+from app.services.published_gateway_response_builders import (
+    PublishedGatewayResponseBuilder,
+)
 from app.services.published_invocations import PublishedInvocationService
 from app.services.published_protocol_mapper import (
     build_anthropic_message_response,
@@ -53,12 +52,14 @@ class PublishedEndpointGatewayService:
         invocation_service: PublishedInvocationService | None = None,
         cache_service: PublishedEndpointCacheService | None = None,
         runtime_service: RuntimeService | None = None,
+        response_builder: PublishedGatewayResponseBuilder | None = None,
     ) -> None:
         self._workflow_publish_service = workflow_publish_service or WorkflowPublishBindingService()
         self._api_key_service = api_key_service or PublishedEndpointApiKeyService()
         self._invocation_service = invocation_service or PublishedInvocationService()
         self._cache_service = cache_service or PublishedEndpointCacheService()
         self._runtime_service = runtime_service or RuntimeService()
+        self._response_builder = response_builder or PublishedGatewayResponseBuilder()
 
     def record_protocol_rejection_by_alias(
         self,
@@ -124,8 +125,8 @@ class PublishedEndpointGatewayService:
             request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="workflow",
-            response_builder=self._build_native_response_payload,
-            response_preview_builder=self._build_native_response_preview,
+            response_builder=self._response_builder.build_native_response_payload,
+            response_preview_builder=self._response_builder.build_native_response_preview,
             require_streaming_enabled=require_streaming_enabled,
             request_surface_override="native.workflow",
         )
@@ -154,8 +155,8 @@ class PublishedEndpointGatewayService:
             request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="workflow",
-            response_builder=self._build_native_response_payload,
-            response_preview_builder=self._build_native_response_preview,
+            response_builder=self._response_builder.build_native_response_payload,
+            response_preview_builder=self._response_builder.build_native_response_preview,
             require_terminal_success=False,
             request_surface_override="native.workflow.async",
         )
@@ -183,8 +184,8 @@ class PublishedEndpointGatewayService:
             request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="alias",
-            response_builder=self._build_native_response_payload,
-            response_preview_builder=self._build_native_response_preview,
+            response_builder=self._response_builder.build_native_response_payload,
+            response_preview_builder=self._response_builder.build_native_response_preview,
             require_streaming_enabled=require_streaming_enabled,
             request_surface_override="native.alias",
         )
@@ -211,8 +212,8 @@ class PublishedEndpointGatewayService:
             request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="alias",
-            response_builder=self._build_native_response_payload,
-            response_preview_builder=self._build_native_response_preview,
+            response_builder=self._response_builder.build_native_response_payload,
+            response_preview_builder=self._response_builder.build_native_response_preview,
             require_terminal_success=False,
             request_surface_override="native.alias.async",
         )
@@ -240,8 +241,8 @@ class PublishedEndpointGatewayService:
             request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="path",
-            response_builder=self._build_native_response_payload,
-            response_preview_builder=self._build_native_response_preview,
+            response_builder=self._response_builder.build_native_response_payload,
+            response_preview_builder=self._response_builder.build_native_response_preview,
             require_streaming_enabled=require_streaming_enabled,
             request_surface_override="native.path",
         )
@@ -268,8 +269,8 @@ class PublishedEndpointGatewayService:
             request_preview_payload=input_payload,
             presented_api_key=presented_api_key,
             request_source="path",
-            response_builder=self._build_native_response_payload,
-            response_preview_builder=self._build_native_response_preview,
+            response_builder=self._response_builder.build_native_response_payload,
+            response_preview_builder=self._response_builder.build_native_response_preview,
             require_terminal_success=False,
             request_surface_override="native.path.async",
         )
@@ -326,7 +327,7 @@ class PublishedEndpointGatewayService:
             presented_api_key=presented_api_key,
             require_terminal_success=False,
             request_surface_override="openai.chat.completions.async",
-            response_builder=lambda **kwargs: self._build_protocol_async_response_payload(
+            response_builder=lambda **kwargs: self._response_builder.build_protocol_async_response_payload(
                 binding=kwargs["binding"],
                 workflow=kwargs["workflow"],
                 workflow_version=kwargs["workflow_version"],
@@ -390,7 +391,7 @@ class PublishedEndpointGatewayService:
             presented_api_key=presented_api_key,
             require_terminal_success=False,
             request_surface_override="openai.responses.async",
-            response_builder=lambda **kwargs: self._build_protocol_async_response_payload(
+            response_builder=lambda **kwargs: self._response_builder.build_protocol_async_response_payload(
                 binding=kwargs["binding"],
                 workflow=kwargs["workflow"],
                 workflow_version=kwargs["workflow_version"],
@@ -454,7 +455,7 @@ class PublishedEndpointGatewayService:
             presented_api_key=presented_api_key,
             require_terminal_success=False,
             request_surface_override="anthropic.messages.async",
-            response_builder=lambda **kwargs: self._build_protocol_async_response_payload(
+            response_builder=lambda **kwargs: self._response_builder.build_protocol_async_response_payload(
                 binding=kwargs["binding"],
                 workflow=kwargs["workflow"],
                 workflow_version=kwargs["workflow_version"],
@@ -497,7 +498,7 @@ class PublishedEndpointGatewayService:
             presented_api_key=presented_api_key,
             request_source="alias",
             response_builder=response_builder,
-            response_preview_builder=self._build_passthrough_response_preview,
+            response_preview_builder=self._response_builder.build_passthrough_response_preview,
             require_streaming_enabled=require_streaming_enabled,
             require_terminal_success=require_terminal_success,
             request_surface_override=request_surface_override,
@@ -684,7 +685,7 @@ class PublishedEndpointGatewayService:
         if response_preview_payload is None:
             response_preview_payload = response_preview_builder(response_payload)
 
-        run_payload = self._extract_run_payload(response_payload)
+        run_payload = self._response_builder.extract_run_payload(response_payload)
         recorded_run_id = run_payload.get("id") if run_payload is not None else executed_run_id
         recorded_run_status = (
             run_payload.get("status") if run_payload is not None else executed_run_status
@@ -724,7 +725,7 @@ class PublishedEndpointGatewayService:
         *,
         response_payload: dict,
     ) -> bool:
-        run_payload = self._extract_run_payload(response_payload)
+        run_payload = self._response_builder.extract_run_payload(response_payload)
         if run_payload is None:
             return True
         return run_payload.get("status") == "succeeded"
@@ -742,79 +743,6 @@ class PublishedEndpointGatewayService:
             f"Published sync invocation ended with unsupported run status '{run_status}'.",
             status_code=500,
         )
-
-    def _build_native_response_payload(
-        self,
-        *,
-        binding: WorkflowPublishedEndpoint,
-        workflow: Workflow,
-        workflow_version: WorkflowVersion,
-        blueprint_record: WorkflowCompiledBlueprint,
-        artifacts,
-    ) -> dict:
-        response = PublishedNativeRunResponse(
-            binding_id=binding.id,
-            endpoint_id=binding.endpoint_id,
-            endpoint_name=binding.endpoint_name,
-            endpoint_alias=binding.endpoint_alias,
-            route_path=binding.route_path,
-            workflow_id=workflow.id,
-            workflow_version=workflow_version.version,
-            compiled_blueprint_id=blueprint_record.id,
-            run=serialize_run_detail(artifacts),
-        )
-        return response.model_dump(mode="json")
-
-    def _build_native_response_preview(self, response_payload: dict) -> dict:
-        run_payload = response_payload.get("run")
-        if not isinstance(run_payload, dict):
-            return {}
-        output_payload = run_payload.get("output_payload")
-        return output_payload if isinstance(output_payload, dict) else {}
-
-    def _build_passthrough_response_preview(self, response_payload: dict) -> dict:
-        return response_payload
-
-    def _build_protocol_async_response_payload(
-        self,
-        *,
-        binding: WorkflowPublishedEndpoint,
-        workflow: Workflow,
-        workflow_version: WorkflowVersion,
-        blueprint_record: WorkflowCompiledBlueprint,
-        artifacts,
-        model: str,
-        request_surface: str,
-        protocol_response_builder,
-    ) -> dict:
-        run_detail = serialize_run_detail(artifacts)
-        response_payload = None
-        if artifacts.run.status == "succeeded":
-            response_payload = protocol_response_builder(
-                model=model,
-                output_payload=artifacts.run.output_payload,
-            )
-
-        response = PublishedProtocolAsyncRunResponse(
-            binding_id=binding.id,
-            endpoint_id=binding.endpoint_id,
-            endpoint_name=binding.endpoint_name,
-            endpoint_alias=binding.endpoint_alias,
-            route_path=binding.route_path,
-            protocol=binding.protocol,
-            request_surface=request_surface,
-            model=model,
-            workflow_id=workflow.id,
-            workflow_version=workflow_version.version,
-            compiled_blueprint_id=blueprint_record.id,
-            run=run_detail,
-            response_payload=response_payload,
-        )
-        return response.model_dump(mode="json", exclude_none=True)
-
-    def _extract_run_payload(self, response_payload: dict) -> dict | None:
-        run_payload = response_payload.get("run")
-        return run_payload if isinstance(run_payload, dict) else None
 
     def _enforce_rate_limit(
         self,
