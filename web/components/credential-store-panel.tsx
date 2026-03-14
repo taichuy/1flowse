@@ -105,7 +105,7 @@ export function CredentialStorePanel({ credentials }: Props) {
 
       {visible.length === 0 ? (
         <p style={{ marginTop: "1rem", opacity: 0.6 }}>
-          暂无凭证。点击"新建凭证"添加 API Key、Token 等敏感信息。
+          暂无凭证。点击 &quot;新建凭证&quot; 添加 API Key、Token 等敏感信息。
         </p>
       ) : (
         <table className="data-table" style={{ marginTop: "1rem" }}>
@@ -305,3 +305,4 @@ function CreateCredentialForm({
     </form>
   );
 }
+
