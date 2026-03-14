@@ -205,7 +205,7 @@ export function WorkflowEditorInspector({
           <li>保存时会把节点位置写回 `config.ui.position`。</li>
           <li>`tool` / `mcp_query` / `condition` / `router` 已优先改成结构化表单，其余配置仍可走高级 JSON。</li>
           <li>节点 `inputSchema` / `outputSchema` 已有独立 section，避免继续混在通用 config JSON 里。</li>
-          <li>`runtimePolicy` 现已补上 retry / join 结构化表单，复杂场景仍可回退到 JSON。</li>
+          <li>`runtimePolicy` 现已补上 execution / retry / join 结构化表单，复杂场景仍可回退到 JSON。</li>
           <li>`tool` 节点会直接消费 `/api/plugins/tools` 的持久化目录，不再只停留在首页绑定面板。</li>
           <li>运行时尚未支持 `loop`，因此当前画布仍不暴露 loop 节点。</li>
           <li>后端会继续校验 trigger 唯一、output 必需和边引用合法性。</li>

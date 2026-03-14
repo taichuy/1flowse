@@ -2,6 +2,7 @@ import type { Edge, Node } from "@xyflow/react";
 
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type { WorkflowDetail } from "@/lib/get-workflows";
+import type { WorkflowNodeRuntimePolicy } from "@/lib/workflow-runtime-policy";
 import {
   buildCatalogNodeDefinition,
   getWorkflowNodeCatalogItem,
@@ -14,7 +15,7 @@ export type WorkflowCanvasNodeData = {
   label: string;
   nodeType: string;
   config: Record<string, unknown>;
-  runtimePolicy?: Record<string, unknown>;
+  runtimePolicy?: WorkflowNodeRuntimePolicy;
   inputSchema?: Record<string, unknown> | null;
   outputSchema?: Record<string, unknown> | null;
   runStatus?: string;

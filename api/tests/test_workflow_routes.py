@@ -392,6 +392,58 @@ def test_create_workflow_rejects_invalid_retry_runtime_policy(client: TestClient
     assert "maxAttempts" in response.json()["detail"]
 
 
+def test_create_workflow_accepts_execution_runtime_policy(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Execution Policy Workflow",
+            "definition": _valid_definition(
+                runtime_policy={
+                    "execution": {
+                        "class": "sandbox",
+                        "profile": "browser-safe",
+                        "timeoutMs": 30000,
+                        "networkPolicy": "restricted",
+                        "filesystemPolicy": "readonly_tmp",
+                    }
+                }
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    execution_policy = body["definition"]["nodes"][1]["runtimePolicy"]["execution"]
+    assert execution_policy == {
+        "class": "sandbox",
+        "profile": "browser-safe",
+        "timeoutMs": 30000,
+        "networkPolicy": "restricted",
+        "filesystemPolicy": "readonly_tmp",
+    }
+
+
+
+def test_create_workflow_rejects_invalid_execution_runtime_policy(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Broken Execution Workflow",
+            "definition": _valid_definition(
+                runtime_policy={
+                    "execution": {
+                        "class": "vm",
+                    }
+                }
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "Input should be 'inline', 'subprocess', 'sandbox' or 'microvm'" in detail
+
+
 def test_create_workflow_accepts_authorized_context_mcp_query(client: TestClient) -> None:
     response = client.post(
         "/api/workflows",
@@ -578,6 +630,21 @@ def test_create_workflow_rejects_mapping_to_runtime_managed_input_root(
     response = client.post(
         "/api/workflows",
         json={"name": "Broken Mapping Workflow", "definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "runtime-managed input roots" in response.json()["detail"]
+
+
+def test_create_workflow_rejects_mapping_to_execution_input_root(
+    client: TestClient,
+) -> None:
+    definition = _valid_mapping_definition()
+    definition["edges"][1]["mapping"][0]["targetField"] = "execution.class"
+
+    response = client.post(
+        "/api/workflows",
+        json={"name": "Broken Execution Mapping Workflow", "definition": definition},
     )
 
     assert response.status_code == 422

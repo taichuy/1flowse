@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { WorkflowNodeRuntimePolicy } from "@/lib/workflow-runtime-policy";
 
 export type WorkflowListItem = {
   id: string;
@@ -12,7 +13,7 @@ export type WorkflowNodeItem = {
   type: string;
   name: string;
   config?: Record<string, unknown>;
-  runtimePolicy?: Record<string, unknown>;
+  runtimePolicy?: WorkflowNodeRuntimePolicy;
   inputSchema?: Record<string, unknown> | null;
   outputSchema?: Record<string, unknown> | null;
   [key: string]: unknown;

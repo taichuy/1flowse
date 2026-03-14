@@ -74,6 +74,12 @@ export type RunExecutionNodeItem = {
   node_type: string;
   status: string;
   phase?: string | null;
+  execution_class: string;
+  execution_source: string;
+  execution_profile?: string | null;
+  execution_timeout_ms?: number | null;
+  execution_network_policy?: string | null;
+  execution_filesystem_policy?: string | null;
   retry_count: number;
   waiting_reason?: string | null;
   error_message?: string | null;

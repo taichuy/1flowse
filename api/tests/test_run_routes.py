@@ -41,6 +41,30 @@ def test_execute_workflow_route(
     assert stored_body["last_event_at"] == body["events"][-1]["created_at"]
 
 
+def test_get_run_execution_view_includes_execution_policy(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "execution view"}},
+    )
+
+    assert response.status_code == 201
+    run_id = response.json()["id"]
+
+    execution_view_response = client.get(f"/api/runs/{run_id}/execution-view")
+
+    assert execution_view_response.status_code == 200
+    execution_view = execution_view_response.json()
+    nodes_by_id = {node["node_id"]: node for node in execution_view["nodes"]}
+    assert nodes_by_id["trigger"]["execution_class"] == "inline"
+    assert nodes_by_id["trigger"]["execution_source"] == "default"
+    assert nodes_by_id["mock_tool"]["execution_class"] == "inline"
+    assert nodes_by_id["mock_tool"]["execution_source"] == "default"
+
+
 def test_get_run_supports_summary_mode_without_events(
     client: TestClient,
     sqlite_session: Session,

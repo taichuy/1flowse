@@ -13,6 +13,11 @@ import {
   toRecord,
   toStringArray
 } from "@/components/workflow-node-config-form/shared";
+import {
+  commitRuntimePolicy,
+  normalizeRuntimePolicy
+} from "@/components/workflow-node-config-form/runtime-policy-helpers";
+import { WorkflowNodeRuntimePolicyExecutionSection } from "@/components/workflow-node-config-form/runtime-policy-execution-section";
 
 type WorkflowNodeRuntimePolicyFormProps = {
   node: Node<WorkflowCanvasNodeData>;
@@ -116,9 +121,16 @@ export function WorkflowNodeRuntimePolicyForm({
       <div className="binding-field">
         <span className="binding-label">Runtime policy</span>
         <small className="section-copy">
-          把运行时重试与 join 策略从纯 JSON 提升为结构化配置，减少图编辑阶段的语义误填。
+          把执行边界、重试与 join 策略从纯 JSON 提升为结构化配置，减少图编辑阶段的语义误填。
         </small>
       </div>
+
+      <WorkflowNodeRuntimePolicyExecutionSection
+        nodeId={node.id}
+        nodeType={node.data.nodeType}
+        runtimePolicy={runtimePolicy}
+        onChange={onChange}
+      />
 
       <div className="binding-field compact-stack">
         <span className="binding-label">Retry policy</span>
@@ -297,30 +309,6 @@ function readRetryPolicy(runtimePolicy: Record<string, unknown>) {
     legacyRetry.backoffMultiplier = runtimePolicy.backoffMultiplier;
   }
   return legacyRetry;
-}
-
-function normalizeRuntimePolicy(runtimePolicy: Record<string, unknown>) {
-  const nextPolicy = cloneRecord(runtimePolicy);
-  delete nextPolicy.maxAttempts;
-  delete nextPolicy.backoffSeconds;
-  delete nextPolicy.backoffMultiplier;
-
-  if (toRecord(nextPolicy.retry) && Object.keys(toRecord(nextPolicy.retry) ?? {}).length === 0) {
-    delete nextPolicy.retry;
-  }
-  if (toRecord(nextPolicy.join) && Object.keys(toRecord(nextPolicy.join) ?? {}).length === 0) {
-    delete nextPolicy.join;
-  }
-
-  return nextPolicy;
-}
-
-function commitRuntimePolicy(
-  runtimePolicy: Record<string, unknown>,
-  onChange: (nextRuntimePolicy: Record<string, unknown> | undefined) => void
-) {
-  const nextPolicy = normalizeRuntimePolicy(runtimePolicy);
-  onChange(Object.keys(nextPolicy).length > 0 ? nextPolicy : undefined);
 }
 
 function listIncomingNodes(

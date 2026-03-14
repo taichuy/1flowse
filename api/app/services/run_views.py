@@ -32,6 +32,7 @@ from app.schemas.run_views import (
     RunExecutionView,
 )
 from app.services.runtime import RuntimeService
+from app.services.runtime_execution_policy import execution_policy_from_node_run_input
 from app.services.runtime_records import ExecutionArtifacts
 
 
@@ -334,6 +335,10 @@ class RunViewService:
                 node_type=node_run.node_type,
                 status=node_run.status,
                 phase=node_run.phase,
+                **execution_policy_from_node_run_input(
+                    node_run.input_payload,
+                    node_type=node_run.node_type,
+                ).as_execution_view_payload(),
                 retry_count=node_run.retry_count,
                 waiting_reason=node_run.waiting_reason,
                 error_message=node_run.error_message,

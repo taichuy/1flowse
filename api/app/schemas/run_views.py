@@ -45,6 +45,12 @@ class RunExecutionNodeItem(BaseModel):
     node_type: str
     status: str
     phase: str | None = None
+    execution_class: str
+    execution_source: str
+    execution_profile: str | None = None
+    execution_timeout_ms: int | None = None
+    execution_network_policy: str | None = None
+    execution_filesystem_policy: str | None = None
     retry_count: int = 0
     waiting_reason: str | None = None
     error_message: str | None = None

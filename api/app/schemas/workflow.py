@@ -28,6 +28,9 @@ EdgeChannel = Literal["control", "data"]
 PublishProtocol = Literal["native", "openai", "anthropic"]
 AuthMode = Literal["api_key", "token", "internal"]
 ArtifactType = Literal["text", "json", "file", "tool_result", "message"]
+ExecutionClass = Literal["inline", "subprocess", "sandbox", "microvm"]
+ExecutionNetworkPolicy = Literal["inherit", "restricted", "isolated"]
+ExecutionFilesystemPolicy = Literal["inherit", "readonly_tmp", "ephemeral"]
 AssistantTriggerMode = Literal[
     "always",
     "on_large_payload",
@@ -237,6 +240,7 @@ class WorkflowEdgeFieldMapping(BaseModel):
             "activated_by",
             "authorized_context",
             "attempt",
+            "execution",
             "join",
         }:
             raise ValueError(
@@ -345,9 +349,31 @@ class WorkflowNodeJoinPolicy(BaseModel):
         return self
 
 
+class WorkflowNodeExecutionPolicy(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+    class_name: ExecutionClass = Field(alias="class")
+    profile: str | None = Field(default=None, min_length=1, max_length=128)
+    timeoutMs: int | None = Field(default=None, ge=1, le=600_000)
+    networkPolicy: ExecutionNetworkPolicy | None = None
+    filesystemPolicy: ExecutionFilesystemPolicy | None = None
+
+    @model_validator(mode="after")
+    def normalize_profile(self) -> WorkflowNodeExecutionPolicy:
+        if self.profile is not None:
+            normalized_profile = self.profile.strip()
+            self.profile = normalized_profile or None
+        return self
+
+
 class WorkflowNodeRuntimePolicy(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    execution: WorkflowNodeExecutionPolicy | None = None
     retry: WorkflowNodeRetryPolicy | None = None
     join: WorkflowNodeJoinPolicy | None = None
 

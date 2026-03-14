@@ -215,6 +215,23 @@ function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
       {node.error_message ? <p className="run-error-message">{node.error_message}</p> : null}
 
       <div className="event-type-strip">
+        <span className="event-chip">exec {node.execution_class}</span>
+        <span className="event-chip">source {node.execution_source}</span>
+        {node.execution_profile ? (
+          <span className="event-chip">profile {node.execution_profile}</span>
+        ) : null}
+        {typeof node.execution_timeout_ms === "number" ? (
+          <span className="event-chip">timeout {formatDurationMs(node.execution_timeout_ms)}</span>
+        ) : null}
+        {node.execution_network_policy ? (
+          <span className="event-chip">network {node.execution_network_policy}</span>
+        ) : null}
+        {node.execution_filesystem_policy ? (
+          <span className="event-chip">fs {node.execution_filesystem_policy}</span>
+        ) : null}
+      </div>
+
+      <div className="event-type-strip">
         <span className="event-chip">events {node.event_count}</span>
         <span className="event-chip">artifacts {node.artifacts.length}</span>
         <span className="event-chip">tools {node.tool_calls.length}</span>

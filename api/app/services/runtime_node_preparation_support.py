@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.run import NodeRun, Run, RunEvent
+from app.services.runtime_execution_policy import resolve_execution_policy
 from app.services.runtime_types import (
     AuthorizedContextRefs,
     FlowCheckpointState,
@@ -37,6 +38,7 @@ class RuntimeNodePreparationSupportMixin:
         global_context: dict,
         events: list[RunEvent],
     ) -> NodeRun | None:
+        execution_policy = resolve_execution_policy(node)
         node_input = self._build_node_input(
             node=node,
             node_run=None,
@@ -150,6 +152,7 @@ class RuntimeNodePreparationSupportMixin:
                 {
                     "node": node,
                     "input": node_input,
+                    "execution": execution_policy.as_runtime_payload(),
                 },
             )
         )
@@ -171,12 +174,14 @@ class RuntimeNodePreparationSupportMixin:
         max_attempts: int,
         global_context: dict,
     ) -> dict:
+        execution_policy = resolve_execution_policy(node)
         node_input = {
             "trigger_input": input_payload,
             "upstream": upstream,
             "accumulated": accumulated,
             "mapped": mapped,
             "activated_by": sorted(activated_by),
+            "execution": execution_policy.as_runtime_payload(),
             "authorized_context": {
                 "currentNodeId": authorized_context.current_node_id,
                 "readableNodeIds": list(authorized_context.readable_node_ids),

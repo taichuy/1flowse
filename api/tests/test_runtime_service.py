@@ -1,13 +1,8 @@
-﻿from datetime import UTC, datetime, timedelta
-
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.run import RunCallbackTicket
-from app.models.workflow import Workflow, WorkflowCompiledBlueprint, WorkflowVersion
-from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
-from app.services.run_resume_scheduler import RunResumeScheduler
+from app.models.workflow import Workflow, WorkflowCompiledBlueprint
 from app.services.runtime import RuntimeService, WorkflowExecutionError
 
 
@@ -58,6 +53,70 @@ def test_runtime_service_executes_linear_workflow(
     assert compiled_blueprint is not None
     assert compiled_blueprint.workflow_id == sample_workflow.id
     assert compiled_blueprint.workflow_version == sample_workflow.version
+
+
+def test_runtime_service_records_effective_execution_policy(sqlite_session: Session) -> None:
+    workflow = Workflow(
+        id="wf-execution-policy",
+        name="Execution Policy Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "tool",
+                    "type": "tool",
+                    "name": "Tool",
+                    "config": {"mock_output": {"answer": "done"}},
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "profile": "browser-safe",
+                            "timeoutMs": 30000,
+                            "networkPolicy": "restricted",
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "execution"},
+    )
+
+    trigger_run = next(
+        node_run for node_run in artifacts.node_runs if node_run.node_id == "trigger"
+    )
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    assert trigger_run.input_payload["execution"] == {
+        "class": "inline",
+        "source": "default",
+    }
+    assert tool_run.input_payload["execution"] == {
+        "class": "sandbox",
+        "source": "runtime_policy",
+        "profile": "browser-safe",
+        "timeoutMs": 30000,
+        "networkPolicy": "restricted",
+    }
+
+    tool_started = next(
+        event
+        for event in artifacts.events
+        if event.event_type == "node.started" and event.payload.get("node", {}).get("id") == "tool"
+    )
+    assert tool_started.payload["execution"] == tool_run.input_payload["execution"]
 
 
 def test_runtime_service_only_executes_selected_condition_branch(sqlite_session: Session) -> None:
