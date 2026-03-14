@@ -1750,3 +1750,44 @@ docker compose up -d --build
    - `web/components/run-diagnostics-panel.tsx`
 4. **P1：继续补节点配置完整度**
    - 把 provider / model / 参数配置做成更结构化的交互层，而不是继续堆叠在单一表单组件里。
+## 2026-03-14 项目现状复核与 Published Gateway Protocol Surface Split
+
+### 当前判断
+
+- 当前项目基础框架已经写到可以持续推进产品完整度的阶段，不再处于“基础框架是否存在”的早期状态。
+- 架构主线也不是混在一起未分层的状态：最近几轮已经连续把发布网关拆出 `binding resolver`、`cache orchestrator`，本轮继续拆出 `protocol surface`。
+- 但这不代表已经进入“只剩人工界面设计”的阶段；运行时、发布链路、诊断面板和节点配置完整度仍有明显推进空间。
+
+### 本轮新增事实
+
+- 新增 `api/app/services/published_gateway_protocol_surface.py`
+  - 统一承载 OpenAI / Anthropic 协议 surface 入口
+  - 主网关不再直接堆叠多组协议入口方法
+- `api/app/services/published_gateway.py` 当前进一步收口为：
+  - native surface 入口
+  - binding invoke 主链路
+  - 限流 / 缓存 / runtime 编排与结果收口
+- 基于当前代码事实，可继续维持以下判断：
+  - 基础框架足够继续支撑产品完整度建设
+  - 当前架构在朝解耦方向稳定演进，而不是反复回到单体 God object
+  - 仍需继续治理的结构热点包括：
+    - `api/app/services/published_gateway.py`
+    - `api/app/services/runtime.py`
+    - `api/app/services/published_invocation_audit.py`
+    - `web/components/run-diagnostics-panel.tsx`
+
+### 验证
+
+- `cd api; .\.venv\Scripts\uv.exe run pytest tests/test_published_protocol_streaming.py tests/test_published_protocol_async_routes.py tests/test_published_native_async_routes.py tests/test_workflow_publish_routes.py -q`
+- 结果：`35 passed`
+
+### 下一步规划
+
+1. **P0：继续拆 `api/app/services/published_gateway.py`**
+   - 优先处理 protocol mapper handoff / invocation audit 边界，避免协议映射与审计细节重新回流主网关。
+2. **P1：继续治理 `api/app/services/runtime.py`**
+   - 沿 graph scheduling / lifecycle / resume orchestration 拆边界，继续防止 runtime service 膨胀。
+3. **P1：继续治理 `web/components/run-diagnostics-panel.tsx`**
+   - 进一步拆 summary / sections / detail drilldown，保持调试面板聚合摘要优先。
+4. **P1：继续补节点配置完整度**
+   - 把 provider / model / tool / publish 配置继续做成结构化配置段，而不是留在大表单里。
