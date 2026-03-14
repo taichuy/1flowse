@@ -1661,6 +1661,53 @@ docker compose up -d --build
    - `web/components/run-diagnostics-panel.tsx`
 4. **P1：继续补节点配置完整度**
    - 把 provider / model / 参数配置做成更结构化的交互层，而不是继续堆叠在单一表单组件里。
+
+## 2026-03-14 Stream Usage + Published Gateway Cache Orchestration 事实
+
+### 背景
+
+- 最近提交 `9ea1795 refactor: split published gateway binding resolver` 已经把 publish gateway 的 binding resolve / auth / workflow preload 职责抽离出去。
+- `runtime-foundation` 连续几轮都把两件事列为紧邻优先级：
+  - P0：继续拆 `api/app/services/published_gateway.py`
+  - P1：补流式 `stream_options.include_usage` 支持
+- 因此这轮明确承接最近提交，不另起炉灶，而是同时推进一项结构治理和一项 AI 成本追踪缺口补齐。
+
+### 当前事实
+
+- `api/app/services/llm_provider.py`
+  - OpenAI 流式请求现在默认携带 `stream_options: {"include_usage": true}`
+  - OpenAI SSE 解析已支持 usage-only chunk
+  - `LLMStreamChunk` 新增 `usage` 字段，允许 provider 层把 token usage 上送到 runtime
+- `api/app/services/agent_runtime_llm_support.py`
+  - agent finalize 的流式执行现在会累计 usage，并写回流式结果输出
+  - 这意味着流式调用不再只保留 `latency_ms`，而能拿到真实 token usage，用于后续 `AICallRecord`/成本分析继续承接
+- `api/app/services/published_gateway_cache_orchestrator.py`
+  - 新增 publish gateway cache 编排器
+  - 统一承接 cache lookup / cache store
+  - `api/app/services/published_gateway.py` 主链路不再直接操心 cache service 的命中/落库细节
+- 基于当前仓库事实，判断维持不变：
+  - 基础框架已经足够继续推进产品完整度，而不是停留在“框架是否写好”阶段
+  - 当前还没有到“只剩人工逐项界面设计”的阶段，因此本轮不触发人工通知脚本
+  - 持续需要治理的结构热点仍包括：
+    - `api/app/services/published_gateway.py`
+    - `api/app/services/runtime.py`
+    - `api/app/services/published_invocation_audit.py`
+    - `web/components/run-diagnostics-panel.tsx`
+
+### 验证
+
+- `cd api; .\.venv\Scripts\uv.exe run pytest tests/test_llm_provider.py tests/test_agent_runtime_llm_streaming.py tests/test_published_protocol_streaming.py tests/test_published_protocol_async_routes.py tests/test_published_native_async_routes.py tests/test_workflow_publish_routes.py -q`：`56 passed`
+
+### 本轮补充后的下一步规划
+
+1. **P0：继续拆 `api/app/services/published_gateway.py`**
+   - 优先补 protocol surface / mapper handoff，避免 publish gateway 再次吸收协议细节
+2. **P1：治理 `api/app/services/runtime.py`**
+   - 按 graph scheduling / node lifecycle / event emission 边界继续收口
+3. **P1：治理 `web/components/run-diagnostics-panel.tsx`**
+   - 把摘要、时间线、详情钻取入口继续拆层，避免调试面板膨胀
+4. **P1：继续补节点配置完整度**
+   - 把 provider / model / 参数配置从大表单继续拆为更结构化的配置段
 ## 2026-03-14 Published Gateway Binding Resolver Split 事实
 
 ### 背景

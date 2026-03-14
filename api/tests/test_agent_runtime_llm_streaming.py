@@ -36,7 +36,12 @@ def _openai_response(content: str, model: str = "gpt-4o") -> dict:
     }
 
 
-def _openai_stream_lines(content: str, model: str = "gpt-4o", chunk_size: int = 10) -> list[str]:
+def _openai_stream_lines(
+    content: str,
+    model: str = "gpt-4o",
+    chunk_size: int = 10,
+    usage: dict[str, int] | None = None,
+) -> list[str]:
     """Build SSE lines that simulate an OpenAI streaming response."""
     lines: list[str] = []
     for i in range(0, len(content), chunk_size):
@@ -61,6 +66,15 @@ def _openai_stream_lines(content: str, model: str = "gpt-4o", chunk_size: int = 
         "model": model,
         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
     }
+    if usage:
+        usage_data = {
+            "id": "chatcmpl-stream",
+            "object": "chat.completion.chunk",
+            "model": model,
+            "choices": [],
+            "usage": usage,
+        }
+        lines.append(f"data: {json.dumps(usage_data)}")
     lines.append(f"data: {json.dumps(final_data)}")
     lines.append("data: [DONE]")
     return lines
@@ -125,7 +139,11 @@ def test_streaming_finalize_produces_realtime_deltas(sqlite_session: Session) ->
     """When LLM streaming is available, finalize phase should produce
     per-chunk node.output.delta events instead of post-hoc chunking."""
     full_answer = "The answer to everything is 42."
-    stream_lines = _openai_stream_lines(full_answer, chunk_size=10)
+    stream_lines = _openai_stream_lines(
+        full_answer,
+        chunk_size=10,
+        usage={"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18},
+    )
 
     runtime = _create_streaming_runtime(
         sync_responses=[
@@ -334,7 +352,11 @@ def test_streaming_finalize_with_tool_results(sqlite_session: Session) -> None:
     )
 
     full_answer = "Based on search results, I found 3 items."
-    stream_lines = _openai_stream_lines(full_answer, chunk_size=15)
+    stream_lines = _openai_stream_lines(
+        full_answer,
+        chunk_size=15,
+        usage={"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18},
+    )
 
     runtime = _create_streaming_runtime(
         sync_responses=[],
@@ -391,6 +413,9 @@ def test_streaming_finalize_with_tool_results(sqlite_session: Session) -> None:
     assert output["result"] == full_answer
     assert output["decision_basis"] == "llm_with_tools"
     assert output.get("streaming") is True
+    assert output["usage"]["prompt_tokens"] == 10
+    assert output["usage"]["completion_tokens"] == 8
+    assert output["usage"]["total_tokens"] == 18
 
     # Should have streaming delta events
     delta_events = [

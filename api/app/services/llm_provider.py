@@ -67,6 +67,7 @@ class LLMStreamChunk:
     delta: str
     finish_reason: str | None = None
     model: str = ""
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 class LLMProviderError(RuntimeError):
@@ -165,6 +166,8 @@ class LLMProviderService:
             "messages": messages,
             "stream": stream,
         }
+        if stream:
+            body["stream_options"] = {"include_usage": True}
         if config.temperature is not None:
             body["temperature"] = config.temperature
         if config.max_tokens is not None:
@@ -190,12 +193,14 @@ class LLMProviderService:
         delta = choice.get("delta") or {}
         content = delta.get("content") or ""
         finish_reason = choice.get("finish_reason")
-        if not content and not finish_reason:
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        if not content and not finish_reason and not usage:
             return None
         return LLMStreamChunk(
             delta=content,
             finish_reason=finish_reason,
             model=data.get("model") or model_id,
+            usage=usage,
         )
 
     # --- Anthropic ---

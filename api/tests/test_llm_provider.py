@@ -212,6 +212,32 @@ def test_openai_chat_stream_yields_chunks():
     assert chunks[2].finish_reason == "stop"
 
 
+def test_openai_chat_stream_requests_usage_and_parses_usage_chunk():
+    captured = {}
+    sse_lines = (
+        'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"model":"gpt-4o"}\n'
+        'data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":4,"total_tokens":16},"model":"gpt-4o"}\n'
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"model":"gpt-4o"}\n'
+        "data: [DONE]\n"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, content=sse_lines.encode())
+
+    svc = _make_service(handler)
+    chunks = list(svc.chat_stream(_config()))
+
+    assert captured["body"]["stream_options"] == {"include_usage": True}
+    assert [chunk.delta for chunk in chunks] == ["Hi", "", ""]
+    assert chunks[1].usage == {
+        "prompt_tokens": 12,
+        "completion_tokens": 4,
+        "total_tokens": 16,
+    }
+    assert chunks[2].finish_reason == "stop"
+
+
 # ---------------------------------------------------------------------------
 # Anthropic streaming
 # ---------------------------------------------------------------------------

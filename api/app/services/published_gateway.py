@@ -25,6 +25,9 @@ from app.services.published_gateway_binding_resolver import (
     PublishedGatewayBindingResolver,
     PublishedGatewayBindingResolverError,
 )
+from app.services.published_gateway_cache_orchestrator import (
+    PublishedGatewayCacheOrchestrator,
+)
 from app.services.published_invocations import PublishedInvocationService
 from app.services.published_protocol_mapper import (
     build_anthropic_message_response,
@@ -64,6 +67,7 @@ class PublishedEndpointGatewayService:
         response_builder: PublishedGatewayResponseBuilder | None = None,
         invocation_recorder: PublishedGatewayInvocationRecorder | None = None,
         binding_resolver: PublishedGatewayBindingResolver | None = None,
+        cache_orchestrator: PublishedGatewayCacheOrchestrator | None = None,
     ) -> None:
         self._workflow_publish_service = workflow_publish_service or WorkflowPublishBindingService()
         self._api_key_service = api_key_service or PublishedEndpointApiKeyService()
@@ -77,6 +81,9 @@ class PublishedEndpointGatewayService:
         self._binding_resolver = binding_resolver or PublishedGatewayBindingResolver(
             api_key_service=self._api_key_service,
             invocation_service=self._invocation_service,
+        )
+        self._cache_orchestrator = cache_orchestrator or PublishedGatewayCacheOrchestrator(
+            cache_service=self._cache_service,
         )
 
     def record_protocol_rejection_by_alias(
@@ -570,27 +577,23 @@ class PublishedEndpointGatewayService:
             authenticated_key = resolved_binding.authenticated_key
             self._enforce_rate_limit(db, binding=binding)
 
-            cache_enabled = self._cache_service.is_enabled(binding)
-            if cache_enabled:
-                cache_status = "miss"
-                cache_hit = self._cache_service.get_hit(
-                    db,
-                    binding=binding,
-                    input_payload=cache_input_payload,
-                    now=started_at,
-                )
-            else:
-                cache_hit = None
+            cache_lookup = self._cache_orchestrator.lookup(
+                db,
+                binding=binding,
+                input_payload=cache_input_payload,
+                now=started_at,
+            )
+            cache_enabled = cache_lookup.cache_enabled
+            cache_status = cache_lookup.cache_status
 
             executed_run_id: str | None = None
             executed_run_status: str | None = None
             executed_run_error: str | None = None
 
-            if cache_hit is not None:
-                response_payload = cache_hit.response_payload
-                cache_status = "hit"
-                cache_key = cache_hit.cache_key
-                cache_entry_id = cache_hit.entry_id
+            if cache_lookup.hit:
+                response_payload = cache_lookup.response_payload
+                cache_key = cache_lookup.cache_key
+                cache_entry_id = cache_lookup.cache_entry_id
                 executed_run_status = "succeeded"
             else:
                 artifacts = self._runtime_service.execute_compiled_workflow(
@@ -617,15 +620,14 @@ class PublishedEndpointGatewayService:
                 if cache_enabled and self._should_store_cached_response(
                     response_payload=response_payload,
                 ):
-                    cache_entry = self._cache_service.store_response(
+                    cache_store = self._cache_orchestrator.store(
                         db,
                         binding=binding,
                         input_payload=cache_input_payload,
                         response_payload=response_payload,
                     )
-                    if cache_entry is not None:
-                        cache_key = cache_entry.cache_key
-                        cache_entry_id = cache_entry.id
+                    cache_key = cache_store.cache_key
+                    cache_entry_id = cache_store.cache_entry_id
                 elif cache_enabled and cache_status != "hit":
                     cache_status = "bypass"
         except PublishedGatewayBindingResolverError as exc:

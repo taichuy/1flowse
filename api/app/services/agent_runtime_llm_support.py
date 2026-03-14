@@ -484,6 +484,7 @@ class AgentRuntimeLLMSupportMixin:
             accumulated_chunks: list[str] = []
             model = ""
             finish_reason = ""
+            stream_usage: dict[str, int] = {}
 
             for chunk in self._llm_provider.chat_stream(call_config):
                 if chunk.delta:
@@ -498,6 +499,8 @@ class AgentRuntimeLLMSupportMixin:
                     finish_reason = chunk.finish_reason
                 if chunk.model:
                     model = chunk.model
+                if chunk.usage:
+                    stream_usage.update(chunk.usage)
 
             elapsed_ms = int((time.monotonic() - start) * 1000)
             final_text = "".join(accumulated_chunks)
@@ -509,7 +512,7 @@ class AgentRuntimeLLMSupportMixin:
                 text=final_text,
                 model=model or call_config.model_id,
                 finish_reason=finish_reason,
-                usage={"latency_ms": elapsed_ms},
+                usage={**stream_usage, "latency_ms": elapsed_ms},
             )
 
             return {
