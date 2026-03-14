@@ -4,6 +4,7 @@ import type { Node } from "@xyflow/react";
 
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import { AuthorizedContextFields } from "@/components/workflow-node-config-form/authorized-context-fields";
+import { CredentialPicker } from "@/components/workflow-node-config-form/credential-picker";
 import {
   cloneRecord,
   dedupeArtifactRefs,
@@ -46,6 +47,25 @@ export function LlmAgentNodeConfigForm({
       delete nextModel[field];
     } else {
       nextModel[field] = value;
+    }
+
+    if (Object.keys(nextModel).length === 0) {
+      delete nextConfig.model;
+    } else {
+      nextConfig.model = nextModel;
+    }
+
+    onChange(nextConfig);
+  };
+
+  const updateModelApiKey = (value: string | undefined) => {
+    const nextConfig = cloneRecord(config);
+    const nextModel = cloneRecord(model);
+
+    if (value === undefined || value === "") {
+      delete nextModel.apiKey;
+    } else {
+      nextModel.apiKey = value;
     }
 
     if (Object.keys(nextModel).length === 0) {
@@ -196,6 +216,14 @@ export function LlmAgentNodeConfigForm({
           placeholder="为空时沿用默认值"
         />
       </label>
+
+      <CredentialPicker
+        label="API Key credential"
+        value={typeof model.apiKey === "string" ? model.apiKey : ""}
+        onChange={updateModelApiKey}
+        hint="选择后会自动写入 credential://{id}，运行时自动解密注入。"
+        placeholder="选择模型 API Key 凭证"
+      />
 
       <label className="binding-field">
         <span className="binding-label">System prompt</span>

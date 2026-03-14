@@ -741,16 +741,21 @@ class RuntimeService(
                     dict.fromkeys([*checkpoint_state.completed_output_nodes, node_id])
                 )
 
-            delta_text = extract_text_output(node_output)
-            if delta_text:
-                events.append(
-                    self._build_event(
-                        run.id,
-                        node_run.id,
-                        "node.output.delta",
-                        {"node_id": node_id, "delta": delta_text},
+            agent_emitted_deltas = any(
+                e.event_type == "node.output.delta"
+                for e in (result.events or [])
+            )
+            if not agent_emitted_deltas:
+                delta_text = extract_text_output(node_output)
+                if delta_text:
+                    events.append(
+                        self._build_event(
+                            run.id,
+                            node_run.id,
+                            "node.output.delta",
+                            {"node_id": node_id, "delta": delta_text},
+                        )
                     )
-                )
             events.append(
                 self._build_event(
                     run.id,

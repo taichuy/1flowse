@@ -4,6 +4,7 @@ import type { Node } from "@xyflow/react";
 
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
+import { CredentialPicker } from "@/components/workflow-node-config-form/credential-picker";
 import {
   cloneRecord,
   getSupportedToolSchemaFields,
@@ -104,6 +105,31 @@ export function ToolNodeConfigForm({
     onChange(nextConfig);
   };
 
+  const handleToolCredentialChange = (credKey: string, value: string | undefined) => {
+    const nextConfig = cloneRecord(config);
+    const currentBinding = readToolBinding(nextConfig);
+    if (!currentBinding) {
+      return;
+    }
+    const nextBinding: Record<string, unknown> = { ...currentBinding };
+    const nextCredentials = { ...(toRecord(nextBinding.credentials) ?? {}) };
+
+    if (value === undefined || value === "") {
+      delete nextCredentials[credKey];
+    } else {
+      nextCredentials[credKey] = value;
+    }
+
+    if (Object.keys(nextCredentials).length === 0) {
+      delete nextBinding.credentials;
+    } else {
+      nextBinding.credentials = nextCredentials;
+    }
+
+    nextConfig.tool = nextBinding;
+    onChange(nextConfig);
+  };
+
   const handleToolInputChange = (field: ToolSchemaField, value: unknown) => {
     const nextConfig = cloneRecord(config);
     const nextInputs = cloneRecord(toRecord(nextConfig.inputs) ?? {});
@@ -193,6 +219,18 @@ export function ToolNodeConfigForm({
               placeholder="为空则使用后端默认超时"
             />
           </label>
+
+          <CredentialPicker
+            label="Tool credential"
+            value={
+              typeof binding?.credentials?.auth === "string"
+                ? binding.credentials.auth
+                : ""
+            }
+            onChange={(value) => handleToolCredentialChange("auth", value)}
+            hint="选择后会写入 config.tool.credentials.auth，运行时自动解密注入。"
+            placeholder="选择工具凭证"
+          />
 
           {schemaFields.length > 0 ? (
             <>

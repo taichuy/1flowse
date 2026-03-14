@@ -28,6 +28,40 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+_DELTA_CHUNK_SIZE = 80
+
+
+def _chunk_text_for_delta(text: str) -> list[str]:
+    """Split text into chunks for streaming delta events.
+
+    Short texts (< 2 * chunk size) are returned as a single chunk.
+    Longer texts are split at natural sentence/line boundaries when possible.
+    """
+    if not text:
+        return []
+    if len(text) < _DELTA_CHUNK_SIZE * 2:
+        return [text]
+
+    chunks: list[str] = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= _DELTA_CHUNK_SIZE:
+            chunks.append(remaining)
+            break
+
+        cut_at = _DELTA_CHUNK_SIZE
+        for separator in ("\n", "。", ". ", "，", ", ", "；", "; "):
+            pos = remaining.rfind(separator, 0, _DELTA_CHUNK_SIZE + len(separator))
+            if pos > 0:
+                cut_at = pos + len(separator)
+                break
+
+        chunks.append(remaining[:cut_at])
+        remaining = remaining[cut_at:]
+
+    return chunks
+
+
 class AgentRuntime:
     def __init__(
         self,
@@ -311,6 +345,7 @@ class AgentRuntime:
             output_value=final_output,
             assistant=False,
         )
+        self._emit_output_deltas(final_output, events, node)
         self._transition_phase(node_run, "emit_output", events, node)
         node_run.waiting_reason = None
         self._context_service.update_working_context(
@@ -517,6 +552,37 @@ class AgentRuntime:
         output.setdefault("degraded", True)
         output.setdefault("fallback_reason", error_message)
         return output
+
+    def _emit_output_deltas(
+        self,
+        final_output: dict[str, Any],
+        events: list[RuntimeEvent],
+        node: dict[str, Any],
+    ) -> None:
+        """Emit fine-grained node.output.delta events by chunking the output text.
+
+        When real LLM streaming is integrated, this will be replaced by
+        provider-driven callbacks that emit chunks as they arrive.
+        """
+        text = self._extract_output_text(final_output)
+        if not text:
+            return
+        node_id = node["id"]
+        for chunk in _chunk_text_for_delta(text):
+            events.append(
+                RuntimeEvent(
+                    "node.output.delta",
+                    {"node_id": node_id, "delta": chunk},
+                )
+            )
+
+    @staticmethod
+    def _extract_output_text(output: dict[str, Any]) -> str:
+        for key in ("result", "text", "content", "answer", "output", "message"):
+            value = output.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+        return ""
 
     def _allowed_tool_ids(self, config: dict[str, Any]) -> set[str] | None:
         tool_policy = self._to_dict(config.get("toolPolicy"))
