@@ -1465,3 +1465,37 @@ docker compose up -d --build
 4. **继续治理后端结构热点**（P1）：`api/app/services/published_invocations.py`（1141 行）若继续补长期趋势，应优先拆 query/filtering 与 audit aggregation。
 5. **节点配置体验**（P2）：把 model provider 配置表单做成更结构化的组件（provider 选择 → model 选择 → 参数配置）。
 6. **凭证进阶功能**（P2）：workspace 级隔离、Redis 缓存、审计日志。
+
+---
+
+## 2026-03-14 Service Module Refactors 收尾
+
+### 背景
+
+- 工作区遗留了一批未提交的服务拆分半成品：
+  - `agent_runtime.py` 已开始把 LLM 逻辑抽离，但还没有形成开发闭环记录。
+  - `published_invocations.py` 已新建 `types` / `audit` 文件，但主服务仍未真正继承这些新模块。
+- 这会让仓库同时存在“新模块草稿 + 旧大文件仍是事实来源”的双轨状态，不利于后续继续开发和追溯。
+
+### 当前事实
+
+- `AgentRuntime` 现已正式继承 `AgentRuntimeLLMSupportMixin`：
+  - `api/app/services/agent_runtime.py` 当前约 `496` 行，聚焦 phase 编排、AI call 记录、工具结果恢复和基础配置辅助。
+  - `api/app/services/agent_runtime_llm_support.py` 当前约 `558` 行，承接 LLM 调用、plan、assistant distill、finalize output 和 delta helper。
+- `PublishedInvocationService` 现已正式继承 `PublishedInvocationAuditMixin`：
+  - `api/app/services/published_invocations.py` 当前约 `287` 行，只保留 payload preview、查询语句构建、记录写入和 list 查询入口。
+  - `api/app/services/published_invocation_types.py` 当前约 `204` 行，承接类型、常量和 `classify_invocation_reason`。
+  - `api/app/services/published_invocation_audit.py` 当前约 `663` 行，承接 facet/timeline 聚合、binding audit 和 multi-binding summary。
+- 这轮变更没有改变 publish activity、publish rate limit 或 AgentRuntime 的既有行为事实，属于结构治理与职责收口。
+
+### 验证
+
+- `./.venv/Scripts/uv.exe run pytest tests/test_workflow_publish_activity.py -q`：4 passed
+- `./.venv/Scripts/uv.exe run pytest tests/ -q`：212 passed
+
+### 本轮补充后的下一步规划
+
+1. **继续深化 publish governance**（P0）：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口，把目前的 activity summary 延伸到可追踪明细。
+2. **补 `stream_options.include_usage` 支持**（P1）：在 `LLMProviderService` 中为流式 OpenAI 调用补 usage 回传，让 `AICallRecord` 和后续成本分析不再只记录 `latency_ms`。
+3. **继续治理 publish gateway 热点**（P1）：若发布治理和协议映射继续扩张，优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 `837` 行）。
+4. **观察新的结构热点**（P1）：`api/app/services/published_invocation_audit.py`（约 `663` 行）与 `api/app/services/agent_runtime_llm_support.py`（约 `558` 行）目前仍可控，但若继续增长，应优先沿 query/filtering 或 phase helper 边界继续下拆。
