@@ -1499,3 +1499,45 @@ docker compose up -d --build
 2. **补 `stream_options.include_usage` 支持**（P1）：在 `LLMProviderService` 中为流式 OpenAI 调用补 usage 回传，让 `AICallRecord` 和后续成本分析不再只记录 `latency_ms`。
 3. **继续治理 publish gateway 热点**（P1）：若发布治理和协议映射继续扩张，优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 `837` 行）。
 4. **观察新的结构热点**（P1）：`api/app/services/published_invocation_audit.py`（约 `663` 行）与 `api/app/services/agent_runtime_llm_support.py`（约 `558` 行）目前仍可控，但若继续增长，应优先沿 query/filtering 或 phase helper 边界继续下拆。
+
+## 2026-03-14 Published Invocation Detail Drilldown 事实
+
+### 背景
+
+- 最近一条真正承接发布治理主线的功能提交是 `4d18eba refactor: split agent runtime llm and publish audit services`；它完成了 `PublishedInvocationService` 的结构拆分，但没有把单条 invocation detail 补齐。
+- 上一条提交 `3a2e27b docs: 更新 PowerShell 提交代码注意事项，强调分步提交` 仅更新协作说明，不涉及产品代码事实，因此这轮需要直接承接 `4d18eba` 留下的 P0 缺口，而不是另起新主线。
+
+### 当前事实
+
+- 发布治理现在同时具备两层 API：
+  - binding 级 list/audit：`api/app/api/routes/published_endpoint_activity.py`
+  - invocation 级 detail：`api/app/api/routes/published_endpoint_invocation_detail.py`
+- 新增共享 helper `api/app/api/routes/published_endpoint_invocation_support.py`，承接 invocation item、waiting lifecycle、callback ticket 和 cache inventory 序列化，避免把 activity route 继续做成“大而全”路由。
+- `WorkflowPublishedInvocation` 现已持久化 `cache_key` 与 `cache_entry_id`：
+  - ORM：`api/app/models/workflow.py`
+  - 迁移：`api/migrations/versions/20260314_0020_published_invocation_cache_links.py`
+- `PublishedEndpointCacheService` 现可返回 cache hit 的 `entry_id`，并支持按 `cache_entry_id` 稳定回查活跃 cache entry；`PublishedGatewayService` 在 cache hit / miss-store 成功时会同步写入 invocation 记录。
+- detail API 默认继续复用既有事实源：
+  - `runs` 提供 run reference
+  - `node_runs` + `run_callback_tickets` 提供 waiting/callback drilldown
+  - `workflow_published_cache_entries` 提供 cache drilldown
+- 当前这轮没有把前端 publish panel 一起接上 detail drawer；后端事实层已具备稳定契约，前端仍是下一步承接项。
+
+### 验证
+
+- `./.venv/Scripts/uv.exe run pytest tests/test_workflow_publish_routes.py -q`：24 passed
+- `./.venv/Scripts/uv.exe run pytest tests/ -q`：213 passed
+
+### 本轮补充后的下一步规划
+
+1. **P0：把 invocation detail 回接到前端 publish panel**
+   - 为单条 invocation 增加 detail drawer / side panel
+   - 明确暴露 `run / callback ticket / cache` 三类排障入口，而不是只停留在 list card
+2. **P1：继续拆 `api/app/services/published_gateway.py`**
+   - 当前 publish 主链路虽然可持续推进，但 `published_gateway.py` 仍是结构热点，应优先沿 protocol surface / response builder / audit handoff 边界分拆
+3. **P1：补 `stream_options.include_usage` 支持**
+   - 让流式 OpenAI 调用也能写入 token usage，补齐成本追踪
+4. **P1：继续观察结构热点**
+   - `api/app/services/runtime.py`
+   - `api/app/services/published_invocation_audit.py`
+   - `web/components/run-diagnostics-panel.tsx`

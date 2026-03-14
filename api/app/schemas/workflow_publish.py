@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.run import RunDetail
+from app.schemas.run_views import RunCallbackTicketItem
 from app.schemas.workflow import (
     WorkflowPublishedEndpointCachePolicy,
     WorkflowPublishedEndpointRateLimitPolicy,
@@ -439,3 +440,29 @@ class PublishedEndpointCacheInventoryItem(BaseModel):
 class PublishedEndpointCacheInventoryResponse(BaseModel):
     summary: PublishedEndpointCacheInventorySummary
     items: list[PublishedEndpointCacheInventoryItem] = Field(default_factory=list)
+
+
+class PublishedEndpointInvocationRunReference(BaseModel):
+    id: str
+    status: str
+    current_node_id: str | None = None
+    error_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class PublishedEndpointInvocationCacheReference(BaseModel):
+    cache_status: PublishedEndpointInvocationCacheStatus = "bypass"
+    cache_key: str | None = None
+    cache_entry_id: str | None = None
+    inventory_entry: PublishedEndpointCacheInventoryItem | None = None
+
+
+class PublishedEndpointInvocationDetailResponse(BaseModel):
+    invocation: PublishedEndpointInvocationItem
+    run: PublishedEndpointInvocationRunReference | None = None
+    callback_tickets: list[RunCallbackTicketItem] = Field(default_factory=list)
+    cache: PublishedEndpointInvocationCacheReference = Field(
+        default_factory=PublishedEndpointInvocationCacheReference
+    )

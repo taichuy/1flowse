@@ -216,6 +216,12 @@ class WorkflowPublishedInvocation(Base):
         nullable=False,
         index=True,
     )
+    cache_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    cache_entry_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workflow_published_cache_entries.id"),
+        nullable=True,
+        index=True,
+    )
     api_key_id: Mapped[str | None] = mapped_column(
         ForeignKey("workflow_published_api_keys.id"),
         nullable=True,

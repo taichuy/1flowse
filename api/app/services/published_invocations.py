@@ -225,6 +225,8 @@ class PublishedInvocationService(PublishedInvocationAuditMixin):
         input_payload: dict,
         status: PublishedInvocationStatus,
         cache_status: PublishedInvocationCacheStatus = "bypass",
+        cache_key: str | None = None,
+        cache_entry_id: str | None = None,
         request_surface_override: PublishedInvocationRequestSurface | None = None,
         api_key_id: str | None = None,
         run_id: str | None = None,
@@ -256,6 +258,8 @@ class PublishedInvocationService(PublishedInvocationAuditMixin):
             request_source=request_source,
             status=status,
             cache_status=cache_status,
+            cache_key=cache_key,
+            cache_entry_id=cache_entry_id,
             api_key_id=api_key_id,
             run_id=run_id,
             run_status=run_status,
@@ -273,6 +277,22 @@ class PublishedInvocationService(PublishedInvocationAuditMixin):
         db.add(record)
         db.flush()
         return record
+
+    def get_for_binding(
+        self,
+        db: Session,
+        *,
+        workflow_id: str,
+        binding_id: str,
+        invocation_id: str,
+    ) -> WorkflowPublishedInvocation | None:
+        return db.scalar(
+            select(WorkflowPublishedInvocation).where(
+                WorkflowPublishedInvocation.id == invocation_id,
+                WorkflowPublishedInvocation.workflow_id == workflow_id,
+                WorkflowPublishedInvocation.binding_id == binding_id,
+            )
+        )
 
     def list_for_binding(
         self,

@@ -532,6 +532,8 @@ class PublishedEndpointGatewayService:
         blueprint_record = None
         response_payload = None
         cache_status = "bypass"
+        cache_key: str | None = None
+        cache_entry_id: str | None = None
         response_preview_payload = None
         stream_run_payload: dict | None = None
 
@@ -605,6 +607,8 @@ class PublishedEndpointGatewayService:
             if cache_hit is not None:
                 response_payload = cache_hit.response_payload
                 cache_status = "hit"
+                cache_key = cache_hit.cache_key
+                cache_entry_id = cache_hit.entry_id
                 executed_run_status = "succeeded"
             else:
                 artifacts = self._runtime_service.execute_compiled_workflow(
@@ -631,12 +635,15 @@ class PublishedEndpointGatewayService:
                 if cache_enabled and self._should_store_cached_response(
                     response_payload=response_payload,
                 ):
-                    self._cache_service.store_response(
+                    cache_entry = self._cache_service.store_response(
                         db,
                         binding=binding,
                         input_payload=cache_input_payload,
                         response_payload=response_payload,
                     )
+                    if cache_entry is not None:
+                        cache_key = cache_entry.cache_key
+                        cache_entry_id = cache_entry.id
                 elif cache_enabled and cache_status != "hit":
                     cache_status = "bypass"
         except PublishedEndpointGatewayError as exc:
@@ -653,6 +660,8 @@ class PublishedEndpointGatewayService:
                 input_payload=request_preview_payload,
                 status="rejected" if invocation_error.status_code < 500 else "failed",
                 cache_status=cache_status,
+                cache_key=cache_key,
+                cache_entry_id=cache_entry_id,
                 request_surface_override=request_surface_override,
                 api_key_id=authenticated_key.id if authenticated_key is not None else None,
                 error_message=str(invocation_error),
@@ -691,6 +700,8 @@ class PublishedEndpointGatewayService:
             input_payload=request_preview_payload,
             status="failed" if recorded_run_status == "failed" else "succeeded",
             cache_status=cache_status,
+            cache_key=cache_key,
+            cache_entry_id=cache_entry_id,
             request_surface_override=request_surface_override,
             api_key_id=authenticated_key.id if authenticated_key is not None else None,
             run_id=recorded_run_id,

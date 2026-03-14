@@ -25,6 +25,7 @@ class PublishedEndpointCachePolicy:
 
 @dataclass(frozen=True)
 class PublishedEndpointCacheHit:
+    entry_id: str
     cache_key: str
     response_payload: dict
 
@@ -148,6 +149,7 @@ class PublishedEndpointCacheService:
         db.add(entry)
         db.flush()
         return PublishedEndpointCacheHit(
+            entry_id=entry.id,
             cache_key=cache_key,
             response_payload=dict(entry.response_payload or {}),
         )
@@ -280,6 +282,42 @@ class PublishedEndpointCacheService:
             )
             for record in records
         ]
+
+    def get_inventory_item(
+        self,
+        db: Session,
+        *,
+        binding: WorkflowPublishedEndpoint,
+        cache_entry_id: str,
+        now: datetime | None = None,
+    ) -> PublishedEndpointCacheInventoryItem | None:
+        policy = self._resolve_policy(binding)
+        if policy is None:
+            return None
+
+        effective_now = now or _utcnow()
+        self._delete_expired_entries(db, binding_id=binding.id, now=effective_now)
+        record = db.scalar(
+            select(WorkflowPublishedCacheEntry).where(
+                WorkflowPublishedCacheEntry.id == cache_entry_id,
+                WorkflowPublishedCacheEntry.binding_id == binding.id,
+                WorkflowPublishedCacheEntry.expires_at > effective_now,
+            )
+        )
+        if record is None:
+            return None
+
+        return PublishedEndpointCacheInventoryItem(
+            id=record.id,
+            binding_id=record.binding_id,
+            cache_key=record.cache_key,
+            response_preview=_build_payload_preview(dict(record.response_payload or {})),
+            hit_count=record.hit_count,
+            last_hit_at=record.last_hit_at,
+            expires_at=record.expires_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
 
     def build_cache_key(
         self,

@@ -1,10 +1,14 @@
 import json
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.models.workflow import WorkflowPublishedCacheEntry
+from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.models.workflow import WorkflowPublishedCacheEntry, WorkflowPublishedEndpoint
 from app.services.plugin_runtime import PluginToolDefinition, reset_plugin_registry
+from app.services.published_invocations import PublishedInvocationService
 from tests.workflow_publish_helpers import (
     publishable_definition as _publishable_definition,
     waiting_agent_publishable_definition as _waiting_agent_publishable_definition,
@@ -1247,6 +1251,207 @@ def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
     assert body["summary"]["last_status"] == "rejected"
     assert body["items"][0]["status"] == "rejected"
     assert body["items"][0]["run_id"] is None
+
+
+def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Invocation Detail Workflow",
+            "definition": _publishable_definition(
+                cache={
+                    "ttl": 300,
+                    "maxEntries": 8,
+                    "varyBy": ["question"],
+                }
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding = bindings_response.json()[0]
+
+    binding_record = sqlite_session.get(WorkflowPublishedEndpoint, binding["id"])
+    assert binding_record is not None
+
+    now = datetime.now(UTC)
+    run = Run(
+        id="run-publish-detail",
+        workflow_id=workflow_id,
+        workflow_version=binding_record.workflow_version,
+        compiled_blueprint_id=binding_record.compiled_blueprint_id,
+        status="waiting",
+        input_payload={"question": "hello"},
+        checkpoint_payload={},
+        current_node_id="tool_wait",
+        started_at=now,
+        created_at=now,
+    )
+    node_run = NodeRun(
+        id="node-run-publish-detail",
+        run_id=run.id,
+        node_id="tool_wait",
+        node_name="Tool Wait",
+        node_type="tool",
+        status="waiting",
+        phase="waiting_callback",
+        retry_count=0,
+        input_payload={"question": "hello"},
+        output_payload=None,
+        checkpoint_payload={
+            "scheduled_resume": {
+                "delay_seconds": 30,
+                "reason": "callback pending",
+                "source": "callback_ticket_monitor",
+                "waiting_status": "waiting_callback",
+            }
+        },
+        working_context={},
+        evidence_context=None,
+        artifact_refs=[],
+        error_message=None,
+        waiting_reason="callback pending",
+        started_at=now,
+        phase_started_at=now,
+        finished_at=None,
+        created_at=now,
+    )
+    callback_ticket = RunCallbackTicket(
+        id="cb-publish-detail",
+        run_id=run.id,
+        node_run_id=node_run.id,
+        tool_call_id=None,
+        tool_id="native.search",
+        tool_call_index=0,
+        waiting_status="waiting_callback",
+        status="pending",
+        reason="callback pending",
+        callback_payload=None,
+        created_at=now,
+        expires_at=now + timedelta(minutes=5),
+    )
+    cache_entry = WorkflowPublishedCacheEntry(
+        id="cache-entry-publish-detail",
+        workflow_id=workflow_id,
+        binding_id=binding_record.id,
+        endpoint_id=binding_record.endpoint_id,
+        cache_key="cache-key-publish-detail",
+        response_payload={
+            "binding_id": binding_record.id,
+            "answer": "cached detail",
+        },
+        hit_count=2,
+        last_hit_at=now,
+        expires_at=now + timedelta(minutes=10),
+        created_at=now,
+        updated_at=now,
+    )
+    sqlite_session.add(run)
+    sqlite_session.add(node_run)
+    sqlite_session.add(callback_ticket)
+    sqlite_session.add(cache_entry)
+
+    invocation_service = PublishedInvocationService()
+    invocation = invocation_service.record_invocation(
+        sqlite_session,
+        binding=binding_record,
+        request_source="workflow",
+        input_payload={"question": "hello"},
+        status="succeeded",
+        cache_status="hit",
+        cache_key=cache_entry.cache_key,
+        cache_entry_id=cache_entry.id,
+        run_id=run.id,
+        run_status=run.status,
+        response_payload={"answer": "cached detail"},
+        started_at=now,
+        finished_at=now,
+    )
+    sqlite_session.commit()
+    expected_now = now.replace(tzinfo=None).isoformat()
+    expected_callback_expires_at = (now + timedelta(minutes=5)).replace(tzinfo=None).isoformat()
+    expected_cache_expires_at = (now + timedelta(minutes=10)).replace(tzinfo=None).isoformat()
+
+    detail_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}"
+    )
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["invocation"]["id"] == invocation.id
+    assert detail_body["invocation"]["run_id"] == run.id
+    assert detail_body["invocation"]["run_status"] == "waiting"
+    assert detail_body["invocation"]["run_waiting_reason"] == "callback pending"
+    assert detail_body["invocation"]["run_waiting_lifecycle"] == {
+        "node_run_id": node_run.id,
+        "node_status": "waiting",
+        "waiting_reason": "callback pending",
+        "callback_ticket_count": 1,
+        "callback_ticket_status_counts": {"pending": 1},
+        "scheduled_resume_delay_seconds": 30.0,
+        "scheduled_resume_reason": "callback pending",
+        "scheduled_resume_source": "callback_ticket_monitor",
+        "scheduled_waiting_status": "waiting_callback",
+    }
+    assert detail_body["run"] == {
+        "id": run.id,
+        "status": "waiting",
+        "current_node_id": "tool_wait",
+        "error_message": None,
+        "created_at": expected_now,
+        "started_at": expected_now,
+        "finished_at": None,
+    }
+    assert detail_body["callback_tickets"] == [
+        {
+            "ticket": callback_ticket.id,
+            "run_id": run.id,
+            "node_run_id": node_run.id,
+            "tool_call_id": None,
+            "tool_id": "native.search",
+            "tool_call_index": 0,
+            "waiting_status": "waiting_callback",
+            "status": "pending",
+            "reason": "callback pending",
+            "callback_payload": None,
+            "created_at": expected_now,
+            "expires_at": expected_callback_expires_at,
+            "consumed_at": None,
+            "canceled_at": None,
+            "expired_at": None,
+        }
+    ]
+    assert detail_body["cache"] == {
+        "cache_status": "hit",
+        "cache_key": cache_entry.cache_key,
+        "cache_entry_id": cache_entry.id,
+        "inventory_entry": {
+            "id": cache_entry.id,
+            "binding_id": binding_record.id,
+            "cache_key": cache_entry.cache_key,
+            "response_preview": {
+                "key_count": 2,
+                "keys": ["answer", "binding_id"],
+                "sample": {
+                    "answer": "cached detail",
+                    "binding_id": binding_record.id,
+                },
+            },
+            "hit_count": 2,
+            "last_hit_at": expected_now,
+            "expires_at": expected_cache_expires_at,
+            "created_at": expected_now,
+            "updated_at": expected_now,
+        },
+    }
 
 
 def test_create_workflow_persists_publish_binding_rate_limit_policy(
