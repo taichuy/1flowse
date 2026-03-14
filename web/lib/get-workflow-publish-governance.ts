@@ -1,9 +1,11 @@
 import {
   getPublishedEndpointApiKeys,
   getPublishedEndpointCacheInventory,
+  getPublishedEndpointInvocationDetail,
   getPublishedEndpointInvocations,
   type PublishedEndpointApiKeyItem,
   type PublishedEndpointCacheInventoryResponse,
+  type PublishedEndpointInvocationDetailResponse,
   type PublishedEndpointInvocationRequestSurface,
   type PublishedEndpointInvocationListResponse,
   type WorkflowPublishedEndpointItem
@@ -13,6 +15,7 @@ export type WorkflowPublishGovernanceSnapshot = {
   cacheInventories: Record<string, PublishedEndpointCacheInventoryResponse | null>;
   apiKeysByBinding: Record<string, PublishedEndpointApiKeyItem[]>;
   invocationAuditsByBinding: Record<string, PublishedEndpointInvocationListResponse | null>;
+  invocationDetailsByBinding: Record<string, PublishedEndpointInvocationDetailResponse | null>;
   rateLimitWindowAuditsByBinding: Record<
     string,
     PublishedEndpointInvocationListResponse | null
@@ -21,6 +24,7 @@ export type WorkflowPublishGovernanceSnapshot = {
 
 type WorkflowPublishInvocationFilter = {
   bindingId: string;
+  invocationId?: string;
   status?: "succeeded" | "failed" | "rejected";
   requestSource?: "workflow" | "alias" | "path";
   requestSurface?: PublishedEndpointInvocationRequestSurface;
@@ -50,6 +54,7 @@ export async function getWorkflowPublishGovernanceSnapshot(
     cacheInventoryEntries,
     apiKeyEntries,
     invocationAuditEntries,
+    invocationDetailEntries,
     rateLimitWindowEntries
   ] = await Promise.all([
     Promise.all(
@@ -94,6 +99,19 @@ export async function getWorkflowPublishGovernanceSnapshot(
       ] as const)
     ),
     Promise.all(
+      bindings.map(async (binding) => [
+        binding.id,
+        options?.activeInvocationFilter?.bindingId === binding.id &&
+        options.activeInvocationFilter.invocationId
+          ? await getPublishedEndpointInvocationDetail(
+              workflowId,
+              binding.id,
+              options.activeInvocationFilter.invocationId
+            )
+          : null
+      ] as const)
+    ),
+    Promise.all(
       bindings
         .filter((binding) => binding.rate_limit_policy)
         .map(async (binding) => [
@@ -112,6 +130,7 @@ export async function getWorkflowPublishGovernanceSnapshot(
     cacheInventories: toRecord(cacheInventoryEntries),
     apiKeysByBinding: toRecord(apiKeyEntries),
     invocationAuditsByBinding: toRecord(invocationAuditEntries),
+    invocationDetailsByBinding: toRecord(invocationDetailEntries),
     rateLimitWindowAuditsByBinding: toRecord(rateLimitWindowEntries)
   };
 }

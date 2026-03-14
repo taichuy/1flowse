@@ -114,6 +114,9 @@ export default async function WorkflowEditorPage({
   const requestedReasonCode = firstSearchValue(
     resolvedSearchParams.publish_reason_code
   );
+  const requestedInvocationId = firstSearchValue(
+    resolvedSearchParams.publish_invocation
+  );
   const publishTimeWindow = resolvePublishTimeWindow(
     firstSearchValue(resolvedSearchParams.publish_window)
   );
@@ -158,9 +161,15 @@ export default async function WorkflowEditorPage({
     cacheInventories,
     apiKeysByBinding,
     invocationAuditsByBinding,
+    invocationDetailsByBinding,
     rateLimitWindowAuditsByBinding
   } = await getWorkflowPublishGovernanceSnapshot(workflow.id, publishedEndpoints, {
-    activeInvocationFilter
+    activeInvocationFilter: activeInvocationFilter
+      ? {
+          ...activeInvocationFilter,
+          invocationId: requestedInvocationId?.trim() ? requestedInvocationId.trim() : undefined
+        }
+      : null
   });
 
   return (
@@ -180,6 +189,8 @@ export default async function WorkflowEditorPage({
         cacheInventories={cacheInventories}
         apiKeysByBinding={apiKeysByBinding}
         invocationAuditsByBinding={invocationAuditsByBinding}
+        invocationDetailsByBinding={invocationDetailsByBinding}
+        selectedInvocationId={requestedInvocationId?.trim() ? requestedInvocationId.trim() : null}
         rateLimitWindowAuditsByBinding={rateLimitWindowAuditsByBinding}
         activeInvocationFilter={{
           bindingId: activeInvocationFilter?.bindingId ?? null,

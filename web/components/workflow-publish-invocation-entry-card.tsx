@@ -12,6 +12,8 @@ type PublishedInvocationItem = PublishedEndpointInvocationListResponse["items"][
 
 type WorkflowPublishInvocationEntryCardProps = {
   item: PublishedInvocationItem;
+  detailHref: string;
+  detailActive: boolean;
 };
 
 function formatMetricCounts(metrics: Record<string, number> | null | undefined): string {
@@ -52,12 +54,10 @@ function hasInvocationDrilldown(item: PublishedInvocationItem): boolean {
   );
 }
 
-function formatJsonPreview(value: unknown): string {
-  return JSON.stringify(value ?? null, null, 2);
-}
-
 export function WorkflowPublishInvocationEntryCard({
-  item
+  item,
+  detailHref,
+  detailActive
 }: WorkflowPublishInvocationEntryCardProps) {
   return (
     <article className="payload-card compact-card">
@@ -149,29 +149,14 @@ export function WorkflowPublishInvocationEntryCard({
       ) : null}
       {item.error_message ? <p className="section-copy entry-copy">error: {item.error_message}</p> : null}
       {hasInvocationDrilldown(item) ? (
-        <details className="entry-card compact-card">
-          <summary>单次 invocation drilldown</summary>
-          <p className="section-copy entry-copy">
-            继续展开可直接查看 request / response preview 与 waiting 生命周期细节，减少在 publish 面板和 run 详情之间来回跳转。
-          </p>
-          <div className="publish-meta-grid">
-            <div>
-              <strong>Request preview</strong>
-              <pre className="trace-preview">{formatJsonPreview(item.request_preview)}</pre>
-            </div>
-            <div>
-              <strong>Response preview</strong>
-              <pre className="trace-preview">{formatJsonPreview(item.response_preview)}</pre>
-            </div>
-          </div>
-          {item.run_waiting_lifecycle ? (
-            <p className="section-copy entry-copy">
-              waiting lifecycle：reason {item.run_waiting_lifecycle.waiting_reason ?? "n/a"} · scheduled reason{" "}
-              {item.run_waiting_lifecycle.scheduled_resume_reason ?? "n/a"} · finished at{" "}
-              {formatTimestamp(item.finished_at)}。
-            </p>
-          ) : null}
-        </details>
+        <div className="publish-invocation-actions">
+          <Link className="inline-link" href={detailHref}>
+            {detailActive ? "查看当前详情" : "打开 invocation detail"}
+          </Link>
+          <span className="section-copy entry-copy">
+            详情面板会补 run / callback ticket / cache 三类稳定排障入口。
+          </span>
+        </div>
       ) : null}
     </article>
   );

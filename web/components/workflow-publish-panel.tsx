@@ -2,6 +2,7 @@ import { WorkflowPublishBindingCard } from "@/components/workflow-publish-bindin
 import type {
   PublishedEndpointApiKeyItem,
   PublishedEndpointCacheInventoryResponse,
+  PublishedEndpointInvocationDetailResponse,
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
@@ -14,6 +15,8 @@ type WorkflowPublishPanelProps = {
   cacheInventories: Record<string, PublishedEndpointCacheInventoryResponse | null>;
   apiKeysByBinding: Record<string, PublishedEndpointApiKeyItem[]>;
   invocationAuditsByBinding: Record<string, PublishedEndpointInvocationListResponse | null>;
+  invocationDetailsByBinding: Record<string, PublishedEndpointInvocationDetailResponse | null>;
+  selectedInvocationId: string | null;
   rateLimitWindowAuditsByBinding: Record<
     string,
     PublishedEndpointInvocationListResponse | null
@@ -27,6 +30,8 @@ export function WorkflowPublishPanel({
   cacheInventories,
   apiKeysByBinding,
   invocationAuditsByBinding,
+  invocationDetailsByBinding,
+  selectedInvocationId,
   rateLimitWindowAuditsByBinding,
   activeInvocationFilter
 }: WorkflowPublishPanelProps) {
@@ -99,6 +104,10 @@ export function WorkflowPublishPanel({
                 cacheInventory={cacheInventories[binding.id] ?? null}
                 apiKeys={apiKeysByBinding[binding.id] ?? []}
                 invocationAudit={invocationAuditsByBinding[binding.id] ?? null}
+                selectedInvocationId={
+                  activeInvocationFilter.bindingId === binding.id ? selectedInvocationId : null
+                }
+                selectedInvocationDetail={invocationDetailsByBinding[binding.id] ?? null}
                 rateLimitWindowAudit={rateLimitWindowAuditsByBinding[binding.id] ?? null}
                 activeInvocationFilter={
                   activeInvocationFilter.bindingId === binding.id

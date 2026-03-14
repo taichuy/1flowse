@@ -907,6 +907,30 @@ a {
   margin: 10px 0 16px;
 }
 
+.publish-invocation-detail-panel {
+  margin-bottom: 16px;
+}
+
+.publish-invocation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.trace-preview {
+  margin: 12px 0 0;
+  padding: 14px;
+  border-radius: 18px;
+  overflow-x: auto;
+  background: rgba(28, 25, 21, 0.92);
+  color: #fff8ef;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
 .roadmap {
   display: grid;
   gap: 18px;

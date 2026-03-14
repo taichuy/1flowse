@@ -1,5 +1,6 @@
 import type {
   PublishedEndpointApiKeyItem,
+  PublishedEndpointInvocationDetailResponse,
   PublishedEndpointInvocationFacetItem,
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
@@ -18,6 +19,10 @@ export type WorkflowPublishActivityPanelProps = {
   binding: WorkflowPublishedEndpointItem;
   apiKeys: PublishedEndpointApiKeyItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
+  selectedInvocationId: string | null;
+  selectedInvocationDetail: PublishedEndpointInvocationDetailResponse | null;
+  selectedInvocationDetailHref: string | null;
+  clearInvocationDetailHref: string | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
 };

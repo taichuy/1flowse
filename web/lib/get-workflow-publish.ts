@@ -164,6 +164,49 @@ export type PublishedEndpointInvocationListResponse = {
   items: PublishedEndpointInvocationItem[];
 };
 
+export type PublishedEndpointInvocationRunReference = {
+  id: string;
+  status: string;
+  current_node_id?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+};
+
+export type PublishedEndpointInvocationCallbackTicketItem = {
+  id: string;
+  run_id: string;
+  node_run_id: string;
+  source_type: string;
+  ticket_type: string;
+  status: string;
+  external_token?: string | null;
+  waiting_reason?: string | null;
+  request_payload?: Record<string, unknown> | null;
+  response_payload?: Record<string, unknown> | null;
+  error_message?: string | null;
+  requested_at: string;
+  resolved_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PublishedEndpointInvocationCacheReference = {
+  cache_status: PublishedEndpointInvocationCacheStatus;
+  cache_key?: string | null;
+  cache_entry_id?: string | null;
+  inventory_entry?: PublishedEndpointCacheInventoryItem | null;
+};
+
+export type PublishedEndpointInvocationDetailResponse = {
+  invocation: PublishedEndpointInvocationItem;
+  run?: PublishedEndpointInvocationRunReference | null;
+  callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
+  cache: PublishedEndpointInvocationCacheReference;
+};
+
 export type PublishedEndpointCacheInventorySummary = {
   enabled: boolean;
   ttl?: number | null;
@@ -400,6 +443,31 @@ export async function getPublishedEndpointInvocations(
     }
 
     return (await response.json()) as PublishedEndpointInvocationListResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function getPublishedEndpointInvocationDetail(
+  workflowId: string,
+  bindingId: string,
+  invocationId: string
+): Promise<PublishedEndpointInvocationDetailResponse | null> {
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+        workflowId
+      )}/published-endpoints/${encodeURIComponent(bindingId)}/invocations/${encodeURIComponent(invocationId)}`,
+      {
+        cache: "no-store"
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as PublishedEndpointInvocationDetailResponse;
   } catch {
     return null;
   }

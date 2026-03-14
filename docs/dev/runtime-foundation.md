@@ -1541,3 +1541,42 @@ docker compose up -d --build
    - `api/app/services/runtime.py`
    - `api/app/services/published_invocation_audit.py`
    - `web/components/run-diagnostics-panel.tsx`
+
+## 2026-03-14 Publish Panel Invocation Detail Bridge 事实
+
+### 背景
+
+- 提交 `344beba feat: add published invocation detail drilldown` 已补齐后端 invocation detail API，但 workflow 页 publish panel 仍只消费 binding 级 activity/list，前端没有承接到单次 invocation 明细。
+- 这与 `run / callback ticket / cache` 作为发布治理稳定排障入口的目标不一致，因此本轮直接承接上一轮 runtime foundation 写明的 P0，而不是扩散到新的功能面。
+
+### 当前事实
+
+- workflow 页现在支持通过查询参数 `publish_invocation` 选中单次 invocation，并在服务端渲染时拉取对应 detail：
+  - 页面入口：`web/app/workflows/[workflowId]/page.tsx`
+  - snapshot 聚合：`web/lib/get-workflow-publish-governance.ts`
+  - detail fetch/type：`web/lib/get-workflow-publish.ts`
+- 新增独立面板 `web/components/workflow-publish-invocation-detail-panel.tsx`，统一展示：
+  - run reference / run status / current node / timestamps
+  - callback tickets
+  - cache key / cache entry / inventory entry
+  - request / response preview
+- `web/components/workflow-publish-invocation-entry-card.tsx` 不再承担内联 detail 展开，而是退回 list card 职责，通过显式链接打开 invocation detail；这样 detail 事实继续由后端 detail API 提供，避免前端在卡片层重复拼装。
+- 当前这轮没有改变后端发布契约和 runtime 事实，属于前端承接与组件职责收口。
+- 从当前仓库整体看：
+  - 基础框架已具备继续推进产品完整度的条件，但仍未到“只剩界面设计”的阶段。
+  - 架构解耦方向正确，但 `api/app/services/published_gateway.py`、`api/app/services/runtime.py`、`api/app/services/published_invocation_audit.py`、`web/components/run-diagnostics-panel.tsx` 仍是下一批结构热点。
+
+### 验证
+
+- `pnpm --dir web exec tsc --noEmit`
+
+### 本轮补充后的下一步规划
+
+1. **P0：继续拆 `api/app/services/published_gateway.py`**
+   - 优先按 protocol surface / response builder / audit handoff 边界分层，控制 publish 主链路复杂度。
+2. **P1：补流式 `stream_options.include_usage` 支持**
+   - 让 `AICallRecord` 与后续成本分析拿到完整 token usage，而不只停留在 latency。
+3. **P1：治理前端结构热点**
+   - 优先拆 `web/components/run-diagnostics-panel.tsx`，避免调试面板继续膨胀。
+4. **P1：继续补节点配置完整度**
+   - 把 provider / model / 参数配置做成更结构化的交互层。

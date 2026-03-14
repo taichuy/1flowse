@@ -5,6 +5,7 @@ import { WorkflowPublishLifecycleForm } from "@/components/workflow-publish-life
 import type {
   PublishedEndpointApiKeyItem,
   PublishedEndpointCacheInventoryResponse,
+  PublishedEndpointInvocationDetailResponse,
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
@@ -18,6 +19,8 @@ type WorkflowPublishBindingCardProps = {
   cacheInventory: PublishedEndpointCacheInventoryResponse | null;
   apiKeys: PublishedEndpointApiKeyItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
+  selectedInvocationId: string | null;
+  selectedInvocationDetail: PublishedEndpointInvocationDetailResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
 };
@@ -28,6 +31,8 @@ export function WorkflowPublishBindingCard({
   cacheInventory,
   apiKeys,
   invocationAudit,
+  selectedInvocationId,
+  selectedInvocationDetail,
   rateLimitWindowAudit,
   activeInvocationFilter
 }: WorkflowPublishBindingCardProps) {
@@ -131,6 +136,10 @@ export function WorkflowPublishBindingCard({
         binding={binding}
         apiKeys={apiKeys}
         invocationAudit={invocationAudit}
+        selectedInvocationId={selectedInvocationId}
+        selectedInvocationDetail={selectedInvocationDetail}
+        selectedInvocationDetailHref={null}
+        clearInvocationDetailHref={null}
         rateLimitWindowAudit={rateLimitWindowAudit}
         activeInvocationFilter={activeInvocationFilter}
       />

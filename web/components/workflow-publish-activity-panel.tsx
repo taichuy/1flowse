@@ -9,16 +9,60 @@ import {
   WorkflowPublishActivityInsights
 } from "@/components/workflow-publish-activity-panel-sections";
 
+function buildInvocationDetailHref(
+  workflowId: string,
+  bindingId: string,
+  activeInvocationFilter: WorkflowPublishActivityPanelProps["activeInvocationFilter"],
+  invocationId?: string | null
+) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("publish_binding", bindingId);
+  if (activeInvocationFilter?.status) {
+    searchParams.set("publish_status", activeInvocationFilter.status);
+  }
+  if (activeInvocationFilter?.requestSource) {
+    searchParams.set("publish_request_source", activeInvocationFilter.requestSource);
+  }
+  if (activeInvocationFilter?.requestSurface) {
+    searchParams.set("publish_request_surface", activeInvocationFilter.requestSurface);
+  }
+  if (activeInvocationFilter?.cacheStatus) {
+    searchParams.set("publish_cache_status", activeInvocationFilter.cacheStatus);
+  }
+  if (activeInvocationFilter?.runStatus) {
+    searchParams.set("publish_run_status", activeInvocationFilter.runStatus);
+  }
+  if (activeInvocationFilter?.apiKeyId) {
+    searchParams.set("publish_api_key_id", activeInvocationFilter.apiKeyId);
+  }
+  if (activeInvocationFilter?.reasonCode) {
+    searchParams.set("publish_reason_code", activeInvocationFilter.reasonCode);
+  }
+  if (activeInvocationFilter?.timeWindow && activeInvocationFilter.timeWindow !== "all") {
+    searchParams.set("publish_window", activeInvocationFilter.timeWindow);
+  }
+  if (invocationId) {
+    searchParams.set("publish_invocation", invocationId);
+  }
+  return `/workflows/${encodeURIComponent(workflowId)}?${searchParams.toString()}`;
+}
+
 export function WorkflowPublishActivityPanel({
   workflowId,
   binding,
   apiKeys,
   invocationAudit,
+  selectedInvocationId,
+  selectedInvocationDetail,
+  selectedInvocationDetailHref,
+  clearInvocationDetailHref,
   rateLimitWindowAudit,
   activeInvocationFilter
 }: WorkflowPublishActivityPanelProps) {
   const activeFilterChips = buildActiveFilterChips(activeInvocationFilter, apiKeys);
   const runStatusOptions = buildRunStatusOptions(invocationAudit?.facets.run_status_counts);
+  const clearHref =
+    clearInvocationDetailHref ?? buildInvocationDetailHref(workflowId, binding.id, activeInvocationFilter);
 
   return (
     <div className="entry-card compact-card">
@@ -52,7 +96,17 @@ export function WorkflowPublishActivityPanel({
         activeTimeWindow={activeInvocationFilter?.timeWindow ?? null}
       />
 
-      <WorkflowPublishActivityDetails invocationAudit={invocationAudit} />
+      <WorkflowPublishActivityDetails
+        invocationAudit={invocationAudit}
+        selectedInvocationId={selectedInvocationId}
+        selectedInvocationDetail={selectedInvocationDetail}
+        buildInvocationDetailHref={(invocationId) =>
+          selectedInvocationId === invocationId && selectedInvocationDetailHref
+            ? selectedInvocationDetailHref
+            : buildInvocationDetailHref(workflowId, binding.id, activeInvocationFilter, invocationId)
+        }
+        clearInvocationDetailHref={clearHref}
+      />
     </div>
   );
 }

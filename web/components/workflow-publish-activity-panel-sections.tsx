@@ -1,6 +1,10 @@
 import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
+import { WorkflowPublishInvocationDetailPanel } from "@/components/workflow-publish-invocation-detail-panel";
 import { WorkflowPublishInvocationEntryCard } from "@/components/workflow-publish-invocation-entry-card";
-import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
+import type {
+  PublishedEndpointInvocationDetailResponse,
+  PublishedEndpointInvocationListResponse
+} from "@/lib/get-workflow-publish";
 import {
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
@@ -185,9 +189,19 @@ export function WorkflowPublishActivityInsights({
 
 type WorkflowPublishActivityDetailsProps = {
   invocationAudit: PublishedEndpointInvocationListResponse | null;
+  selectedInvocationId: string | null;
+  selectedInvocationDetail: PublishedEndpointInvocationDetailResponse | null;
+  buildInvocationDetailHref: (invocationId: string) => string;
+  clearInvocationDetailHref: string | null;
 };
 
-export function WorkflowPublishActivityDetails({ invocationAudit }: WorkflowPublishActivityDetailsProps) {
+export function WorkflowPublishActivityDetails({
+  invocationAudit,
+  selectedInvocationId,
+  selectedInvocationDetail,
+  buildInvocationDetailHref,
+  clearInvocationDetailHref
+}: WorkflowPublishActivityDetailsProps) {
   const items = invocationAudit?.items ?? [];
   const apiKeyUsage = invocationAudit?.facets.api_key_usage ?? [];
   const failureReasons = invocationAudit?.facets.recent_failure_reasons ?? [];
@@ -243,11 +257,24 @@ export function WorkflowPublishActivityDetails({ invocationAudit }: WorkflowPubl
       ) : null}
 
       {items.length ? (
-        <div className="publish-cache-list">
-          {items.map((item) => (
-            <WorkflowPublishInvocationEntryCard item={item} key={item.id} />
-          ))}
-        </div>
+        <>
+          {selectedInvocationDetail && clearInvocationDetailHref ? (
+            <WorkflowPublishInvocationDetailPanel
+              clearHref={clearInvocationDetailHref}
+              detail={selectedInvocationDetail}
+            />
+          ) : null}
+          <div className="publish-cache-list">
+            {items.map((item) => (
+              <WorkflowPublishInvocationEntryCard
+                detailActive={selectedInvocationId === item.id}
+                detailHref={buildInvocationDetailHref(item.id)}
+                item={item}
+                key={item.id}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <p className="empty-state compact">当前还没有 invocation 审计记录。endpoint 发布后，外部入口命中会在这里留下治理事实。</p>
       )}
