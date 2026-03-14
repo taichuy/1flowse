@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.routes.credentials import router as credential_router
 from app.api.routes.health import router as health_router
 from app.api.routes.plugins import router as plugin_router
 from app.api.routes.published_endpoint_activity import router as published_endpoint_activity_router
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     )
     application.include_router(health_router)
     application.include_router(published_gateway_router)
+    application.include_router(credential_router, prefix="/api")
     application.include_router(plugin_router, prefix="/api")
     application.include_router(system_router, prefix="/api")
     application.include_router(workflow_router, prefix="/api")

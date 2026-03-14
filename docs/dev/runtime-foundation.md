@@ -31,6 +31,7 @@
 - `api/migrations/versions/20260312_0016_publish_endpoint_rate_limits.py`
 - `api/migrations/versions/20260312_0017_publish_endpoint_cache.py`
 - `api/migrations/versions/20260312_0018_publish_invocation_cache_status.py`
+- `api/migrations/versions/20260314_0019_credential_store.py`
 
 当前迁移会创建以下表：
 
@@ -46,6 +47,7 @@
 - `workflow_published_api_keys`
 - `workflow_published_invocations`
 - `workflow_published_cache_entries`
+- `credentials`
 
 ### 2. Docker 自动迁移
 
@@ -1210,3 +1212,50 @@ docker compose up -d --build
 2. 继续深化 publish governance：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口。
 3. 若 publish surface 因 streaming 与治理继续膨胀，优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 837 行），避免新的 God object 转移到发布层。
 4. 继续治理后端结构热点：`api/app/services/published_invocations.py`（1141 行）已是当前最大服务文件，若继续补长期趋势与更多筛选维度，应优先拆 query/filtering 与 audit aggregation。
+
+## 2026-03-14 Credential Store 凭证管理基础设施
+
+- 这轮承接产品设计中"凭证加密存储"的非功能需求（`product-design.md` §12.1），以及技术补充中"凭证管理安全"的设计（`technical-design-supplement.md` §16.2.2），落地最小可用的凭证管理基础设施。
+- 当前实现采用 **Fernet (AES-128-CBC + HMAC-SHA256)** 对称加密，而不是设计文档中建议的 AES-256-GCM。选择 Fernet 的原因是：标准库级别的 Python 支持（`cryptography.fernet`）、自动处理 IV/MAC/版本头、无需手动管理 nonce，且安全性对首版 MVP 足够。后续若需升级到 AES-256-GCM 可替换 `CredentialEncryptionService` 内部实现，外部接口不变。
+- 加密密钥通过环境变量 `SEVENFLOWS_CREDENTIAL_ENCRYPTION_KEY` 配置，默认空字符串（未配置时加密/解密会报错提示生成密钥命令）。
+
+### 已落地文件
+
+| 文件 | 职责 |
+|------|------|
+| `api/app/models/credential.py` | `Credential` ORM 模型：id, name, credential_type, encrypted_data, description, status, last_used_at, revoked_at, created_at, updated_at |
+| `api/app/services/credential_encryption.py` | `CredentialEncryptionService`：Fernet 加密/解密 dict 数据 |
+| `api/app/services/credential_store.py` | `CredentialStore`：CRUD + revoke + decrypt + get_data_keys + resolve_credential_refs |
+| `api/app/schemas/credential.py` | Pydantic schemas：CredentialCreateRequest, CredentialUpdateRequest, CredentialItem, CredentialDetail |
+| `api/app/api/routes/credentials.py` | REST API：POST/GET/PUT/DELETE `/api/credentials` |
+| `api/migrations/versions/20260314_0019_credential_store.py` | Alembic 迁移：创建 `credentials` 表 |
+| `api/tests/test_credential_store.py` | 28 项测试：加密服务 6 项 + 存储服务 12 项 + API 路由 10 项 |
+
+### 关键设计决策
+
+1. **凭证引用协议**：运行时通过 `credential://{id}` 引用凭证，`CredentialStore.resolve_credential_refs()` 负责在执行前解密替换，节点配置中永远不出现明文凭证。
+2. **软删除 / 撤销**：`DELETE` 端点不物理删除记录，而是设置 `status=revoked`、记录 `revoked_at`，确保审计可追溯。已撤销凭证不可更新、不可解密。
+3. **data_keys 暴露**：详情接口返回加密数据的字段名列表（不含值），方便前端展示凭证结构，同时不泄露实际数据。
+4. **last_used_at 追踪**：每次运行时解密凭证时自动更新 `last_used_at`，供后续凭证使用频率分析和过期策略参考。
+5. **依赖引入**：新增 `cryptography>=43.0.0,<45` 到 `api/pyproject.toml`。
+
+### 当前边界
+
+- 凭证管理目前是全局级别，尚未引入 workspace 级隔离。
+- 尚未实现凭证 Redis 缓存（设计文档中提到 TTL 86400s 的 Redis 缓存优化）。
+- 尚未实现凭证审计日志（谁在何时创建/更新/解密了哪个凭证）。
+- 尚未集成到运行时节点执行链路（`RuntimeService` 在执行节点前自动 resolve credential refs）。
+- 前端凭证管理页尚未实现。
+
+### 定向验证
+
+- `./.venv/Scripts/uv.exe run pytest tests/test_credential_store.py -v`：28 passed
+- `./.venv/Scripts/uv.exe run pytest tests/ -q`：178 passed
+
+### 本轮补充后的下一步规划
+
+1. **将凭证集成到运行时执行链路**（高优先级）：在 `RuntimeService` 的节点执行前，自动调用 `CredentialStore.resolve_credential_refs()` 解密节点配置中的凭证引用，让 `llm_agent` 和 `tool` 节点能通过 `credential://{id}` 使用已存储的 API Key / Token。
+2. **继续把 delta 从一次性写入推进到细粒度**：优先在 `llm_agent` 的 `main_plan` / `main_finalize` phase 接入 LLM streaming callback，产出多条 `node.output.delta`。
+3. **继续深化 publish governance**：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口。
+4. **若 publish surface 继续膨胀**，优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 837 行）。
+5. **继续治理后端结构热点**：`api/app/services/published_invocations.py`（1141 行）若继续补长期趋势与更多筛选维度，应优先拆 query/filtering 与 audit aggregation。

@@ -1,4 +1,5 @@
 from app.core.database import Base
+from app.models.credential import Credential
 from app.models.plugin import PluginAdapterRecord, PluginToolRecord
 from app.models.run import AICallRecord, NodeRun, Run, RunArtifact, RunEvent, ToolCallRecord
 from app.models.workflow import (
@@ -24,6 +25,7 @@ __all__ = [
     "RunArtifact",
     "ToolCallRecord",
     "AICallRecord",
+    "Credential",
     "PluginAdapterRecord",
     "PluginToolRecord",
     "WorkspaceStarterTemplateRecord",
