@@ -2,7 +2,7 @@
 
 ## Background
 
-`docs/dev/2026-03-10-runtime-branching.md` landed explicit branch activation and failure-path continuation, but the runtime still lacked a minimal retry layer.
+`docs/history/2026-03-10-runtime-branching.md` landed explicit branch activation and failure-path continuation, but the runtime still lacked a minimal retry layer.
 That left transient node failures with only two outcomes:
 
 - fail the whole run immediately

@@ -3,7 +3,8 @@
 ## 文档定位
 
 - 本文只保留当前仍成立、且对后续开发有直接指导作用的运行时事实、结构热点和优先级。
-- 2026-03-14 之前的追加式历史记录已归档到 `docs/dev/2026-03-14-runtime-foundation-history-expired.md`，避免主文档继续膨胀为流水账。
+- 带日期的阶段性开发记录统一放在 `docs/history/`；已废弃文档统一放在 `docs/expired/`，避免与当前索引混放影响检索。
+- 2026-03-14 之前的旧版长文已归档到 `docs/expired/2026-03-14-runtime-foundation-history-expired.md`，压缩过程说明放在 `docs/history/2026-03-14-runtime-foundation-compression.md`。
 - 若目标设计与当前实现冲突，优先以 `docs/dev/` 和代码事实为准，再决定修实现还是补文档。
 
 ## 当前判断
@@ -58,7 +59,7 @@
 ## 本轮压缩说明
 
 - 旧版 `runtime-foundation` 经多轮直接追加，已从“当前事实索引”膨胀为“历史流水账”，不再适合作为后续开发第一参考。
-- 2026-03-14 起，详细历史已归档到 `docs/dev/2026-03-14-runtime-foundation-history-expired.md`；主文档只保留当前仍成立的代码事实、结构热点和当前优先级。
+- 2026-03-14 起，详细历史已归档到 `docs/expired/2026-03-14-runtime-foundation-history-expired.md`，压缩过程说明归档到 `docs/history/2026-03-14-runtime-foundation-compression.md`；主文档只保留当前仍成立的代码事实、结构热点和当前优先级。
 - 后续若再超过可维护体量，应继续按“当前代码事实优先、历史另行归档、下一步规划保留”的原则压缩。
 
 ## 下一步规划

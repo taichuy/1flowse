@@ -41,7 +41,7 @@
 - `api/tests/test_runtime_service.py`
 - `api/tests/test_runtime_service_agent_runtime.py`
 - `docs/dev/runtime-foundation.md`
-- `docs/dev/2026-03-13-runtime-node-execution-support-decoupling.md`
+- `docs/history/2026-03-13-runtime-node-execution-support-decoupling.md`
 
 ## 验证方式
 

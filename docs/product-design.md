@@ -1,5 +1,7 @@
 # 7Flows 产品设计方案
 
+> 文档分层约定：本文与 `docs/technical-design-supplement.md` 只保留产品/技术基线；当前实现索引放在 `docs/dev/`；带日期开发记录统一归档到 `docs/history/`；废弃文档统一归档到 `docs/expired/`。
+
 ## 1. 产品定位与问题定义
 
 ### 1.1 产品定位

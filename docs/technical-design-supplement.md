@@ -2,6 +2,7 @@
 
 > 本文档是 [7Flows 产品设计方案](./product-design.md) 的技术细化补充，覆盖当前关键设计补充主题。
 > 所有 IR 类型与 `product-design.md` 中定义的 `Node`、`Edge`、`RuntimeContext`、`EvidencePack`、`ArtifactReference`、`AuthorizedContextRefs`、`PublishedEndpoint` 保持兼容。
+> 文档分层约定：本文只保留持续有效的技术基线；当前实现索引放在 `docs/dev/`；带日期开发记录统一归档到 `docs/history/`；废弃文档统一归档到 `docs/expired/`。
 
 ---
 

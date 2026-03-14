@@ -129,7 +129,7 @@
 文档：
 
 - `docs/dev/runtime-foundation.md`
-- `docs/dev/2026-03-11-workspace-starter-source-diff-and-rebase.md`
+- `docs/history/2026-03-11-workspace-starter-source-diff-and-rebase.md`
 
 ## 验证
 

@@ -2,7 +2,7 @@
 
 ## 背景
 
-`docs/dev/2026-03-10-runtime-branch-selector-rules.md` 已经给 `condition` / `router` 节点补上了结构化规则选择器，但当前分支与 DAG 仍有两个明显缺口：
+`docs/history/2026-03-10-runtime-branch-selector-rules.md` 已经给 `condition` / `router` 节点补上了结构化规则选择器，但当前分支与 DAG 仍有两个明显缺口：
 
 - 分支节点只能靠 `selector` 或硬编码 `selected` 做路由，表达能力仍然偏窄。
 - 普通 DAG 边仍然只能表达默认成功边、失败边或分支 key，无法在不引入第二套 DSL 的前提下做更细粒度的安全条件判定。

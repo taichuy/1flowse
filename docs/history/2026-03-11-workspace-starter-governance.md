@@ -196,7 +196,7 @@
 文档：
 
 - `docs/dev/runtime-foundation.md`
-- `docs/dev/2026-03-11-workspace-starter-governance.md`
+- `docs/history/2026-03-11-workspace-starter-governance.md`
 
 ## 验证
 

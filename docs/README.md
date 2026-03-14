@@ -7,6 +7,9 @@
 - [7Flows 产品设计方案](./product-design.md)
 - [7Flows 技术设计补充文档](./technical-design-supplement.md) — 插件兼容性代理、插件 UI 协议、安全模型、变量传递、节点调试、值缓存
 - [Dev 文档索引](./dev/README.md)
+- `docs/dev/`：当前有效索引，例如 `runtime-foundation.md`、`user-preferences.md`
+- `docs/history/`：按日期归档的开发记录与阶段性决策
+- `docs/expired/`：废弃但保留历史价值的文档
 
 ## 本地可以可以参考项目仓库和代码：
 E:\code\taichuCode\dify

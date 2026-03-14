@@ -13,7 +13,7 @@
 
 ## 决策与实现
 
-- 将旧版主文档归档为 `docs/dev/2026-03-14-runtime-foundation-history-expired.md`，并按废弃文档规范补充原因、替代文档和日期。
+- 将旧版主文档归档为 `docs/expired/2026-03-14-runtime-foundation-history-expired.md`，并按废弃文档规范补充原因、替代文档和日期。
 - 重写 `docs/dev/runtime-foundation.md`，只保留：
   - 当前判断
   - 当前代码事实

@@ -137,7 +137,7 @@
 文档：
 
 - `docs/dev/runtime-foundation.md`
-- `docs/dev/2026-03-11-workspace-starter-template-persistence.md`
+- `docs/history/2026-03-11-workspace-starter-template-persistence.md`
 
 ## 架构判断
 

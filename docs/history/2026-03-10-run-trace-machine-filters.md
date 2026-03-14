@@ -82,7 +82,7 @@
 - `api/app/schemas/run.py`
 - `api/tests/test_run_routes.py`
 - `docs/dev/runtime-foundation.md`
-- `docs/dev/2026-03-10-ai-traceability-layering.md`
+- `docs/history/2026-03-10-ai-traceability-layering.md`
 
 ## 验证
 

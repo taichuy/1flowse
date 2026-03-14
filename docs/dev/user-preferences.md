@@ -22,12 +22,20 @@
 
 ## 当前已记录偏好
 
+## 2026-03-14 开发文档目录分层
+
+- 偏好：文档目录要按“当前索引 / 历史记录 / 废弃归档”分层，避免带日期开发日志和过期文档继续混在 `docs/dev/` 里影响检索；其中 `docs/dev/` 只保留当前有效索引，`docs/history/` 统一放带日期开发记录，`docs/expired/` 统一放废弃文档。
+- 来源：用户在本轮任务中明确指出，日期开发日志集中在 `docs/` 下会影响检索，希望统一迁到 `docs/history/`，并把过期文档单独放到 `docs/expired/`。
+- 影响范围：`AGENTS.md`、`docs/README.md`、`docs/dev/README.md`、`docs/dev/runtime-foundation.md`、所有日期开发记录与废弃文档的落盘位置，以及后续文档检索方式。
+- 落地动作：本轮已把 `docs/dev/` 下全部日期开发记录迁到 `docs/history/`，把过期文档迁到 `docs/expired/`，并同步更新仓库协作约定、产品/技术基线提示和运行时现状文档中的路径说明。
+- 备注：后续新增日期开发记录默认直接写入 `docs/history/`，不要再回到 `docs/dev/` 根目录。
+
 ## 2026-03-09 文档与溯源优先
 
 - 偏好：项目早期要重视用户偏好记录、skill 规范沉淀和开发过程可溯源。
 - 来源：初始化项目 AGENTS 规范时的明确要求。
-- 影响范围：`AGENTS.md`、`.agents/skill-cn/`、`docs/dev/`
-- 落地动作：新增仓库级 `AGENTS.md`；约定稳定偏好记录到本文件；要求重要开发动作沉淀到 `docs/dev/`；要求废弃文档文件名显式包含 `expired`。
+- 影响范围：`AGENTS.md`、`.agents/skill-cn/`、`docs/dev/`、`docs/history/`、`docs/expired/`
+- 落地动作：新增仓库级 `AGENTS.md`；约定稳定偏好记录到本文件；要求当前索引保留在 `docs/dev/`、重要开发动作沉淀到 `docs/history/`、废弃文档归档到 `docs/expired/`。
 - 备注：后续若出现更细化的偏好，应继续追加，不要覆盖本条。
 
 ## 2026-03-10 文件体量控制
@@ -170,6 +178,6 @@
 
 - 偏好：`docs/dev/runtime-foundation.md` 一旦过长到削弱后续开发指导作用时，应优先结合当前代码现状压缩；可参考“超过约 1500 行时压缩到约 1000 行以内”的尺度，但核心目标是让它持续充当“当前事实索引”，并保留现有“下一步规划”内容不动。
 - 来源：用户在本轮任务中明确要求，把 `runtime-foundation.md` 的压缩维护提升为长期开发偏好，并说明该文档对后续开发具有最高优先级的指导作用。
-- 影响范围：`docs/dev/runtime-foundation.md`、`docs/dev/` 开发记录收尾方式、仓库协作约定，以及后续任务的事实同步与优先级规划。
-- 落地动作：本轮已归档旧版长文到 `docs/dev/2026-03-14-runtime-foundation-history-expired.md`，并把主文档压缩回“当前代码事实 + 结构热点 + 下一步规划”的短版；后续若再次膨胀，将继续按“当前事实优先、历史另行归档”的方式维护。
+- 影响范围：`docs/dev/runtime-foundation.md`、`docs/history/`、`docs/expired/`、仓库协作约定，以及后续任务的事实同步与优先级规划。
+- 落地动作：本轮已把压缩过程说明放到 `docs/history/2026-03-14-runtime-foundation-compression.md`，并将旧版长文归档到 `docs/expired/2026-03-14-runtime-foundation-history-expired.md`；后续若再次膨胀，将继续按“当前事实优先、历史另行归档”的方式维护。
 - 备注：这条偏好优先级高于继续往主文档追加历史过程，因为 `runtime-foundation.md` 首先要服务后续开发决策，而不是充当完整流水账。

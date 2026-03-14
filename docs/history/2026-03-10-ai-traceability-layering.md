@@ -111,7 +111,7 @@
 - `AGENTS.md`
 - `docs/dev/runtime-foundation.md`
 - `docs/dev/user-preferences.md`
-- `docs/dev/2026-03-10-system-diagnostics-observability.md`
+- `docs/history/2026-03-10-system-diagnostics-observability.md`
 - `api/app/api/routes/runs.py`
 - `api/app/api/routes/system.py`
 - `web/app/page.tsx`

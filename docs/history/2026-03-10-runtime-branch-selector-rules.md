@@ -2,7 +2,7 @@
 
 ## 背景
 
-`docs/dev/2026-03-10-runtime-branching.md` 让 `condition` / `router` 节点具备了“显式分支可走”的能力，但分支选择本身仍然主要依赖：
+`docs/history/2026-03-10-runtime-branching.md` 让 `condition` / `router` 节点具备了“显式分支可走”的能力，但分支选择本身仍然主要依赖：
 
 - `config.selected`
 - `config.mock_output.selected`
