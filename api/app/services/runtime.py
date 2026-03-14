@@ -27,6 +27,10 @@ from app.services.plugin_runtime import (
 from app.services.runtime_execution_progress_support import (
     RuntimeExecutionProgressSupportMixin,
 )
+from app.services.runtime_node_dispatch_support import RuntimeNodeDispatchSupportMixin
+from app.services.runtime_node_preparation_support import (
+    RuntimeNodePreparationSupportMixin,
+)
 from app.services.run_callback_tickets import RunCallbackTicketService
 from app.services.run_resume_scheduler import (
     RunResumeScheduler,
@@ -51,6 +55,8 @@ def _utcnow() -> datetime:
 
 class RuntimeService(
     RuntimeRunSupportMixin,
+    RuntimeNodePreparationSupportMixin,
+    RuntimeNodeDispatchSupportMixin,
     RuntimeNodeExecutionSupportMixin,
     RuntimeExecutionProgressSupportMixin,
     RuntimeLifecycleSupportMixin,

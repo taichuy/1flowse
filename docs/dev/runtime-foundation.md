@@ -26,7 +26,7 @@
 
 - `RuntimeService` 已采用 compiled blueprint 执行链，run 会显式绑定 `workflow_version` 与 `compiled_blueprint_id`。
 - 当前执行器已支持拓扑排序、条件/路由分支、join、mapping、节点重试、waiting/resume、callback ticket、artifact 引用和统一事件落库。
-- 2026-03-14 已连续推进三轮 runtime 结构治理：先把 run load / resume / callback orchestration 从 `runtime.py` 拆到 `runtime_run_support.py`，再把 graph support 拆成 `runtime_branch_support.py`、`runtime_mapping_support.py` 与收口后的 `runtime_graph_support.py`，本轮继续把节点失败 / waiting / 成功收尾与 run 完成输出从 `runtime.py` 收口到 `runtime_execution_progress_support.py`，`RuntimeService` 主文件进一步回到“执行入口 + 执行主链 orchestration”职责。
+- 2026-03-14 已连续推进四轮 runtime 结构治理：先把 run load / resume / callback orchestration 从 `runtime.py` 拆到 `runtime_run_support.py`，再把 graph support 拆成 `runtime_branch_support.py`、`runtime_mapping_support.py` 与收口后的 `runtime_graph_support.py`，随后把节点失败 / waiting / 成功收尾与 run 完成输出从 `runtime.py` 收口到 `runtime_execution_progress_support.py`，本轮继续把节点准备与输入拼装拆到 `runtime_node_preparation_support.py`、把节点类型分发 / tool dispatch / credential resolve 拆到 `runtime_node_dispatch_support.py`，`RuntimeService` 主文件和节点执行 support 的职责边界都进一步收紧。
 - `loop` 节点仍未在 MVP 执行器中开放执行；循环能力仍需通过后续 runtime 演进补齐，不能假装已完成。
 - `run_events` 仍是调试、回放、SSE 和 AI 追溯的统一事件源，不应为不同界面另起事实层。
 
@@ -52,11 +52,13 @@
 
 ## 当前结构热点
 
-- `api/app/services/runtime.py`：382 行，节点失败 / waiting / 成功收尾与 run output finalization 已移到 `runtime_execution_progress_support.py`（218 行），主文件热点继续下降，但 `_continue_execution` 仍承接节点遍历与 orchestration 主链。
-- `api/app/services/runtime_node_execution_support.py`：684 行，当前成为 runtime 结构治理中最明显的后端热点之一，后续应继续按节点准备、重试循环、节点类型执行与事件拼装边界拆分。
+- `api/app/services/runtime.py`：387 行，主文件继续维持“执行入口 + `_continue_execution` orchestration 主链”定位，没有把节点准备、节点分发或节点收尾重新回流进来。
+- `api/app/services/runtime_node_preparation_support.py`：264 行，承接 join 判定后的 node run 准备、node input 拼装与 skipped / blocked node run 构造。
+- `api/app/services/runtime_node_dispatch_support.py`：249 行，承接节点类型分发、tool dispatch、凭据解析与 branch / router 选择逻辑。
+- `api/app/services/runtime_node_execution_support.py`：183 行，已收口为重试循环、失败输出、最终输出解析和下游激活 support，不再是主要结构热点。
 - `api/app/services/runtime_run_support.py`：403 行，run load / resume / callback 已独立成层，后续应保持 helper 化演进，避免 callback orchestration 再次回流主文件或重新膨胀成新热点。
 - `api/app/services/runtime_graph_support.py`：292 行，已从总装热点收口为 graph orchestration 组合层；`runtime_branch_support.py`（262 行）与 `runtime_mapping_support.py`（176 行）分别承接 branch/selector 与 mapping/merge 逻辑，边界比上一轮更清晰。
-- `web/components/run-diagnostics-panel.tsx`：688 行，调试面板仍需按摘要、时间线、钻取入口继续拆层。
+- `web/components/run-diagnostics-panel.tsx`：688 行，当前已成为更明显的前端结构热点，调试面板仍需按摘要、时间线、钻取入口继续拆层。
 - `api/app/services/published_invocation_audit.py` 已收口到 197 行，但 publish governance 仍由 `published_invocation_audit_aggregation.py`（340 行）和 `published_invocation_audit_timeline.py`（206 行）承接；后续应继续防止查询、facet、timeline 再次回流单文件。
 - 当前项目整体判断不变：基础框架足够继续推主业务完整度，但还没到“只剩人工界面设计 / 全链路人工验收”的阶段。
 
@@ -68,11 +70,11 @@
 
 ## 下一步规划
 
-1. **P0：继续治理 `api/app/services/runtime_node_execution_support.py`**
-   - 现在 `runtime.py` 的 waiting / output finalization 已收口，下一步优先把节点准备、重试循环、节点类型执行与事件拼装继续拆出 helper / support，避免新的热点长期停留在单文件。
-2. **P1：继续治理 `web/components/run-diagnostics-panel.tsx`**
+1. **P0：继续治理 `web/components/run-diagnostics-panel.tsx`**
    - 进一步拆 summary / sections / detail drilldown，保持调试面板聚合摘要优先。
-3. **P1：继续补节点配置完整度**
+2. **P1：继续补节点配置完整度**
    - 把 provider / model / tool / publish 配置继续做成结构化配置段，而不是留在大表单里。
-4. **P1：继续收紧 publish governance 聚合边界**
+3. **P1：继续收紧 publish governance 聚合边界**
    - 保持 `published_invocation_audit.py` 只做 orchestration，新增查询或图表统计时优先落到 aggregation / timeline helpers，而不是回流 mixin。
+4. **P1：按需继续收紧 runtime support 边界**
+   - 保持 preparation / dispatch / execution progress / graph / run support 的组合式演进，避免重试、等待调度或下游激活再次回流单文件。
