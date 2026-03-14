@@ -517,6 +517,84 @@ type CredentialRef = `credential://${string}`  // 如 credential://abc123
 
 **凭证缓存**：已解密凭证可缓存于 Redis，TTL 可配（默认 86400s），减少频繁解密开销。
 
+#### 16.2.3 统一敏感访问控制（Sensitive Access Control）
+
+7Flows 首版不预置“支付信息 / 个人隐私 / 危险工具能力”这类行业分类，而是提供统一的**分级访问管理基座**：
+
+- 业务厂商或应用侧负责声明资源文本、用途说明与 `sensitivity_level`
+- 平台负责管理访问请求、策略决策、人工审核、通知与审计闭环
+- 授权在首版视为统一运行时能力，而不是先定义独立“人工审核节点”
+
+最小对象模型：
+
+```ts
+type SensitivityLevel = 'L0' | 'L1' | 'L2' | 'L3'
+type AccessDecision = 'allow' | 'deny' | 'require_approval' | 'allow_masked'
+type AccessRequesterType = 'human' | 'ai' | 'workflow' | 'tool'
+type AccessActionType = 'read' | 'use' | 'export' | 'write' | 'invoke'
+
+type SensitiveResourceRecord = {
+  id: string
+  label: string
+  description?: string
+  sensitivityLevel: SensitivityLevel
+  source:
+    | 'credential'
+    | 'workspace_resource'
+    | 'local_capability'
+    | 'published_secret'
+  metadata?: Record<string, unknown>
+}
+
+type SensitiveAccessRequest = {
+  id: string
+  runId?: string
+  nodeRunId?: string
+  requesterType: AccessRequesterType
+  requesterId: string
+  resourceId: string
+  actionType: AccessActionType
+  purposeText?: string
+  decision?: AccessDecision
+  reasonCode?: string
+  createdAt: string
+}
+
+type ApprovalTicket = {
+  id: string
+  accessRequestId: string
+  runId?: string
+  nodeRunId?: string
+  status: 'pending' | 'approved' | 'rejected' | 'expired'
+  waitingStatus: 'waiting' | 'resumed' | 'failed'
+  approvedBy?: string
+  decidedAt?: string
+}
+
+type NotificationDispatch = {
+  id: string
+  approvalTicketId: string
+  channel: 'in_app' | 'webhook' | 'feishu' | 'slack' | 'email'
+  target: string
+  status: 'pending' | 'delivered' | 'failed'
+  deliveredAt?: string
+  error?: string
+}
+```
+
+运行规则：
+
+1. `human / ai / workflow / tool` 访问受控资源前先提交 `SensitiveAccessRequest`
+2. Policy Engine 按 `sensitivityLevel + requesterType + actionType` 输出 `allow / deny / require_approval / allow_masked`
+3. 命中 `require_approval` 时，创建 `ApprovalTicket`，Run 进入 `waiting`，通知适配器负责触达人类
+4. 审批通过后触发 `resume`；审批拒绝或过期则写入拒绝事件并终止当前访问
+
+设计原则：
+
+- 平台优先放行“使用权”而不是“原文”，能给 handle / masked value 就不要给明文
+- 高敏资源默认不直接进入 AI prompt、`run_events` 或 artifact 摘要
+- 通知是人工审核的触达机制，审批结果仍以平台事实层和 `resume` 为准
+
 ### 16.3 节点间交互安全
 
 基于 `product-design.md` 中定义的 `AuthorizedContextRefs`，运行时强制校验节点间数据访问：
@@ -547,6 +625,9 @@ type ContextAccessCheck = {
 1. 数据传递仅通过平台内部通道（Edge 的 `mapping` 字段），不允许节点直接互通
 2. `AuthorizedContextRefs` 在每次节点执行前由 Runtime Scheduler 生成并注入
 3. 敏感字段（标记为 `sensitive: true` 的输出）在传递给下游时自动脱敏，除非下游节点显式声明需要原始值
+4. 任何敏感资源访问都必须先经过 `SensitiveAccessRequest`，不允许节点或前端绕过运行时直接读原文
+5. 即使决策为 `allow`，也应优先通过 handle、本地受控工具或脱敏值继续执行，而不是默认把高敏明文注入 AI prompt、日志或事件流
+6. 命中 `require_approval` 时，节点或工具访问应进入 `waiting` / `need_review`，由审批票据与通知闭环驱动后续恢复
 
 ### 16.4 发布接口安全
 
@@ -558,6 +639,7 @@ type ContextAccessCheck = {
 | IP 白名单 | 可选配置，仅允许指定 IP/CIDR 访问 |
 | 频率限制 | 每 API Key 独立计数，默认 60 RPM，可配 |
 | 请求体大小 | 默认上限 10MB |
+| 敏感导出控制 | 若响应包含高敏资源的 `export` / `write` 动作，应先走统一敏感访问控制与审批闭环 |
 | 审计日志 | 每次调用记录：时间、来源 IP、API Key（脱敏）、状态码、耗时 |
 
 ```ts
@@ -1038,6 +1120,7 @@ type CacheInvalidateEvent = {
 - `RuntimeService`：以 phase state machine 风格驱动节点执行
 - `POST /api/runs/{run_id}/resume`：作为最小恢复入口
 - `run_artifacts`、`tool_call_records`、`ai_call_records`：作为独立运行态事实表
+- `waiting / resume + callback ticket` 已具备承接未来审批流的基础原语
 
 当前还未完整落地、不能假装已完成的部分：
 
@@ -1045,6 +1128,7 @@ type CacheInvalidateEvent = {
 - `WAITING_CALLBACK` 的后台自动唤醒
 - 延迟重试和 timeout 的统一调度器
 - Loop 的正式 durable 运行语义
+- 统一的 `SensitiveAccessRequest / ApprovalTicket / NotificationDispatch` 事实层与 API
 
 ### 20.3 FlowRun / NodeRun 双层状态模型
 
@@ -1085,6 +1169,11 @@ type NodeRunPhase =
   | 'finalizing'
 ```
 
+补充语义：
+
+- `need_review` 表示节点或工具访问已命中 `require_approval`，等待统一授权决策
+- `node_runs.waiting_reason` 建议至少区分 `approval_required`、`callback_pending`、`input_required`
+
 持久化层建议至少保存：
 
 - `runs.current_node_id`
@@ -1113,8 +1202,9 @@ type FlowCheckpointState = {
 
 1. 先读取 `runs.checkpoint_payload`
 2. 再读取当前 `node_runs` 的 phase 与 node-level checkpoint
-3. 依据 phase 决定从 `tool_execute`、`assistant_distill` 或 `main_finalize` 继续
-4. 恢复后继续写统一 `run_events`
+3. 若 `waiting_reason = approval_required`，则先读取 `ApprovalTicket` 的最终决策，再决定是恢复执行还是终止
+4. 依据 phase 决定从 `tool_execute`、`assistant_distill` 或 `main_finalize` 继续
+5. 恢复后继续写统一 `run_events`
 
 ### 20.5 Phase 2 演进方向
 
@@ -1264,6 +1354,8 @@ Tool Gateway 至少负责：
 - 工具注册入口复用
 - 参数校验
 - 权限控制
+- 敏感访问决策挂点
+- 审批票据与通知触发挂点
 - 超时
 - 重试
 - 结果标准化
@@ -1275,7 +1367,7 @@ Tool Gateway 至少负责：
 
 ```ts
 type ToolExecutionResult = {
-  status: 'success' | 'failed' | 'partial'
+  status: 'success' | 'failed' | 'partial' | 'waiting'
   contentType: 'text' | 'json' | 'file' | 'table' | 'binary' | 'mixed'
   summary: string
   rawRef?: string
@@ -1284,6 +1376,9 @@ type ToolExecutionResult = {
     toolName: string
     latencyMs: number
     truncated: boolean
+    accessDecision?: 'allow' | 'deny' | 'require_approval' | 'allow_masked'
+    waitingReason?: string
+    approvalTicketId?: string
   }
 }
 ```
@@ -1326,6 +1421,25 @@ type AICallTrace = {
     total?: number
   }
 }
+
+type AccessDecisionTrace = {
+  requestId: string
+  resourceId: string
+  requesterType: 'human' | 'ai' | 'workflow' | 'tool'
+  actionType: 'read' | 'use' | 'export' | 'write' | 'invoke'
+  sensitivityLevel: 'L0' | 'L1' | 'L2' | 'L3'
+  decision: 'allow' | 'deny' | 'require_approval' | 'allow_masked'
+  approvalTicketId?: string
+  reasonCode?: string
+}
+
+type NotificationTrace = {
+  approvalTicketId: string
+  channel: string
+  status: 'pending' | 'delivered' | 'failed'
+  target?: string
+  error?: string
+}
 ```
 
 ### 23.4 日志粒度原则
@@ -1336,5 +1450,7 @@ type AICallTrace = {
 - 引用
 - phase 转换
 - latency / error
+- 敏感访问的分级、动作、决策与审批票据引用
 
 而不是默认把超长原文直接写进事件流或前端面板。
+对敏感资源而言，原始明文不应进入默认事件流，只保留脱敏摘要、handle 或审计引用。
