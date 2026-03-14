@@ -7,8 +7,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.models.run import NodeRun, Run, RunEvent, ToolCallRecord
+from app.models.run import Run, RunEvent
 from app.models.workflow import Workflow, WorkflowCompiledBlueprint, WorkflowVersion
 from app.services.agent_runtime import AgentRuntime
 from app.services.artifact_store import RuntimeArtifactStore
@@ -34,9 +33,10 @@ from app.services.run_resume_scheduler import (
 from app.services.runtime_graph_support import RuntimeGraphSupportMixin
 from app.services.runtime_lifecycle_support import RuntimeLifecycleSupportMixin
 from app.services.runtime_node_execution_support import RuntimeNodeExecutionSupportMixin
-from app.services.runtime_records import CallbackHandleResult, ExecutionArtifacts
+from app.services.runtime_records import ExecutionArtifacts
+from app.services.runtime_run_support import RuntimeRunSupportMixin
 from app.services.runtime_types import (
-    AuthorizedContextRefs,
+    CompiledWorkflowBlueprint,
     FlowCheckpointState,
     WorkflowExecutionError,
 )
@@ -48,6 +48,7 @@ def _utcnow() -> datetime:
 
 
 class RuntimeService(
+    RuntimeRunSupportMixin,
     RuntimeNodeExecutionSupportMixin,
     RuntimeLifecycleSupportMixin,
     RuntimeGraphSupportMixin,
@@ -188,73 +189,6 @@ class RuntimeService(
             )
         return artifacts
 
-    def resume_run(
-        self,
-        db: Session,
-        run_id: str,
-        *,
-        source: str = "manual",
-        reason: str | None = None,
-    ) -> ExecutionArtifacts:
-        self._refresh_runtime_dependencies(db)
-        run = db.get(Run, run_id)
-        if run is None:
-            raise WorkflowExecutionError("Run not found.")
-        if run.status != "waiting":
-            raise WorkflowExecutionError("Only waiting runs can be resumed.")
-
-        try:
-            blueprint_record = self._resolve_run_blueprint_record(db, run)
-            blueprint = self._compiled_blueprints.load_blueprint(blueprint_record)
-        except (CompiledBlueprintError, WorkflowExecutionError) as exc:
-            raise WorkflowExecutionError(str(exc)) from exc
-        checkpoint_state = FlowCheckpointState.from_dict(
-            run.checkpoint_payload,
-            ordered_node_ids=[node.id for node in blueprint.ordered_nodes],
-        )
-        if not checkpoint_state.waiting_node_run_id:
-            raise WorkflowExecutionError("Run does not have a resumable waiting node.")
-
-        run.status = "running"
-        run.current_node_id = None
-        run.error_message = None
-        events = [
-            self._build_event(
-                run.id,
-                None,
-                "run.resumed",
-                {
-                    "run_id": run.id,
-                    "source": source,
-                    "reason": reason,
-                },
-            )
-        ]
-        try:
-            self._continue_execution(
-                db,
-                run=run,
-                blueprint=blueprint,
-                input_payload=run.input_payload,
-                checkpoint_state=checkpoint_state,
-                events=events,
-            )
-        except WorkflowExecutionError as exc:
-            run.status = "failed"
-            run.error_message = str(exc)
-            run.finished_at = _utcnow()
-            events.append(self._build_event(run.id, None, "run.failed", {"error": str(exc)}))
-        finally:
-            self._persist_events(db, events)
-            db.commit()
-
-        artifacts = self.load_run(db, run_id)
-        if artifacts is None:
-            raise WorkflowExecutionError("Run disappeared while resuming.")
-        if artifacts.run.status == "failed":
-            raise WorkflowExecutionError(artifacts.run.error_message or "Workflow resume failed.")
-        return artifacts
-
     def _ensure_workflow_version_for_execution(
         self,
         db: Session,
@@ -296,277 +230,6 @@ class RuntimeService(
                 f"Workflow version '{workflow_version}' is not available."
             )
         return record
-
-    def _resolve_run_blueprint_record(
-        self,
-        db: Session,
-        run: Run,
-    ):
-        record = self._compiled_blueprints.get_for_run(db, run)
-        if record is not None:
-            if run.compiled_blueprint_id != record.id:
-                run.compiled_blueprint_id = record.id
-            return record
-
-        workflow_version = self._load_workflow_version(
-            db,
-            workflow_id=run.workflow_id,
-            workflow_version=run.workflow_version,
-        )
-        record = self._compiled_blueprints.ensure_for_workflow_version(db, workflow_version)
-        run.compiled_blueprint_id = record.id
-        return record
-
-    def receive_callback(
-        self,
-        db: Session,
-        ticket: str,
-        *,
-        payload: dict,
-        source: str = "external_callback",
-    ) -> CallbackHandleResult:
-        self._refresh_runtime_dependencies(db)
-        ticket_record = self._callback_tickets.get_ticket(db, ticket)
-        if ticket_record is None:
-            raise WorkflowExecutionError("Callback ticket not found.")
-
-        if ticket_record.status == "consumed":
-            artifacts = self.load_run(db, ticket_record.run_id)
-            if artifacts is None:
-                raise WorkflowExecutionError("Run not found for callback ticket.")
-            return CallbackHandleResult(
-                callback_status="already_consumed",
-                ticket=ticket_record.id,
-                run_id=ticket_record.run_id,
-                node_run_id=ticket_record.node_run_id,
-                artifacts=artifacts,
-            )
-
-        if ticket_record.status == "expired":
-            artifacts = self.load_run(db, ticket_record.run_id)
-            if artifacts is None:
-                raise WorkflowExecutionError("Run not found for callback ticket.")
-            return CallbackHandleResult(
-                callback_status="expired",
-                ticket=ticket_record.id,
-                run_id=ticket_record.run_id,
-                node_run_id=ticket_record.node_run_id,
-                artifacts=artifacts,
-            )
-
-        run = db.get(Run, ticket_record.run_id)
-        node_run = db.get(NodeRun, ticket_record.node_run_id)
-        if run is None or node_run is None:
-            raise WorkflowExecutionError("Run callback ticket points to missing runtime records.")
-
-        if self._callback_tickets.is_ticket_expired(ticket_record):
-            callback_snapshot = self._callback_tickets.expire_ticket(
-                ticket_record,
-                reason="callback_ticket_expired",
-                callback_payload={
-                    "reason": "callback_ticket_expired",
-                    "source": source,
-                    "cleanup": False,
-                },
-            )
-            self._persist_events(
-                db,
-                [
-                    self._build_event(
-                        ticket_record.run_id,
-                        ticket_record.node_run_id,
-                        "run.callback.ticket.expired",
-                        {
-                            "ticket": callback_snapshot.ticket,
-                            "node_id": node_run.node_id,
-                            "tool_id": ticket_record.tool_id,
-                            "tool_call_id": ticket_record.tool_call_id,
-                            "expires_at": (
-                                callback_snapshot.expires_at.isoformat().replace("+00:00", "Z")
-                                if callback_snapshot.expires_at is not None
-                                else None
-                            ),
-                            "expired_at": (
-                                callback_snapshot.expired_at.isoformat().replace("+00:00", "Z")
-                                if callback_snapshot.expired_at is not None
-                                else None
-                            ),
-                            "source": source,
-                            "cleanup": False,
-                        },
-                    )
-                ],
-            )
-            db.commit()
-            artifacts = self.load_run(db, ticket_record.run_id)
-            if artifacts is None:
-                raise WorkflowExecutionError("Run not found for callback ticket.")
-            return CallbackHandleResult(
-                callback_status="expired",
-                ticket=ticket_record.id,
-                run_id=ticket_record.run_id,
-                node_run_id=ticket_record.node_run_id,
-                artifacts=artifacts,
-            )
-
-        if ticket_record.status != "pending":
-            artifacts = self.load_run(db, ticket_record.run_id)
-            if artifacts is None:
-                raise WorkflowExecutionError("Run not found for callback ticket.")
-            return CallbackHandleResult(
-                callback_status="ignored",
-                ticket=ticket_record.id,
-                run_id=ticket_record.run_id,
-                node_run_id=ticket_record.node_run_id,
-                artifacts=artifacts,
-            )
-
-        if run.status != "waiting" or node_run.status != "waiting_callback":
-            self._callback_tickets.cancel_pending_for_node_run(
-                db,
-                node_run_id=node_run.id,
-                reason="callback_received_after_run_left_waiting",
-            )
-            artifacts = self.load_run(db, ticket_record.run_id)
-            if artifacts is None:
-                raise WorkflowExecutionError("Run not found for callback ticket.")
-            db.commit()
-            return CallbackHandleResult(
-                callback_status="ignored",
-                ticket=ticket_record.id,
-                run_id=ticket_record.run_id,
-                node_run_id=ticket_record.node_run_id,
-                artifacts=artifacts,
-            )
-
-        tool_call_record = None
-        if ticket_record.tool_call_id:
-            tool_call_record = db.get(ToolCallRecord, ticket_record.tool_call_id)
-        if tool_call_record is None and ticket_record.tool_id:
-            tool_call_record = db.scalar(
-                select(ToolCallRecord)
-                .where(
-                    ToolCallRecord.node_run_id == ticket_record.node_run_id,
-                    ToolCallRecord.tool_id == ticket_record.tool_id,
-                )
-                .order_by(ToolCallRecord.created_at.desc())
-            )
-
-        result = self._tool_gateway.record_callback_result(
-            db,
-            run_id=run.id,
-            node_run=node_run,
-            tool_call_record=tool_call_record,
-            tool_id=ticket_record.tool_id,
-            payload=payload,
-        )
-        callback_snapshot = self._callback_tickets.consume_ticket(
-            ticket_record,
-            callback_payload={
-                "source": source,
-                "result": deepcopy(payload),
-            },
-        )
-
-        checkpoint_payload = dict(node_run.checkpoint_payload or {})
-        tool_results = list(checkpoint_payload.get("tool_results") or [])
-        tool_index = max(int(ticket_record.tool_call_index), 0)
-        if tool_index > len(tool_results):
-            raise WorkflowExecutionError("Callback ticket references an invalid tool result slot.")
-        serialized_result = self._serialize_tool_result(result)
-        if tool_index == len(tool_results):
-            tool_results.append(serialized_result)
-        else:
-            tool_results[tool_index] = serialized_result
-        checkpoint_payload["tool_results"] = tool_results
-        checkpoint_payload["next_tool_index"] = max(
-            tool_index + 1,
-            int(checkpoint_payload.get("next_tool_index") or 0),
-        )
-        checkpoint_payload.pop("callback_ticket", None)
-        checkpoint_payload.pop("scheduled_resume", None)
-        node_run.checkpoint_payload = checkpoint_payload
-        self._context_service.update_working_context(
-            node_run,
-            tool_results=tool_results,
-            callback_result=serialized_result,
-        )
-        artifact_refs = list(node_run.artifact_refs or [])
-        if result.raw_ref and result.raw_ref not in artifact_refs:
-            artifact_refs.append(result.raw_ref)
-        self._context_service.replace_artifact_refs(node_run, artifact_refs)
-
-        callback_events = [
-            self._build_event(
-                run.id,
-                node_run.id,
-                "run.callback.received",
-                {
-                    "ticket": callback_snapshot.ticket,
-                    "node_id": node_run.node_id,
-                    "tool_id": ticket_record.tool_id,
-                    "tool_call_id": ticket_record.tool_call_id,
-                    "source": source,
-                    "status": result.status,
-                },
-            ),
-            self._build_event(
-                run.id,
-                node_run.id,
-                "tool.completed",
-                {
-                    "node_id": node_run.node_id,
-                    "tool_id": ticket_record.tool_id,
-                    "summary": result.summary,
-                    "raw_ref": result.raw_ref,
-                    "content_type": result.content_type,
-                    "status": result.status,
-                    "source": "callback",
-                },
-            ),
-        ]
-        self._persist_events(db, callback_events)
-
-        artifacts = self.resume_run(
-            db,
-            run.id,
-            source=source,
-            reason=f"callback:{callback_snapshot.ticket}",
-        )
-        return CallbackHandleResult(
-            callback_status="accepted",
-            ticket=callback_snapshot.ticket,
-            run_id=run.id,
-            node_run_id=node_run.id,
-            artifacts=artifacts,
-        )
-
-    def load_run(self, db: Session, run_id: str) -> ExecutionArtifacts | None:
-        run = db.get(Run, run_id)
-        if run is None:
-            return None
-        node_runs = db.scalars(
-            select(NodeRun).where(NodeRun.run_id == run_id).order_by(NodeRun.created_at.asc())
-        ).all()
-        events = db.scalars(
-            select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.id.asc())
-        ).all()
-        artifacts = self._artifact_store.load_run_artifacts(db, run_id)
-        tool_calls = self._tool_gateway.list_tool_calls(db, run_id)
-        ai_calls = self._agent_runtime.list_ai_calls(db, run_id)
-        return ExecutionArtifacts(
-            run=run,
-            node_runs=node_runs,
-            events=events,
-            artifacts=artifacts,
-            tool_calls=tool_calls,
-            ai_calls=ai_calls,
-        )
-
-    def list_workflow_runs(self, db: Session, workflow_id: str) -> list[Run]:
-        return db.scalars(
-            select(Run).where(Run.workflow_id == workflow_id).order_by(Run.created_at.desc())
-        ).all()
 
     def _refresh_runtime_dependencies(self, db: Session) -> None:
         if not self._uses_default_plugin_proxy:

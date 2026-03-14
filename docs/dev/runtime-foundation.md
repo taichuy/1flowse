@@ -26,6 +26,7 @@
 
 - `RuntimeService` 已采用 compiled blueprint 执行链，run 会显式绑定 `workflow_version` 与 `compiled_blueprint_id`。
 - 当前执行器已支持拓扑排序、条件/路由分支、join、mapping、节点重试、waiting/resume、callback ticket、artifact 引用和统一事件落库。
+- 2026-03-14 本轮已把 run load / resume / callback orchestration 从 `runtime.py` 拆到 `runtime_run_support.py`；`RuntimeService` 主文件开始回到“执行入口 + 执行主链 orchestration”职责。
 - `loop` 节点仍未在 MVP 执行器中开放执行；循环能力仍需通过后续 runtime 演进补齐，不能假装已完成。
 - `run_events` 仍是调试、回放、SSE 和 AI 追溯的统一事件源，不应为不同界面另起事实层。
 
@@ -51,9 +52,10 @@
 
 ## 当前结构热点
 
-- `api/app/services/runtime.py`：818 行，后续优先沿 graph scheduling / lifecycle / resume orchestration 继续拆分。
+- `api/app/services/runtime.py`：481 行，主文件热点已明显下降，但 `_continue_execution` 仍承接执行主链，后续可继续沿 node lifecycle / waiting transition / output finalization 收口。
+- `api/app/services/runtime_run_support.py`：403 行，run load / resume / callback 已独立成层，后续应保持 helper 化演进，避免 callback orchestration 再次回流主文件或重新膨胀成新热点。
 - `web/components/run-diagnostics-panel.tsx`：688 行，调试面板仍需按摘要、时间线、钻取入口继续拆层。
-- `api/app/services/runtime_graph_support.py`：713 行，与 `runtime.py` 一起构成当前 runtime 结构治理的主要后端热点。
+- `api/app/services/runtime_graph_support.py`：713 行，当前已成为 runtime 结构治理中最明显的后端热点，后续优先沿 selector / mapping / join / context read 边界继续拆分。
 - `api/app/services/published_invocation_audit.py` 已收口到 197 行，但 publish governance 仍由 `published_invocation_audit_aggregation.py`（340 行）和 `published_invocation_audit_timeline.py`（206 行）承接；后续应继续防止查询、facet、timeline 再次回流单文件。
 - 当前项目整体判断不变：基础框架足够继续推主业务完整度，但还没到“只剩人工界面设计 / 全链路人工验收”的阶段。
 
@@ -65,8 +67,8 @@
 
 ## 下一步规划
 
-1. **P0：继续治理 `api/app/services/runtime.py` 与 `api/app/services/runtime_graph_support.py`**
-   - 沿 graph scheduling / lifecycle / resume orchestration 继续拆边界，避免 runtime 主执行链和图调度辅助层一起膨胀。
+1. **P0：继续治理 `api/app/services/runtime_graph_support.py` 与 `api/app/services/runtime.py` 执行主链**
+   - 优先把 selector / mapping / join 相关图辅助逻辑继续拆薄，并评估 `_continue_execution` 是否按 node lifecycle / waiting transition / output finalization 继续收口。
 2. **P1：继续治理 `web/components/run-diagnostics-panel.tsx`**
    - 进一步拆 summary / sections / detail drilldown，保持调试面板聚合摘要优先。
 3. **P1：继续补节点配置完整度**
