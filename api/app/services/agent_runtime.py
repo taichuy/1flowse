@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+import time
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
@@ -11,6 +14,12 @@ from sqlalchemy.orm import Session
 from app.models.run import AICallRecord, NodeRun
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
+from app.services.llm_provider import (
+    LLMProviderError,
+    LLMProviderService,
+    LLMResponse,
+    build_llm_call_config,
+)
 from app.services.runtime_types import (
     PHASE_STATUS_MAP,
     AgentExecutionResult,
@@ -22,6 +31,8 @@ from app.services.runtime_types import (
     WorkflowExecutionError,
 )
 from app.services.tool_gateway import ToolGateway
+
+_log = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -69,10 +80,12 @@ class AgentRuntime:
         tool_gateway: ToolGateway,
         artifact_store: RuntimeArtifactStore | None = None,
         context_service: ContextService | None = None,
+        llm_provider: LLMProviderService | None = None,
     ) -> None:
         self._tool_gateway = tool_gateway
         self._artifact_store = artifact_store or RuntimeArtifactStore()
         self._context_service = context_service or ContextService()
+        self._llm_provider = llm_provider or LLMProviderService()
 
     def execute(
         self,
@@ -107,7 +120,8 @@ class AgentRuntime:
         plan = self._restore_plan(checkpoint.get("plan"))
         if plan is None:
             self._transition_phase(node_run, "running_main", events, node)
-            plan = self._build_plan(config)
+            plan = self._build_plan(config, model_config, node_input)
+            plan_llm_response = plan.llm_response
             checkpoint["plan"] = plan.as_dict()
             node_run.checkpoint_payload = checkpoint
             self._record_ai_call(
@@ -123,6 +137,7 @@ class AgentRuntime:
                 },
                 output_value=plan.as_dict(),
                 assistant=False,
+                llm_response=plan_llm_response,
             )
             events.append(
                 RuntimeEvent(
@@ -277,7 +292,9 @@ class AgentRuntime:
         evidence_pack = self._to_dict(node_run.evidence_context)
         if self._should_run_assistant(config, tool_results) and not evidence_pack:
             self._transition_phase(node_run, "assistant_distill", events, node)
-            distilled_evidence = self._distill_evidence(config, tool_results)
+            distilled_evidence, distill_llm_response = self._distill_evidence(
+                config, model_config, tool_results,
+            )
             evidence_artifact = self._artifact_store.create_artifact(
                 db,
                 run_id=run_id,
@@ -310,6 +327,7 @@ class AgentRuntime:
                 },
                 output_value=evidence_pack,
                 assistant=True,
+                llm_response=distill_llm_response,
             )
             events.append(
                 RuntimeEvent(
@@ -323,8 +341,9 @@ class AgentRuntime:
             )
 
         self._transition_phase(node_run, "main_finalize", events, node)
-        final_output = self._finalize_output(
+        final_output, finalize_llm_response = self._finalize_output(
             config=config,
+            model_config=model_config,
             plan=plan,
             tool_results=tool_results,
             evidence_pack=evidence_pack,
@@ -344,6 +363,7 @@ class AgentRuntime:
             },
             output_value=final_output,
             assistant=False,
+            llm_response=finalize_llm_response,
         )
         self._emit_output_deltas(final_output, events, node)
         self._transition_phase(node_run, "emit_output", events, node)
@@ -371,7 +391,44 @@ class AgentRuntime:
             .order_by(AICallRecord.created_at.asc())
         ).all()
 
-    def _build_plan(self, config: dict[str, Any]) -> AgentPlan:
+    # --- LLM integration helpers ---
+
+    @staticmethod
+    def _has_valid_model_config(model_config: dict[str, Any]) -> bool:
+        model_id = model_config.get("modelId") or model_config.get("model_id") or ""
+        api_key = model_config.get("apiKey") or model_config.get("api_key") or ""
+        return bool(model_id and api_key)
+
+    def _call_llm(
+        self,
+        *,
+        model_config: dict[str, Any],
+        system_prompt: str | None,
+        user_prompt: str,
+        node_input: dict[str, Any] | None = None,
+    ) -> LLMResponse:
+        call_config = build_llm_call_config(
+            model_config=model_config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            node_input=node_input,
+        )
+        start = time.monotonic()
+        try:
+            response = self._llm_provider.chat(call_config)
+        except LLMProviderError as exc:
+            _log.warning("LLM call failed: %s", exc)
+            raise WorkflowExecutionError(str(exc)) from exc
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        response.usage.setdefault("latency_ms", elapsed_ms)
+        return response
+
+    def _build_plan(
+        self,
+        config: dict[str, Any],
+        model_config: dict[str, Any],
+        node_input: dict[str, Any],
+    ) -> AgentPlan:
         raw_plan = self._to_dict(config.get("mockPlan"))
         raw_tool_calls = raw_plan.get("toolCalls") if raw_plan else None
         tool_calls: list[AgentToolCall] = []
@@ -393,7 +450,28 @@ class AgentRuntime:
         need_assistant = bool(raw_plan.get("needAssistant")) if raw_plan else False
         if self._assistant_enabled(config):
             need_assistant = True
-        return AgentPlan(
+
+        analysis = ""
+        llm_response: LLMResponse | None = None
+        if not raw_plan and self._has_valid_model_config(model_config):
+            prompt = str(config.get("prompt") or "")
+            if prompt:
+                try:
+                    llm_response = self._call_llm(
+                        model_config=model_config,
+                        system_prompt=(
+                            "You are a workflow planning engine. Analyze the task and "
+                            "provide a brief analysis of how to approach it. "
+                            "Be concise and actionable."
+                        ),
+                        user_prompt=prompt,
+                        node_input=node_input,
+                    )
+                    analysis = llm_response.text
+                except WorkflowExecutionError:
+                    _log.warning("LLM plan call failed, using empty plan")
+
+        plan = AgentPlan(
             tool_calls=tool_calls,
             need_assistant=need_assistant,
             finalize_from=(
@@ -402,6 +480,10 @@ class AgentRuntime:
                 else "evidence"
             ),
         )
+        if analysis:
+            plan.analysis = analysis
+        plan.llm_response = llm_response
+        return plan
 
     def _restore_plan(self, payload: Any) -> AgentPlan | None:
         if not isinstance(payload, dict):
@@ -456,8 +538,9 @@ class AgentRuntime:
     def _distill_evidence(
         self,
         config: dict[str, Any],
+        model_config: dict[str, Any],
         tool_results: list[ToolExecutionResult],
-    ) -> EvidencePack:
+    ) -> tuple[EvidencePack, LLMResponse | None]:
         mock_output = self._to_dict(config.get("mockAssistantOutput"))
         if mock_output:
             return EvidencePack(
@@ -469,8 +552,83 @@ class AgentRuntime:
                 recommended_focus=[str(item) for item in mock_output.get("recommended_focus", [])],
                 confidence=float(mock_output.get("confidence") or 0.0),
                 artifact_refs=[str(item) for item in mock_output.get("artifact_refs", [])],
-            )
+            ), None
 
+        assistant_model = self._assistant_model_config(config, model_config)
+        if self._has_valid_model_config(assistant_model):
+            return self._distill_evidence_via_llm(assistant_model, tool_results)
+
+        return self._distill_evidence_synthetic(tool_results), None
+
+    def _distill_evidence_via_llm(
+        self,
+        model_config: dict[str, Any],
+        tool_results: list[ToolExecutionResult],
+    ) -> tuple[EvidencePack, LLMResponse | None]:
+        tool_data = [
+            {
+                "tool_id": r.meta.get("tool_id"),
+                "tool_name": r.meta.get("tool_name"),
+                "summary": r.summary,
+                "structured": r.structured,
+            }
+            for r in tool_results
+        ]
+        user_prompt = (
+            "Distill the following tool results into a structured evidence summary.\n\n"
+            f"{json.dumps(tool_data, ensure_ascii=False, default=str)}\n\n"
+            "Return a JSON object with keys: summary, key_points (array), "
+            "conflicts (array), unknowns (array), confidence (0-1 float)."
+        )
+        try:
+            llm_response = self._call_llm(
+                model_config=model_config,
+                system_prompt=(
+                    "You are an information distillation assistant. "
+                    "Extract key findings from tool results and produce structured evidence. "
+                    "Respond with valid JSON only."
+                ),
+                user_prompt=user_prompt,
+            )
+        except WorkflowExecutionError:
+            _log.warning("LLM distill call failed, using synthetic evidence")
+            return self._distill_evidence_synthetic(tool_results), None
+
+        try:
+            parsed = json.loads(llm_response.text)
+        except (json.JSONDecodeError, TypeError):
+            parsed = {}
+
+        if isinstance(parsed, dict) and parsed.get("summary"):
+            return EvidencePack(
+                summary=str(parsed.get("summary") or ""),
+                key_points=[str(p) for p in parsed.get("key_points", [])],
+                evidence=[
+                    {"tool_id": r.meta.get("tool_id"), "summary": r.summary}
+                    for r in tool_results
+                ],
+                conflicts=[str(c) for c in parsed.get("conflicts", [])],
+                unknowns=[str(u) for u in parsed.get("unknowns", [])],
+                recommended_focus=[str(f) for f in parsed.get("recommended_focus", [])],
+                confidence=float(parsed.get("confidence") or 0.8),
+                artifact_refs=[r.raw_ref for r in tool_results if r.raw_ref],
+            ), llm_response
+
+        return EvidencePack(
+            summary=llm_response.text[:500],
+            key_points=[r.summary for r in tool_results if r.summary],
+            evidence=[
+                {"tool_id": r.meta.get("tool_id"), "summary": r.summary}
+                for r in tool_results
+            ],
+            confidence=0.7,
+            artifact_refs=[r.raw_ref for r in tool_results if r.raw_ref],
+        ), llm_response
+
+    @staticmethod
+    def _distill_evidence_synthetic(
+        tool_results: list[ToolExecutionResult],
+    ) -> EvidencePack:
         evidence = [
             {
                 "tool_id": result.meta.get("tool_id"),
@@ -500,18 +658,30 @@ class AgentRuntime:
         self,
         *,
         config: dict[str, Any],
+        model_config: dict[str, Any],
         plan: AgentPlan,
         tool_results: list[ToolExecutionResult],
         evidence_pack: dict[str, Any] | None,
         artifact_refs: list[str],
         node_input: dict[str, Any],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], LLMResponse | None]:
         mock_final_output = self._to_dict(config.get("mockFinalOutput"))
         if mock_final_output:
             output = deepcopy(mock_final_output)
             output.setdefault("decision_basis", "evidence" if evidence_pack else "tool_results")
             output.setdefault("artifact_refs", artifact_refs)
-            return output
+            return output, None
+
+        if self._has_valid_model_config(model_config):
+            return self._finalize_output_via_llm(
+                config=config,
+                model_config=model_config,
+                plan=plan,
+                tool_results=tool_results,
+                evidence_pack=evidence_pack,
+                artifact_refs=artifact_refs,
+                node_input=node_input,
+            )
 
         if evidence_pack:
             return {
@@ -521,23 +691,93 @@ class AgentRuntime:
                 "tool_summaries": [result.summary for result in tool_results],
                 "artifact_refs": artifact_refs,
                 "finalize_from": plan.finalize_from,
-            }
+            }, None
         if tool_results:
             return {
                 "result": " | ".join(result.summary for result in tool_results if result.summary),
                 "decision_basis": "tool_results",
                 "tool_results": [self._tool_result_to_dict(result) for result in tool_results],
                 "artifact_refs": artifact_refs,
-            }
+            }, None
         mock_output = config.get("mock_output")
         if isinstance(mock_output, dict):
-            return deepcopy(mock_output)
+            return deepcopy(mock_output), None
         return {
             "result": str(config.get("prompt") or config.get("systemPrompt") or ""),
             "decision_basis": "working_context",
             "received": self._to_dict(node_input.get("accumulated")),
             "artifact_refs": artifact_refs,
-        }
+        }, None
+
+    def _finalize_output_via_llm(
+        self,
+        *,
+        config: dict[str, Any],
+        model_config: dict[str, Any],
+        plan: AgentPlan,
+        tool_results: list[ToolExecutionResult],
+        evidence_pack: dict[str, Any] | None,
+        artifact_refs: list[str],
+        node_input: dict[str, Any],
+    ) -> tuple[dict[str, Any], LLMResponse | None]:
+        system_prompt = config.get("systemPrompt") or None
+        prompt = str(config.get("prompt") or "")
+
+        context_parts: list[str] = []
+        if evidence_pack:
+            context_parts.append(
+                f"[Evidence]\n{json.dumps(evidence_pack, ensure_ascii=False, default=str)}"
+            )
+        if tool_results:
+            summaries = [result.summary for result in tool_results if result.summary]
+            if summaries:
+                context_parts.append(f"[Tool results]\n" + "\n".join(summaries))
+        if plan.analysis:
+            context_parts.append(f"[Analysis]\n{plan.analysis}")
+
+        user_prompt = prompt
+        if context_parts:
+            user_prompt = "\n\n".join(context_parts) + "\n\n" + prompt
+
+        if not user_prompt.strip():
+            user_prompt = "Generate a response based on the provided context."
+
+        try:
+            llm_response = self._call_llm(
+                model_config=model_config,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                node_input=node_input,
+            )
+        except WorkflowExecutionError:
+            _log.warning("LLM finalize call failed, falling back to synthetic output")
+            if evidence_pack:
+                return {
+                    "result": evidence_pack.get("summary", ""),
+                    "decision_basis": "evidence",
+                    "evidence": evidence_pack,
+                    "artifact_refs": artifact_refs,
+                }, None
+            return {
+                "result": prompt or "LLM call failed.",
+                "decision_basis": "working_context",
+                "artifact_refs": artifact_refs,
+            }, None
+
+        decision_basis = "llm"
+        if evidence_pack:
+            decision_basis = "llm_with_evidence"
+        elif tool_results:
+            decision_basis = "llm_with_tools"
+
+        return {
+            "result": llm_response.text,
+            "decision_basis": decision_basis,
+            "model": llm_response.model,
+            "finish_reason": llm_response.finish_reason,
+            "usage": llm_response.usage,
+            "artifact_refs": artifact_refs,
+        }, llm_response
 
     def _fallback_output(
         self,
@@ -644,6 +884,7 @@ class AgentRuntime:
         output_value: dict[str, Any],
         assistant: bool,
         error_message: str | None = None,
+        llm_response: LLMResponse | None = None,
     ) -> None:
         input_artifact = self._artifact_store.create_artifact(
             db,
@@ -665,6 +906,17 @@ class AgentRuntime:
             summary=self._artifact_store.summarize(output_value),
             metadata_payload={"role": role, "assistant": assistant},
         )
+
+        latency_ms = 0
+        token_usage: dict[str, Any] = {}
+        actual_model_id = model_config.get("modelId")
+        actual_provider = model_config.get("provider")
+        if llm_response is not None:
+            latency_ms = llm_response.usage.pop("latency_ms", 0)
+            token_usage = llm_response.usage
+            actual_model_id = llm_response.model or actual_model_id
+            actual_provider = actual_provider
+
         db.add(
             AICallRecord(
                 id=str(uuid4()),
@@ -672,14 +924,14 @@ class AgentRuntime:
                 node_run_id=node_run.id,
                 role=role,
                 status="failed" if error_message else "succeeded",
-                provider=model_config.get("provider"),
-                model_id=model_config.get("modelId"),
+                provider=actual_provider,
+                model_id=actual_model_id,
                 input_summary=input_artifact.summary,
                 output_summary=output_artifact.summary,
                 input_artifact_id=input_artifact.id,
                 output_artifact_id=output_artifact.id,
-                latency_ms=0,
-                token_usage={},
+                latency_ms=latency_ms,
+                token_usage=token_usage,
                 cost_payload={},
                 assistant=assistant,
                 error_message=error_message,

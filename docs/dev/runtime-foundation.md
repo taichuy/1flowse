@@ -1309,3 +1309,90 @@ docker compose up -d --build
 4. **若 publish surface 继续膨胀**，优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 837 行）。
 5. **继续治理后端结构热点**：`api/app/services/published_invocations.py`（1141 行）若继续补长期趋势与更多筛选维度，应优先拆 query/filtering 与 audit aggregation。
 6. **凭证进阶功能**：workspace 级隔离、Redis 缓存、审计日志（谁在何时解密了哪个凭证）。
+
+---
+
+## 2026-03-14 LLM Provider 真实调用集成
+
+### 背景
+
+上一轮（凭证管理 + delta chunking + credential picker）落地后，AgentRuntime 的三个核心 AI 阶段仍然全部依赖 mock 数据（`mockPlan`、`mockFinalOutput`、`mockAssistantOutput`），无法通过真实大模型生成输出。`llm_provider.py` 已创建但未接线。
+
+### 目标
+
+1. 将 `LLMProviderService` 真正接入 AgentRuntime 的三个 AI 阶段
+2. 保持 mock config 的向后兼容（测试和无模型配置场景）
+3. 为 `AICallRecord` 记录真实的 latency 和 token usage
+
+### 实现方式
+
+#### LLMProviderService 可测性增强 (`llm_provider.py`)
+
+- 新增 `client_factory: LLMClientFactory | None` 参数，对齐 `PluginCallProxy` 的 `httpx.MockTransport` 可测性模式
+- `_make_client` 优先使用注入的工厂函数，否则创建默认 httpx.Client
+- 从 settings 读取 `llm_default_timeout_seconds` 替代硬编码常量
+
+#### AgentRuntime 三阶段 LLM 接线 (`agent_runtime.py`)
+
+核心策略是 **mock 优先降级**：
+- 当 mock config key 存在 → 保持原行为（测试向后兼容）
+- 当 mock 不存在且 model config 有效（有 modelId + apiKey）→ 调用真实 LLM
+- 当 model config 无效 → 降级到当前合成逻辑
+
+新增方法：
+- `_has_valid_model_config(model_config)` — 检查 modelId 和 apiKey 是否存在
+- `_call_llm(model_config, system_prompt, user_prompt, node_input)` — 统一 LLM 调用入口，包含计时和错误转换
+
+改造的阶段：
+1. **`_build_plan`** — 当无 mockPlan 且 model config 有效时，调用 LLM 生成初步分析（记录在 plan.analysis），tool calls 仍从 config 读取
+2. **`_finalize_output`** — 当无 mockFinalOutput 且 model config 有效时，调用 LLM 生成最终回答，输出包含 `decision_basis: "llm"/"llm_with_evidence"/"llm_with_tools"` 和真实 usage/model 信息；LLM 失败时降级到合成输出
+3. **`_distill_evidence`** — 当无 mockAssistantOutput 且 model config 有效时，调用 LLM 提炼结构化 EvidencePack（尝试 JSON 解析），失败时降级到合成拼接
+
+#### `_record_ai_call` 增强
+
+- 新增 `llm_response: LLMResponse | None` 参数
+- 当有真实 LLM 响应时，记录实际 latency_ms、token_usage、model_id
+
+#### RuntimeService 接线 (`runtime.py`)
+
+- `__init__` 和 `_refresh_runtime_dependencies` 都显式创建 `LLMProviderService` 并传给 `AgentRuntime`
+
+#### AgentPlan 扩展 (`runtime_types.py`)
+
+- 新增 `analysis: str` 和 `llm_response: Any` 字段，`as_dict()` 在有 analysis 时包含它
+
+### 已落地文件
+
+| 文件 | 变更 |
+|------|------|
+| `api/app/services/llm_provider.py` | +`LLMClientFactory` 类型 + `client_factory` 参数 + settings 读取 |
+| `api/app/services/agent_runtime.py` | +`_call_llm`, `_has_valid_model_config`, `_finalize_output_via_llm`, `_distill_evidence_via_llm`, `_distill_evidence_synthetic`; 改造 `_build_plan`, `_finalize_output`, `_distill_evidence`, `_record_ai_call` |
+| `api/app/services/runtime_types.py` | `AgentPlan` +`analysis`, `llm_response` 字段 |
+| `api/app/services/runtime.py` | +`LLMProviderService` 导入和显式传递 |
+| `api/app/core/config.py` | +`llm_http_proxy`, `llm_default_timeout_seconds` |
+| `api/tests/test_llm_provider.py` | 新增 15 项测试：OpenAI/Anthropic 同步+流式、build_llm_call_config、错误处理 |
+| `api/tests/test_agent_runtime_llm_integration.py` | 新增 6 项集成测试：finalize via LLM、mock 优先、无模型降级、tools+LLM、evidence distill、LLM 错误降级 |
+
+### 当前边界
+
+- LLM 调用仍然是同步模式（`chat()`），未使用 streaming（`chat_stream()`）
+- 输出 delta 仍然是 post-hoc chunking（`_emit_output_deltas`），不是 token 级实时推送
+- plan 阶段的 tool calls 仍从 config 读取，LLM 只负责初步分析，不做动态工具选择
+- 未来 `llm_agent` 可接入 `chat_stream` 实现真正的 token 级流式输出
+
+### 定向验证
+
+- `pytest tests/test_llm_provider.py -v`：15 passed
+- `pytest tests/test_agent_runtime_llm_integration.py -v`：6 passed
+- `pytest tests/test_runtime_service_agent_runtime.py -q`：8 passed（现有测试无回归）
+- `pytest tests/test_runtime_credential_integration.py -q`：8 passed（凭证集成无回归）
+- `pytest tests/ -q`：207 passed（全量无回归）
+
+### 本轮补充后的下一步规划
+
+1. **把 LLM 调用从同步推进到流式**（P0）：在 `_finalize_output_via_llm` 中接入 `chat_stream`，每个 chunk 直接产出 `node.output.delta` 事件，实现真正的 token 级实时流式输出。
+2. **继续深化 publish governance**（P0）：补单次 invocation detail，以及 invocation 到 `run / callback ticket / cache` 的稳定钻取入口。
+3. **若 publish surface 继续膨胀**（P1），优先按 protocol surface / mapper / audit 边界拆 `api/app/services/published_gateway.py`（当前约 837 行）。
+4. **继续治理后端结构热点**（P1）：`api/app/services/published_invocations.py`（1141 行）若继续补长期趋势，应优先拆 query/filtering。
+5. **凭证进阶功能**（P2）：workspace 级隔离、Redis 缓存、审计日志。
+6. **节点配置体验**（P2）：把 model provider 配置表单做成更结构化的组件（provider 选择 → model 选择 → 参数配置）。

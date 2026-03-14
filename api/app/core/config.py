@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     callback_ticket_cleanup_schedule_enabled: bool = True
     callback_ticket_cleanup_interval_seconds: int = 300
     credential_encryption_key: str = ""
+    llm_http_proxy: str = ""
+    llm_default_timeout_seconds: int = 120
     plugin_compat_dify_enabled: bool = False
     plugin_compat_dify_adapter_id: str = "dify-default"
     plugin_compat_dify_endpoint: str = "http://localhost:8091"

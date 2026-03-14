@@ -3,7 +3,9 @@ Name: sevenflows-api
 Version: 0.1.0
 Summary: 7Flows orchestration API and worker runtime.
 Requires-Python: <3.13,>=3.11
+Requires-Dist: alembic<2,>=1.14.0
 Requires-Dist: boto3<2,>=1.35.0
+Requires-Dist: cryptography<45,>=43.0.0
 Requires-Dist: celery<6,>=5.4.0
 Requires-Dist: fastapi<1,>=0.115.0
 Requires-Dist: httpx<1,>=0.28.0

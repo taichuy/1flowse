@@ -19,6 +19,7 @@ from app.services.compiled_blueprints import (
 from app.services.context_service import ContextService
 from app.services.credential_store import CredentialStore
 from app.services.flow_compiler import FlowCompiler
+from app.services.llm_provider import LLMProviderService
 from app.services.plugin_runtime import (
     PluginCallProxy,
     get_plugin_call_proxy,
@@ -65,6 +66,7 @@ class RuntimeService(
         self._context_service = ContextService()
         self._credential_store = CredentialStore()
         self._callback_tickets = RunCallbackTicketService()
+        self._llm_provider = LLMProviderService()
         self._tool_gateway = ToolGateway(
             plugin_call_proxy=self._plugin_call_proxy,
             artifact_store=self._artifact_store,
@@ -73,6 +75,7 @@ class RuntimeService(
             tool_gateway=self._tool_gateway,
             artifact_store=self._artifact_store,
             context_service=self._context_service,
+            llm_provider=self._llm_provider,
         )
 
     def execute_workflow(
@@ -581,6 +584,7 @@ class RuntimeService(
             tool_gateway=self._tool_gateway,
             artifact_store=self._artifact_store,
             context_service=self._context_service,
+            llm_provider=self._llm_provider,
         )
 
     def _continue_execution(

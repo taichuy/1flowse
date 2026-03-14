@@ -151,9 +151,11 @@ class AgentPlan:
     tool_calls: list[AgentToolCall] = field(default_factory=list)
     need_assistant: bool = False
     finalize_from: str = "evidence"
+    analysis: str = ""
+    llm_response: Any = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "toolCalls": [
                 {
                     "toolId": tool_call.tool_id,
@@ -168,6 +170,9 @@ class AgentPlan:
             "needAssistant": self.need_assistant,
             "finalizeFrom": self.finalize_from,
         }
+        if self.analysis:
+            result["analysis"] = self.analysis
+        return result
 
 
 @dataclass
