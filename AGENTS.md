@@ -65,7 +65,7 @@
 - `docs/dev/`：当前有效的开发索引文档，仅保留 `runtime-foundation.md`、`user-preferences.md` 等持续维护的当前事实。
 - `docs/history/`：按日期归档的开发记录、阶段性方案、实现说明与验证留痕。
 - `docs/expired/`：已废弃但仍保留历史价值的文档，不作为默认检索入口。
-- `.agents/skill-cn/`：仓库内可复用技能，承载专项任务规范与参考资料。
+- `.agents/skills/`：仓库内可复用技能，承载专项任务规范与参考资料。
 
 ## 5. 用户偏好记录
 

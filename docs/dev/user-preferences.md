@@ -42,7 +42,7 @@
 
 - 偏好：项目早期要重视用户偏好记录、skill 规范沉淀和开发过程可溯源。
 - 来源：初始化项目 AGENTS 规范时的明确要求。
-- 影响范围：`AGENTS.md`、`.agents/skill-cn/`、`docs/dev/`、`docs/history/`、`docs/expired/`
+- 影响范围：`AGENTS.md`、`.agents/skill/`、`docs/dev/`、`docs/history/`、`docs/expired/`
 - 落地动作：新增仓库级 `AGENTS.md`；约定稳定偏好记录到本文件；要求当前索引保留在 `docs/dev/`、重要开发动作沉淀到 `docs/history/`、废弃文档归档到 `docs/expired/`。
 - 备注：后续若出现更细化的偏好，应继续追加，不要覆盖本条。
 
