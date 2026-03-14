@@ -201,21 +201,7 @@ export function useWorkflowEditorGraph({
     }
 
     if (!value.trim()) {
-      setNodes((currentNodes) =>
-        currentNodes.map((node) =>
-          node.id === selectedNodeId
-            ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  runtimePolicy: undefined
-                }
-              }
-            : node
-        )
-      );
-      setMessage("已清空 runtimePolicy。");
-      setMessageTone("success");
+      updateNodeRuntimePolicy(undefined, { successMessage: "已清空 runtimePolicy。" });
       return;
     }
 
@@ -225,24 +211,41 @@ export function useWorkflowEditorGraph({
         throw new Error("runtimePolicy 必须是 JSON 对象。");
       }
 
-      setNodes((currentNodes) =>
-        currentNodes.map((node) =>
-          node.id === selectedNodeId
-            ? {
-                ...node,
-                data: {
-                  ...node.data,
-                  runtimePolicy: parsed
-                }
-              }
-            : node
-        )
-      );
-      setMessage("runtimePolicy 已应用。");
-      setMessageTone("success");
+      updateNodeRuntimePolicy(parsed, { successMessage: "runtimePolicy 已应用。" });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "runtimePolicy 不是合法 JSON。");
       setMessageTone("error");
+    }
+  };
+
+  const updateNodeRuntimePolicy = (
+    nextRuntimePolicy: Record<string, unknown> | undefined,
+    options?: { successMessage?: string }
+  ) => {
+    if (!selectedNodeId) {
+      return;
+    }
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedNodeId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                runtimePolicy: nextRuntimePolicy
+              }
+            }
+          : node
+      )
+    );
+
+    if (options?.successMessage) {
+      setMessage(options.successMessage);
+      setMessageTone("success");
+    } else {
+      setMessage(null);
+      setMessageTone("idle");
     }
   };
 
@@ -345,6 +348,7 @@ export function useWorkflowEditorGraph({
     handleNodeNameChange,
     handleSelectedNodeConfigChange,
     applyNodeConfigJson,
+    updateNodeRuntimePolicy,
     handleNodeRuntimePolicyChange,
     handleDeleteSelectedNode,
     handleDeleteSelectedEdge,

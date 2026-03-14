@@ -218,12 +218,14 @@ export function WorkflowEditorWorkbench({
               selectedNode={selectedNode}
               selectedEdge={selectedEdge}
               nodes={graph.nodes}
+              edges={graph.edges}
               tools={tools}
               nodeConfigText={graph.nodeConfigText}
               onNodeConfigTextChange={graph.setNodeConfigText}
               onApplyNodeConfigJson={graph.applyNodeConfigJson}
               onNodeNameChange={graph.handleNodeNameChange}
               onNodeConfigChange={graph.handleSelectedNodeConfigChange}
+              onNodeRuntimePolicyUpdate={graph.updateNodeRuntimePolicy}
               onNodeRuntimePolicyChange={graph.handleNodeRuntimePolicyChange}
               onDeleteSelectedNode={graph.handleDeleteSelectedNode}
               onUpdateSelectedEdge={graph.updateSelectedEdge}

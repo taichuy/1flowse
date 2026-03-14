@@ -8,17 +8,20 @@ import type {
   WorkflowCanvasNodeData
 } from "@/lib/workflow-editor";
 import { WorkflowNodeConfigForm } from "@/components/workflow-node-config-form";
+import { WorkflowNodeRuntimePolicyForm } from "@/components/workflow-node-config-form/runtime-policy-form";
 
 type WorkflowEditorInspectorProps = {
   selectedNode: Node<WorkflowCanvasNodeData> | null;
   selectedEdge: Edge<WorkflowCanvasEdgeData> | null;
   nodes: Array<Node<WorkflowCanvasNodeData>>;
+  edges: Array<Edge<WorkflowCanvasEdgeData>>;
   tools: PluginToolRegistryItem[];
   nodeConfigText: string;
   onNodeConfigTextChange: (value: string) => void;
   onApplyNodeConfigJson: () => void;
   onNodeNameChange: (value: string) => void;
   onNodeConfigChange: (nextConfig: Record<string, unknown>) => void;
+  onNodeRuntimePolicyUpdate: (nextRuntimePolicy: Record<string, unknown> | undefined) => void;
   onNodeRuntimePolicyChange: (value: string) => void;
   onDeleteSelectedNode: () => void;
   onUpdateSelectedEdge: (
@@ -31,12 +34,14 @@ export function WorkflowEditorInspector({
   selectedNode,
   selectedEdge,
   nodes,
+  edges,
   tools,
   nodeConfigText,
   onNodeConfigTextChange,
   onApplyNodeConfigJson,
   onNodeNameChange,
   onNodeConfigChange,
+  onNodeRuntimePolicyUpdate,
   onNodeRuntimePolicyChange,
   onDeleteSelectedNode,
   onUpdateSelectedEdge,
@@ -90,6 +95,13 @@ export function WorkflowEditorInspector({
             <button className="sync-button" type="button" onClick={onApplyNodeConfigJson}>
               应用高级 config JSON
             </button>
+
+            <WorkflowNodeRuntimePolicyForm
+              node={selectedNode}
+              nodes={nodes}
+              edges={edges}
+              onChange={onNodeRuntimePolicyUpdate}
+            />
 
             <label className="binding-field">
               <span className="binding-label">Runtime policy JSON</span>
@@ -181,6 +193,7 @@ export function WorkflowEditorInspector({
         <ul className="roadmap-list compact-list">
           <li>保存时会把节点位置写回 `config.ui.position`。</li>
           <li>`tool` / `mcp_query` / `condition` / `router` 已优先改成结构化表单，其余配置仍可走高级 JSON。</li>
+          <li>`runtimePolicy` 现已补上 retry / join 结构化表单，复杂场景仍可回退到 JSON。</li>
           <li>`tool` 节点会直接消费 `/api/plugins/tools` 的持久化目录，不再只停留在首页绑定面板。</li>
           <li>运行时尚未支持 `loop`，因此当前画布仍不暴露 loop 节点。</li>
           <li>后端会继续校验 trigger 唯一、output 必需和边引用合法性。</li>
