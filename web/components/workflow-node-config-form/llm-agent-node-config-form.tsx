@@ -2,9 +2,11 @@
 
 import type { Node } from "@xyflow/react";
 
+import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import { AuthorizedContextFields } from "@/components/workflow-node-config-form/authorized-context-fields";
 import { CredentialPicker } from "@/components/workflow-node-config-form/credential-picker";
+import { LlmAgentToolPolicyForm } from "@/components/workflow-node-config-form/llm-agent-tool-policy-form";
 import {
   cloneRecord,
   dedupeArtifactRefs,
@@ -18,12 +20,14 @@ import {
 type LlmAgentNodeConfigFormProps = {
   node: Node<WorkflowCanvasNodeData>;
   nodes: Array<Node<WorkflowCanvasNodeData>>;
+  tools: PluginToolRegistryItem[];
   onChange: (nextConfig: Record<string, unknown>) => void;
 };
 
 export function LlmAgentNodeConfigForm({
   node,
   nodes,
+  tools,
   onChange
 }: LlmAgentNodeConfigFormProps) {
   const config = cloneRecord(node.data.config);
@@ -274,10 +278,12 @@ export function LlmAgentNodeConfigForm({
           </label>
         </div>
         <small className="section-copy">
-          这层先把 LLM Agent 的主配置显式化，后续再继续细化输入输出 schema、tool policy
-          和 runtime policy。
+          这层先把 LLM Agent 的主配置显式化；输入输出 schema 已移到 inspector 的 Node
+          contract 区块，tool policy 在下方继续细化。
         </small>
       </div>
+
+      <LlmAgentToolPolicyForm config={config} tools={tools} onChange={onChange} />
 
       <div className="binding-field">
         <span className="binding-label">Assistant distill</span>

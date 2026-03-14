@@ -8,6 +8,7 @@ import type {
   WorkflowCanvasNodeData
 } from "@/lib/workflow-editor";
 import { WorkflowNodeConfigForm } from "@/components/workflow-node-config-form";
+import { WorkflowNodeIoSchemaForm } from "@/components/workflow-node-config-form/node-io-schema-form";
 import { WorkflowNodeRuntimePolicyForm } from "@/components/workflow-node-config-form/runtime-policy-form";
 
 type WorkflowEditorInspectorProps = {
@@ -21,6 +22,8 @@ type WorkflowEditorInspectorProps = {
   onApplyNodeConfigJson: () => void;
   onNodeNameChange: (value: string) => void;
   onNodeConfigChange: (nextConfig: Record<string, unknown>) => void;
+  onNodeInputSchemaChange: (nextSchema: Record<string, unknown> | undefined) => void;
+  onNodeOutputSchemaChange: (nextSchema: Record<string, unknown> | undefined) => void;
   onNodeRuntimePolicyUpdate: (nextRuntimePolicy: Record<string, unknown> | undefined) => void;
   onNodeRuntimePolicyChange: (value: string) => void;
   onDeleteSelectedNode: () => void;
@@ -41,6 +44,8 @@ export function WorkflowEditorInspector({
   onApplyNodeConfigJson,
   onNodeNameChange,
   onNodeConfigChange,
+  onNodeInputSchemaChange,
+  onNodeOutputSchemaChange,
   onNodeRuntimePolicyUpdate,
   onNodeRuntimePolicyChange,
   onDeleteSelectedNode,
@@ -81,6 +86,12 @@ export function WorkflowEditorInspector({
               nodes={nodes}
               tools={tools}
               onChange={onNodeConfigChange}
+            />
+
+            <WorkflowNodeIoSchemaForm
+              node={selectedNode}
+              onInputSchemaChange={onNodeInputSchemaChange}
+              onOutputSchemaChange={onNodeOutputSchemaChange}
             />
 
             <label className="binding-field">
@@ -193,6 +204,7 @@ export function WorkflowEditorInspector({
         <ul className="roadmap-list compact-list">
           <li>保存时会把节点位置写回 `config.ui.position`。</li>
           <li>`tool` / `mcp_query` / `condition` / `router` 已优先改成结构化表单，其余配置仍可走高级 JSON。</li>
+          <li>节点 `inputSchema` / `outputSchema` 已有独立 section，避免继续混在通用 config JSON 里。</li>
           <li>`runtimePolicy` 现已补上 retry / join 结构化表单，复杂场景仍可回退到 JSON。</li>
           <li>`tool` 节点会直接消费 `/api/plugins/tools` 的持久化目录，不再只停留在首页绑定面板。</li>
           <li>运行时尚未支持 `loop`，因此当前画布仍不暴露 loop 节点。</li>

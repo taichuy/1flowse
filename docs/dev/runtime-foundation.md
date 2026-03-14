@@ -50,6 +50,7 @@
 - Run API 已覆盖创建、详情、events、trace、trace export、resume、callback ingress、execution view、evidence view。
 - Workflow library、system overview、plugin adapters、runtime activity、credentials API 已具备，为编辑器、诊断面板和发布治理继续承接提供稳定后端入口。
 - `workflow editor` inspector 已把 `runtimePolicy` 的 retry / join 从纯 JSON 文本补成结构化表单；join 候选来源会按当前画布实际入边收敛，复杂场景仍可回退到高级 JSON。
+- 2026-03-14 晚间继续把节点 `inputSchema / outputSchema` 从通用 `config` JSON 里拆成独立 contract section，并把 `llm_agent.config.toolPolicy` 显式化到结构化表单；workflow editor 正在沿同一条配置收口链持续推进，而不是停留在一次性 demo。
 - 前端与后端的诊断/治理界面应继续消费这些事实接口，而不是直接拼装数据库内部结构。
 
 ## 当前结构热点
@@ -66,8 +67,10 @@
 - `api/app/api/routes/published_gateway.py`：10 行，当前仅保留 `/v1` 聚合入口；native / OpenAI / Anthropic surface 已分别拆到独立 route 文件，route 层最显著的单文件热点已解除。
 - `api/app/services/published_protocol_streaming.py`：459 行，仍集中承接 native / OpenAI / Anthropic 三类 SSE 映射，是发布层下一阶段更值得继续拆层的后端热点。
 - `api/app/services/published_gateway.py`：338 行，虽然 service 主体已明显比前期收敛，但 native / OpenAI / Anthropic surface orchestration 仍集中在同一服务里，后续可继续按 surface/helper 分层。
-- `web/components/workflow-editor-workbench.tsx`：219 行，已收口为 orchestrator；graph state / node-edge mutation 已拆到 `use-workflow-editor-graph.ts`（319 行），run overlay 已拆到 `use-workflow-run-overlay.ts`（81 行），工作台主文件不再同时承担画布状态、运行拉取和保存编排三类职责。
-- `web/components/workflow-node-config-form/runtime-policy-form.tsx`：305 行，当前承接 retry / join 的结构化配置与入边来源约束，是继续补输入输出 schema、tool policy 或 publish section 时可复用的稳定区块。
+- `web/components/workflow-editor-workbench.tsx`：221 行，已收口为 orchestrator；graph state / node-edge mutation 已拆到 `use-workflow-editor-graph.ts`（360 行），run overlay 已拆到 `use-workflow-run-overlay.ts`（81 行），工作台主文件不再同时承担画布状态、运行拉取和保存编排三类职责。
+- `web/components/workflow-node-config-form/runtime-policy-form.tsx`：311 行，当前承接 retry / join 的结构化配置与入边来源约束，已和新的 `node-io-schema-form.tsx`、`llm-agent-tool-policy-form.tsx` 一起形成 workflow editor inspector 的稳定 section 组合层。
+- `web/components/workflow-node-config-form/llm-agent-node-config-form.tsx`：293 行，tool policy 已拆到 `llm-agent-tool-policy-form.tsx`（103 行），主表单职责比之前更清晰；后续若继续增长，可再按 assistant / contextAccess 分层。
+- `web/components/workflow-editor-workbench/use-workflow-editor-graph.ts`：360 行，graph mutation 仍集中但边界清晰；如果后续继续补 publish section、variables 或 schema builder，适合把节点 contract / publish mutation 再拆成 helper hook。
 - `api/app/services/published_invocation_audit.py` 已收口到 197 行，但 publish governance 仍由 `published_invocation_audit_aggregation.py`（340 行）和 `published_invocation_audit_timeline.py`（206 行）承接；后续应继续防止查询、facet、timeline 再次回流单文件。
 - 当前项目整体判断不变：基础框架足够继续推主业务完整度，但还没到“只剩人工界面设计 / 全链路人工验收”的阶段。
 
@@ -80,7 +83,7 @@
 ## 下一步规划
 
 1. **P0：继续补节点配置与 workflow editor 完整度**
-   - `runtimePolicy` 的 retry / join 已补成结构化表单，下一步优先继续把 input/output schema、tool policy、publish config 等仍停留在 JSON 驱动的配置整理成稳定 section，并按 graph persistence / publish config 继续收紧编辑器职责边界。
+   - `runtimePolicy`、节点 `input/output schema`、`llm_agent.toolPolicy` 已补成独立 section；下一步优先继续把 workflow `publish` config 与其余仍停留在 JSON 驱动的配置整理成稳定 section，并按 graph persistence / publish config 继续收紧编辑器职责边界。
 2. **P1：补齐 `WAITING_CALLBACK` 的后台唤醒闭环**
    - 继续把 callback ticket、scheduler 和 resume orchestration 衔接成更完整的 durable execution 主链。
 3. **P1：继续治理 run diagnostics 详情层**

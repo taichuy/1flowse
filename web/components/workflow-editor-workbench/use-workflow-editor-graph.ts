@@ -249,6 +249,50 @@ export function useWorkflowEditorGraph({
     }
   };
 
+  const updateNodeSchema = (
+    field: "inputSchema" | "outputSchema",
+    nextSchema: Record<string, unknown> | undefined,
+    options?: { successMessage?: string }
+  ) => {
+    if (!selectedNodeId) {
+      return;
+    }
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedNodeId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                [field]: nextSchema
+              }
+            }
+          : node
+      )
+    );
+
+    if (options?.successMessage) {
+      setMessage(options.successMessage);
+      setMessageTone("success");
+    } else {
+      setMessage(null);
+      setMessageTone("idle");
+    }
+  };
+
+  const updateNodeInputSchema = (nextSchema: Record<string, unknown> | undefined) => {
+    updateNodeSchema("inputSchema", nextSchema, {
+      successMessage: nextSchema ? "inputSchema 已应用。" : "已清空 inputSchema。"
+    });
+  };
+
+  const updateNodeOutputSchema = (nextSchema: Record<string, unknown> | undefined) => {
+    updateNodeSchema("outputSchema", nextSchema, {
+      successMessage: nextSchema ? "outputSchema 已应用。" : "已清空 outputSchema。"
+    });
+  };
+
   const handleDeleteSelectedNode = () => {
     if (!selectedNode) {
       return;
@@ -348,6 +392,8 @@ export function useWorkflowEditorGraph({
     handleNodeNameChange,
     handleSelectedNodeConfigChange,
     applyNodeConfigJson,
+    updateNodeInputSchema,
+    updateNodeOutputSchema,
     updateNodeRuntimePolicy,
     handleNodeRuntimePolicyChange,
     handleDeleteSelectedNode,

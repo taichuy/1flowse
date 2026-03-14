@@ -225,6 +225,8 @@ export function WorkflowEditorWorkbench({
               onApplyNodeConfigJson={graph.applyNodeConfigJson}
               onNodeNameChange={graph.handleNodeNameChange}
               onNodeConfigChange={graph.handleSelectedNodeConfigChange}
+              onNodeInputSchemaChange={graph.updateNodeInputSchema}
+              onNodeOutputSchemaChange={graph.updateNodeOutputSchema}
               onNodeRuntimePolicyUpdate={graph.updateNodeRuntimePolicy}
               onNodeRuntimePolicyChange={graph.handleNodeRuntimePolicyChange}
               onDeleteSelectedNode={graph.handleDeleteSelectedNode}
