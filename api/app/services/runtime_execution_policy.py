@@ -97,6 +97,29 @@ def _resolve_tool_execution_from_payload(
     )
 
 
+def _extract_tool_execution_payload(tool_call: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(tool_call, dict):
+        return None
+
+    call_execution = tool_call.get("execution")
+    if isinstance(call_execution, dict):
+        return call_execution
+
+    if any(
+        key in tool_call
+        for key in (
+            "class",
+            "profile",
+            "timeoutMs",
+            "networkPolicy",
+            "filesystemPolicy",
+        )
+    ):
+        return tool_call
+
+    return None
+
+
 def resolve_tool_execution_policy(
     *,
     tool_call: dict[str, Any] | None,
@@ -105,14 +128,13 @@ def resolve_tool_execution_policy(
 ) -> ResolvedExecutionPolicy:
     default_class = default_execution_class_for_tool_ecosystem(ecosystem)
 
-    if isinstance(tool_call, dict):
-        call_execution = tool_call.get("execution")
-        if isinstance(call_execution, dict):
-            return _resolve_tool_execution_from_payload(
-                call_execution,
-                default_class=default_class,
-                source="tool_call",
-            )
+    call_execution = _extract_tool_execution_payload(tool_call)
+    if call_execution is not None:
+        return _resolve_tool_execution_from_payload(
+            call_execution,
+            default_class=default_class,
+            source="tool_call",
+        )
 
     if isinstance(tool_policy, dict):
         policy_execution = tool_policy.get("execution")

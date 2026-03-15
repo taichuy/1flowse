@@ -247,6 +247,137 @@ def test_llm_agent_tool_policy_execution_records_tool_execution_trace(
     }
 
 
+def test_llm_agent_tool_call_execution_override_wins_over_tool_policy(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-agent-tool-execution-override",
+        name="Agent Tool Execution Override Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "assistant": {"enabled": False},
+                        "toolPolicy": {
+                            "allowedToolIds": ["native.search"],
+                            "execution": {
+                                "class": "sandbox",
+                                "profile": "risk-reviewed",
+                                "timeoutMs": 15000,
+                            },
+                        },
+                        "mockPlan": {
+                            "toolCalls": [
+                                {
+                                    "toolId": "native.search",
+                                    "inputs": {"query": "tool-execution-override"},
+                                    "execution": {
+                                        "class": "microvm",
+                                        "profile": "per-call-override",
+                                        "timeoutMs": 5000,
+                                        "networkPolicy": "isolated",
+                                        "filesystemPolicy": "ephemeral",
+                                    },
+                                }
+                            ]
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(id="native.search", name="Native Search"),
+        invoker=lambda request: {
+            "status": "success",
+            "content_type": "json",
+            "summary": "tool execution override traced",
+            "structured": {"documents": ["alpha"], "query": request.inputs["query"]},
+            "meta": {"tool_name": "Native Search"},
+        },
+    )
+
+    artifacts = RuntimeService(plugin_call_proxy=PluginCallProxy(registry)).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "agent"},
+    )
+
+    agent_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "agent")
+    dispatched_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == agent_run.id and event.event_type == "tool.execution.dispatched"
+    )
+    assert dispatched_event.payload == {
+        "node_id": "agent",
+        "tool_id": "native.search",
+        "tool_name": "Native Search",
+        "requested_execution_class": "microvm",
+        "effective_execution_class": "inline",
+        "execution_source": "tool_call",
+        "requested_execution_profile": "per-call-override",
+        "requested_execution_timeout_ms": 5000,
+        "requested_network_policy": "isolated",
+        "requested_filesystem_policy": "ephemeral",
+        "executor_ref": "tool:native-inline",
+    }
+
+    fallback_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == agent_run.id and event.event_type == "tool.execution.fallback"
+    )
+    assert fallback_event.payload == {
+        "node_id": "agent",
+        "tool_id": "native.search",
+        "tool_name": "Native Search",
+        "requested_execution_class": "microvm",
+        "effective_execution_class": "inline",
+        "execution_source": "tool_call",
+        "requested_execution_profile": "per-call-override",
+        "requested_execution_timeout_ms": 5000,
+        "requested_network_policy": "isolated",
+        "requested_filesystem_policy": "ephemeral",
+        "executor_ref": "tool:native-inline",
+        "reason": "native_tools_currently_inline_only",
+    }
+
+    tool_result_artifact = next(
+        artifact
+        for artifact in artifacts.artifacts
+        if artifact.node_run_id == agent_run.id and artifact.artifact_kind == "tool_result"
+    )
+    assert tool_result_artifact.metadata_payload == {
+        "tool_id": "native.search",
+        "tool_name": "native.search",
+        "requested_execution_class": "microvm",
+        "effective_execution_class": "inline",
+        "execution_source": "tool_call",
+        "requested_execution_profile": "per-call-override",
+        "requested_execution_timeout_ms": 5000,
+        "requested_network_policy": "isolated",
+        "requested_filesystem_policy": "ephemeral",
+        "executor_ref": "tool:native-inline",
+        "fallback_reason": "native_tools_currently_inline_only",
+    }
+
+
 def test_llm_agent_waiting_tool_can_resume(sqlite_session: Session) -> None:
     workflow = Workflow(
         id="wf-agent-resume",

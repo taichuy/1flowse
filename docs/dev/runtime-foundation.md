@@ -24,6 +24,7 @@
 - 2026-03-16 workflow editor 已把同一套 tool catalog reference 规则补到前端 preflight：`保存 workflow` / `保存为 workspace starter` 现在除了 planned node guard 与 contract preflight，还会阻断指向缺失目录工具或 ecosystem 漂移的 `tool` 节点、以及指向失效目录项的 `llm_agent.toolPolicy`，把“tool binding 断链”从 save-time 之后的 API/runtime 问题，前移成 editor 内可直接修正的事实提示。
 - 2026-03-16 workflow / workspace starter 的持久化链路已进一步补齐 publish version reference guard：`definition.publish[].workflowVersion` 现在会在 save-time 校验是否落在“已存在版本 + 当前上下文允许的 next version”集合内，既保留 pin 到本次保存目标版本的语义，又把 `9.9.9` / 越界 future version 之类的错误从 publish binding sync 阶段前移到 workflow / starter 保存阶段。
 - 2026-03-16 workflow editor 与 inspector publish draft 表单已同步接上同一套 publish version preflight：hero 会显示 `publish version issues`，publish form 会直接给出当前可 pin 的版本集合，并明确提示“如果要跟随本次保存版本，`workflowVersion` 留空即可”，避免用户等到后端 `422` 才知道引用失配。
+- 2026-03-16 `llm_agent` 的 tool call 级 execution override 已补成真实生效：`resolve_tool_execution_policy()` 现在既接受完整 `toolCall` 对象，也接受 `AgentToolCall.execution` 这种直接 payload 形态，因此 `mockPlan.toolCalls[].execution` 不再被误判为空并静默回退到 `toolPolicy.execution`；这把“agent 内单次工具调用覆盖默认执行策略”的事实与 runtime trace/event/artifact 对齐，也避免 execution policy 只在 node / toolPolicy 层可见、到了 per-call 粒度却失真。
 - 面向 AI / 自动化 的追溯仍必须以 `runs / node_runs / run_events / run_artifacts / tool_call_records / ai_call_records` 为事实源，前端面板只负责摘要、导航和排障入口。
 - 当前产品基线已进一步明确：7Flows 同时服务人类用户与 AI 用户，后续工作台、发布接口与运行态接口演进时，应保持人机交互、人与 AI 协作、AI 独立操作三类场景的结果语义一致。
 - 2026-03-15 文档基线已显式区分“对外 OpenClaw-first 切口”和“对内 IR / runtime 内核”：开源给协作、商业给治理现已作为目标设计写入稳定策略文档，但当前仓库仍主要落在 OSS kernel 和运行时基础建设阶段，不应把 Team / Enterprise 能力误写成已落地事实。
@@ -128,7 +129,7 @@
 ## 下一步规划
 
 1. **P0：继续把 graded execution 从 execution-aware 扩成真实隔离能力**
-   - `RuntimeExecutionAdapterRegistry`、`sandbox_code` host-subprocess MVP，以及 ToolGateway / `llm_agent.toolPolicy.execution` / tool node 的 execution-aware dispatch 已落地；下一步优先补真实 `sandbox` / `microvm` tool adapter、compat plugin execution boundary 对接与 execution trace 摘要聚合，避免 execution policy 长期停留在“有 trace 但少数能力仍 fallback”。
+   - `RuntimeExecutionAdapterRegistry`、`sandbox_code` host-subprocess MVP，以及 ToolGateway / `llm_agent.toolPolicy.execution` / tool node 的 execution-aware dispatch 已落地；2026-03-16 又补齐了 `llm_agent` 单次 tool call 对 `toolPolicy.execution` 的覆盖语义。下一步优先补真实 `sandbox` / `microvm` tool adapter、compat plugin execution boundary 对接与 execution trace 摘要聚合，避免 execution policy 长期停留在“有 trace 但少数能力仍 fallback”。
 2. **P0：继续扩统一敏感访问控制闭环**
    - `SensitiveAccessRequest`、`ApprovalTicket`、`NotificationDispatch`、`/api/sensitive-access/*`、runtime `credential resolve`、`mcp_query / authorized_context` 的 context read 拦截、`ToolGateway` 的 tool invoke gating、Run API `trace export` 的敏感导出控制、published endpoint invocation detail / cache inventory / invocation export 的人工详情查看控制，以及 publish 面板对 access-blocked 状态的最小 UI 落点都已落地；credential path 的 `allow_masked` 也已补成真正的 masked/handle 语义，2026-03-16 已继续补上首页摘要 + 最小 inbox/operator UI、approval timeline 的筛选与跨入口跳转，以及 transaction-aware 的 `NotificationDispatchScheduler`、`notifications.deliver_dispatch` worker 与最小 webhook adapter。下一步优先补 email/slack/feishu 的真实投递 adapter、更细的 operator 控制面，以及 inbox / run / published detail 的聚合解释与批量治理动作，避免统一治理仍停留在“可人工处理，但自动投递与批量运维仍偏薄”的阶段。
 3. **P0：继续收口 `WAITING_CALLBACK` 的 durable resume 语义**
