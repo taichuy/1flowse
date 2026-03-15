@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.routes import run_callback_tickets as run_callback_ticket_routes
 from app.models.run import NodeRun, Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
@@ -84,12 +85,20 @@ def _create_waiting_callback_run(sqlite_session: Session) -> tuple[str, str]:
 def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch,
 ) -> None:
     run_id, ticket = _create_waiting_callback_run(sqlite_session)
     ticket_record = sqlite_session.get(RunCallbackTicket, ticket)
     assert ticket_record is not None
     ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=5)
     sqlite_session.commit()
+
+    scheduled_resumes = []
+    monkeypatch.setattr(
+        run_callback_ticket_routes.cleanup_service,
+        "_resume_scheduler",
+        RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
 
     response = client.post(
         "/api/runs/callback-tickets/cleanup",
@@ -98,11 +107,22 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
 
     sqlite_session.refresh(ticket_record)
     refreshed_run = sqlite_session.get(Run, run_id)
+    node_run = sqlite_session.scalar(
+        select(NodeRun).where(NodeRun.run_id == run_id, NodeRun.node_id == "agent")
+    )
     event = sqlite_session.scalar(
         select(RunEvent)
         .where(
             RunEvent.run_id == run_id,
             RunEvent.event_type == "run.callback.ticket.expired",
+        )
+        .order_by(RunEvent.id.desc())
+    )
+    resume_event = sqlite_session.scalar(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run_id,
+            RunEvent.event_type == "run.resume.scheduled",
         )
         .order_by(RunEvent.id.desc())
     )
@@ -112,7 +132,9 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
     assert body["source"] == "route_cleanup"
     assert body["matched_count"] == 1
     assert body["expired_count"] == 1
+    assert body["scheduled_resume_count"] == 1
     assert body["run_ids"] == [run_id]
+    assert body["scheduled_resume_run_ids"] == [run_id]
     assert body["items"][0]["ticket"] == ticket
     assert body["items"][0]["node_id"] == "agent"
     assert body["items"][0]["status"] == "expired"
@@ -125,21 +147,94 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
     }
     assert refreshed_run is not None
     assert refreshed_run.status == "waiting"
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].run_id == run_id
+    assert scheduled_resumes[0].source == "route_cleanup"
+    assert node_run is not None
+    assert node_run.checkpoint_payload["scheduled_resume"] == {
+        "delay_seconds": 0.0,
+        "reason": "cleanup route pending",
+        "source": "route_cleanup",
+        "waiting_status": "waiting_callback",
+    }
     assert event is not None
     assert event.payload["ticket"] == ticket
     assert event.payload["source"] == "route_cleanup"
     assert event.payload["cleanup"] is True
+    assert resume_event is not None
+    assert resume_event.payload == {
+        "node_id": "agent",
+        "delay_seconds": 0.0,
+        "reason": "cleanup route pending",
+        "source": "route_cleanup",
+        "waiting_status": "waiting_callback",
+    }
 
 
-def test_cleanup_stale_run_callback_tickets_route_supports_dry_run(
+def test_cleanup_stale_run_callback_tickets_route_can_skip_resume_scheduling(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch,
 ) -> None:
     run_id, ticket = _create_waiting_callback_run(sqlite_session)
     ticket_record = sqlite_session.get(RunCallbackTicket, ticket)
     assert ticket_record is not None
     ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=5)
     sqlite_session.commit()
+
+    scheduled_resumes = []
+    monkeypatch.setattr(
+        run_callback_ticket_routes.cleanup_service,
+        "_resume_scheduler",
+        RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
+
+    response = client.post(
+        "/api/runs/callback-tickets/cleanup",
+        json={"source": "route_cleanup_no_resume", "schedule_resumes": False},
+    )
+
+    node_run = sqlite_session.scalar(
+        select(NodeRun).where(NodeRun.run_id == run_id, NodeRun.node_id == "agent")
+    )
+    resume_event = sqlite_session.scalar(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run_id,
+            RunEvent.event_type == "run.resume.scheduled",
+        )
+        .order_by(RunEvent.id.desc())
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched_count"] == 1
+    assert body["expired_count"] == 1
+    assert body["scheduled_resume_count"] == 0
+    assert body["scheduled_resume_run_ids"] == []
+    assert scheduled_resumes == []
+    assert node_run is not None
+    assert "scheduled_resume" not in (node_run.checkpoint_payload or {})
+    assert resume_event is None
+
+
+def test_cleanup_stale_run_callback_tickets_route_supports_dry_run(
+    client: TestClient,
+    sqlite_session: Session,
+    monkeypatch,
+) -> None:
+    run_id, ticket = _create_waiting_callback_run(sqlite_session)
+    ticket_record = sqlite_session.get(RunCallbackTicket, ticket)
+    assert ticket_record is not None
+    ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=5)
+    sqlite_session.commit()
+
+    scheduled_resumes = []
+    monkeypatch.setattr(
+        run_callback_ticket_routes.cleanup_service,
+        "_resume_scheduler",
+        RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
 
     response = client.post(
         "/api/runs/callback-tickets/cleanup",
@@ -160,11 +255,13 @@ def test_cleanup_stale_run_callback_tickets_route_supports_dry_run(
     assert body["dry_run"] is True
     assert body["matched_count"] == 1
     assert body["expired_count"] == 0
+    assert body["scheduled_resume_count"] == 0
     assert body["items"][0]["ticket"] == ticket
     assert body["items"][0]["status"] == "pending"
     assert ticket_record.status == "pending"
     assert ticket_record.expired_at is None
     assert matching_events == []
+    assert scheduled_resumes == []
 
 
 def test_cleanup_service_can_schedule_immediate_resume_for_expired_callback_tickets(
@@ -187,6 +284,14 @@ def test_cleanup_service_can_schedule_immediate_resume_for_expired_callback_tick
         schedule_resumes=True,
         resume_source="callback_ticket_monitor",
     )
+
+    assert result.matched_count == 1
+    assert result.expired_count == 1
+    assert result.scheduled_resume_count == 1
+    assert result.run_ids == [run_id]
+    assert result.scheduled_resume_run_ids == [run_id]
+    assert scheduled_resumes == []
+
     sqlite_session.commit()
 
     sqlite_session.refresh(ticket_record)
@@ -202,9 +307,6 @@ def test_cleanup_service_can_schedule_immediate_resume_for_expired_callback_tick
         .order_by(RunEvent.id.desc())
     )
 
-    assert result.matched_count == 1
-    assert result.expired_count == 1
-    assert result.run_ids == [run_id]
     assert ticket_record.status == "expired"
     assert node_run is not None
     assert len(scheduled_resumes) == 1

@@ -26,6 +26,7 @@ class CallbackTicketCleanupRequest(BaseModel):
     source: str = Field(default="manual_cleanup", min_length=1, max_length=64)
     limit: int | None = Field(default=None, ge=1, le=1000)
     dry_run: bool = False
+    schedule_resumes: bool = True
 
 
 class CallbackTicketCleanupItem(BaseModel):
@@ -50,7 +51,9 @@ class CallbackTicketCleanupResponse(BaseModel):
     limit: int
     matched_count: int = 0
     expired_count: int = 0
+    scheduled_resume_count: int = 0
     run_ids: list[str] = Field(default_factory=list)
+    scheduled_resume_run_ids: list[str] = Field(default_factory=list)
     items: list[CallbackTicketCleanupItem] = Field(default_factory=list)
 
 

@@ -25,7 +25,9 @@ def _serialize_cleanup_result(
         limit=result.limit,
         matched_count=result.matched_count,
         expired_count=result.expired_count,
+        scheduled_resume_count=result.scheduled_resume_count,
         run_ids=result.run_ids,
+        scheduled_resume_run_ids=result.scheduled_resume_run_ids,
         items=[
             CallbackTicketCleanupItem(
                 ticket=item.ticket,
@@ -55,6 +57,8 @@ def cleanup_stale_run_callback_tickets(
     result = cleanup_service.cleanup_stale_tickets(
         db,
         source=payload.source,
+        schedule_resumes=payload.schedule_resumes and not payload.dry_run,
+        resume_source=payload.source,
         limit=payload.limit,
         dry_run=payload.dry_run,
     )

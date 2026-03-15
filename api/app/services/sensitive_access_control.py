@@ -345,6 +345,7 @@ class SensitiveAccessControlService:
                     f"Sensitive access ticket {approval_ticket.id} {status}"
                 ),
                 source="sensitive_access_decision",
+                db=db,
             )
         return ApprovalDecisionBundle(
             access_request=access_request,

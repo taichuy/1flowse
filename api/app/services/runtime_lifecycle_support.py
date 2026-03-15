@@ -92,6 +92,7 @@ class RuntimeLifecycleSupportMixin:
 
     def _schedule_waiting_resume_if_needed(
         self,
+        db: Session,
         *,
         run: Run,
         node: dict,
@@ -108,6 +109,7 @@ class RuntimeLifecycleSupportMixin:
             delay_seconds=result.resume_after_seconds,
             reason=result.waiting_reason or f"{node['id']} waiting",
             source="runtime_waiting",
+            db=db,
         )
         checkpoint_payload = dict(node_run.checkpoint_payload or {})
         checkpoint_payload["scheduled_resume"] = {

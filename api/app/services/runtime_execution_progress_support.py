@@ -92,6 +92,7 @@ class RuntimeExecutionProgressSupportMixin:
             events=events,
         )
         self._schedule_waiting_resume_if_needed(
+            db,
             run=run,
             node=node,
             node_run=node_run,

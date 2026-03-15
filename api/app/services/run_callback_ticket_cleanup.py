@@ -46,7 +46,9 @@ class CallbackTicketCleanupResult:
     limit: int
     matched_count: int
     expired_count: int
+    scheduled_resume_count: int
     run_ids: list[str]
+    scheduled_resume_run_ids: list[str]
     items: list[CallbackTicketCleanupItem]
 
 
@@ -91,6 +93,7 @@ class RunCallbackTicketCleanupService:
         run_ids: list[str] = []
         seen_run_ids: set[str] = set()
         resume_scheduled_run_ids: set[str] = set()
+        scheduled_resume_run_ids: list[str] = []
         items: list[CallbackTicketCleanupItem] = []
         for record in records:
             run = runs.get(record.run_id)
@@ -133,6 +136,7 @@ class RunCallbackTicketCleanupService:
                     )
                 ):
                     resume_scheduled_run_ids.add(record.run_id)
+                    scheduled_resume_run_ids.append(record.run_id)
             if record.run_id not in seen_run_ids:
                 seen_run_ids.add(record.run_id)
                 run_ids.append(record.run_id)
@@ -144,7 +148,9 @@ class RunCallbackTicketCleanupService:
             limit=effective_limit,
             matched_count=len(records),
             expired_count=0 if dry_run else len(records),
+            scheduled_resume_count=len(scheduled_resume_run_ids),
             run_ids=run_ids,
+            scheduled_resume_run_ids=scheduled_resume_run_ids,
             items=items,
         )
 
@@ -215,6 +221,7 @@ class RunCallbackTicketCleanupService:
             delay_seconds=0.0,
             reason=snapshot.reason or node_run.waiting_reason or "callback pending",
             source=source,
+            db=db,
         )
         checkpoint_payload = dict(node_run.checkpoint_payload or {})
         checkpoint_payload["scheduled_resume"] = {
