@@ -1,11 +1,15 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import time
 from functools import lru_cache
-from typing import Any
 
 import httpx
 
+from app.services.plugin_execution_contract import (
+    build_execution_contract,
+    normalize_contract_bound_request,
+)
+from app.services.plugin_execution_dispatch import PluginExecutionDispatchPlanner
 from app.services.plugin_runtime_registry import PluginRegistry
 from app.services.plugin_runtime_types import (
     ClientFactory,
@@ -16,7 +20,6 @@ from app.services.plugin_runtime_types import (
     PluginInvocationError,
     PluginToolDefinition,
 )
-from app.services.runtime_execution_policy import default_execution_class_for_tool_ecosystem
 
 
 def default_plugin_client_factory(timeout_ms: int) -> httpx.Client:
@@ -33,6 +36,7 @@ class PluginCallProxy:
     ) -> None:
         self._registry = registry
         self._client_factory = client_factory or default_plugin_client_factory
+        self._execution_dispatch_planner = PluginExecutionDispatchPlanner(registry)
 
     def invoke(self, request: PluginCallRequest) -> PluginCallResponse:
         tool = self._registry.get_tool(request.tool_id)
@@ -57,100 +61,12 @@ class PluginCallProxy:
     def describe_execution_dispatch(
         self,
         request: PluginCallRequest,
+        *,
+        adapter: CompatibilityAdapterRegistration | None = None,
     ) -> PluginExecutionDispatchPlan:
-        requested_execution = dict(request.execution or {})
-        default_execution_class = default_execution_class_for_tool_ecosystem(request.ecosystem)
-        requested_execution_class = str(
-            requested_execution.get("class") or default_execution_class
-        ).strip().lower() or default_execution_class
-        execution_source = str(requested_execution.get("source") or "default").strip() or "default"
-        requested_execution_profile = requested_execution.get("profile")
-        requested_execution_timeout_ms = requested_execution.get("timeoutMs")
-        requested_network_policy = requested_execution.get("networkPolicy")
-        requested_filesystem_policy = requested_execution.get("filesystemPolicy")
-
-        if request.ecosystem == "native":
-            effective_execution_class = "inline"
-            fallback_reason = None
-            if requested_execution_class != effective_execution_class:
-                fallback_reason = "native_tools_currently_inline_only"
-            return PluginExecutionDispatchPlan(
-                requested_execution_class=requested_execution_class,
-                effective_execution_class=effective_execution_class,
-                execution_source=execution_source,
-                requested_execution_profile=(
-                    str(requested_execution_profile)
-                    if isinstance(requested_execution_profile, str)
-                    else None
-                ),
-                requested_execution_timeout_ms=(
-                    requested_execution_timeout_ms
-                    if isinstance(requested_execution_timeout_ms, int)
-                    else None
-                ),
-                requested_network_policy=(
-                    str(requested_network_policy)
-                    if isinstance(requested_network_policy, str)
-                    else None
-                ),
-                requested_filesystem_policy=(
-                    str(requested_filesystem_policy)
-                    if isinstance(requested_filesystem_policy, str)
-                    else None
-                ),
-                executor_ref="tool:native-inline",
-                effective_execution=self._build_effective_execution_payload(
-                    requested_execution=requested_execution,
-                    effective_execution_class=effective_execution_class,
-                    execution_source=execution_source,
-                ),
-                fallback_reason=fallback_reason,
-            )
-
-        adapter = self._registry.resolve_adapter(
-            ecosystem=request.ecosystem,
-            adapter_id=request.adapter_id,
-        )
-        supported_execution_classes = adapter.supported_execution_classes or ("subprocess",)
-        effective_execution_class = (
-            requested_execution_class
-            if requested_execution_class in supported_execution_classes
-            else supported_execution_classes[0]
-        )
-        fallback_reason = None
-        if requested_execution_class != effective_execution_class:
-            fallback_reason = "compat_adapter_execution_class_not_supported"
-        return PluginExecutionDispatchPlan(
-            requested_execution_class=requested_execution_class,
-            effective_execution_class=effective_execution_class,
-            execution_source=execution_source,
-            requested_execution_profile=(
-                str(requested_execution_profile)
-                if isinstance(requested_execution_profile, str)
-                else None
-            ),
-            requested_execution_timeout_ms=(
-                requested_execution_timeout_ms
-                if isinstance(requested_execution_timeout_ms, int)
-                else None
-            ),
-            requested_network_policy=(
-                str(requested_network_policy)
-                if isinstance(requested_network_policy, str)
-                else None
-            ),
-            requested_filesystem_policy=(
-                str(requested_filesystem_policy)
-                if isinstance(requested_filesystem_policy, str)
-                else None
-            ),
-            executor_ref=f"tool:compat-adapter:{adapter.id}",
-            effective_execution=self._build_effective_execution_payload(
-                requested_execution=requested_execution,
-                effective_execution_class=effective_execution_class,
-                execution_source=execution_source,
-            ),
-            fallback_reason=fallback_reason,
+        return self._execution_dispatch_planner.describe(
+            request,
+            adapter=adapter,
         )
 
     def _invoke_native_tool(self, request: PluginCallRequest) -> PluginCallResponse:
@@ -184,9 +100,9 @@ class PluginCallProxy:
     ) -> PluginCallResponse:
         started_at = time.perf_counter()
         invoke_url = f"{adapter.endpoint.rstrip('/')}/invoke"
-        execution_dispatch = self.describe_execution_dispatch(request)
-        execution_contract = self._build_execution_contract(tool)
-        normalized_inputs, normalized_credentials = self._normalize_contract_bound_request(
+        execution_dispatch = self.describe_execution_dispatch(request, adapter=adapter)
+        execution_contract = build_execution_contract(tool)
+        normalized_inputs, normalized_credentials = normalize_contract_bound_request(
             request,
             execution_contract,
         )
@@ -232,224 +148,6 @@ class PluginCallProxy:
                 body.get("durationMs") or int((time.perf_counter() - started_at) * 1000)
             ),
         )
-
-    def _build_effective_execution_payload(
-        self,
-        *,
-        requested_execution: dict[str, Any],
-        effective_execution_class: str,
-        execution_source: str,
-    ) -> dict[str, Any]:
-        if not requested_execution:
-            return {}
-
-        effective_execution = dict(requested_execution)
-        effective_execution["class"] = effective_execution_class
-        effective_execution["source"] = execution_source
-        return effective_execution
-
-    def _build_execution_contract(self, tool: PluginToolDefinition) -> dict[str, Any]:
-        constrained_ir = tool.constrained_ir
-        if not isinstance(constrained_ir, dict):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool.id}' is missing constrained_ir and cannot be invoked."
-            )
-
-        input_contract = constrained_ir.get("input_contract")
-        constraints = constrained_ir.get("constraints")
-        if not isinstance(input_contract, list) or not isinstance(constraints, dict):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool.id}' has an invalid constrained_ir execution contract."
-            )
-
-        contract_fields: list[dict[str, Any]] = []
-        for raw_field in input_contract:
-            if not isinstance(raw_field, dict):
-                raise PluginInvocationError(
-                    f"Compat plugin tool '{tool.id}' has a non-object input_contract field."
-                )
-            field_name = str(raw_field.get("name") or "").strip()
-            value_source = str(raw_field.get("value_source") or "").strip()
-            json_schema = raw_field.get("json_schema") or {}
-            if not field_name or value_source not in {"llm", "user", "credential", "file"}:
-                raise PluginInvocationError(
-                    f"Compat plugin tool '{tool.id}' has an invalid input_contract field."
-                )
-            if not isinstance(json_schema, dict):
-                raise PluginInvocationError(
-                    f"Compat plugin tool '{tool.id}' has an invalid json_schema for '{field_name}'."
-                )
-            contract_fields.append(
-                {
-                    "name": field_name,
-                    "required": bool(raw_field.get("required")),
-                    "valueSource": value_source,
-                    "jsonSchema": dict(json_schema),
-                }
-            )
-
-        return {
-            "irVersion": str(constrained_ir.get("ir_version") or "2026-03-10"),
-            "kind": "tool_execution",
-            "ecosystem": str(constrained_ir.get("ecosystem") or tool.ecosystem),
-            "toolId": str(constrained_ir.get("tool_id") or tool.id),
-            "inputContract": contract_fields,
-            "constraints": {
-                "additionalProperties": bool(constraints.get("additional_properties", False)),
-                "credentialFields": list(constraints.get("credential_fields") or []),
-                "fileFields": list(constraints.get("file_fields") or []),
-                "llmFillableFields": list(constraints.get("llm_fillable_fields") or []),
-                "userConfigFields": list(constraints.get("user_config_fields") or []),
-            },
-            "pluginMeta": dict(constrained_ir.get("plugin_meta") or {}),
-        }
-
-    def _normalize_contract_bound_request(
-        self,
-        request: PluginCallRequest,
-        execution_contract: dict[str, Any],
-    ) -> tuple[dict[str, Any], dict[str, str]]:
-        raw_fields = execution_contract.get("inputContract") or []
-        constraints = execution_contract.get("constraints") or {}
-        fields_by_name = {
-            str(field.get("name")): field
-            for field in raw_fields
-            if isinstance(field, dict) and field.get("name")
-        }
-        allowed_input_fields = {
-            name
-            for name, field in fields_by_name.items()
-            if field.get("valueSource") != "credential"
-        }
-        allowed_credential_fields = set(constraints.get("credentialFields") or [])
-        additional_properties = bool(constraints.get("additionalProperties", False))
-
-        for name, field in fields_by_name.items():
-            value_source = str(field.get("valueSource") or "")
-            if value_source == "credential" and name in request.inputs:
-                raise PluginInvocationError(
-                    f"Compat plugin tool '{request.tool_id}' must receive credential field "
-                    f"'{name}' via credentials, not inputs."
-                )
-            if value_source != "credential" and name in request.credentials:
-                raise PluginInvocationError(
-                    f"Compat plugin tool '{request.tool_id}' must receive field '{name}' via "
-                    f"inputs, not credentials."
-                )
-
-        extra_inputs = sorted(set(request.inputs) - allowed_input_fields)
-        if extra_inputs and not additional_properties:
-            raise PluginInvocationError(
-                f"Compat plugin tool '{request.tool_id}' received unsupported input fields: "
-                f"{', '.join(extra_inputs)}."
-            )
-
-        extra_credentials = sorted(set(request.credentials) - allowed_credential_fields)
-        if extra_credentials and not additional_properties:
-            raise PluginInvocationError(
-                f"Compat plugin tool '{request.tool_id}' received unsupported credential fields: "
-                f"{', '.join(extra_credentials)}."
-            )
-
-        normalized_inputs: dict[str, Any] = {}
-        normalized_credentials: dict[str, str] = {}
-        for name, field in fields_by_name.items():
-            value_source = str(field.get("valueSource") or "")
-            required = bool(field.get("required"))
-            json_schema = field.get("jsonSchema") or {}
-            if value_source == "credential":
-                if name not in request.credentials:
-                    if required:
-                        raise PluginInvocationError(
-                            f"Compat plugin tool '{request.tool_id}' is missing required "
-                            f"credential '{name}'."
-                        )
-                    continue
-                value = request.credentials[name]
-                self._validate_contract_field_value(
-                    tool_id=request.tool_id,
-                    field_name=name,
-                    value_source=value_source,
-                    value=value,
-                    json_schema=json_schema,
-                )
-                normalized_credentials[name] = value
-                continue
-
-            if name not in request.inputs:
-                if required:
-                    raise PluginInvocationError(
-                        f"Compat plugin tool '{request.tool_id}' is missing "
-                        f"required input '{name}'."
-                    )
-                continue
-            value = request.inputs[name]
-            self._validate_contract_field_value(
-                tool_id=request.tool_id,
-                field_name=name,
-                value_source=value_source,
-                value=value,
-                json_schema=json_schema,
-            )
-            normalized_inputs[name] = value
-
-        if additional_properties:
-            for name, value in request.inputs.items():
-                normalized_inputs.setdefault(name, value)
-            for name, value in request.credentials.items():
-                normalized_credentials.setdefault(name, value)
-
-        return normalized_inputs, normalized_credentials
-
-    def _validate_contract_field_value(
-        self,
-        *,
-        tool_id: str,
-        field_name: str,
-        value_source: str,
-        value: Any,
-        json_schema: dict[str, Any],
-    ) -> None:
-        schema_type = str(json_schema.get("type") or "").strip()
-        if schema_type == "string" and not isinstance(value, str):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' expects a string "
-                f"({value_source})."
-            )
-        if schema_type == "number" and (
-            not isinstance(value, (int, float)) or isinstance(value, bool)
-        ):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' expects a number "
-                f"({value_source})."
-            )
-        if schema_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' expects an integer "
-                f"({value_source})."
-            )
-        if schema_type == "boolean" and not isinstance(value, bool):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' expects a boolean "
-                f"({value_source})."
-            )
-        if schema_type == "object" and not isinstance(value, dict):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' expects an object "
-                f"({value_source})."
-            )
-        if schema_type == "array" and not isinstance(value, list):
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' expects an array "
-                f"({value_source})."
-            )
-
-        enum_values = json_schema.get("enum")
-        if isinstance(enum_values, list) and value not in enum_values:
-            raise PluginInvocationError(
-                f"Compat plugin tool '{tool_id}' field '{field_name}' must be one of "
-                f"{', '.join(str(item) for item in enum_values)}."
-            )
 
 
 @lru_cache(maxsize=1)
