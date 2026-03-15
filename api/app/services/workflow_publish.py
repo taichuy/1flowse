@@ -7,12 +7,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.workflow import WorkflowPublishedEndpoint, WorkflowVersion
-from app.schemas.workflow import (
+from app.schemas.workflow_publish import PublishedEndpointLifecycleStatus
+from app.schemas.workflow_published_endpoint import (
     WorkflowPublishedEndpointDefinition,
     normalize_published_endpoint_alias,
     normalize_published_endpoint_path,
 )
-from app.schemas.workflow_publish import PublishedEndpointLifecycleStatus
 from app.services.compiled_blueprints import CompiledBlueprintService
 
 

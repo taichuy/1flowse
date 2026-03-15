@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.run import RunDetail
 from app.schemas.run_views import RunCallbackTicketItem
-from app.schemas.workflow import (
+from app.schemas.workflow_published_endpoint import (
     WorkflowPublishedEndpointCachePolicy,
     WorkflowPublishedEndpointRateLimitPolicy,
 )
