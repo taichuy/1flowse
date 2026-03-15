@@ -86,7 +86,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             plan = self._build_plan(config, model_config, node_input)
             plan_llm_response = plan.llm_response
             checkpoint["plan"] = plan.as_dict()
-            node_run.checkpoint_payload = checkpoint
+            node_run.checkpoint_payload = deepcopy(checkpoint)
             self._record_ai_call(
                 db,
                 run_id=run_id,
@@ -183,7 +183,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                     tool_error=str(exc),
                     final_output=fallback_output,
                 )
-                node_run.checkpoint_payload = checkpoint
+                node_run.checkpoint_payload = deepcopy(checkpoint)
                 self._context_service.replace_artifact_refs(node_run, artifact_refs)
                 return AgentExecutionResult(
                     output=fallback_output,
@@ -209,6 +209,11 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 self._tool_result_to_dict(result) for result in tool_results
             ]
             checkpoint["next_tool_index"] = next_tool_index
+            sensitive_access_checkpoint = tool_result.meta.get("sensitive_access")
+            if isinstance(sensitive_access_checkpoint, dict):
+                checkpoint["sensitive_access"] = dict(sensitive_access_checkpoint)
+            else:
+                checkpoint.pop("sensitive_access", None)
             if tool_result.raw_ref:
                 artifact_refs = self._append_unique_ref(artifact_refs, tool_result.raw_ref)
             self._context_service.update_working_context(
@@ -226,7 +231,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 node_run.status = waiting_status
                 node_run.phase = waiting_status
                 node_run.waiting_reason = waiting_reason
-                node_run.checkpoint_payload = checkpoint
+                node_run.checkpoint_payload = deepcopy(checkpoint)
                 self._context_service.replace_artifact_refs(node_run, artifact_refs)
                 events.append(
                     RuntimeEvent(
@@ -264,7 +269,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             )
             next_tool_index += 1
             checkpoint["next_tool_index"] = next_tool_index
-            node_run.checkpoint_payload = checkpoint
+            node_run.checkpoint_payload = deepcopy(checkpoint)
 
         evidence_pack = self._to_dict(node_run.evidence_context)
         if self._should_run_assistant(config, tool_results) and not evidence_pack:
@@ -288,7 +293,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             )
             evidence_pack = distilled_evidence.as_dict()
             checkpoint["evidence_pack"] = evidence_pack
-            node_run.checkpoint_payload = checkpoint
+            node_run.checkpoint_payload = deepcopy(checkpoint)
             self._context_service.set_evidence_context(node_run, evidence_pack)
             artifact_refs = self._append_unique_ref(artifact_refs, evidence_artifact.uri)
             self._record_ai_call(
@@ -355,7 +360,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             final_output=final_output,
         )
         self._context_service.replace_artifact_refs(node_run, artifact_refs)
-        node_run.checkpoint_payload = checkpoint
+        node_run.checkpoint_payload = deepcopy(checkpoint)
         return AgentExecutionResult(
             output=final_output,
             evidence_pack=evidence_pack,

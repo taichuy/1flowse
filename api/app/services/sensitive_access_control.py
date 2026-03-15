@@ -173,6 +173,12 @@ class SensitiveAccessControlService:
                 return record
         return None
 
+    def _workflow_id_for_run(self, db: Session, *, run_id: str | None) -> str:
+        if not run_id:
+            return ""
+        run = db.get(Run, run_id)
+        return str(run.workflow_id or "") if run is not None else ""
+
     def find_workflow_context_resource(
         self,
         db: Session,
@@ -181,10 +187,7 @@ class SensitiveAccessControlService:
         source_node_id: str,
         artifact_type: str,
     ) -> SensitiveResourceRecord | None:
-        workflow_id = ""
-        if run_id:
-            run = db.get(Run, run_id)
-            workflow_id = str(run.workflow_id or "") if run is not None else ""
+        workflow_id = self._workflow_id_for_run(db, run_id=run_id)
 
         statement = select(SensitiveResourceRecord).where(
             SensitiveResourceRecord.source == "workflow_context"
@@ -203,6 +206,50 @@ class SensitiveAccessControlService:
                 or ""
             ).strip()
             if resource_node_id != source_node_id or resource_artifact_type != artifact_type:
+                continue
+
+            resource_workflow_id = str(metadata_payload.get("workflow_id") or "").strip()
+            if workflow_id and resource_workflow_id == workflow_id:
+                return record
+            if not resource_workflow_id and fallback_match is None:
+                fallback_match = record
+        return fallback_match
+
+    def find_tool_resource(
+        self,
+        db: Session,
+        *,
+        run_id: str | None,
+        tool_id: str,
+        ecosystem: str | None = None,
+        adapter_id: str | None = None,
+    ) -> SensitiveResourceRecord | None:
+        workflow_id = self._workflow_id_for_run(db, run_id=run_id)
+
+        statement = select(SensitiveResourceRecord).where(
+            SensitiveResourceRecord.source == "local_capability"
+        )
+        fallback_match: SensitiveResourceRecord | None = None
+        for record in db.scalars(statement):
+            metadata_payload = record.metadata_payload or {}
+            resource_tool_id = str(
+                metadata_payload.get("tool_id")
+                or metadata_payload.get("toolId")
+                or ""
+            ).strip()
+            if resource_tool_id != tool_id:
+                continue
+
+            resource_ecosystem = str(metadata_payload.get("ecosystem") or "").strip()
+            if resource_ecosystem and resource_ecosystem != str(ecosystem or "").strip():
+                continue
+
+            resource_adapter_id = str(
+                metadata_payload.get("adapter_id")
+                or metadata_payload.get("adapterId")
+                or ""
+            ).strip()
+            if resource_adapter_id and resource_adapter_id != str(adapter_id or "").strip():
                 continue
 
             resource_workflow_id = str(metadata_payload.get("workflow_id") or "").strip()

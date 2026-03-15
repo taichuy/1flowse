@@ -19,6 +19,7 @@ from app.services.runtime_execution_policy import (
     default_execution_class_for_tool_ecosystem,
 )
 from app.services.runtime_types import ToolExecutionResult, WorkflowExecutionError
+from app.services.sensitive_access_control import SensitiveAccessControlService
 
 
 def _utcnow() -> datetime:
@@ -31,9 +32,11 @@ class ToolGateway:
         *,
         plugin_call_proxy: PluginCallProxy,
         artifact_store: RuntimeArtifactStore | None = None,
+        sensitive_access_service: SensitiveAccessControlService | None = None,
     ) -> None:
         self._plugin_call_proxy = plugin_call_proxy
         self._artifact_store = artifact_store or RuntimeArtifactStore()
+        self._sensitive_access = sensitive_access_service or SensitiveAccessControlService()
 
     def execute(
         self,
@@ -59,6 +62,18 @@ class ToolGateway:
 
         tool_record = db.get(PluginToolRecord, tool_id)
         tool_name = tool_record.name if tool_record is not None else tool_id
+        sensitive_waiting_result = self._guard_sensitive_tool_access(
+            db,
+            run_id=run_id,
+            node_run=node_run,
+            tool_id=tool_id,
+            tool_name=tool_name,
+            ecosystem=ecosystem,
+            adapter_id=adapter_id,
+        )
+        if sensitive_waiting_result is not None:
+            return sensitive_waiting_result
+
         request_summary = self._artifact_store.summarize(inputs)
         call_record = ToolCallRecord(
             id=str(uuid4()),
@@ -125,6 +140,59 @@ class ToolGateway:
             call_record.finished_at = _utcnow()
             db.flush()
             raise WorkflowExecutionError(str(exc)) from exc
+
+    def _guard_sensitive_tool_access(
+        self,
+        db: Session,
+        *,
+        run_id: str,
+        node_run: NodeRun,
+        tool_id: str,
+        tool_name: str,
+        ecosystem: str,
+        adapter_id: str | None,
+    ) -> ToolExecutionResult | None:
+        resource = self._sensitive_access.find_tool_resource(
+            db,
+            run_id=run_id,
+            tool_id=tool_id,
+            ecosystem=ecosystem,
+            adapter_id=adapter_id,
+        )
+        if resource is None:
+            self._clear_sensitive_access_waiting_state(node_run)
+            return None
+
+        bundle = self._sensitive_access.ensure_access(
+            db,
+            run_id=run_id,
+            node_run_id=node_run.id,
+            requester_type="tool",
+            requester_id=tool_id,
+            resource_id=resource.id,
+            action_type="invoke",
+            purpose_text=(
+                f"Tool '{tool_name}' requested invocation from node '{node_run.node_id}'."
+            ),
+            reuse_existing=True,
+        )
+        decision = str(bundle.access_request.decision or "")
+        if decision == "require_approval":
+            return self._build_sensitive_access_waiting_result(
+                node_run=node_run,
+                tool_id=tool_id,
+                tool_name=tool_name,
+                bundle=bundle,
+            )
+
+        self._clear_sensitive_access_waiting_state(node_run)
+        if decision == "deny":
+            reason_code = str(bundle.access_request.reason_code or "access_denied")
+            raise WorkflowExecutionError(
+                f"Sensitive tool access denied for resource '{bundle.resource.label}' "
+                f"({reason_code})."
+            )
+        return None
 
     def list_tool_calls(self, db: Session, run_id: str) -> list[ToolCallRecord]:
         return db.scalars(
@@ -258,6 +326,60 @@ class ToolGateway:
                 "truncated": False,
             },
         )
+
+    def _build_sensitive_access_waiting_result(
+        self,
+        *,
+        node_run: NodeRun,
+        tool_id: str,
+        tool_name: str,
+        bundle,
+    ) -> ToolExecutionResult:
+        approval_ticket = bundle.approval_ticket
+        waiting_reason = (
+            f"Sensitive access approval required for resource '{bundle.resource.label}'."
+        )
+        sensitive_access_payload = {
+            "resource_id": bundle.resource.id,
+            "resource_label": bundle.resource.label,
+            "sensitivity_level": bundle.resource.sensitivity_level,
+            "access_request_id": bundle.access_request.id,
+            "approval_ticket_id": approval_ticket.id if approval_ticket is not None else None,
+            "access_target": "tool_invoke",
+            "tool_id": tool_id,
+            "tool_name": tool_name,
+        }
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        checkpoint_payload["sensitive_access"] = sensitive_access_payload
+        node_run.checkpoint_payload = checkpoint_payload
+        return ToolExecutionResult(
+            status="waiting",
+            content_type="json",
+            summary=waiting_reason,
+            raw_ref=None,
+            structured={
+                "status": "waiting",
+                "resourceId": bundle.resource.id,
+                "resourceLabel": bundle.resource.label,
+                "accessRequestId": bundle.access_request.id,
+                "approvalTicketId": (
+                    approval_ticket.id if approval_ticket is not None else None
+                ),
+                "accessTarget": "tool_invoke",
+            },
+            meta={
+                "tool_id": tool_id,
+                "tool_name": tool_name,
+                "waiting_status": "waiting_tool",
+                "waiting_reason": waiting_reason,
+                "sensitive_access": sensitive_access_payload,
+            },
+        )
+
+    def _clear_sensitive_access_waiting_state(self, node_run: NodeRun) -> None:
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        if checkpoint_payload.pop("sensitive_access", None) is not None:
+            node_run.checkpoint_payload = checkpoint_payload
 
     def _is_normalized_tool_payload(self, payload: dict[str, Any]) -> bool:
         return bool(
