@@ -9,6 +9,7 @@ from app.schemas.plugin import (
     PluginToolRegistrationCreate,
     PluginToolSyncResult,
 )
+from app.services.plugin_registry_store import get_plugin_registry_store
 from app.services.plugin_runtime import (
     CompatibilityAdapterRegistration,
     PluginCatalogError,
@@ -17,7 +18,6 @@ from app.services.plugin_runtime import (
     get_compatibility_adapter_health_checker,
     get_plugin_registry,
 )
-from app.services.plugin_registry_store import get_plugin_registry_store
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
@@ -37,6 +37,7 @@ def _serialize_adapter(adapter_id: str) -> PluginAdapterRegistrationItem:
         healthcheck_path=adapter.healthcheck_path,
         workspace_ids=list(adapter.workspace_ids),
         plugin_kinds=list(adapter.plugin_kinds),
+        supported_execution_classes=list(adapter.supported_execution_classes),
         status=health.status,
         detail=health.detail,
     )
@@ -89,6 +90,7 @@ def register_plugin_adapter(
         healthcheck_path=payload.healthcheck_path,
         workspace_ids=tuple(payload.workspace_ids),
         plugin_kinds=tuple(payload.plugin_kinds),
+        supported_execution_classes=tuple(payload.supported_execution_classes),
     )
     get_plugin_registry_store().upsert_adapter(db, adapter)
     db.commit()

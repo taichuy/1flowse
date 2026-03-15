@@ -16,6 +16,11 @@ class PluginAdapterRecord(Base):
     healthcheck_path: Mapped[str] = mapped_column(String(128), default="/healthz", nullable=False)
     workspace_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     plugin_kinds: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    supported_execution_classes: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=lambda: ["subprocess"],
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

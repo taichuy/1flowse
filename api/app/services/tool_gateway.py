@@ -15,10 +15,7 @@ from app.models.run import NodeRun, ToolCallRecord
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.credential_store import CredentialStore, CredentialStoreError
 from app.services.plugin_runtime import PluginCallProxy, PluginCallRequest, PluginInvocationError
-from app.services.runtime_execution_policy import (
-    ResolvedExecutionPolicy,
-    default_execution_class_for_tool_ecosystem,
-)
+from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_types import ToolExecutionResult, WorkflowExecutionError
 from app.services.sensitive_access_control import SensitiveAccessControlService
 
@@ -96,11 +93,20 @@ class ToolGateway:
         db.flush()
 
         resolved_timeout_ms = timeout_ms or get_settings().plugin_default_timeout_ms
-        execution_trace = self._resolve_execution_trace(
+        request = PluginCallRequest(
+            tool_id=tool_id,
             ecosystem=ecosystem,
             adapter_id=adapter_id,
-            execution_policy=execution_policy,
+            inputs=deepcopy(inputs),
+            timeout_ms=resolved_timeout_ms,
+            trace_id=f"run:{run_id}:node:{node_run.node_id}:tool:{tool_id}",
+            execution=(
+                execution_policy.as_runtime_payload() if execution_policy is not None else {}
+            ),
         )
+        execution_trace = self._plugin_call_proxy.describe_execution_dispatch(
+            request
+        ).as_trace_payload()
         started_at = time.perf_counter()
         try:
             invocation_credentials = self._credential_store.resolve_masked_runtime_credentials(
@@ -109,18 +115,14 @@ class ToolGateway:
             )
             response = self._plugin_call_proxy.invoke(
                 PluginCallRequest(
-                    tool_id=tool_id,
-                    ecosystem=ecosystem,
-                    adapter_id=adapter_id,
-                    inputs=deepcopy(inputs),
+                    tool_id=request.tool_id,
+                    ecosystem=request.ecosystem,
+                    adapter_id=request.adapter_id,
+                    inputs=request.inputs,
                     credentials=invocation_credentials,
-                    timeout_ms=resolved_timeout_ms,
-                    trace_id=f"run:{run_id}:node:{node_run.node_id}:tool:{tool_id}",
-                    execution=(
-                        execution_policy.as_runtime_payload()
-                        if execution_policy is not None
-                        else {}
-                    ),
+                    timeout_ms=request.timeout_ms,
+                    trace_id=request.trace_id,
+                    execution=request.execution,
                 )
             )
             result = self._normalize_result(
@@ -409,40 +411,3 @@ class ToolGateway:
             and isinstance(payload.get("content_type"), str)
             and "structured" in payload
         )
-
-    def _resolve_execution_trace(
-        self,
-        *,
-        ecosystem: str,
-        adapter_id: str | None,
-        execution_policy: ResolvedExecutionPolicy | None,
-    ) -> dict[str, Any]:
-        resolved_policy = execution_policy or ResolvedExecutionPolicy(
-            execution_class=default_execution_class_for_tool_ecosystem(ecosystem),
-            source="default",
-        )
-        requested_execution_class = resolved_policy.execution_class
-        if ecosystem == "native":
-            effective_execution_class = "inline"
-            executor_ref = "tool:native-inline"
-            fallback_reason = None
-            if requested_execution_class != effective_execution_class:
-                fallback_reason = "native_tools_currently_inline_only"
-        else:
-            effective_execution_class = "subprocess"
-            executor_ref = f"tool:compat-adapter:{adapter_id or ecosystem}"
-            fallback_reason = None
-            if requested_execution_class != effective_execution_class:
-                fallback_reason = "compat_tools_currently_bridge_via_adapter_service"
-
-        return {
-            "requested_execution_class": requested_execution_class,
-            "effective_execution_class": effective_execution_class,
-            "execution_source": resolved_policy.source,
-            "requested_execution_profile": resolved_policy.profile,
-            "requested_execution_timeout_ms": resolved_policy.timeout_ms,
-            "requested_network_policy": resolved_policy.network_policy,
-            "requested_filesystem_policy": resolved_policy.filesystem_policy,
-            "executor_ref": executor_ref,
-            "fallback_reason": fallback_reason,
-        }

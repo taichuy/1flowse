@@ -20,6 +20,7 @@ def test_plugin_registry_store_persists_and_hydrates_registry(sqlite_session: Se
         healthcheck_path="/healthz",
         workspace_ids=("ws-demo",),
         plugin_kinds=("node", "provider"),
+        supported_execution_classes=("subprocess", "microvm"),
     )
     tool = PluginToolDefinition(
         id="compat:dify:plugin:demo/search",

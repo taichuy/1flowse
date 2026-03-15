@@ -49,6 +49,7 @@ def test_register_and_list_plugin_adapter(client, monkeypatch) -> None:
             "healthcheck_path": "/healthz",
             "workspace_ids": ["ws-demo"],
             "plugin_kinds": ["node", "provider"],
+            "supported_execution_classes": ["subprocess", "microvm"],
         },
     )
 
@@ -61,6 +62,7 @@ def test_register_and_list_plugin_adapter(client, monkeypatch) -> None:
         "healthcheck_path": "/healthz",
         "workspace_ids": ["ws-demo"],
         "plugin_kinds": ["node", "provider"],
+        "supported_execution_classes": ["subprocess", "microvm"],
         "status": "up",
         "detail": None,
     }

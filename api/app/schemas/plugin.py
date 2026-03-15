@@ -13,6 +13,9 @@ class PluginAdapterRegistrationCreate(BaseModel):
     plugin_kinds: list[Literal["node", "provider"]] = Field(
         default_factory=lambda: ["node", "provider"]
     )
+    supported_execution_classes: list[Literal["subprocess", "sandbox", "microvm"]] = (
+        Field(default_factory=lambda: ["subprocess"])
+    )
 
 
 class PluginAdapterRegistrationItem(BaseModel):
@@ -23,6 +26,7 @@ class PluginAdapterRegistrationItem(BaseModel):
     healthcheck_path: str
     workspace_ids: list[str] = Field(default_factory=list)
     plugin_kinds: list[str] = Field(default_factory=list)
+    supported_execution_classes: list[str] = Field(default_factory=list)
     status: str
     detail: str | None = None
 

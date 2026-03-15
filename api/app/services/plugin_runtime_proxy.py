@@ -12,9 +12,11 @@ from app.services.plugin_runtime_types import (
     CompatibilityAdapterRegistration,
     PluginCallRequest,
     PluginCallResponse,
+    PluginExecutionDispatchPlan,
     PluginInvocationError,
     PluginToolDefinition,
 )
+from app.services.runtime_execution_policy import default_execution_class_for_tool_ecosystem
 
 
 def default_plugin_client_factory(timeout_ms: int) -> httpx.Client:
@@ -52,6 +54,105 @@ class PluginCallProxy:
         )
         return self._invoke_adapter_tool(tool, adapter, request)
 
+    def describe_execution_dispatch(
+        self,
+        request: PluginCallRequest,
+    ) -> PluginExecutionDispatchPlan:
+        requested_execution = dict(request.execution or {})
+        default_execution_class = default_execution_class_for_tool_ecosystem(request.ecosystem)
+        requested_execution_class = str(
+            requested_execution.get("class") or default_execution_class
+        ).strip().lower() or default_execution_class
+        execution_source = str(requested_execution.get("source") or "default").strip() or "default"
+        requested_execution_profile = requested_execution.get("profile")
+        requested_execution_timeout_ms = requested_execution.get("timeoutMs")
+        requested_network_policy = requested_execution.get("networkPolicy")
+        requested_filesystem_policy = requested_execution.get("filesystemPolicy")
+
+        if request.ecosystem == "native":
+            effective_execution_class = "inline"
+            fallback_reason = None
+            if requested_execution_class != effective_execution_class:
+                fallback_reason = "native_tools_currently_inline_only"
+            return PluginExecutionDispatchPlan(
+                requested_execution_class=requested_execution_class,
+                effective_execution_class=effective_execution_class,
+                execution_source=execution_source,
+                requested_execution_profile=(
+                    str(requested_execution_profile)
+                    if isinstance(requested_execution_profile, str)
+                    else None
+                ),
+                requested_execution_timeout_ms=(
+                    requested_execution_timeout_ms
+                    if isinstance(requested_execution_timeout_ms, int)
+                    else None
+                ),
+                requested_network_policy=(
+                    str(requested_network_policy)
+                    if isinstance(requested_network_policy, str)
+                    else None
+                ),
+                requested_filesystem_policy=(
+                    str(requested_filesystem_policy)
+                    if isinstance(requested_filesystem_policy, str)
+                    else None
+                ),
+                executor_ref="tool:native-inline",
+                effective_execution=self._build_effective_execution_payload(
+                    requested_execution=requested_execution,
+                    effective_execution_class=effective_execution_class,
+                    execution_source=execution_source,
+                ),
+                fallback_reason=fallback_reason,
+            )
+
+        adapter = self._registry.resolve_adapter(
+            ecosystem=request.ecosystem,
+            adapter_id=request.adapter_id,
+        )
+        supported_execution_classes = adapter.supported_execution_classes or ("subprocess",)
+        effective_execution_class = (
+            requested_execution_class
+            if requested_execution_class in supported_execution_classes
+            else supported_execution_classes[0]
+        )
+        fallback_reason = None
+        if requested_execution_class != effective_execution_class:
+            fallback_reason = "compat_adapter_execution_class_not_supported"
+        return PluginExecutionDispatchPlan(
+            requested_execution_class=requested_execution_class,
+            effective_execution_class=effective_execution_class,
+            execution_source=execution_source,
+            requested_execution_profile=(
+                str(requested_execution_profile)
+                if isinstance(requested_execution_profile, str)
+                else None
+            ),
+            requested_execution_timeout_ms=(
+                requested_execution_timeout_ms
+                if isinstance(requested_execution_timeout_ms, int)
+                else None
+            ),
+            requested_network_policy=(
+                str(requested_network_policy)
+                if isinstance(requested_network_policy, str)
+                else None
+            ),
+            requested_filesystem_policy=(
+                str(requested_filesystem_policy)
+                if isinstance(requested_filesystem_policy, str)
+                else None
+            ),
+            executor_ref=f"tool:compat-adapter:{adapter.id}",
+            effective_execution=self._build_effective_execution_payload(
+                requested_execution=requested_execution,
+                effective_execution_class=effective_execution_class,
+                execution_source=execution_source,
+            ),
+            fallback_reason=fallback_reason,
+        )
+
     def _invoke_native_tool(self, request: PluginCallRequest) -> PluginCallResponse:
         invoker = self._registry.get_native_invoker(request.tool_id)
         if invoker is None:
@@ -83,6 +184,7 @@ class PluginCallProxy:
     ) -> PluginCallResponse:
         started_at = time.perf_counter()
         invoke_url = f"{adapter.endpoint.rstrip('/')}/invoke"
+        execution_dispatch = self.describe_execution_dispatch(request)
         execution_contract = self._build_execution_contract(tool)
         normalized_inputs, normalized_credentials = self._normalize_contract_bound_request(
             request,
@@ -96,7 +198,7 @@ class PluginCallProxy:
             "credentials": normalized_credentials,
             "timeout": request.timeout_ms,
             "traceId": request.trace_id,
-            "execution": dict(request.execution or {}),
+            "execution": execution_dispatch.effective_execution,
             "executionContract": execution_contract,
         }
 
@@ -130,6 +232,21 @@ class PluginCallProxy:
                 body.get("durationMs") or int((time.perf_counter() - started_at) * 1000)
             ),
         )
+
+    def _build_effective_execution_payload(
+        self,
+        *,
+        requested_execution: dict[str, Any],
+        effective_execution_class: str,
+        execution_source: str,
+    ) -> dict[str, Any]:
+        if not requested_execution:
+            return {}
+
+        effective_execution = dict(requested_execution)
+        effective_execution["class"] = effective_execution_class
+        effective_execution["source"] = execution_source
+        return effective_execution
 
     def _build_execution_contract(self, tool: PluginToolDefinition) -> dict[str, Any]:
         constrained_ir = tool.constrained_ir

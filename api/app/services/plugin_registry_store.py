@@ -28,6 +28,9 @@ class PluginRegistryStore:
                     healthcheck_path=record.healthcheck_path,
                     workspace_ids=tuple(record.workspace_ids or ()),
                     plugin_kinds=tuple(record.plugin_kinds or ()),
+                    supported_execution_classes=tuple(
+                        record.supported_execution_classes or ()
+                    ),
                 )
             )
 
@@ -77,6 +80,9 @@ class PluginRegistryStore:
         record.healthcheck_path = registration.healthcheck_path
         record.workspace_ids = list(registration.workspace_ids)
         record.plugin_kinds = list(registration.plugin_kinds)
+        record.supported_execution_classes = list(
+            registration.supported_execution_classes
+        )
         db.flush()
         return record
 

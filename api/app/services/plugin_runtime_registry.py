@@ -90,6 +90,7 @@ def build_plugin_registry(settings: Settings | None = None) -> PluginRegistry:
                 endpoint=app_settings.plugin_compat_dify_endpoint,
                 enabled=True,
                 health_status="degraded",
+                supported_execution_classes=("subprocess",),
             )
         )
 

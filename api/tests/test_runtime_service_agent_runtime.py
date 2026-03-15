@@ -501,7 +501,7 @@ def test_llm_agent_tool_call_execution_override_is_forwarded_to_compat_adapter(
         assert payload["toolId"] == "compat:dify:plugin:demo/search"
         assert payload["adapterId"] == "dify-default"
         assert payload["execution"] == {
-            "class": "microvm",
+            "class": "subprocess",
             "source": "tool_call",
             "profile": "per-call-compat",
             "timeoutMs": 4000,
@@ -574,7 +574,7 @@ def test_llm_agent_tool_call_execution_override_is_forwarded_to_compat_adapter(
         "requested_network_policy": "isolated",
         "requested_filesystem_policy": "ephemeral",
         "executor_ref": "tool:compat-adapter:dify-default",
-        "reason": "compat_tools_currently_bridge_via_adapter_service",
+        "reason": "compat_adapter_execution_class_not_supported",
     }
 
 
