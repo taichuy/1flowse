@@ -14,8 +14,11 @@ import {
 import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
 import type {
-  PublishTimeWindow,
   WorkflowPublishInvocationActiveFilter
+} from "@/lib/workflow-publish-governance";
+import {
+  resolvePublishTimeWindow,
+  resolvePublishWindowRange
 } from "@/lib/workflow-publish-governance";
 import {
   PUBLISHED_INVOCATION_CACHE_STATUSES,
@@ -44,26 +47,6 @@ function firstSearchValue(
   value: string | string[] | undefined
 ) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function resolvePublishTimeWindow(value: string | undefined): PublishTimeWindow {
-  if (value === "24h" || value === "7d" || value === "30d") {
-    return value;
-  }
-  return "all";
-}
-
-function resolvePublishWindowRange(window: PublishTimeWindow) {
-  if (window === "all") {
-    return {};
-  }
-
-  const now = new Date();
-  const hours = window === "24h" ? 24 : window === "7d" ? 24 * 7 : 24 * 30;
-  return {
-    createdFrom: new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString(),
-    createdTo: now.toISOString()
-  };
 }
 
 export async function generateMetadata({

@@ -1,4 +1,5 @@
 import { WorkflowPublishActivityFilterForm } from "@/components/workflow-publish-activity-panel-filter-form";
+import { WorkflowPublishExportActions } from "@/components/workflow-publish-export-actions";
 import {
   buildActiveFilterChips,
   buildRunStatusOptions,
@@ -88,6 +89,14 @@ export function WorkflowPublishActivityPanel({
           ))}
         </div>
       ) : null}
+
+      <div className="trace-active-filter-row">
+        <WorkflowPublishExportActions
+          workflowId={workflowId}
+          bindingId={binding.id}
+          activeInvocationFilter={activeInvocationFilter}
+        />
+      </div>
 
       <WorkflowPublishActivityInsights
         binding={binding}

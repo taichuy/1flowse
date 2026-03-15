@@ -27,6 +27,8 @@ export type PublishedEndpointInvocationRequestSurface =
   | "anthropic.messages.async"
   | "unknown";
 
+export type PublishedEndpointInvocationExportFormat = "json" | "jsonl";
+
 export type PublishedEndpointInvocationSummary = {
   total_count: number;
   succeeded_count: number;
@@ -151,6 +153,19 @@ export type PublishedEndpointInvocationFilters = {
   reason_code?: string | null;
   created_from?: string | null;
   created_to?: string | null;
+};
+
+export type PublishedEndpointInvocationListOptions = {
+  limit?: number;
+  status?: PublishedEndpointInvocationStatus;
+  requestSource?: PublishedEndpointInvocationRequestSource;
+  requestSurface?: PublishedEndpointInvocationRequestSurface;
+  cacheStatus?: PublishedEndpointInvocationCacheStatus;
+  runStatus?: string;
+  apiKeyId?: string;
+  reasonCode?: string;
+  createdFrom?: string;
+  createdTo?: string;
 };
 
 export type PublishedEndpointInvocationFacets = {
@@ -372,52 +387,13 @@ export async function getPublishedEndpointApiKeys(
 export async function getPublishedEndpointInvocations(
   workflowId: string,
   bindingId: string,
-  options?: {
-    limit?: number;
-    status?: PublishedEndpointInvocationStatus;
-    requestSource?: PublishedEndpointInvocationRequestSource;
-    requestSurface?: PublishedEndpointInvocationRequestSurface;
-    cacheStatus?: PublishedEndpointInvocationCacheStatus;
-    runStatus?: string;
-    apiKeyId?: string;
-    reasonCode?: string;
-    createdFrom?: string;
-    createdTo?: string;
-  }
+  options?: PublishedEndpointInvocationListOptions
 ): Promise<PublishedEndpointInvocationListResponse | null> {
   try {
-    const searchParams = new URLSearchParams();
-    searchParams.set(
-      "limit",
-      String(Math.min(Math.max(options?.limit ?? 5, 1), 20))
-    );
-    if (options?.status) {
-      searchParams.set("status", options.status);
-    }
-    if (options?.requestSource) {
-      searchParams.set("request_source", options.requestSource);
-    }
-    if (options?.requestSurface) {
-      searchParams.set("request_surface", options.requestSurface);
-    }
-    if (options?.cacheStatus) {
-      searchParams.set("cache_status", options.cacheStatus);
-    }
-    if (options?.runStatus) {
-      searchParams.set("run_status", options.runStatus);
-    }
-    if (options?.apiKeyId) {
-      searchParams.set("api_key_id", options.apiKeyId);
-    }
-    if (options?.reasonCode) {
-      searchParams.set("reason_code", options.reasonCode);
-    }
-    if (options?.createdFrom) {
-      searchParams.set("created_from", options.createdFrom);
-    }
-    if (options?.createdTo) {
-      searchParams.set("created_to", options.createdTo);
-    }
+    const searchParams = buildPublishedEndpointInvocationSearchParams(options, {
+      defaultLimit: 5,
+      maxLimit: 20
+    });
 
     const response = await fetch(
       `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
@@ -436,6 +412,65 @@ export async function getPublishedEndpointInvocations(
   } catch {
     return null;
   }
+}
+
+export function buildPublishedEndpointInvocationExportUrl(
+  workflowId: string,
+  bindingId: string,
+  options: PublishedEndpointInvocationListOptions | undefined,
+  format: PublishedEndpointInvocationExportFormat
+) {
+  const searchParams = buildPublishedEndpointInvocationSearchParams(options, {
+    defaultLimit: 200,
+    maxLimit: 1000
+  });
+  searchParams.set("format", format);
+
+  return `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+    workflowId
+  )}/published-endpoints/${encodeURIComponent(bindingId)}/invocations/export?${searchParams.toString()}`;
+}
+
+function buildPublishedEndpointInvocationSearchParams(
+  options: PublishedEndpointInvocationListOptions | undefined,
+  limits: {
+    defaultLimit: number;
+    maxLimit: number;
+  }
+) {
+  const searchParams = new URLSearchParams();
+  searchParams.set(
+    "limit",
+    String(Math.min(Math.max(options?.limit ?? limits.defaultLimit, 1), limits.maxLimit))
+  );
+  if (options?.status) {
+    searchParams.set("status", options.status);
+  }
+  if (options?.requestSource) {
+    searchParams.set("request_source", options.requestSource);
+  }
+  if (options?.requestSurface) {
+    searchParams.set("request_surface", options.requestSurface);
+  }
+  if (options?.cacheStatus) {
+    searchParams.set("cache_status", options.cacheStatus);
+  }
+  if (options?.runStatus) {
+    searchParams.set("run_status", options.runStatus);
+  }
+  if (options?.apiKeyId) {
+    searchParams.set("api_key_id", options.apiKeyId);
+  }
+  if (options?.reasonCode) {
+    searchParams.set("reason_code", options.reasonCode);
+  }
+  if (options?.createdFrom) {
+    searchParams.set("created_from", options.createdFrom);
+  }
+  if (options?.createdTo) {
+    searchParams.set("created_to", options.createdTo);
+  }
+  return searchParams;
 }
 
 export async function getPublishedEndpointInvocationDetail(
