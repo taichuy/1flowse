@@ -29,6 +29,23 @@ export function RunDiagnosticsExecutionOverview({
         <SummaryCard label="Callback tickets" value={executionView.summary.callback_ticket_count} />
       </div>
 
+      {executionView.summary.sensitive_access_request_count > 0 ? (
+        <div className="summary-strip">
+          <SummaryCard
+            label="Sensitive requests"
+            value={executionView.summary.sensitive_access_request_count}
+          />
+          <SummaryCard
+            label="Approval tickets"
+            value={executionView.summary.sensitive_access_approval_ticket_count}
+          />
+          <SummaryCard
+            label="Notifications"
+            value={executionView.summary.sensitive_access_notification_count}
+          />
+        </div>
+      ) : null}
+
       {callbackWaiting.node_count > 0 ? (
         <div className="summary-strip">
           <SummaryCard label="Callback waits" value={callbackWaiting.node_count} />
@@ -45,6 +62,29 @@ export function RunDiagnosticsExecutionOverview({
         metrics={executionView.summary.callback_ticket_status_counts}
         prefix="ticket"
       />
+
+      {executionView.summary.sensitive_access_request_count > 0 ? (
+        <>
+          <MetricChipRow
+            title="Sensitive decisions"
+            emptyCopy="No sensitive access decisions were recorded for this run."
+            metrics={executionView.summary.sensitive_access_decision_counts}
+            prefix="decision"
+          />
+          <MetricChipRow
+            title="Approval statuses"
+            emptyCopy="No approval tickets were issued for this run."
+            metrics={executionView.summary.sensitive_access_approval_status_counts}
+            prefix="approval"
+          />
+          <MetricChipRow
+            title="Notification statuses"
+            emptyCopy="No notification dispatches were recorded for this run."
+            metrics={executionView.summary.sensitive_access_notification_status_counts}
+            prefix="notification"
+          />
+        </>
+      ) : null}
 
       {callbackWaiting.node_count > 0 ? (
         <>

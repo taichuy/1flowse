@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 
 export type RunArtifactItem = {
   id: string;
@@ -132,6 +133,7 @@ export type RunExecutionNodeItem = {
   tool_calls: ToolCallItem[];
   ai_calls: AICallItem[];
   callback_tickets: RunCallbackTicketItem[];
+  sensitive_access_entries: SensitiveAccessTimelineEntry[];
   callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
 };
 
@@ -150,10 +152,16 @@ export type RunExecutionView = {
     ai_call_count: number;
     assistant_call_count: number;
     callback_ticket_count: number;
+    sensitive_access_request_count: number;
+    sensitive_access_approval_ticket_count: number;
+    sensitive_access_notification_count: number;
     artifact_kind_counts: Record<string, number>;
     tool_status_counts: Record<string, number>;
     ai_role_counts: Record<string, number>;
     callback_ticket_status_counts: Record<string, number>;
+    sensitive_access_decision_counts: Record<string, number>;
+    sensitive_access_approval_status_counts: Record<string, number>;
+    sensitive_access_notification_status_counts: Record<string, number>;
     callback_waiting: RunCallbackWaitingSummary;
   };
   nodes: RunExecutionNodeItem[];

@@ -53,11 +53,11 @@ export function RunDiagnosticsExecutionSections({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Execution Timeline</p>
-              <h2>Artifacts, tool calls and callback lifecycle</h2>
+              <h2>Artifacts, tool calls, approvals and callback lifecycle</h2>
             </div>
             <p className="section-copy">
-              Each node row keeps execution policy, callback waiting lifecycle and produced artifacts in a
-              stable timeline layout.
+              Each node row keeps execution policy, sensitive access decisions, callback waiting lifecycle
+              and produced artifacts in a stable timeline layout.
             </p>
           </div>
 

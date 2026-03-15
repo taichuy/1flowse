@@ -95,11 +95,15 @@ class NotificationDispatchRetryResponse(BaseModel):
     notification: NotificationDispatchItem
 
 
-class SensitiveAccessRequestResponse(BaseModel):
+class SensitiveAccessTimelineEntryItem(BaseModel):
     request: SensitiveAccessRequestItem
     resource: SensitiveResourceItem
     approval_ticket: ApprovalTicketItem | None = None
     notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+
+
+class SensitiveAccessRequestResponse(SensitiveAccessTimelineEntryItem):
+    pass
 
 
 class ApprovalTicketDecisionRequest(BaseModel):

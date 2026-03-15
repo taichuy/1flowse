@@ -62,6 +62,13 @@ export type SensitiveAccessInboxEntry = {
   notifications: NotificationDispatchItem[];
 };
 
+export type SensitiveAccessTimelineEntry = {
+  request: SensitiveAccessRequestItem;
+  resource: SensitiveResourceItem;
+  approval_ticket?: ApprovalTicketItem | null;
+  notifications: NotificationDispatchItem[];
+};
+
 export type SensitiveAccessInboxSummary = {
   ticket_count: number;
   pending_ticket_count: number;

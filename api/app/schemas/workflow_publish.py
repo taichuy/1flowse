@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.run import RunDetail
 from app.schemas.run_views import CallbackWaitingLifecycleSummary, RunCallbackTicketItem
+from app.schemas.sensitive_access import SensitiveAccessTimelineEntryItem
 from app.schemas.workflow_published_endpoint import (
     WorkflowPublishedEndpointCachePolicy,
     WorkflowPublishedEndpointRateLimitPolicy,
@@ -464,6 +465,9 @@ class PublishedEndpointInvocationDetailResponse(BaseModel):
     invocation: PublishedEndpointInvocationItem
     run: PublishedEndpointInvocationRunReference | None = None
     callback_tickets: list[RunCallbackTicketItem] = Field(default_factory=list)
+    sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
+        default_factory=list
+    )
     cache: PublishedEndpointInvocationCacheReference = Field(
         default_factory=PublishedEndpointInvocationCacheReference
     )

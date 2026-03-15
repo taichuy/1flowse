@@ -23,6 +23,10 @@ from app.services.published_invocation_detail_access import (
     PublishedInvocationDetailAccessService,
 )
 from app.services.published_invocations import PublishedInvocationService
+from app.services.sensitive_access_presenters import (
+    serialize_sensitive_access_timeline_entry,
+)
+from app.services.sensitive_access_timeline import load_sensitive_access_timeline
 
 router = APIRouter(prefix="/workflows", tags=["published-endpoint-activity"])
 published_invocation_service = PublishedInvocationService()
@@ -96,6 +100,7 @@ def get_published_endpoint_invocation_detail(
     waiting_reason_lookup: dict[str, str | None] = {}
     waiting_lifecycle_lookup = {}
     callback_ticket_items = []
+    sensitive_access_entries = []
     if record.run_id:
         node_runs = (
             db.scalars(select(NodeRun).where(NodeRun.run_id == record.run_id)).all()
@@ -113,6 +118,14 @@ def get_published_endpoint_invocation_detail(
                 node_runs,
                 callback_tickets,
             )
+            sensitive_access_timeline = load_sensitive_access_timeline(
+                db,
+                run_id=record.run_id,
+            )
+            sensitive_access_entries = [
+                serialize_sensitive_access_timeline_entry(bundle)
+                for bundle in sensitive_access_timeline.bundles
+            ]
         callback_ticket_items = [
             serialize_callback_ticket_item(ticket) for ticket in callback_tickets
         ]
@@ -152,6 +165,7 @@ def get_published_endpoint_invocation_detail(
             else None
         ),
         callback_tickets=callback_ticket_items,
+        sensitive_access_entries=sensitive_access_entries,
         cache=PublishedEndpointInvocationCacheReference(
             cache_status=record.cache_status or "bypass",
             cache_key=record.cache_key,

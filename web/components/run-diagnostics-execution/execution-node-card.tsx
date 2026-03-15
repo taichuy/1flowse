@@ -10,6 +10,7 @@ import {
   ArtifactPreviewList,
   MetricChipRow
 } from "@/components/run-diagnostics-execution/shared";
+import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 
 export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
   return (
@@ -201,6 +202,16 @@ export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
             </article>
           ))}
         </div>
+      ) : null}
+
+      {node.sensitive_access_entries.length > 0 ? (
+        <>
+          <p className="section-copy entry-copy">Sensitive access timeline</p>
+          <SensitiveAccessTimelineEntryList
+            entries={node.sensitive_access_entries}
+            emptyCopy="No sensitive access decisions were recorded for this node."
+          />
+        </>
       ) : null}
 
       <ArtifactPreviewList artifacts={node.artifacts} />

@@ -3,6 +3,7 @@ import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem
 } from "@/lib/get-run-views";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
   parseSensitiveAccessGuardedResponse,
   type SensitiveAccessGuardedResult
@@ -211,6 +212,7 @@ export type PublishedEndpointInvocationDetailResponse = {
   invocation: PublishedEndpointInvocationItem;
   run?: PublishedEndpointInvocationRunReference | null;
   callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
+  sensitive_access_entries: SensitiveAccessTimelineEntry[];
   cache: PublishedEndpointInvocationCacheReference;
 };
 

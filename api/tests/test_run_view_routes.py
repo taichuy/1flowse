@@ -12,6 +12,12 @@ from app.models.run import (
     RunEvent,
     ToolCallRecord,
 )
+from app.models.sensitive_access import (
+    ApprovalTicketRecord,
+    NotificationDispatchRecord,
+    SensitiveAccessRequestRecord,
+    SensitiveResourceRecord,
+)
 from app.models.workflow import Workflow
 
 
@@ -145,6 +151,52 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                 created_at=datetime(2026, 3, 11, 10, 1, tzinfo=UTC),
                 expires_at=datetime(2026, 3, 12, 10, 1, tzinfo=UTC),
             ),
+            SensitiveResourceRecord(
+                id="resource-search-tool",
+                label="Search Tool",
+                description="Search adapter requires approval.",
+                sensitivity_level="L3",
+                source="local_capability",
+                metadata_payload={"tool_id": "compat:dify:plugin/search"},
+                created_at=datetime(2026, 3, 11, 9, 59, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 11, 9, 59, tzinfo=UTC),
+            ),
+            SensitiveAccessRequestRecord(
+                id="access-request-agent",
+                run_id=run.id,
+                node_run_id=node_run.id,
+                requester_type="workflow",
+                requester_id=node_run.node_id,
+                resource_id="resource-search-tool",
+                action_type="invoke",
+                purpose_text="Invoke search tool for external retrieval.",
+                decision="require_approval",
+                reason_code="approval_required_high_sensitive_access",
+                created_at=datetime(2026, 3, 11, 10, 0, 30, tzinfo=UTC),
+                decided_at=None,
+            ),
+            ApprovalTicketRecord(
+                id="approval-ticket-agent",
+                access_request_id="access-request-agent",
+                run_id=run.id,
+                node_run_id=node_run.id,
+                status="pending",
+                waiting_status="waiting",
+                approved_by=None,
+                decided_at=None,
+                expires_at=datetime(2026, 3, 12, 10, 1, tzinfo=UTC),
+                created_at=datetime(2026, 3, 11, 10, 0, 31, tzinfo=UTC),
+            ),
+            NotificationDispatchRecord(
+                id="notification-agent",
+                approval_ticket_id="approval-ticket-agent",
+                channel="in_app",
+                target="sensitive-access-inbox",
+                status="delivered",
+                delivered_at=datetime(2026, 3, 11, 10, 0, 32, tzinfo=UTC),
+                error=None,
+                created_at=datetime(2026, 3, 11, 10, 0, 32, tzinfo=UTC),
+            ),
             RunEvent(
                 run_id=run.id,
                 event_type="run.started",
@@ -182,11 +234,23 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert body["summary"]["ai_call_count"] == 2
     assert body["summary"]["assistant_call_count"] == 1
     assert body["summary"]["callback_ticket_count"] == 1
+    assert body["summary"]["sensitive_access_request_count"] == 1
+    assert body["summary"]["sensitive_access_approval_ticket_count"] == 1
+    assert body["summary"]["sensitive_access_notification_count"] == 1
     assert body["summary"]["artifact_kind_counts"] == {
         "evidence_pack": 1,
         "tool_result": 1,
     }
     assert body["summary"]["callback_ticket_status_counts"] == {"pending": 1}
+    assert body["summary"]["sensitive_access_decision_counts"] == {
+        "require_approval": 1
+    }
+    assert body["summary"]["sensitive_access_approval_status_counts"] == {
+        "pending": 1
+    }
+    assert body["summary"]["sensitive_access_notification_status_counts"] == {
+        "delivered": 1
+    }
     assert body["summary"]["callback_waiting"] == {
         "node_count": 1,
         "terminated_node_count": 0,
@@ -213,9 +277,26 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert len(node["tool_calls"]) == 1
     assert len(node["ai_calls"]) == 2
     assert len(node["callback_tickets"]) == 1
+    assert len(node["sensitive_access_entries"]) == 1
     assert node["callback_tickets"][0]["ticket"] == "ticket-agent"
     assert node["callback_tickets"][0]["expires_at"] == "2026-03-12T10:01:00Z"
     assert node["callback_tickets"][0]["expired_at"] is None
+    assert node["sensitive_access_entries"][0]["resource"]["label"] == "Search Tool"
+    assert node["sensitive_access_entries"][0]["request"]["decision"] == "require_approval"
+    assert node["sensitive_access_entries"][0]["request"]["action_type"] == "invoke"
+    assert node["sensitive_access_entries"][0]["approval_ticket"]["status"] == "pending"
+    assert node["sensitive_access_entries"][0]["notifications"] == [
+        {
+            "id": "notification-agent",
+            "approval_ticket_id": "approval-ticket-agent",
+            "channel": "in_app",
+            "target": "sensitive-access-inbox",
+            "status": "delivered",
+            "delivered_at": "2026-03-11T10:00:32",
+            "error": None,
+            "created_at": "2026-03-11T10:00:32",
+        }
+    ]
     assert node["callback_waiting_lifecycle"] == {
         "wait_cycle_count": 2,
         "issued_ticket_count": 2,

@@ -37,6 +37,10 @@ from app.services.callback_waiting_lifecycle import load_callback_waiting_lifecy
 from app.services.runtime import RuntimeService
 from app.services.runtime_execution_policy import execution_policy_from_node_run_input
 from app.services.runtime_records import ExecutionArtifacts
+from app.services.sensitive_access_presenters import (
+    serialize_sensitive_access_timeline_entry,
+)
+from app.services.sensitive_access_timeline import load_sensitive_access_timeline
 
 
 def _normalize_datetime(value: datetime | None) -> datetime | None:
@@ -261,6 +265,7 @@ class RunViewService:
             return None
 
         callback_tickets = self._list_callback_tickets(db, run_id)
+        sensitive_access_timeline = load_sensitive_access_timeline(db, run_id=run_id)
         assistant_call_count = sum(1 for call in artifacts.ai_calls if call.assistant)
 
         return RunExecutionView(
@@ -282,6 +287,13 @@ class RunViewService:
                 ai_call_count=len(artifacts.ai_calls),
                 assistant_call_count=assistant_call_count,
                 callback_ticket_count=len(callback_tickets),
+                sensitive_access_request_count=sensitive_access_timeline.request_count,
+                sensitive_access_approval_ticket_count=(
+                    sensitive_access_timeline.approval_ticket_count
+                ),
+                sensitive_access_notification_count=(
+                    sensitive_access_timeline.notification_count
+                ),
                 artifact_kind_counts=dict(
                     sorted(Counter(item.artifact_kind for item in artifacts.artifacts).items())
                 ),
@@ -294,9 +306,22 @@ class RunViewService:
                 callback_ticket_status_counts=dict(
                     sorted(Counter(item.status for item in callback_tickets).items())
                 ),
+                sensitive_access_decision_counts=(
+                    sensitive_access_timeline.decision_counts or {}
+                ),
+                sensitive_access_approval_status_counts=(
+                    sensitive_access_timeline.approval_status_counts or {}
+                ),
+                sensitive_access_notification_status_counts=(
+                    sensitive_access_timeline.notification_status_counts or {}
+                ),
                 callback_waiting=serialize_run_callback_waiting_summary(artifacts.node_runs),
             ),
-            nodes=self._build_execution_nodes(artifacts, callback_tickets),
+            nodes=self._build_execution_nodes(
+                artifacts,
+                callback_tickets,
+                sensitive_access_timeline.by_node_run,
+            ),
         )
 
     def get_evidence_view(self, db: Session, run_id: str) -> RunEvidenceView | None:
@@ -385,6 +410,7 @@ class RunViewService:
         self,
         artifacts: ExecutionArtifacts,
         callback_tickets: list[RunCallbackTicket],
+        sensitive_access_by_node_run,
     ) -> list[RunExecutionNodeItem]:
         artifacts_by_node_run = self._group_by_node_run(artifacts.artifacts)
         tool_calls_by_node_run = self._group_by_node_run(artifacts.tool_calls)
@@ -439,6 +465,10 @@ class RunViewService:
                 callback_tickets=[
                     self._serialize_callback_ticket(ticket)
                     for ticket in tickets_by_node_run[node_run.id]
+                ],
+                sensitive_access_entries=[
+                    serialize_sensitive_access_timeline_entry(bundle)
+                    for bundle in sensitive_access_by_node_run.get(node_run.id, [])
                 ],
                 callback_waiting_lifecycle=serialize_callback_waiting_lifecycle_summary(
                     node_run.checkpoint_payload

@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.schemas.run import AICallItem, RunArtifactItem, ToolCallItem
+from app.schemas.sensitive_access import SensitiveAccessTimelineEntryItem
 
 
 class RunCallbackTicketItem(BaseModel):
@@ -45,10 +46,16 @@ class RunExecutionSummary(BaseModel):
     ai_call_count: int = 0
     assistant_call_count: int = 0
     callback_ticket_count: int = 0
+    sensitive_access_request_count: int = 0
+    sensitive_access_approval_ticket_count: int = 0
+    sensitive_access_notification_count: int = 0
     artifact_kind_counts: dict[str, int] = Field(default_factory=dict)
     tool_status_counts: dict[str, int] = Field(default_factory=dict)
     ai_role_counts: dict[str, int] = Field(default_factory=dict)
     callback_ticket_status_counts: dict[str, int] = Field(default_factory=dict)
+    sensitive_access_decision_counts: dict[str, int] = Field(default_factory=dict)
+    sensitive_access_approval_status_counts: dict[str, int] = Field(default_factory=dict)
+    sensitive_access_notification_status_counts: dict[str, int] = Field(default_factory=dict)
     callback_waiting: RunCallbackWaitingSummary = Field(default_factory=RunCallbackWaitingSummary)
 
 
@@ -102,6 +109,9 @@ class RunExecutionNodeItem(BaseModel):
     tool_calls: list[ToolCallItem] = Field(default_factory=list)
     ai_calls: list[AICallItem] = Field(default_factory=list)
     callback_tickets: list[RunCallbackTicketItem] = Field(default_factory=list)
+    sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
+        default_factory=list
+    )
     callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
 
 

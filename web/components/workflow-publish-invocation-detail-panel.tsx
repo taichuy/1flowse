@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
@@ -79,7 +80,13 @@ export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref
 }: WorkflowPublishInvocationDetailPanelProps) {
-  const { invocation, run, callback_tickets: callbackTickets, cache } = detail;
+  const {
+    invocation,
+    run,
+    callback_tickets: callbackTickets,
+    sensitive_access_entries: sensitiveAccessEntries,
+    cache
+  } = detail;
   const waitingLifecycle = invocation.run_waiting_lifecycle;
 
   return (
@@ -278,6 +285,18 @@ export function WorkflowPublishInvocationDetailPanel({
       ) : (
         <p className="empty-state compact">当前这次 invocation 没有关联 callback ticket。</p>
       )}
+
+      <div>
+        <strong>Approval timeline</strong>
+        <p className="section-copy entry-copy">
+          Sensitive access decisions, approval tickets and notification delivery are grouped here
+          so published-surface debugging no longer has to jump back to the inbox.
+        </p>
+        <SensitiveAccessTimelineEntryList
+          entries={sensitiveAccessEntries}
+          emptyCopy="当前这次 invocation 没有关联 sensitive access timeline。"
+        />
+      </div>
     </article>
   );
 }

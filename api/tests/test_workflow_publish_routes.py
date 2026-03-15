@@ -6,6 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.models.sensitive_access import (
+    ApprovalTicketRecord,
+    NotificationDispatchRecord,
+    SensitiveAccessRequestRecord,
+    SensitiveResourceRecord,
+)
 from app.models.workflow import (
     WorkflowPublishedCacheEntry,
     WorkflowPublishedEndpoint,
@@ -1369,6 +1375,52 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         created_at=now,
         expires_at=now + timedelta(minutes=5),
     )
+    sensitive_resource = SensitiveResourceRecord(
+        id="resource-publish-detail-tool",
+        label="Published Search Tool",
+        description="Published invocation depends on approved search access.",
+        sensitivity_level="L2",
+        source="local_capability",
+        metadata_payload={"tool_id": "native.search", "workflow_id": workflow_id},
+        created_at=now,
+        updated_at=now,
+    )
+    sensitive_request = SensitiveAccessRequestRecord(
+        id="access-request-publish-detail",
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_type="workflow",
+        requester_id=node_run.node_id,
+        resource_id=sensitive_resource.id,
+        action_type="invoke",
+        purpose_text="Invoke search tool for published callback response.",
+        decision="allow",
+        reason_code="approved_after_review",
+        created_at=now,
+        decided_at=now + timedelta(seconds=45),
+    )
+    approval_ticket = ApprovalTicketRecord(
+        id="approval-ticket-publish-detail",
+        access_request_id=sensitive_request.id,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        status="approved",
+        waiting_status="resumed",
+        approved_by="ops-manager",
+        decided_at=now + timedelta(seconds=45),
+        expires_at=now + timedelta(minutes=10),
+        created_at=now,
+    )
+    notification_dispatch = NotificationDispatchRecord(
+        id="notification-publish-detail",
+        approval_ticket_id=approval_ticket.id,
+        channel="in_app",
+        target="sensitive-access-inbox",
+        status="delivered",
+        delivered_at=now + timedelta(seconds=10),
+        error=None,
+        created_at=now,
+    )
     cache_entry = WorkflowPublishedCacheEntry(
         id="cache-entry-publish-detail",
         workflow_id=workflow_id,
@@ -1388,6 +1440,10 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     sqlite_session.add(run)
     sqlite_session.add(node_run)
     sqlite_session.add(callback_ticket)
+    sqlite_session.add(sensitive_resource)
+    sqlite_session.add(sensitive_request)
+    sqlite_session.add(approval_ticket)
+    sqlite_session.add(notification_dispatch)
     sqlite_session.add(cache_entry)
 
     invocation_service = PublishedInvocationService()
@@ -1480,6 +1536,38 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
             "consumed_at": None,
             "canceled_at": None,
             "expired_at": None,
+        }
+    ]
+    assert len(detail_body["sensitive_access_entries"]) == 1
+    assert detail_body["sensitive_access_entries"][0]["resource"]["label"] == (
+        "Published Search Tool"
+    )
+    assert detail_body["sensitive_access_entries"][0]["request"]["decision"] == "allow"
+    assert detail_body["sensitive_access_entries"][0]["request"]["reason_code"] == (
+        "approved_after_review"
+    )
+    assert detail_body["sensitive_access_entries"][0]["approval_ticket"] == {
+        "id": approval_ticket.id,
+        "access_request_id": sensitive_request.id,
+        "run_id": run.id,
+        "node_run_id": node_run.id,
+        "status": "approved",
+        "waiting_status": "resumed",
+        "approved_by": "ops-manager",
+        "decided_at": (now + timedelta(seconds=45)).replace(tzinfo=None).isoformat(),
+        "expires_at": (now + timedelta(minutes=10)).replace(tzinfo=None).isoformat(),
+        "created_at": expected_now,
+    }
+    assert detail_body["sensitive_access_entries"][0]["notifications"] == [
+        {
+            "id": notification_dispatch.id,
+            "approval_ticket_id": approval_ticket.id,
+            "channel": "in_app",
+            "target": "sensitive-access-inbox",
+            "status": "delivered",
+            "delivered_at": (now + timedelta(seconds=10)).replace(tzinfo=None).isoformat(),
+            "error": None,
+            "created_at": expected_now,
         }
     ]
     assert detail_body["cache"] == {
