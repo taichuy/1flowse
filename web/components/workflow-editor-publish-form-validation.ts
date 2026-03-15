@@ -4,6 +4,7 @@ import {
   WORKFLOW_VERSION_PATTERN,
   type WorkflowPublishedEndpointDraft
 } from "./workflow-editor-publish-form-shared";
+import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
 
 export type WorkflowEditorPublishValidationIssue = {
   key: string;
@@ -52,6 +53,29 @@ export function buildPublishedEndpointValidationIssues(
           message: `${endpointLabel} 的 cache.varyBy 不能包含重复字段。`
         });
       }
+    }
+
+    pushSchemaValidationIssue(
+      endpoint.inputSchema,
+      {
+        key: `${entryKey}-input-schema`,
+        endpointKey,
+        endpointId: endpoint.id,
+        errorPrefix: `Published endpoint '${endpoint.id}' inputSchema`
+      },
+      issues
+    );
+    if (endpoint.outputSchema) {
+      pushSchemaValidationIssue(
+        endpoint.outputSchema,
+        {
+          key: `${entryKey}-output-schema`,
+          endpointKey,
+          endpointId: endpoint.id,
+          errorPrefix: `Published endpoint '${endpoint.id}' outputSchema`
+        },
+        issues
+      );
     }
 
     return {
@@ -150,6 +174,28 @@ function pushDuplicateIssues(
       endpointKey: item.endpointKey,
       endpointId: item.endpointId,
       message: `${item.endpointLabel} 的 ${label} “${value}” 与其他 publish endpoint 重复。`
+    });
+  }
+}
+
+function pushSchemaValidationIssue(
+  schema: Record<string, unknown>,
+  issue: {
+    key: string;
+    endpointKey: string;
+    endpointId: string;
+    errorPrefix: string;
+  },
+  issues: WorkflowEditorPublishValidationIssue[]
+) {
+  try {
+    validateContractSchema(schema, { errorPrefix: issue.errorPrefix });
+  } catch (error) {
+    issues.push({
+      key: issue.key,
+      endpointKey: issue.endpointKey,
+      endpointId: issue.endpointId,
+      message: readErrorMessage(error)
     });
   }
 }

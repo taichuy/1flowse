@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { buildWorkflowDefinitionContractValidationIssues } from "@/lib/workflow-contract-schema-validation";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -83,10 +84,32 @@ export function WorkflowEditorWorkbench({
     graph.currentDefinition.nodes ?? []
   );
   const unsupportedNodeSummary = formatUnsupportedWorkflowNodes(unsupportedNodes);
-  const persistBlockedMessage =
+  const contractValidationIssues = useMemo(
+    () => buildWorkflowDefinitionContractValidationIssues(graph.currentDefinition),
+    [graph.currentDefinition]
+  );
+  const contractValidationSummary = useMemo(() => {
+    if (contractValidationIssues.length === 0) {
+      return null;
+    }
+    const head = contractValidationIssues
+      .slice(0, 3)
+      .map((issue) => issue.message)
+      .join("；");
+    return contractValidationIssues.length > 3
+      ? `${head}；另有 ${contractValidationIssues.length - 3} 项待修正。`
+      : head;
+  }, [contractValidationIssues]);
+  const unsupportedNodesBlockedMessage =
     unsupportedNodes.length > 0
       ? `当前 workflow 包含未进入执行主链的节点，暂不能保存或沉淀为 workspace starter：${unsupportedNodeSummary}。请先移除或替换这些节点，再继续保存。`
       : null;
+  const contractBlockedMessage = contractValidationSummary
+    ? `当前 workflow definition 还有 contract schema 待修正问题：${contractValidationSummary}${contractValidationSummary.endsWith("。") ? "" : "。"}请先在 Node contract / publish draft 中修正后再保存。`
+    : null;
+  const persistBlockedMessage = [unsupportedNodesBlockedMessage, contractBlockedMessage]
+    .filter(Boolean)
+    .join(" ");
 
   const handleSave = () => {
     if (persistBlockedMessage) {
@@ -188,24 +211,25 @@ export function WorkflowEditorWorkbench({
   return (
     <ReactFlowProvider>
       <main className="editor-shell">
-        <WorkflowEditorHero
-          workflowId={workflow.id}
-          workflowVersion={graph.workflowVersion}
-          nodesCount={graph.nodes.length}
-          edgesCount={graph.edges.length}
-          toolsCount={tools.length}
-          availableRunsCount={runOverlay.availableRuns.length}
-          isDirty={graph.isDirty}
-          selectedNodeLabel={selectedNode?.data.label ?? null}
-          selectedEdgeId={selectedEdge?.id ?? null}
-          workflowsCount={workflows.length}
-          selectedRunAttached={Boolean(runOverlay.selectedRunId)}
-          plannedNodeLabels={plannedNodeLibrary.map((item) => item.label)}
-          unsupportedNodes={unsupportedNodes}
-          persistBlockedMessage={persistBlockedMessage}
-          isSaving={isSaving}
-          isSavingStarter={isSavingStarter}
-          onSave={handleSave}
+          <WorkflowEditorHero
+            workflowId={workflow.id}
+            workflowVersion={graph.workflowVersion}
+            nodesCount={graph.nodes.length}
+            edgesCount={graph.edges.length}
+            toolsCount={tools.length}
+            availableRunsCount={runOverlay.availableRuns.length}
+            isDirty={graph.isDirty}
+            selectedNodeLabel={selectedNode?.data.label ?? null}
+            selectedEdgeId={selectedEdge?.id ?? null}
+            workflowsCount={workflows.length}
+            selectedRunAttached={Boolean(runOverlay.selectedRunId)}
+            plannedNodeLabels={plannedNodeLibrary.map((item) => item.label)}
+            unsupportedNodes={unsupportedNodes}
+            contractValidationIssuesCount={contractValidationIssues.length}
+            persistBlockedMessage={persistBlockedMessage || null}
+            isSaving={isSaving}
+            isSavingStarter={isSavingStarter}
+            onSave={handleSave}
           onSaveAsWorkspaceStarter={handleSaveAsWorkspaceStarter}
         />
 

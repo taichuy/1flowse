@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Node } from "@xyflow/react";
 
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
+import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
 import { toRecord } from "@/components/workflow-node-config-form/shared";
 
 type WorkflowNodeIoSchemaFormProps = {
@@ -29,12 +30,14 @@ export function WorkflowNodeIoSchemaForm({
 }: WorkflowNodeIoSchemaFormProps) {
   const [inputSchemaText, setInputSchemaText] = useState(stringifySchema(node.data.inputSchema));
   const [outputSchemaText, setOutputSchemaText] = useState(stringifySchema(node.data.outputSchema));
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [inputErrorMessage, setInputErrorMessage] = useState<string | null>(null);
+  const [outputErrorMessage, setOutputErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setInputSchemaText(stringifySchema(node.data.inputSchema));
     setOutputSchemaText(stringifySchema(node.data.outputSchema));
-    setErrorMessage(null);
+    setInputErrorMessage(null);
+    setOutputErrorMessage(null);
   }, [node.id, node.data.inputSchema, node.data.outputSchema]);
 
   const inputSchemaFieldsCount = countSchemaFields(node.data.inputSchema);
@@ -69,14 +72,24 @@ export function WorkflowNodeIoSchemaForm({
         <button
           className="sync-button"
           type="button"
-          onClick={() => handleApplySchema(inputSchemaText, onInputSchemaChange, setErrorMessage)}
+          onClick={() =>
+            handleApplySchema({
+              value: inputSchemaText,
+              errorPrefix: `Node '${node.id}' inputSchema`,
+              onChange: onInputSchemaChange,
+              setErrorMessage: setInputErrorMessage
+            })
+          }
         >
           应用 input schema
         </button>
         <button
           className="sync-button"
           type="button"
-          onClick={() => setInputSchemaText(EMPTY_OBJECT_SCHEMA)}
+          onClick={() => {
+            setInputSchemaText(EMPTY_OBJECT_SCHEMA);
+            setInputErrorMessage(null);
+          }}
         >
           object 模板
         </button>
@@ -85,7 +98,7 @@ export function WorkflowNodeIoSchemaForm({
           type="button"
           onClick={() => {
             setInputSchemaText("");
-            setErrorMessage(null);
+            setInputErrorMessage(null);
             onInputSchemaChange(undefined);
           }}
         >
@@ -107,14 +120,24 @@ export function WorkflowNodeIoSchemaForm({
         <button
           className="sync-button"
           type="button"
-          onClick={() => handleApplySchema(outputSchemaText, onOutputSchemaChange, setErrorMessage)}
+          onClick={() =>
+            handleApplySchema({
+              value: outputSchemaText,
+              errorPrefix: `Node '${node.id}' outputSchema`,
+              onChange: onOutputSchemaChange,
+              setErrorMessage: setOutputErrorMessage
+            })
+          }
         >
           应用 output schema
         </button>
         <button
           className="sync-button"
           type="button"
-          onClick={() => setOutputSchemaText(EMPTY_OBJECT_SCHEMA)}
+          onClick={() => {
+            setOutputSchemaText(EMPTY_OBJECT_SCHEMA);
+            setOutputErrorMessage(null);
+          }}
         >
           object 模板
         </button>
@@ -123,7 +146,7 @@ export function WorkflowNodeIoSchemaForm({
           type="button"
           onClick={() => {
             setOutputSchemaText("");
-            setErrorMessage(null);
+            setOutputErrorMessage(null);
             onOutputSchemaChange(undefined);
           }}
         >
@@ -132,30 +155,34 @@ export function WorkflowNodeIoSchemaForm({
       </div>
 
       <p className="section-copy">
-        这层先把节点契约从通用 config JSON 中分离出来，便于后续继续演进成更细粒度的 schema
-        builder；复杂 JsonSchema 关键字仍可直接保留在这里维护。
+        这层先把节点契约从通用 config JSON 中分离出来，并复用与后端保存链路一致的最小
+        contract 校验；后续再继续演进成更细粒度的 schema builder。
       </p>
 
-      {errorMessage ? <p className="empty-state compact">{errorMessage}</p> : null}
+      {inputErrorMessage ? <p className="empty-state compact">{inputErrorMessage}</p> : null}
+      {outputErrorMessage ? <p className="empty-state compact">{outputErrorMessage}</p> : null}
     </div>
   );
 }
 
-function handleApplySchema(
-  value: string,
-  onChange: (nextSchema: Record<string, unknown> | undefined) => void,
-  setErrorMessage: (value: string | null) => void
-) {
+function handleApplySchema(options: {
+  value: string;
+  errorPrefix: string;
+  onChange: (nextSchema: Record<string, unknown> | undefined) => void;
+  setErrorMessage: (value: string | null) => void;
+}) {
   try {
-    const nextSchema = parseSchemaText(value);
-    setErrorMessage(null);
-    onChange(nextSchema);
+    const nextSchema = parseSchemaText(options.value, options.errorPrefix);
+    options.setErrorMessage(null);
+    options.onChange(nextSchema);
   } catch (error) {
-    setErrorMessage(error instanceof Error ? error.message : "Schema 不是合法 JSON 对象。");
+    options.setErrorMessage(
+      error instanceof Error ? error.message : "Schema 不是合法 JSON 对象。"
+    );
   }
 }
 
-function parseSchemaText(value: string) {
+function parseSchemaText(value: string, errorPrefix: string) {
   const normalized = value.trim();
   if (!normalized) {
     return undefined;
@@ -165,6 +192,7 @@ function parseSchemaText(value: string) {
   if (!record) {
     throw new Error("Schema 必须是 JSON 对象。");
   }
+  validateContractSchema(record, { errorPrefix });
   return record;
 }
 

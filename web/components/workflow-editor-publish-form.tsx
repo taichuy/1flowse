@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
 import { WorkflowEditorPublishEndpointCard } from "./workflow-editor-publish-endpoint-card";
 import { buildPublishedEndpointValidationIssues } from "./workflow-editor-publish-form-validation";
 import {
@@ -105,6 +106,11 @@ export function WorkflowEditorPublishForm({
       if (!isRecord(parsed)) {
         throw new Error(`${field} 必须是 JSON 对象。`);
       }
+      const endpoint = normalizedEndpoints[endpointIndex];
+      const endpointId = endpoint?.id ?? `endpoint_${endpointIndex + 1}`;
+      validateContractSchema(parsed, {
+        errorPrefix: `Published endpoint '${endpointId}' ${field}`
+      });
       updateEndpoint(endpointIndex, (endpoint) => {
         endpoint[field] = parsed;
         return endpoint;
