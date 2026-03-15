@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.run import NodeRun, Run
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
     NotificationDispatchRecord,
@@ -18,38 +15,39 @@ from app.services.run_resume_scheduler import (
     RunResumeScheduler,
     get_run_resume_scheduler,
 )
+from app.services.sensitive_access_policy import (
+    evaluate_default_sensitive_access_policy,
+)
+from app.services.sensitive_access_queries import (
+    find_credential_resource,
+    find_existing_access_bundle,
+    find_tool_resource,
+    find_workflow_context_resource,
+    list_access_requests,
+    list_approval_tickets,
+    list_notification_dispatches,
+    list_resources,
+    validate_runtime_scope,
+)
+from app.services.sensitive_access_types import (
+    AccessDecisionResult,
+    ApprovalDecisionBundle,
+    SensitiveAccessControlError,
+    SensitiveAccessRequestBundle,
+)
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-class SensitiveAccessControlError(RuntimeError):
-    pass
-
-
-@dataclass(frozen=True)
-class AccessDecisionResult:
-    decision: str
-    reason_code: str
-
-
-@dataclass(frozen=True)
-class SensitiveAccessRequestBundle:
-    resource: SensitiveResourceRecord
-    access_request: SensitiveAccessRequestRecord
-    approval_ticket: ApprovalTicketRecord | None = None
-    notifications: list[NotificationDispatchRecord] = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "notifications", list(self.notifications or []))
-
-
-@dataclass(frozen=True)
-class ApprovalDecisionBundle:
-    access_request: SensitiveAccessRequestRecord
-    approval_ticket: ApprovalTicketRecord
-    notifications: list[NotificationDispatchRecord]
+__all__ = [
+    "AccessDecisionResult",
+    "ApprovalDecisionBundle",
+    "SensitiveAccessControlError",
+    "SensitiveAccessControlService",
+    "SensitiveAccessRequestBundle",
+]
 
 
 class SensitiveAccessControlService:
@@ -91,16 +89,11 @@ class SensitiveAccessControlService:
         sensitivity_level: str | None = None,
         source: str | None = None,
     ) -> list[SensitiveResourceRecord]:
-        statement = select(SensitiveResourceRecord).order_by(
-            SensitiveResourceRecord.created_at.desc()
+        return list_resources(
+            db,
+            sensitivity_level=sensitivity_level,
+            source=source,
         )
-        if sensitivity_level:
-            statement = statement.where(
-                SensitiveResourceRecord.sensitivity_level == sensitivity_level
-            )
-        if source:
-            statement = statement.where(SensitiveResourceRecord.source == source)
-        return db.scalars(statement).all()
 
     def list_access_requests(
         self,
@@ -110,18 +103,12 @@ class SensitiveAccessControlService:
         requester_type: str | None = None,
         run_id: str | None = None,
     ) -> list[SensitiveAccessRequestRecord]:
-        statement = select(SensitiveAccessRequestRecord).order_by(
-            SensitiveAccessRequestRecord.created_at.desc()
+        return list_access_requests(
+            db,
+            decision=decision,
+            requester_type=requester_type,
+            run_id=run_id,
         )
-        if decision:
-            statement = statement.where(SensitiveAccessRequestRecord.decision == decision)
-        if requester_type:
-            statement = statement.where(
-                SensitiveAccessRequestRecord.requester_type == requester_type
-            )
-        if run_id:
-            statement = statement.where(SensitiveAccessRequestRecord.run_id == run_id)
-        return db.scalars(statement).all()
 
     def list_approval_tickets(
         self,
@@ -131,14 +118,12 @@ class SensitiveAccessControlService:
         waiting_status: str | None = None,
         run_id: str | None = None,
     ) -> list[ApprovalTicketRecord]:
-        statement = select(ApprovalTicketRecord).order_by(ApprovalTicketRecord.created_at.desc())
-        if status:
-            statement = statement.where(ApprovalTicketRecord.status == status)
-        if waiting_status:
-            statement = statement.where(ApprovalTicketRecord.waiting_status == waiting_status)
-        if run_id:
-            statement = statement.where(ApprovalTicketRecord.run_id == run_id)
-        return db.scalars(statement).all()
+        return list_approval_tickets(
+            db,
+            status=status,
+            waiting_status=waiting_status,
+            run_id=run_id,
+        )
 
     def list_notification_dispatches(
         self,
@@ -147,16 +132,11 @@ class SensitiveAccessControlService:
         approval_ticket_id: str | None = None,
         status: str | None = None,
     ) -> list[NotificationDispatchRecord]:
-        statement = select(NotificationDispatchRecord).order_by(
-            NotificationDispatchRecord.created_at.desc()
+        return list_notification_dispatches(
+            db,
+            approval_ticket_id=approval_ticket_id,
+            status=status,
         )
-        if approval_ticket_id:
-            statement = statement.where(
-                NotificationDispatchRecord.approval_ticket_id == approval_ticket_id
-            )
-        if status:
-            statement = statement.where(NotificationDispatchRecord.status == status)
-        return db.scalars(statement).all()
 
     def find_credential_resource(
         self,
@@ -164,20 +144,7 @@ class SensitiveAccessControlService:
         *,
         credential_id: str,
     ) -> SensitiveResourceRecord | None:
-        statement = select(SensitiveResourceRecord).where(
-            SensitiveResourceRecord.source == "credential"
-        )
-        for record in db.scalars(statement):
-            metadata_payload = record.metadata_payload or {}
-            if str(metadata_payload.get("credential_id") or "") == credential_id:
-                return record
-        return None
-
-    def _workflow_id_for_run(self, db: Session, *, run_id: str | None) -> str:
-        if not run_id:
-            return ""
-        run = db.get(Run, run_id)
-        return str(run.workflow_id or "") if run is not None else ""
+        return find_credential_resource(db, credential_id=credential_id)
 
     def find_workflow_context_resource(
         self,
@@ -187,33 +154,12 @@ class SensitiveAccessControlService:
         source_node_id: str,
         artifact_type: str,
     ) -> SensitiveResourceRecord | None:
-        workflow_id = self._workflow_id_for_run(db, run_id=run_id)
-
-        statement = select(SensitiveResourceRecord).where(
-            SensitiveResourceRecord.source == "workflow_context"
+        return find_workflow_context_resource(
+            db,
+            run_id=run_id,
+            source_node_id=source_node_id,
+            artifact_type=artifact_type,
         )
-        fallback_match: SensitiveResourceRecord | None = None
-        for record in db.scalars(statement):
-            metadata_payload = record.metadata_payload or {}
-            resource_node_id = str(
-                metadata_payload.get("source_node_id")
-                or metadata_payload.get("node_id")
-                or ""
-            ).strip()
-            resource_artifact_type = str(
-                metadata_payload.get("artifact_type")
-                or metadata_payload.get("artifactType")
-                or ""
-            ).strip()
-            if resource_node_id != source_node_id or resource_artifact_type != artifact_type:
-                continue
-
-            resource_workflow_id = str(metadata_payload.get("workflow_id") or "").strip()
-            if workflow_id and resource_workflow_id == workflow_id:
-                return record
-            if not resource_workflow_id and fallback_match is None:
-                fallback_match = record
-        return fallback_match
 
     def find_tool_resource(
         self,
@@ -224,40 +170,13 @@ class SensitiveAccessControlService:
         ecosystem: str | None = None,
         adapter_id: str | None = None,
     ) -> SensitiveResourceRecord | None:
-        workflow_id = self._workflow_id_for_run(db, run_id=run_id)
-
-        statement = select(SensitiveResourceRecord).where(
-            SensitiveResourceRecord.source == "local_capability"
+        return find_tool_resource(
+            db,
+            run_id=run_id,
+            tool_id=tool_id,
+            ecosystem=ecosystem,
+            adapter_id=adapter_id,
         )
-        fallback_match: SensitiveResourceRecord | None = None
-        for record in db.scalars(statement):
-            metadata_payload = record.metadata_payload or {}
-            resource_tool_id = str(
-                metadata_payload.get("tool_id")
-                or metadata_payload.get("toolId")
-                or ""
-            ).strip()
-            if resource_tool_id != tool_id:
-                continue
-
-            resource_ecosystem = str(metadata_payload.get("ecosystem") or "").strip()
-            if resource_ecosystem and resource_ecosystem != str(ecosystem or "").strip():
-                continue
-
-            resource_adapter_id = str(
-                metadata_payload.get("adapter_id")
-                or metadata_payload.get("adapterId")
-                or ""
-            ).strip()
-            if resource_adapter_id and resource_adapter_id != str(adapter_id or "").strip():
-                continue
-
-            resource_workflow_id = str(metadata_payload.get("workflow_id") or "").strip()
-            if workflow_id and resource_workflow_id == workflow_id:
-                return record
-            if not resource_workflow_id and fallback_match is None:
-                fallback_match = record
-        return fallback_match
 
     def ensure_access(
         self,
@@ -275,7 +194,7 @@ class SensitiveAccessControlService:
         reuse_existing: bool = True,
     ) -> SensitiveAccessRequestBundle:
         if reuse_existing:
-            existing_bundle = self._find_existing_access_bundle(
+            existing_bundle = find_existing_access_bundle(
                 db,
                 run_id=run_id,
                 node_run_id=node_run_id,
@@ -318,13 +237,13 @@ class SensitiveAccessControlService:
         if resource is None:
             raise SensitiveAccessControlError("Sensitive resource not found.")
 
-        self._validate_runtime_scope(
+        validate_runtime_scope(
             db,
             run_id=run_id,
             node_run_id=node_run_id,
         )
 
-        decision_result = self._evaluate_default_policy(
+        decision_result = evaluate_default_sensitive_access_policy(
             sensitivity_level=resource.sensitivity_level,
             requester_type=requester_type,
             action_type=action_type,
@@ -431,126 +350,4 @@ class SensitiveAccessControlService:
             access_request=access_request,
             approval_ticket=approval_ticket,
             notifications=notifications,
-        )
-
-    def _find_existing_access_bundle(
-        self,
-        db: Session,
-        *,
-        run_id: str | None,
-        node_run_id: str | None,
-        requester_type: str,
-        requester_id: str,
-        resource_id: str,
-        action_type: str,
-    ) -> SensitiveAccessRequestBundle | None:
-        statement = (
-            select(SensitiveAccessRequestRecord)
-            .where(
-                SensitiveAccessRequestRecord.requester_type == requester_type,
-                SensitiveAccessRequestRecord.requester_id == requester_id.strip(),
-                SensitiveAccessRequestRecord.resource_id == resource_id,
-                SensitiveAccessRequestRecord.action_type == action_type,
-            )
-            .order_by(SensitiveAccessRequestRecord.created_at.desc())
-        )
-        if run_id is None:
-            statement = statement.where(SensitiveAccessRequestRecord.run_id.is_(None))
-        else:
-            statement = statement.where(SensitiveAccessRequestRecord.run_id == run_id)
-        if node_run_id is None:
-            statement = statement.where(SensitiveAccessRequestRecord.node_run_id.is_(None))
-        else:
-            statement = statement.where(SensitiveAccessRequestRecord.node_run_id == node_run_id)
-
-        access_request = db.scalars(statement).first()
-        if access_request is None:
-            return None
-
-        resource = db.get(SensitiveResourceRecord, resource_id)
-        if resource is None:
-            raise SensitiveAccessControlError("Sensitive resource not found.")
-
-        approval_ticket = db.scalar(
-            select(ApprovalTicketRecord).where(
-                ApprovalTicketRecord.access_request_id == access_request.id
-            )
-        )
-        notifications: list[NotificationDispatchRecord] = []
-        if approval_ticket is not None:
-            notifications = self.list_notification_dispatches(
-                db,
-                approval_ticket_id=approval_ticket.id,
-            )
-
-        return SensitiveAccessRequestBundle(
-            resource=resource,
-            access_request=access_request,
-            approval_ticket=approval_ticket,
-            notifications=notifications,
-        )
-
-    def _validate_runtime_scope(
-        self,
-        db: Session,
-        *,
-        run_id: str | None,
-        node_run_id: str | None,
-    ) -> None:
-        if run_id:
-            run = db.get(Run, run_id)
-            if run is None:
-                raise SensitiveAccessControlError("Run not found.")
-
-        if node_run_id:
-            node_run = db.get(NodeRun, node_run_id)
-            if node_run is None:
-                raise SensitiveAccessControlError("Node run not found.")
-            if run_id and node_run.run_id != run_id:
-                raise SensitiveAccessControlError(
-                    "Node run does not belong to the provided run."
-                )
-
-    def _evaluate_default_policy(
-        self,
-        *,
-        sensitivity_level: str,
-        requester_type: str,
-        action_type: str,
-    ) -> AccessDecisionResult:
-        if sensitivity_level == "L0":
-            return AccessDecisionResult("allow", "allow_low_sensitivity")
-
-        if sensitivity_level == "L1":
-            if requester_type != "human" and action_type in {"export", "write"}:
-                return AccessDecisionResult(
-                    "require_approval",
-                    "approval_required_non_human_mutation",
-                )
-            return AccessDecisionResult("allow", "allow_standard_low_risk")
-
-        if sensitivity_level == "L2":
-            if requester_type == "human" and action_type in {"read", "use", "invoke"}:
-                return AccessDecisionResult(
-                    "allow",
-                    "allow_human_moderate_runtime_use",
-                )
-            if action_type in {"read", "use", "invoke"}:
-                return AccessDecisionResult(
-                    "allow_masked",
-                    "masked_moderate_runtime_use",
-                )
-            return AccessDecisionResult(
-                "require_approval",
-                "approval_required_moderate_sensitive_operation",
-            )
-
-        if requester_type != "human" and action_type in {"export", "write"}:
-            return AccessDecisionResult(
-                "deny",
-                "deny_non_human_high_sensitive_mutation",
-            )
-        return AccessDecisionResult(
-            "require_approval",
-            "approval_required_high_sensitive_access",
         )
