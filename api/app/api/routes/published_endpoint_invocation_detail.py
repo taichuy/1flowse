@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,7 @@ from app.api.routes.published_endpoint_invocation_support import (
     serialize_callback_ticket_item,
     serialize_published_invocation_item,
 )
+from app.api.routes.sensitive_access_http import build_sensitive_access_blocking_response
 from app.core.database import get_db
 from app.models.run import NodeRun, Run, RunCallbackTicket
 from app.models.workflow import Workflow, WorkflowPublishedApiKey, WorkflowPublishedEndpoint
@@ -18,11 +19,15 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationRunReference,
 )
 from app.services.published_cache import PublishedEndpointCacheService
+from app.services.published_invocation_detail_access import (
+    PublishedInvocationDetailAccessService,
+)
 from app.services.published_invocations import PublishedInvocationService
 
 router = APIRouter(prefix="/workflows", tags=["published-endpoint-activity"])
 published_invocation_service = PublishedInvocationService()
 published_cache_service = PublishedEndpointCacheService()
+published_invocation_detail_access_service = PublishedInvocationDetailAccessService()
 
 
 @router.get(
@@ -33,6 +38,8 @@ def get_published_endpoint_invocation_detail(
     workflow_id: str,
     binding_id: str,
     invocation_id: str,
+    requester_id: str = Query(default="publish-activity-detail", min_length=1, max_length=128),
+    purpose_text: str | None = Query(default=None, min_length=1, max_length=512),
     db: Session = Depends(get_db),
 ) -> PublishedEndpointInvocationDetailResponse:
     workflow = db.get(Workflow, workflow_id)
@@ -57,6 +64,21 @@ def get_published_endpoint_invocation_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Published endpoint invocation not found.",
         )
+
+    sensitive_access_response = build_sensitive_access_blocking_response(
+        published_invocation_detail_access_service.ensure_access(
+            db,
+            invocation=record,
+            requester_id=requester_id,
+            purpose_text=purpose_text,
+        ),
+        approval_detail=(
+            "Published invocation detail requires approval before the payload can be viewed."
+        ),
+        deny_detail="Published invocation detail is denied by the sensitive access policy.",
+    )
+    if sensitive_access_response is not None:
+        return sensitive_access_response
 
     api_key_lookup: dict[str, PublishedEndpointInvocationApiKeyUsageItem] = {}
     if record.api_key_id:
@@ -91,7 +113,9 @@ def get_published_endpoint_invocation_detail(
                 node_runs,
                 callback_tickets,
             )
-        callback_ticket_items = [serialize_callback_ticket_item(ticket) for ticket in callback_tickets]
+        callback_ticket_items = [
+            serialize_callback_ticket_item(ticket) for ticket in callback_tickets
+        ]
 
     invocation = serialize_published_invocation_item(
         record,

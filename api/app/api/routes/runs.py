@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.routes.sensitive_access_http import (
+    build_sensitive_access_blocking_response,
+)
 from app.core.database import get_db
 from app.models.run import Run, RunEvent
 from app.models.workflow import Workflow
@@ -31,55 +34,6 @@ runtime_service = RuntimeService()
 run_trace_export_access_service = RunTraceExportAccessService()
 
 
-def _serialize_trace_export_access_bundle(bundle) -> dict:
-    approval_ticket = bundle.approval_ticket
-    return {
-        "resource": {
-            "id": bundle.resource.id,
-            "label": bundle.resource.label,
-            "description": bundle.resource.description,
-            "sensitivity_level": bundle.resource.sensitivity_level,
-            "source": bundle.resource.source,
-            "metadata": bundle.resource.metadata_payload or {},
-        },
-        "access_request": {
-            "id": bundle.access_request.id,
-            "run_id": bundle.access_request.run_id,
-            "node_run_id": bundle.access_request.node_run_id,
-            "requester_type": bundle.access_request.requester_type,
-            "requester_id": bundle.access_request.requester_id,
-            "resource_id": bundle.access_request.resource_id,
-            "action_type": bundle.access_request.action_type,
-            "purpose_text": bundle.access_request.purpose_text,
-            "decision": bundle.access_request.decision,
-            "reason_code": bundle.access_request.reason_code,
-        },
-        "approval_ticket": (
-            {
-                "id": approval_ticket.id,
-                "access_request_id": approval_ticket.access_request_id,
-                "run_id": approval_ticket.run_id,
-                "node_run_id": approval_ticket.node_run_id,
-                "status": approval_ticket.status,
-                "waiting_status": approval_ticket.waiting_status,
-                "approved_by": approval_ticket.approved_by,
-            }
-            if approval_ticket is not None
-            else None
-        ),
-        "notifications": [
-            {
-                "id": item.id,
-                "approval_ticket_id": item.approval_ticket_id,
-                "channel": item.channel,
-                "target": item.target,
-                "status": item.status,
-            }
-            for item in bundle.notifications
-        ],
-    }
-
-
 def _enforce_trace_export_sensitive_access(
     *,
     db: Session,
@@ -93,22 +47,11 @@ def _enforce_trace_export_sensitive_access(
         requester_id=requester_id,
         purpose_text=purpose_text,
     )
-    if bundle is None or bundle.access_request.decision == "allow":
-        return None
-
-    payload = _serialize_trace_export_access_bundle(bundle)
-    if (
-        bundle.access_request.decision == "require_approval"
-        and bundle.approval_ticket is not None
-        and bundle.approval_ticket.status == "pending"
-    ):
-        payload["detail"] = (
-            "Run trace export requires approval before the payload can be exported."
-        )
-        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=payload)
-
-    payload["detail"] = "Run trace export is denied by the sensitive access policy."
-    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=payload)
+    return build_sensitive_access_blocking_response(
+        bundle,
+        approval_detail="Run trace export requires approval before the payload can be exported.",
+        deny_detail="Run trace export is denied by the sensitive access policy.",
+    )
 
 
 def _normalize_filter_datetime(value: datetime | None) -> datetime | None:

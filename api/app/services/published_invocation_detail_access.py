@@ -5,9 +5,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.run import Run
 from app.models.sensitive_access import SensitiveResourceRecord
-from app.models.workflow import Workflow
+from app.models.workflow import Workflow, WorkflowPublishedInvocation
 from app.services.run_sensitive_access_summary import (
     SENSITIVITY_RANK,
     resolve_highest_run_sensitivity,
@@ -15,32 +14,32 @@ from app.services.run_sensitive_access_summary import (
 from app.services.sensitive_access_control import SensitiveAccessControlService
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
-__all__ = ["RunTraceExportAccessService"]
+__all__ = ["PublishedInvocationDetailAccessService"]
 
 
-_TRACE_EXPORT_RESOURCE_KIND = "run_trace_export"
+_PUBLISHED_INVOCATION_DETAIL_RESOURCE_KIND = "published_invocation_detail"
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-def _match_trace_export_resource(
+def _match_invocation_detail_resource(
     record: SensitiveResourceRecord,
     *,
-    run_id: str,
+    invocation_id: str,
 ) -> bool:
     if record.source != "workspace_resource":
         return False
     metadata_payload = record.metadata_payload if isinstance(record.metadata_payload, dict) else {}
     return (
         str(metadata_payload.get("resource_kind") or "").strip()
-        == _TRACE_EXPORT_RESOURCE_KIND
-        and str(metadata_payload.get("run_id") or "").strip() == run_id
+        == _PUBLISHED_INVOCATION_DETAIL_RESOURCE_KIND
+        and str(metadata_payload.get("invocation_id") or "").strip() == invocation_id
     )
 
 
-class RunTraceExportAccessService:
+class PublishedInvocationDetailAccessService:
     def __init__(
         self,
         *,
@@ -52,47 +51,46 @@ class RunTraceExportAccessService:
         self,
         db: Session,
         *,
-        run_id: str,
+        invocation: WorkflowPublishedInvocation,
         requester_id: str,
         purpose_text: str | None = None,
         notification_channel: str = "in_app",
         notification_target: str = "sensitive-access-inbox",
     ) -> SensitiveAccessRequestBundle | None:
-        sensitivity_level = resolve_highest_run_sensitivity(db, run_id=run_id)
+        if not invocation.run_id:
+            return None
+
+        sensitivity_level = resolve_highest_run_sensitivity(db, run_id=invocation.run_id)
         if sensitivity_level is None:
             return None
 
-        run = db.get(Run, run_id)
-        if run is None:
-            return None
-
-        resource, require_revalidation = self._find_or_create_export_resource(
+        resource, require_revalidation = self._find_or_create_detail_resource(
             db,
-            run=run,
+            invocation=invocation,
             sensitivity_level=sensitivity_level,
         )
         return self._sensitive_access.ensure_access(
             db,
-            run_id=run.id,
+            run_id=invocation.run_id,
             node_run_id=None,
             requester_type="human",
             requester_id=requester_id,
             resource_id=resource.id,
-            action_type="export",
-            purpose_text=purpose_text or f"export run trace for {run.id}",
+            action_type="read",
+            purpose_text=purpose_text or f"read published invocation detail for {invocation.id}",
             notification_channel=notification_channel,
             notification_target=notification_target,
             reuse_existing=not require_revalidation,
         )
 
-    def _find_or_create_export_resource(
+    def _find_or_create_detail_resource(
         self,
         db: Session,
         *,
-        run: Run,
+        invocation: WorkflowPublishedInvocation,
         sensitivity_level: str,
     ) -> tuple[SensitiveResourceRecord, bool]:
-        existing = self._find_export_resource(db, run_id=run.id)
+        existing = self._find_detail_resource(db, invocation_id=invocation.id)
         if existing is not None:
             if SENSITIVITY_RANK.get(existing.sensitivity_level, 0) < SENSITIVITY_RANK.get(
                 sensitivity_level,
@@ -104,30 +102,37 @@ class RunTraceExportAccessService:
                 return existing, True
             return existing, False
 
-        workflow = db.get(Workflow, run.workflow_id)
-        workflow_label = workflow.name if workflow is not None else run.workflow_id
+        workflow = db.get(Workflow, invocation.workflow_id)
+        workflow_label = workflow.name if workflow is not None else invocation.workflow_id
         return (
             self._sensitive_access.create_resource(
                 db,
-                label=f"Run trace export · {workflow_label}",
-                description=f"Sensitive export surface for run {run.id} trace payloads.",
+                label=(
+                    f"Published invocation detail · {workflow_label} / {invocation.endpoint_alias}"
+                ),
+                description=(
+                    f"Sensitive detail surface for published invocation {invocation.id}."
+                ),
                 sensitivity_level=sensitivity_level,
                 source="workspace_resource",
                 metadata={
-                    "resource_kind": _TRACE_EXPORT_RESOURCE_KIND,
-                    "run_id": run.id,
-                    "workflow_id": run.workflow_id,
-                    "workflow_version": run.workflow_version,
+                    "resource_kind": _PUBLISHED_INVOCATION_DETAIL_RESOURCE_KIND,
+                    "workflow_id": invocation.workflow_id,
+                    "binding_id": invocation.binding_id,
+                    "invocation_id": invocation.id,
+                    "run_id": invocation.run_id,
+                    "endpoint_id": invocation.endpoint_id,
+                    "endpoint_alias": invocation.endpoint_alias,
                 },
             ),
             False,
         )
 
-    def _find_export_resource(
+    def _find_detail_resource(
         self,
         db: Session,
         *,
-        run_id: str,
+        invocation_id: str,
     ) -> SensitiveResourceRecord | None:
         records = db.scalars(
             select(SensitiveResourceRecord).where(
@@ -135,6 +140,6 @@ class RunTraceExportAccessService:
             )
         ).all()
         for record in records:
-            if _match_trace_export_resource(record, run_id=run_id):
+            if _match_invocation_detail_resource(record, invocation_id=invocation_id):
                 return record
         return None
