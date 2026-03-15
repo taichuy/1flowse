@@ -22,11 +22,93 @@ from app.schemas.run import (
     RunTraceFilters,
     RunTraceSummary,
 )
+from app.services.run_trace_export_access import RunTraceExportAccessService
 from app.services.run_views import serialize_run_detail, serialize_run_event
 from app.services.runtime import RuntimeService, WorkflowExecutionError
 
 router = APIRouter(tags=["runs"])
 runtime_service = RuntimeService()
+run_trace_export_access_service = RunTraceExportAccessService()
+
+
+def _serialize_trace_export_access_bundle(bundle) -> dict:
+    approval_ticket = bundle.approval_ticket
+    return {
+        "resource": {
+            "id": bundle.resource.id,
+            "label": bundle.resource.label,
+            "description": bundle.resource.description,
+            "sensitivity_level": bundle.resource.sensitivity_level,
+            "source": bundle.resource.source,
+            "metadata": bundle.resource.metadata_payload or {},
+        },
+        "access_request": {
+            "id": bundle.access_request.id,
+            "run_id": bundle.access_request.run_id,
+            "node_run_id": bundle.access_request.node_run_id,
+            "requester_type": bundle.access_request.requester_type,
+            "requester_id": bundle.access_request.requester_id,
+            "resource_id": bundle.access_request.resource_id,
+            "action_type": bundle.access_request.action_type,
+            "purpose_text": bundle.access_request.purpose_text,
+            "decision": bundle.access_request.decision,
+            "reason_code": bundle.access_request.reason_code,
+        },
+        "approval_ticket": (
+            {
+                "id": approval_ticket.id,
+                "access_request_id": approval_ticket.access_request_id,
+                "run_id": approval_ticket.run_id,
+                "node_run_id": approval_ticket.node_run_id,
+                "status": approval_ticket.status,
+                "waiting_status": approval_ticket.waiting_status,
+                "approved_by": approval_ticket.approved_by,
+            }
+            if approval_ticket is not None
+            else None
+        ),
+        "notifications": [
+            {
+                "id": item.id,
+                "approval_ticket_id": item.approval_ticket_id,
+                "channel": item.channel,
+                "target": item.target,
+                "status": item.status,
+            }
+            for item in bundle.notifications
+        ],
+    }
+
+
+def _enforce_trace_export_sensitive_access(
+    *,
+    db: Session,
+    run_id: str,
+    requester_id: str,
+    purpose_text: str | None,
+) -> JSONResponse | None:
+    bundle = run_trace_export_access_service.ensure_access(
+        db,
+        run_id=run_id,
+        requester_id=requester_id,
+        purpose_text=purpose_text,
+    )
+    if bundle is None or bundle.access_request.decision == "allow":
+        return None
+
+    payload = _serialize_trace_export_access_bundle(bundle)
+    if (
+        bundle.access_request.decision == "require_approval"
+        and bundle.approval_ticket is not None
+        and bundle.approval_ticket.status == "pending"
+    ):
+        payload["detail"] = (
+            "Run trace export requires approval before the payload can be exported."
+        )
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=payload)
+
+    payload["detail"] = "Run trace export is denied by the sensitive access policy."
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=payload)
 
 
 def _normalize_filter_datetime(value: datetime | None) -> datetime | None:
@@ -594,8 +676,19 @@ def export_run_trace(
     limit: int = Query(default=200, ge=1, le=1000),
     order: Literal["asc", "desc"] = "asc",
     format: Literal["json", "jsonl"] = "json",
+    requester_id: str = Query(default="run-diagnostics-export", min_length=1, max_length=128),
+    purpose_text: str | None = Query(default=None, max_length=512),
     db: Session = Depends(get_db),
 ):
+    sensitive_access_response = _enforce_trace_export_sensitive_access(
+        db=db,
+        run_id=run_id,
+        requester_id=requester_id,
+        purpose_text=purpose_text,
+    )
+    if sensitive_access_response is not None:
+        return sensitive_access_response
+
     trace = _load_trace_request(
         run_id=run_id,
         cursor=cursor,
