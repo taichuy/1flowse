@@ -11,6 +11,10 @@ from app.models.sensitive_access import (
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
 )
+from app.services.notification_dispatch_scheduler import (
+    NotificationDispatchScheduler,
+    get_notification_dispatch_scheduler,
+)
 from app.services.run_resume_scheduler import (
     RunResumeScheduler,
     get_run_resume_scheduler,
@@ -57,8 +61,12 @@ class SensitiveAccessControlService:
         self,
         *,
         resume_scheduler: RunResumeScheduler | None = None,
+        notification_dispatch_scheduler: NotificationDispatchScheduler | None = None,
     ) -> None:
         self._resume_scheduler = resume_scheduler or get_run_resume_scheduler()
+        self._notification_dispatch_scheduler = (
+            notification_dispatch_scheduler or get_notification_dispatch_scheduler()
+        )
 
     def create_resource(
         self,
@@ -165,12 +173,9 @@ class SensitiveAccessControlService:
             approval_ticket_id=approval_ticket_id,
             channel=channel,
             target=target,
-            status="failed",
+            status="pending",
             delivered_at=None,
-            error=(
-                f"Notification channel '{channel}' is not implemented yet; "
-                "worker/adapter delivery is still pending."
-            ),
+            error=None,
             created_at=created_at,
         )
 
@@ -327,6 +332,13 @@ class SensitiveAccessControlService:
             )
             db.add_all(notifications)
             db.flush()
+            for notification in notifications:
+                if notification.status == "pending":
+                    self._notification_dispatch_scheduler.schedule(
+                        dispatch_id=notification.id,
+                        source="sensitive_access_request",
+                        db=db,
+                    )
 
         return SensitiveAccessRequestBundle(
             resource=resource,
@@ -396,7 +408,9 @@ class SensitiveAccessControlService:
 
         approval_ticket = db.get(ApprovalTicketRecord, notification.approval_ticket_id)
         if approval_ticket is None:
-            raise SensitiveAccessControlError("Approval ticket not found for notification dispatch.")
+            raise SensitiveAccessControlError(
+                "Approval ticket not found for notification dispatch."
+            )
         if approval_ticket.status != "pending" or approval_ticket.waiting_status != "waiting":
             raise SensitiveAccessControlError(
                 "Only waiting approval tickets can retry notifications."
@@ -426,6 +440,12 @@ class SensitiveAccessControlService:
 
         db.add(retried_notification)
         db.flush()
+        if retried_notification.status == "pending":
+            self._notification_dispatch_scheduler.schedule(
+                dispatch_id=retried_notification.id,
+                source="sensitive_access_retry",
+                db=db,
+            )
         return NotificationDispatchRetryBundle(
             approval_ticket=approval_ticket,
             notification=retried_notification,

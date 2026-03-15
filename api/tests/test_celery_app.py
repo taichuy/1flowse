@@ -1,7 +1,7 @@
 import importlib
 
-from app.core import config as config_module
 from app.core import celery_app as celery_module
+from app.core import config as config_module
 
 
 def _reload_celery_module():
@@ -38,3 +38,9 @@ def test_celery_app_skips_callback_cleanup_schedule_when_disabled(monkeypatch) -
     monkeypatch.delenv("SEVENFLOWS_CALLBACK_TICKET_CLEANUP_SCHEDULE_ENABLED")
     monkeypatch.delenv("SEVENFLOWS_CALLBACK_TICKET_CLEANUP_INTERVAL_SECONDS")
     _reload_celery_module()
+
+
+def test_celery_app_includes_notification_tasks() -> None:
+    module = _reload_celery_module()
+
+    assert "app.tasks.notifications" in module.celery_app.conf.include

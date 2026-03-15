@@ -8,7 +8,7 @@ celery_app = Celery(
     "sevenflows",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.heartbeat", "app.tasks.runtime"],
+    include=["app.tasks.heartbeat", "app.tasks.notifications", "app.tasks.runtime"],
 )
 
 beat_schedule: dict[str, dict[str, object]] = {}

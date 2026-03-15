@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     callback_ticket_cleanup_batch_size: int = 100
     callback_ticket_cleanup_schedule_enabled: bool = True
     callback_ticket_cleanup_interval_seconds: int = 300
+    notification_delivery_timeout_seconds: float = 10.0
     credential_encryption_key: str = ""
     llm_http_proxy: str = ""
     llm_default_timeout_seconds: int = 120

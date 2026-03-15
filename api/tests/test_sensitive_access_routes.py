@@ -1,12 +1,17 @@
 from fastapi.testclient import TestClient
+from pytest import MonkeyPatch
 from sqlalchemy.orm import Session
 
+from app.api.routes import sensitive_access as sensitive_access_routes
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
     NotificationDispatchRecord,
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
 )
+from app.services.notification_dispatch_scheduler import NotificationDispatchScheduler
+from app.services.run_resume_scheduler import RunResumeScheduler
+from app.services.sensitive_access_control import SensitiveAccessControlService
 
 
 def test_create_sensitive_resource_and_list_it(
@@ -160,10 +165,23 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     assert len(stored_notifications) == 1
 
 
-def test_request_external_notification_channel_fails_honestly(
+def test_request_external_notification_channel_is_enqueued_for_worker_delivery(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
 ) -> None:
+    scheduled_dispatches = []
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+            notification_dispatch_scheduler=NotificationDispatchScheduler(
+                dispatcher=scheduled_dispatches.append
+            ),
+        ),
+    )
+
     resource_response = client.post(
         "/api/sensitive-access/resources",
         json={
@@ -197,18 +215,35 @@ def test_request_external_notification_channel_fails_honestly(
     assert approval_ticket["waiting_status"] == "waiting"
     assert notification["channel"] == "slack"
     assert notification["target"] == "#ops-review"
-    assert notification["status"] == "failed"
-    assert "not implemented yet" in notification["error"]
+    assert notification["status"] == "pending"
+    assert notification["error"] is None
+
+    assert len(scheduled_dispatches) == 1
+    assert scheduled_dispatches[0].dispatch_id == notification["id"]
+    assert scheduled_dispatches[0].source == "sensitive_access_request"
 
     stored_notification = sqlite_session.get(NotificationDispatchRecord, notification["id"])
     assert stored_notification is not None
-    assert stored_notification.status == "failed"
+    assert stored_notification.status == "pending"
 
 
 def test_retry_notification_dispatch_creates_new_attempt(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
 ) -> None:
+    scheduled_dispatches = []
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+            notification_dispatch_scheduler=NotificationDispatchScheduler(
+                dispatcher=scheduled_dispatches.append
+            ),
+        ),
+    )
+
     resource_response = client.post(
         "/api/sensitive-access/resources",
         json={
@@ -249,8 +284,13 @@ def test_retry_notification_dispatch_creates_new_attempt(
     assert retried_notification["id"] != first_notification["id"]
     assert retried_notification["channel"] == "email"
     assert retried_notification["target"] == "ops@example.com"
-    assert retried_notification["status"] == "failed"
-    assert "not implemented yet" in retried_notification["error"]
+    assert retried_notification["status"] == "pending"
+    assert retried_notification["error"] is None
+
+    assert len(scheduled_dispatches) == 2
+    assert scheduled_dispatches[0].dispatch_id == first_notification["id"]
+    assert scheduled_dispatches[1].dispatch_id == retried_notification["id"]
+    assert scheduled_dispatches[1].source == "sensitive_access_retry"
 
     notifications = (
         sqlite_session.query(NotificationDispatchRecord)
