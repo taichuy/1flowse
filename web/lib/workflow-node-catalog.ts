@@ -19,6 +19,17 @@ export type UnsupportedWorkflowNodeSummary = {
   supportSummary: string;
 };
 
+export function formatUnsupportedWorkflowNodes(
+  items: UnsupportedWorkflowNodeSummary[]
+) {
+  return items
+    .map((item) => {
+      const suffix = item.supportStatus === "unknown" ? "unknown" : item.supportStatus;
+      return `${item.label} x${item.count} (${suffix})`;
+    })
+    .join(" / ");
+}
+
 export function getWorkflowNodeCatalogItem(
   catalog: WorkflowNodeCatalogItem[],
   type: string

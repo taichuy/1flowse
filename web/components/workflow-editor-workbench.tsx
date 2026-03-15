@@ -14,6 +14,7 @@ import { buildWorkspaceStarterPayload } from "@/lib/workspace-starter-payload";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import {
+  formatUnsupportedWorkflowNodes,
   getPaletteNodeCatalog,
   getPlannedNodeCatalog,
   summarizeUnsupportedWorkflowNodes
@@ -81,8 +82,19 @@ export function WorkflowEditorWorkbench({
     nodeCatalog,
     graph.currentDefinition.nodes ?? []
   );
+  const unsupportedNodeSummary = formatUnsupportedWorkflowNodes(unsupportedNodes);
+  const persistBlockedMessage =
+    unsupportedNodes.length > 0
+      ? `当前 workflow 包含未进入执行主链的节点，暂不能保存或沉淀为 workspace starter：${unsupportedNodeSummary}。请先移除或替换这些节点，再继续保存。`
+      : null;
 
   const handleSave = () => {
+    if (persistBlockedMessage) {
+      setMessage(persistBlockedMessage);
+      setMessageTone("error");
+      return;
+    }
+
     startSavingTransition(async () => {
       setMessage("正在保存 workflow definition...");
       setMessageTone("idle");
@@ -124,6 +136,12 @@ export function WorkflowEditorWorkbench({
   };
 
   const handleSaveAsWorkspaceStarter = () => {
+    if (persistBlockedMessage) {
+      setMessage(persistBlockedMessage);
+      setMessageTone("error");
+      return;
+    }
+
     const businessTrack = inferWorkflowBusinessTrack(graph.currentDefinition);
     const normalizedWorkflowName = graph.workflowName.trim() || workflow.name;
     const starterPayload = buildWorkspaceStarterPayload({
@@ -184,6 +202,7 @@ export function WorkflowEditorWorkbench({
           selectedRunAttached={Boolean(runOverlay.selectedRunId)}
           plannedNodeLabels={plannedNodeLibrary.map((item) => item.label)}
           unsupportedNodes={unsupportedNodes}
+          persistBlockedMessage={persistBlockedMessage}
           isSaving={isSaving}
           isSavingStarter={isSavingStarter}
           onSave={handleSave}

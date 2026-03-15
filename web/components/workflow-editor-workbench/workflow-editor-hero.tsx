@@ -18,6 +18,7 @@ type WorkflowEditorHeroProps = {
   selectedRunAttached: boolean;
   plannedNodeLabels: string[];
   unsupportedNodes: UnsupportedWorkflowNodeSummary[];
+  persistBlockedMessage: string | null;
   isSaving: boolean;
   isSavingStarter: boolean;
   onSave: () => void;
@@ -38,6 +39,7 @@ export function WorkflowEditorHero({
   selectedRunAttached,
   plannedNodeLabels,
   unsupportedNodes,
+  persistBlockedMessage,
   isSaving,
   isSavingStarter,
   onSave,
@@ -110,6 +112,11 @@ export function WorkflowEditorHero({
             <strong>
               {unsupportedNodes.map((item) => `${item.label} x${item.count}`).join(" / ")}
             </strong>
+          </p>
+        ) : null}
+        {persistBlockedMessage ? (
+          <p className="panel-text">
+            当前保存策略：<strong>含 planned / unknown 节点时阻断保存与 starter 沉淀</strong>
           </p>
         ) : null}
         <p className="panel-text">
