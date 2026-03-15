@@ -5,9 +5,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.routes import runs as run_routes
 from app.models.run import Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
+from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.runtime import RuntimeService
 
 
@@ -1119,6 +1121,7 @@ def test_receive_run_callback_route_resumes_waiting_callback_run(
 def test_receive_run_callback_route_returns_expired_for_stale_ticket(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch,
 ) -> None:
     workflow = Workflow(
         id="wf-route-callback-expired",
@@ -1190,6 +1193,13 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
     ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=1)
     sqlite_session.commit()
 
+    scheduled_resumes = []
+    monkeypatch.setattr(
+        run_routes.runtime_service,
+        "_resume_scheduler",
+        RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
+
     response = client.post(
         f"/api/runs/callbacks/{callback_ticket}",
         json={
@@ -1214,6 +1224,14 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
         )
         .order_by(RunEvent.id.desc())
     )
+    resume_event = sqlite_session.scalar(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == first_pass.run.id,
+            RunEvent.event_type == "run.resume.scheduled",
+        )
+        .order_by(RunEvent.id.desc())
+    )
     lifecycle = waiting_run.checkpoint_payload["callback_waiting_lifecycle"]
     assert response.status_code == 200
     body = response.json()
@@ -1221,6 +1239,19 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
     assert body["run"]["status"] == "waiting"
     assert ticket_record.status == "expired"
     assert ticket_record.expired_at is not None
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].run_id == first_pass.run.id
+    assert scheduled_resumes[0].delay_seconds == 0.0
+    assert scheduled_resumes[0].reason == "route callback pending"
+    assert scheduled_resumes[0].source == "route_test"
+    assert "callback_ticket" not in waiting_run.checkpoint_payload
+    assert waiting_run.checkpoint_payload["scheduled_resume"] == {
+        "delay_seconds": 0.0,
+        "reason": "route callback pending",
+        "source": "route_test",
+        "waiting_status": "waiting_callback",
+        "backoff_attempt": 1,
+    }
     assert lifecycle == {
         "wait_cycle_count": 1,
         "issued_ticket_count": 1,
@@ -1228,20 +1259,33 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
         "consumed_ticket_count": 0,
         "canceled_ticket_count": 0,
         "late_callback_count": 1,
-        "resume_schedule_count": 0,
+        "resume_schedule_count": 1,
+        "max_expired_ticket_count": 3,
+        "terminated": False,
+        "termination_reason": None,
+        "terminated_at": None,
         "last_ticket_status": "expired",
         "last_ticket_reason": "callback_ticket_expired",
         "last_ticket_updated_at": lifecycle["last_ticket_updated_at"],
         "last_late_callback_status": "expired",
         "last_late_callback_reason": "callback_ticket_expired",
         "last_late_callback_at": lifecycle["last_late_callback_at"],
-        "last_resume_delay_seconds": None,
-        "last_resume_reason": None,
-        "last_resume_source": None,
-        "last_resume_backoff_attempt": 0,
+        "last_resume_delay_seconds": 0.0,
+        "last_resume_reason": "route callback pending",
+        "last_resume_source": "route_test",
+        "last_resume_backoff_attempt": 1,
     }
     assert late_event is not None
     assert late_event.payload["ticket"] == callback_ticket
     assert late_event.payload["ticket_status"] == "expired"
     assert late_event.payload["reason"] == "callback_ticket_expired"
     assert late_event.payload["source"] == "route_test"
+    assert resume_event is not None
+    assert resume_event.payload == {
+        "node_id": "agent",
+        "delay_seconds": 0.0,
+        "reason": "route callback pending",
+        "source": "route_test",
+        "waiting_status": "waiting_callback",
+        "backoff_attempt": 1,
+    }

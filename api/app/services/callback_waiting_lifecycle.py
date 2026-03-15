@@ -32,6 +32,18 @@ def _optional_string(value: object) -> str | None:
     return normalized or None
 
 
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off", ""}:
+            return False
+    return bool(value)
+
+
 def load_callback_waiting_lifecycle(checkpoint_payload: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(checkpoint_payload, dict):
         checkpoint_payload = {}
@@ -51,6 +63,12 @@ def load_callback_waiting_lifecycle(checkpoint_payload: dict[str, Any] | None) -
         "resume_schedule_count": _coerce_non_negative_int(
             raw_lifecycle.get("resume_schedule_count")
         ),
+        "max_expired_ticket_count": _coerce_non_negative_int(
+            raw_lifecycle.get("max_expired_ticket_count")
+        ),
+        "terminated": _coerce_bool(raw_lifecycle.get("terminated")),
+        "termination_reason": _optional_string(raw_lifecycle.get("termination_reason")),
+        "terminated_at": _optional_string(raw_lifecycle.get("terminated_at")),
         "last_ticket_status": _optional_string(raw_lifecycle.get("last_ticket_status")),
         "last_ticket_reason": _optional_string(raw_lifecycle.get("last_ticket_reason")),
         "last_ticket_updated_at": _optional_string(raw_lifecycle.get("last_ticket_updated_at")),
@@ -79,6 +97,16 @@ def attach_callback_waiting_lifecycle(
     return payload
 
 
+def apply_callback_waiting_termination_policy(
+    checkpoint_payload: dict[str, Any] | None,
+    *,
+    max_expired_ticket_count: int,
+) -> dict[str, Any]:
+    lifecycle = load_callback_waiting_lifecycle(checkpoint_payload)
+    lifecycle["max_expired_ticket_count"] = max(int(max_expired_ticket_count), 0)
+    return attach_callback_waiting_lifecycle(checkpoint_payload, lifecycle)
+
+
 def record_callback_ticket_issued(
     checkpoint_payload: dict[str, Any] | None,
     *,
@@ -88,6 +116,9 @@ def record_callback_ticket_issued(
     lifecycle = load_callback_waiting_lifecycle(checkpoint_payload)
     lifecycle["wait_cycle_count"] += 1
     lifecycle["issued_ticket_count"] += 1
+    lifecycle["terminated"] = False
+    lifecycle["termination_reason"] = None
+    lifecycle["terminated_at"] = None
     lifecycle["last_ticket_status"] = "pending"
     lifecycle["last_ticket_reason"] = _optional_string(reason)
     lifecycle["last_ticket_updated_at"] = _serialize_datetime(issued_at)
@@ -165,6 +196,31 @@ def record_late_callback_delivery(
     lifecycle["last_late_callback_reason"] = _optional_string(reason)
     lifecycle["last_late_callback_at"] = _serialize_datetime(received_at)
     return attach_callback_waiting_lifecycle(checkpoint_payload, lifecycle)
+
+
+def record_callback_waiting_terminated(
+    checkpoint_payload: dict[str, Any] | None,
+    *,
+    max_expired_ticket_count: int,
+    reason: str,
+    terminated_at: datetime | None,
+) -> dict[str, Any]:
+    lifecycle = load_callback_waiting_lifecycle(checkpoint_payload)
+    lifecycle["max_expired_ticket_count"] = max(int(max_expired_ticket_count), 0)
+    lifecycle["terminated"] = True
+    lifecycle["termination_reason"] = _optional_string(reason)
+    lifecycle["terminated_at"] = _serialize_datetime(terminated_at)
+    return attach_callback_waiting_lifecycle(checkpoint_payload, lifecycle)
+
+
+def should_terminate_callback_waiting(
+    checkpoint_payload: dict[str, Any] | None,
+) -> bool:
+    lifecycle = load_callback_waiting_lifecycle(checkpoint_payload)
+    max_expired_ticket_count = lifecycle["max_expired_ticket_count"]
+    if max_expired_ticket_count <= 0:
+        return False
+    return lifecycle["expired_ticket_count"] >= max_expired_ticket_count
 
 
 def compute_callback_cleanup_backoff_delay_seconds(

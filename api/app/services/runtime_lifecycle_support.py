@@ -4,8 +4,10 @@ from copy import deepcopy
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.run import NodeRun, Run, RunEvent
 from app.services.callback_waiting_lifecycle import (
+    apply_callback_waiting_termination_policy,
     record_callback_ticket_canceled,
     record_callback_ticket_issued,
 )
@@ -65,6 +67,10 @@ class RuntimeLifecycleSupportMixin:
             checkpoint_payload,
             reason=result.waiting_reason,
             issued_at=snapshot.created_at,
+        )
+        checkpoint_payload = apply_callback_waiting_termination_policy(
+            checkpoint_payload,
+            max_expired_ticket_count=get_settings().callback_ticket_max_expired_cycles,
         )
         node_run.checkpoint_payload = checkpoint_payload
         events.append(

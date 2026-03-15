@@ -287,6 +287,10 @@ def test_get_published_invocation_detail_requires_approval_for_high_sensitive_ru
         "canceled_ticket_count": 0,
         "late_callback_count": 0,
         "resume_schedule_count": 1,
+        "max_expired_ticket_count": 0,
+        "terminated": False,
+        "termination_reason": None,
+        "terminated_at": None,
         "last_ticket_status": "pending",
         "last_ticket_reason": "callback pending",
         "last_ticket_updated_at": node_run.checkpoint_payload["callback_waiting_lifecycle"][

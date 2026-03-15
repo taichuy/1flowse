@@ -62,6 +62,12 @@ function formatCallbackLifecycle(detail: PublishedEndpointInvocationDetailRespon
   if (lifecycle.last_resume_backoff_attempt > 0) {
     parts.push(`backoff #${lifecycle.last_resume_backoff_attempt}`);
   }
+  if (lifecycle.max_expired_ticket_count > 0) {
+    parts.push(`max expired ${lifecycle.max_expired_ticket_count}`);
+  }
+  if (lifecycle.terminated) {
+    parts.push("terminated");
+  }
   if (lifecycle.last_ticket_status) {
     parts.push(`last ticket ${lifecycle.last_ticket_status}`);
   }
@@ -136,6 +142,19 @@ export function WorkflowPublishInvocationDetailPanel({
             <div>
               <dt>Callback lifecycle</dt>
               <dd>{formatCallbackLifecycle(detail)}</dd>
+            </div>
+            <div>
+              <dt>Termination</dt>
+              <dd>
+                {waitingLifecycle?.callback_waiting_lifecycle?.terminated
+                  ? [
+                      waitingLifecycle.callback_waiting_lifecycle.termination_reason,
+                      formatTimestamp(waitingLifecycle.callback_waiting_lifecycle.terminated_at)
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "terminated"
+                  : "n/a"}
+              </dd>
             </div>
             <div>
               <dt>Started</dt>

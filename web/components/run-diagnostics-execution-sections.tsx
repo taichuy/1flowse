@@ -252,6 +252,11 @@ function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
           <span className="event-chip">
             expired {node.callback_waiting_lifecycle.expired_ticket_count}
           </span>
+          {node.callback_waiting_lifecycle.max_expired_ticket_count > 0 ? (
+            <span className="event-chip">
+              max expired {node.callback_waiting_lifecycle.max_expired_ticket_count}
+            </span>
+          ) : null}
           {node.callback_waiting_lifecycle.late_callback_count > 0 ? (
             <span className="event-chip">
               late callbacks {node.callback_waiting_lifecycle.late_callback_count}
@@ -267,7 +272,22 @@ function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
               backoff #{node.callback_waiting_lifecycle.last_resume_backoff_attempt}
             </span>
           ) : null}
+          {node.callback_waiting_lifecycle.terminated ? (
+            <span className="event-chip">terminated</span>
+          ) : null}
         </div>
+      ) : null}
+
+      {node.callback_waiting_lifecycle?.terminated ? (
+        <p className="run-error-message">
+          callback waiting terminated
+          {node.callback_waiting_lifecycle.termination_reason
+            ? ` · ${node.callback_waiting_lifecycle.termination_reason}`
+            : ""}
+          {node.callback_waiting_lifecycle.terminated_at
+            ? ` · ${formatTimestamp(node.callback_waiting_lifecycle.terminated_at)}`
+            : ""}
+        </p>
       ) : null}
 
       <MetricChipRow

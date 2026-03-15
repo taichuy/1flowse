@@ -635,7 +635,7 @@ def test_llm_agent_waiting_callback_can_resume_from_callback_ticket(
     assert duplicate.artifacts.run.status == "succeeded"
 
 
-def test_expired_callback_ticket_is_rejected_without_resuming_run(
+def test_expired_callback_ticket_is_rejected_and_schedules_waiting_run_resume(
     sqlite_session: Session,
 ) -> None:
     workflow = Workflow(
@@ -696,7 +696,11 @@ def test_expired_callback_ticket_is_rejected_without_resuming_run(
             },
         },
     )
-    runtime = RuntimeService(plugin_call_proxy=PluginCallProxy(registry))
+    scheduled_resumes = []
+    runtime = RuntimeService(
+        plugin_call_proxy=PluginCallProxy(registry),
+        resume_scheduler=RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
 
     first_pass = runtime.execute_workflow(sqlite_session, workflow, {"topic": "callback"})
     waiting_run = next(node_run for node_run in first_pass.node_runs if node_run.node_id == "agent")
@@ -725,6 +729,11 @@ def test_expired_callback_ticket_is_rejected_without_resuming_run(
 
     assert callback_result.callback_status == "expired"
     assert refreshed_run.status == "waiting"
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].run_id == first_pass.run.id
+    assert scheduled_resumes[0].delay_seconds == 0.0
+    assert scheduled_resumes[0].reason == "external callback pending"
+    assert scheduled_resumes[0].source == "expired_callback_test"
     assert ticket_record.status == "expired"
     assert ticket_record.expired_at is not None
     assert ticket_record.callback_payload == {

@@ -77,6 +77,10 @@ export type CallbackWaitingLifecycleSummary = {
   canceled_ticket_count: number;
   late_callback_count: number;
   resume_schedule_count: number;
+  max_expired_ticket_count: number;
+  terminated: boolean;
+  termination_reason?: string | null;
+  terminated_at?: string | null;
   last_ticket_status?: string | null;
   last_ticket_reason?: string | null;
   last_ticket_updated_at?: string | null;

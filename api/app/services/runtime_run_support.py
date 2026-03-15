@@ -11,10 +11,10 @@ from app.models.workflow import WorkflowCompiledBlueprint
 from app.services.callback_waiting_lifecycle import (
     record_callback_ticket_canceled,
     record_callback_ticket_consumed,
-    record_callback_ticket_expired,
     record_late_callback_delivery,
 )
 from app.services.compiled_blueprints import CompiledBlueprintError
+from app.services.run_callback_ticket_cleanup import RunCallbackTicketCleanupService
 from app.services.runtime_records import CallbackHandleResult, ExecutionArtifacts
 from app.services.runtime_types import FlowCheckpointState, WorkflowExecutionError
 
@@ -161,19 +161,19 @@ class RuntimeRunSupportMixin:
             raise WorkflowExecutionError("Run callback ticket points to missing runtime records.")
 
         if self._callback_tickets.is_ticket_expired(ticket_record):
-            callback_snapshot = self._callback_tickets.expire_ticket(
-                ticket_record,
-                reason="callback_ticket_expired",
-                callback_payload={
-                    "reason": "callback_ticket_expired",
-                    "source": source,
-                    "cleanup": False,
-                },
+            callback_cleanup_service = RunCallbackTicketCleanupService(
+                ticket_service=self._callback_tickets,
+                resume_scheduler=self._resume_scheduler,
             )
-            node_run.checkpoint_payload = record_callback_ticket_expired(
-                node_run.checkpoint_payload,
-                reason="callback_ticket_expired",
-                expired_at=callback_snapshot.expired_at,
+            callback_cleanup_service.expire_ticket_and_follow_up(
+                db,
+                record=ticket_record,
+                run=run,
+                node_run=node_run,
+                source=source,
+                schedule_resumes=True,
+                resume_source=source,
+                cleanup=False,
             )
             self._record_late_callback_state(
                 db,
@@ -182,26 +182,6 @@ class RuntimeRunSupportMixin:
                 status="expired",
                 reason="callback_ticket_expired",
                 source=source,
-            )
-            self._persist_events(
-                db,
-                [
-                    self._build_event(
-                        ticket_record.run_id,
-                        ticket_record.node_run_id,
-                        "run.callback.ticket.expired",
-                        {
-                            "ticket": callback_snapshot.ticket,
-                            "node_id": node_run.node_id,
-                            "tool_id": ticket_record.tool_id,
-                            "tool_call_id": ticket_record.tool_call_id,
-                            "expires_at": self._serialize_timestamp(callback_snapshot.expires_at),
-                            "expired_at": self._serialize_timestamp(callback_snapshot.expired_at),
-                            "source": source,
-                            "cleanup": False,
-                        },
-                    )
-                ],
             )
             db.commit()
             artifacts = self._load_run_artifacts_or_raise(db, ticket_record.run_id)

@@ -46,6 +46,10 @@ class CallbackWaitingLifecycleSummary(BaseModel):
     canceled_ticket_count: int = 0
     late_callback_count: int = 0
     resume_schedule_count: int = 0
+    max_expired_ticket_count: int = 0
+    terminated: bool = False
+    termination_reason: str | None = None
+    terminated_at: datetime | None = None
     last_ticket_status: str | None = None
     last_ticket_reason: str | None = None
     last_ticket_updated_at: datetime | None = None

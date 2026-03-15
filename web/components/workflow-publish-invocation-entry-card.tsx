@@ -66,6 +66,12 @@ function formatCallbackLifecycle(item: PublishedInvocationItem): string | null {
   if (lifecycle.last_resume_backoff_attempt > 0) {
     parts.push(`backoff #${lifecycle.last_resume_backoff_attempt}`);
   }
+  if (lifecycle.max_expired_ticket_count > 0) {
+    parts.push(`max expired ${lifecycle.max_expired_ticket_count}`);
+  }
+  if (lifecycle.terminated) {
+    parts.push("terminated");
+  }
 
   return parts.length ? parts.join(" · ") : "callback lifecycle tracked";
 }

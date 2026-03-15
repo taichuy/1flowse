@@ -26,8 +26,10 @@ def _serialize_cleanup_result(
         matched_count=result.matched_count,
         expired_count=result.expired_count,
         scheduled_resume_count=result.scheduled_resume_count,
+        terminated_count=result.terminated_count,
         run_ids=result.run_ids,
         scheduled_resume_run_ids=result.scheduled_resume_run_ids,
+        terminated_run_ids=result.terminated_run_ids,
         items=[
             CallbackTicketCleanupItem(
                 ticket=item.ticket,

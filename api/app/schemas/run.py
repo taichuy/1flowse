@@ -52,8 +52,10 @@ class CallbackTicketCleanupResponse(BaseModel):
     matched_count: int = 0
     expired_count: int = 0
     scheduled_resume_count: int = 0
+    terminated_count: int = 0
     run_ids: list[str] = Field(default_factory=list)
     scheduled_resume_run_ids: list[str] = Field(default_factory=list)
+    terminated_run_ids: list[str] = Field(default_factory=list)
     items: list[CallbackTicketCleanupItem] = Field(default_factory=list)
 
 

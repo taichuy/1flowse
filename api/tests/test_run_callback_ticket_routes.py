@@ -133,8 +133,10 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
     assert body["matched_count"] == 1
     assert body["expired_count"] == 1
     assert body["scheduled_resume_count"] == 1
+    assert body["terminated_count"] == 0
     assert body["run_ids"] == [run_id]
     assert body["scheduled_resume_run_ids"] == [run_id]
+    assert body["terminated_run_ids"] == []
     assert body["items"][0]["ticket"] == ticket
     assert body["items"][0]["node_id"] == "agent"
     assert body["items"][0]["status"] == "expired"
@@ -213,7 +215,9 @@ def test_cleanup_stale_run_callback_tickets_route_can_skip_resume_scheduling(
     assert body["matched_count"] == 1
     assert body["expired_count"] == 1
     assert body["scheduled_resume_count"] == 0
+    assert body["terminated_count"] == 0
     assert body["scheduled_resume_run_ids"] == []
+    assert body["terminated_run_ids"] == []
     assert scheduled_resumes == []
     assert node_run is not None
     assert "scheduled_resume" not in (node_run.checkpoint_payload or {})
@@ -258,6 +262,8 @@ def test_cleanup_stale_run_callback_tickets_route_supports_dry_run(
     assert body["matched_count"] == 1
     assert body["expired_count"] == 0
     assert body["scheduled_resume_count"] == 0
+    assert body["terminated_count"] == 0
+    assert body["terminated_run_ids"] == []
     assert body["items"][0]["ticket"] == ticket
     assert body["items"][0]["status"] == "pending"
     assert ticket_record.status == "pending"
@@ -290,8 +296,10 @@ def test_cleanup_service_can_schedule_immediate_resume_for_expired_callback_tick
     assert result.matched_count == 1
     assert result.expired_count == 1
     assert result.scheduled_resume_count == 1
+    assert result.terminated_count == 0
     assert result.run_ids == [run_id]
     assert result.scheduled_resume_run_ids == [run_id]
+    assert result.terminated_run_ids == []
     assert scheduled_resumes == []
 
     sqlite_session.commit()
@@ -398,7 +406,109 @@ def test_cleanup_service_applies_backoff_after_repeated_callback_expirations(
     lifecycle = node_run.checkpoint_payload["callback_waiting_lifecycle"]
     assert lifecycle["expired_ticket_count"] == 2
     assert lifecycle["resume_schedule_count"] == 1
+    assert lifecycle["max_expired_ticket_count"] == 3
+    assert lifecycle["terminated"] is False
+    assert lifecycle["termination_reason"] is None
+    assert lifecycle["terminated_at"] is None
     assert lifecycle["last_resume_delay_seconds"] == 5.0
     assert lifecycle["last_resume_reason"] == "cleanup route pending"
     assert lifecycle["last_resume_source"] == "callback_ticket_monitor"
     assert lifecycle["last_resume_backoff_attempt"] == 2
+
+
+def test_cleanup_service_terminates_waiting_callback_after_max_expired_cycles(
+    sqlite_session: Session,
+) -> None:
+    run_id, ticket = _create_waiting_callback_run(sqlite_session)
+    ticket_record = sqlite_session.get(RunCallbackTicket, ticket)
+    assert ticket_record is not None
+    node_run = sqlite_session.scalar(
+        select(NodeRun).where(NodeRun.run_id == run_id, NodeRun.node_id == "agent")
+    )
+    run = sqlite_session.get(Run, run_id)
+    assert node_run is not None
+    assert run is not None
+    node_run.checkpoint_payload = {
+        **dict(node_run.checkpoint_payload or {}),
+        "callback_waiting_lifecycle": {
+            "wait_cycle_count": 2,
+            "issued_ticket_count": 2,
+            "expired_ticket_count": 1,
+            "consumed_ticket_count": 0,
+            "canceled_ticket_count": 0,
+            "late_callback_count": 0,
+            "resume_schedule_count": 0,
+            "max_expired_ticket_count": 2,
+            "last_ticket_status": "expired",
+            "last_ticket_reason": "callback_ticket_expired",
+        },
+    }
+    ticket_record.expires_at = datetime.now(UTC) - timedelta(minutes=5)
+    sqlite_session.commit()
+
+    scheduled_resumes = []
+    cleanup_service = RunCallbackTicketCleanupService(
+        resume_scheduler=RunResumeScheduler(dispatcher=scheduled_resumes.append),
+        max_expired_cycles=2,
+    )
+
+    result = cleanup_service.cleanup_stale_tickets(
+        sqlite_session,
+        source="scheduler_cleanup",
+        schedule_resumes=True,
+        resume_source="callback_ticket_monitor",
+    )
+
+    sqlite_session.commit()
+    sqlite_session.refresh(ticket_record)
+    sqlite_session.refresh(node_run)
+    sqlite_session.refresh(run)
+
+    terminated_event = sqlite_session.scalar(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run_id,
+            RunEvent.event_type == "run.callback.waiting.terminated",
+        )
+        .order_by(RunEvent.id.desc())
+    )
+    run_failed_event = sqlite_session.scalar(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run_id,
+            RunEvent.event_type == "run.failed",
+        )
+        .order_by(RunEvent.id.desc())
+    )
+
+    assert result.matched_count == 1
+    assert result.expired_count == 1
+    assert result.scheduled_resume_count == 0
+    assert result.terminated_count == 1
+    assert result.terminated_run_ids == [run_id]
+    assert scheduled_resumes == []
+    assert ticket_record.status == "expired"
+    assert run.status == "failed"
+    assert node_run.status == "failed"
+    assert run.error_message == (
+        "Callback waiting terminated after 2 expired ticket cycle(s) (max 2)."
+    )
+    assert node_run.error_message == run.error_message
+    assert "callback_ticket" not in (node_run.checkpoint_payload or {})
+    assert "scheduled_resume" not in (node_run.checkpoint_payload or {})
+    assert (
+        node_run.checkpoint_payload["callback_waiting_lifecycle"]["max_expired_ticket_count"]
+        == 2
+    )
+    assert node_run.checkpoint_payload["callback_waiting_lifecycle"]["terminated"] is True
+    assert (
+        node_run.checkpoint_payload["callback_waiting_lifecycle"]["termination_reason"]
+        == "callback_waiting_max_expired_tickets_reached"
+    )
+    assert node_run.checkpoint_payload["callback_waiting_lifecycle"]["terminated_at"] is not None
+    assert terminated_event is not None
+    assert terminated_event.payload["expired_ticket_count"] == 2
+    assert terminated_event.payload["max_expired_ticket_count"] == 2
+    assert terminated_event.payload["reason"] == "callback_waiting_max_expired_tickets_reached"
+    assert run_failed_event is not None
+    assert run_failed_event.payload["error"] == run.error_message
