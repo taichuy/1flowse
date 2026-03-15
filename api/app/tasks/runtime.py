@@ -63,6 +63,8 @@ def cleanup_callback_tickets_task(
             db,
             limit=limit,
             source=source,
+            schedule_resumes=True,
+            resume_source="callback_ticket_monitor",
         )
         db.commit()
         return {

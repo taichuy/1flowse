@@ -7,8 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.run import NodeRun, RunEvent
+from app.models.run import NodeRun, Run, RunEvent
 from app.services.run_callback_tickets import CallbackTicketSnapshot, RunCallbackTicketService
+from app.services.run_resume_scheduler import RunResumeScheduler, get_run_resume_scheduler
 
 
 def _utcnow() -> datetime:
@@ -54,6 +55,7 @@ class RunCallbackTicketCleanupService:
         self,
         *,
         ticket_service: RunCallbackTicketService | None = None,
+        resume_scheduler: RunResumeScheduler | None = None,
         batch_size: int | None = None,
     ) -> None:
         resolved_batch_size = (
@@ -62,6 +64,7 @@ class RunCallbackTicketCleanupService:
             else batch_size
         )
         self._ticket_service = ticket_service or RunCallbackTicketService()
+        self._resume_scheduler = resume_scheduler or get_run_resume_scheduler()
         self._batch_size = max(int(resolved_batch_size), 1)
 
     def cleanup_stale_tickets(
@@ -69,6 +72,8 @@ class RunCallbackTicketCleanupService:
         db: Session,
         *,
         source: str = "callback_ticket_cleanup",
+        schedule_resumes: bool = False,
+        resume_source: str = "callback_ticket_monitor",
         limit: int | None = None,
         dry_run: bool = False,
         now: datetime | None = None,
@@ -80,12 +85,15 @@ class RunCallbackTicketCleanupService:
             now=effective_now,
             limit=effective_limit,
         )
+        runs = self._load_runs(db, [record.run_id for record in records])
         node_runs = self._load_node_runs(db, [record.node_run_id for record in records])
 
         run_ids: list[str] = []
         seen_run_ids: set[str] = set()
+        resume_scheduled_run_ids: set[str] = set()
         items: list[CallbackTicketCleanupItem] = []
         for record in records:
+            run = runs.get(record.run_id)
             node_run = node_runs.get(record.node_run_id)
             if dry_run:
                 snapshot = self._ticket_service.snapshot(record)
@@ -113,6 +121,18 @@ class RunCallbackTicketCleanupService:
                         ),
                     )
                 )
+                if (
+                    schedule_resumes
+                    and record.run_id not in resume_scheduled_run_ids
+                    and self._schedule_resume_if_needed(
+                        db,
+                        run=run,
+                        node_run=node_run,
+                        snapshot=snapshot,
+                        source=resume_source,
+                    )
+                ):
+                    resume_scheduled_run_ids.add(record.run_id)
             if record.run_id not in seen_run_ids:
                 seen_run_ids.add(record.run_id)
                 run_ids.append(record.run_id)
@@ -127,6 +147,17 @@ class RunCallbackTicketCleanupService:
             run_ids=run_ids,
             items=items,
         )
+
+    def _load_runs(
+        self,
+        db: Session,
+        run_ids: list[str],
+    ) -> dict[str, Run]:
+        unique_ids = [run_id for run_id in dict.fromkeys(run_ids) if run_id]
+        if not unique_ids:
+            return {}
+        records = db.scalars(select(Run).where(Run.id.in_(unique_ids))).all()
+        return {record.id: record for record in records}
 
     def _load_node_runs(
         self,
@@ -160,6 +191,54 @@ class RunCallbackTicketCleanupService:
             expires_at=snapshot.expires_at,
             expired_at=snapshot.expired_at,
         )
+
+    def _schedule_resume_if_needed(
+        self,
+        db: Session,
+        *,
+        run: Run | None,
+        node_run: NodeRun | None,
+        snapshot: CallbackTicketSnapshot,
+        source: str,
+    ) -> bool:
+        if run is None or run.status != "waiting" or node_run is None:
+            return False
+
+        waiting_status = str(
+            snapshot.waiting_status or node_run.phase or node_run.status or ""
+        ).strip()
+        if waiting_status != "waiting_callback":
+            return False
+
+        scheduled_resume = self._resume_scheduler.schedule(
+            run_id=run.id,
+            delay_seconds=0.0,
+            reason=snapshot.reason or node_run.waiting_reason or "callback pending",
+            source=source,
+        )
+        checkpoint_payload = dict(node_run.checkpoint_payload or {})
+        checkpoint_payload["scheduled_resume"] = {
+            "delay_seconds": scheduled_resume.delay_seconds,
+            "reason": scheduled_resume.reason,
+            "source": scheduled_resume.source,
+            "waiting_status": waiting_status,
+        }
+        node_run.checkpoint_payload = checkpoint_payload
+        db.add(
+            RunEvent(
+                run_id=run.id,
+                node_run_id=node_run.id,
+                event_type="run.resume.scheduled",
+                payload={
+                    "node_id": node_run.node_id,
+                    "delay_seconds": scheduled_resume.delay_seconds,
+                    "reason": scheduled_resume.reason,
+                    "source": scheduled_resume.source,
+                    "waiting_status": waiting_status,
+                },
+            )
+        )
+        return True
 
     def _build_expired_event_payload(
         self,
