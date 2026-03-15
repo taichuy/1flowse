@@ -1,7 +1,7 @@
 from collections import Counter
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
-from app.schemas.run_views import RunCallbackTicketItem
+from app.schemas.run_views import CallbackWaitingLifecycleSummary, RunCallbackTicketItem
 from app.schemas.workflow_publish import (
     PublishedEndpointCacheInventoryItem,
     PublishedEndpointInvocationApiKeyUsageItem,
@@ -9,6 +9,7 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationRequestSurface,
     PublishedEndpointInvocationWaitingLifecycle,
 )
+from app.services.callback_waiting_lifecycle import load_callback_waiting_lifecycle
 from app.services.published_invocations import classify_invocation_reason
 
 
@@ -95,11 +96,39 @@ def resolve_waiting_node_run(run: Run, node_runs: list[NodeRun]) -> NodeRun | No
     )
 
 
+def serialize_callback_waiting_lifecycle_summary(
+    checkpoint_payload: dict | None,
+) -> CallbackWaitingLifecycleSummary | None:
+    lifecycle = load_callback_waiting_lifecycle(checkpoint_payload)
+    if not any(
+        lifecycle.get(key)
+        for key in (
+            "wait_cycle_count",
+            "issued_ticket_count",
+            "expired_ticket_count",
+            "consumed_ticket_count",
+            "canceled_ticket_count",
+            "late_callback_count",
+            "resume_schedule_count",
+            "last_ticket_status",
+            "last_late_callback_status",
+            "last_resume_delay_seconds",
+            "last_resume_backoff_attempt",
+        )
+    ):
+        return None
+    return CallbackWaitingLifecycleSummary(**lifecycle)
+
+
 def serialize_waiting_lifecycle(
     node_run: NodeRun,
     callback_tickets: list[RunCallbackTicket],
 ) -> PublishedEndpointInvocationWaitingLifecycle:
-    checkpoint_payload = node_run.checkpoint_payload if isinstance(node_run.checkpoint_payload, dict) else {}
+    checkpoint_payload = (
+        node_run.checkpoint_payload
+        if isinstance(node_run.checkpoint_payload, dict)
+        else {}
+    )
     raw_scheduled_resume = checkpoint_payload.get("scheduled_resume")
     scheduled_resume = raw_scheduled_resume if isinstance(raw_scheduled_resume, dict) else {}
     scheduled_delay = scheduled_resume.get("delay_seconds")
@@ -110,6 +139,9 @@ def serialize_waiting_lifecycle(
         callback_ticket_count=len(callback_tickets),
         callback_ticket_status_counts=dict(
             sorted(Counter(ticket.status for ticket in callback_tickets).items())
+        ),
+        callback_waiting_lifecycle=serialize_callback_waiting_lifecycle_summary(
+            node_run.checkpoint_payload
         ),
         scheduled_resume_delay_seconds=(
             float(scheduled_delay)

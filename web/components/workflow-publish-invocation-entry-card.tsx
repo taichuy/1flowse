@@ -44,6 +44,32 @@ function formatScheduledResume(item: PublishedInvocationItem): string {
   return parts.join(" · ");
 }
 
+function formatCallbackLifecycle(item: PublishedInvocationItem): string | null {
+  const lifecycle = item.run_waiting_lifecycle?.callback_waiting_lifecycle;
+  if (!lifecycle) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (lifecycle.wait_cycle_count > 0) {
+    parts.push(`wait cycles ${lifecycle.wait_cycle_count}`);
+  }
+  if (lifecycle.expired_ticket_count > 0) {
+    parts.push(`expired ${lifecycle.expired_ticket_count}`);
+  }
+  if (lifecycle.late_callback_count > 0) {
+    parts.push(`late callbacks ${lifecycle.late_callback_count}`);
+  }
+  if (typeof lifecycle.last_resume_delay_seconds === "number") {
+    parts.push(`resume ${lifecycle.last_resume_delay_seconds}s`);
+  }
+  if (lifecycle.last_resume_backoff_attempt > 0) {
+    parts.push(`backoff #${lifecycle.last_resume_backoff_attempt}`);
+  }
+
+  return parts.length ? parts.join(" · ") : "callback lifecycle tracked";
+}
+
 function hasInvocationDrilldown(item: PublishedInvocationItem): boolean {
   return Boolean(
     item.error_message ||
@@ -59,6 +85,8 @@ export function WorkflowPublishInvocationEntryCard({
   detailHref,
   detailActive
 }: WorkflowPublishInvocationEntryCardProps) {
+  const callbackLifecycle = formatCallbackLifecycle(item);
+
   return (
     <article className="payload-card compact-card">
       <div className="payload-card-header">
@@ -139,6 +167,7 @@ export function WorkflowPublishInvocationEntryCard({
           {item.run_waiting_lifecycle.scheduled_resume_delay_seconds
             ? ` · scheduled resume ${formatScheduledResume(item)}`
             : ""}
+          {callbackLifecycle ? ` · ${callbackLifecycle}` : ""}
           。
         </p>
       ) : null}
@@ -154,7 +183,7 @@ export function WorkflowPublishInvocationEntryCard({
             {detailActive ? "查看当前详情" : "打开 invocation detail"}
           </Link>
           <span className="section-copy entry-copy">
-            详情面板会补 run / callback ticket / cache 三类稳定排障入口。
+            详情面板会补 run / callback ticket / callback lifecycle / cache 四类稳定排障入口。
           </span>
         </div>
       ) : null}

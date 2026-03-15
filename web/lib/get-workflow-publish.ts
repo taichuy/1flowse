@@ -1,4 +1,8 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type {
+  CallbackWaitingLifecycleSummary,
+  RunCallbackTicketItem
+} from "@/lib/get-run-views";
 import {
   parseSensitiveAccessGuardedResponse,
   type SensitiveAccessGuardedResult
@@ -66,6 +70,7 @@ export type PublishedEndpointInvocationItem = {
     waiting_reason?: string | null;
     callback_ticket_count: number;
     callback_ticket_status_counts: Record<string, number>;
+    callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
     scheduled_resume_delay_seconds?: number | null;
     scheduled_resume_reason?: string | null;
     scheduled_resume_source?: string | null;
@@ -178,24 +183,7 @@ export type PublishedEndpointInvocationRunReference = {
   finished_at?: string | null;
 };
 
-export type PublishedEndpointInvocationCallbackTicketItem = {
-  id: string;
-  run_id: string;
-  node_run_id: string;
-  source_type: string;
-  ticket_type: string;
-  status: string;
-  external_token?: string | null;
-  waiting_reason?: string | null;
-  request_payload?: Record<string, unknown> | null;
-  response_payload?: Record<string, unknown> | null;
-  error_message?: string | null;
-  requested_at: string;
-  resolved_at?: string | null;
-  expires_at?: string | null;
-  created_at: string;
-  updated_at: string;
-};
+export type PublishedEndpointInvocationCallbackTicketItem = RunCallbackTicketItem;
 
 export type PublishedEndpointInvocationCacheReference = {
   cache_status: PublishedEndpointInvocationCacheStatus;

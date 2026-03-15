@@ -12,11 +12,69 @@ function formatJsonPreview(value: unknown): string {
   return JSON.stringify(value ?? null, null, 2);
 }
 
+function formatMetricCounts(metrics: Record<string, number> | null | undefined): string {
+  if (!metrics) {
+    return "n/a";
+  }
+
+  const parts = Object.entries(metrics)
+    .filter(([, count]) => count > 0)
+    .map(([label, count]) => `${label} ${count}`);
+
+  return parts.length ? parts.join(" · ") : "0";
+}
+
+function formatScheduledResume(detail: PublishedEndpointInvocationDetailResponse): string {
+  const scheduledResume = detail.invocation.run_waiting_lifecycle;
+  if (!scheduledResume?.scheduled_resume_delay_seconds) {
+    return "n/a";
+  }
+
+  const parts = [`${scheduledResume.scheduled_resume_delay_seconds}s`];
+  if (scheduledResume.scheduled_resume_source) {
+    parts.push(scheduledResume.scheduled_resume_source);
+  }
+  if (scheduledResume.scheduled_waiting_status) {
+    parts.push(scheduledResume.scheduled_waiting_status);
+  }
+  return parts.join(" · ");
+}
+
+function formatCallbackLifecycle(detail: PublishedEndpointInvocationDetailResponse): string {
+  const lifecycle = detail.invocation.run_waiting_lifecycle?.callback_waiting_lifecycle;
+  if (!lifecycle) {
+    return "n/a";
+  }
+
+  const parts: string[] = [];
+  if (lifecycle.wait_cycle_count > 0) {
+    parts.push(`wait cycles ${lifecycle.wait_cycle_count}`);
+  }
+  if (lifecycle.expired_ticket_count > 0) {
+    parts.push(`expired ${lifecycle.expired_ticket_count}`);
+  }
+  if (lifecycle.late_callback_count > 0) {
+    parts.push(`late callbacks ${lifecycle.late_callback_count}`);
+  }
+  if (typeof lifecycle.last_resume_delay_seconds === "number") {
+    parts.push(`resume ${lifecycle.last_resume_delay_seconds}s`);
+  }
+  if (lifecycle.last_resume_backoff_attempt > 0) {
+    parts.push(`backoff #${lifecycle.last_resume_backoff_attempt}`);
+  }
+  if (lifecycle.last_ticket_status) {
+    parts.push(`last ticket ${lifecycle.last_ticket_status}`);
+  }
+
+  return parts.length ? parts.join(" · ") : "tracked";
+}
+
 export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref
 }: WorkflowPublishInvocationDetailPanelProps) {
   const { invocation, run, callback_tickets: callbackTickets, cache } = detail;
+  const waitingLifecycle = invocation.run_waiting_lifecycle;
 
   return (
     <article className="entry-card compact-card publish-invocation-detail-panel">
@@ -58,6 +116,26 @@ export function WorkflowPublishInvocationDetailPanel({
             <div>
               <dt>Waiting reason</dt>
               <dd>{invocation.run_waiting_reason ?? "n/a"}</dd>
+            </div>
+            <div>
+              <dt>Waiting node run</dt>
+              <dd>{waitingLifecycle?.node_run_id ?? "n/a"}</dd>
+            </div>
+            <div>
+              <dt>Callback tickets</dt>
+              <dd>
+                {waitingLifecycle
+                  ? `${waitingLifecycle.callback_ticket_count} · ${formatMetricCounts(waitingLifecycle.callback_ticket_status_counts)}`
+                  : "n/a"}
+              </dd>
+            </div>
+            <div>
+              <dt>Scheduled resume</dt>
+              <dd>{formatScheduledResume(detail)}</dd>
+            </div>
+            <div>
+              <dt>Callback lifecycle</dt>
+              <dd>{formatCallbackLifecycle(detail)}</dd>
             </div>
             <div>
               <dt>Started</dt>
@@ -120,39 +198,61 @@ export function WorkflowPublishInvocationDetailPanel({
       {callbackTickets.length ? (
         <div className="publish-cache-list">
           {callbackTickets.map((ticket) => (
-            <article className="payload-card compact-card" key={ticket.id}>
+            <article className="payload-card compact-card" key={ticket.ticket}>
               <div className="payload-card-header">
                 <span className="status-meta">Callback ticket</span>
                 <span className="event-chip">{ticket.status}</span>
               </div>
               <dl className="compact-meta-list">
                 <div>
+                  <dt>Ticket</dt>
+                  <dd>{ticket.ticket}</dd>
+                </div>
+                <div>
                   <dt>Node run</dt>
                   <dd>{ticket.node_run_id}</dd>
                 </div>
                 <div>
-                  <dt>Type</dt>
+                  <dt>Tool</dt>
                   <dd>
-                    {ticket.source_type} · {ticket.ticket_type}
+                    {ticket.tool_id ?? "n/a"} · call #{ticket.tool_call_index}
                   </dd>
                 </div>
                 <div>
-                  <dt>Waiting reason</dt>
-                  <dd>{ticket.waiting_reason ?? "n/a"}</dd>
+                  <dt>Waiting status</dt>
+                  <dd>{ticket.waiting_status}</dd>
                 </div>
                 <div>
-                  <dt>Requested</dt>
-                  <dd>{formatTimestamp(ticket.requested_at)}</dd>
+                  <dt>Reason</dt>
+                  <dd>{ticket.reason ?? "n/a"}</dd>
                 </div>
                 <div>
-                  <dt>Resolved</dt>
-                  <dd>{formatTimestamp(ticket.resolved_at)}</dd>
+                  <dt>Created</dt>
+                  <dd>{formatTimestamp(ticket.created_at)}</dd>
                 </div>
                 <div>
                   <dt>Expires</dt>
                   <dd>{formatTimestamp(ticket.expires_at)}</dd>
                 </div>
+                <div>
+                  <dt>Consumed</dt>
+                  <dd>{formatTimestamp(ticket.consumed_at)}</dd>
+                </div>
+                <div>
+                  <dt>Canceled</dt>
+                  <dd>{formatTimestamp(ticket.canceled_at)}</dd>
+                </div>
+                <div>
+                  <dt>Expired</dt>
+                  <dd>{formatTimestamp(ticket.expired_at)}</dd>
+                </div>
               </dl>
+              {ticket.callback_payload ? (
+                <>
+                  <p className="section-copy entry-copy">callback payload preview</p>
+                  <pre className="trace-preview">{formatJsonPreview(ticket.callback_payload)}</pre>
+                </>
+              ) : null}
             </article>
           ))}
         </div>

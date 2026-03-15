@@ -119,6 +119,25 @@ def _create_published_invocation_fixture(
         input_payload={"question": "hello"},
         output_payload=None,
         checkpoint_payload={
+            "callback_waiting_lifecycle": {
+                "wait_cycle_count": 1,
+                "issued_ticket_count": 1,
+                "expired_ticket_count": 0,
+                "consumed_ticket_count": 0,
+                "canceled_ticket_count": 0,
+                "late_callback_count": 0,
+                "resume_schedule_count": 1,
+                "last_ticket_status": "pending",
+                "last_ticket_reason": "callback pending",
+                "last_ticket_updated_at": now.isoformat().replace("+00:00", "Z"),
+                "last_late_callback_status": None,
+                "last_late_callback_reason": None,
+                "last_late_callback_at": None,
+                "last_resume_delay_seconds": 30.0,
+                "last_resume_reason": "callback pending",
+                "last_resume_source": "callback_ticket_monitor",
+                "last_resume_backoff_attempt": 0,
+            },
             "scheduled_resume": {
                 "delay_seconds": 30,
                 "reason": "callback pending",
@@ -258,6 +277,29 @@ def test_get_published_invocation_detail_requires_approval_for_high_sensitive_ru
     approved_body = approved_detail_response.json()
     assert approved_body["invocation"]["id"] == invocation.id
     assert approved_body["invocation"]["run_id"] == run.id
+    assert approved_body["invocation"]["run_waiting_lifecycle"][
+        "callback_waiting_lifecycle"
+    ] == {
+        "wait_cycle_count": 1,
+        "issued_ticket_count": 1,
+        "expired_ticket_count": 0,
+        "consumed_ticket_count": 0,
+        "canceled_ticket_count": 0,
+        "late_callback_count": 0,
+        "resume_schedule_count": 1,
+        "last_ticket_status": "pending",
+        "last_ticket_reason": "callback pending",
+        "last_ticket_updated_at": node_run.checkpoint_payload["callback_waiting_lifecycle"][
+            "last_ticket_updated_at"
+        ],
+        "last_late_callback_status": None,
+        "last_late_callback_reason": None,
+        "last_late_callback_at": None,
+        "last_resume_delay_seconds": 30.0,
+        "last_resume_reason": "callback pending",
+        "last_resume_source": "callback_ticket_monitor",
+        "last_resume_backoff_attempt": 0,
+    }
     assert approved_body["callback_tickets"][0]["callback_payload"] == {
         "token": "secret-review-token"
     }
@@ -293,6 +335,12 @@ def test_get_published_invocation_detail_allows_moderate_sensitive_runs_without_
     assert detail_response.status_code == 200
     detail_body = detail_response.json()
     assert detail_body["invocation"]["id"] == invocation.id
+    assert detail_body["invocation"]["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+        "issued_ticket_count"
+    ] == 1
+    assert detail_body["invocation"]["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+        "resume_schedule_count"
+    ] == 1
     assert detail_body["cache"]["inventory_entry"]["response_preview"]["sample"]["secret"] == (
         "masked-later"
     )

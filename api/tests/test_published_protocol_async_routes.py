@@ -195,9 +195,30 @@ def test_published_protocol_async_routes_accept_waiting_runs_without_caching(
         ]
         assert all(item["run_status"] == "waiting" for item in activity["items"])
         assert all(item["run_waiting_reason"] == "callback pending" for item in activity["items"])
-        assert all(item["run_waiting_lifecycle"]["callback_ticket_count"] == 1 for item in activity["items"])
+        assert all(
+            item["run_waiting_lifecycle"]["callback_ticket_count"] == 1
+            for item in activity["items"]
+        )
         assert all(
             item["run_waiting_lifecycle"]["callback_ticket_status_counts"] == {"pending": 1}
+            for item in activity["items"]
+        )
+        assert all(
+            item["run_waiting_lifecycle"]["callback_waiting_lifecycle"]["wait_cycle_count"] == 1
+            for item in activity["items"]
+        )
+        assert all(
+            item["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+                "issued_ticket_count"
+            ]
+            == 1
+            for item in activity["items"]
+        )
+        assert all(
+            item["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+                "last_ticket_status"
+            ]
+            == "pending"
             for item in activity["items"]
         )
     finally:

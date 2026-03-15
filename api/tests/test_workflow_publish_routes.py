@@ -6,11 +6,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
-from app.models.workflow import WorkflowPublishedCacheEntry, WorkflowPublishedEndpoint
+from app.models.workflow import (
+    WorkflowPublishedCacheEntry,
+    WorkflowPublishedEndpoint,
+)
 from app.services.plugin_runtime import PluginToolDefinition, reset_plugin_registry
 from app.services.published_invocations import PublishedInvocationService
 from tests.workflow_publish_helpers import (
     publishable_definition as _publishable_definition,
+)
+from tests.workflow_publish_helpers import (
     waiting_agent_publishable_definition as _waiting_agent_publishable_definition,
 )
 
@@ -597,7 +602,10 @@ def test_invoke_published_native_endpoint_rejects_streaming_when_binding_disable
         },
     )
     assert invoke_response.status_code == 422
-    assert invoke_response.json()["detail"] == "Streaming is not supported for this published endpoint."
+    assert (
+        invoke_response.json()["detail"]
+        == "Streaming is not supported for this published endpoint."
+    )
 
     activity_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations"
@@ -1191,7 +1199,10 @@ def test_invoke_published_native_endpoint_uses_response_cache(
     assert cache_inventory_body["summary"]["active_entry_count"] == 2
     assert cache_inventory_body["summary"]["total_hit_count"] == 1
     assert [item["hit_count"] for item in cache_inventory_body["items"]] == [1, 0]
-    assert cache_inventory_body["items"][0]["response_preview"]["sample"]["binding_id"] == binding["id"]
+    assert (
+        cache_inventory_body["items"][0]["response_preview"]["sample"]["binding_id"]
+        == binding["id"]
+    )
     assert all(item["cache_key"] for item in cache_inventory_body["items"])
 
 
@@ -1308,6 +1319,25 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         input_payload={"question": "hello"},
         output_payload=None,
         checkpoint_payload={
+            "callback_waiting_lifecycle": {
+                "wait_cycle_count": 1,
+                "issued_ticket_count": 1,
+                "expired_ticket_count": 0,
+                "consumed_ticket_count": 0,
+                "canceled_ticket_count": 0,
+                "late_callback_count": 0,
+                "resume_schedule_count": 1,
+                "last_ticket_status": "pending",
+                "last_ticket_reason": "callback pending",
+                "last_ticket_updated_at": now.isoformat().replace("+00:00", "Z"),
+                "last_late_callback_status": None,
+                "last_late_callback_reason": None,
+                "last_late_callback_at": None,
+                "last_resume_delay_seconds": 30.0,
+                "last_resume_reason": "callback pending",
+                "last_resume_source": "callback_ticket_monitor",
+                "last_resume_backoff_attempt": 0,
+            },
             "scheduled_resume": {
                 "delay_seconds": 30,
                 "reason": "callback pending",
@@ -1396,6 +1426,25 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "waiting_reason": "callback pending",
         "callback_ticket_count": 1,
         "callback_ticket_status_counts": {"pending": 1},
+        "callback_waiting_lifecycle": {
+            "wait_cycle_count": 1,
+            "issued_ticket_count": 1,
+            "expired_ticket_count": 0,
+            "consumed_ticket_count": 0,
+            "canceled_ticket_count": 0,
+            "late_callback_count": 0,
+            "resume_schedule_count": 1,
+            "last_ticket_status": "pending",
+            "last_ticket_reason": "callback pending",
+            "last_ticket_updated_at": now.isoformat().replace("+00:00", "Z"),
+            "last_late_callback_status": None,
+            "last_late_callback_reason": None,
+            "last_late_callback_at": None,
+            "last_resume_delay_seconds": 30.0,
+            "last_resume_reason": "callback pending",
+            "last_resume_source": "callback_ticket_monitor",
+            "last_resume_backoff_attempt": 0,
+        },
         "scheduled_resume_delay_seconds": 30.0,
         "scheduled_resume_reason": "callback pending",
         "scheduled_resume_source": "callback_ticket_monitor",

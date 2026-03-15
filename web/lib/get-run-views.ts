@@ -63,8 +63,10 @@ export type RunCallbackTicketItem = {
   reason?: string | null;
   callback_payload?: Record<string, unknown> | null;
   created_at: string;
+  expires_at?: string | null;
   consumed_at?: string | null;
   canceled_at?: string | null;
+  expired_at?: string | null;
 };
 
 export type CallbackWaitingLifecycleSummary = {

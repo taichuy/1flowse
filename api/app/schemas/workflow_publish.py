@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.run import RunDetail
-from app.schemas.run_views import RunCallbackTicketItem
+from app.schemas.run_views import CallbackWaitingLifecycleSummary, RunCallbackTicketItem
 from app.schemas.workflow_published_endpoint import (
     WorkflowPublishedEndpointCachePolicy,
     WorkflowPublishedEndpointRateLimitPolicy,
@@ -274,6 +274,7 @@ class PublishedEndpointInvocationWaitingLifecycle(BaseModel):
     waiting_reason: str | None = None
     callback_ticket_count: int = 0
     callback_ticket_status_counts: dict[str, int] = Field(default_factory=dict)
+    callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
     scheduled_resume_delay_seconds: float | None = None
     scheduled_resume_reason: str | None = None
     scheduled_resume_source: str | None = None

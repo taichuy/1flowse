@@ -115,12 +115,36 @@ def test_published_native_async_route_accepts_waiting_run(client: TestClient) ->
         assert all(item["run_status"] == "waiting" for item in activity["items"])
         assert all(item["run_waiting_reason"] == "callback pending" for item in activity["items"])
         assert all(item["run_current_node_id"] == "agent" for item in activity["items"])
-        assert all(item["run_waiting_lifecycle"]["callback_ticket_count"] == 1 for item in activity["items"])
+        assert all(
+            item["run_waiting_lifecycle"]["callback_ticket_count"] == 1
+            for item in activity["items"]
+        )
         assert all(
             item["run_waiting_lifecycle"]["callback_ticket_status_counts"] == {"pending": 1}
             for item in activity["items"]
         )
-        assert all(item["run_waiting_lifecycle"]["scheduled_resume_delay_seconds"] is None for item in activity["items"])
+        assert all(
+            item["run_waiting_lifecycle"]["callback_waiting_lifecycle"]["wait_cycle_count"] == 1
+            for item in activity["items"]
+        )
+        assert all(
+            item["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+                "issued_ticket_count"
+            ]
+            == 1
+            for item in activity["items"]
+        )
+        assert all(
+            item["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+                "last_ticket_status"
+            ]
+            == "pending"
+            for item in activity["items"]
+        )
+        assert all(
+            item["run_waiting_lifecycle"]["scheduled_resume_delay_seconds"] is None
+            for item in activity["items"]
+        )
         assert [item["request_surface"] for item in activity["items"]] == [
             "native.workflow.async",
             "native.path.async",
@@ -263,5 +287,11 @@ def test_published_activity_waiting_reason_falls_back_to_waiting_node_run(
         assert activity["items"][0]["run_waiting_reason"] == "callback pending"
         assert activity["items"][0]["run_waiting_lifecycle"]["waiting_reason"] == "callback pending"
         assert activity["items"][0]["run_waiting_lifecycle"]["callback_ticket_count"] == 1
+        assert (
+            activity["items"][0]["run_waiting_lifecycle"]["callback_waiting_lifecycle"][
+                "issued_ticket_count"
+            ]
+            == 1
+        )
     finally:
         reset_plugin_registry()
