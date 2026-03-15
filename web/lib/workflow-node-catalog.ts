@@ -11,6 +11,14 @@ type WorkflowCatalogNodeBlueprint = {
   config?: Record<string, unknown>;
 };
 
+export type UnsupportedWorkflowNodeSummary = {
+  type: string;
+  label: string;
+  count: number;
+  supportStatus: WorkflowNodeCatalogItem["supportStatus"] | "unknown";
+  supportSummary: string;
+};
+
 export function getWorkflowNodeCatalogItem(
   catalog: WorkflowNodeCatalogItem[],
   type: string
@@ -22,6 +30,47 @@ export function getPaletteNodeCatalog(catalog: WorkflowNodeCatalogItem[]) {
   return [...catalog]
     .filter((item) => item.palette.enabled)
     .sort((left, right) => left.palette.order - right.palette.order);
+}
+
+export function getPlannedNodeCatalog(catalog: WorkflowNodeCatalogItem[]) {
+  return [...catalog]
+    .filter((item) => item.supportStatus !== "available")
+    .sort((left, right) => left.palette.order - right.palette.order);
+}
+
+export function summarizeUnsupportedWorkflowNodes(
+  catalog: WorkflowNodeCatalogItem[],
+  nodes: WorkflowNodeItem[]
+) {
+  const catalogByType = new Map(catalog.map((item) => [item.type, item]));
+  const summaryByType = new Map<string, UnsupportedWorkflowNodeSummary>();
+
+  for (const node of nodes) {
+    const catalogItem = catalogByType.get(node.type);
+    const supportStatus = catalogItem?.supportStatus ?? "unknown";
+    if (supportStatus === "available") {
+      continue;
+    }
+
+    const typeKey = catalogItem?.type ?? node.type;
+    const existing = summaryByType.get(typeKey);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    summaryByType.set(typeKey, {
+      type: typeKey,
+      label: catalogItem?.label ?? node.type,
+      count: 1,
+      supportStatus,
+      supportSummary:
+        catalogItem?.supportSummary ||
+        "当前 catalog 未声明该节点类型，编辑器无法保证画布与 runtime 的一致语义。"
+    });
+  }
+
+  return [...summaryByType.values()].sort((left, right) => left.label.localeCompare(right.label));
 }
 
 export function getWorkflowNodeDefaultPosition(

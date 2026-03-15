@@ -6,6 +6,7 @@ import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
+import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
@@ -21,6 +22,8 @@ type WorkflowEditorSidebarProps = {
   nodeSourceLanes: WorkflowLibrarySourceLane[];
   toolSourceLanes: WorkflowLibrarySourceLane[];
   editorNodeLibrary: WorkflowNodeCatalogItem[];
+  plannedNodeLibrary: WorkflowNodeCatalogItem[];
+  unsupportedNodes: UnsupportedWorkflowNodeSummary[];
   message: string | null;
   messageTone: WorkflowEditorMessageTone;
   runs: WorkflowRunListItem[];
@@ -44,6 +47,8 @@ export function WorkflowEditorSidebar({
   nodeSourceLanes,
   toolSourceLanes,
   editorNodeLibrary,
+  plannedNodeLibrary,
+  unsupportedNodes,
   message,
   messageTone,
   runs,
@@ -111,6 +116,19 @@ export function WorkflowEditorSidebar({
           先覆盖当前 MVP 较有意义的节点类型。`trigger` 保持单实例，`loop` 暂不放进画布。
         </p>
 
+        {unsupportedNodes.length > 0 ? (
+          <div className="sync-message error">
+            <p>当前 workflow 已包含未进入执行主链的节点类型，编辑器会保留它们，但不能假装已可运行：</p>
+            <ul className="roadmap-list compact-list">
+              {unsupportedNodes.map((item) => (
+                <li key={`unsupported-${item.type}`}>
+                  {item.label} x{item.count}：{item.supportSummary}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div className="summary-strip compact-strip">
           {primaryNodeLane ? (
             <div className="summary-card">
@@ -147,6 +165,22 @@ export function WorkflowEditorSidebar({
             </span>
           ))}
         </div>
+
+        {plannedNodeLibrary.length > 0 ? (
+          <div className="binding-field compact-stack">
+            <span className="binding-label">Planned node types</span>
+            <div className="tool-badge-row">
+              {plannedNodeLibrary.map((item) => (
+                <span className="event-chip" key={`planned-${item.type}`}>
+                  {item.label}
+                </span>
+              ))}
+            </div>
+            <small className="section-copy">
+              这些类型已经进入统一节点目录，但当前仍保持 planned，不进入 palette 按钮或 runtime 主链。
+            </small>
+          </div>
+        ) : null}
 
         <div className="editor-palette">
           {editorNodeLibrary.map((item) => (

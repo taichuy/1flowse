@@ -126,6 +126,23 @@ def build_node_catalog_items(
             binding_source_lanes=tool_binding_lanes,
         ),
         WorkflowNodeCatalogItem(
+            type="sandbox_code",
+            label="Sandbox Code",
+            description="为高风险代码执行预留的隔离节点，后续会挂到真实 sandbox / microvm 执行边界。",
+            ecosystem="native",
+            source=NATIVE_NODE_SOURCE,
+            capability_group="integration",
+            business_track="编排节点能力",
+            tags=["sandbox", "code", "planned"],
+            palette=_build_palette(enabled=False, order=25, x=500, y=420),
+            defaults=_build_defaults(name="Sandbox Code"),
+            support_status="planned",
+            support_summary=(
+                "真实 sandbox / microvm adapter 仍在推进；当前 catalog 仅保留类型占位，"
+                "不开放进 editor palette 或 runtime 主链。"
+            ),
+        ),
+        WorkflowNodeCatalogItem(
             type="mcp_query",
             label="MCP Query",
             description="按授权读取上游上下文，为 Agent 或工具提供受控查询入口。",
@@ -163,6 +180,23 @@ def build_node_catalog_items(
             tags=["router", "branch", "decision"],
             palette=_build_palette(enabled=True, order=50, x=620, y=420),
             defaults=_build_defaults(name="Router"),
+        ),
+        WorkflowNodeCatalogItem(
+            type="loop",
+            label="Loop",
+            description="显式表达循环语义的节点类型，避免通过隐式回边或调度技巧偷渡循环。",
+            ecosystem="native",
+            source=NATIVE_NODE_SOURCE,
+            capability_group="logic",
+            business_track="编排节点能力",
+            tags=["loop", "control-flow", "planned"],
+            palette=_build_palette(enabled=False, order=55, x=760, y=420),
+            defaults=_build_defaults(name="Loop"),
+            support_status="planned",
+            support_summary=(
+                "显式 loop 节点语义已收敛，但 MVP executor 仍未支持；当前只在 catalog 中保留"
+                "路线对齐，不开放进 editor palette 或 runtime 主链。"
+            ),
         ),
         WorkflowNodeCatalogItem(
             type="output",

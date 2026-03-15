@@ -79,8 +79,9 @@ def test_workflow_library_snapshot_includes_shared_catalog_contract(
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["nodes"]) == 7
+    assert len(body["nodes"]) == 9
     tool_node = next(item for item in body["nodes"] if item["type"] == "tool")
+    loop_node = next(item for item in body["nodes"] if item["type"] == "loop")
     assert {item["id"] for item in body["starters"]} >= {
         "blank",
         "agent",
@@ -106,6 +107,9 @@ def test_workflow_library_snapshot_includes_shared_catalog_contract(
         }
     ]
     assert tool_node["binding_required"] is True
+    assert loop_node["support_status"] == "planned"
+    assert loop_node["support_summary"]
+    assert loop_node["palette"]["enabled"] is False
     assert {lane["short_label"] for lane in tool_node["binding_source_lanes"]} == {
         "compat:dify",
         "tool registry",

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
+
 type WorkflowEditorHeroProps = {
   workflowId: string;
   workflowVersion: string;
@@ -14,6 +16,8 @@ type WorkflowEditorHeroProps = {
   selectedEdgeId: string | null;
   workflowsCount: number;
   selectedRunAttached: boolean;
+  plannedNodeLabels: string[];
+  unsupportedNodes: UnsupportedWorkflowNodeSummary[];
   isSaving: boolean;
   isSavingStarter: boolean;
   onSave: () => void;
@@ -32,11 +36,15 @@ export function WorkflowEditorHero({
   selectedEdgeId,
   workflowsCount,
   selectedRunAttached,
+  plannedNodeLabels,
+  unsupportedNodes,
   isSaving,
   isSavingStarter,
   onSave,
   onSaveAsWorkspaceStarter
 }: WorkflowEditorHeroProps) {
+  const plannedNodeSummary = plannedNodeLabels.join(" / ");
+
   return (
     <section className="hero editor-hero">
       <div className="hero-copy">
@@ -54,6 +62,9 @@ export function WorkflowEditorHero({
           <span className="pill">{edgesCount} edges</span>
           <span className="pill">{toolsCount} catalog tools</span>
           <span className="pill">{availableRunsCount} recent runs</span>
+          {unsupportedNodes.length > 0 ? (
+            <span className="pill">{unsupportedNodes.length} unsupported node types</span>
+          ) : null}
         </div>
         <div className="hero-actions">
           <Link className="inline-link" href="/">
@@ -86,8 +97,21 @@ export function WorkflowEditorHero({
           当前保存链路：<strong>web canvas -&gt; workflow definition -&gt; API versioning</strong>
         </p>
         <p className="panel-text">
-          当前边界：<strong>Loop / 发布网关 / 调试联动稍后继续</strong>
+          当前节点边界：
+          <strong>
+            {plannedNodeSummary
+              ? `${plannedNodeSummary} 仍保持 planned；发布网关 / 调试联动继续推进`
+              : "发布网关 / 调试联动继续推进"}
+          </strong>
         </p>
+        {unsupportedNodes.length > 0 ? (
+          <p className="panel-text">
+            当前 workflow 已载入未进入执行主链的节点：
+            <strong>
+              {unsupportedNodes.map((item) => `${item.label} x${item.count}`).join(" / ")}
+            </strong>
+          </p>
+        ) : null}
         <p className="panel-text">
           当前治理入口：<strong>editor -&gt; workspace starter library</strong>
         </p>

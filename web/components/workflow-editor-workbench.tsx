@@ -13,7 +13,11 @@ import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
 import { buildWorkspaceStarterPayload } from "@/lib/workspace-starter-payload";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import { getPaletteNodeCatalog } from "@/lib/workflow-node-catalog";
+import {
+  getPaletteNodeCatalog,
+  getPlannedNodeCatalog,
+  summarizeUnsupportedWorkflowNodes
+} from "@/lib/workflow-node-catalog";
 
 import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/workflow-editor-canvas";
 import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
@@ -49,6 +53,7 @@ export function WorkflowEditorWorkbench({
   recentRuns
 }: WorkflowEditorWorkbenchProps) {
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
+  const plannedNodeLibrary = getPlannedNodeCatalog(nodeCatalog);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<WorkflowEditorMessageTone>("idle");
   const [isSaving, startSavingTransition] = useTransition();
@@ -72,6 +77,10 @@ export function WorkflowEditorWorkbench({
   );
   const selectedNode = displayedNodes.find((node) => node.id === graph.selectedNodeId) ?? null;
   const selectedEdge = graph.edges.find((edge) => edge.id === graph.selectedEdgeId) ?? null;
+  const unsupportedNodes = summarizeUnsupportedWorkflowNodes(
+    nodeCatalog,
+    graph.currentDefinition.nodes ?? []
+  );
 
   const handleSave = () => {
     startSavingTransition(async () => {
@@ -173,6 +182,8 @@ export function WorkflowEditorWorkbench({
           selectedEdgeId={selectedEdge?.id ?? null}
           workflowsCount={workflows.length}
           selectedRunAttached={Boolean(runOverlay.selectedRunId)}
+          plannedNodeLabels={plannedNodeLibrary.map((item) => item.label)}
+          unsupportedNodes={unsupportedNodes}
           isSaving={isSaving}
           isSavingStarter={isSavingStarter}
           onSave={handleSave}
@@ -187,6 +198,8 @@ export function WorkflowEditorWorkbench({
             nodeSourceLanes={nodeSourceLanes}
             toolSourceLanes={toolSourceLanes}
             editorNodeLibrary={editorNodeLibrary}
+            plannedNodeLibrary={plannedNodeLibrary}
+            unsupportedNodes={unsupportedNodes}
             message={message}
             messageTone={messageTone}
             runs={runOverlay.availableRuns}

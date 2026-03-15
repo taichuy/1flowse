@@ -28,6 +28,8 @@ export type WorkflowNodeCatalogItem = {
   capabilityGroup: "entry" | "agent" | "integration" | "logic" | "output";
   businessTrack: WorkflowBusinessTrack;
   tags: string[];
+  supportStatus: "available" | "planned";
+  supportSummary: string;
   bindingRequired: boolean;
   bindingSourceLanes: WorkflowLibrarySourceLane[];
   palette: {
@@ -188,6 +190,11 @@ function normalizeNodeCatalogItem(
       "应用新建编排"
     ) as WorkflowBusinessTrack,
     tags: asStringArray(input.tags),
+    supportStatus: asString(
+      input.support_status,
+      "available"
+    ) as WorkflowNodeCatalogItem["supportStatus"],
+    supportSummary: asString(input.support_summary),
     bindingRequired: Boolean(input.binding_required),
     bindingSourceLanes: Array.isArray(input.binding_source_lanes)
       ? input.binding_source_lanes

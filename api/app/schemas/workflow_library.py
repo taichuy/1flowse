@@ -12,6 +12,7 @@ WorkflowLibrarySourceKind = Literal["starter", "node", "tool"]
 WorkflowLibrarySourceScope = Literal["builtin", "workspace", "ecosystem"]
 WorkflowLibrarySourceStatus = Literal["available", "planned"]
 WorkflowLibrarySourceGovernance = Literal["repo", "workspace", "adapter"]
+WorkflowNodeSupportStatus = Literal["available", "planned"]
 WorkflowNodeType = Literal[
     "trigger",
     "llm_agent",
@@ -74,6 +75,8 @@ class WorkflowNodeCatalogItem(BaseModel):
     tags: list[str] = Field(default_factory=list)
     palette: WorkflowNodeCatalogPalette
     defaults: WorkflowNodeCatalogDefaults
+    support_status: WorkflowNodeSupportStatus = "available"
+    support_summary: str = ""
     binding_required: bool = False
     binding_source_lanes: list[WorkflowLibrarySourceLane] = Field(default_factory=list)
 

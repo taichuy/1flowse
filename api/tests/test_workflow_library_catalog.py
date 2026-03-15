@@ -65,6 +65,25 @@ def test_build_tool_source_lanes_groups_native_and_compat_tools() -> None:
     assert lane_by_label["compat:dify tools"].count == 2
 
 
+def test_build_node_catalog_marks_planned_nodes_without_confusing_palette_visibility() -> None:
+    node_catalog = build_node_catalog_items()
+
+    trigger_node = next(item for item in node_catalog if item.type == "trigger")
+    sandbox_node = next(item for item in node_catalog if item.type == "sandbox_code")
+    loop_node = next(item for item in node_catalog if item.type == "loop")
+
+    assert trigger_node.support_status == "available"
+    assert trigger_node.palette.enabled is False
+
+    assert sandbox_node.support_status == "planned"
+    assert sandbox_node.palette.enabled is False
+    assert "sandbox / microvm" in sandbox_node.support_summary
+
+    assert loop_node.support_status == "planned"
+    assert loop_node.palette.enabled is False
+    assert "MVP executor" in loop_node.support_summary
+
+
 def test_build_starter_source_lanes_marks_workspace_source_available() -> None:
     lanes = build_starter_source_lanes(
         [
