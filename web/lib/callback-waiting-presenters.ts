@@ -93,6 +93,52 @@ export function formatCallbackTerminationLabel(
   ]);
 }
 
+export function formatLatestCallbackTicketLabel(
+  lifecycle?: CallbackWaitingLifecycleSummary | null
+): string | null {
+  if (!lifecycle) {
+    return null;
+  }
+
+  return formatOptionalParts([
+    lifecycle.last_ticket_status ? `latest ticket ${lifecycle.last_ticket_status}` : null,
+    lifecycle.last_ticket_reason,
+    lifecycle.last_ticket_updated_at
+  ]);
+}
+
+export function formatLatestLateCallbackLabel(
+  lifecycle?: CallbackWaitingLifecycleSummary | null
+): string | null {
+  if (!lifecycle?.last_late_callback_at) {
+    return null;
+  }
+
+  return formatOptionalParts([
+    lifecycle.last_late_callback_status ? `late callback ${lifecycle.last_late_callback_status}` : null,
+    lifecycle.last_late_callback_reason,
+    lifecycle.last_late_callback_at
+  ]);
+}
+
+export function formatCallbackTicketStatusSummary(
+  callbackTickets: RunCallbackTicketItem[] | undefined
+): string | null {
+  if (!callbackTickets?.length) {
+    return null;
+  }
+
+  const counts = new Map<string, number>();
+  for (const ticket of callbackTickets) {
+    counts.set(ticket.status, (counts.get(ticket.status) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([status, count]) => `${status} ${count}`)
+    .join(" · ");
+}
+
 export function formatApprovalSummary(
   entries: SensitiveAccessTimelineEntry[] | undefined
 ): string | null {
