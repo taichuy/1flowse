@@ -12,11 +12,13 @@ import {
   formatApprovalSummary,
   formatCallbackLifecycleLabel,
   formatCallbackWaitingNotificationSummary,
+  formatCallbackWaitingOperatorStatusSummary,
   formatCallbackWaitingSensitiveAccessSummary,
   formatScheduledResumeLabel,
   getCallbackWaitingRecommendedAction,
   getCallbackWaitingHeadline,
   listCallbackWaitingChips,
+  listCallbackWaitingOperatorStatuses,
   pickCallbackWaitingInlineSensitiveAccessEntry
 } from "@/lib/callback-waiting-presenters";
 
@@ -66,6 +68,15 @@ export function CallbackWaitingSummaryCard({
     inlineSensitiveAccessEntry
   );
   const notificationSummary = formatCallbackWaitingNotificationSummary(inlineSensitiveAccessEntry);
+  const operatorStatuses = listCallbackWaitingOperatorStatuses({
+    lifecycle,
+    callbackTickets,
+    sensitiveAccessEntries,
+    scheduledResumeDelaySeconds,
+    scheduledResumeSource,
+    scheduledWaitingStatus
+  });
+  const operatorStatusSummary = formatCallbackWaitingOperatorStatusSummary(operatorStatuses);
   const chips = listCallbackWaitingChips({
     lifecycle,
     callbackTickets,
@@ -106,6 +117,7 @@ export function CallbackWaitingSummaryCard({
     approvalSummary ||
     sensitiveAccessSummary ||
     notificationSummary ||
+    operatorStatusSummary ||
     scheduledResume ||
     lifecycleSummary ||
     waitingReason ||
@@ -141,6 +153,18 @@ export function CallbackWaitingSummaryCard({
         </div>
       ) : null}
       {waitingReason ? <p className="run-error-message">{waitingReason}</p> : null}
+      {operatorStatuses.length ? (
+        <div className="event-type-strip">
+          {operatorStatuses.map((status) => (
+            <span className="event-chip" key={status.kind}>
+              {status.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {operatorStatusSummary ? (
+        <p className="section-copy entry-copy">Status: {operatorStatusSummary}</p>
+      ) : null}
       {approvalSummary ? <p className="section-copy entry-copy">Approval: {approvalSummary}</p> : null}
       {sensitiveAccessSummary ? (
         <p className="section-copy entry-copy">Sensitive access: {sensitiveAccessSummary}</p>

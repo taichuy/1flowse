@@ -40,6 +40,17 @@ type CallbackWaitingExplanationInput = {
   scheduledWaitingStatus?: string | null;
 };
 
+export type CallbackWaitingOperatorStatus = {
+  kind:
+    | "approval_pending"
+    | "external_callback_pending"
+    | "scheduled_resume_pending"
+    | "late_callback_recorded"
+    | "terminated";
+  label: string;
+  detail: string;
+};
+
 export type CallbackWaitingRecommendedAction = {
   kind:
     | "open_inbox"
@@ -335,6 +346,81 @@ export function getCallbackWaitingHeadline({
     return "Callback waiting is tracked for this run.";
   }
   return null;
+}
+
+export function listCallbackWaitingOperatorStatuses({
+  lifecycle,
+  callbackTickets = [],
+  sensitiveAccessEntries = [],
+  scheduledResumeDelaySeconds,
+  scheduledResumeSource,
+  scheduledWaitingStatus
+}: CallbackWaitingExplanationInput): CallbackWaitingOperatorStatus[] {
+  const statuses: CallbackWaitingOperatorStatus[] = [];
+  const pendingApprovalCount = countPendingApprovals(sensitiveAccessEntries);
+  const pendingTicketCount = callbackTickets.filter((ticket) => ticket.status === "pending").length;
+  const lateCallbackCount = lifecycle?.late_callback_count ?? 0;
+
+  if (pendingApprovalCount > 0) {
+    statuses.push({
+      kind: "approval_pending",
+      label: "approval pending",
+      detail: `${formatCountLabel(pendingApprovalCount, "approval")} still needs an operator decision before this run can resume.`
+    });
+  }
+
+  if (pendingTicketCount > 0) {
+    statuses.push({
+      kind: "external_callback_pending",
+      label: "waiting external callback",
+      detail: `${formatCountLabel(pendingTicketCount, "callback ticket")} is still waiting for the upstream tool or external system to answer.`
+    });
+  }
+
+  if (scheduledResumeDelaySeconds) {
+    statuses.push({
+      kind: "scheduled_resume_pending",
+      label: "scheduled resume queued",
+      detail:
+        formatOptionalParts([
+          `runtime will retry in ${scheduledResumeDelaySeconds}s`,
+          scheduledResumeSource,
+          scheduledWaitingStatus
+        ]) ?? `runtime will retry in ${scheduledResumeDelaySeconds}s`
+    });
+  }
+
+  if (lateCallbackCount > 0) {
+    statuses.push({
+      kind: "late_callback_recorded",
+      label: "late callback recorded",
+      detail: `${formatCountLabel(lateCallbackCount, "late callback")} already arrived after the original wait path, so manual resume can be used to pull the run forward.`
+    });
+  }
+
+  if (lifecycle?.terminated) {
+    statuses.push({
+      kind: "terminated",
+      label: "callback waiting terminated",
+      detail:
+        formatOptionalParts([
+          lifecycle.termination_reason,
+          "resume should wait until the termination reason is understood"
+        ]) ?? "resume should wait until the termination reason is understood"
+    });
+  }
+
+  return statuses;
+}
+
+export function formatCallbackWaitingOperatorStatusSummary(
+  statuses: CallbackWaitingOperatorStatus[]
+): string | null {
+  if (!statuses.length) {
+    return null;
+  }
+
+  return statuses.map((status) => `${status.label}: ${status.detail}`).join(" ");
 }
 
 export function listCallbackWaitingChips({
