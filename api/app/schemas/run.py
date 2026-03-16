@@ -22,6 +22,11 @@ class RunCallbackRequest(BaseModel):
     result: RunCallbackToolResult
 
 
+class RunResumeRequest(BaseModel):
+    source: str = Field(default="manual_api", min_length=1, max_length=64)
+    reason: str | None = Field(default=None, max_length=255)
+
+
 class CallbackTicketCleanupRequest(BaseModel):
     source: str = Field(default="manual_cleanup", min_length=1, max_length=64)
     limit: int | None = Field(default=None, ge=1, le=1000)

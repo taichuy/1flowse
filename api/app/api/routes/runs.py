@@ -16,6 +16,7 @@ from app.schemas.run import (
     RunCreate,
     RunDetail,
     RunEventItem,
+    RunResumeRequest,
     RunTrace,
 )
 from app.services.run_trace_export_access import RunTraceExportAccessService
@@ -92,10 +93,17 @@ def get_run(
 @router.post("/runs/{run_id}/resume", response_model=RunDetail)
 def resume_run(
     run_id: str,
+    payload: RunResumeRequest | None = None,
     db: Session = Depends(get_db),
 ) -> RunDetail:
     try:
-        artifacts = runtime_service.resume_run(db, run_id, source="manual_api")
+        request = payload or RunResumeRequest()
+        artifacts = runtime_service.resume_run(
+            db,
+            run_id,
+            source=request.source,
+            reason=request.reason,
+        )
     except WorkflowExecutionError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

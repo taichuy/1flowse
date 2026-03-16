@@ -112,7 +112,12 @@ export function CallbackWaitingSummaryCard({
           {terminationAt !== "n/a" ? ` · ${terminationAt}` : ""}
         </p>
       ) : null}
-      <CallbackWaitingInlineActions compact nodeRunId={nodeRunId} runId={runId ?? null} />
+      <CallbackWaitingInlineActions
+        allowManualResume={!hasTermination}
+        compact
+        nodeRunId={nodeRunId}
+        runId={runId ?? null}
+      />
     </div>
   );
 }

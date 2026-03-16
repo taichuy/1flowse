@@ -95,6 +95,46 @@ def test_get_run_supports_summary_mode_without_events(
     assert summary_body["events"] == []
 
 
+def test_resume_run_route_forwards_source_and_reason(
+    client: TestClient,
+    sample_workflow: Workflow,
+    monkeypatch,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "resume-route"}},
+    )
+
+    assert response.status_code == 201
+    run_body = response.json()
+    run_id = run_body["id"]
+
+    captured: dict[str, str | None] = {}
+
+    def fake_resume_run(db, target_run_id: str, *, source: str = "manual", reason: str | None = None):
+        captured["run_id"] = target_run_id
+        captured["source"] = source
+        captured["reason"] = reason
+        return run_routes.runtime_service.load_run(db, target_run_id)
+
+    monkeypatch.setattr(run_routes.runtime_service, "resume_run", fake_resume_run)
+
+    resume_response = client.post(
+        f"/api/runs/{run_id}/resume",
+        json={
+            "source": "operator_callback_resume",
+            "reason": "operator_manual_resume_attempt",
+        },
+    )
+
+    assert resume_response.status_code == 200
+    assert captured == {
+        "run_id": run_id,
+        "source": "operator_callback_resume",
+        "reason": "operator_manual_resume_attempt",
+    }
+
+
 def _parse_trace_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
