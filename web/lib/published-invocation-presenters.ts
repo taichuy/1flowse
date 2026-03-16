@@ -1,3 +1,10 @@
+import type {
+  PublishedEndpointInvocationCallbackTicketItem,
+  PublishedEndpointInvocationItem
+} from "@/lib/get-workflow-publish";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+
 export const PUBLISHED_INVOCATION_REASON_CODES = [
   "api_key_invalid",
   "api_key_required",
@@ -158,4 +165,69 @@ export function formatRateLimitPressure(
     percentage,
     label: `${percentage}%`
   };
+}
+
+function findLatestApprovalEntry(entries: SensitiveAccessTimelineEntry[]) {
+  return entries.find((entry) => entry.approval_ticket) ?? null;
+}
+
+export function buildPublishedInvocationInboxHref({
+  invocation,
+  callbackTickets,
+  sensitiveAccessEntries
+}: {
+  invocation: PublishedEndpointInvocationItem;
+  callbackTickets: PublishedEndpointInvocationCallbackTicketItem[];
+  sensitiveAccessEntries: SensitiveAccessTimelineEntry[];
+}) {
+  const latestApprovalEntry = findLatestApprovalEntry(sensitiveAccessEntries);
+  if (
+    callbackTickets.length === 0 &&
+    sensitiveAccessEntries.length === 0 &&
+    !invocation.run_waiting_lifecycle?.node_run_id
+  ) {
+    return null;
+  }
+
+  return buildSensitiveAccessInboxHref({
+    runId: invocation.run_id ?? latestApprovalEntry?.request.run_id ?? null,
+    nodeRunId:
+      invocation.run_waiting_lifecycle?.node_run_id ??
+      latestApprovalEntry?.request.node_run_id ??
+      latestApprovalEntry?.approval_ticket?.node_run_id ??
+      callbackTickets[0]?.node_run_id ??
+      null,
+    status: latestApprovalEntry?.approval_ticket?.status ?? null,
+    waitingStatus: latestApprovalEntry?.approval_ticket?.waiting_status ?? null,
+    accessRequestId: latestApprovalEntry?.request.id ?? null,
+    approvalTicketId: latestApprovalEntry?.approval_ticket?.id ?? null
+  });
+}
+
+export function buildBlockingPublishedInvocationInboxHref({
+  runId,
+  blockingNodeRunId,
+  blockingSensitiveAccessEntries
+}: {
+  runId?: string | null;
+  blockingNodeRunId?: string | null;
+  blockingSensitiveAccessEntries: SensitiveAccessTimelineEntry[];
+}) {
+  const latestBlockingEntry = findLatestApprovalEntry(blockingSensitiveAccessEntries);
+  if (!blockingNodeRunId && latestBlockingEntry === null) {
+    return null;
+  }
+
+  return buildSensitiveAccessInboxHref({
+    runId: runId ?? latestBlockingEntry?.request.run_id ?? latestBlockingEntry?.approval_ticket?.run_id ?? null,
+    nodeRunId:
+      blockingNodeRunId ??
+      latestBlockingEntry?.request.node_run_id ??
+      latestBlockingEntry?.approval_ticket?.node_run_id ??
+      null,
+    status: latestBlockingEntry?.approval_ticket?.status ?? null,
+    waitingStatus: latestBlockingEntry?.approval_ticket?.waiting_status ?? null,
+    accessRequestId: latestBlockingEntry?.request.id ?? null,
+    approvalTicketId: latestBlockingEntry?.approval_ticket?.id ?? null
+  });
 }

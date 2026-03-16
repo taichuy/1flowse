@@ -17,7 +17,7 @@ import {
   getCallbackWaitingHeadline,
   listCallbackWaitingChips
 } from "@/lib/callback-waiting-presenters";
-import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import { buildPublishedInvocationInboxHref } from "@/lib/published-invocation-presenters";
 
 type WorkflowPublishInvocationCallbackSectionProps = {
   invocation: PublishedEndpointInvocationItem;
@@ -69,23 +69,11 @@ export function WorkflowPublishInvocationCallbackSection({
   const latestLateCallback = formatLatestLateCallbackLabel(callbackLifecycle);
   const terminationLabel = formatCallbackTerminationLabel(callbackLifecycle);
   const ticketStatusSummary = formatCallbackTicketStatusSummary(callbackTickets);
-  const latestApprovalEntry = sensitiveAccessEntries.find((entry) => entry.approval_ticket);
-  const inboxHref =
-    callbackTickets.length > 0 || sensitiveAccessEntries.length > 0 || waitingLifecycle?.node_run_id
-      ? buildSensitiveAccessInboxHref({
-          runId: invocation.run_id ?? latestApprovalEntry?.request.run_id ?? null,
-          nodeRunId:
-            waitingLifecycle?.node_run_id ??
-            latestApprovalEntry?.request.node_run_id ??
-            latestApprovalEntry?.approval_ticket?.node_run_id ??
-            callbackTickets[0]?.node_run_id ??
-            null,
-          status: latestApprovalEntry?.approval_ticket?.status ?? null,
-          waitingStatus: latestApprovalEntry?.approval_ticket?.waiting_status ?? null,
-          accessRequestId: latestApprovalEntry?.request.id ?? null,
-          approvalTicketId: latestApprovalEntry?.approval_ticket?.id ?? null
-        })
-      : null;
+  const inboxHref = buildPublishedInvocationInboxHref({
+    invocation,
+    callbackTickets,
+    sensitiveAccessEntries
+  });
 
   return (
     <section>

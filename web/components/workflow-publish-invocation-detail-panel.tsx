@@ -3,6 +3,10 @@ import Link from "next/link";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-publish-invocation-callback-section";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
+import {
+  buildBlockingPublishedInvocationInboxHref,
+  buildPublishedInvocationInboxHref
+} from "@/lib/published-invocation-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
 type WorkflowPublishInvocationDetailPanelProps = {
@@ -28,6 +32,17 @@ export function WorkflowPublishInvocationDetailPanel({
     cache
   } = detail;
   const waitingLifecycle = invocation.run_waiting_lifecycle;
+  const runId = run?.id ?? invocation.run_id ?? null;
+  const blockingInboxHref = buildBlockingPublishedInvocationInboxHref({
+    runId,
+    blockingNodeRunId,
+    blockingSensitiveAccessEntries
+  });
+  const approvalInboxHref = buildPublishedInvocationInboxHref({
+    invocation,
+    callbackTickets,
+    sensitiveAccessEntries
+  });
 
   return (
     <article className="entry-card compact-card publish-invocation-detail-panel">
@@ -147,8 +162,15 @@ export function WorkflowPublishInvocationDetailPanel({
             on the blocker instead of scanning the entire run timeline.
             {blockingNodeRunId ? ` Current blocking node run: ${blockingNodeRunId}.` : ""}
           </p>
+          {blockingInboxHref ? (
+            <div className="tool-badge-row">
+              <Link className="event-chip inbox-filter-link" href={blockingInboxHref}>
+                open blocker inbox slice
+              </Link>
+            </div>
+          ) : null}
           <SensitiveAccessTimelineEntryList
-            defaultRunId={run?.id ?? invocation.run_id ?? null}
+            defaultRunId={runId}
             entries={blockingSensitiveAccessEntries}
             emptyCopy="当前阻塞节点没有关联 sensitive access timeline。"
           />
@@ -161,8 +183,15 @@ export function WorkflowPublishInvocationDetailPanel({
           Sensitive access decisions, approval tickets and notification delivery are grouped here
           so published-surface debugging no longer has to jump back to the inbox.
         </p>
+        {approvalInboxHref ? (
+          <div className="tool-badge-row">
+            <Link className="event-chip inbox-filter-link" href={approvalInboxHref}>
+              open approval inbox slice
+            </Link>
+          </div>
+        ) : null}
         <SensitiveAccessTimelineEntryList
-          defaultRunId={run?.id ?? invocation.run_id ?? null}
+          defaultRunId={runId}
           entries={sensitiveAccessEntries}
           emptyCopy="当前这次 invocation 没有关联 sensitive access timeline。"
         />
