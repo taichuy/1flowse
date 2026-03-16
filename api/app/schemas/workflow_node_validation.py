@@ -110,6 +110,31 @@ class WorkflowNodeAgentMockPlan(BaseModel):
     finalizeFrom: Literal["evidence", "tool_results", "working_context"] = "evidence"
 
 
+class WorkflowNodeSandboxConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    language: str | None = Field(default=None, min_length=1, max_length=64)
+    code: str | None = None
+    dependencyMode: Literal["builtin", "dependency_ref", "backend_managed"] | None = None
+    builtinPackageSet: str | None = Field(default=None, min_length=1, max_length=128)
+    dependencyRef: str | None = Field(default=None, min_length=1, max_length=256)
+    backendExtensions: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_dependency_contract(self) -> WorkflowNodeSandboxConfig:
+        if self.builtinPackageSet is not None and self.dependencyMode != "builtin":
+            raise ValueError(
+                "config.builtinPackageSet requires config.dependencyMode = 'builtin'."
+            )
+        if self.dependencyRef is not None and self.dependencyMode != "dependency_ref":
+            raise ValueError(
+                "config.dependencyRef requires config.dependencyMode = 'dependency_ref'."
+            )
+        if self.backendExtensions is not None and not isinstance(self.backendExtensions, dict):
+            raise ValueError("config.backendExtensions must be an object when provided.")
+        return self
+
+
 BranchSelectorOperator = Literal[
     "exists",
     "not_exists",
@@ -215,3 +240,6 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
         if node_type != "llm_agent":
             raise ValueError("Only llm_agent nodes may define config.mockPlan.")
         WorkflowNodeAgentMockPlan.model_validate(mock_plan)
+
+    if node_type == "sandbox_code":
+        WorkflowNodeSandboxConfig.model_validate(config)

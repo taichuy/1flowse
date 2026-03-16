@@ -122,6 +122,30 @@ def _bound_tool_definition(
     }
 
 
+def _sandbox_code_definition(*, config: dict | None = None, runtime_policy: dict | None = None) -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "sandbox",
+                "type": "sandbox_code",
+                "name": "Sandbox",
+                "config": {
+                    "language": "python",
+                    "code": "result = {'ok': True}",
+                    **(config or {}),
+                },
+                "runtimePolicy": runtime_policy,
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
+            {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+        ],
+    }
+
+
 def _valid_mcp_definition() -> dict:
     return {
         "nodes": [
@@ -773,6 +797,48 @@ def test_create_workflow_rejects_invalid_execution_runtime_policy(client: TestCl
     assert response.status_code == 422
     detail = _workflow_detail_message(response)
     assert "Input should be 'inline', 'subprocess', 'sandbox' or 'microvm'" in detail
+
+
+def test_create_workflow_rejects_builtin_package_set_without_builtin_dependency_mode(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Broken Sandbox Dependency Workflow",
+            "definition": _sandbox_code_definition(
+                config={
+                    "dependencyMode": "backend_managed",
+                    "builtinPackageSet": "py-data-basic",
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "config.builtinPackageSet requires config.dependencyMode = 'builtin'" in detail
+
+
+def test_create_workflow_rejects_dependency_ref_without_dependency_ref_mode(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Broken Sandbox Dependency Ref Workflow",
+            "definition": _sandbox_code_definition(
+                config={
+                    "dependencyMode": "builtin",
+                    "dependencyRef": "bundle:finance-safe-v1",
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "config.dependencyRef requires config.dependencyMode = 'dependency_ref'" in detail
 
 
 def test_create_workflow_rejects_unsupported_tool_execution_class(client: TestClient) -> None:

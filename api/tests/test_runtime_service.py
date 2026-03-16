@@ -283,6 +283,8 @@ class _SandboxBackendClientStub(SandboxBackendClient):
             capability=SandboxBackendCapability(
                 supported_execution_classes=("sandbox",),
                 supported_languages=("python",),
+                supported_dependency_modes=("builtin",),
+                supports_builtin_package_sets=True,
                 supports_network_policy=True,
                 supports_filesystem_policy=True,
             ),
@@ -322,6 +324,8 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
                     "config": {
                         "language": "python",
                         "code": 'result = {"answer": "unused"}',
+                        "dependencyMode": "builtin",
+                        "builtinPackageSet": "py-data-basic",
                     },
                     "runtimePolicy": {
                         "execution": {
@@ -360,6 +364,8 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
     }
     assert len(sandbox_backend_client.requests) == 1
     assert sandbox_backend_client.requests[0].profile == "python-safe"
+    assert sandbox_backend_client.requests[0].dependency_mode == "builtin"
+    assert sandbox_backend_client.requests[0].builtin_package_set == "py-data-basic"
     assert sandbox_backend_client.requests[0].network_policy == "restricted"
     assert sandbox_backend_client.requests[0].filesystem_policy == "ephemeral"
 
@@ -388,7 +394,70 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
         "effectiveExecutionClass": "sandbox",
         "executorRef": "sandbox-backend:sandbox-default",
         "backendId": "sandbox-default",
+        "dependencyMode": "builtin",
+        "builtinPackageSet": "py-data-basic",
     }
+
+
+class _DependencyMismatchSandboxBackendClientStub:
+    def describe_execution_backend(self, request: SandboxExecutionRequest) -> SandboxBackendSelection:
+        return SandboxBackendSelection(
+            available=False,
+            reason=(
+                "No compatible sandbox backend is currently available for the requested "
+                "execution class 'sandbox'. sandbox-default: does not support dependency mode 'dependency_ref'"
+            ),
+        )
+
+    def execute(self, request: SandboxExecutionRequest) -> SandboxExecutionResponse:
+        raise AssertionError("execute should not be called when dependency capability is missing")
+
+
+def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-sandbox-code-dependency-mismatch",
+        name="Sandbox Dependency Mismatch Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "name": "Sandbox",
+                    "config": {
+                        "language": "python",
+                        "code": 'result = {"answer": "unused"}',
+                        "dependencyMode": "dependency_ref",
+                        "dependencyRef": "bundle:finance-safe-v1",
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="does not support dependency mode 'dependency_ref'",
+    ):
+        RuntimeService(
+            sandbox_backend_client=_DependencyMismatchSandboxBackendClientStub()
+        ).execute_workflow(sqlite_session, workflow, {"topic": "remote"})
 
 def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
     sqlite_session: Session,

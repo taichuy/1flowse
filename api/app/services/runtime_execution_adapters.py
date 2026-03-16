@@ -178,6 +178,19 @@ class RemoteSandboxExecutionAdapter:
         code = str(config.get("code") or "")
         if not code.strip():
             raise WorkflowExecutionError("sandbox_code nodes must define a non-empty config.code.")
+        dependency_mode = self._normalize_optional_string(config.get("dependencyMode"))
+        builtin_package_set = self._normalize_optional_string(config.get("builtinPackageSet"))
+        dependency_ref = self._normalize_optional_string(config.get("dependencyRef"))
+        backend_extensions = self._normalize_backend_extensions(config.get("backendExtensions"))
+
+        if builtin_package_set is not None and dependency_mode != "builtin":
+            raise WorkflowExecutionError(
+                "sandbox_code builtinPackageSet requires dependencyMode 'builtin'."
+            )
+        if dependency_ref is not None and dependency_mode != "dependency_ref":
+            raise WorkflowExecutionError(
+                "sandbox_code dependencyRef requires dependencyMode 'dependency_ref'."
+            )
 
         execution = self._sandbox_backend_client.execute(
             SandboxExecutionRequest(
@@ -187,9 +200,13 @@ class RemoteSandboxExecutionAdapter:
                 node_input=request.node_input,
                 trace_id=f"run:{request.run_id}:node:{request.node.get('id')}:sandbox_code",
                 profile=request.execution_policy.profile,
+                dependency_mode=dependency_mode,
+                builtin_package_set=builtin_package_set,
+                dependency_ref=dependency_ref,
                 timeout_ms=request.execution_policy.timeout_ms,
                 network_policy=request.execution_policy.network_policy,
                 filesystem_policy=request.execution_policy.filesystem_policy,
+                backend_extensions=backend_extensions,
             )
         )
         normalized_output = self._normalize_output(execution.result)
@@ -203,6 +220,12 @@ class RemoteSandboxExecutionAdapter:
             "executorRef": execution.executor_ref,
             "backendId": execution.backend_id,
         }
+        if dependency_mode is not None:
+            artifact_payload["dependencyMode"] = dependency_mode
+        if builtin_package_set is not None:
+            artifact_payload["builtinPackageSet"] = builtin_package_set
+        if dependency_ref is not None:
+            artifact_payload["dependencyRef"] = dependency_ref
         artifact_ref = self._artifact_store.create_artifact(
             request.db,
             run_id=request.run_id,
@@ -216,6 +239,7 @@ class RemoteSandboxExecutionAdapter:
                 "effective_execution_class": execution.effective_execution_class,
                 "executor_ref": execution.executor_ref,
                 "backend_id": execution.backend_id,
+                "dependency_mode": dependency_mode,
             },
         )
         self._context_service.append_artifact_ref(request.node_run, artifact_ref.uri)
@@ -242,10 +266,26 @@ class RemoteSandboxExecutionAdapter:
                         "artifact_ref": artifact_ref.uri,
                         "executor_ref": execution.executor_ref,
                         "backend_id": execution.backend_id,
+                        "dependency_mode": dependency_mode,
                     },
                 ),
             ],
         )
+
+    @staticmethod
+    def _normalize_optional_string(value: object) -> str | None:
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return None
+
+    @staticmethod
+    def _normalize_backend_extensions(value: object) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise WorkflowExecutionError("sandbox_code backendExtensions must be an object.")
+        return dict(value)
 
     def _normalize_output(self, result: Any) -> dict[str, Any]:
         if isinstance(result, dict):

@@ -154,9 +154,13 @@ class SandboxExecutionRequest:
     node_input: dict[str, Any]
     trace_id: str
     profile: str | None = None
+    dependency_mode: str | None = None
+    builtin_package_set: str | None = None
+    dependency_ref: str | None = None
     timeout_ms: int | None = None
     network_policy: str | None = None
     filesystem_policy: str | None = None
+    backend_extensions: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -284,8 +288,11 @@ class SandboxBackendClient:
             execution_class=request.execution_class,
             language=request.language,
             profile=request.profile,
+            dependency_mode=request.dependency_mode,
+            builtin_package_set=request.builtin_package_set,
             network_policy=request.network_policy,
             filesystem_policy=request.filesystem_policy,
+            backend_extensions=request.backend_extensions,
         )
 
     def describe_tool_execution_backend(
@@ -293,15 +300,21 @@ class SandboxBackendClient:
         *,
         execution_class: str,
         profile: str | None = None,
+        dependency_mode: str | None = None,
+        builtin_package_set: str | None = None,
         network_policy: str | None = None,
         filesystem_policy: str | None = None,
+        backend_extensions: dict[str, Any] | None = None,
     ) -> SandboxBackendSelection:
         return self._describe_backend_selection(
             execution_class=execution_class,
             language=None,
             profile=profile,
+            dependency_mode=dependency_mode,
+            builtin_package_set=builtin_package_set,
             network_policy=network_policy,
             filesystem_policy=filesystem_policy,
+            backend_extensions=backend_extensions,
         )
 
     def _describe_backend_selection(
@@ -310,8 +323,11 @@ class SandboxBackendClient:
         execution_class: str,
         language: str | None,
         profile: str | None,
+        dependency_mode: str | None,
+        builtin_package_set: str | None,
         network_policy: str | None,
         filesystem_policy: str | None,
+        backend_extensions: dict[str, Any] | None,
     ) -> SandboxBackendSelection:
         backend_healths = self._health_checker.probe_all(self._registry)
         if not backend_healths:
@@ -346,6 +362,24 @@ class SandboxBackendClient:
                 and profile not in capability.supported_profiles
             ):
                 reasons.append(f"{health.id}: does not expose profile '{profile}'")
+                continue
+            if dependency_mode is not None:
+                if dependency_mode not in capability.supported_dependency_modes:
+                    reasons.append(
+                        f"{health.id}: does not support dependency mode '{dependency_mode}'"
+                    )
+                    continue
+                if (
+                    dependency_mode == "builtin"
+                    and builtin_package_set
+                    and not capability.supports_builtin_package_sets
+                ):
+                    reasons.append(
+                        f"{health.id}: does not support builtin package set hints"
+                    )
+                    continue
+            if backend_extensions and not capability.supports_backend_extensions:
+                reasons.append(f"{health.id}: does not support backendExtensions payloads")
                 continue
             if network_policy and not capability.supports_network_policy:
                 reasons.append(f"{health.id}: does not support networkPolicy hints")
@@ -390,12 +424,20 @@ class SandboxBackendClient:
         }
         if request.profile is not None:
             payload["profile"] = request.profile
+        if request.dependency_mode is not None:
+            payload["dependencyMode"] = request.dependency_mode
+        if request.builtin_package_set is not None:
+            payload["builtinPackageSet"] = request.builtin_package_set
+        if request.dependency_ref is not None:
+            payload["dependencyRef"] = request.dependency_ref
         if request.timeout_ms is not None:
             payload["timeoutMs"] = request.timeout_ms
         if request.network_policy is not None:
             payload["networkPolicy"] = request.network_policy
         if request.filesystem_policy is not None:
             payload["filesystemPolicy"] = request.filesystem_policy
+        if request.backend_extensions:
+            payload["backendExtensions"] = request.backend_extensions
 
         try:
             with self._client_factory(request.timeout_ms) as client:
