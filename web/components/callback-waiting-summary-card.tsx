@@ -1,0 +1,96 @@
+import type {
+  CallbackWaitingLifecycleSummary,
+  RunCallbackTicketItem
+} from "@/lib/get-run-views";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { formatTimestamp } from "@/lib/runtime-presenters";
+import {
+  formatApprovalSummary,
+  formatCallbackLifecycleLabel,
+  formatScheduledResumeLabel,
+  getCallbackWaitingHeadline,
+  listCallbackWaitingChips
+} from "@/lib/callback-waiting-presenters";
+
+type CallbackWaitingSummaryCardProps = {
+  lifecycle?: CallbackWaitingLifecycleSummary | null;
+  callbackTickets?: RunCallbackTicketItem[];
+  sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+  waitingReason?: string | null;
+  scheduledResumeDelaySeconds?: number | null;
+  scheduledResumeSource?: string | null;
+  scheduledWaitingStatus?: string | null;
+  className?: string;
+};
+
+export function CallbackWaitingSummaryCard({
+  lifecycle,
+  callbackTickets = [],
+  sensitiveAccessEntries = [],
+  waitingReason,
+  scheduledResumeDelaySeconds,
+  scheduledResumeSource,
+  scheduledWaitingStatus,
+  className = ""
+}: CallbackWaitingSummaryCardProps) {
+  const headline = getCallbackWaitingHeadline({
+    lifecycle,
+    callbackTickets,
+    sensitiveAccessEntries
+  });
+  const approvalSummary = formatApprovalSummary(sensitiveAccessEntries);
+  const scheduledResume = formatScheduledResumeLabel({
+    scheduledResumeDelaySeconds,
+    scheduledResumeSource,
+    scheduledWaitingStatus
+  });
+  const lifecycleSummary = formatCallbackLifecycleLabel(lifecycle);
+  const chips = listCallbackWaitingChips({
+    lifecycle,
+    callbackTickets,
+    sensitiveAccessEntries,
+    scheduledResumeDelaySeconds
+  });
+  const terminationAt = formatTimestamp(lifecycle?.terminated_at);
+  const hasTermination = Boolean(lifecycle?.terminated);
+  const hasContent =
+    headline ||
+    approvalSummary ||
+    scheduledResume ||
+    lifecycleSummary ||
+    waitingReason ||
+    chips.length > 0 ||
+    hasTermination;
+
+  if (!hasContent) {
+    return null;
+  }
+
+  return (
+    <div className={className}>
+      {headline ? <p className="section-copy entry-copy">{headline}</p> : null}
+      {chips.length ? (
+        <div className="event-type-strip">
+          {chips.map((chip) => (
+            <span className="event-chip" key={chip}>
+              {chip}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {waitingReason ? <p className="run-error-message">{waitingReason}</p> : null}
+      {approvalSummary ? <p className="section-copy entry-copy">Approval: {approvalSummary}</p> : null}
+      {scheduledResume ? <p className="section-copy entry-copy">Resume: {scheduledResume}</p> : null}
+      {lifecycleSummary ? (
+        <p className="section-copy entry-copy">Lifecycle: {lifecycleSummary}</p>
+      ) : null}
+      {hasTermination ? (
+        <p className="run-error-message">
+          callback waiting terminated
+          {lifecycle?.termination_reason ? ` · ${lifecycle.termination_reason}` : ""}
+          {terminationAt !== "n/a" ? ` · ${terminationAt}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}

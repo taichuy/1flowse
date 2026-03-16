@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
@@ -23,57 +24,6 @@ function formatMetricCounts(metrics: Record<string, number> | null | undefined):
     .map(([label, count]) => `${label} ${count}`);
 
   return parts.length ? parts.join(" · ") : "0";
-}
-
-function formatScheduledResume(detail: PublishedEndpointInvocationDetailResponse): string {
-  const scheduledResume = detail.invocation.run_waiting_lifecycle;
-  if (!scheduledResume?.scheduled_resume_delay_seconds) {
-    return "n/a";
-  }
-
-  const parts = [`${scheduledResume.scheduled_resume_delay_seconds}s`];
-  if (scheduledResume.scheduled_resume_source) {
-    parts.push(scheduledResume.scheduled_resume_source);
-  }
-  if (scheduledResume.scheduled_waiting_status) {
-    parts.push(scheduledResume.scheduled_waiting_status);
-  }
-  return parts.join(" · ");
-}
-
-function formatCallbackLifecycle(detail: PublishedEndpointInvocationDetailResponse): string {
-  const lifecycle = detail.invocation.run_waiting_lifecycle?.callback_waiting_lifecycle;
-  if (!lifecycle) {
-    return "n/a";
-  }
-
-  const parts: string[] = [];
-  if (lifecycle.wait_cycle_count > 0) {
-    parts.push(`wait cycles ${lifecycle.wait_cycle_count}`);
-  }
-  if (lifecycle.expired_ticket_count > 0) {
-    parts.push(`expired ${lifecycle.expired_ticket_count}`);
-  }
-  if (lifecycle.late_callback_count > 0) {
-    parts.push(`late callbacks ${lifecycle.late_callback_count}`);
-  }
-  if (typeof lifecycle.last_resume_delay_seconds === "number") {
-    parts.push(`resume ${lifecycle.last_resume_delay_seconds}s`);
-  }
-  if (lifecycle.last_resume_backoff_attempt > 0) {
-    parts.push(`backoff #${lifecycle.last_resume_backoff_attempt}`);
-  }
-  if (lifecycle.max_expired_ticket_count > 0) {
-    parts.push(`max expired ${lifecycle.max_expired_ticket_count}`);
-  }
-  if (lifecycle.terminated) {
-    parts.push("terminated");
-  }
-  if (lifecycle.last_ticket_status) {
-    parts.push(`last ticket ${lifecycle.last_ticket_status}`);
-  }
-
-  return parts.length ? parts.join(" · ") : "tracked";
 }
 
 export function WorkflowPublishInvocationDetailPanel({
@@ -144,11 +94,19 @@ export function WorkflowPublishInvocationDetailPanel({
             </div>
             <div>
               <dt>Scheduled resume</dt>
-              <dd>{formatScheduledResume(detail)}</dd>
+              <dd>
+                {waitingLifecycle?.scheduled_resume_delay_seconds
+                  ? `${waitingLifecycle.scheduled_resume_delay_seconds}s`
+                  : "n/a"}
+              </dd>
             </div>
             <div>
               <dt>Callback lifecycle</dt>
-              <dd>{formatCallbackLifecycle(detail)}</dd>
+              <dd>
+                {waitingLifecycle?.callback_waiting_lifecycle
+                  ? "tracked"
+                  : "n/a"}
+              </dd>
             </div>
             <div>
               <dt>Termination</dt>
@@ -172,6 +130,16 @@ export function WorkflowPublishInvocationDetailPanel({
               <dd>{formatTimestamp(run?.finished_at ?? invocation.finished_at)}</dd>
             </div>
           </dl>
+          <CallbackWaitingSummaryCard
+            className="compact-card"
+            lifecycle={waitingLifecycle?.callback_waiting_lifecycle}
+            callbackTickets={callbackTickets}
+            sensitiveAccessEntries={sensitiveAccessEntries}
+            waitingReason={invocation.run_waiting_reason}
+            scheduledResumeDelaySeconds={waitingLifecycle?.scheduled_resume_delay_seconds}
+            scheduledResumeSource={waitingLifecycle?.scheduled_resume_source}
+            scheduledWaitingStatus={waitingLifecycle?.scheduled_waiting_status}
+          />
         </div>
 
         <div className="payload-card compact-card">

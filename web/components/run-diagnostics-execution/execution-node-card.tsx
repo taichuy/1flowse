@@ -10,6 +10,7 @@ import {
   ArtifactPreviewList,
   MetricChipRow
 } from "@/components/run-diagnostics-execution/shared";
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 
 export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
@@ -31,7 +32,6 @@ export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
       </p>
       <p className="event-run">node run {node.node_run_id}</p>
 
-      {node.waiting_reason ? <p className="run-error-message">{node.waiting_reason}</p> : null}
       {node.error_message ? <p className="run-error-message">{node.error_message}</p> : null}
 
       <div className="event-type-strip">
@@ -62,71 +62,12 @@ export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
         {node.last_event_type ? <span className="event-chip">last {node.last_event_type}</span> : null}
       </div>
 
-      {node.callback_waiting_lifecycle ? (
-        <>
-          <div className="event-type-strip">
-            <span className="event-chip">
-              wait cycles {node.callback_waiting_lifecycle.wait_cycle_count}
-            </span>
-            <span className="event-chip">
-              expired {node.callback_waiting_lifecycle.expired_ticket_count}
-            </span>
-            {node.callback_waiting_lifecycle.max_expired_ticket_count > 0 ? (
-              <span className="event-chip">
-                max expired {node.callback_waiting_lifecycle.max_expired_ticket_count}
-              </span>
-            ) : null}
-            {node.callback_waiting_lifecycle.late_callback_count > 0 ? (
-              <span className="event-chip">
-                late callbacks {node.callback_waiting_lifecycle.late_callback_count}
-              </span>
-            ) : null}
-            {typeof node.callback_waiting_lifecycle.last_resume_delay_seconds === "number" ? (
-              <span className="event-chip">
-                resume {node.callback_waiting_lifecycle.last_resume_delay_seconds}s
-              </span>
-            ) : null}
-            {node.callback_waiting_lifecycle.last_resume_backoff_attempt > 0 ? (
-              <span className="event-chip">
-                backoff #{node.callback_waiting_lifecycle.last_resume_backoff_attempt}
-              </span>
-            ) : null}
-            {node.callback_waiting_lifecycle.terminated ? (
-              <span className="event-chip">terminated</span>
-            ) : null}
-          </div>
-
-          <div className="event-type-strip">
-            {node.callback_waiting_lifecycle.last_ticket_status ? (
-              <span className="event-chip">
-                ticket {node.callback_waiting_lifecycle.last_ticket_status}
-              </span>
-            ) : null}
-            {node.callback_waiting_lifecycle.last_resume_source ? (
-              <span className="event-chip">
-                resume source {node.callback_waiting_lifecycle.last_resume_source}
-              </span>
-            ) : null}
-            {node.callback_waiting_lifecycle.last_late_callback_status ? (
-              <span className="event-chip">
-                late status {node.callback_waiting_lifecycle.last_late_callback_status}
-              </span>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {node.callback_waiting_lifecycle?.terminated ? (
-        <p className="run-error-message">
-          callback waiting terminated
-          {node.callback_waiting_lifecycle.termination_reason
-            ? ` · ${node.callback_waiting_lifecycle.termination_reason}`
-            : ""}
-          {node.callback_waiting_lifecycle.terminated_at
-            ? ` · ${formatTimestamp(node.callback_waiting_lifecycle.terminated_at)}`
-            : ""}
-        </p>
-      ) : null}
+      <CallbackWaitingSummaryCard
+        lifecycle={node.callback_waiting_lifecycle}
+        callbackTickets={node.callback_tickets}
+        sensitiveAccessEntries={node.sensitive_access_entries}
+        waitingReason={node.waiting_reason}
+      />
 
       <MetricChipRow
         title="Event types"
