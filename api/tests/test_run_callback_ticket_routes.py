@@ -13,9 +13,13 @@ from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.runtime import RuntimeService
 
 
-def _create_waiting_callback_run(sqlite_session: Session) -> tuple[str, str]:
+def _create_waiting_callback_run(
+    sqlite_session: Session,
+    *,
+    suffix: str = "route",
+) -> tuple[str, str]:
     workflow = Workflow(
-        id="wf-cleanup-route",
+        id=f"wf-cleanup-{suffix}",
         name="Cleanup Route Workflow",
         version="0.1.0",
         status="draft",
@@ -48,7 +52,7 @@ def _create_waiting_callback_run(sqlite_session: Session) -> tuple[str, str]:
         },
     )
     workflow_version = WorkflowVersion(
-        id="wf-cleanup-route-v1",
+        id=f"wf-cleanup-{suffix}-v1",
         workflow_id=workflow.id,
         version=workflow.version,
         definition=workflow.definition,
@@ -414,6 +418,54 @@ def test_cleanup_service_applies_backoff_after_repeated_callback_expirations(
     assert lifecycle["last_resume_reason"] == "cleanup route pending"
     assert lifecycle["last_resume_source"] == "callback_ticket_monitor"
     assert lifecycle["last_resume_backoff_attempt"] == 2
+
+
+def test_cleanup_stale_run_callback_tickets_route_scopes_to_run_and_node(
+    client: TestClient,
+    sqlite_session: Session,
+    monkeypatch,
+) -> None:
+    target_run_id, target_ticket = _create_waiting_callback_run(sqlite_session, suffix="route-scope-a")
+    other_run_id, other_ticket = _create_waiting_callback_run(sqlite_session, suffix="route-scope-b")
+    target_record = sqlite_session.get(RunCallbackTicket, target_ticket)
+    other_record = sqlite_session.get(RunCallbackTicket, other_ticket)
+    assert target_record is not None
+    assert other_record is not None
+    target_record.expires_at = datetime.now(UTC) - timedelta(minutes=5)
+    other_record.expires_at = datetime.now(UTC) - timedelta(minutes=5)
+    sqlite_session.commit()
+
+    scheduled_resumes = []
+    monkeypatch.setattr(
+        run_callback_ticket_routes.cleanup_service,
+        "_resume_scheduler",
+        RunResumeScheduler(dispatcher=scheduled_resumes.append),
+    )
+
+    response = client.post(
+        "/api/runs/callback-tickets/cleanup",
+        json={
+            "source": "route_cleanup_scoped",
+            "run_id": target_run_id,
+            "node_run_id": target_record.node_run_id,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+
+    sqlite_session.refresh(target_record)
+    sqlite_session.refresh(other_record)
+
+    assert body["matched_count"] == 1
+    assert body["expired_count"] == 1
+    assert body["scheduled_resume_count"] == 1
+    assert body["run_ids"] == [target_run_id]
+    assert target_record.status == "expired"
+    assert other_record.status == "pending"
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].run_id == target_run_id
+    assert scheduled_resumes[0].run_id != other_run_id
 
 
 def test_cleanup_service_terminates_waiting_callback_after_max_expired_cycles(

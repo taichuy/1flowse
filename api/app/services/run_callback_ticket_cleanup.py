@@ -106,6 +106,8 @@ class RunCallbackTicketCleanupService:
         limit: int | None = None,
         dry_run: bool = False,
         now: datetime | None = None,
+        run_id: str | None = None,
+        node_run_id: str | None = None,
     ) -> CallbackTicketCleanupResult:
         effective_limit = max(int(limit or self._batch_size), 1)
         effective_now = now or _utcnow()
@@ -113,6 +115,8 @@ class RunCallbackTicketCleanupService:
             db,
             now=effective_now,
             limit=effective_limit,
+            run_id=run_id,
+            node_run_id=node_run_id,
         )
         runs = self._load_runs(db, [record.run_id for record in records])
         node_runs = self._load_node_runs(db, [record.node_run_id for record in records])

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CallbackWaitingInlineActions } from "@/components/callback-waiting-inline-actions";
 import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem
@@ -23,6 +24,8 @@ type CallbackWaitingSummaryCardProps = {
   scheduledResumeSource?: string | null;
   scheduledWaitingStatus?: string | null;
   inboxHref?: string | null;
+  runId?: string | null;
+  nodeRunId?: string | null;
   className?: string;
 };
 
@@ -35,6 +38,8 @@ export function CallbackWaitingSummaryCard({
   scheduledResumeSource,
   scheduledWaitingStatus,
   inboxHref,
+  runId,
+  nodeRunId,
   className = ""
 }: CallbackWaitingSummaryCardProps) {
   const headline = getCallbackWaitingHeadline({
@@ -107,6 +112,7 @@ export function CallbackWaitingSummaryCard({
           {terminationAt !== "n/a" ? ` · ${terminationAt}` : ""}
         </p>
       ) : null}
+      <CallbackWaitingInlineActions compact nodeRunId={nodeRunId} runId={runId ?? null} />
     </div>
   );
 }

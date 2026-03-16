@@ -63,6 +63,8 @@ def cleanup_stale_run_callback_tickets(
         resume_source=payload.source,
         limit=payload.limit,
         dry_run=payload.dry_run,
+        run_id=payload.run_id,
+        node_run_id=payload.node_run_id,
     )
     if not payload.dry_run:
         db.commit()

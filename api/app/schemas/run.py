@@ -27,6 +27,8 @@ class CallbackTicketCleanupRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=1000)
     dry_run: bool = False
     schedule_resumes: bool = True
+    run_id: str | None = Field(default=None, min_length=1, max_length=255)
+    node_run_id: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class CallbackTicketCleanupItem(BaseModel):

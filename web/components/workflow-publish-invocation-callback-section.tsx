@@ -98,6 +98,8 @@ export function WorkflowPublishInvocationCallbackSection({
         scheduledResumeSource={waitingLifecycle?.scheduled_resume_source}
         scheduledWaitingStatus={waitingLifecycle?.scheduled_waiting_status}
         inboxHref={inboxHref}
+        runId={invocation.run_id ?? null}
+        nodeRunId={waitingLifecycle?.node_run_id ?? null}
       />
       {(headline || chips.length > 0 || latestTicket || latestLateCallback || approvalSummary) ? (
         <div className="publish-meta-grid">

@@ -14,7 +14,7 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
-export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
+export function ExecutionNodeCard({ node, runId }: { node: RunExecutionNodeItem; runId: string }) {
   const latestApprovalEntry = node.sensitive_access_entries.find((entry) => entry.approval_ticket);
   const inboxHref =
     node.sensitive_access_entries.length > 0 || node.callback_tickets.length > 0
@@ -82,6 +82,8 @@ export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
         sensitiveAccessEntries={node.sensitive_access_entries}
         waitingReason={node.waiting_reason}
         inboxHref={inboxHref}
+        runId={runId}
+        nodeRunId={node.node_run_id}
       />
 
       <MetricChipRow

@@ -115,6 +115,8 @@ class RunCallbackTicketService:
         *,
         now: datetime | None = None,
         limit: int | None = None,
+        run_id: str | None = None,
+        node_run_id: str | None = None,
     ) -> list[RunCallbackTicket]:
         effective_now = _normalize_datetime(now or _utcnow())
         statement = (
@@ -129,6 +131,10 @@ class RunCallbackTicketService:
                 RunCallbackTicket.created_at.asc(),
             )
         )
+        if run_id:
+            statement = statement.where(RunCallbackTicket.run_id == run_id)
+        if node_run_id:
+            statement = statement.where(RunCallbackTicket.node_run_id == node_run_id)
         if limit is not None:
             statement = statement.limit(max(int(limit), 1))
         return db.scalars(statement).all()

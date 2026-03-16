@@ -68,7 +68,7 @@ export function RunDiagnosticsExecutionSections({
           ) : (
             <div className="timeline-list">
               {executionView.nodes.map((node) => (
-                <ExecutionNodeCard key={node.node_run_id} node={node} />
+                <ExecutionNodeCard key={node.node_run_id} node={node} runId={executionView.run_id} />
               ))}
             </div>
           )}
