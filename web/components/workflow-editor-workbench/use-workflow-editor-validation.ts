@@ -33,6 +33,7 @@ const PREFLIGHT_CATEGORY_LABELS: Record<string, string> = {
   tool_execution: "tool execution",
   publish_identity: "publish identity",
   publish_version: "publish version",
+  starter_portability: "starter portability",
   variables: "variables"
 };
 

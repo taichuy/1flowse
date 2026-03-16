@@ -127,6 +127,24 @@ def _invalid_publish_identity_definition() -> dict:
     return definition
 
 
+def _non_portable_publish_version_definition() -> dict:
+    definition = _valid_definition()
+    definition["publish"] = [
+        {
+            "id": "starter-api",
+            "name": "Starter API",
+            "alias": "starter.chat",
+            "path": "/starter/chat",
+            "protocol": "native",
+            "workflowVersion": "0.1.0",
+            "authMode": "internal",
+            "streaming": False,
+            "inputSchema": {"type": "object"},
+        }
+    ]
+    return definition
+
+
 def test_workspace_starter_create_rejects_unsupported_agent_tool_execution(
     client: TestClient,
 ) -> None:
@@ -231,6 +249,33 @@ def test_workspace_starter_create_rejects_duplicate_publish_identities(
     assert any(issue.get("path") == "publish.1.alias" for issue in issues)
 
 
+def test_workspace_starter_create_rejects_non_portable_publish_version_pins(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Pinned Publish Version Starter",
+            "description": "Should reject publish workflowVersion pins in starter snapshots",
+            "business_track": "API 调用开放",
+            "default_workflow_name": "Pinned Publish Version Workflow",
+            "workflow_focus": "Starter portability validation",
+            "recommended_next_step": "Clear workflowVersion before saving starter",
+            "tags": ["publish", "starter"],
+            "definition": _non_portable_publish_version_definition(),
+            "created_from_workflow_id": "wf-demo",
+            "created_from_workflow_version": "0.1.0",
+        },
+    )
+
+    assert response.status_code == 422
+    message, issues = _validation_detail(response.json())
+    assert "not portable for starter reuse" in message
+    assert any(issue["category"] == "starter_portability" for issue in issues)
+    assert any(issue.get("path") == "publish.0.workflowVersion" for issue in issues)
+
+
 def test_workspace_starter_list_supports_filters_and_search(client: TestClient) -> None:
     app_template = _create_workspace_starter(
         client,
@@ -332,6 +377,28 @@ def test_workspace_starter_update_rejects_unavailable_persisted_nodes(
     assert "not currently available for persistence" in message
     assert "loop" in message
     assert any(issue["category"] == "node_support" for issue in issues)
+
+
+def test_workspace_starter_update_rejects_non_portable_publish_version_pins(
+    client: TestClient,
+) -> None:
+    created = _create_workspace_starter(
+        client,
+        name="Portable Starter",
+        business_track="API 调用开放",
+        description="Template for invalid publish pin update",
+    )
+
+    response = client.put(
+        f"/api/workspace-starters/{created['id']}",
+        json={"definition": _non_portable_publish_version_definition()},
+    )
+
+    assert response.status_code == 422
+    message, issues = _validation_detail(response.json())
+    assert "not portable for starter reuse" in message
+    assert any(issue["category"] == "starter_portability" for issue in issues)
+    assert any(issue.get("path") == "publish.0.workflowVersion" for issue in issues)
 
 
 def test_workspace_starter_create_rejects_unavailable_persisted_nodes(
