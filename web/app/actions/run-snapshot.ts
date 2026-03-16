@@ -6,6 +6,11 @@ export type RunSnapshot = {
   waitingReason?: string | null;
 };
 
+export type RunSnapshotWithId = {
+  runId: string;
+  snapshot: RunSnapshot | null;
+};
+
 type RunDetailResponseBody = {
   status?: string;
   current_node_id?: string | null;
@@ -49,4 +54,21 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
   } catch {
     return null;
   }
+}
+
+export async function fetchRunSnapshots(
+  runIds: Array<string | null | undefined>,
+  limit = 3
+): Promise<RunSnapshotWithId[]> {
+  const normalizedRunIds = [...new Set(runIds.map((item) => item?.trim()).filter(Boolean))].slice(
+    0,
+    Math.max(limit, 0)
+  ) as string[];
+
+  return Promise.all(
+    normalizedRunIds.map(async (runId) => ({
+      runId,
+      snapshot: await fetchRunSnapshot(runId)
+    }))
+  );
 }

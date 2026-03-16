@@ -22,6 +22,16 @@ type CleanupRunCallbackTicketsSummary = {
   runSnapshot?: RunSnapshotInput | null;
 };
 
+type BulkRunSnapshotSample = {
+  runId: string;
+  snapshot: RunSnapshotInput | null;
+};
+
+type BulkOperatorFollowUpInput = {
+  affectedRunCount: number;
+  sampledRuns: BulkRunSnapshotSample[];
+};
+
 function joinParts(parts: Array<string | null | undefined>) {
   return parts.filter((part): part is string => Boolean(part && part.trim())).join(" ");
 }
@@ -36,6 +46,46 @@ function formatRunSnapshot({ status, currentNodeId, waitingReason }: RunSnapshot
     `当前 run 状态：${normalizedStatus}。`,
     currentNodeId ? `当前节点：${currentNodeId}。` : null,
     waitingReason ? `waiting reason：${waitingReason}。` : null
+  ]);
+}
+
+function formatBulkRunFollowUp({
+  affectedRunCount,
+  sampledRuns
+}: BulkOperatorFollowUpInput) {
+  if (affectedRunCount <= 0) {
+    return null;
+  }
+
+  const statusCounts = new Map<string, number>();
+  for (const item of sampledRuns) {
+    const status = item.snapshot?.status?.trim() || "unknown";
+    statusCounts.set(status, (statusCounts.get(status) ?? 0) + 1);
+  }
+
+  const statusSummary = Array.from(statusCounts.entries())
+    .map(([status, count]) => `${status} ${count}`)
+    .join("、");
+
+  const sampleSummary = sampledRuns
+    .map(({ runId, snapshot }) => {
+      const shortRunId = runId.slice(0, 8);
+      const snapshotSummary = formatRunSnapshot(snapshot ?? {});
+      return snapshotSummary
+        ? `run ${shortRunId}：${snapshotSummary}`
+        : `run ${shortRunId}：暂未读取到最新快照。`;
+    })
+    .join(" ");
+
+  const sampledCount = sampledRuns.length;
+  return joinParts([
+    sampledCount > 0
+      ? `本次影响 ${affectedRunCount} 个 run；已回读 ${sampledCount} 个样本，当前状态分布：${statusSummary || "unknown"}。`
+      : `本次影响 ${affectedRunCount} 个 run；当前还未读取到可用的 run 快照。`,
+    sampleSummary,
+    affectedRunCount > sampledCount
+      ? `其余 ${affectedRunCount - sampledCount} 个 run 可继续到对应 run detail / inbox slice 查看后续推进。`
+      : null
   ]);
 }
 
@@ -201,5 +251,41 @@ export function formatNotificationRetryResultMessage(input: {
     "通知已触发重试，请继续回看最新通知状态与审批结果，确认阻塞是否真正解除。",
     input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null,
     runSnapshotSummary
+  ]);
+}
+
+export function formatBulkApprovalDecisionResultMessage(input: {
+  decision: "approved" | "rejected";
+  updatedCount: number;
+  skippedCount: number;
+  skippedSummary?: string | null;
+  affectedRunCount: number;
+  sampledRuns: BulkRunSnapshotSample[];
+}) {
+  const actionLabel = input.decision === "approved" ? "批准" : "拒绝";
+  return joinParts([
+    `批量${actionLabel} ${input.updatedCount} 条票据，跳过 ${input.skippedCount} 条。`,
+    input.skippedSummary ?? null,
+    formatBulkRunFollowUp({
+      affectedRunCount: input.affectedRunCount,
+      sampledRuns: input.sampledRuns
+    })
+  ]);
+}
+
+export function formatBulkNotificationRetryResultMessage(input: {
+  updatedCount: number;
+  skippedCount: number;
+  skippedSummary?: string | null;
+  affectedRunCount: number;
+  sampledRuns: BulkRunSnapshotSample[];
+}) {
+  return joinParts([
+    `批量重试 ${input.updatedCount} 条通知，跳过 ${input.skippedCount} 条。`,
+    input.skippedSummary ?? null,
+    formatBulkRunFollowUp({
+      affectedRunCount: input.affectedRunCount,
+      sampledRuns: input.sampledRuns
+    })
   ]);
 }

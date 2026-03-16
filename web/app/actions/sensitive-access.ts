@@ -9,11 +9,13 @@ import type {
   SensitiveAccessBulkSkipSummary
 } from "@/lib/get-sensitive-access";
 import {
+  formatBulkApprovalDecisionResultMessage,
+  formatBulkNotificationRetryResultMessage,
   formatApprovalDecisionResultMessage,
   formatNotificationRetryResultMessage
 } from "@/lib/operator-action-result-presenters";
 
-import { fetchRunSnapshot } from "./run-snapshot";
+import { fetchRunSnapshot, fetchRunSnapshots } from "./run-snapshot";
 
 export type DecideSensitiveAccessApprovalTicketState = {
   status: "idle" | "success" | "error";
@@ -78,10 +80,10 @@ type NotificationDispatchBulkRetryResponseBody = {
 
 function buildBulkSkipSummaryMessage(summary: SensitiveAccessBulkSkipSummary[]) {
   if (summary.length === 0) {
-    return "";
+    return null;
   }
 
-  return ` 跳过原因：${summary.map((item) => `${item.reason} ${item.count}`).join("、")}。`;
+  return `跳过原因：${summary.map((item) => `${item.reason} ${item.count}`).join("、")}。`;
 }
 
 function revalidateSensitiveAccessPaths(runIds: Array<string | null | undefined>) {
@@ -287,12 +289,20 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
     const updatedCount = body?.decided_count ?? 0;
     const skippedCount = body?.skipped_count ?? 0;
     const skippedReasonSummary = body?.skipped_reason_summary ?? [];
-    const actionLabel = input.status === "approved" ? "批准" : "拒绝";
+    const affectedRunIds = body?.decided_items?.map((item) => item.run_id) ?? [];
+    const sampledRuns = await fetchRunSnapshots(affectedRunIds);
 
     return {
       action: input.status,
       status: "success",
-      message: `批量${actionLabel} ${updatedCount} 条票据，跳过 ${skippedCount} 条。${buildBulkSkipSummaryMessage(skippedReasonSummary)}`.trim(),
+      message: formatBulkApprovalDecisionResultMessage({
+        decision: input.status,
+        updatedCount,
+        skippedCount,
+        skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
+        affectedRunCount: [...new Set(affectedRunIds.map((item) => item?.trim()).filter(Boolean))].length,
+        sampledRuns
+      }),
       requestedCount: body?.requested_count ?? ticketIds.length,
       updatedCount,
       skippedCount,
@@ -361,11 +371,19 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
     const updatedCount = body?.retried_count ?? 0;
     const skippedCount = body?.skipped_count ?? 0;
     const skippedReasonSummary = body?.skipped_reason_summary ?? [];
+    const affectedRunIds = body?.retried_items?.map((item) => item.approval_ticket.run_id) ?? [];
+    const sampledRuns = await fetchRunSnapshots(affectedRunIds);
 
     return {
       action: "retry",
       status: "success",
-      message: `批量重试 ${updatedCount} 条通知，跳过 ${skippedCount} 条。${buildBulkSkipSummaryMessage(skippedReasonSummary)}`.trim(),
+      message: formatBulkNotificationRetryResultMessage({
+        updatedCount,
+        skippedCount,
+        skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
+        affectedRunCount: [...new Set(affectedRunIds.map((item) => item?.trim()).filter(Boolean))].length,
+        sampledRuns
+      }),
       requestedCount: body?.requested_count ?? dispatchIds.length,
       updatedCount,
       skippedCount,
