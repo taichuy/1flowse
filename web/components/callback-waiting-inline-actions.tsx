@@ -8,6 +8,10 @@ import {
   type CleanupRunCallbackTicketsState
 } from "@/app/actions/callback-tickets";
 import { resumeRun, type ResumeRunState } from "@/app/actions/runs";
+import {
+  getCleanupExpectationCopy,
+  getManualResumeExpectationCopy
+} from "@/lib/operator-action-result-presenters";
 
 type CallbackWaitingInlineActionsProps = {
   runId: string | null;
@@ -62,7 +66,7 @@ export function CallbackWaitingInlineActions({
           立即尝试恢复
         </button>
       </div>
-      <p className="empty-state compact">适用于审批已处理后立即重试，避免只依赖定时恢复。</p>
+      <p className="empty-state compact">{getManualResumeExpectationCopy()}</p>
       {resumeState.message && resumeState.runId === runId ? (
         <p className={`sync-message ${resumeState.status}`}>{resumeState.message}</p>
       ) : null}
@@ -78,9 +82,7 @@ export function CallbackWaitingInlineActions({
           处理过期 ticket 并尝试恢复
         </button>
       </div>
-      <p className="empty-state compact">
-        仅处理当前 run / node slice 下已过期的 callback ticket，不会扫全局批次。
-      </p>
+      <p className="empty-state compact">{getCleanupExpectationCopy()}</p>
       {cleanupState.message && cleanupState.scopeKey === scopeKey ? (
         <p className={`sync-message ${cleanupState.status}`}>{cleanupState.message}</p>
       ) : null}

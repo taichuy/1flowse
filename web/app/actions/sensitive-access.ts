@@ -8,6 +8,10 @@ import type {
   SensitiveAccessBulkActionResult,
   SensitiveAccessBulkSkipSummary
 } from "@/lib/get-sensitive-access";
+import {
+  formatApprovalDecisionResultMessage,
+  formatNotificationRetryResultMessage
+} from "@/lib/operator-action-result-presenters";
 
 export type DecideSensitiveAccessApprovalTicketState = {
   status: "idle" | "success" | "error";
@@ -111,10 +115,7 @@ export async function decideSensitiveAccessApprovalTicket(
 
     return {
       status: "success",
-      message:
-        decision === "approved"
-          ? "审批已通过，等待中的执行会按主链继续恢复。"
-          : "审批已拒绝，对应等待中的执行将保持阻断/失败语义。",
+      message: formatApprovalDecisionResultMessage(decision as "approved" | "rejected"),
       ticketId
     };
   } catch {
@@ -186,12 +187,11 @@ export async function retrySensitiveAccessNotificationDispatch(
 
     return {
       status: "success",
-      message:
-        body?.notification?.status === "delivered"
-          ? `通知已重新投递到 ${effectiveTarget || "当前目标"}。`
-          : body?.notification?.status === "pending"
-            ? `通知已按 ${effectiveTarget || "当前目标"} 重新入队，等待 worker 投递。`
-            : body?.notification?.error ?? "通知已重试，但当前通道仍未成功投递。",
+      message: formatNotificationRetryResultMessage({
+        status: body?.notification?.status,
+        error: body?.notification?.error,
+        target: effectiveTarget
+      }),
       dispatchId,
       target: effectiveTarget
     };

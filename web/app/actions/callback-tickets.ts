@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { formatCleanupResultMessage } from "@/lib/operator-action-result-presenters";
 
 export type CleanupRunCallbackTicketsState = {
   status: "idle" | "success" | "error";
@@ -80,10 +81,12 @@ export async function cleanupRunCallbackTickets(
 
     return {
       status: "success",
-      message:
-        matchedCount === 0
-          ? "当前 slice 没有发现已过期的 callback ticket。"
-          : `已处理 ${expiredCount} 条过期 ticket，安排 ${scheduledResumeCount} 次恢复，终止 ${terminatedCount} 条等待链路。`,
+      message: formatCleanupResultMessage({
+        matchedCount,
+        expiredCount,
+        scheduledResumeCount,
+        terminatedCount
+      }),
       scopeKey
     };
   } catch {

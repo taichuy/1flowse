@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { formatManualResumeResultMessage } from "@/lib/operator-action-result-presenters";
 
 export type ResumeRunState = {
   status: "idle" | "success" | "error";
@@ -61,7 +62,7 @@ export async function resumeRun(
 
     return {
       status: "success",
-      message: `已发起恢复尝试，当前 run 状态：${body?.status ?? "unknown"}。`,
+      message: formatManualResumeResultMessage(body?.status),
       runId
     };
   } catch {

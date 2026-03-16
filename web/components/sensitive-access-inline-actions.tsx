@@ -10,6 +10,10 @@ import {
   type DecideSensitiveAccessApprovalTicketState,
   type RetrySensitiveAccessNotificationDispatchState
 } from "@/app/actions/sensitive-access";
+import {
+  getApprovalExpectationCopy,
+  getNotificationRetryExpectationCopy
+} from "@/lib/operator-action-result-presenters";
 
 export const DEFAULT_INLINE_OPERATOR_ID = "studio-operator";
 
@@ -147,6 +151,7 @@ export function SensitiveAccessInlineActions({
             <DecisionSubmitButton label="批准并恢复" value="approved" />
             <DecisionSubmitButton label="拒绝访问" value="rejected" variant="secondary" />
           </div>
+          <p className="empty-state compact">{getApprovalExpectationCopy()}</p>
           {decisionState.message && decisionState.ticketId === ticket?.id ? (
             <p className={`sync-message ${decisionState.status}`}>{decisionState.message}</p>
           ) : null}
@@ -187,6 +192,7 @@ export function SensitiveAccessInlineActions({
           {retriableNotification.error ? (
             <p className="empty-state compact">{retriableNotification.error}</p>
           ) : null}
+          <p className="empty-state compact">{getNotificationRetryExpectationCopy()}</p>
           {retryState.message && retryState.dispatchId === retriableNotification.id ? (
             <p className={`sync-message ${retryState.status}`}>{retryState.message}</p>
           ) : null}
