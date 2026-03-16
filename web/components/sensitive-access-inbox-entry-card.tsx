@@ -46,7 +46,8 @@ const initialDecisionState: DecideSensitiveAccessApprovalTicketState = {
 const initialRetryState: RetrySensitiveAccessNotificationDispatchState = {
   status: "idle",
   message: "",
-  dispatchId: ""
+  dispatchId: "",
+  target: ""
 };
 
 function DecisionSubmitButton({
@@ -128,9 +129,20 @@ function SensitiveAccessNotificationRetryForm({
     <form action={formAction} className="inbox-decision-form">
       <input type="hidden" name="dispatchId" value={notification.id} />
       <input type="hidden" name="runId" value={entry.ticket.run_id ?? ""} />
+      <label className="status-meta" htmlFor={`notificationTarget-${notification.id}`}>
+        Notification target
+      </label>
+      <input
+        className="inbox-operator-input"
+        defaultValue={notification.target}
+        id={`notificationTarget-${notification.id}`}
+        name="target"
+        placeholder="输入新的通知目标；留空则沿用当前目标"
+        type="text"
+      />
       <div className="binding-actions">
         <button className="action-link-button" type="submit">
-          重试最新通知
+          改派目标并重试
         </button>
       </div>
       {notification.error ? <p className="empty-state compact">{notification.error}</p> : null}

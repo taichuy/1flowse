@@ -42,7 +42,8 @@ const initialDecisionState: DecideSensitiveAccessApprovalTicketState = {
 const initialRetryState: RetrySensitiveAccessNotificationDispatchState = {
   status: "idle",
   message: "",
-  dispatchId: ""
+  dispatchId: "",
+  target: ""
 };
 
 function isPendingWaitingTicket(ticket?: InlineApprovalTicket | null) {
@@ -154,6 +155,7 @@ export function SensitiveAccessInlineActions({
         <form action={retryAction} className="inbox-decision-form">
           <input type="hidden" name="dispatchId" value={retriableNotification.id} />
           <input type="hidden" name="runId" value={runId ?? ""} />
+          <input type="hidden" name="target" value="" />
           <div className="binding-actions">
             <button className="action-link-button" type="submit">
               重试最新通知

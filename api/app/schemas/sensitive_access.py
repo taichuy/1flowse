@@ -149,6 +149,17 @@ class NotificationDispatchRetryResponse(BaseModel):
     notification: NotificationDispatchItem
 
 
+class NotificationDispatchRetryRequest(BaseModel):
+    target: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def normalize_target(self) -> "NotificationDispatchRetryRequest":
+        if self.target is not None:
+            normalized = self.target.strip()
+            self.target = normalized or None
+        return self
+
+
 class SensitiveAccessTimelineEntryItem(BaseModel):
     request: SensitiveAccessRequestItem
     resource: SensitiveResourceItem

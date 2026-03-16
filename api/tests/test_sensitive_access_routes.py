@@ -603,6 +603,92 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
     assert retried_notification.status == "pending"
 
 
+def test_retry_notification_dispatch_allows_target_override(
+    client: TestClient,
+    sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    scheduled_dispatches = []
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+            notification_dispatch_scheduler=NotificationDispatchScheduler(
+                dispatcher=scheduled_dispatches.append
+            ),
+            settings=Settings(
+                notification_email_smtp_host="smtp.example.test",
+                notification_email_smtp_port=2525,
+                notification_email_from_address="noreply@example.test",
+            ),
+        ),
+    )
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Publish approval export",
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"binding_id": "binding-target-override"},
+        },
+    )
+    resource_id = resource_response.json()["id"]
+
+    request_response = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "requester_type": "ai",
+            "requester_id": "assistant-target-override",
+            "resource_id": resource_id,
+            "action_type": "read",
+            "purpose_text": "retarget notification",
+            "notification_channel": "email",
+            "notification_target": "ops-old@example.com",
+        },
+    )
+
+    assert request_response.status_code == 201
+    request_body = request_response.json()
+    approval_ticket = request_body["approval_ticket"]
+    first_notification = request_body["notifications"][0]
+    assert first_notification["status"] == "pending"
+
+    retry_response = client.post(
+        f"/api/sensitive-access/notification-dispatches/{first_notification['id']}/retry",
+        json={"target": "ops-new@example.com"},
+    )
+
+    assert retry_response.status_code == 200
+    retry_body = retry_response.json()
+    retried_notification = retry_body["notification"]
+    assert retry_body["approval_ticket"]["id"] == approval_ticket["id"]
+    assert retried_notification["id"] != first_notification["id"]
+    assert retried_notification["target"] == "ops-new@example.com"
+    assert retried_notification["status"] == "pending"
+
+    assert len(scheduled_dispatches) == 2
+    assert scheduled_dispatches[1].dispatch_id == retried_notification["id"]
+
+    notifications = (
+        sqlite_session.query(NotificationDispatchRecord)
+        .filter(NotificationDispatchRecord.approval_ticket_id == approval_ticket["id"])
+        .all()
+    )
+    assert len(notifications) == 2
+    original_notification = next(
+        item for item in notifications if item.id == first_notification["id"]
+    )
+    latest_notification = next(
+        item for item in notifications if item.id == retried_notification["id"]
+    )
+    assert original_notification.target == "ops-old@example.com"
+    assert original_notification.status == "failed"
+    assert latest_notification.target == "ops-new@example.com"
+    assert latest_notification.status == "pending"
+
+
 def test_sensitive_access_listing_filters_support_node_and_ticket_scopes(
     client: TestClient,
     sqlite_session: Session,

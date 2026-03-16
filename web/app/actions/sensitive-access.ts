@@ -19,6 +19,7 @@ export type RetrySensitiveAccessNotificationDispatchState = {
   status: "idle" | "success" | "error";
   message: string;
   dispatchId: string;
+  target: string;
 };
 
 type ApprovalTicketBulkDecisionResponseBody = {
@@ -131,12 +132,14 @@ export async function retrySensitiveAccessNotificationDispatch(
 ): Promise<RetrySensitiveAccessNotificationDispatchState> {
   const dispatchId = String(formData.get("dispatchId") ?? "").trim();
   const runId = String(formData.get("runId") ?? "").trim();
+  const target = String(formData.get("target") ?? "").trim();
 
   if (!dispatchId) {
     return {
       status: "error",
       message: "缺少通知重试所需的 dispatch 标识。",
-      dispatchId
+      dispatchId,
+      target
     };
   }
 
@@ -145,6 +148,12 @@ export async function retrySensitiveAccessNotificationDispatch(
       `${getApiBaseUrl()}/api/sensitive-access/notification-dispatches/${encodeURIComponent(dispatchId)}/retry`,
       {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          target: target || null
+        }),
         cache: "no-store"
       }
     );
@@ -155,6 +164,7 @@ export async function retrySensitiveAccessNotificationDispatch(
           notification?: {
             status?: "pending" | "delivered" | "failed";
             error?: string | null;
+            target?: string | null;
           };
         }
       | null;
@@ -163,27 +173,34 @@ export async function retrySensitiveAccessNotificationDispatch(
       return {
         status: "error",
         message: body?.detail ?? "通知重试失败。",
-        dispatchId
+        dispatchId,
+        target
       };
     }
 
     revalidateSensitiveAccessPaths([runId]);
+    const effectiveTarget =
+      typeof body?.notification?.target === "string" && body.notification.target.trim().length > 0
+        ? body.notification.target.trim()
+        : target;
 
     return {
       status: "success",
       message:
         body?.notification?.status === "delivered"
-          ? "通知已重新投递到收件箱。"
+          ? `通知已重新投递到 ${effectiveTarget || "当前目标"}。`
           : body?.notification?.status === "pending"
-            ? "通知已重新入队，等待 worker 投递。"
+            ? `通知已按 ${effectiveTarget || "当前目标"} 重新入队，等待 worker 投递。`
             : body?.notification?.error ?? "通知已重试，但当前通道仍未成功投递。",
-      dispatchId
+      dispatchId,
+      target: effectiveTarget
     };
   } catch {
     return {
       status: "error",
       message: "无法连接后端执行通知重试。",
-      dispatchId
+      dispatchId,
+      target
     };
   }
 }

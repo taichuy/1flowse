@@ -430,6 +430,7 @@ class SensitiveAccessControlService:
         db: Session,
         *,
         dispatch_id: str,
+        target_override: str | None = None,
     ) -> NotificationDispatchRetryBundle:
         notification = db.get(NotificationDispatchRecord, dispatch_id)
         if notification is None:
@@ -461,7 +462,7 @@ class SensitiveAccessControlService:
         retried_notification = self._create_notification_dispatch(
             approval_ticket_id=approval_ticket.id,
             channel=notification.channel,
-            target=notification.target,
+            target=target_override or notification.target,
         )
         if notification.status == "pending":
             notification.status = "failed"

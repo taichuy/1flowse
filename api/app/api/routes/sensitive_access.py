@@ -19,6 +19,7 @@ from app.schemas.sensitive_access import (
     NotificationDispatchBulkSkippedItem,
     NotificationDispatchBulkSkippedSummary,
     NotificationDispatchItem,
+    NotificationDispatchRetryRequest,
     NotificationDispatchRetryResponse,
     SensitiveAccessRequestCreateRequest,
     SensitiveAccessRequestItem,
@@ -382,12 +383,14 @@ def list_notification_dispatches(
 )
 def retry_notification_dispatch(
     dispatch_id: str,
+    payload: NotificationDispatchRetryRequest | None = None,
     db: Session = Depends(get_db),
 ) -> NotificationDispatchRetryResponse:
     try:
         bundle = service.retry_notification_dispatch(
             db,
             dispatch_id=dispatch_id,
+            target_override=payload.target if payload is not None else None,
         )
     except SensitiveAccessControlError as exc:
         _raise_sensitive_access_error(exc)
