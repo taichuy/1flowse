@@ -3,14 +3,18 @@ import type {
   PluginToolRegistryItem
 } from "@/lib/get-plugin-registry";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
+import {
+  buildExecutionCapabilityIssue,
+  extractExplicitExecutionClass,
+  isAdapterVisible,
+  validateExplicitAdapterBinding
+} from "@/lib/workflow-tool-execution-validation-helpers";
+import type {
+  WorkflowToolExecutionValidationContext,
+  WorkflowToolExecutionValidationIssue
+} from "@/lib/workflow-tool-execution-validation-types";
 
-export type WorkflowToolExecutionValidationIssue = {
-  nodeId: string;
-  nodeName: string;
-  message: string;
-  path: string;
-  field: string;
-};
+export type { WorkflowToolExecutionValidationIssue } from "@/lib/workflow-tool-execution-validation-types";
 
 export function buildWorkflowToolExecutionValidationIssues(
   definition: WorkflowDefinition,
@@ -81,14 +85,8 @@ function buildToolNodeExecutionIssues({
   config,
   toolIndex,
   adapters
-}: {
+}: WorkflowToolExecutionValidationContext & {
   node: { runtimePolicy?: unknown };
-  nodeId: string;
-  nodeName: string;
-  nodeIndex: number;
-  config: Record<string, unknown>;
-  toolIndex: Map<string, PluginToolRegistryItem>;
-  adapters: PluginAdapterRegistryItem[];
 }): WorkflowToolExecutionValidationIssue[] {
   const binding = toRecord(config.tool);
   const toolId = normalizeString(binding?.toolId ?? config.toolId);
@@ -155,14 +153,7 @@ function buildAgentExecutionIssues({
   config,
   toolIndex,
   adapters
-}: {
-  nodeId: string;
-  nodeName: string;
-  nodeIndex: number;
-  config: Record<string, unknown>;
-  toolIndex: Map<string, PluginToolRegistryItem>;
-  adapters: PluginAdapterRegistryItem[];
-}): WorkflowToolExecutionValidationIssue[] {
+}: WorkflowToolExecutionValidationContext): WorkflowToolExecutionValidationIssue[] {
   const issues: WorkflowToolExecutionValidationIssue[] = [];
   const toolPolicy = toRecord(config.toolPolicy);
   const mockPlan = toRecord(config.mockPlan);
@@ -263,164 +254,6 @@ function buildAgentExecutionIssues({
   }
 
   return issues;
-}
-
-function validateExplicitAdapterBinding({
-  context,
-  toolId,
-  ecosystem,
-  adapterId,
-  adapters,
-  path,
-  field,
-  nodeId,
-  nodeName
-}: {
-  context: string;
-  toolId: string;
-  ecosystem: string;
-  adapterId: string;
-  adapters: PluginAdapterRegistryItem[];
-  path: string;
-  field: string;
-  nodeId: string;
-  nodeName: string;
-}): WorkflowToolExecutionValidationIssue | null {
-  const adapter = adapters.find((item) => item.id === adapterId);
-  if (!adapter) {
-    return {
-      nodeId,
-      nodeName,
-      message: `${context} 绑定了 adapter ${adapterId}，但当前 workspace 看不到这个 adapter，工具 ${toolId} 无法按该绑定执行。`,
-      path,
-      field
-    };
-  }
-  if (adapter.ecosystem !== ecosystem) {
-    return {
-      nodeId,
-      nodeName,
-      message: `${context} 绑定的 adapter ${adapterId} 服务于 ${adapter.ecosystem}，与工具 ${toolId} 需要的 ${ecosystem} 不一致。`,
-      path,
-      field
-    };
-  }
-  if (!adapter.enabled) {
-    return {
-      nodeId,
-      nodeName,
-      message: `${context} 绑定的 adapter ${adapterId} 当前已禁用，工具 ${toolId} 不能按该绑定执行。`,
-      path,
-      field
-    };
-  }
-  return null;
-}
-
-function buildExecutionCapabilityIssue({
-  context,
-  nodeId,
-  nodeName,
-  toolId,
-  tool,
-  ecosystem,
-  adapterId,
-  requestedExecutionClass,
-  adapters,
-  path,
-  field
-}: {
-  context: string;
-  nodeId: string;
-  nodeName: string;
-  toolId: string;
-  tool: PluginToolRegistryItem;
-  ecosystem: string | null;
-  adapterId: string | null;
-  requestedExecutionClass: string;
-  adapters: PluginAdapterRegistryItem[];
-  path: string;
-  field: string;
-}): WorkflowToolExecutionValidationIssue | null {
-  if (tool.ecosystem === "native") {
-    if (requestedExecutionClass === "inline") {
-      return null;
-    }
-    return {
-      nodeId,
-      nodeName,
-      message: `${context} 显式请求了 ${requestedExecutionClass}，但原生工具 ${toolId} 当前只支持 inline。`,
-      path,
-      field
-    };
-  }
-
-  const resolvedEcosystem = ecosystem ?? tool.ecosystem;
-  if (resolvedEcosystem !== tool.ecosystem) {
-    return null;
-  }
-
-  const adapter = resolveAdapterForExecution({
-    ecosystem: resolvedEcosystem,
-    adapterId,
-    adapters
-  });
-  if (!adapter) {
-    return {
-      nodeId,
-      nodeName,
-      message: `${context} 显式请求了 ${requestedExecutionClass}，但当前没有可用 adapter 能为 ${toolId} 提供 ${resolvedEcosystem} 执行入口。`,
-      path,
-      field
-    };
-  }
-
-  const supportedExecutionClasses = adapter.supported_execution_classes?.length
-    ? adapter.supported_execution_classes
-    : ["subprocess"];
-  if (supportedExecutionClasses.includes(requestedExecutionClass)) {
-    return null;
-  }
-
-  return {
-    nodeId,
-    nodeName,
-    message: `${context} 显式请求了 ${requestedExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
-      ", "
-    )}。`,
-    path,
-    field
-  };
-}
-
-function resolveAdapterForExecution({
-  ecosystem,
-  adapterId,
-  adapters
-}: {
-  ecosystem: string;
-  adapterId: string | null;
-  adapters: PluginAdapterRegistryItem[];
-}) {
-  if (adapterId) {
-    return adapters.find(
-      (adapter) => adapter.id === adapterId && adapter.enabled && adapter.ecosystem === ecosystem
-    );
-  }
-
-  return adapters.find((adapter) => adapter.enabled && adapter.ecosystem === ecosystem) ?? null;
-}
-
-function extractExplicitExecutionClass(value: unknown) {
-  const record = toRecord(value);
-  return normalizeString(record?.class);
-}
-
-function isAdapterVisible(adapter: PluginAdapterRegistryItem, workspaceId: string) {
-  if (!Array.isArray(adapter.workspace_ids) || adapter.workspace_ids.length === 0) {
-    return true;
-  }
-  return adapter.workspace_ids.includes(workspaceId);
 }
 
 function normalizeString(value: unknown) {

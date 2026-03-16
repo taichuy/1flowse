@@ -1,4 +1,4 @@
-# Runtime Foundation
+﻿# Runtime Foundation
 
 ## 文档定位
 
@@ -138,6 +138,7 @@
 - `api/app/services/workflow_library.py` 已在 2026-03-15 拆到约 220 行，当前主要保留 snapshot、workspace starter 读取和 tool visibility orchestration；新增 `api/app/services/workflow_library_catalog.py`（约 474 行）承接 builtin starter、node catalog、source lane 与 blueprint 默认值拼装，当前不再是稳定性阻塞项，但若继续补 ecosystem starter / source governance，可继续沿 source/helper 分层演进。
 - `api/app/services/plugin_runtime.py` 已在 2026-03-15 拆成 facade + `plugin_runtime_proxy.py` / `plugin_runtime_adapter_clients.py` / `plugin_runtime_registry.py` / `plugin_runtime_types.py`；2026-03-16 又把 `plugin_runtime_proxy.py` 继续拆到约 157 行，并新增 `plugin_execution_dispatch.py`（约 120 行）与 `plugin_execution_contract.py`（约 210 行）承接 execution planning 与 constrained-ir contract 绑定。compat/runtime 侧已不再被单文件耦合阻塞；后续若继续补 adapter lifecycle、workspace scoping、catalog/store hydration 或健康探测聚合，应沿现有模块边界扩展，而不是把职责重新堆回 facade/proxy。
 - `web/lib/get-workflow-publish.ts` 已在 2026-03-16 从约 501 行降到 2 行，现通过 `web/lib/workflow-publish-types.ts`（约 300 行）与 `web/lib/workflow-publish-client.ts`（约 210 行）拆开共享类型定义与查询 fetcher，同时保留原 barrel export 兼容现有 import。publish 查询层不再被单文件聚合阻塞；下一步应继续把 publish detail / governance 的展示聚合逻辑从组件壳层抽到 presenter / section helper，而不是重新把 detail/list/export 逻辑堆回读取层。
+- web/lib/workflow-tool-execution-validation.ts 已在 2026-03-16 从约 434 行降到约 254 行，新增 web/lib/workflow-tool-execution-validation-types.ts 与 web/lib/workflow-tool-execution-validation-helpers.ts，把 issue type、adapter/execution helper 与 orchestrator 解耦，同时保持 uildWorkflowToolExecutionValidationIssues 的对外入口不变。editor 的 tool execution preflight 不再被单文件结构阻塞；下一步可继续把更细的 execution-aware explanation / structured hint 沿 helper 边界下沉，而不是把新增判断重新堆回主文件。
 - `api/app/services/agent_runtime_llm_support.py` 已在 2026-03-16 收口为 86 行 facade；原先 plan / assistant / finalize+delta 三段职责分别下沉到 `agent_runtime_llm_plan.py`（120 行）、`agent_runtime_llm_assistant.py`（176 行）和 `agent_runtime_llm_finalize.py`（252 行）。当前 `llm_agent` 已不再受单文件热点阻塞；若后续继续补 provider-specific streaming、usage accounting 或 finalize fallback，可优先在 `agent_runtime_llm_finalize.py` 内继续拆 helper，而不是把细节回流到 facade。
 - `api/app/api/routes/runs.py`：已在 2026-03-15 降到约 211 行，当前主要保留 run CRUD / resume / callback / trace HTTP contract；新增 `api/app/services/run_trace_views.py`（约 389 行）统一承接 trace filter、cursor、summary 与 export 序列化。后续若继续补 run detail presenter 或 trace export 治理，优先沿 `run_trace_views.py` / `run_views.py` helper 化演进，而不是把细节重新堆回 route。
 - `api/app/services/run_views.py`：已在 2026-03-16 收口为 run detail + evidence view 的 facade；execution view summary / node timeline 以及 callback ticket list 已分别拆到 `api/app/services/run_execution_views.py` 和 `api/app/services/run_view_serializers.py`。当前长度和职责边界明显改善；后续若继续补 diagnostics 详情，优先在新 helper 里扩展，而不是把 execution 细节回流主文件。
