@@ -5,6 +5,7 @@ import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type {
   WorkspaceStarterBulkAction,
   WorkspaceStarterBulkActionResult,
+  WorkspaceStarterValidationIssue,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
 
@@ -89,4 +90,38 @@ export function buildBulkActionMessage(
       : "";
 
   return `${updatedPart}${deletedPart}${skippedPart}。`;
+}
+
+export function summarizeValidationIssues(
+  issues: WorkspaceStarterValidationIssue[]
+) {
+  if (issues.length === 0) {
+    return null;
+  }
+
+  const categoryLabels: Record<string, string> = {
+    schema: "结构",
+    node_support: "节点支持",
+    tool_reference: "工具引用",
+    tool_execution: "执行能力",
+    publish_version: "发布版本"
+  };
+
+  return Object.entries(
+    issues.reduce<Record<string, number>>((summary, issue) => {
+      const category = issue.category || "unknown";
+      summary[category] = (summary[category] ?? 0) + 1;
+      return summary;
+    }, {})
+  )
+    .map(([category, count]) => {
+      const sample = issues
+        .filter((issue) => issue.category === category)
+        .slice(0, 2)
+        .map((issue) => issue.path ?? issue.field ?? issue.message)
+        .join("、");
+      const prefix = `${categoryLabels[category] ?? category} ${count} 项`;
+      return sample ? `${prefix}（${sample}）` : prefix;
+    })
+    .join("；");
 }
