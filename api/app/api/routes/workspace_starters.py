@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+﻿from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -7,9 +7,6 @@ from app.schemas.workspace_starter import (
     WorkflowBusinessTrack,
     WorkspaceStarterBulkActionRequest,
     WorkspaceStarterBulkActionResult,
-    WorkspaceStarterBulkDeletedItem,
-    WorkspaceStarterBulkSkippedItem,
-    WorkspaceStarterBulkSkippedSummary,
     WorkspaceStarterHistoryItem,
     WorkspaceStarterSourceDiff,
     WorkspaceStarterTemplateCreate,
@@ -20,6 +17,7 @@ from app.services.workflow_definitions import (
     WorkflowDefinitionValidationError,
     WorkflowDefinitionValidationIssue,
 )
+from app.services.workspace_starter_bulk_actions import execute_workspace_starter_bulk_action
 from app.services.workspace_starter_templates import (
     get_workspace_starter_template_service,
 )
@@ -60,202 +58,7 @@ def bulk_update_workspace_starters(
     payload: WorkspaceStarterBulkActionRequest,
     db: Session = Depends(get_db),
 ) -> WorkspaceStarterBulkActionResult:
-    service = get_workspace_starter_template_service()
-    records = service.list_templates_by_ids(
-        db,
-        payload.template_ids,
-        workspace_id=payload.workspace_id,
-    )
-    record_map = {record.id: record for record in records}
-    updated_items: list[WorkspaceStarterTemplateItem] = []
-    deleted_items: list[WorkspaceStarterBulkDeletedItem] = []
-    skipped_items: list[WorkspaceStarterBulkSkippedItem] = []
-
-    for template_id in payload.template_ids:
-        record = record_map.get(template_id)
-        if record is None:
-            skipped_items.append(
-                WorkspaceStarterBulkSkippedItem(
-                    template_id=template_id,
-                    reason="not_found",
-                    detail="Workspace starter template not found.",
-                )
-            )
-            continue
-
-        if payload.action == "archive":
-            if record.archived_at is not None:
-                skipped_items.append(
-                    WorkspaceStarterBulkSkippedItem(
-                        template_id=record.id,
-                        name=record.name,
-                        reason="already_archived",
-                        detail="Workspace starter is already archived.",
-                    )
-                )
-                continue
-
-            service.archive_template(record)
-            service.record_history(
-                db,
-                template_id=record.id,
-                workspace_id=record.workspace_id,
-                action="archived",
-                summary=f"批量归档了 workspace starter「{record.name}」。",
-                payload={"bulk": True},
-            )
-            db.add(record)
-            db.flush()
-            updated_items.append(service.serialize(record))
-        elif payload.action == "restore":
-            if record.archived_at is None:
-                skipped_items.append(
-                    WorkspaceStarterBulkSkippedItem(
-                        template_id=record.id,
-                        name=record.name,
-                        reason="not_archived",
-                        detail="Workspace starter is not archived.",
-                    )
-                )
-                continue
-
-            service.restore_template(record)
-            service.record_history(
-                db,
-                template_id=record.id,
-                workspace_id=record.workspace_id,
-                action="restored",
-                summary=f"批量恢复了 workspace starter「{record.name}」。",
-                payload={"bulk": True},
-            )
-            db.add(record)
-            db.flush()
-            updated_items.append(service.serialize(record))
-        elif payload.action == "delete":
-            if record.archived_at is None:
-                skipped_items.append(
-                    WorkspaceStarterBulkSkippedItem(
-                        template_id=record.id,
-                        name=record.name,
-                        reason="delete_requires_archive",
-                        detail="Archive the workspace starter before deleting it.",
-                    )
-                )
-                continue
-
-            deleted_items.append(
-                WorkspaceStarterBulkDeletedItem(
-                    template_id=record.id,
-                    name=record.name,
-                )
-            )
-            service.delete_template(db, record)
-        else:
-            if record.created_from_workflow_id is None:
-                skipped_items.append(
-                    WorkspaceStarterBulkSkippedItem(
-                        template_id=record.id,
-                        name=record.name,
-                        reason="no_source_workflow",
-                        detail="Workspace starter has no source workflow.",
-                    )
-                )
-                continue
-
-            source_workflow = db.get(Workflow, record.created_from_workflow_id)
-            if source_workflow is None:
-                skipped_items.append(
-                    WorkspaceStarterBulkSkippedItem(
-                        template_id=record.id,
-                        name=record.name,
-                        reason="source_workflow_missing",
-                        detail="Source workflow not found.",
-                    )
-                )
-                continue
-
-            if payload.action == "refresh":
-                try:
-                    previous_version = record.created_from_workflow_version
-                    changed = service.refresh_from_workflow(db, record, source_workflow)
-                except WorkflowDefinitionValidationError as exc:
-                    skipped_items.append(
-                        WorkspaceStarterBulkSkippedItem(
-                            template_id=record.id,
-                            name=record.name,
-                            reason="source_workflow_invalid",
-                            detail=str(exc),
-                        )
-                    )
-                    continue
-                service.record_history(
-                    db,
-                    template_id=record.id,
-                    workspace_id=record.workspace_id,
-                    action="refreshed",
-                    summary=(
-                        f"批量从源 workflow「{source_workflow.name}」刷新了模板快照。"
-                        if changed
-                        else f"批量检查了源 workflow「{source_workflow.name}」，模板快照已是最新。"
-                    ),
-                    payload={
-                        "bulk": True,
-                        "source_workflow_id": source_workflow.id,
-                        "previous_workflow_version": previous_version,
-                        "source_workflow_version": source_workflow.version,
-                        "changed": changed,
-                    },
-                )
-            else:
-                try:
-                    diff = service.rebase_from_workflow(db, record, source_workflow)
-                except WorkflowDefinitionValidationError as exc:
-                    skipped_items.append(
-                        WorkspaceStarterBulkSkippedItem(
-                            template_id=record.id,
-                            name=record.name,
-                            reason="source_workflow_invalid",
-                            detail=str(exc),
-                        )
-                    )
-                    continue
-                service.record_history(
-                    db,
-                    template_id=record.id,
-                    workspace_id=record.workspace_id,
-                    action="rebased",
-                    summary=(
-                        f"批量从源 workflow「{source_workflow.name}」同步了 rebase 所需字段。"
-                        if diff.changed
-                        else f"批量检查了源 workflow「{source_workflow.name}」，当前已对齐。"
-                    ),
-                    payload={
-                        "bulk": True,
-                        "source_workflow_id": source_workflow.id,
-                        "source_workflow_version": source_workflow.version,
-                        "changed": diff.changed,
-                        "rebase_fields": diff.rebase_fields,
-                        "node_changes": diff.node_summary.model_dump(),
-                        "edge_changes": diff.edge_summary.model_dump(),
-                    },
-                )
-            db.add(record)
-            db.flush()
-            updated_items.append(service.serialize(record))
-
-    db.commit()
-    processed_count = len(updated_items) + len(deleted_items)
-    return WorkspaceStarterBulkActionResult(
-        workspace_id=payload.workspace_id,
-        action=payload.action,
-        requested_count=len(payload.template_ids),
-        updated_count=processed_count,
-        skipped_count=len(skipped_items),
-        updated_items=updated_items,
-        deleted_items=deleted_items,
-        skipped_items=skipped_items,
-        skipped_reason_summary=_summarize_bulk_skips(skipped_items),
-    )
+    return execute_workspace_starter_bulk_action(db, payload)
 
 
 @router.get("", response_model=list[WorkspaceStarterTemplateItem])
@@ -610,22 +413,3 @@ def delete_workspace_starter(
 
     service.delete_template(db, record)
     db.commit()
-
-
-def _summarize_bulk_skips(
-    skipped_items: list[WorkspaceStarterBulkSkippedItem],
-) -> list[WorkspaceStarterBulkSkippedSummary]:
-    summary_by_reason: dict[str, WorkspaceStarterBulkSkippedSummary] = {}
-    for item in skipped_items:
-        summary = summary_by_reason.get(item.reason)
-        if summary is None:
-            summary_by_reason[item.reason] = WorkspaceStarterBulkSkippedSummary(
-                reason=item.reason,
-                count=1,
-                detail=item.detail,
-            )
-            continue
-
-        summary.count += 1
-
-    return sorted(summary_by_reason.values(), key=lambda item: item.reason)
