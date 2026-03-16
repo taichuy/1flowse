@@ -62,6 +62,14 @@ export function ExecutionNodeCard({ node, runId }: { node: RunExecutionNodeItem;
         {node.execution_executor_ref ? (
           <span className="event-chip">executor {node.execution_executor_ref}</span>
         ) : null}
+        {node.execution_sandbox_backend_id ? (
+          <span className="event-chip">sandbox {node.execution_sandbox_backend_id}</span>
+        ) : null}
+        {node.execution_sandbox_backend_executor_ref ? (
+          <span className="event-chip">
+            backend-executor {node.execution_sandbox_backend_executor_ref}
+          </span>
+        ) : null}
         {node.execution_profile ? (
           <span className="event-chip">profile {node.execution_profile}</span>
         ) : null}

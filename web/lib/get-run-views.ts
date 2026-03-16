@@ -126,6 +126,8 @@ export type RunExecutionNodeItem = {
   execution_unavailable_count: number;
   effective_execution_class?: string | null;
   execution_executor_ref?: string | null;
+  execution_sandbox_backend_id?: string | null;
+  execution_sandbox_backend_executor_ref?: string | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   retry_count: number;
@@ -173,6 +175,7 @@ export type RunExecutionView = {
     execution_requested_class_counts: Record<string, number>;
     execution_effective_class_counts: Record<string, number>;
     execution_executor_ref_counts: Record<string, number>;
+    execution_sandbox_backend_counts: Record<string, number>;
     callback_ticket_status_counts: Record<string, number>;
     sensitive_access_decision_counts: Record<string, number>;
     sensitive_access_approval_status_counts: Record<string, number>;

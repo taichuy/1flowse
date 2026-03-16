@@ -104,6 +104,13 @@ export function RunDiagnosticsExecutionOverview({
         prefix="executor-ref"
       />
 
+      <MetricChipRow
+        title="Sandbox backends"
+        emptyCopy="No sandbox backend bindings were recorded for this run."
+        metrics={executionView.summary.execution_sandbox_backend_counts}
+        prefix="sandbox-backend"
+      />
+
       {executionView.summary.sensitive_access_request_count > 0 ? (
         <>
           <MetricChipRow

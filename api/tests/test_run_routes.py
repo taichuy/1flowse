@@ -68,6 +68,61 @@ def test_get_run_execution_view_includes_execution_policy(
     assert nodes_by_id["mock_tool"]["execution_source"] == "default"
 
 
+def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "sandbox binding summary"}},
+    )
+
+    assert response.status_code == 201
+    run_body = response.json()
+    run_id = run_body["id"]
+    tool_node_run = next(node for node in run_body["node_runs"] if node["node_id"] == "mock_tool")
+
+    sqlite_session.add(
+        RunEvent(
+            run_id=run_id,
+            node_run_id=tool_node_run["id"],
+            event_type="tool.execution.dispatched",
+            payload={
+                "node_id": "mock_tool",
+                "tool_id": "mock_tool",
+                "tool_name": "mock_tool",
+                "requested_execution_class": "microvm",
+                "effective_execution_class": "microvm",
+                "execution_source": "runtime_policy",
+                "requested_execution_profile": "strict",
+                "requested_execution_timeout_ms": 5000,
+                "requested_network_policy": "isolated",
+                "requested_filesystem_policy": "ephemeral",
+                "executor_ref": "tool:compat-adapter:dify-default",
+                "sandbox_backend_id": "sandbox-default",
+                "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+            },
+        )
+    )
+    sqlite_session.commit()
+
+    execution_view_response = client.get(f"/api/runs/{run_id}/execution-view")
+
+    assert execution_view_response.status_code == 200
+    body = execution_view_response.json()
+    assert body["summary"]["execution_sandbox_backend_counts"] == {"sandbox-default": 1}
+
+    node = next(item for item in body["nodes"] if item["node_id"] == "mock_tool")
+    assert node["effective_execution_class"] == "microvm"
+    assert node["execution_executor_ref"] == "tool:compat-adapter:dify-default"
+    assert node["execution_sandbox_backend_id"] == "sandbox-default"
+    assert (
+        node["execution_sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default"
+    )
+
+
 def test_get_run_execution_view_summarizes_execution_fallback_signals(
     client: TestClient,
     sqlite_session: Session,

@@ -41,6 +41,8 @@ class NodeExecutionSignalSnapshot:
     requested_execution_class: str | None = None
     effective_execution_class: str | None = None
     executor_ref: str | None = None
+    sandbox_backend_id: str | None = None
+    sandbox_backend_executor_ref: str | None = None
     blocking_reason: str | None = None
     fallback_reason: str | None = None
 
@@ -55,6 +57,7 @@ class RunExecutionSignalSummary:
     requested_class_counts: dict[str, int] = field(default_factory=dict)
     effective_class_counts: dict[str, int] = field(default_factory=dict)
     executor_ref_counts: dict[str, int] = field(default_factory=dict)
+    sandbox_backend_counts: dict[str, int] = field(default_factory=dict)
 
 
 def list_callback_tickets(db: Session, run_id: str) -> list[RunCallbackTicket]:
@@ -110,6 +113,7 @@ def build_run_execution_view(
             execution_requested_class_counts=execution_signals.requested_class_counts,
             execution_effective_class_counts=execution_signals.effective_class_counts,
             execution_executor_ref_counts=execution_signals.executor_ref_counts,
+            execution_sandbox_backend_counts=execution_signals.sandbox_backend_counts,
             callback_ticket_status_counts=dict(
                 sorted(Counter(item.status for item in callback_tickets).items())
             ),
@@ -190,6 +194,12 @@ def _build_execution_node_item(
             execution_signal.effective_execution_class if execution_signal else None
         ),
         execution_executor_ref=(execution_signal.executor_ref if execution_signal else None),
+        execution_sandbox_backend_id=(
+            execution_signal.sandbox_backend_id if execution_signal else None
+        ),
+        execution_sandbox_backend_executor_ref=(
+            execution_signal.sandbox_backend_executor_ref if execution_signal else None
+        ),
         execution_blocking_reason=(
             execution_signal.blocking_reason if execution_signal else None
         ),
@@ -244,6 +254,15 @@ def summarize_execution_signals(artifacts: ExecutionArtifacts) -> RunExecutionSi
         executor_ref = payload.get("executor_ref")
         if isinstance(executor_ref, str) and executor_ref.strip():
             snapshot.executor_ref = executor_ref
+        sandbox_backend_id = payload.get("sandbox_backend_id")
+        if isinstance(sandbox_backend_id, str) and sandbox_backend_id.strip():
+            snapshot.sandbox_backend_id = sandbox_backend_id
+        sandbox_backend_executor_ref = payload.get("sandbox_backend_executor_ref")
+        if (
+            isinstance(sandbox_backend_executor_ref, str)
+            and sandbox_backend_executor_ref.strip()
+        ):
+            snapshot.sandbox_backend_executor_ref = sandbox_backend_executor_ref
         reason = payload.get("reason")
         if event.event_type.endswith("dispatched"):
             snapshot.dispatched_count += 1
@@ -275,6 +294,11 @@ def summarize_execution_signals(artifacts: ExecutionArtifacts) -> RunExecutionSi
         for snapshot in by_node_run.values()
         if snapshot.executor_ref is not None
     )
+    sandbox_backend_counts = Counter(
+        snapshot.sandbox_backend_id
+        for snapshot in by_node_run.values()
+        if snapshot.sandbox_backend_id is not None
+    )
     return RunExecutionSignalSummary(
         by_node_run=dict(by_node_run),
         dispatched_node_count=sum(1 for snapshot in by_node_run.values() if snapshot.dispatched_count > 0),
@@ -284,6 +308,7 @@ def summarize_execution_signals(artifacts: ExecutionArtifacts) -> RunExecutionSi
         requested_class_counts=dict(sorted(requested_class_counts.items())),
         effective_class_counts=dict(sorted(effective_class_counts.items())),
         executor_ref_counts=dict(sorted(executor_ref_counts.items())),
+        sandbox_backend_counts=dict(sorted(sandbox_backend_counts.items())),
     )
 
 

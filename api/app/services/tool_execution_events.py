@@ -22,7 +22,7 @@ def _build_base_payload(
         )
     ):
         return None
-    return {
+    payload: dict[str, object] = {
         "node_id": node_id,
         "tool_id": tool_id,
         "tool_name": tool_name,
@@ -35,6 +35,15 @@ def _build_base_payload(
         "requested_filesystem_policy": trace_payload.get("requested_filesystem_policy"),
         "executor_ref": executor_ref,
     }
+    sandbox_backend_id = trace_payload.get("sandbox_backend_id")
+    if isinstance(sandbox_backend_id, str) and sandbox_backend_id.strip():
+        payload["sandbox_backend_id"] = sandbox_backend_id
+
+    sandbox_backend_executor_ref = trace_payload.get("sandbox_backend_executor_ref")
+    if isinstance(sandbox_backend_executor_ref, str) and sandbox_backend_executor_ref.strip():
+        payload["sandbox_backend_executor_ref"] = sandbox_backend_executor_ref
+
+    return payload
 
 
 def build_tool_execution_error_events(

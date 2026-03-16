@@ -59,6 +59,7 @@ class RunExecutionSummary(BaseModel):
     execution_requested_class_counts: dict[str, int] = Field(default_factory=dict)
     execution_effective_class_counts: dict[str, int] = Field(default_factory=dict)
     execution_executor_ref_counts: dict[str, int] = Field(default_factory=dict)
+    execution_sandbox_backend_counts: dict[str, int] = Field(default_factory=dict)
     callback_ticket_status_counts: dict[str, int] = Field(default_factory=dict)
     sensitive_access_decision_counts: dict[str, int] = Field(default_factory=dict)
     sensitive_access_approval_status_counts: dict[str, int] = Field(default_factory=dict)
@@ -109,6 +110,8 @@ class RunExecutionNodeItem(BaseModel):
     execution_unavailable_count: int = 0
     effective_execution_class: str | None = None
     execution_executor_ref: str | None = None
+    execution_sandbox_backend_id: str | None = None
+    execution_sandbox_backend_executor_ref: str | None = None
     execution_blocking_reason: str | None = None
     execution_fallback_reason: str | None = None
     retry_count: int = 0
