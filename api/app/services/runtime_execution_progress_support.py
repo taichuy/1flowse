@@ -39,6 +39,16 @@ class RuntimeExecutionProgressSupportMixin:
         node_run.error_message = node_error
         node_run.finished_at = _utcnow()
         self._clear_callback_ticket(db, node_run, reason="node_failed")
+        if isinstance(cause, WorkflowExecutionError) and cause.runtime_events:
+            events.extend(
+                self._build_event(
+                    run.id,
+                    node_run.id,
+                    event.event_type,
+                    event.payload,
+                )
+                for event in cause.runtime_events
+            )
         events.append(
             self._build_event(
                 run.id,

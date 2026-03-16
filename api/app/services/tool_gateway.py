@@ -18,6 +18,7 @@ from app.services.plugin_runtime import PluginCallProxy, PluginCallRequest, Plug
 from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_types import ToolExecutionResult, WorkflowExecutionError
 from app.services.sensitive_access_control import SensitiveAccessControlService
+from app.services.tool_execution_events import build_tool_execution_error_events
 
 
 def _utcnow() -> datetime:
@@ -162,7 +163,16 @@ class ToolGateway:
             call_record.latency_ms = int((time.perf_counter() - started_at) * 1000)
             call_record.finished_at = _utcnow()
             db.flush()
-            raise WorkflowExecutionError(str(exc)) from exc
+            raise WorkflowExecutionError(
+                str(exc),
+                metadata={"tool_execution_trace": dict(execution_trace)},
+                runtime_events=build_tool_execution_error_events(
+                    node_id=node_run.node_id,
+                    tool_id=tool_id,
+                    tool_name=tool_name,
+                    trace_payload=execution_trace,
+                ),
+            ) from exc
 
     def _guard_sensitive_tool_access(
         self,

@@ -161,6 +161,8 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 fallback_output = self._fallback_output(config, error_message=str(exc))
                 if fallback_output is None:
                     raise
+                if exc.runtime_events:
+                    events.extend(exc.runtime_events)
                 self._transition_phase(node_run, "main_finalize", events, node)
                 node_run.waiting_reason = None
                 events.append(

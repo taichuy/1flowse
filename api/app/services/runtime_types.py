@@ -37,7 +37,16 @@ PHASE_STATUS_MAP: dict[str, str] = {
 
 
 class WorkflowExecutionError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+        runtime_events: list[RuntimeEvent] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.metadata = dict(metadata or {})
+        self.runtime_events = list(runtime_events or [])
 
 
 @dataclass(frozen=True)

@@ -3,17 +3,16 @@ from __future__ import annotations
 from app.services.runtime_types import RuntimeEvent, ToolExecutionResult
 
 
-def build_tool_execution_events(
+def _build_base_payload(
     *,
     node_id: str,
     tool_id: str,
     tool_name: str,
-    tool_result: ToolExecutionResult,
-) -> list[RuntimeEvent]:
-    meta = dict(tool_result.meta or {})
-    requested_execution_class = meta.get("requested_execution_class")
-    effective_execution_class = meta.get("effective_execution_class")
-    executor_ref = meta.get("executor_ref")
+    trace_payload: dict[str, object],
+) -> dict[str, object] | None:
+    requested_execution_class = trace_payload.get("requested_execution_class")
+    effective_execution_class = trace_payload.get("effective_execution_class")
+    executor_ref = trace_payload.get("executor_ref")
     if not all(
         isinstance(value, str) and value.strip()
         for value in (
@@ -22,24 +21,53 @@ def build_tool_execution_events(
             executor_ref,
         )
     ):
-        return []
-
-    base_payload = {
+        return None
+    return {
         "node_id": node_id,
         "tool_id": tool_id,
         "tool_name": tool_name,
         "requested_execution_class": requested_execution_class,
         "effective_execution_class": effective_execution_class,
-        "execution_source": meta.get("execution_source"),
-        "requested_execution_profile": meta.get("requested_execution_profile"),
-        "requested_execution_timeout_ms": meta.get("requested_execution_timeout_ms"),
-        "requested_network_policy": meta.get("requested_network_policy"),
-        "requested_filesystem_policy": meta.get("requested_filesystem_policy"),
+        "execution_source": trace_payload.get("execution_source"),
+        "requested_execution_profile": trace_payload.get("requested_execution_profile"),
+        "requested_execution_timeout_ms": trace_payload.get("requested_execution_timeout_ms"),
+        "requested_network_policy": trace_payload.get("requested_network_policy"),
+        "requested_filesystem_policy": trace_payload.get("requested_filesystem_policy"),
         "executor_ref": executor_ref,
     }
-    events = [RuntimeEvent("tool.execution.dispatched", base_payload)]
 
-    fallback_reason = meta.get("fallback_reason")
+
+def build_tool_execution_error_events(
+    *,
+    node_id: str,
+    tool_id: str,
+    tool_name: str,
+    trace_payload: dict[str, object],
+) -> list[RuntimeEvent]:
+    base_payload = _build_base_payload(
+        node_id=node_id,
+        tool_id=tool_id,
+        tool_name=tool_name,
+        trace_payload=trace_payload,
+    )
+    if base_payload is None:
+        return []
+
+    events = [RuntimeEvent("tool.execution.dispatched", dict(base_payload))]
+
+    blocked_reason = trace_payload.get("blocked_reason")
+    if isinstance(blocked_reason, str) and blocked_reason.strip():
+        events.append(
+            RuntimeEvent(
+                "tool.execution.blocked",
+                {
+                    **base_payload,
+                    "reason": blocked_reason,
+                },
+            )
+        )
+
+    fallback_reason = trace_payload.get("fallback_reason")
     if isinstance(fallback_reason, str) and fallback_reason.strip():
         events.append(
             RuntimeEvent(
@@ -52,3 +80,19 @@ def build_tool_execution_events(
         )
 
     return events
+
+
+def build_tool_execution_events(
+    *,
+    node_id: str,
+    tool_id: str,
+    tool_name: str,
+    tool_result: ToolExecutionResult,
+) -> list[RuntimeEvent]:
+    meta = dict(tool_result.meta or {})
+    return build_tool_execution_error_events(
+        node_id=node_id,
+        tool_id=tool_id,
+        tool_name=tool_name,
+        trace_payload=meta,
+    )

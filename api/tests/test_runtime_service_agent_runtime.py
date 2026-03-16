@@ -3,9 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.run import RunCallbackTicket
+from app.models.run import NodeRun, Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.plugin_runtime import (
     CompatibilityAdapterRegistration,
@@ -534,6 +535,62 @@ def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_comp
         runtime.execute_workflow(sqlite_session, workflow, {"topic": "agent"})
 
     assert captured_payloads == []
+
+    run = sqlite_session.scalars(
+        select(Run).where(Run.workflow_id == workflow.id).order_by(Run.created_at.desc())
+    ).first()
+    assert run is not None
+
+    agent_run = sqlite_session.scalars(
+        select(NodeRun)
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "agent")
+        .order_by(NodeRun.started_at.desc())
+    ).first()
+    assert agent_run is not None
+
+    events = sqlite_session.scalars(
+        select(RunEvent)
+        .where(RunEvent.run_id == run.id, RunEvent.node_run_id == agent_run.id)
+        .order_by(RunEvent.id.asc())
+    ).all()
+
+    dispatched_event = next(
+        event for event in events if event.event_type == "tool.execution.dispatched"
+    )
+    assert dispatched_event.payload == {
+        "node_id": "agent",
+        "tool_id": "compat:dify:plugin:demo/search",
+        "tool_name": "compat:dify:plugin:demo/search",
+        "requested_execution_class": "microvm",
+        "effective_execution_class": "subprocess",
+        "execution_source": "tool_call",
+        "requested_execution_profile": "per-call-compat",
+        "requested_execution_timeout_ms": 4000,
+        "requested_network_policy": "isolated",
+        "requested_filesystem_policy": "ephemeral",
+        "executor_ref": "tool:compat-adapter:dify-default",
+    }
+
+    blocked_event = next(
+        event for event in events if event.event_type == "tool.execution.blocked"
+    )
+    assert blocked_event.payload == {
+        "node_id": "agent",
+        "tool_id": "compat:dify:plugin:demo/search",
+        "tool_name": "compat:dify:plugin:demo/search",
+        "requested_execution_class": "microvm",
+        "effective_execution_class": "subprocess",
+        "execution_source": "tool_call",
+        "requested_execution_profile": "per-call-compat",
+        "requested_execution_timeout_ms": 4000,
+        "requested_network_policy": "isolated",
+        "requested_filesystem_policy": "ephemeral",
+        "executor_ref": "tool:compat-adapter:dify-default",
+        "reason": (
+            "Compatibility adapter 'dify-default' does not support requested execution class "
+            "'microvm'. Supported classes: subprocess."
+        ),
+    }
 
 
 def test_llm_agent_waiting_tool_can_resume(sqlite_session: Session) -> None:
