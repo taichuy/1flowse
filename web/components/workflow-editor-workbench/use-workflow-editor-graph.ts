@@ -28,6 +28,7 @@ import {
   stripUiPosition,
   type WorkflowEditorMessageTone
 } from "./shared";
+import { useWorkflowEditorWorkflowState } from "./use-workflow-editor-workflow-state";
 
 type UseWorkflowEditorGraphOptions = {
   workflow: WorkflowDetail;
@@ -47,12 +48,12 @@ export function useWorkflowEditorGraph({
   const [persistedWorkflowName, setPersistedWorkflowName] = useState(workflow.name);
   const [workflowVersion, setWorkflowVersion] = useState(workflow.version);
   const [persistedDefinition, setPersistedDefinition] = useState(workflow.definition);
-  const [workflowVariables, setWorkflowVariables] = useState(() =>
-    normalizeWorkflowVariables(workflow.definition.variables)
-  );
-  const [workflowPublish, setWorkflowPublish] = useState(() =>
-    normalizeWorkflowPublishDraft(workflow.definition.publish)
-  );
+  const workflowState = useWorkflowEditorWorkflowState({
+    initialDefinition: workflow.definition,
+    setMessage,
+    setMessageTone
+  });
+  const { resetWorkflowState } = workflowState;
   const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(initialGraph.nodes[0]?.id ?? null);
@@ -63,8 +64,8 @@ export function useWorkflowEditorGraph({
 
   const currentDefinition = reactFlowToWorkflowDefinition(nodes, edges, {
     ...persistedDefinition,
-    variables: workflowVariables,
-    publish: workflowPublish
+    variables: workflowState.workflowVariables,
+    publish: workflowState.workflowPublish
   });
   const isDirty =
     workflowName.trim() !== persistedWorkflowName ||
@@ -76,14 +77,13 @@ export function useWorkflowEditorGraph({
     setPersistedWorkflowName(workflow.name);
     setWorkflowVersion(workflow.version);
     setPersistedDefinition(workflow.definition);
-    setWorkflowVariables(normalizeWorkflowVariables(workflow.definition.variables));
-    setWorkflowPublish(normalizeWorkflowPublishDraft(workflow.definition.publish));
+    resetWorkflowState(workflow.definition);
     setNodes(nextGraph.nodes);
     setEdges(nextGraph.edges);
     setSelectedNodeId(nextGraph.nodes[0]?.id ?? null);
     setSelectedEdgeId(null);
     setNodeConfigText(stringifyJson(nextGraph.nodes[0]?.data.config ?? {}));
-  }, [nodeCatalog, workflow, setEdges, setNodes]);
+  }, [nodeCatalog, workflow, resetWorkflowState, setEdges, setNodes]);
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
@@ -385,36 +385,6 @@ export function useWorkflowEditorGraph({
     );
   };
 
-  const updateWorkflowPublish = (
-    nextPublish: Array<Record<string, unknown>>,
-    options?: { successMessage?: string }
-  ) => {
-    setWorkflowPublish(normalizeWorkflowPublishDraft(nextPublish));
-
-    if (options?.successMessage) {
-      setMessage(options.successMessage);
-      setMessageTone("success");
-    } else {
-      setMessage(null);
-      setMessageTone("idle");
-    }
-  };
-
-  const updateWorkflowVariables = (
-    nextVariables: Array<Record<string, unknown>>,
-    options?: { successMessage?: string }
-  ) => {
-    setWorkflowVariables(normalizeWorkflowVariables(nextVariables));
-
-    if (options?.successMessage) {
-      setMessage(options.successMessage);
-      setMessageTone("success");
-    } else {
-      setMessage(null);
-      setMessageTone("idle");
-    }
-  };
-
   return {
     workflowName,
     setWorkflowName,
@@ -435,8 +405,8 @@ export function useWorkflowEditorGraph({
     nodeConfigText,
     setNodeConfigText,
     currentDefinition,
-    workflowVariables,
-    workflowPublish,
+    workflowVariables: workflowState.workflowVariables,
+    workflowPublish: workflowState.workflowPublish,
     isDirty,
     onConnect,
     handleSelectionChange,
@@ -452,23 +422,7 @@ export function useWorkflowEditorGraph({
     handleDeleteSelectedNode,
     handleDeleteSelectedEdge,
     updateSelectedEdge,
-    updateWorkflowVariables,
-    updateWorkflowPublish
+    updateWorkflowVariables: workflowState.updateWorkflowVariables,
+    updateWorkflowPublish: workflowState.updateWorkflowPublish
   };
-}
-
-function normalizeWorkflowVariables(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => isRecord(item)).map((item) => ({
-        ...item
-      }))
-    : [];
-}
-
-function normalizeWorkflowPublishDraft(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => isRecord(item)).map((item) => ({
-        ...item
-      }))
-    : [];
 }
