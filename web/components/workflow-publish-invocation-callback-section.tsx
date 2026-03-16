@@ -1,6 +1,7 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import type {
   PublishedEndpointInvocationItem,
   PublishedEndpointInvocationCallbackTicketItem
@@ -152,64 +153,78 @@ export function WorkflowPublishInvocationCallbackSection({
 
       {callbackTickets.length ? (
         <div className="publish-cache-list">
-          {callbackTickets.map((ticket) => (
-            <article className="payload-card compact-card" key={ticket.ticket}>
-              <div className="payload-card-header">
-                <span className="status-meta">Callback ticket</span>
-                <span className="event-chip">{ticket.status}</span>
-              </div>
-              <dl className="compact-meta-list">
-                <div>
-                  <dt>Ticket</dt>
-                  <dd>{ticket.ticket}</dd>
+          {callbackTickets.map((ticket) => {
+            const ticketInboxHref = buildCallbackTicketInboxHref(ticket, {
+              runId: invocation.run_id ?? null,
+              nodeRunId: waitingLifecycle?.node_run_id ?? null
+            });
+
+            return (
+              <article className="payload-card compact-card" key={ticket.ticket}>
+                <div className="payload-card-header">
+                  <span className="status-meta">Callback ticket</span>
+                  <span className="event-chip">{ticket.status}</span>
                 </div>
-                <div>
-                  <dt>Node run</dt>
-                  <dd>{ticket.node_run_id}</dd>
-                </div>
-                <div>
-                  <dt>Tool</dt>
-                  <dd>
-                    {ticket.tool_id ?? "n/a"} · call #{ticket.tool_call_index}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Waiting status</dt>
-                  <dd>{ticket.waiting_status}</dd>
-                </div>
-                <div>
-                  <dt>Reason</dt>
-                  <dd>{ticket.reason ?? "n/a"}</dd>
-                </div>
-                <div>
-                  <dt>Created</dt>
-                  <dd>{formatTimestamp(ticket.created_at)}</dd>
-                </div>
-                <div>
-                  <dt>Expires</dt>
-                  <dd>{formatTimestamp(ticket.expires_at)}</dd>
-                </div>
-                <div>
-                  <dt>Consumed</dt>
-                  <dd>{formatTimestamp(ticket.consumed_at)}</dd>
-                </div>
-                <div>
-                  <dt>Canceled</dt>
-                  <dd>{formatTimestamp(ticket.canceled_at)}</dd>
-                </div>
-                <div>
-                  <dt>Expired</dt>
-                  <dd>{formatTimestamp(ticket.expired_at)}</dd>
-                </div>
-              </dl>
-              {ticket.callback_payload ? (
-                <>
-                  <p className="section-copy entry-copy">callback payload preview</p>
-                  <pre className="trace-preview">{formatJsonPreview(ticket.callback_payload)}</pre>
-                </>
-              ) : null}
-            </article>
-          ))}
+                {ticketInboxHref ? (
+                  <div className="tool-badge-row">
+                    <Link className="event-chip inbox-filter-link" href={ticketInboxHref}>
+                      open ticket inbox slice
+                    </Link>
+                  </div>
+                ) : null}
+                <dl className="compact-meta-list">
+                  <div>
+                    <dt>Ticket</dt>
+                    <dd>{ticket.ticket}</dd>
+                  </div>
+                  <div>
+                    <dt>Node run</dt>
+                    <dd>{ticket.node_run_id}</dd>
+                  </div>
+                  <div>
+                    <dt>Tool</dt>
+                    <dd>
+                      {ticket.tool_id ?? "n/a"} · call #{ticket.tool_call_index}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Waiting status</dt>
+                    <dd>{ticket.waiting_status}</dd>
+                  </div>
+                  <div>
+                    <dt>Reason</dt>
+                    <dd>{ticket.reason ?? "n/a"}</dd>
+                  </div>
+                  <div>
+                    <dt>Created</dt>
+                    <dd>{formatTimestamp(ticket.created_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Expires</dt>
+                    <dd>{formatTimestamp(ticket.expires_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Consumed</dt>
+                    <dd>{formatTimestamp(ticket.consumed_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Canceled</dt>
+                    <dd>{formatTimestamp(ticket.canceled_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Expired</dt>
+                    <dd>{formatTimestamp(ticket.expired_at)}</dd>
+                  </div>
+                </dl>
+                {ticket.callback_payload ? (
+                  <>
+                    <p className="section-copy entry-copy">callback payload preview</p>
+                    <pre className="trace-preview">{formatJsonPreview(ticket.callback_payload)}</pre>
+                  </>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       ) : (
         <p className="empty-state compact">当前这次 invocation 没有关联 callback ticket。</p>
