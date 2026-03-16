@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import smtplib
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from email.message import EmailMessage
+from email.utils import formataddr, getaddresses
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
     NotificationDispatchRecord,
@@ -38,6 +41,7 @@ class NotificationDeliveryOutcome:
 
 
 NotificationClientFactory = Callable[[], httpx.Client]
+SMTPClientFactory = Callable[[str, int, float, bool], Any]
 
 
 def _utcnow() -> datetime:
@@ -47,6 +51,15 @@ def _utcnow() -> datetime:
 def _is_http_target(target: str) -> bool:
     parsed = urlparse(target.strip())
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _parse_email_recipients(target: str) -> list[str]:
+    normalized = target.strip()
+    if normalized.lower().startswith("mailto:"):
+        normalized = urlparse(normalized).path
+    normalized = normalized.replace(";", ",")
+    recipients = [address.strip() for _, address in getaddresses([normalized]) if address]
+    return [address for address in recipients if "@" in address and " " not in address]
 
 
 def _build_notification_text(context: NotificationDeliveryContext) -> str:
@@ -109,6 +122,42 @@ def _build_webhook_payload(
         },
         "resource": resource,
     }
+
+
+def _build_email_subject(context: NotificationDeliveryContext) -> str:
+    resource_label = (
+        context.resource.label
+        if context.resource is not None
+        else context.access_request.resource_id
+    )
+    return f"[7Flows] Approval required for {resource_label}"
+
+
+def _build_email_body(context: NotificationDeliveryContext) -> str:
+    resource_label = (
+        context.resource.label
+        if context.resource is not None
+        else context.access_request.resource_id
+    )
+    run_id = context.approval_ticket.run_id or context.access_request.run_id or "unknown"
+    purpose_text = context.access_request.purpose_text or "No purpose provided."
+    return "\n".join(
+        [
+            "7Flows approval required.",
+            "",
+            f"Dispatch ID: {context.notification.id}",
+            f"Approval ticket: {context.approval_ticket.id}",
+            f"Run ID: {run_id}",
+            (
+                "Requester: "
+                f"{context.access_request.requester_type} "
+                f"{context.access_request.requester_id}"
+            ),
+            f"Action: {context.access_request.action_type}",
+            f"Resource: {resource_label}",
+            f"Purpose: {purpose_text}",
+        ]
+    )
 
 
 class NotificationAdapter(Protocol):
@@ -227,16 +276,91 @@ class FeishuNotificationAdapter:
 
 
 class EmailNotificationAdapter:
+    def __init__(
+        self,
+        *,
+        smtp_host: str,
+        smtp_port: int,
+        smtp_username: str,
+        smtp_password: str,
+        from_address: str,
+        from_name: str,
+        use_ssl: bool,
+        starttls: bool,
+        timeout_seconds: float,
+        smtp_factory: SMTPClientFactory,
+    ) -> None:
+        self._smtp_host = smtp_host.strip()
+        self._smtp_port = smtp_port
+        self._smtp_username = smtp_username.strip()
+        self._smtp_password = smtp_password
+        self._from_address = from_address.strip()
+        self._from_name = from_name.strip()
+        self._use_ssl = use_ssl
+        self._starttls = starttls
+        self._timeout_seconds = timeout_seconds
+        self._smtp_factory = smtp_factory
+
     def deliver(
         self,
         context: NotificationDeliveryContext,
     ) -> NotificationDeliveryOutcome:
+        if not self._smtp_host or not self._from_address:
+            return NotificationDeliveryOutcome(
+                status="failed",
+                error=(
+                    "Email delivery adapter is not configured. Set "
+                    "SEVENFLOWS_NOTIFICATION_EMAIL_SMTP_HOST and "
+                    "SEVENFLOWS_NOTIFICATION_EMAIL_FROM_ADDRESS."
+                ),
+            )
+
+        recipients = _parse_email_recipients(context.notification.target)
+        if not recipients:
+            return NotificationDeliveryOutcome(
+                status="failed",
+                error=(
+                    "Email delivery requires the notification target to contain at least "
+                    "one valid email address."
+                ),
+            )
+
+        message = EmailMessage()
+        message["Subject"] = _build_email_subject(context)
+        message["From"] = (
+            formataddr((self._from_name, self._from_address))
+            if self._from_name
+            else self._from_address
+        )
+        message["To"] = ", ".join(recipients)
+        message.set_content(_build_email_body(context))
+
+        try:
+            with self._smtp_factory(
+                self._smtp_host,
+                self._smtp_port,
+                self._timeout_seconds,
+                self._use_ssl,
+            ) as client:
+                ehlo = getattr(client, "ehlo", None)
+                if callable(ehlo):
+                    ehlo()
+                if not self._use_ssl and self._starttls:
+                    client.starttls()
+                    if callable(ehlo):
+                        ehlo()
+                if self._smtp_username or self._smtp_password:
+                    client.login(self._smtp_username, self._smtp_password)
+                client.send_message(message)
+        except (OSError, smtplib.SMTPException, ValueError) as exc:
+            return NotificationDeliveryOutcome(
+                status="failed",
+                error=f"Email delivery failed: {exc}",
+            )
+
         return NotificationDeliveryOutcome(
-            status="failed",
-            error=(
-                "Email delivery adapter is not configured yet; "
-                "bridge it via webhook or add a dedicated mail provider adapter."
-            ),
+            status="delivered",
+            delivered_at=_utcnow(),
         )
 
 
@@ -245,21 +369,35 @@ class NotificationDeliveryService:
         self,
         *,
         client_factory: NotificationClientFactory | None = None,
+        smtp_factory: SMTPClientFactory | None = None,
+        settings: Settings | None = None,
         timeout_seconds: float | None = None,
     ) -> None:
-        settings = get_settings()
+        settings = settings or get_settings()
         self._timeout_seconds = (
             timeout_seconds
             if timeout_seconds is not None
             else settings.notification_delivery_timeout_seconds
         )
         self._client_factory = client_factory or self._make_client
+        self._smtp_factory = smtp_factory or self._make_smtp_client
         self._adapters: dict[str, NotificationAdapter] = {
             "in_app": InAppNotificationAdapter(),
             "webhook": WebhookNotificationAdapter(client_factory=self._client_factory),
             "slack": SlackNotificationAdapter(client_factory=self._client_factory),
             "feishu": FeishuNotificationAdapter(client_factory=self._client_factory),
-            "email": EmailNotificationAdapter(),
+            "email": EmailNotificationAdapter(
+                smtp_host=settings.notification_email_smtp_host,
+                smtp_port=settings.notification_email_smtp_port,
+                smtp_username=settings.notification_email_smtp_username,
+                smtp_password=settings.notification_email_smtp_password,
+                from_address=settings.notification_email_from_address,
+                from_name=settings.notification_email_from_name,
+                use_ssl=settings.notification_email_use_ssl,
+                starttls=settings.notification_email_starttls,
+                timeout_seconds=self._timeout_seconds,
+                smtp_factory=self._smtp_factory,
+            ),
         }
 
     def deliver_dispatch(
@@ -332,3 +470,14 @@ class NotificationDeliveryService:
             timeout=httpx.Timeout(self._timeout_seconds, connect=10.0),
             follow_redirects=True,
         )
+
+    def _make_smtp_client(
+        self,
+        host: str,
+        port: int,
+        timeout_seconds: float,
+        use_ssl: bool,
+    ) -> Any:
+        if use_ssl:
+            return smtplib.SMTP_SSL(host=host, port=port, timeout=timeout_seconds)
+        return smtplib.SMTP(host=host, port=port, timeout=timeout_seconds)

@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     callback_ticket_cleanup_schedule_enabled: bool = True
     callback_ticket_cleanup_interval_seconds: int = 300
     notification_delivery_timeout_seconds: float = 10.0
+    notification_email_smtp_host: str = ""
+    notification_email_smtp_port: int = 587
+    notification_email_smtp_username: str = ""
+    notification_email_smtp_password: str = ""
+    notification_email_from_address: str = ""
+    notification_email_from_name: str = "7Flows"
+    notification_email_use_ssl: bool = False
+    notification_email_starttls: bool = True
     credential_encryption_key: str = ""
     llm_http_proxy: str = ""
     llm_default_timeout_seconds: int = 120
