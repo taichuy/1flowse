@@ -1,5 +1,6 @@
 import type { RunExecutionView } from "@/lib/get-run-views";
 
+import { RunDiagnosticsExecutionOverviewBlockers } from "@/components/run-diagnostics-execution/execution-overview-blockers";
 import { MetricChipRow, SummaryCard } from "@/components/run-diagnostics-execution/shared";
 
 export function RunDiagnosticsExecutionOverview({
@@ -88,6 +89,8 @@ export function RunDiagnosticsExecutionOverview({
 
       {callbackWaiting.node_count > 0 ? (
         <>
+          <RunDiagnosticsExecutionOverviewBlockers executionView={executionView} />
+
           <MetricChipRow
             title="Resume sources"
             emptyCopy="No callback resumes have been scheduled yet."
