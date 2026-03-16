@@ -2,28 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getApiBaseUrl } from "@/lib/api-base-url";
 import { formatManualResumeResultMessage } from "@/lib/operator-action-result-presenters";
+import { getApiBaseUrl } from "@/lib/api-base-url";
 
-type RunDetailResponseBody = {
-  status?: string;
-  current_node_id?: string | null;
-  node_runs?: Array<{
-    node_id?: string | null;
-    status?: string | null;
-    waiting_reason?: string | null;
-  }>;
-};
-
-function readCurrentWaitingReason(body: RunDetailResponseBody | null) {
-  const currentNodeId = body?.current_node_id?.trim();
-  if (!currentNodeId || !Array.isArray(body?.node_runs)) {
-    return null;
-  }
-
-  const currentNodeRun = body.node_runs.find((item) => item.node_id === currentNodeId);
-  return currentNodeRun?.waiting_reason ?? null;
-}
+import { fetchRunSnapshot } from "./run-snapshot";
 
 export type ResumeRunState = {
   status: "idle" | "success" | "error";
@@ -68,9 +50,7 @@ export async function resumeRun(
       cache: "no-store"
     });
 
-    const body = (await response.json().catch(() => null)) as
-      | ({ detail?: string } & RunDetailResponseBody)
-      | null;
+    const body = (await response.json().catch(() => null)) as ({ detail?: string } & { status?: string }) | null;
 
     if (!response.ok) {
       return {
@@ -81,14 +61,17 @@ export async function resumeRun(
     }
 
     revalidateRunPaths(runId);
+    const runSnapshot = await fetchRunSnapshot(runId);
 
     return {
       status: "success",
-      message: formatManualResumeResultMessage({
-        status: body?.status,
-        currentNodeId: body?.current_node_id,
-        waitingReason: readCurrentWaitingReason(body)
-      }),
+      message: formatManualResumeResultMessage(
+        runSnapshot ?? {
+          status: body?.status,
+          currentNodeId: null,
+          waitingReason: null
+        }
+      ),
       runId
     };
   } catch {

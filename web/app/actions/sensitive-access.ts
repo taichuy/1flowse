@@ -13,6 +13,8 @@ import {
   formatNotificationRetryResultMessage
 } from "@/lib/operator-action-result-presenters";
 
+import { fetchRunSnapshot } from "./run-snapshot";
+
 export type DecideSensitiveAccessApprovalTicketState = {
   status: "idle" | "success" | "error";
   message: string;
@@ -136,6 +138,7 @@ export async function decideSensitiveAccessApprovalTicket(
     }
 
     revalidateSensitiveAccessPaths([runId]);
+    const runSnapshot = await fetchRunSnapshot(runId);
 
     return {
       status: "success",
@@ -143,7 +146,8 @@ export async function decideSensitiveAccessApprovalTicket(
         waitingStatus: body?.approval_ticket?.waiting_status,
         decisionLabel: body?.request?.decision_label,
         reasonLabel: body?.request?.reason_label,
-        policySummary: body?.request?.policy_summary
+        policySummary: body?.request?.policy_summary,
+        runSnapshot
       }),
       ticketId
     };
@@ -200,6 +204,7 @@ export async function retrySensitiveAccessNotificationDispatch(
     }
 
     revalidateSensitiveAccessPaths([runId]);
+    const runSnapshot = await fetchRunSnapshot(runId);
     const effectiveTarget =
       typeof body?.notification?.target === "string" && body.notification.target.trim().length > 0
         ? body.notification.target.trim()
@@ -211,7 +216,8 @@ export async function retrySensitiveAccessNotificationDispatch(
         status: body?.notification?.status,
         error: body?.notification?.error,
         target: effectiveTarget,
-        waitingStatus: body?.approval_ticket?.waiting_status
+        waitingStatus: body?.approval_ticket?.waiting_status,
+        runSnapshot
       }),
       dispatchId,
       target: effectiveTarget

@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import { formatCleanupResultMessage } from "@/lib/operator-action-result-presenters";
 
+import { fetchRunSnapshot } from "./run-snapshot";
+
 export type CleanupRunCallbackTicketsState = {
   status: "idle" | "success" | "error";
   message: string;
@@ -78,6 +80,7 @@ export async function cleanupRunCallbackTickets(
     const scheduledResumeCount = body?.scheduled_resume_count ?? 0;
     const terminatedCount = body?.terminated_count ?? 0;
     const matchedCount = body?.matched_count ?? 0;
+    const runSnapshot = await fetchRunSnapshot(runId);
 
     return {
       status: "success",
@@ -85,7 +88,8 @@ export async function cleanupRunCallbackTickets(
         matchedCount,
         expiredCount,
         scheduledResumeCount,
-        terminatedCount
+        terminatedCount,
+        runSnapshot
       }),
       scopeKey
     };

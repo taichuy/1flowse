@@ -11,6 +11,7 @@ type ApprovalDecisionSnapshotInput = {
   decisionLabel?: string | null;
   reasonLabel?: string | null;
   policySummary?: string | null;
+  runSnapshot?: RunSnapshotInput | null;
 };
 
 type CleanupRunCallbackTicketsSummary = {
@@ -18,6 +19,7 @@ type CleanupRunCallbackTicketsSummary = {
   expiredCount: number;
   scheduledResumeCount: number;
   terminatedCount: number;
+  runSnapshot?: RunSnapshotInput | null;
 };
 
 function joinParts(parts: Array<string | null | undefined>) {
@@ -105,10 +107,16 @@ export function formatCleanupResultMessage({
   matchedCount,
   expiredCount,
   scheduledResumeCount,
-  terminatedCount
+  terminatedCount,
+  runSnapshot
 }: CleanupRunCallbackTicketsSummary) {
+  const runSnapshotSummary = formatRunSnapshot(runSnapshot ?? {});
+
   if (matchedCount === 0) {
-    return "当前 slice 没有发现已过期的 callback ticket；如果 run 仍在等待，问题更可能在未完成审批、外部 callback 未到达，或尚未到定时恢复窗口。";
+    return joinParts([
+      "当前 slice 没有发现已过期的 callback ticket；如果 run 仍在等待，问题更可能在未完成审批、外部 callback 未到达，或尚未到定时恢复窗口。",
+      runSnapshotSummary
+    ]);
   }
 
   return joinParts([
@@ -118,7 +126,8 @@ export function formatCleanupResultMessage({
       : "本次没有新增恢复调度。",
     terminatedCount > 0
       ? `另有 ${terminatedCount} 条等待链路被终止，需要按失败路径继续排障。`
-      : null
+      : null,
+    runSnapshotSummary
   ]);
 }
 
@@ -131,17 +140,20 @@ export function formatApprovalDecisionResultMessage(
   snapshot?: ApprovalDecisionSnapshotInput
 ) {
   const snapshotSummary = formatApprovalSnapshot(snapshot ?? {});
+  const runSnapshotSummary = formatRunSnapshot(snapshot?.runSnapshot ?? {});
 
   if (decision === "approved") {
     return joinParts([
       "审批已通过，runtime 会沿原 waiting 链路继续尝试恢复；如果 run 仍停在 waiting，请继续检查 callback 或定时恢复。",
-      snapshotSummary
+      snapshotSummary,
+      runSnapshotSummary
     ]);
   }
 
   return joinParts([
     "审批已拒绝，对应等待中的执行会保持 blocked / failed 语义；后续应转向人工处理或重新发起新的访问请求。",
-    snapshotSummary
+    snapshotSummary,
+    runSnapshotSummary
   ]);
 }
 
@@ -154,30 +166,40 @@ export function formatNotificationRetryResultMessage(input: {
   target?: string | null;
   error?: string | null;
   waitingStatus?: string | null;
+  runSnapshot?: RunSnapshotInput | null;
 }) {
   const targetLabel = input.target?.trim() ? input.target.trim() : "当前目标";
   const waitingSummary = input.waitingStatus
     ? ` 当前 waiting 链路：${input.waitingStatus}。`
     : "";
+  const runSnapshotSummary = formatRunSnapshot(input.runSnapshot ?? {});
 
   if (input.status === "delivered") {
-    return `通知已重新投递到 ${targetLabel}。这一步只表示审批请求已送达；run 仍需等待人工决策后才会继续。${waitingSummary}`;
+    return joinParts([
+      `通知已重新投递到 ${targetLabel}。这一步只表示审批请求已送达；run 仍需等待人工决策后才会继续。${waitingSummary}`,
+      runSnapshotSummary
+    ]);
   }
 
   if (input.status === "pending") {
-    return `通知已按 ${targetLabel} 重新入队，等待 worker 投递。当前 run 仍会保持 waiting，直到审批完成或阻塞解除。${waitingSummary}`;
+    return joinParts([
+      `通知已按 ${targetLabel} 重新入队，等待 worker 投递。当前 run 仍会保持 waiting，直到审批完成或阻塞解除。${waitingSummary}`,
+      runSnapshotSummary
+    ]);
   }
 
   if (input.status === "failed") {
     return joinParts([
       input.error ?? "通知已重试，但当前通道仍未成功投递。",
       "这意味着审批人可能仍未收到请求，run 也不会因此自动恢复。",
-      input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null
+      input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null,
+      runSnapshotSummary
     ]);
   }
 
   return joinParts([
     "通知已触发重试，请继续回看最新通知状态与审批结果，确认阻塞是否真正解除。",
-    input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null
+    input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null,
+    runSnapshotSummary
   ]);
 }
