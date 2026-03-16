@@ -16,8 +16,8 @@
 - 当前仍未进入“只剩界面润色或人工全链路验收”的阶段，后续开发应继续围绕主业务闭环推进，因此本轮不触发人工界面验收通知脚本。
 - 2026-03-16 再次按 `AGENTS.md`、产品/技术/策略基线、`docs/history/` 与最近一次提交复核后，可以确认：当前项目基础框架已经足够承接持续功能开发，不需要回头重搭主骨架；现阶段的核心任务是沿既有主线继续治理 runtime / waiting / diagnostics / editor 热点，避免复杂度重新堆回单体模块。
 - 2026-03-16 全量健康度复核已通过一轮真实 smoke validation：后端 `api/.venv/Scripts/uv.exe run pytest -q` 共 `300 passed`，前端 `web/pnpm exec tsc --noEmit` 通过。当前“可继续功能开发”的判断不只来自文档推演，也来自现有主链验证。
-- 最近一次 Git 提交 `5fe1652 docs: record status review after workspace starter split` 属于文档留痕更新；最近一次正式代码提交仍是 `94ad5ed refactor: split workspace starter library state`。两者都在沿同一条主线收敛：先通过 history/runtime 索引明确当前事实，再继续拆解高耦合热点，不存在需要回退或改道的阶段切换信号。
-- 最近一次 Git 提交 `94ad5ed refactor: split workspace starter library state` 是自然衔接点而不是阶段切换点：它把 workspace starter library 的 templates/filter/selection/form/message/bulk governance/source sync orchestration 从页面壳层下沉到独立 hook，继续落实同一条“热点组件拆 state / helper、保持壳层轻量”的主线。这说明仓库当前应继续在既有 runtime、publish、editor、governance 主链上收口一致性，而不是回头重造基础框架。
+- 最近一次 Git 提交已更新为 `159b712 docs: record architecture assessment and priorities`，它与上一条 `5fe1652 docs: record status review after workspace starter split` 一样，都是把“当前事实 + 优先级 + 主线衔接判断”沉淀到 `docs/history/` 与 `runtime-foundation`，而不是引入新的执行语义或产品方向。最近一次正式代码提交仍是 `94ad5ed refactor: split workspace starter library state`；从连续三次提交的关系看，当前主线依旧是“先留痕校准，再继续拆热点”，不存在需要回退或改道的阶段切换信号。
+- `94ad5ed refactor: split workspace starter library state` 仍是当前最明确的代码衔接点：它把 workspace starter library 的 templates/filter/selection/form/message/bulk governance/source sync orchestration 从页面壳层下沉到独立 hook，继续落实同一条“热点组件拆 state / helper、保持壳层轻量”的主线。这说明仓库当前应继续在既有 runtime、publish、editor、governance 主链上收口一致性，而不是回头重造基础框架；2026-03-16 末次复核也再次确认，这个判断和当前测试结果、代码体量热点分布保持一致。
 - 从 2026-03-16 的代码与文档交叉复核看，当前架构已经满足后续功能性开发、插件扩展性 / 兼容性推进、基础可靠性 / 稳定性和安全治理的继续演进门槛；真正的风险不在“骨架缺失”，而在于 waiting / callback、publish diagnostics、sensitive access policy explanation 和若干 service / state hook 热点如果不持续解耦，会拖慢后续闭环速度。
 - 2026-03-16 sensitive access 的 notification channel governance 已继续推进为真实 operator diagnostics：`/api/sensitive-access/notification-channels` 不再只返回静态 capability，而是会聚合 `NotificationDispatch` 的 `pending / delivered / failed` 摘要、latest failure 脱敏 target、email SMTP 配置事实与 health reason；`web/app/sensitive-access/page.tsx` 同页即可完成 channel health-check / config drilldown，不用再只靠 worker 错误或单条 dispatch 排障。
 - 2026-03-16 sensitive access inbox 已把同页 operator UI 继续推进到批量治理：后端新增 `/api/sensitive-access/approval-tickets/bulk-decision` 与 `/api/sensitive-access/notification-dispatches/bulk-retry`，允许对当前筛选结果集中的 `pending + waiting` 票据做批量批准 / 拒绝，并对每条票据最新且未成功投递的通知做批量 retry；前端 `SensitiveAccessInboxPanel` 也已补上 bulk governance card、operator 输入、跳过原因摘要和按 run 的失效刷新，避免通知 diagnostics 已可见但治理动作仍停留在逐条点击。
@@ -178,7 +178,7 @@
 8. **P2：先把 `organization / workspace / member / role / publish governance` 写成最小领域模型设计稿**
    - 在不提前引入重 IAM 或复杂多组织计费系统的前提下，先收敛 Team / Enterprise 最小治理模型与 API 预留，明确哪些属于 Community kernel、哪些属于商业治理能力，避免后续实现、README 和对外叙事再次混线。
 9. **P2：继续收敛 Community License 的执行边界**
-   - 围绕 `workspace = tenant`、多租户托管、商业化对立面、前端品牌替换和白标分发等触发条件，继续补文档、术语定义和未来商业授权入口，避免许可证文本有了但执行口径仍模糊。
+   - 围绕 `workspace = tenant`、多租户托管、商业化对立面、前��品牌替换和白标分发等触发条件，继续补文档、术语定义和未来商业授权入口，避免许可证文本有了但执行口径仍模糊。
 10. **P3：继续完善 AI 协作 skill 的双层体系**
    - 根据后续实现节奏，继续补强 backend refactor、runtime debugging、发布治理验证等高复用流程，并定期复核 skill 与 `AGENTS.md`、`runtime-foundation.md`、README 索引的一致性，避免 skill 再次漂移。
 11. **P3：把 OpenClaw-first README / demo / 首页入口收成可传播资产**
