@@ -77,6 +77,19 @@ export function CallbackWaitingSummaryCard({
       : recommendedAction?.kind === "cleanup_expired_tickets"
         ? "cleanup"
         : null;
+  const inlineStatusHint =
+    recommendedAction?.kind === "monitor_callback"
+      ? "建议先观察 callback ticket 与外部系统；若确认回调已到达但 run 仍未推进，再尝试手动恢复。"
+      : recommendedAction?.kind === "watch_scheduled_resume"
+        ? "系统已安排定时恢复；仅在需要绕过当前 backoff 时，再手动恢复或清理过期 ticket。"
+        : null;
+  const recommendedCtaHref =
+    recommendedAction?.kind === "open_inbox" ||
+    recommendedAction?.kind === "inspect_termination" ||
+    recommendedAction?.kind === "monitor_callback" ||
+    recommendedAction?.kind === "watch_scheduled_resume"
+      ? inboxHref
+      : null;
   const hasContent =
     headline ||
     approvalSummary ||
@@ -125,17 +138,10 @@ export function CallbackWaitingSummaryCard({
           Recommended next action: <strong>{recommendedAction.label}.</strong> {recommendedAction.detail}
         </p>
       ) : null}
-      {recommendedAction?.kind === "open_inbox" && inboxHref ? (
+      {recommendedCtaHref ? (
         <div className="event-type-strip">
-          <Link className="event-chip inbox-filter-link" href={inboxHref}>
-            {recommendedAction.ctaLabel ?? "Open inbox slice"}
-          </Link>
-        </div>
-      ) : null}
-      {recommendedAction?.kind === "inspect_termination" && inboxHref ? (
-        <div className="event-type-strip">
-          <Link className="event-chip inbox-filter-link" href={inboxHref}>
-            {recommendedAction.ctaLabel ?? "Review blocker timeline"}
+          <Link className="event-chip inbox-filter-link" href={recommendedCtaHref}>
+            {recommendedAction?.ctaLabel ?? "Open inbox slice"}
           </Link>
         </div>
       ) : null}
@@ -152,6 +158,7 @@ export function CallbackWaitingSummaryCard({
         nodeRunId={nodeRunId}
         preferredAction={preferredInlineAction}
         runId={runId ?? null}
+        statusHint={inlineStatusHint}
       />
     </div>
   );

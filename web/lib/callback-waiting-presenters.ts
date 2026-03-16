@@ -324,7 +324,8 @@ export function getCallbackWaitingRecommendedAction({
     return {
       kind: "monitor_callback",
       label: "Wait for callback result",
-      detail: `${formatCountLabel(pendingTicketCount, "callback ticket")} is still pending, so the main action is to monitor the ticket or the external tool rather than forcing another resume.`
+      detail: `${formatCountLabel(pendingTicketCount, "callback ticket")} is still pending, so the main action is to monitor the ticket or the external tool rather than forcing another resume.`,
+      ctaLabel: "Open waiting inbox"
     };
   }
 
@@ -344,7 +345,8 @@ export function getCallbackWaitingRecommendedAction({
     return {
       kind: "watch_scheduled_resume",
       label: "Watch the scheduled resume",
-      detail: `The runtime already scheduled a resume in ${scheduledResumeDelaySeconds}s, so intervention is optional unless the operator wants to bypass the backoff.`
+      detail: `The runtime already scheduled a resume in ${scheduledResumeDelaySeconds}s, so intervention is optional unless the operator wants to bypass the backoff.`,
+      ctaLabel: "Open waiting inbox"
     };
   }
 

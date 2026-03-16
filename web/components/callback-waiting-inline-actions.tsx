@@ -15,6 +15,7 @@ type CallbackWaitingInlineActionsProps = {
   compact?: boolean;
   allowManualResume?: boolean;
   preferredAction?: "resume" | "cleanup" | null;
+  statusHint?: string | null;
 };
 
 const initialState: CleanupRunCallbackTicketsState = {
@@ -34,7 +35,8 @@ export function CallbackWaitingInlineActions({
   nodeRunId = null,
   compact = false,
   allowManualResume = true,
-  preferredAction = null
+  preferredAction = null,
+  statusHint = null
 }: CallbackWaitingInlineActionsProps) {
   const router = useRouter();
   const [cleanupState, cleanupAction] = useActionState(cleanupRunCallbackTickets, initialState);
@@ -95,6 +97,7 @@ export function CallbackWaitingInlineActions({
   return (
     <div className={compact ? "entry-card compact-card" : undefined}>
       {compact ? <p className="entry-card-title">Callback actions</p> : null}
+      {statusHint ? <p className="empty-state compact">{statusHint}</p> : null}
       {preferredAction === "resume" ? (
         <p className="empty-state compact">建议先手动恢复；若仍卡住，再处理过期 ticket。</p>
       ) : null}
