@@ -1057,6 +1057,56 @@ def test_create_workflow_rejects_invalid_node_contract_schema(client: TestClient
     assert "inputSchema.type" in response.json()["detail"]
 
 
+def test_validate_workflow_definition_preflight_returns_normalized_definition(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Preflight Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    definition = _valid_definition()
+    definition["nodes"][1]["runtimePolicy"] = {
+        "execution": {
+            "class": "inline",
+        }
+    }
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={"definition": definition},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["next_version"] == "0.1.1"
+    assert body["definition"]["nodes"][1]["runtimePolicy"]["execution"]["class"] == "inline"
+
+
+def test_validate_workflow_definition_preflight_rejects_invalid_publish_reference(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Broken Preflight Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    definition = _valid_publish_definition()
+    definition["publish"][0]["workflowVersion"] = "9.9.9"
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={"definition": definition},
+    )
+
+    assert response.status_code == 422
+    assert "unknown publish workflow versions" in response.json()["detail"]
+
+
 def test_create_workflow_rejects_invalid_publish_contract_schema(
     client: TestClient,
 ) -> None:

@@ -163,6 +163,15 @@ class WorkflowUpdate(BaseModel):
         return self
 
 
+class WorkflowDefinitionPreflightRequest(BaseModel):
+    definition: dict = Field(default_factory=dict)
+
+
+class WorkflowDefinitionPreflightResult(BaseModel):
+    definition: dict
+    next_version: str
+
+
 class WorkflowListItem(BaseModel):
     id: str
     name: str

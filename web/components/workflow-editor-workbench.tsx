@@ -17,7 +17,11 @@ import type {
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
-import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
+import {
+  type WorkflowDetail,
+  type WorkflowListItem,
+  validateWorkflowDefinition
+} from "@/lib/get-workflows";
 import { buildWorkspaceStarterPayload } from "@/lib/workspace-starter-payload";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
@@ -212,6 +216,7 @@ export function WorkflowEditorWorkbench({
       setMessageTone("idle");
 
       try {
+        const preflight = await validateWorkflowDefinition(workflow.id, graph.currentDefinition);
         const response = await fetch(
           `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflow.id)}`,
           {
@@ -221,7 +226,7 @@ export function WorkflowEditorWorkbench({
             },
             body: JSON.stringify({
               name: graph.workflowName.trim() || workflow.name,
-              definition: graph.currentDefinition
+              definition: preflight.definition
             })
           }
         );
@@ -236,12 +241,16 @@ export function WorkflowEditorWorkbench({
         }
 
         graph.setPersistedWorkflowName(graph.workflowName.trim() || workflow.name);
-        graph.setPersistedDefinition(graph.currentDefinition);
+        graph.setPersistedDefinition(preflight.definition);
         graph.setWorkflowVersion(body?.version ?? graph.workflowVersion);
         setMessage(`已保存 workflow，当前版本 ${body?.version ?? graph.workflowVersion}。`);
         setMessageTone("success");
-      } catch {
-        setMessage("无法连接后端保存 workflow，请确认 API 已启动。");
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "无法连接后端保存 workflow，请确认 API 已启动。"
+        );
         setMessageTone("error");
       }
     });

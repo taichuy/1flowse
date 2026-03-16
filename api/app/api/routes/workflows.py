@@ -7,6 +7,8 @@ from app.models.workflow import Workflow
 from app.schemas.run import WorkflowRunListItem
 from app.schemas.workflow import (
     WorkflowCreate,
+    WorkflowDefinitionPreflightRequest,
+    WorkflowDefinitionPreflightResult,
     WorkflowDetail,
     WorkflowListItem,
     WorkflowUpdate,
@@ -37,6 +39,26 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 workflow_mutation_service = WorkflowMutationService(CompiledBlueprintService())
 
 
+def _validate_workflow_definition_for_persistence(
+    db: Session,
+    *,
+    definition: dict,
+    workflow: Workflow | None = None,
+) -> tuple[dict, str]:
+    current_version = "0.1.0" if workflow is None else bump_workflow_version(workflow.version)
+    validated_definition = validate_persistable_workflow_definition(
+        definition,
+        tool_index=build_workflow_tool_reference_index(db),
+        adapters=build_workflow_adapter_reference_list(db),
+        allowed_publish_versions=build_allowed_publish_workflow_versions(
+            db,
+            workflow_id=workflow.id if workflow is not None else None,
+            current_version=current_version,
+        ),
+    )
+    return validated_definition, current_version
+
+
 @router.get("", response_model=list[WorkflowListItem])
 def list_workflows(db: Session = Depends(get_db)) -> list[WorkflowListItem]:
     items = db.scalars(select(Workflow).order_by(Workflow.name.asc())).all()
@@ -54,14 +76,9 @@ def list_workflows(db: Session = Depends(get_db)) -> list[WorkflowListItem]:
 @router.post("", response_model=WorkflowDetail, status_code=status.HTTP_201_CREATED)
 def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)) -> WorkflowDetail:
     try:
-        definition = validate_persistable_workflow_definition(
-            payload.definition,
-            tool_index=build_workflow_tool_reference_index(db),
-            adapters=build_workflow_adapter_reference_list(db),
-            allowed_publish_versions=build_allowed_publish_workflow_versions(
-                db,
-                current_version="0.1.0",
-            ),
+        definition, _ = _validate_workflow_definition_for_persistence(
+            db,
+            definition=payload.definition,
         )
     except WorkflowDefinitionValidationError as exc:
         raise HTTPException(
@@ -106,15 +123,10 @@ def update_workflow(
     definition = None
     if payload.definition is not None:
         try:
-            definition = validate_persistable_workflow_definition(
-                payload.definition,
-                tool_index=build_workflow_tool_reference_index(db),
-                adapters=build_workflow_adapter_reference_list(db),
-                allowed_publish_versions=build_allowed_publish_workflow_versions(
-                    db,
-                    workflow_id=workflow.id,
-                    current_version=bump_workflow_version(workflow.version),
-                ),
+            definition, _ = _validate_workflow_definition_for_persistence(
+                db,
+                definition=payload.definition,
+                workflow=workflow,
             )
         except WorkflowDefinitionValidationError as exc:
             raise HTTPException(
@@ -138,6 +150,37 @@ def update_workflow(
     db.commit()
     db.refresh(workflow)
     return build_workflow_detail(db, workflow)
+
+
+@router.post(
+    "/{workflow_id}/validate-definition",
+    response_model=WorkflowDefinitionPreflightResult,
+)
+def validate_workflow_definition_preflight(
+    workflow_id: str,
+    payload: WorkflowDefinitionPreflightRequest,
+    db: Session = Depends(get_db),
+) -> WorkflowDefinitionPreflightResult:
+    workflow = db.get(Workflow, workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found.")
+
+    try:
+        definition, next_version = _validate_workflow_definition_for_persistence(
+            db,
+            definition=payload.definition,
+            workflow=workflow,
+        )
+    except WorkflowDefinitionValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return WorkflowDefinitionPreflightResult(
+        definition=definition,
+        next_version=next_version,
+    )
 
 
 @router.get("/{workflow_id}/versions", response_model=list[WorkflowVersionItem])

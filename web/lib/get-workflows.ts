@@ -47,6 +47,11 @@ export type WorkflowDetail = WorkflowListItem & {
   }>;
 };
 
+export type WorkflowDefinitionPreflightResult = {
+  definition: WorkflowDetail["definition"];
+  next_version: string;
+};
+
 export async function getWorkflows(): Promise<WorkflowListItem[]> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/workflows`, {
@@ -87,4 +92,32 @@ export async function getWorkflowDetail(
   } catch {
     return null;
   }
+}
+
+export async function validateWorkflowDefinition(
+  workflowId: string,
+  definition: WorkflowDetail["definition"]
+): Promise<WorkflowDefinitionPreflightResult> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowId)}/validate-definition`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ definition })
+    }
+  );
+
+  const body = (await response.json().catch(() => null)) as
+    | ({ detail?: string } & Partial<WorkflowDefinitionPreflightResult>)
+    | null;
+  if (!response.ok) {
+    throw new Error(body?.detail ?? `Validation failed with status ${response.status}.`);
+  }
+
+  return {
+    definition: body?.definition ?? definition,
+    next_version: body?.next_version ?? "0.1.0"
+  };
 }
