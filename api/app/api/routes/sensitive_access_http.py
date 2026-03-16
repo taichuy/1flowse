@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import status
 from fastapi.responses import JSONResponse
 
+from app.services.sensitive_access_reasoning import describe_sensitive_access_reasoning
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
 __all__ = [
@@ -13,6 +14,10 @@ __all__ = [
 
 def serialize_sensitive_access_bundle(bundle: SensitiveAccessRequestBundle) -> dict:
     approval_ticket = bundle.approval_ticket
+    reasoning = describe_sensitive_access_reasoning(
+        decision=bundle.access_request.decision,
+        reason_code=bundle.access_request.reason_code,
+    )
     return {
         "resource": {
             "id": bundle.resource.id,
@@ -32,7 +37,10 @@ def serialize_sensitive_access_bundle(bundle: SensitiveAccessRequestBundle) -> d
             "action_type": bundle.access_request.action_type,
             "purpose_text": bundle.access_request.purpose_text,
             "decision": bundle.access_request.decision,
+            "decision_label": reasoning.decision_label,
             "reason_code": bundle.access_request.reason_code,
+            "reason_label": reasoning.reason_label,
+            "policy_summary": reasoning.policy_summary,
         },
         "approval_ticket": (
             {

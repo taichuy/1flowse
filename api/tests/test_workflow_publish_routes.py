@@ -1549,6 +1549,13 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     assert detail_body["sensitive_access_entries"][0]["request"]["reason_code"] == (
         "approved_after_review"
     )
+    assert detail_body["sensitive_access_entries"][0]["request"]["decision_label"] == "Allowed"
+    assert detail_body["sensitive_access_entries"][0]["request"]["reason_label"] == (
+        "Access approved after review"
+    )
+    assert detail_body["sensitive_access_entries"][0]["request"]["policy_summary"] == (
+        "An operator approved the request and the blocked workflow can resume."
+    )
     assert detail_body["sensitive_access_entries"][0]["approval_ticket"] == {
         "id": approval_ticket.id,
         "access_request_id": sensitive_request.id,

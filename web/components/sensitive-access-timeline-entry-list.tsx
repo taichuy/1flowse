@@ -5,6 +5,11 @@ import { useMemo, useState } from "react";
 
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
+import {
+  formatSensitiveAccessDecisionLabel,
+  formatSensitiveAccessReasonLabel,
+  getSensitiveAccessPolicySummary
+} from "@/lib/sensitive-access-presenters";
 
 type SensitiveAccessTimelineEntryListProps = {
   entries: SensitiveAccessTimelineEntry[];
@@ -304,7 +309,7 @@ export function SensitiveAccessTimelineEntryList({
             <article className="event-row compact-card" key={entry.request.id}>
               <div className="event-meta">
                 <span>{entry.resource.label}</span>
-                <span>{entry.request.decision ?? "pending"}</span>
+                <span>{formatSensitiveAccessDecisionLabel(entry.request)}</span>
               </div>
 
               <p className="event-run">
@@ -314,8 +319,10 @@ export function SensitiveAccessTimelineEntryList({
               <div className="event-type-strip">
                 <span className="event-chip">requester {entry.request.requester_type}</span>
                 <span className="event-chip">id {entry.request.requester_id}</span>
-                {entry.request.reason_code ? (
-                  <span className="event-chip">reason {entry.request.reason_code}</span>
+                {formatSensitiveAccessReasonLabel(entry.request) ? (
+                  <span className="event-chip">
+                    reason {formatSensitiveAccessReasonLabel(entry.request)}
+                  </span>
                 ) : null}
                 {entry.approval_ticket ? (
                   <span className="event-chip">ticket {entry.approval_ticket.status}</span>
@@ -342,6 +349,12 @@ export function SensitiveAccessTimelineEntryList({
 
               {entry.request.purpose_text ? (
                 <p className="section-copy entry-copy">purpose: {entry.request.purpose_text}</p>
+              ) : null}
+
+              {getSensitiveAccessPolicySummary(entry.request) ? (
+                <p className="section-copy entry-copy">
+                  policy: {getSensitiveAccessPolicySummary(entry.request)}
+                </p>
               ) : null}
 
               <dl className="compact-meta-list">

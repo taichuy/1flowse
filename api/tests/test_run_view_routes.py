@@ -283,7 +283,19 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert node["callback_tickets"][0]["expired_at"] is None
     assert node["sensitive_access_entries"][0]["resource"]["label"] == "Search Tool"
     assert node["sensitive_access_entries"][0]["request"]["decision"] == "require_approval"
+    assert (
+        node["sensitive_access_entries"][0]["request"]["decision_label"]
+        == "Approval required"
+    )
     assert node["sensitive_access_entries"][0]["request"]["action_type"] == "invoke"
+    assert (
+        node["sensitive_access_entries"][0]["request"]["reason_label"]
+        == "High-sensitivity access requires approval"
+    )
+    assert (
+        node["sensitive_access_entries"][0]["request"]["policy_summary"]
+        == "High-sensitivity access must be reviewed by an operator before the workflow can resume."
+    )
     assert node["sensitive_access_entries"][0]["approval_ticket"]["status"] == "pending"
     assert node["sensitive_access_entries"][0]["notifications"] == [
         {

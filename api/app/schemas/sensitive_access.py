@@ -73,7 +73,10 @@ class SensitiveAccessRequestItem(BaseModel):
     action_type: AccessActionType
     purpose_text: str | None = None
     decision: AccessDecision | None = None
+    decision_label: str | None = None
     reason_code: str | None = None
+    reason_label: str | None = None
+    policy_summary: str | None = None
     created_at: datetime
     decided_at: datetime | None = None
 

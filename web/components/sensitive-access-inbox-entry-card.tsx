@@ -23,6 +23,11 @@ import {
 } from "@/components/sensitive-access-inbox-panel-helpers";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
+import {
+  formatSensitiveAccessDecisionLabel,
+  formatSensitiveAccessReasonLabel,
+  getSensitiveAccessPolicySummary
+} from "@/lib/sensitive-access-presenters";
 
 type SensitiveAccessInboxEntryCardProps = {
   entry: SensitiveAccessInboxEntry;
@@ -170,6 +175,12 @@ export function SensitiveAccessInboxEntryCard({
       </p>
 
       <div className="tool-badge-row">
+        {request ? (
+          <span className="event-chip">{formatSensitiveAccessDecisionLabel(request)}</span>
+        ) : null}
+        {request && formatSensitiveAccessReasonLabel(request) ? (
+          <span className="event-chip">reason {formatSensitiveAccessReasonLabel(request)}</span>
+        ) : null}
         {entry.ticket.run_id ? (
           <Link className="event-chip inbox-filter-link" href={`/runs/${entry.ticket.run_id}`}>
             run {entry.ticket.run_id.slice(0, 8)}
@@ -184,6 +195,13 @@ export function SensitiveAccessInboxEntryCard({
         <div className="entry-card compact-card">
           <p className="entry-card-title">Purpose</p>
           <p className="section-copy entry-copy">{request.purpose_text}</p>
+        </div>
+      ) : null}
+
+      {request && getSensitiveAccessPolicySummary(request) ? (
+        <div className="entry-card compact-card">
+          <p className="entry-card-title">Policy summary</p>
+          <p className="section-copy entry-copy">{getSensitiveAccessPolicySummary(request)}</p>
         </div>
       ) : null}
 

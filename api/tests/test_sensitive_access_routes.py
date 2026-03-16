@@ -81,7 +81,13 @@ def test_request_low_sensitivity_access_allows_without_ticket(
     assert request_response.status_code == 201
     body = request_response.json()
     assert body["request"]["decision"] == "allow"
+    assert body["request"]["decision_label"] == "Allowed"
     assert body["request"]["reason_code"] == "allow_low_sensitivity"
+    assert body["request"]["reason_label"] == "Low-sensitivity access allowed"
+    assert (
+        body["request"]["policy_summary"]
+        == "Default policy allows low-sensitivity resources without extra review."
+    )
     assert body["approval_ticket"] is None
     assert body["notifications"] == []
 
@@ -121,7 +127,16 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     request_body = request_response.json()
     approval_ticket = request_body["approval_ticket"]
     assert request_body["request"]["decision"] == "require_approval"
+    assert request_body["request"]["decision_label"] == "Approval required"
     assert request_body["request"]["reason_code"] == "approval_required_high_sensitive_access"
+    assert (
+        request_body["request"]["reason_label"]
+        == "High-sensitivity access requires approval"
+    )
+    assert (
+        request_body["request"]["policy_summary"]
+        == "High-sensitivity access must be reviewed by an operator before the workflow can resume."
+    )
     assert approval_ticket is not None
     assert approval_ticket["status"] == "pending"
     assert approval_ticket["waiting_status"] == "waiting"
@@ -146,7 +161,13 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     assert decision_response.status_code == 200
     decision_body = decision_response.json()
     assert decision_body["request"]["decision"] == "allow"
+    assert decision_body["request"]["decision_label"] == "Allowed"
     assert decision_body["request"]["reason_code"] == "approved_after_review"
+    assert decision_body["request"]["reason_label"] == "Access approved after review"
+    assert (
+        decision_body["request"]["policy_summary"]
+        == "An operator approved the request and the blocked workflow can resume."
+    )
     assert decision_body["approval_ticket"]["status"] == "approved"
     assert decision_body["approval_ticket"]["waiting_status"] == "resumed"
     assert decision_body["approval_ticket"]["approved_by"] == "ops-reviewer"

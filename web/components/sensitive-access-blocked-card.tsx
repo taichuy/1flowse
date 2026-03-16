@@ -3,6 +3,11 @@
 import Link from "next/link";
 
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import {
+  formatSensitiveAccessDecisionLabel,
+  formatSensitiveAccessReasonLabel,
+  getSensitiveAccessBlockedPolicySummary
+} from "@/lib/sensitive-access-presenters";
 
 type SensitiveAccessBlockedCardProps = {
   title: string;
@@ -10,16 +15,6 @@ type SensitiveAccessBlockedCardProps = {
   clearHref?: string | null;
   summary?: string;
 };
-
-function formatDecisionLabel(payload: SensitiveAccessBlockingPayload) {
-  if (payload.access_request.decision === "require_approval") {
-    return "approval required";
-  }
-  if (payload.access_request.decision === "deny") {
-    return "denied";
-  }
-  return payload.access_request.decision;
-}
 
 export function SensitiveAccessBlockedCard({
   title,
@@ -49,7 +44,7 @@ export function SensitiveAccessBlockedCard({
       </p>
 
       <div className="tool-badge-row">
-        <span className="event-chip">{formatDecisionLabel(payload)}</span>
+        <span className="event-chip">{formatSensitiveAccessDecisionLabel(payload.access_request)}</span>
         <span className="event-chip">{payload.resource.sensitivity_level}</span>
         <span className="event-chip">{payload.access_request.action_type}</span>
         <span className="event-chip">{payload.resource.source}</span>
@@ -68,7 +63,7 @@ export function SensitiveAccessBlockedCard({
         </div>
         <div>
           <dt>Reason code</dt>
-          <dd>{payload.access_request.reason_code ?? "n/a"}</dd>
+          <dd>{formatSensitiveAccessReasonLabel(payload.access_request) ?? "n/a"}</dd>
         </div>
         <div>
           <dt>Run</dt>
@@ -101,6 +96,11 @@ export function SensitiveAccessBlockedCard({
       ) : null}
       {payload.access_request.purpose_text ? (
         <p className="section-copy entry-copy">purpose: {payload.access_request.purpose_text}</p>
+      ) : null}
+      {getSensitiveAccessBlockedPolicySummary(payload) ? (
+        <p className="section-copy entry-copy">
+          policy: {getSensitiveAccessBlockedPolicySummary(payload)}
+        </p>
       ) : null}
 
       {payload.notifications.length ? (

@@ -13,6 +13,7 @@ from app.schemas.sensitive_access import (
     SensitiveAccessTimelineEntryItem,
     SensitiveResourceItem,
 )
+from app.services.sensitive_access_reasoning import describe_sensitive_access_reasoning
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
 
@@ -32,6 +33,10 @@ def serialize_sensitive_resource(record: SensitiveResourceRecord) -> SensitiveRe
 def serialize_sensitive_access_request(
     record: SensitiveAccessRequestRecord,
 ) -> SensitiveAccessRequestItem:
+    reasoning = describe_sensitive_access_reasoning(
+        decision=record.decision,
+        reason_code=record.reason_code,
+    )
     return SensitiveAccessRequestItem(
         id=record.id,
         run_id=record.run_id,
@@ -42,7 +47,10 @@ def serialize_sensitive_access_request(
         action_type=record.action_type,
         purpose_text=record.purpose_text,
         decision=record.decision,
+        decision_label=reasoning.decision_label,
         reason_code=record.reason_code,
+        reason_label=reasoning.reason_label,
+        policy_summary=reasoning.policy_summary,
         created_at=record.created_at,
         decided_at=record.decided_at,
     )

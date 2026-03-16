@@ -17,7 +17,10 @@ export type SensitiveAccessBlockingRequest = {
   action_type: string;
   purpose_text?: string | null;
   decision: string;
+  decision_label?: string | null;
   reason_code?: string | null;
+  reason_label?: string | null;
+  policy_summary?: string | null;
 };
 
 export type SensitiveAccessBlockingApprovalTicket = {

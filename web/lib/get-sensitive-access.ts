@@ -26,7 +26,10 @@ export type SensitiveAccessRequestItem = {
   action_type: "read" | "use" | "export" | "write" | "invoke";
   purpose_text?: string | null;
   decision?: "allow" | "deny" | "require_approval" | "allow_masked" | null;
+  decision_label?: string | null;
   reason_code?: string | null;
+  reason_label?: string | null;
+  policy_summary?: string | null;
   created_at: string;
   decided_at?: string | null;
 };
