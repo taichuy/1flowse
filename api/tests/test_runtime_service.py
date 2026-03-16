@@ -404,6 +404,7 @@ def test_runtime_service_falls_back_non_inline_execution_class_for_tool_nodes(
         "requested_filesystem_policy": None,
         "executor_ref": "tool:native-inline",
         "fallback_reason": "native_tools_currently_inline_only",
+        "blocked_reason": None,
     }
 
 

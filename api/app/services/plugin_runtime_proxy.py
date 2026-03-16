@@ -70,6 +70,10 @@ class PluginCallProxy:
         )
 
     def _invoke_native_tool(self, request: PluginCallRequest) -> PluginCallResponse:
+        execution_dispatch = self.describe_execution_dispatch(request)
+        if execution_dispatch.blocked_reason:
+            raise PluginInvocationError(execution_dispatch.blocked_reason)
+
         invoker = self._registry.get_native_invoker(request.tool_id)
         if invoker is None:
             raise PluginInvocationError(
@@ -101,6 +105,8 @@ class PluginCallProxy:
         started_at = time.perf_counter()
         invoke_url = f"{adapter.endpoint.rstrip('/')}/invoke"
         execution_dispatch = self.describe_execution_dispatch(request, adapter=adapter)
+        if execution_dispatch.blocked_reason:
+            raise PluginInvocationError(execution_dispatch.blocked_reason)
         execution_contract = build_execution_contract(tool)
         normalized_inputs, normalized_credentials = normalize_contract_bound_request(
             request,

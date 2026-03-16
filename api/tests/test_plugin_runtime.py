@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 from sqlalchemy.orm import Session
 
 from app.models.workflow import Workflow
@@ -12,6 +13,7 @@ from app.services.plugin_runtime import (
     PluginCallProxy,
     PluginCallRequest,
     PluginCatalogError,
+    PluginInvocationError,
     PluginRegistry,
     PluginToolDefinition,
 )
@@ -290,7 +292,7 @@ def test_plugin_call_proxy_forwards_execution_payload_to_compat_adapter() -> Non
     assert response.duration_ms == 9
 
 
-def test_plugin_call_proxy_downgrades_unsupported_execution_class_for_compat_adapter() -> None:
+def test_plugin_call_proxy_blocks_explicit_unsupported_execution_class_for_compat_adapter() -> None:
     registry = PluginRegistry()
     registry.register_tool(
         PluginToolDefinition(
@@ -310,29 +312,19 @@ def test_plugin_call_proxy_downgrades_unsupported_execution_class_for_compat_ada
         )
     )
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content.decode())
-        assert payload["execution"] == {
-            "class": "subprocess",
-            "source": "tool_call",
-            "profile": "compat-isolation",
-            "timeoutMs": 4000,
-            "networkPolicy": "isolated",
-            "filesystemPolicy": "ephemeral",
-        }
-        return httpx.Response(
-            200,
-            json={
-                "status": "success",
-                "output": {"documents": ["doc-1"]},
-                "durationMs": 9,
-            },
-        )
-
     proxy = PluginCallProxy(
         registry,
         client_factory=lambda timeout_ms: httpx.Client(
-            transport=httpx.MockTransport(handler),
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    json={
+                        "status": "success",
+                        "output": {"documents": ["doc-1"]},
+                        "durationMs": 9,
+                    },
+                )
+            ),
             timeout=timeout_ms / 1000,
         ),
     )
@@ -363,7 +355,95 @@ def test_plugin_call_proxy_downgrades_unsupported_execution_class_for_compat_ada
         "requested_network_policy": "isolated",
         "requested_filesystem_policy": "ephemeral",
         "executor_ref": "tool:compat-adapter:dify-default",
-        "fallback_reason": "compat_adapter_execution_class_not_supported",
+        "fallback_reason": None,
+        "blocked_reason": (
+            "Compatibility adapter 'dify-default' does not support requested execution class "
+            "'microvm'. Supported classes: subprocess."
+        ),
+    }
+
+    with pytest.raises(
+        PluginInvocationError,
+        match="does not support requested execution class 'microvm'",
+    ):
+        proxy.invoke(
+            PluginCallRequest(
+                tool_id="compat:dify:plugin:demo/search",
+                ecosystem="compat:dify",
+                inputs={"query": "sevenflows"},
+                trace_id="trace-compat-execution",
+                execution={
+                    "class": "microvm",
+                    "source": "tool_call",
+                    "profile": "compat-isolation",
+                    "timeoutMs": 4000,
+                    "networkPolicy": "isolated",
+                    "filesystemPolicy": "ephemeral",
+                },
+            )
+        )
+
+
+def test_plugin_call_proxy_keeps_default_execution_fallback_for_compat_adapter() -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="compat:dify:plugin:demo/search",
+            name="Search",
+            ecosystem="compat:dify",
+            source="plugin",
+            constrained_ir=_demo_search_constrained_ir(),
+        )
+    )
+    registry.register_adapter(
+        CompatibilityAdapterRegistration(
+            id="dify-default",
+            ecosystem="compat:dify",
+            endpoint="http://adapter.local/dify",
+            supported_execution_classes=("subprocess",),
+        )
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode())
+        assert payload["execution"] == {}
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "output": {"documents": ["doc-1"]},
+                "durationMs": 9,
+            },
+        )
+
+    proxy = PluginCallProxy(
+        registry,
+        client_factory=lambda timeout_ms: httpx.Client(
+            transport=httpx.MockTransport(handler),
+            timeout=timeout_ms / 1000,
+        ),
+    )
+
+    dispatch = proxy.describe_execution_dispatch(
+        PluginCallRequest(
+            tool_id="compat:dify:plugin:demo/search",
+            ecosystem="compat:dify",
+            inputs={"query": "sevenflows"},
+            trace_id="trace-compat-execution-default",
+        )
+    )
+
+    assert dispatch.as_trace_payload() == {
+        "requested_execution_class": "subprocess",
+        "effective_execution_class": "subprocess",
+        "execution_source": "default",
+        "requested_execution_profile": None,
+        "requested_execution_timeout_ms": None,
+        "requested_network_policy": None,
+        "requested_filesystem_policy": None,
+        "executor_ref": "tool:compat-adapter:dify-default",
+        "fallback_reason": None,
+        "blocked_reason": None,
     }
 
     response = proxy.invoke(
@@ -371,21 +451,12 @@ def test_plugin_call_proxy_downgrades_unsupported_execution_class_for_compat_ada
             tool_id="compat:dify:plugin:demo/search",
             ecosystem="compat:dify",
             inputs={"query": "sevenflows"},
-            trace_id="trace-compat-execution",
-            execution={
-                "class": "microvm",
-                "source": "tool_call",
-                "profile": "compat-isolation",
-                "timeoutMs": 4000,
-                "networkPolicy": "isolated",
-                "filesystemPolicy": "ephemeral",
-            },
+            trace_id="trace-compat-execution-default",
         )
     )
 
     assert response.status == "success"
     assert response.output == {"documents": ["doc-1"]}
-    assert response.duration_ms == 9
 
 
 def test_plugin_call_proxy_rejects_unsupported_contract_fields() -> None:

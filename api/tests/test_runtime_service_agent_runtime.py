@@ -2,6 +2,7 @@
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 from sqlalchemy.orm import Session
 
 from app.models.run import RunCallbackTicket
@@ -14,6 +15,7 @@ from app.services.plugin_runtime import (
 )
 from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.runtime import RuntimeService
+from app.services.runtime_types import WorkflowExecutionError
 
 
 def _compat_demo_search_constrained_ir() -> dict:
@@ -286,6 +288,7 @@ def test_llm_agent_tool_policy_execution_records_tool_execution_trace(
         "requested_filesystem_policy": None,
         "executor_ref": "tool:native-inline",
         "fallback_reason": "native_tools_currently_inline_only",
+        "blocked_reason": None,
     }
 
 
@@ -417,10 +420,11 @@ def test_llm_agent_tool_call_execution_override_wins_over_tool_policy(
         "requested_filesystem_policy": "ephemeral",
         "executor_ref": "tool:native-inline",
         "fallback_reason": "native_tools_currently_inline_only",
+        "blocked_reason": None,
     }
 
 
-def test_llm_agent_tool_call_execution_override_is_forwarded_to_compat_adapter(
+def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_compat_execution(
     sqlite_session: Session,
 ) -> None:
     workflow = Workflow(
@@ -498,16 +502,6 @@ def test_llm_agent_tool_call_execution_override_is_forwarded_to_compat_adapter(
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content.decode())
         captured_payloads.append(payload)
-        assert payload["toolId"] == "compat:dify:plugin:demo/search"
-        assert payload["adapterId"] == "dify-default"
-        assert payload["execution"] == {
-            "class": "subprocess",
-            "source": "tool_call",
-            "profile": "per-call-compat",
-            "timeoutMs": 4000,
-            "networkPolicy": "isolated",
-            "filesystemPolicy": "ephemeral",
-        }
         return httpx.Response(
             200,
             json={
@@ -533,49 +527,13 @@ def test_llm_agent_tool_call_execution_override_is_forwarded_to_compat_adapter(
         )
     )
 
-    artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "agent"})
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="does not support requested execution class 'microvm'",
+    ):
+        runtime.execute_workflow(sqlite_session, workflow, {"topic": "agent"})
 
-    assert artifacts.run.status == "succeeded"
-    assert len(captured_payloads) == 1
-    agent_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "agent")
-    dispatched_event = next(
-        event
-        for event in artifacts.events
-        if event.node_run_id == agent_run.id and event.event_type == "tool.execution.dispatched"
-    )
-    assert dispatched_event.payload == {
-        "node_id": "agent",
-        "tool_id": "compat:dify:plugin:demo/search",
-        "tool_name": "Compat Search",
-        "requested_execution_class": "microvm",
-        "effective_execution_class": "subprocess",
-        "execution_source": "tool_call",
-        "requested_execution_profile": "per-call-compat",
-        "requested_execution_timeout_ms": 4000,
-        "requested_network_policy": "isolated",
-        "requested_filesystem_policy": "ephemeral",
-        "executor_ref": "tool:compat-adapter:dify-default",
-    }
-
-    fallback_event = next(
-        event
-        for event in artifacts.events
-        if event.node_run_id == agent_run.id and event.event_type == "tool.execution.fallback"
-    )
-    assert fallback_event.payload == {
-        "node_id": "agent",
-        "tool_id": "compat:dify:plugin:demo/search",
-        "tool_name": "Compat Search",
-        "requested_execution_class": "microvm",
-        "effective_execution_class": "subprocess",
-        "execution_source": "tool_call",
-        "requested_execution_profile": "per-call-compat",
-        "requested_execution_timeout_ms": 4000,
-        "requested_network_policy": "isolated",
-        "requested_filesystem_policy": "ephemeral",
-        "executor_ref": "tool:compat-adapter:dify-default",
-        "reason": "compat_adapter_execution_class_not_supported",
-    }
+    assert captured_payloads == []
 
 
 def test_llm_agent_waiting_tool_can_resume(sqlite_session: Session) -> None:

@@ -100,6 +100,7 @@ class PluginExecutionDispatchPlan:
     executor_ref: str
     effective_execution: dict[str, Any] = field(default_factory=dict)
     fallback_reason: str | None = None
+    blocked_reason: str | None = None
 
     def as_trace_payload(self) -> dict[str, Any]:
         return {
@@ -112,6 +113,7 @@ class PluginExecutionDispatchPlan:
             "requested_filesystem_policy": self.requested_filesystem_policy,
             "executor_ref": self.executor_ref,
             "fallback_reason": self.fallback_reason,
+            "blocked_reason": self.blocked_reason,
         }
 
 

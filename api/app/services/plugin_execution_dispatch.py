@@ -75,8 +75,19 @@ class PluginExecutionDispatchPlanner:
             else supported_execution_classes[0]
         )
         fallback_reason = None
+        blocked_reason = None
         if requested_execution_class != effective_execution_class:
-            fallback_reason = "compat_adapter_execution_class_not_supported"
+            if self._requires_fail_closed(
+                requested_execution_class=requested_execution_class,
+                execution_source=execution_source,
+            ):
+                blocked_reason = (
+                    f"Compatibility adapter '{resolved_adapter.id}' does not support requested "
+                    f"execution class '{requested_execution_class}'. Supported classes: "
+                    f"{', '.join(supported_execution_classes)}."
+                )
+            else:
+                fallback_reason = "compat_adapter_execution_class_not_supported"
         return PluginExecutionDispatchPlan(
             requested_execution_class=requested_execution_class,
             effective_execution_class=effective_execution_class,
@@ -96,6 +107,18 @@ class PluginExecutionDispatchPlanner:
                 execution_source=execution_source,
             ),
             fallback_reason=fallback_reason,
+            blocked_reason=blocked_reason,
+        )
+
+    @staticmethod
+    def _requires_fail_closed(
+        *,
+        requested_execution_class: str,
+        execution_source: str,
+    ) -> bool:
+        return (
+            requested_execution_class != "inline"
+            and execution_source in {"tool_call", "tool_policy", "runtime_policy"}
         )
 
     @staticmethod
