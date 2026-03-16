@@ -1,7 +1,7 @@
 from collections import Counter
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
-from app.schemas.run_views import CallbackWaitingLifecycleSummary, RunCallbackTicketItem
+from app.schemas.run_views import RunCallbackTicketItem
 from app.schemas.workflow_publish import (
     PublishedEndpointCacheInventoryItem,
     PublishedEndpointInvocationApiKeyUsageItem,
@@ -9,8 +9,8 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationRequestSurface,
     PublishedEndpointInvocationWaitingLifecycle,
 )
-from app.services.callback_waiting_lifecycle import load_callback_waiting_lifecycle
 from app.services.published_invocations import classify_invocation_reason
+from app.services.run_view_serializers import serialize_callback_waiting_lifecycle_summary
 
 
 def serialize_published_invocation_item(
@@ -94,34 +94,6 @@ def resolve_waiting_node_run(run: Run, node_runs: list[NodeRun]) -> NodeRun | No
         (node_run for node_run in node_runs if node_run.waiting_reason is not None),
         None,
     )
-
-
-def serialize_callback_waiting_lifecycle_summary(
-    checkpoint_payload: dict | None,
-) -> CallbackWaitingLifecycleSummary | None:
-    lifecycle = load_callback_waiting_lifecycle(checkpoint_payload)
-    if not any(
-        lifecycle.get(key)
-        for key in (
-            "wait_cycle_count",
-            "issued_ticket_count",
-            "expired_ticket_count",
-            "consumed_ticket_count",
-            "canceled_ticket_count",
-            "late_callback_count",
-            "resume_schedule_count",
-            "max_expired_ticket_count",
-            "terminated",
-            "termination_reason",
-            "terminated_at",
-            "last_ticket_status",
-            "last_late_callback_status",
-            "last_resume_delay_seconds",
-            "last_resume_backoff_attempt",
-        )
-    ):
-        return None
-    return CallbackWaitingLifecycleSummary(**lifecycle)
 
 
 def serialize_waiting_lifecycle(
