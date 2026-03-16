@@ -18,6 +18,27 @@ class CompatibilityAdapterCheck(BaseModel):
     detail: str | None = None
 
 
+class SandboxBackendCapabilityCheck(BaseModel):
+    supported_execution_classes: list[str] = Field(default_factory=list)
+    supported_languages: list[str] = Field(default_factory=list)
+    supported_profiles: list[str] = Field(default_factory=list)
+    supported_dependency_modes: list[str] = Field(default_factory=list)
+    supports_builtin_package_sets: bool = False
+    supports_backend_extensions: bool = False
+    supports_network_policy: bool = False
+    supports_filesystem_policy: bool = False
+
+
+class SandboxBackendCheck(BaseModel):
+    id: str
+    kind: str
+    endpoint: str
+    enabled: bool
+    status: str
+    capability: SandboxBackendCapabilityCheck = Field(default_factory=SandboxBackendCapabilityCheck)
+    detail: str | None = None
+
+
 class PluginToolCheck(BaseModel):
     id: str
     name: str
@@ -66,5 +87,6 @@ class SystemOverview(BaseModel):
     services: list[ServiceCheck]
     capabilities: list[str]
     plugin_adapters: list[CompatibilityAdapterCheck] = Field(default_factory=list)
+    sandbox_backends: list[SandboxBackendCheck] = Field(default_factory=list)
     plugin_tools: list[PluginToolCheck] = Field(default_factory=list)
     runtime_activity: RuntimeActivityCheck = Field(default_factory=RuntimeActivityCheck)

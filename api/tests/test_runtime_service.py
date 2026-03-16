@@ -5,6 +5,13 @@ from sqlalchemy.orm import Session
 from app.models.workflow import Workflow, WorkflowCompiledBlueprint
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
 from app.services.runtime import RuntimeService, WorkflowExecutionError
+from app.services.sandbox_backends import (
+    SandboxBackendCapability,
+    SandboxBackendClient,
+    SandboxBackendSelection,
+    SandboxExecutionRequest,
+    SandboxExecutionResponse,
+)
 
 
 def test_runtime_service_executes_linear_workflow(
@@ -158,7 +165,7 @@ def test_runtime_service_blocks_sandbox_code_without_registered_backend(
     service = RuntimeService()
     with pytest.raises(
         WorkflowExecutionError,
-        match="Strong-isolation paths must fail closed until a sandbox backend is available",
+        match="No compatible sandbox backend is currently available",
     ):
         service.execute_workflow(
             sqlite_session,
@@ -262,6 +269,99 @@ def test_runtime_service_executes_sandbox_code_via_explicit_subprocess_mvp(
         "executorRef": "host_subprocess_python",
     }
 
+
+class _SandboxBackendClientStub(SandboxBackendClient):
+    def __init__(self) -> None:
+        self.requests: list[SandboxExecutionRequest] = []
+
+    def describe_execution_backend(self, request: SandboxExecutionRequest) -> SandboxBackendSelection:
+        return SandboxBackendSelection(
+            available=True,
+            backend_id="sandbox-default",
+            executor_ref="sandbox-backend:sandbox-default",
+            capability=SandboxBackendCapability(
+                supported_execution_classes=("sandbox",),
+                supported_languages=("python",),
+                supports_network_policy=True,
+                supports_filesystem_policy=True,
+            ),
+            health_status="healthy",
+        )
+
+    def execute(self, request: SandboxExecutionRequest) -> SandboxExecutionResponse:
+        self.requests.append(request)
+        return SandboxExecutionResponse(
+            backend_id="sandbox-default",
+            executor_ref="sandbox-backend:sandbox-default",
+            effective_execution_class="sandbox",
+            result={
+                "answer": request.node_input["trigger_input"]["topic"].upper(),
+                "requested": request.execution_class,
+            },
+            stdout="sandbox stdout",
+            stderr="",
+        )
+
+
+def test_runtime_service_executes_sandbox_code_via_registered_backend(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-sandbox-code-remote",
+        name="Sandbox Backend Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "name": "Sandbox",
+                    "config": {
+                        "language": "python",
+                        "code": 'result = {"answer": "unused"}',
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "profile": "python-safe",
+                            "timeoutMs": 15000,
+                            "networkPolicy": "restricted",
+                            "filesystemPolicy": "ephemeral",
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _SandboxBackendClientStub()
+    artifacts = RuntimeService(sandbox_backend_client=sandbox_backend_client).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "remote"},
+    )
+
+    sandbox_run = next(
+        node_run for node_run in artifacts.node_runs if node_run.node_id == "sandbox"
+    )
+    assert sandbox_run.output_payload == {
+        "answer": "REMOTE",
+        "requested": "sandbox",
+    }
+    assert len(sandbox_backend_client.requests) == 1
+    assert sandbox_backend_client.requests[0].profile == "python-safe"
+    assert sandbox_backend_client.requests[0].network_policy == "restricted"
+    assert sandbox_backend_client.requests[0].filesystem_policy == "ephemeral"
+
     dispatched_event = next(
         event
         for event in artifacts.events
@@ -270,11 +370,24 @@ def test_runtime_service_executes_sandbox_code_via_explicit_subprocess_mvp(
     assert dispatched_event.payload == {
         "node_id": "sandbox",
         "node_type": "sandbox_code",
-        "requested_execution_class": "subprocess",
-        "effective_execution_class": "subprocess",
-        "executor_ref": "runtime:host-subprocess-sandbox-code",
+        "requested_execution_class": "sandbox",
+        "effective_execution_class": "sandbox",
+        "executor_ref": "sandbox-backend:sandbox-default",
     }
 
+    sandbox_artifact = next(
+        artifact for artifact in artifacts.artifacts if artifact.node_run_id == sandbox_run.id
+    )
+    assert sandbox_artifact.payload == {
+        "language": "python",
+        "result": {"answer": "REMOTE", "requested": "sandbox"},
+        "stdout": "sandbox stdout",
+        "stderr": "",
+        "requestedExecutionClass": "sandbox",
+        "effectiveExecutionClass": "sandbox",
+        "executorRef": "sandbox-backend:sandbox-default",
+        "backendId": "sandbox-default",
+    }
 
 def test_runtime_service_falls_back_non_inline_execution_class_for_tool_nodes(
     sqlite_session: Session,

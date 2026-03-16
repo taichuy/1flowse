@@ -9,6 +9,11 @@ from sqlalchemy.orm import Session
 from app.models.run import NodeRun
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
+from app.services.sandbox_backends import (
+    SandboxBackendClient,
+    SandboxExecutionRequest,
+    get_sandbox_backend_client,
+)
 from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_sandbox_code import HostSandboxCodeExecutor
 from app.services.runtime_types import (
@@ -155,6 +160,101 @@ class SandboxCodeExecutionAdapter:
         return {"value": result}
 
 
+class RemoteSandboxExecutionAdapter:
+    def __init__(
+        self,
+        *,
+        sandbox_backend_client: SandboxBackendClient,
+        artifact_store: RuntimeArtifactStore,
+        context_service: ContextService,
+    ) -> None:
+        self._sandbox_backend_client = sandbox_backend_client
+        self._artifact_store = artifact_store
+        self._context_service = context_service
+
+    def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
+        config = dict(request.node.get("config") or {})
+        language = str(config.get("language") or "python").strip().lower() or "python"
+        code = str(config.get("code") or "")
+        if not code.strip():
+            raise WorkflowExecutionError("sandbox_code nodes must define a non-empty config.code.")
+
+        execution = self._sandbox_backend_client.execute(
+            SandboxExecutionRequest(
+                execution_class=request.execution_policy.execution_class,
+                language=language,
+                code=code,
+                node_input=request.node_input,
+                trace_id=f"run:{request.run_id}:node:{request.node.get('id')}:sandbox_code",
+                profile=request.execution_policy.profile,
+                timeout_ms=request.execution_policy.timeout_ms,
+                network_policy=request.execution_policy.network_policy,
+                filesystem_policy=request.execution_policy.filesystem_policy,
+            )
+        )
+        normalized_output = self._normalize_output(execution.result)
+        artifact_payload = {
+            "language": language,
+            "result": normalized_output,
+            "stdout": execution.stdout,
+            "stderr": execution.stderr,
+            "requestedExecutionClass": request.execution_policy.execution_class,
+            "effectiveExecutionClass": execution.effective_execution_class,
+            "executorRef": execution.executor_ref,
+            "backendId": execution.backend_id,
+        }
+        artifact_ref = self._artifact_store.create_artifact(
+            request.db,
+            run_id=request.run_id,
+            node_run_id=request.node_run.id,
+            artifact_kind="sandbox_result",
+            value=artifact_payload,
+            metadata_payload={
+                "node_id": request.node.get("id"),
+                "language": language,
+                "requested_execution_class": request.execution_policy.execution_class,
+                "effective_execution_class": execution.effective_execution_class,
+                "executor_ref": execution.executor_ref,
+                "backend_id": execution.backend_id,
+            },
+        )
+        self._context_service.append_artifact_ref(request.node_run, artifact_ref.uri)
+        return NodeExecutionResult(
+            output=normalized_output,
+            events=[
+                RuntimeEvent(
+                    "node.execution.dispatched",
+                    {
+                        "node_id": request.node.get("id"),
+                        "node_type": request.node.get("type"),
+                        "requested_execution_class": request.execution_policy.execution_class,
+                        "effective_execution_class": execution.effective_execution_class,
+                        "executor_ref": execution.executor_ref,
+                    },
+                ),
+                RuntimeEvent(
+                    "sandbox_code.completed",
+                    {
+                        "node_id": request.node.get("id"),
+                        "language": language,
+                        "stdout_present": bool(execution.stdout.strip()),
+                        "stderr_present": bool(execution.stderr.strip()),
+                        "artifact_ref": artifact_ref.uri,
+                        "executor_ref": execution.executor_ref,
+                        "backend_id": execution.backend_id,
+                    },
+                ),
+            ],
+        )
+
+    def _normalize_output(self, result: Any) -> dict[str, Any]:
+        if isinstance(result, dict):
+            return result
+        if result is None:
+            return {}
+        return {"value": result}
+
+
 class RuntimeExecutionAdapterRegistry:
     def __init__(
         self,
@@ -162,7 +262,9 @@ class RuntimeExecutionAdapterRegistry:
         artifact_store: RuntimeArtifactStore,
         context_service: ContextService,
         sandbox_code_executor: HostSandboxCodeExecutor | None = None,
+        sandbox_backend_client: SandboxBackendClient | None = None,
     ) -> None:
+        self._sandbox_backend_client = sandbox_backend_client or get_sandbox_backend_client()
         self._inline_adapter = InlineExecutionAdapter()
         self._fallback_adapters = {
             "subprocess": InlineExecutionFallbackAdapter("subprocess"),
@@ -171,6 +273,11 @@ class RuntimeExecutionAdapterRegistry:
         }
         self._sandbox_code_adapter = SandboxCodeExecutionAdapter(
             sandbox_code_executor=sandbox_code_executor or HostSandboxCodeExecutor(),
+            artifact_store=artifact_store,
+            context_service=context_service,
+        )
+        self._remote_sandbox_adapter = RemoteSandboxExecutionAdapter(
+            sandbox_backend_client=self._sandbox_backend_client,
             artifact_store=artifact_store,
             context_service=context_service,
         )
@@ -200,6 +307,31 @@ class RuntimeExecutionAdapterRegistry:
                 ),
             )
 
+        if execution_policy.execution_class in {"sandbox", "microvm"}:
+            config = dict(node.get("config") or {})
+            selection = self._sandbox_backend_client.describe_execution_backend(
+                SandboxExecutionRequest(
+                    execution_class=execution_policy.execution_class,
+                    language=str(config.get("language") or "python").strip().lower() or "python",
+                    code=str(config.get("code") or ""),
+                    node_input={},
+                    trace_id=f"node:{node.get('id')}:availability",
+                    profile=execution_policy.profile,
+                    timeout_ms=execution_policy.timeout_ms,
+                    network_policy=execution_policy.network_policy,
+                    filesystem_policy=execution_policy.filesystem_policy,
+                )
+            )
+            if selection.available:
+                return NodeExecutionAvailability(
+                    available=True,
+                    executor_ref=selection.executor_ref,
+                )
+            return NodeExecutionAvailability(
+                available=False,
+                blocking_reason=selection.reason,
+            )
+
         return NodeExecutionAvailability(
             available=False,
             blocking_reason=(
@@ -213,6 +345,8 @@ class RuntimeExecutionAdapterRegistry:
         if request.node.get("type") == "sandbox_code":
             if request.execution_policy.execution_class == "subprocess":
                 return self._sandbox_code_adapter.execute(request)
+            if request.execution_policy.execution_class in {"sandbox", "microvm"}:
+                return self._remote_sandbox_adapter.execute(request)
             raise WorkflowExecutionError(
                 "sandbox_code execution class "
                 f"'{request.execution_policy.execution_class}' is unavailable "

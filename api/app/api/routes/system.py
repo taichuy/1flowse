@@ -17,6 +17,8 @@ from app.schemas.system import (
     RecentRunCheck,
     RecentRunEventCheck,
     RuntimeActivityCheck,
+    SandboxBackendCapabilityCheck,
+    SandboxBackendCheck,
     ServiceCheck,
     SystemOverview,
 )
@@ -24,12 +26,37 @@ from app.services.plugin_runtime import (
     get_compatibility_adapter_health_checker,
     get_plugin_registry,
 )
+from app.services.sandbox_backends import (
+    get_sandbox_backend_health_checker,
+    get_sandbox_backend_registry,
+)
 
 router = APIRouter(tags=["system"])
 
 _RECENT_RUN_LIMIT = 5
 _RECENT_EVENT_LIMIT = 8
 _PAYLOAD_PREVIEW_LIMIT = 180
+
+
+def _serialize_sandbox_backend(backend) -> SandboxBackendCheck:
+    return SandboxBackendCheck(
+        id=backend.id,
+        kind=backend.kind,
+        endpoint=backend.endpoint,
+        enabled=backend.enabled,
+        status=backend.status,
+        detail=backend.detail,
+        capability=SandboxBackendCapabilityCheck(
+            supported_execution_classes=list(backend.capability.supported_execution_classes),
+            supported_languages=list(backend.capability.supported_languages),
+            supported_profiles=list(backend.capability.supported_profiles),
+            supported_dependency_modes=list(backend.capability.supported_dependency_modes),
+            supports_builtin_package_sets=backend.capability.supports_builtin_package_sets,
+            supports_backend_extensions=backend.capability.supports_backend_extensions,
+            supports_network_policy=backend.capability.supports_network_policy,
+            supports_filesystem_policy=backend.capability.supports_filesystem_policy,
+        ),
+    )
 
 
 def _probe(name: str, handler: Callable[[], None]) -> ServiceCheck:
@@ -141,6 +168,9 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
 
     adapter_healths = get_compatibility_adapter_health_checker().probe_all(get_plugin_registry())
     registry = get_plugin_registry()
+    sandbox_backends = get_sandbox_backend_health_checker().probe_all(
+        get_sandbox_backend_registry()
+    )
     adapter_services = [
         ServiceCheck(
             name=f"plugin-adapter:{adapter.id}",
@@ -150,8 +180,17 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
         for adapter in adapter_healths
         if adapter.enabled
     ]
+    sandbox_services = [
+        ServiceCheck(
+            name=f"sandbox-backend:{backend.id}",
+            status="up" if backend.status in {"healthy", "degraded"} else "down",
+            detail=backend.detail,
+        )
+        for backend in sandbox_backends
+        if backend.enabled
+    ]
 
-    services = [postgres, redis_service, s3_service, *adapter_services]
+    services = [postgres, redis_service, s3_service, *adapter_services, *sandbox_services]
     status = "degraded" if any(item.status == "down" for item in services) else "ok"
 
     return SystemOverview(
@@ -163,6 +202,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
             "runtime-worker-skeleton",
             "runtime-run-tracking",
             "sandbox-ready",
+            "sandbox-backend-registry",
             "plugin-call-proxy-foundation",
             "plugin-adapter-health-probe",
             "plugin-tool-catalog-visible",
@@ -179,6 +219,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
             )
             for adapter in adapter_healths
         ],
+        sandbox_backends=[_serialize_sandbox_backend(backend) for backend in sandbox_backends],
         plugin_tools=[
             PluginToolCheck(
                 id=tool.id,
@@ -207,6 +248,14 @@ def list_plugin_adapters() -> list[CompatibilityAdapterCheck]:
         )
         for adapter in adapter_healths
     ]
+
+
+@router.get("/system/sandbox-backends", response_model=list[SandboxBackendCheck])
+def list_sandbox_backends() -> list[SandboxBackendCheck]:
+    backend_healths = get_sandbox_backend_health_checker().probe_all(
+        get_sandbox_backend_registry()
+    )
+    return [_serialize_sandbox_backend(backend) for backend in backend_healths]
 
 
 @router.get("/system/runtime-activity", response_model=RuntimeActivityCheck)

@@ -15,6 +15,27 @@ export type CompatibilityAdapterCheck = {
   detail?: string | null;
 };
 
+export type SandboxBackendCapabilityCheck = {
+  supported_execution_classes: string[];
+  supported_languages: string[];
+  supported_profiles: string[];
+  supported_dependency_modes: string[];
+  supports_builtin_package_sets: boolean;
+  supports_backend_extensions: boolean;
+  supports_network_policy: boolean;
+  supports_filesystem_policy: boolean;
+};
+
+export type SandboxBackendCheck = {
+  id: string;
+  kind: string;
+  endpoint: string;
+  enabled: boolean;
+  status: string;
+  capability: SandboxBackendCapabilityCheck;
+  detail?: string | null;
+};
+
 export type PluginToolCheck = {
   id: string;
   name: string;
@@ -63,6 +84,7 @@ export type SystemOverview = {
   services: ServiceCheck[];
   capabilities: string[];
   plugin_adapters: CompatibilityAdapterCheck[];
+  sandbox_backends: SandboxBackendCheck[];
   plugin_tools: PluginToolCheck[];
   runtime_activity: RuntimeActivityCheck;
 };
@@ -79,6 +101,7 @@ const fallback: SystemOverview = {
   ],
   capabilities: ["frontend-shell-ready"],
   plugin_adapters: [],
+  sandbox_backends: [],
   plugin_tools: [],
   runtime_activity: {
     summary: {

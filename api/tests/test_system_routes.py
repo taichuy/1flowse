@@ -8,6 +8,11 @@ from app.services.plugin_runtime import (
     PluginRegistry,
     PluginToolDefinition,
 )
+from app.services.sandbox_backends import (
+    SandboxBackendCapability,
+    SandboxBackendHealth,
+    SandboxBackendRegistry,
+)
 
 
 class _HealthyRedis:
@@ -28,8 +33,17 @@ class _StaticHealthChecker:
         return self._healths
 
 
+class _StaticSandboxHealthChecker:
+    def __init__(self, healths: list[SandboxBackendHealth]) -> None:
+        self._healths = healths
+
+    def probe_all(self, registry: SandboxBackendRegistry) -> list[SandboxBackendHealth]:
+        return self._healths
+
+
 def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> None:
     registry = PluginRegistry()
+    sandbox_registry = SandboxBackendRegistry()
     registry.register_tool(
         PluginToolDefinition(
             id="compat:dify:plugin:demo/search",
@@ -51,6 +65,7 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
     monkeypatch.setattr(system_routes.redis, "from_url", lambda url: _HealthyRedis())
     monkeypatch.setattr(system_routes.boto3, "client", lambda *args, **kwargs: _HealthyS3Client())
     monkeypatch.setattr(system_routes, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(system_routes, "get_sandbox_backend_registry", lambda: sandbox_registry)
     monkeypatch.setattr(
         system_routes,
         "get_compatibility_adapter_health_checker",
@@ -66,6 +81,29 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
             ]
         ),
     )
+    monkeypatch.setattr(
+        system_routes,
+        "get_sandbox_backend_health_checker",
+        lambda: _StaticSandboxHealthChecker(
+            [
+                SandboxBackendHealth(
+                    id="sandbox-default",
+                    kind="official",
+                    endpoint="http://sandbox.local",
+                    enabled=True,
+                    status="healthy",
+                    capability=SandboxBackendCapability(
+                        supported_execution_classes=("sandbox",),
+                        supported_languages=("python",),
+                        supported_profiles=("python-safe",),
+                        supported_dependency_modes=("builtin",),
+                        supports_network_policy=True,
+                        supports_filesystem_policy=True,
+                    ),
+                )
+            ]
+        ),
+    )
 
     response = client.get("/api/system/overview")
 
@@ -74,6 +112,7 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
     assert body["status"] == "ok"
     assert "plugin-call-proxy-foundation" in body["capabilities"]
     assert "plugin-adapter-health-probe" in body["capabilities"]
+    assert "sandbox-backend-registry" in body["capabilities"]
     assert "plugin-tool-catalog-visible" in body["capabilities"]
     assert "runtime-events-visible" in body["capabilities"]
     assert body["plugin_adapters"] == [
@@ -84,6 +123,26 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
             "enabled": True,
             "status": "up",
             "detail": None,
+        }
+    ]
+    assert body["sandbox_backends"] == [
+        {
+            "id": "sandbox-default",
+            "kind": "official",
+            "endpoint": "http://sandbox.local",
+            "enabled": True,
+            "status": "healthy",
+            "detail": None,
+            "capability": {
+                "supported_execution_classes": ["sandbox"],
+                "supported_languages": ["python"],
+                "supported_profiles": ["python-safe"],
+                "supported_dependency_modes": ["builtin"],
+                "supports_builtin_package_sets": False,
+                "supports_backend_extensions": False,
+                "supports_network_policy": True,
+                "supports_filesystem_policy": True,
+            },
         }
     ]
     assert body["plugin_tools"] == [
@@ -106,6 +165,7 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
         "recent_events": [],
     }
     assert any(service["name"] == "plugin-adapter:dify-default" for service in body["services"])
+    assert any(service["name"] == "sandbox-backend:sandbox-default" for service in body["services"])
 
 
 def test_list_plugin_adapters_returns_current_adapter_health(client, monkeypatch) -> None:
@@ -138,6 +198,54 @@ def test_list_plugin_adapters_returns_current_adapter_health(client, monkeypatch
             "enabled": True,
             "status": "down",
             "detail": "connect timeout",
+        }
+    ]
+
+
+def test_list_sandbox_backends_returns_current_backend_health(client, monkeypatch) -> None:
+    monkeypatch.setattr(system_routes, "get_sandbox_backend_registry", lambda: SandboxBackendRegistry())
+    monkeypatch.setattr(
+        system_routes,
+        "get_sandbox_backend_health_checker",
+        lambda: _StaticSandboxHealthChecker(
+            [
+                SandboxBackendHealth(
+                    id="sandbox-default",
+                    kind="official",
+                    endpoint="http://sandbox.local",
+                    enabled=True,
+                    status="offline",
+                    capability=SandboxBackendCapability(
+                        supported_execution_classes=("sandbox", "microvm"),
+                        supported_languages=("python", "javascript"),
+                    ),
+                    detail="connect timeout",
+                )
+            ]
+        ),
+    )
+
+    response = client.get("/api/system/sandbox-backends")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": "sandbox-default",
+            "kind": "official",
+            "endpoint": "http://sandbox.local",
+            "enabled": True,
+            "status": "offline",
+            "detail": "connect timeout",
+            "capability": {
+                "supported_execution_classes": ["sandbox", "microvm"],
+                "supported_languages": ["python", "javascript"],
+                "supported_profiles": [],
+                "supported_dependency_modes": [],
+                "supports_builtin_package_sets": False,
+                "supports_backend_extensions": False,
+                "supports_network_policy": False,
+                "supports_filesystem_policy": False,
+            },
         }
     ]
 
