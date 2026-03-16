@@ -32,6 +32,16 @@ type BulkOperatorFollowUpInput = {
   sampledRuns: BulkRunSnapshotSample[];
 };
 
+export type BulkRunFollowUpSummary = {
+  affectedRunCount: number;
+  sampledRunCount: number;
+  waitingRunCount: number;
+  runningRunCount: number;
+  succeededRunCount: number;
+  failedRunCount: number;
+  unknownRunCount: number;
+};
+
 function joinParts(parts: Array<string | null | undefined>) {
   return parts.filter((part): part is string => Boolean(part && part.trim())).join(" ");
 }
@@ -53,6 +63,11 @@ function formatBulkRunFollowUp({
   affectedRunCount,
   sampledRuns
 }: BulkOperatorFollowUpInput) {
+  const summary = summarizeBulkRunFollowUp({ affectedRunCount, sampledRuns });
+  if (summary.affectedRunCount <= 0) {
+    return null;
+  }
+
   if (affectedRunCount <= 0) {
     return null;
   }
@@ -87,6 +102,44 @@ function formatBulkRunFollowUp({
       ? `其余 ${affectedRunCount - sampledCount} 个 run 可继续到对应 run detail / inbox slice 查看后续推进。`
       : null
   ]);
+}
+
+export function summarizeBulkRunFollowUp({
+  affectedRunCount,
+  sampledRuns
+}: BulkOperatorFollowUpInput): BulkRunFollowUpSummary {
+  const summary: BulkRunFollowUpSummary = {
+    affectedRunCount,
+    sampledRunCount: sampledRuns.length,
+    waitingRunCount: 0,
+    runningRunCount: 0,
+    succeededRunCount: 0,
+    failedRunCount: 0,
+    unknownRunCount: 0
+  };
+
+  for (const item of sampledRuns) {
+    const status = item.snapshot?.status?.trim() || "unknown";
+    if (status === "waiting") {
+      summary.waitingRunCount += 1;
+      continue;
+    }
+    if (status === "running") {
+      summary.runningRunCount += 1;
+      continue;
+    }
+    if (status === "succeeded") {
+      summary.succeededRunCount += 1;
+      continue;
+    }
+    if (status === "failed") {
+      summary.failedRunCount += 1;
+      continue;
+    }
+    summary.unknownRunCount += 1;
+  }
+
+  return summary;
 }
 
 function formatApprovalSnapshot({

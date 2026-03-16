@@ -130,6 +130,13 @@ export type SensitiveAccessBulkActionResult = {
   updatedCount: number;
   skippedCount: number;
   skippedReasonSummary: SensitiveAccessBulkSkipSummary[];
+  affectedRunCount: number;
+  sampledRunCount: number;
+  waitingRunCount: number;
+  runningRunCount: number;
+  succeededRunCount: number;
+  failedRunCount: number;
+  unknownRunCount: number;
 };
 
 export type SensitiveAccessInboxSnapshot = {

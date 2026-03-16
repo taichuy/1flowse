@@ -62,18 +62,42 @@ export function SensitiveAccessBulkGovernanceCard({
       />
 
       {lastResult ? (
-        <div className="starter-tag-row">
-          <span className="health-pill">last run: {getSensitiveAccessBulkActionLabel(lastResult.action)}</span>
-          <span className="event-chip">updated {lastResult.updatedCount}</span>
-          <span className="event-chip">skipped {lastResult.skippedCount}</span>
-          {lastResult.skippedReasonSummary.length > 0
-            ? lastResult.skippedReasonSummary.map((item) => (
-                <span className="event-chip" key={`${item.reason}-${item.count}`}>
-                  {getSensitiveAccessBulkSkipReasonLabel(item.reason)} {item.count}
-                </span>
-              ))
-            : null}
-        </div>
+        <>
+          <div className="starter-tag-row">
+            <span className="health-pill">last run: {getSensitiveAccessBulkActionLabel(lastResult.action)}</span>
+            <span className="event-chip">updated {lastResult.updatedCount}</span>
+            <span className="event-chip">skipped {lastResult.skippedCount}</span>
+            {lastResult.skippedReasonSummary.length > 0
+              ? lastResult.skippedReasonSummary.map((item) => (
+                  <span className="event-chip" key={`${item.reason}-${item.count}`}>
+                    {getSensitiveAccessBulkSkipReasonLabel(item.reason)} {item.count}
+                  </span>
+                ))
+              : null}
+          </div>
+
+          {lastResult.affectedRunCount > 0 ? (
+            <div className="starter-tag-row">
+              <span className="event-chip">affected runs {lastResult.affectedRunCount}</span>
+              <span className="event-chip">sampled {lastResult.sampledRunCount}</span>
+              {lastResult.waitingRunCount > 0 ? (
+                <span className="event-chip">still waiting {lastResult.waitingRunCount}</span>
+              ) : null}
+              {lastResult.runningRunCount > 0 ? (
+                <span className="event-chip">running {lastResult.runningRunCount}</span>
+              ) : null}
+              {lastResult.succeededRunCount > 0 ? (
+                <span className="event-chip">succeeded {lastResult.succeededRunCount}</span>
+              ) : null}
+              {lastResult.failedRunCount > 0 ? (
+                <span className="event-chip">failed {lastResult.failedRunCount}</span>
+              ) : null}
+              {lastResult.unknownRunCount > 0 ? (
+                <span className="event-chip">unknown {lastResult.unknownRunCount}</span>
+              ) : null}
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       {message ? <p className={`sync-message ${messageTone}`}>{message}</p> : null}

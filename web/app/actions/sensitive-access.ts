@@ -12,7 +12,8 @@ import {
   formatBulkApprovalDecisionResultMessage,
   formatBulkNotificationRetryResultMessage,
   formatApprovalDecisionResultMessage,
-  formatNotificationRetryResultMessage
+  formatNotificationRetryResultMessage,
+  summarizeBulkRunFollowUp
 } from "@/lib/operator-action-result-presenters";
 
 import { fetchRunSnapshot, fetchRunSnapshots } from "./run-snapshot";
@@ -84,6 +85,32 @@ function buildBulkSkipSummaryMessage(summary: SensitiveAccessBulkSkipSummary[]) 
   }
 
   return `跳过原因：${summary.map((item) => `${item.reason} ${item.count}`).join("、")}。`;
+}
+
+function createEmptyBulkResultMetrics() {
+  return {
+    affectedRunCount: 0,
+    sampledRunCount: 0,
+    waitingRunCount: 0,
+    runningRunCount: 0,
+    succeededRunCount: 0,
+    failedRunCount: 0,
+    unknownRunCount: 0
+  };
+}
+
+async function buildBulkRunFollowUpMetrics(runIds: Array<string | null | undefined>) {
+  const normalizedRunIds = [...new Set(runIds.map((item) => item?.trim()).filter(Boolean))];
+  const sampledRuns = await fetchRunSnapshots(normalizedRunIds);
+  const followUpSummary = summarizeBulkRunFollowUp({
+    affectedRunCount: normalizedRunIds.length,
+    sampledRuns
+  });
+
+  return {
+    sampledRuns,
+    followUpSummary
+  };
 }
 
 function revalidateSensitiveAccessPaths(runIds: Array<string | null | undefined>) {
@@ -250,7 +277,8 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
       requestedCount: ticketIds.length,
       updatedCount: 0,
       skippedCount: 0,
-      skippedReasonSummary: []
+      skippedReasonSummary: [],
+      ...createEmptyBulkResultMetrics()
     };
   }
 
@@ -280,7 +308,8 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
         requestedCount: ticketIds.length,
         updatedCount: 0,
         skippedCount: 0,
-        skippedReasonSummary: []
+        skippedReasonSummary: [],
+        ...createEmptyBulkResultMetrics()
       };
     }
 
@@ -290,7 +319,7 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
     const skippedCount = body?.skipped_count ?? 0;
     const skippedReasonSummary = body?.skipped_reason_summary ?? [];
     const affectedRunIds = body?.decided_items?.map((item) => item.run_id) ?? [];
-    const sampledRuns = await fetchRunSnapshots(affectedRunIds);
+    const { sampledRuns, followUpSummary } = await buildBulkRunFollowUpMetrics(affectedRunIds);
 
     return {
       action: input.status,
@@ -300,13 +329,14 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
         updatedCount,
         skippedCount,
         skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
-        affectedRunCount: [...new Set(affectedRunIds.map((item) => item?.trim()).filter(Boolean))].length,
+        affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns
       }),
       requestedCount: body?.requested_count ?? ticketIds.length,
       updatedCount,
       skippedCount,
-      skippedReasonSummary
+      skippedReasonSummary,
+      ...followUpSummary
     };
   } catch {
     return {
@@ -316,7 +346,8 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
       requestedCount: ticketIds.length,
       updatedCount: 0,
       skippedCount: 0,
-      skippedReasonSummary: []
+      skippedReasonSummary: [],
+      ...createEmptyBulkResultMetrics()
     };
   }
 }
@@ -334,7 +365,8 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
       requestedCount: 0,
       updatedCount: 0,
       skippedCount: 0,
-      skippedReasonSummary: []
+      skippedReasonSummary: [],
+      ...createEmptyBulkResultMetrics()
     };
   }
 
@@ -360,7 +392,8 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
         requestedCount: dispatchIds.length,
         updatedCount: 0,
         skippedCount: 0,
-        skippedReasonSummary: []
+        skippedReasonSummary: [],
+        ...createEmptyBulkResultMetrics()
       };
     }
 
@@ -372,7 +405,7 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
     const skippedCount = body?.skipped_count ?? 0;
     const skippedReasonSummary = body?.skipped_reason_summary ?? [];
     const affectedRunIds = body?.retried_items?.map((item) => item.approval_ticket.run_id) ?? [];
-    const sampledRuns = await fetchRunSnapshots(affectedRunIds);
+    const { sampledRuns, followUpSummary } = await buildBulkRunFollowUpMetrics(affectedRunIds);
 
     return {
       action: "retry",
@@ -381,13 +414,14 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
         updatedCount,
         skippedCount,
         skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
-        affectedRunCount: [...new Set(affectedRunIds.map((item) => item?.trim()).filter(Boolean))].length,
+        affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns
       }),
       requestedCount: body?.requested_count ?? dispatchIds.length,
       updatedCount,
       skippedCount,
-      skippedReasonSummary
+      skippedReasonSummary,
+      ...followUpSummary
     };
   } catch {
     return {
@@ -397,7 +431,8 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
       requestedCount: dispatchIds.length,
       updatedCount: 0,
       skippedCount: 0,
-      skippedReasonSummary: []
+      skippedReasonSummary: [],
+      ...createEmptyBulkResultMetrics()
     };
   }
 }
