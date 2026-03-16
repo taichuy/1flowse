@@ -1,8 +1,16 @@
-from datetime import UTC, datetime, timedelta
+﻿from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
 from app.models.run import NodeRun, Run, RunEvent
+
+
+def _workflow_detail_message(response) -> str:
+    detail = response.json()["detail"]
+    if isinstance(detail, dict):
+        message = detail.get("message")
+        return message if isinstance(message, str) else str(detail)
+    return str(detail)
 
 
 def _valid_definition(answer: str = "done", runtime_policy: dict | None = None) -> dict:
@@ -351,7 +359,7 @@ def test_create_workflow_rejects_invalid_definition(client: TestClient) -> None:
     )
 
     assert response.status_code == 422
-    assert "trigger node" in response.json()["detail"]
+    assert "trigger node" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_unavailable_persisted_nodes(client: TestClient) -> None:
@@ -364,8 +372,10 @@ def test_create_workflow_rejects_unavailable_persisted_nodes(client: TestClient)
     )
 
     assert response.status_code == 422
-    assert "not currently available for persistence" in response.json()["detail"]
-    assert "loop" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "not currently available for persistence" in detail["message"]
+    assert detail["issues"][0]["category"] == "node_support"
+    assert "loop" in detail["issues"][0]["message"]
 
 
 def test_create_workflow_rejects_cycles_during_blueprint_compilation(
@@ -391,7 +401,7 @@ def test_create_workflow_rejects_cycles_during_blueprint_compilation(
     )
 
     assert response.status_code == 422
-    assert "cycle" in response.json()["detail"]
+    assert "cycle" in _workflow_detail_message(response)
 
 
 def test_update_workflow_bumps_version_and_keeps_history(
@@ -426,8 +436,10 @@ def test_update_workflow_rejects_unavailable_persisted_nodes(
     )
 
     assert response.status_code == 422
-    assert "not currently available for persistence" in response.json()["detail"]
-    assert "loop" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "not currently available for persistence" in detail["message"]
+    assert detail["issues"][0]["category"] == "node_support"
+    assert "loop" in detail["issues"][0]["message"]
 
 
 def test_update_workflow_allows_publish_binding_to_next_persisted_version(
@@ -460,8 +472,8 @@ def test_update_workflow_rejects_publish_binding_beyond_next_persisted_version(
     )
 
     assert response.status_code == 422
-    assert "references unknown publish workflow versions" in response.json()["detail"]
-    assert "0.1.0, 0.1.1" in response.json()["detail"]
+    assert "references unknown publish workflow versions" in _workflow_detail_message(response)
+    assert "0.1.0, 0.1.1" in _workflow_detail_message(response)
 
 
 def test_list_workflow_runs_returns_aggregated_summary(
@@ -583,7 +595,7 @@ def test_create_workflow_rejects_invalid_retry_runtime_policy(client: TestClient
     )
 
     assert response.status_code == 422
-    assert "maxAttempts" in response.json()["detail"]
+    assert "maxAttempts" in _workflow_detail_message(response)
 
 
 def test_create_workflow_accepts_execution_runtime_policy(client: TestClient) -> None:
@@ -634,7 +646,7 @@ def test_create_workflow_rejects_invalid_execution_runtime_policy(client: TestCl
     )
 
     assert response.status_code == 422
-    detail = response.json()["detail"]
+    detail = _workflow_detail_message(response)
     assert "Input should be 'inline', 'subprocess', 'sandbox' or 'microvm'" in detail
 
 
@@ -677,7 +689,7 @@ def test_create_workflow_rejects_unsupported_tool_execution_class(client: TestCl
     )
 
     assert response.status_code == 422
-    detail = response.json()["detail"]
+    detail = _workflow_detail_message(response)
     assert "tool execution capabilities" in detail
     assert "microvm" in detail
     assert "dify-default" in detail
@@ -763,7 +775,7 @@ def test_create_workflow_rejects_unauthorized_mcp_query_source(client: TestClien
     )
 
     assert response.status_code == 422
-    assert "unauthorized source nodes" in response.json()["detail"]
+    assert "unauthorized source nodes" in _workflow_detail_message(response)
 
 
 def test_create_workflow_accepts_condition_selector_rules(client: TestClient) -> None:
@@ -856,7 +868,7 @@ def test_create_workflow_rejects_selector_on_non_branch_node(client: TestClient)
     )
 
     assert response.status_code == 422
-    assert "Only condition/router nodes may define config.selector" in response.json()["detail"]
+    assert "Only condition/router nodes may define config.selector" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_expression_on_non_branch_node(client: TestClient) -> None:
@@ -869,7 +881,7 @@ def test_create_workflow_rejects_expression_on_non_branch_node(client: TestClien
     )
 
     assert response.status_code == 422
-    assert "Only condition/router nodes may define config.expression" in response.json()["detail"]
+    assert "Only condition/router nodes may define config.expression" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_unsafe_edge_condition_expression(client: TestClient) -> None:
@@ -882,7 +894,7 @@ def test_create_workflow_rejects_unsafe_edge_condition_expression(client: TestCl
     )
 
     assert response.status_code == 422
-    assert "Unsupported expression syntax 'Call'" in response.json()["detail"]
+    assert "Unsupported expression syntax 'Call'" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_join_required_node_ids_outside_incoming_edges(
@@ -898,7 +910,7 @@ def test_create_workflow_rejects_join_required_node_ids_outside_incoming_edges(
     )
 
     assert response.status_code == 422
-    assert "join.requiredNodeIds references non-incoming sources" in response.json()["detail"]
+    assert "join.requiredNodeIds references non-incoming sources" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_mapping_to_runtime_managed_input_root(
@@ -913,7 +925,7 @@ def test_create_workflow_rejects_mapping_to_runtime_managed_input_root(
     )
 
     assert response.status_code == 422
-    assert "runtime-managed input roots" in response.json()["detail"]
+    assert "runtime-managed input roots" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_mapping_to_execution_input_root(
@@ -928,7 +940,7 @@ def test_create_workflow_rejects_mapping_to_execution_input_root(
     )
 
     assert response.status_code == 422
-    assert "runtime-managed input roots" in response.json()["detail"]
+    assert "runtime-managed input roots" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_invalid_tool_binding(
@@ -947,7 +959,7 @@ def test_create_workflow_rejects_invalid_tool_binding(
     )
 
     assert response.status_code == 422
-    assert "String should have at least 1 character" in response.json()["detail"]
+    assert "String should have at least 1 character" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_missing_catalog_tool_binding(client: TestClient) -> None:
@@ -965,8 +977,8 @@ def test_create_workflow_rejects_missing_catalog_tool_binding(client: TestClient
     )
 
     assert response.status_code == 422
-    assert "references missing or drifted tool catalog entries" in response.json()["detail"]
-    assert "native.missing" in response.json()["detail"]
+    assert "references missing or drifted tool catalog entries" in _workflow_detail_message(response)
+    assert "native.missing" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_missing_tool_policy_reference(client: TestClient) -> None:
@@ -997,8 +1009,8 @@ def test_create_workflow_rejects_missing_tool_policy_reference(client: TestClien
     )
 
     assert response.status_code == 422
-    assert "toolPolicy.allowedToolIds references missing catalog tools" in response.json()["detail"]
-    assert "native.missing" in response.json()["detail"]
+    assert "toolPolicy.allowedToolIds references missing catalog tools" in _workflow_detail_message(response)
+    assert "native.missing" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_duplicate_variable_names(client: TestClient) -> None:
@@ -1014,7 +1026,7 @@ def test_create_workflow_rejects_duplicate_variable_names(client: TestClient) ->
     )
 
     assert response.status_code == 422
-    assert "Workflow variable names must be unique" in response.json()["detail"]
+    assert "Workflow variable names must be unique" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_duplicate_publish_endpoint_metadata(
@@ -1039,7 +1051,7 @@ def test_create_workflow_rejects_duplicate_publish_endpoint_metadata(
     )
 
     assert response.status_code == 422
-    assert "Workflow published endpoint ids must be unique" in response.json()["detail"]
+    assert "Workflow published endpoint ids must be unique" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_invalid_node_contract_schema(client: TestClient) -> None:
@@ -1054,7 +1066,7 @@ def test_create_workflow_rejects_invalid_node_contract_schema(client: TestClient
     )
 
     assert response.status_code == 422
-    assert "inputSchema.type" in response.json()["detail"]
+    assert "inputSchema.type" in _workflow_detail_message(response)
 
 
 def test_validate_workflow_definition_preflight_returns_normalized_definition(
@@ -1126,7 +1138,7 @@ def test_create_workflow_rejects_invalid_publish_contract_schema(
     )
 
     assert response.status_code == 422
-    assert "outputSchema.required" in response.json()["detail"]
+    assert "outputSchema.required" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_tool_binding_conflicts(client: TestClient) -> None:
@@ -1145,7 +1157,7 @@ def test_create_workflow_rejects_tool_binding_conflicts(client: TestClient) -> N
     )
 
     assert response.status_code == 422
-    assert "cannot define both config.tool and config.toolId" in response.json()["detail"]
+    assert "cannot define both config.tool and config.toolId" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_mcp_query_artifact_types_without_authorization(
@@ -1161,7 +1173,7 @@ def test_create_workflow_rejects_mcp_query_artifact_types_without_authorization(
     )
 
     assert response.status_code == 422
-    assert "requests unauthorized artifact types" in response.json()["detail"]
+    assert "requests unauthorized artifact types" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_invalid_branch_edge_conditions(client: TestClient) -> None:
@@ -1208,7 +1220,7 @@ def test_create_workflow_rejects_invalid_branch_edge_conditions(client: TestClie
     )
 
     assert response.status_code == 422
-    assert "true'/'false' branch conditions" in response.json()["detail"]
+    assert "true'/'false' branch conditions" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_branch_duplicate_fallback_edges(client: TestClient) -> None:
@@ -1223,7 +1235,7 @@ def test_create_workflow_rejects_branch_duplicate_fallback_edges(client: TestCli
     )
 
     assert response.status_code == 422
-    assert "at most one fallback outgoing edge" in response.json()["detail"]
+    assert "at most one fallback outgoing edge" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_non_branch_custom_edge_condition(client: TestClient) -> None:
@@ -1236,4 +1248,4 @@ def test_create_workflow_rejects_non_branch_custom_edge_condition(client: TestCl
     )
 
     assert response.status_code == 422
-    assert "uses unsupported condition" in response.json()["detail"]
+    assert "uses unsupported condition" in _workflow_detail_message(response)

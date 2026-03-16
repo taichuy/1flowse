@@ -22,6 +22,7 @@ import {
   type WorkflowDefinitionPreflightIssue,
   type WorkflowDetail,
   type WorkflowListItem,
+  updateWorkflow,
   validateWorkflowDefinition
 } from "@/lib/get-workflows";
 import {
@@ -290,28 +291,10 @@ export function WorkflowEditorWorkbench({
 
       try {
         const preflight = await validateWorkflowDefinition(workflow.id, graph.currentDefinition);
-        const response = await fetch(
-          `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflow.id)}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              name: graph.workflowName.trim() || workflow.name,
-              definition: preflight.definition
-            })
-          }
-        );
-        const body = (await response.json().catch(() => null)) as
-          | { detail?: string; version?: string }
-          | null;
-
-        if (!response.ok) {
-          setMessage(body?.detail ?? `保存失败，API 返回 ${response.status}。`);
-          setMessageTone("error");
-          return;
-        }
+        const body = await updateWorkflow(workflow.id, {
+          name: graph.workflowName.trim() || workflow.name,
+          definition: preflight.definition
+        });
 
         graph.setPersistedWorkflowName(graph.workflowName.trim() || workflow.name);
         graph.setPersistedDefinition(preflight.definition);

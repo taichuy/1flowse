@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { parseWorkflowValidationError } from "@/lib/get-workflows";
 
 export type SyncAdapterToolsState = {
   status: "idle" | "success" | "error";
@@ -220,13 +221,16 @@ export async function updateWorkflowToolBinding(
     );
 
     const updateBody = (await updateResponse.json().catch(() => null)) as
-      | { detail?: string; version?: string }
+      | { detail?: string | { message?: string } ; version?: string }
       | null;
 
     if (!updateResponse.ok) {
       return {
         status: "error",
-        message: updateBody?.detail ?? "保存 workflow 工具绑定失败。",
+        message: parseWorkflowValidationError(
+          updateBody,
+          "保存 workflow 工具绑定失败。"
+        ).message,
         workflowId,
         nodeId,
         toolId

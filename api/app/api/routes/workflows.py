@@ -52,6 +52,16 @@ def _render_validation_issues(
     ]
 
 
+def _raise_definition_validation_error(exc: WorkflowDefinitionValidationError) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={
+            "message": str(exc),
+            "issues": _render_validation_issues(exc.issues),
+        },
+    ) from exc
+
+
 def _validate_workflow_definition_for_persistence(
     db: Session,
     *,
@@ -94,10 +104,7 @@ def create_workflow(payload: WorkflowCreate, db: Session = Depends(get_db)) -> W
             definition=payload.definition,
         )
     except WorkflowDefinitionValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
+        _raise_definition_validation_error(exc)
 
     try:
         workflow = workflow_mutation_service.create_workflow(
@@ -142,10 +149,7 @@ def update_workflow(
                 workflow=workflow,
             )
         except WorkflowDefinitionValidationError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=str(exc),
-            ) from exc
+            _raise_definition_validation_error(exc)
 
     try:
         workflow_mutation_service.update_workflow(
@@ -185,13 +189,7 @@ def validate_workflow_definition_preflight(
             workflow=workflow,
         )
     except WorkflowDefinitionValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail={
-                "message": str(exc),
-                "issues": _render_validation_issues(exc.issues),
-            },
-        ) from exc
+        _raise_definition_validation_error(exc)
 
     return WorkflowDefinitionPreflightResult(
         definition=definition,

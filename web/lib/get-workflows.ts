@@ -64,14 +64,93 @@ export type WorkflowDefinitionPreflightIssue = {
   message: string;
 };
 
-export class WorkflowDefinitionPreflightError extends Error {
+type WorkflowValidationErrorDetail =
+  | string
+  | {
+      message?: string;
+      issues?: WorkflowDefinitionPreflightIssue[];
+    };
+
+type WorkflowValidationErrorBody = {
+  detail?: WorkflowValidationErrorDetail;
+};
+
+export class WorkflowDefinitionValidationError extends Error {
   readonly issues: WorkflowDefinitionPreflightIssue[];
 
   constructor(message: string, issues: WorkflowDefinitionPreflightIssue[] = []) {
     super(message);
-    this.name = "WorkflowDefinitionPreflightError";
+    this.name = "WorkflowDefinitionValidationError";
     this.issues = issues;
   }
+}
+
+export { WorkflowDefinitionValidationError as WorkflowDefinitionPreflightError };
+
+export function parseWorkflowValidationError(
+  body: WorkflowValidationErrorBody | null,
+  fallbackMessage: string
+): WorkflowDefinitionValidationError {
+  const detail = body?.detail;
+  if (typeof detail === "string") {
+    return new WorkflowDefinitionValidationError(detail);
+  }
+  return new WorkflowDefinitionValidationError(
+    detail?.message ?? fallbackMessage,
+    Array.isArray(detail?.issues) ? detail.issues : []
+  );
+}
+
+export async function createWorkflow(payload: {
+  name: string;
+  definition: WorkflowDetail["definition"];
+}): Promise<WorkflowDetail> {
+  const response = await fetch(`${getApiBaseUrl()}/api/workflows`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const body = (await response.json().catch(() => null)) as
+    | WorkflowValidationErrorBody
+    | WorkflowDetail
+    | null;
+
+  if (!response.ok) {
+    throw parseWorkflowValidationError(body as WorkflowValidationErrorBody | null, `创建失败，API 返回 ${response.status}。`);
+  }
+
+  return body as WorkflowDetail;
+}
+
+export async function updateWorkflow(
+  workflowId: string,
+  payload: {
+    name?: string;
+    definition?: WorkflowDetail["definition"];
+  }
+): Promise<WorkflowDetail> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowId)}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+  const body = (await response.json().catch(() => null)) as
+    | WorkflowValidationErrorBody
+    | WorkflowDetail
+    | null;
+
+  if (!response.ok) {
+    throw parseWorkflowValidationError(body as WorkflowValidationErrorBody | null, `保存失败，API 返回 ${response.status}。`);
+  }
+
+  return body as WorkflowDetail;
 }
 
 export async function getWorkflows(): Promise<WorkflowListItem[]> {
@@ -120,15 +199,6 @@ export async function validateWorkflowDefinition(
   workflowId: string,
   definition: WorkflowDetail["definition"]
 ): Promise<WorkflowDefinitionPreflightResult> {
-  type WorkflowDefinitionPreflightErrorBody = {
-    detail?:
-      | string
-      | {
-          message?: string;
-          issues?: WorkflowDefinitionPreflightIssue[];
-        };
-  };
-
   type WorkflowDefinitionPreflightSuccessBody = Partial<WorkflowDefinitionPreflightResult>;
 
   const response = await fetch(
@@ -143,17 +213,13 @@ export async function validateWorkflowDefinition(
   );
 
   const body = (await response.json().catch(() => null)) as
-    | WorkflowDefinitionPreflightErrorBody
+    | WorkflowValidationErrorBody
     | WorkflowDefinitionPreflightSuccessBody
     | null;
   if (!response.ok) {
-    const detail = (body as WorkflowDefinitionPreflightErrorBody | null)?.detail;
-    if (typeof detail === "string") {
-      throw new WorkflowDefinitionPreflightError(detail);
-    }
-    throw new WorkflowDefinitionPreflightError(
-      detail?.message ?? `Validation failed with status ${response.status}.`,
-      Array.isArray(detail?.issues) ? detail.issues : []
+    throw parseWorkflowValidationError(
+      body as WorkflowValidationErrorBody | null,
+      `Validation failed with status ${response.status}.`
     );
   }
 

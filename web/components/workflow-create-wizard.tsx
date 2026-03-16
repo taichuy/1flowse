@@ -5,14 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
-import { getApiBaseUrl } from "@/lib/api-base-url";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowLibraryStarterItem,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
-import type { WorkflowListItem } from "@/lib/get-workflows";
+import {
+  createWorkflow,
+  type WorkflowListItem,
+  WorkflowDefinitionValidationError
+} from "@/lib/get-workflows";
 import {
   buildWorkflowStarterTemplates,
   buildWorkflowStarterTracks,
@@ -119,32 +122,21 @@ export function WorkflowCreateWizard({
       setMessageTone("idle");
 
       try {
-        const response = await fetch(`${getApiBaseUrl()}/api/workflows`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            name: normalizedName,
-            definition: structuredClone(selectedStarter.definition)
-          })
+        const body = await createWorkflow({
+          name: normalizedName,
+          definition: structuredClone(selectedStarter.definition)
         });
-        const body = (await response.json().catch(() => null)) as
-          | { id?: string; detail?: string }
-          | null;
-
-        if (!response.ok || !body?.id) {
-          setMessage(body?.detail ?? `创建失败，API 返回 ${response.status}。`);
-          setMessageTone("error");
-          return;
-        }
 
         setMessage(`已创建 ${normalizedName}，正在进入编辑器...`);
         setMessageTone("success");
         router.push(`/workflows/${encodeURIComponent(body.id)}`);
         router.refresh();
-      } catch {
-        setMessage("无法连接后端创建 workflow，请确认 API 已启动。");
+      } catch (error) {
+        setMessage(
+          error instanceof WorkflowDefinitionValidationError
+            ? error.message
+            : "无法连接后端创建 workflow，请确认 API 已启动。"
+        );
         setMessageTone("error");
       }
     });
