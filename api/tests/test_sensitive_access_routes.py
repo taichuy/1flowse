@@ -1,15 +1,19 @@
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 from sqlalchemy.orm import Session
 
 from app.api.routes import sensitive_access as sensitive_access_routes
 from app.core.config import Settings
+from app.models.run import NodeRun, Run
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
     NotificationDispatchRecord,
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
 )
+from app.models.workflow import Workflow
 from app.services.notification_dispatch_scheduler import NotificationDispatchScheduler
 from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.sensitive_access_control import SensitiveAccessControlService
@@ -528,3 +532,137 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
     )
     assert original_notification.status == "failed"
     assert retried_notification.status == "pending"
+
+
+def test_sensitive_access_listing_filters_support_node_and_ticket_scopes(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    first_run = Run(
+        id="run-scope-1",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    second_run = Run(
+        id="run-scope-2",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    first_node_run = NodeRun(
+        id="node-run-scope-1",
+        run_id=first_run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        created_at=datetime.now(UTC),
+    )
+    second_node_run = NodeRun(
+        id="node-run-scope-2",
+        run_id=second_run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([first_run, second_run, first_node_run, second_node_run])
+    sqlite_session.commit()
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Scoped approval secret",
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"binding_id": "binding-scope-1"},
+        },
+    )
+    resource_id = resource_response.json()["id"]
+
+    first_request = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "run_id": "run-scope-1",
+            "node_run_id": "node-run-scope-1",
+            "requester_type": "ai",
+            "requester_id": "assistant-scope-1",
+            "resource_id": resource_id,
+            "action_type": "read",
+            "purpose_text": "first scoped request",
+        },
+    )
+    second_request = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "run_id": "run-scope-2",
+            "node_run_id": "node-run-scope-2",
+            "requester_type": "ai",
+            "requester_id": "assistant-scope-2",
+            "resource_id": resource_id,
+            "action_type": "read",
+            "purpose_text": "second scoped request",
+        },
+    )
+
+    first_body = first_request.json()
+    second_body = second_request.json()
+
+    requests_response = client.get(
+        "/api/sensitive-access/requests",
+        params={
+            "node_run_id": "node-run-scope-1",
+            "access_request_id": first_body["request"]["id"],
+        },
+    )
+    assert requests_response.status_code == 200
+    assert [item["id"] for item in requests_response.json()] == [first_body["request"]["id"]]
+
+    tickets_response = client.get(
+        "/api/sensitive-access/approval-tickets",
+        params={
+            "node_run_id": "node-run-scope-1",
+            "access_request_id": first_body["request"]["id"],
+            "approval_ticket_id": first_body["approval_ticket"]["id"],
+        },
+    )
+    assert tickets_response.status_code == 200
+    assert [item["id"] for item in tickets_response.json()] == [first_body["approval_ticket"]["id"]]
+
+    notifications_response = client.get(
+        "/api/sensitive-access/notification-dispatches",
+        params={"approval_ticket_id": first_body["approval_ticket"]["id"]},
+    )
+    assert notifications_response.status_code == 200
+    notifications = notifications_response.json()
+    assert len(notifications) == 1
+    assert notifications[0]["approval_ticket_id"] == first_body["approval_ticket"]["id"]
+
+    unmatched_tickets_response = client.get(
+        "/api/sensitive-access/approval-tickets",
+        params={
+            "node_run_id": "node-run-scope-1",
+            "approval_ticket_id": second_body["approval_ticket"]["id"],
+        },
+    )
+    assert unmatched_tickets_response.status_code == 200
+    assert unmatched_tickets_response.json() == []

@@ -40,6 +40,8 @@ def list_access_requests(
     decision: str | None = None,
     requester_type: str | None = None,
     run_id: str | None = None,
+    node_run_id: str | None = None,
+    access_request_id: str | None = None,
 ) -> list[SensitiveAccessRequestRecord]:
     statement = select(SensitiveAccessRequestRecord).order_by(
         SensitiveAccessRequestRecord.created_at.desc()
@@ -52,6 +54,10 @@ def list_access_requests(
         )
     if run_id:
         statement = statement.where(SensitiveAccessRequestRecord.run_id == run_id)
+    if node_run_id:
+        statement = statement.where(SensitiveAccessRequestRecord.node_run_id == node_run_id)
+    if access_request_id:
+        statement = statement.where(SensitiveAccessRequestRecord.id == access_request_id)
     return db.scalars(statement).all()
 
 
@@ -61,6 +67,9 @@ def list_approval_tickets(
     status: str | None = None,
     waiting_status: str | None = None,
     run_id: str | None = None,
+    node_run_id: str | None = None,
+    access_request_id: str | None = None,
+    approval_ticket_id: str | None = None,
 ) -> list[ApprovalTicketRecord]:
     statement = select(ApprovalTicketRecord).order_by(ApprovalTicketRecord.created_at.desc())
     if status:
@@ -69,6 +78,12 @@ def list_approval_tickets(
         statement = statement.where(ApprovalTicketRecord.waiting_status == waiting_status)
     if run_id:
         statement = statement.where(ApprovalTicketRecord.run_id == run_id)
+    if node_run_id:
+        statement = statement.where(ApprovalTicketRecord.node_run_id == node_run_id)
+    if access_request_id:
+        statement = statement.where(ApprovalTicketRecord.access_request_id == access_request_id)
+    if approval_ticket_id:
+        statement = statement.where(ApprovalTicketRecord.id == approval_ticket_id)
     return db.scalars(statement).all()
 
 

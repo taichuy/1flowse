@@ -8,6 +8,17 @@ import {
   formatSensitiveAccessReasonLabel,
   getSensitiveAccessBlockedPolicySummary
 } from "@/lib/sensitive-access-presenters";
+import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+
+function normalizeApprovalStatus(value?: string | null) {
+  return value === "pending" || value === "approved" || value === "rejected" || value === "expired"
+    ? value
+    : null;
+}
+
+function normalizeWaitingStatus(value?: string | null) {
+  return value === "waiting" || value === "resumed" || value === "failed" ? value : null;
+}
 
 type SensitiveAccessBlockedCardProps = {
   title: string;
@@ -23,6 +34,14 @@ export function SensitiveAccessBlockedCard({
   summary
 }: SensitiveAccessBlockedCardProps) {
   const runId = payload.access_request.run_id ?? payload.approval_ticket?.run_id ?? null;
+  const inboxHref = buildSensitiveAccessInboxHref({
+    runId,
+    nodeRunId: payload.access_request.node_run_id ?? payload.approval_ticket?.node_run_id ?? null,
+    status: normalizeApprovalStatus(payload.approval_ticket?.status),
+    waitingStatus: normalizeWaitingStatus(payload.approval_ticket?.waiting_status),
+    accessRequestId: payload.access_request.id,
+    approvalTicketId: payload.approval_ticket?.id ?? null
+  });
 
   return (
     <article className="entry-card compact-card">
@@ -48,6 +67,9 @@ export function SensitiveAccessBlockedCard({
         <span className="event-chip">{payload.resource.sensitivity_level}</span>
         <span className="event-chip">{payload.access_request.action_type}</span>
         <span className="event-chip">{payload.resource.source}</span>
+        <Link className="event-chip inbox-filter-link" href={inboxHref}>
+          open inbox slice
+        </Link>
       </div>
 
       <dl className="compact-meta-list">

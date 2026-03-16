@@ -10,6 +10,7 @@ import {
   formatSensitiveAccessReasonLabel,
   getSensitiveAccessPolicySummary
 } from "@/lib/sensitive-access-presenters";
+import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 
 type SensitiveAccessTimelineEntryListProps = {
   entries: SensitiveAccessTimelineEntry[];
@@ -112,27 +113,6 @@ function resolveRunId(
   defaultRunId?: string | null
 ): string | null {
   return entry.request.run_id ?? entry.approval_ticket?.run_id ?? defaultRunId ?? null;
-}
-
-function buildInboxSliceHref(
-  entry: SensitiveAccessTimelineEntry,
-  defaultRunId?: string | null
-): string | null {
-  const params = new URLSearchParams();
-  const runId = resolveRunId(entry, defaultRunId);
-
-  if (runId?.trim()) {
-    params.set("run_id", runId.trim());
-  }
-  if (entry.approval_ticket?.status) {
-    params.set("status", entry.approval_ticket.status);
-  }
-  if (entry.approval_ticket?.waiting_status) {
-    params.set("waiting_status", entry.approval_ticket.waiting_status);
-  }
-
-  const query = params.toString();
-  return query ? `/sensitive-access?${query}` : null;
 }
 
 function renderFilterStrip<T extends string>({
@@ -303,7 +283,7 @@ export function SensitiveAccessTimelineEntryList({
       <div className="event-list">
         {filteredEntries.map((entry) => {
           const runId = resolveRunId(entry, defaultRunId);
-          const inboxSliceHref = buildInboxSliceHref(entry, defaultRunId);
+          const inboxSliceHref = buildSensitiveAccessTimelineInboxHref(entry, defaultRunId);
 
           return (
             <article className="event-row compact-card" key={entry.request.id}>

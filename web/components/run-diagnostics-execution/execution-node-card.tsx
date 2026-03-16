@@ -12,8 +12,22 @@ import {
 } from "@/components/run-diagnostics-execution/shared";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
+import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
+  const latestApprovalEntry = node.sensitive_access_entries.find((entry) => entry.approval_ticket);
+  const inboxHref =
+    node.sensitive_access_entries.length > 0 || node.callback_tickets.length > 0
+      ? buildSensitiveAccessInboxHref({
+          runId: latestApprovalEntry?.request.run_id ?? latestApprovalEntry?.approval_ticket?.run_id ?? null,
+          nodeRunId: node.node_run_id,
+          status: latestApprovalEntry?.approval_ticket?.status ?? null,
+          waitingStatus: latestApprovalEntry?.approval_ticket?.waiting_status ?? null,
+          accessRequestId: latestApprovalEntry?.request.id ?? null,
+          approvalTicketId: latestApprovalEntry?.approval_ticket?.id ?? null
+        })
+      : null;
+
   return (
     <article className="timeline-row">
       <div className="activity-header">
@@ -67,6 +81,7 @@ export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
         callbackTickets={node.callback_tickets}
         sensitiveAccessEntries={node.sensitive_access_entries}
         waitingReason={node.waiting_reason}
+        inboxHref={inboxHref}
       />
 
       <MetricChipRow
@@ -151,6 +166,7 @@ export function ExecutionNodeCard({ node }: { node: RunExecutionNodeItem }) {
           <SensitiveAccessTimelineEntryList
             entries={node.sensitive_access_entries}
             emptyCopy="No sensitive access decisions were recorded for this node."
+            defaultRunId={latestApprovalEntry?.request.run_id ?? latestApprovalEntry?.approval_ticket?.run_id ?? null}
           />
         </>
       ) : null}

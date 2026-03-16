@@ -1,4 +1,6 @@
-﻿import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+﻿import Link from "next/link";
+
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import type {
   PublishedEndpointInvocationItem,
   PublishedEndpointInvocationCallbackTicketItem
@@ -15,6 +17,7 @@ import {
   getCallbackWaitingHeadline,
   listCallbackWaitingChips
 } from "@/lib/callback-waiting-presenters";
+import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 type WorkflowPublishInvocationCallbackSectionProps = {
   invocation: PublishedEndpointInvocationItem;
@@ -66,6 +69,23 @@ export function WorkflowPublishInvocationCallbackSection({
   const latestLateCallback = formatLatestLateCallbackLabel(callbackLifecycle);
   const terminationLabel = formatCallbackTerminationLabel(callbackLifecycle);
   const ticketStatusSummary = formatCallbackTicketStatusSummary(callbackTickets);
+  const latestApprovalEntry = sensitiveAccessEntries.find((entry) => entry.approval_ticket);
+  const inboxHref =
+    callbackTickets.length > 0 || sensitiveAccessEntries.length > 0 || waitingLifecycle?.node_run_id
+      ? buildSensitiveAccessInboxHref({
+          runId: invocation.run_id ?? latestApprovalEntry?.request.run_id ?? null,
+          nodeRunId:
+            waitingLifecycle?.node_run_id ??
+            latestApprovalEntry?.request.node_run_id ??
+            latestApprovalEntry?.approval_ticket?.node_run_id ??
+            callbackTickets[0]?.node_run_id ??
+            null,
+          status: latestApprovalEntry?.approval_ticket?.status ?? null,
+          waitingStatus: latestApprovalEntry?.approval_ticket?.waiting_status ?? null,
+          accessRequestId: latestApprovalEntry?.request.id ?? null,
+          approvalTicketId: latestApprovalEntry?.approval_ticket?.id ?? null
+        })
+      : null;
 
   return (
     <section>
@@ -75,6 +95,13 @@ export function WorkflowPublishInvocationCallbackSection({
         published-surface debugging does not need to jump between run detail, inbox and async
         tickets.
       </p>
+      {inboxHref ? (
+        <div className="tool-badge-row">
+          <Link className="event-chip inbox-filter-link" href={inboxHref}>
+            open inbox slice
+          </Link>
+        </div>
+      ) : null}
       <CallbackWaitingSummaryCard
         callbackTickets={callbackTickets}
         lifecycle={callbackLifecycle}
@@ -82,6 +109,7 @@ export function WorkflowPublishInvocationCallbackSection({
         scheduledResumeDelaySeconds={waitingLifecycle?.scheduled_resume_delay_seconds}
         scheduledResumeSource={waitingLifecycle?.scheduled_resume_source}
         scheduledWaitingStatus={waitingLifecycle?.scheduled_waiting_status}
+        inboxHref={inboxHref}
       />
       {(headline || chips.length > 0 || latestTicket || latestLateCallback || approvalSummary) ? (
         <div className="publish-meta-grid">

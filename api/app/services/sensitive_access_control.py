@@ -118,12 +118,16 @@ class SensitiveAccessControlService:
         decision: str | None = None,
         requester_type: str | None = None,
         run_id: str | None = None,
+        node_run_id: str | None = None,
+        access_request_id: str | None = None,
     ) -> list[SensitiveAccessRequestRecord]:
         return list_access_requests(
             db,
             decision=decision,
             requester_type=requester_type,
             run_id=run_id,
+            node_run_id=node_run_id,
+            access_request_id=access_request_id,
         )
 
     def list_approval_tickets(
@@ -133,12 +137,18 @@ class SensitiveAccessControlService:
         status: str | None = None,
         waiting_status: str | None = None,
         run_id: str | None = None,
+        node_run_id: str | None = None,
+        access_request_id: str | None = None,
+        approval_ticket_id: str | None = None,
     ) -> list[ApprovalTicketRecord]:
         return list_approval_tickets(
             db,
             status=status,
             waiting_status=waiting_status,
             run_id=run_id,
+            node_run_id=node_run_id,
+            access_request_id=access_request_id,
+            approval_ticket_id=approval_ticket_id,
         )
 
     def list_notification_dispatches(

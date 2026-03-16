@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem
@@ -20,6 +22,7 @@ type CallbackWaitingSummaryCardProps = {
   scheduledResumeDelaySeconds?: number | null;
   scheduledResumeSource?: string | null;
   scheduledWaitingStatus?: string | null;
+  inboxHref?: string | null;
   className?: string;
 };
 
@@ -31,6 +34,7 @@ export function CallbackWaitingSummaryCard({
   scheduledResumeDelaySeconds,
   scheduledResumeSource,
   scheduledWaitingStatus,
+  inboxHref,
   className = ""
 }: CallbackWaitingSummaryCardProps) {
   const headline = getCallbackWaitingHeadline({
@@ -76,6 +80,18 @@ export function CallbackWaitingSummaryCard({
               {chip}
             </span>
           ))}
+          {inboxHref ? (
+            <Link className="event-chip inbox-filter-link" href={inboxHref}>
+              open inbox slice
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+      {!chips.length && inboxHref ? (
+        <div className="event-type-strip">
+          <Link className="event-chip inbox-filter-link" href={inboxHref}>
+            open inbox slice
+          </Link>
         </div>
       ) : null}
       {waitingReason ? <p className="run-error-message">{waitingReason}</p> : null}

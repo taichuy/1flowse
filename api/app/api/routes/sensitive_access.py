@@ -209,6 +209,8 @@ def list_sensitive_access_requests(
     decision: str | None = Query(default=None),
     requester_type: str | None = Query(default=None),
     run_id: str | None = Query(default=None),
+    node_run_id: str | None = Query(default=None),
+    access_request_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[SensitiveAccessRequestItem]:
     records = service.list_access_requests(
@@ -216,6 +218,8 @@ def list_sensitive_access_requests(
         decision=decision,
         requester_type=requester_type,
         run_id=run_id,
+        node_run_id=node_run_id,
+        access_request_id=access_request_id,
     )
     return [serialize_sensitive_access_request(record) for record in records]
 
@@ -225,6 +229,9 @@ def list_approval_tickets(
     status: str | None = Query(default=None),
     waiting_status: str | None = Query(default=None),
     run_id: str | None = Query(default=None),
+    node_run_id: str | None = Query(default=None),
+    access_request_id: str | None = Query(default=None),
+    approval_ticket_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[ApprovalTicketItem]:
     records = service.list_approval_tickets(
@@ -232,6 +239,9 @@ def list_approval_tickets(
         status=status,
         waiting_status=waiting_status,
         run_id=run_id,
+        node_run_id=node_run_id,
+        access_request_id=access_request_id,
+        approval_ticket_id=approval_ticket_id,
     )
     return [serialize_approval_ticket(record) for record in records]
 
