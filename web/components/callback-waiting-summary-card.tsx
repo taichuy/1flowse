@@ -9,14 +9,11 @@ import type {
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
-  formatApprovalSummary,
   formatCallbackLifecycleLabel,
-  formatCallbackWaitingNotificationSummary,
-  formatCallbackWaitingOperatorStatusSummary,
-  formatCallbackWaitingSensitiveAccessSummary,
   formatScheduledResumeLabel,
   getCallbackWaitingRecommendedAction,
   getCallbackWaitingHeadline,
+  listCallbackWaitingBlockerRows,
   listCallbackWaitingChips,
   listCallbackWaitingOperatorStatuses,
   pickCallbackWaitingInlineSensitiveAccessEntry
@@ -54,7 +51,6 @@ export function CallbackWaitingSummaryCard({
     callbackTickets,
     sensitiveAccessEntries
   });
-  const approvalSummary = formatApprovalSummary(sensitiveAccessEntries);
   const scheduledResume = formatScheduledResumeLabel({
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
@@ -64,10 +60,6 @@ export function CallbackWaitingSummaryCard({
   const inlineSensitiveAccessEntry = pickCallbackWaitingInlineSensitiveAccessEntry(
     sensitiveAccessEntries
   );
-  const sensitiveAccessSummary = formatCallbackWaitingSensitiveAccessSummary(
-    inlineSensitiveAccessEntry
-  );
-  const notificationSummary = formatCallbackWaitingNotificationSummary(inlineSensitiveAccessEntry);
   const operatorStatuses = listCallbackWaitingOperatorStatuses({
     lifecycle,
     callbackTickets,
@@ -76,7 +68,6 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeSource,
     scheduledWaitingStatus
   });
-  const operatorStatusSummary = formatCallbackWaitingOperatorStatusSummary(operatorStatuses);
   const chips = listCallbackWaitingChips({
     lifecycle,
     callbackTickets,
@@ -91,6 +82,19 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeSource,
     scheduledWaitingStatus
   });
+  const blockerRows = listCallbackWaitingBlockerRows(
+    {
+      lifecycle,
+      callbackTickets,
+      sensitiveAccessEntries,
+      scheduledResumeDelaySeconds,
+      scheduledResumeSource,
+      scheduledWaitingStatus
+    },
+    {
+      includeTerminationRow: false
+    }
+  );
   const terminationAt = formatTimestamp(lifecycle?.terminated_at);
   const hasTermination = Boolean(lifecycle?.terminated);
   const preferredInlineAction =
@@ -114,10 +118,7 @@ export function CallbackWaitingSummaryCard({
       : null;
   const hasContent =
     headline ||
-    approvalSummary ||
-    sensitiveAccessSummary ||
-    notificationSummary ||
-    operatorStatusSummary ||
+    blockerRows.length > 0 ||
     scheduledResume ||
     lifecycleSummary ||
     waitingReason ||
@@ -162,25 +163,11 @@ export function CallbackWaitingSummaryCard({
           ))}
         </div>
       ) : null}
-      {operatorStatusSummary ? (
-        <p className="section-copy entry-copy">Status: {operatorStatusSummary}</p>
-      ) : null}
-      {approvalSummary ? <p className="section-copy entry-copy">Approval: {approvalSummary}</p> : null}
-      {sensitiveAccessSummary ? (
-        <p className="section-copy entry-copy">Sensitive access: {sensitiveAccessSummary}</p>
-      ) : null}
-      {notificationSummary ? (
-        <p className="section-copy entry-copy">Notification: {notificationSummary}</p>
-      ) : null}
-      {scheduledResume ? <p className="section-copy entry-copy">Resume: {scheduledResume}</p> : null}
-      {lifecycleSummary ? (
-        <p className="section-copy entry-copy">Lifecycle: {lifecycleSummary}</p>
-      ) : null}
-      {recommendedAction ? (
-        <p className="section-copy entry-copy">
-          Recommended next action: <strong>{recommendedAction.label}.</strong> {recommendedAction.detail}
+      {blockerRows.map((row) => (
+        <p className="section-copy entry-copy" key={row.label}>
+          {row.label}: {row.value}
         </p>
-      ) : null}
+      ))}
       {recommendedCtaHref ? (
         <div className="event-type-strip">
           <Link className="event-chip inbox-filter-link" href={recommendedCtaHref}>

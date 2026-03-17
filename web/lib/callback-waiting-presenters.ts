@@ -40,6 +40,11 @@ type CallbackWaitingExplanationInput = {
   scheduledWaitingStatus?: string | null;
 };
 
+export type CallbackWaitingDetailRow = {
+  label: string;
+  value: string;
+};
+
 export type CallbackWaitingOperatorStatus = {
   kind:
     | "approval_pending"
@@ -96,6 +101,18 @@ function formatOptionalParts(parts: Array<string | null | undefined>): string | 
     .map((item) => item?.trim())
     .filter((item): item is string => Boolean(item));
   return normalized.length ? normalized.join(" · ") : null;
+}
+
+function buildDetailRows(
+  rows: Array<{ label: string; value: string | null | undefined }>
+): CallbackWaitingDetailRow[] {
+  return rows.flatMap((row) => {
+    const value = row.value?.trim();
+    if (!value) {
+      return [];
+    }
+    return [{ label: row.label, value }];
+  });
 }
 
 export function formatScheduledResumeLabel({
@@ -421,6 +438,118 @@ export function formatCallbackWaitingOperatorStatusSummary(
   }
 
   return statuses.map((status) => `${status.label}: ${status.detail}`).join(" ");
+}
+
+export function listCallbackWaitingBlockerRows(
+  {
+    lifecycle,
+    callbackTickets = [],
+    sensitiveAccessEntries = [],
+    scheduledResumeDelaySeconds,
+    scheduledResumeSource,
+    scheduledWaitingStatus
+  }: CallbackWaitingExplanationInput,
+  options?: {
+    includeRecommendedActionRow?: boolean;
+    includeTerminationRow?: boolean;
+  }
+): CallbackWaitingDetailRow[] {
+  const includeRecommendedActionRow = options?.includeRecommendedActionRow ?? true;
+  const includeTerminationRow = options?.includeTerminationRow ?? true;
+  const inlineSensitiveAccessEntry = pickCallbackWaitingInlineSensitiveAccessEntry(
+    sensitiveAccessEntries
+  );
+  const operatorStatuses = listCallbackWaitingOperatorStatuses({
+    lifecycle,
+    callbackTickets,
+    sensitiveAccessEntries,
+    scheduledResumeDelaySeconds,
+    scheduledResumeSource,
+    scheduledWaitingStatus
+  });
+  const recommendedAction = getCallbackWaitingRecommendedAction({
+    lifecycle,
+    callbackTickets,
+    sensitiveAccessEntries,
+    scheduledResumeDelaySeconds,
+    scheduledResumeSource,
+    scheduledWaitingStatus
+  });
+
+  return buildDetailRows([
+    {
+      label: "Status",
+      value: formatCallbackWaitingOperatorStatusSummary(operatorStatuses)
+    },
+    {
+      label: "Ticket status mix",
+      value: formatCallbackTicketStatusSummary(callbackTickets)
+    },
+    {
+      label: "Approvals",
+      value: formatApprovalSummary(sensitiveAccessEntries)
+    },
+    {
+      label: "Sensitive access",
+      value: formatCallbackWaitingSensitiveAccessSummary(inlineSensitiveAccessEntry)
+    },
+    {
+      label: "Notification",
+      value: formatCallbackWaitingNotificationSummary(inlineSensitiveAccessEntry)
+    },
+    {
+      label: "Resume",
+      value: formatScheduledResumeLabel({
+        scheduledResumeDelaySeconds,
+        scheduledResumeSource,
+        scheduledWaitingStatus
+      })
+    },
+    {
+      label: "Lifecycle",
+      value: formatCallbackLifecycleLabel(lifecycle)
+    },
+    {
+      label: "Termination",
+      value: includeTerminationRow ? formatCallbackTerminationLabel(lifecycle) : null
+    },
+    {
+      label: "Recommended next action",
+      value:
+        includeRecommendedActionRow && recommendedAction
+          ? `${recommendedAction.label} · ${recommendedAction.detail}`
+          : null
+    }
+  ]);
+}
+
+export function listCallbackWaitingEventRows({
+  lifecycle,
+  waitingReason,
+  waitingNodeRunId
+}: {
+  lifecycle?: CallbackWaitingLifecycleSummary | null;
+  waitingReason?: string | null;
+  waitingNodeRunId?: string | null;
+}): CallbackWaitingDetailRow[] {
+  return buildDetailRows([
+    {
+      label: "Latest ticket",
+      value: formatLatestCallbackTicketLabel(lifecycle)
+    },
+    {
+      label: "Latest late callback",
+      value: formatLatestLateCallbackLabel(lifecycle)
+    },
+    {
+      label: "Waiting node run",
+      value: waitingNodeRunId
+    },
+    {
+      label: "Waiting reason",
+      value: waitingReason
+    }
+  ]);
 }
 
 export function listCallbackWaitingChips({

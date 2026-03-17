@@ -9,15 +9,10 @@ import type {
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
-  formatApprovalSummary,
-  formatCallbackTicketStatusSummary,
-  formatCallbackTerminationLabel,
-  formatLatestCallbackTicketLabel,
-  formatLatestLateCallbackLabel,
-  formatScheduledResumeLabel,
-  getCallbackWaitingRecommendedAction,
   getCallbackWaitingHeadline,
-  listCallbackWaitingChips
+  listCallbackWaitingBlockerRows,
+  listCallbackWaitingChips,
+  listCallbackWaitingEventRows
 } from "@/lib/callback-waiting-presenters";
 import { buildPublishedInvocationInboxHref } from "@/lib/published-invocation-presenters";
 
@@ -29,15 +24,6 @@ type WorkflowPublishInvocationCallbackSectionProps = {
 
 function formatJsonPreview(value: unknown): string {
   return JSON.stringify(value ?? null, null, 2);
-}
-
-function renderMetaRow(label: string, value: string | null | undefined) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value ?? "n/a"}</dd>
-    </div>
-  );
 }
 
 export function WorkflowPublishInvocationCallbackSection({
@@ -61,13 +47,7 @@ export function WorkflowPublishInvocationCallbackSection({
     sensitiveAccessEntries,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds
   });
-  const scheduledResume = formatScheduledResumeLabel({
-    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
-    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
-    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status
-  });
-  const approvalSummary = formatApprovalSummary(sensitiveAccessEntries);
-  const recommendedAction = getCallbackWaitingRecommendedAction({
+  const blockerRows = listCallbackWaitingBlockerRows({
     lifecycle: callbackLifecycle,
     callbackTickets,
     sensitiveAccessEntries,
@@ -75,10 +55,11 @@ export function WorkflowPublishInvocationCallbackSection({
     scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
     scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status
   });
-  const latestTicket = formatLatestCallbackTicketLabel(callbackLifecycle);
-  const latestLateCallback = formatLatestLateCallbackLabel(callbackLifecycle);
-  const terminationLabel = formatCallbackTerminationLabel(callbackLifecycle);
-  const ticketStatusSummary = formatCallbackTicketStatusSummary(callbackTickets);
+  const eventRows = listCallbackWaitingEventRows({
+    lifecycle: callbackLifecycle,
+    waitingReason: waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason,
+    waitingNodeRunId: waitingLifecycle?.node_run_id ?? invocation.run_current_node_id ?? null
+  });
   const inboxHref = buildPublishedInvocationInboxHref({
     invocation,
     callbackTickets,
@@ -104,6 +85,7 @@ export function WorkflowPublishInvocationCallbackSection({
         callbackTickets={callbackTickets}
         lifecycle={callbackLifecycle}
         sensitiveAccessEntries={sensitiveAccessEntries}
+        waitingReason={waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason}
         scheduledResumeDelaySeconds={waitingLifecycle?.scheduled_resume_delay_seconds}
         scheduledResumeSource={waitingLifecycle?.scheduled_resume_source}
         scheduledWaitingStatus={waitingLifecycle?.scheduled_waiting_status}
@@ -111,7 +93,7 @@ export function WorkflowPublishInvocationCallbackSection({
         runId={invocation.run_id ?? null}
         nodeRunId={waitingLifecycle?.node_run_id ?? null}
       />
-      {(headline || chips.length > 0 || latestTicket || latestLateCallback || approvalSummary) ? (
+      {(headline || chips.length > 0 || blockerRows.length > 0 || eventRows.length > 0) ? (
         <div className="publish-meta-grid">
           <div className="payload-card compact-card">
             <div className="payload-card-header">
@@ -122,16 +104,12 @@ export function WorkflowPublishInvocationCallbackSection({
               <p className="binding-meta">{chips.join(" · ")}</p>
             ) : null}
             <dl className="compact-meta-list">
-              {renderMetaRow("Ticket status mix", ticketStatusSummary)}
-              {renderMetaRow("Approvals", approvalSummary)}
-              {renderMetaRow("Scheduled resume", scheduledResume)}
-              {renderMetaRow("Termination", terminationLabel)}
-              {renderMetaRow(
-                "Recommended next action",
-                recommendedAction
-                  ? `${recommendedAction.label} · ${recommendedAction.detail}`
-                  : null
-              )}
+              {blockerRows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
             </dl>
           </div>
           <div className="payload-card compact-card">
@@ -139,13 +117,12 @@ export function WorkflowPublishInvocationCallbackSection({
               <span className="status-meta">Latest callback events</span>
             </div>
             <dl className="compact-meta-list">
-              {renderMetaRow("Latest ticket", latestTicket)}
-              {renderMetaRow("Latest late callback", latestLateCallback)}
-              {renderMetaRow(
-                "Waiting node run",
-                waitingLifecycle?.node_run_id ?? invocation.run_current_node_id ?? null
-              )}
-              {renderMetaRow("Waiting reason", waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason)}
+              {eventRows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
             </dl>
           </div>
         </div>
