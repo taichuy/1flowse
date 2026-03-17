@@ -114,6 +114,17 @@ def _collect_tool_node_execution_issues(
         runtime_policy.get("execution") if isinstance(runtime_policy, dict) else None
     )
     if requested_execution_class is None:
+        default_issue = _build_default_execution_support_issue(
+            context=f"Tool node '{node_label}'",
+            tool_id=tool_id,
+            tool=tool,
+            ecosystem=ecosystem,
+            adapter_id=adapter_id,
+            adapters=adapters,
+            sandbox_backend_client=sandbox_backend_client,
+        )
+        if default_issue is not None:
+            issues.append(default_issue)
         return issues
 
     target_issue = _build_execution_support_issue(
@@ -179,6 +190,17 @@ def _collect_agent_execution_issues(
                 if tool is None:
                     continue
                 if policy_execution_class is None:
+                    default_issue = _build_default_execution_support_issue(
+                        context=f"LLM agent node '{node_label}' toolPolicy.allowedToolIds",
+                        tool_id=tool_id,
+                        tool=tool,
+                        ecosystem=tool.ecosystem,
+                        adapter_id=None,
+                        adapters=adapters,
+                        sandbox_backend_client=sandbox_backend_client,
+                    )
+                    if default_issue is not None:
+                        issues.append(default_issue)
                     continue
                 target_issue = _build_execution_support_issue(
                     context=f"LLM agent node '{node_label}' toolPolicy.allowedToolIds",
@@ -226,6 +248,17 @@ def _collect_agent_execution_issues(
                     raw_tool_call.get("execution")
                 )
                 if requested_execution_class is None:
+                    default_issue = _build_default_execution_support_issue(
+                        context=f"LLM agent node '{node_label}' mockPlan.toolCalls[{index}]",
+                        tool_id=tool_id,
+                        tool=tool,
+                        ecosystem=ecosystem,
+                        adapter_id=adapter_id,
+                        adapters=adapters,
+                        sandbox_backend_client=sandbox_backend_client,
+                    )
+                    if default_issue is not None:
+                        issues.append(default_issue)
                     continue
                 target_issue = _build_execution_support_issue(
                     context=f"LLM agent node '{node_label}' mockPlan.toolCalls[{index}]",
@@ -334,10 +367,119 @@ def _build_execution_support_issue(
     )
 
 
+def _build_default_execution_support_issue(
+    *,
+    context: str,
+    tool_id: str,
+    tool: PluginToolItem,
+    ecosystem: str | None,
+    adapter_id: str | None,
+    adapters: Sequence[CompatibilityAdapterRegistration],
+    sandbox_backend_client: SandboxBackendClient,
+) -> str | None:
+    default_execution_class = _normalize_default_strong_execution_class(
+        tool.default_execution_class
+    )
+    if default_execution_class is None:
+        return None
+
+    if tool.ecosystem == "native":
+        supported_execution_classes = tuple(tool.supported_execution_classes or ("inline",))
+        if default_execution_class not in supported_execution_classes:
+            supported_summary = ", ".join(supported_execution_classes)
+            return (
+                f"{context} relies on native tool '{tool_id}' default execution class "
+                f"'{default_execution_class}', but this tool currently supports only "
+                f"{supported_summary}."
+            )
+        backend_issue = _build_default_sandbox_backend_issue(
+            context=context,
+            tool_id=tool_id,
+            default_execution_class=default_execution_class,
+            sandbox_backend_client=sandbox_backend_client,
+        )
+        if backend_issue is not None:
+            return backend_issue
+        return None
+
+    resolved_ecosystem = ecosystem or tool.ecosystem
+    if resolved_ecosystem != tool.ecosystem:
+        return None
+
+    adapter = _resolve_adapter_for_execution(
+        ecosystem=resolved_ecosystem,
+        adapter_id=adapter_id,
+        adapters=adapters,
+    )
+    if adapter is None:
+        return (
+            f"{context} relies on tool '{tool_id}' default execution class "
+            f"'{default_execution_class}', but no enabled adapter is currently available for "
+            f"ecosystem '{resolved_ecosystem}'."
+        )
+
+    supported_execution_classes = tuple(adapter.supported_execution_classes or ("subprocess",))
+    if default_execution_class not in supported_execution_classes:
+        supported_summary = ", ".join(supported_execution_classes)
+        return (
+            f"{context} relies on tool '{tool_id}' default execution class "
+            f"'{default_execution_class}', but adapter '{adapter.id}' currently supports only "
+            f"{supported_summary}."
+        )
+
+    return _build_default_sandbox_backend_issue(
+        context=context,
+        tool_id=tool_id,
+        default_execution_class=default_execution_class,
+        sandbox_backend_client=sandbox_backend_client,
+    )
+
+
 def _build_sandbox_backend_issue(
     *,
     context: str,
     tool_id: str,
+    requested_execution_class: str,
+    execution_payload: Any,
+    sandbox_backend_client: SandboxBackendClient,
+) -> str | None:
+    backend_reason = _describe_sandbox_backend_unavailable(
+        requested_execution_class=requested_execution_class,
+        execution_payload=execution_payload,
+        sandbox_backend_client=sandbox_backend_client,
+    )
+    if backend_reason is None:
+        return None
+    return (
+        f"{context} explicitly requests execution class '{requested_execution_class}' for "
+        f"tool '{tool_id}', but no compatible sandbox backend is currently available. "
+        f"{backend_reason}".strip()
+    )
+
+
+def _build_default_sandbox_backend_issue(
+    *,
+    context: str,
+    tool_id: str,
+    default_execution_class: str,
+    sandbox_backend_client: SandboxBackendClient,
+) -> str | None:
+    backend_reason = _describe_sandbox_backend_unavailable(
+        requested_execution_class=default_execution_class,
+        execution_payload=None,
+        sandbox_backend_client=sandbox_backend_client,
+    )
+    if backend_reason is None:
+        return None
+    return (
+        f"{context} relies on tool '{tool_id}' default execution class "
+        f"'{default_execution_class}', but no compatible sandbox backend is currently available. "
+        f"{backend_reason}".strip()
+    )
+
+
+def _describe_sandbox_backend_unavailable(
+    *,
     requested_execution_class: str,
     execution_payload: Any,
     sandbox_backend_client: SandboxBackendClient,
@@ -354,11 +496,14 @@ def _build_sandbox_backend_issue(
     )
     if selection.available:
         return None
-    return (
-        f"{context} explicitly requests execution class '{requested_execution_class}' for "
-        f"tool '{tool_id}', but no compatible sandbox backend is currently available. "
-        f"{selection.reason or ''}".strip()
-    )
+    return selection.reason or "No compatible sandbox backend is currently available."
+
+
+def _normalize_default_strong_execution_class(value: Any) -> str | None:
+    normalized = _normalize_optional_string(value)
+    if normalized not in {"sandbox", "microvm"}:
+        return None
+    return normalized
 
 
 def _resolve_adapter_for_execution(

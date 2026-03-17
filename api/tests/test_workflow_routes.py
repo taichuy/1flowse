@@ -1015,6 +1015,118 @@ def test_create_workflow_accepts_native_tool_declared_sandbox_execution(
     assert response.status_code == 201
 
 
+def test_create_workflow_rejects_tool_default_sandbox_when_backend_unavailable(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search-default",
+            name="Risk Search Default",
+            supported_execution_classes=("inline", "sandbox"),
+            default_execution_class="sandbox",
+        ),
+        invoker=lambda request: {
+            "documents": ["doc-1"],
+            "execution": request.execution,
+        },
+    )
+    monkeypatch.setattr(workflow_library, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(workflow_definitions, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Native Default Sandbox Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="native.risk-search-default",
+                ecosystem="native",
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "default execution class 'sandbox'" in detail
+    assert "no compatible sandbox backend is currently available" in detail
+
+
+def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unavailable(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-default-microvm",
+            "ecosystem": "compat:dify-default",
+            "endpoint": "http://adapter.local/dify-default",
+            "supported_execution_classes": ["subprocess", "microvm"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-default:plugin:demo/search",
+            "name": "Demo Search Default",
+            "ecosystem": "compat:dify-default",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+            "supported_execution_classes": ["subprocess", "microvm"],
+            "default_execution_class": "microvm",
+        },
+    )
+    assert tool_response.status_code == 201
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("sandbox",)),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Agent Default Microvm Workflow",
+            "definition": {
+                "nodes": [
+                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {
+                        "id": "agent",
+                        "type": "llm_agent",
+                        "name": "Agent",
+                        "config": {
+                            "prompt": "Plan with tools",
+                            "toolPolicy": {
+                                "allowedToolIds": ["compat:dify-default:plugin:demo/search"],
+                            },
+                        },
+                    },
+                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                ],
+                "edges": [
+                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "toolPolicy.allowedToolIds" in detail
+    assert "default execution class 'microvm'" in detail
+    assert "no compatible sandbox backend is currently available" in detail
+
+
 def test_create_workflow_accepts_authorized_context_mcp_query(client: TestClient) -> None:
     response = client.post(
         "/api/workflows",

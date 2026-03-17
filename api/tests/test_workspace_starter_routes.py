@@ -64,7 +64,17 @@ def _planned_loop_definition() -> dict:
     }
 
 
-def _agent_tool_policy_definition(*, tool_id: str) -> dict:
+def _agent_tool_policy_definition(
+    *,
+    tool_id: str,
+    execution_class: str | None = "microvm",
+) -> dict:
+    tool_policy: dict[str, object] = {
+        "allowedToolIds": [tool_id],
+    }
+    if execution_class is not None:
+        tool_policy["execution"] = {"class": execution_class}
+
     return {
         "nodes": [
             {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
@@ -74,10 +84,7 @@ def _agent_tool_policy_definition(*, tool_id: str) -> dict:
                 "name": "Agent",
                 "config": {
                     "prompt": "Plan with tools",
-                    "toolPolicy": {
-                        "allowedToolIds": [tool_id],
-                        "execution": {"class": "microvm"},
-                    },
+                    "toolPolicy": tool_policy,
                 },
             },
             {"id": "output", "type": "output", "name": "Output", "config": {}},
@@ -328,6 +335,66 @@ def test_workspace_starter_create_accepts_supported_agent_tool_execution(
     )
 
     assert response.status_code == 201
+
+
+def test_workspace_starter_create_rejects_allowed_tool_default_microvm_when_backend_unavailable(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-default-microvm",
+            "ecosystem": "compat:dify-default",
+            "endpoint": "http://adapter.local/dify-default",
+            "supported_execution_classes": ["subprocess", "microvm"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-default:plugin:demo/search",
+            "name": "Demo Search Default",
+            "ecosystem": "compat:dify-default",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+            "supported_execution_classes": ["subprocess", "microvm"],
+            "default_execution_class": "microvm",
+        },
+    )
+    assert tool_response.status_code == 201
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("sandbox",)),
+    )
+
+    response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Default Execution Guard Starter",
+            "description": "Template for default execution guard",
+            "business_track": "编排节点能力",
+            "default_workflow_name": "Default Execution Guard Workflow",
+            "workflow_focus": "Default execution guard focus",
+            "recommended_next_step": "Provision microvm sandbox backend",
+            "tags": ["execution", "default"],
+            "definition": _agent_tool_policy_definition(
+                tool_id="compat:dify-default:plugin:demo/search",
+                execution_class=None,
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    message, issues = _validation_detail(response.json())
+    assert "toolPolicy.allowedToolIds" in message
+    assert "default execution class 'microvm'" in message
+    assert any(issue["category"] == "tool_execution" for issue in issues)
 
 
 def test_workspace_starter_create_rejects_invalid_variables(

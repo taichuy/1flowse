@@ -142,6 +142,99 @@ export function buildExecutionCapabilityIssue({
   return null;
 }
 
+export function buildDefaultExecutionCapabilityIssue({
+  context,
+  nodeId,
+  nodeName,
+  toolId,
+  tool,
+  ecosystem,
+  adapterId,
+  adapters,
+  sandboxReadiness,
+  path,
+  field
+}: Omit<WorkflowExecutionCapabilityIssueOptions, "requestedExecutionClass">): WorkflowToolExecutionValidationIssue | null {
+  const defaultExecutionClass = normalizeStrongDefaultExecutionClass(tool.default_execution_class);
+  if (!defaultExecutionClass) {
+    return null;
+  }
+
+  if (tool.ecosystem === "native") {
+    const supportedExecutionClasses = tool.supported_execution_classes?.length
+      ? tool.supported_execution_classes
+      : ["inline"];
+    if (!supportedExecutionClasses.includes(defaultExecutionClass)) {
+      return {
+        nodeId,
+        nodeName,
+        message: `${context} 绑定的原生工具 ${toolId} 默认执行级别是 ${defaultExecutionClass}，但当前只支持 ${supportedExecutionClasses.join(
+          ", "
+        )}。`,
+        path,
+        field
+      };
+    }
+
+    return buildDefaultSandboxReadinessIssue({
+      context,
+      nodeId,
+      nodeName,
+      toolId,
+      defaultExecutionClass,
+      sandboxReadiness,
+      path,
+      field
+    });
+  }
+
+  const resolvedEcosystem = ecosystem ?? tool.ecosystem;
+  if (resolvedEcosystem !== tool.ecosystem) {
+    return null;
+  }
+
+  const adapter = resolveAdapterForExecution({
+    ecosystem: resolvedEcosystem,
+    adapterId,
+    adapters
+  });
+  if (!adapter) {
+    return {
+      nodeId,
+      nodeName,
+      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。`,
+      path,
+      field
+    };
+  }
+
+  const supportedExecutionClasses = adapter.supported_execution_classes?.length
+    ? adapter.supported_execution_classes
+    : ["subprocess"];
+  if (!supportedExecutionClasses.includes(defaultExecutionClass)) {
+    return {
+      nodeId,
+      nodeName,
+      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
+        ", "
+      )}。`,
+      path,
+      field
+    };
+  }
+
+  return buildDefaultSandboxReadinessIssue({
+    context,
+    nodeId,
+    nodeName,
+    toolId,
+    defaultExecutionClass,
+    sandboxReadiness,
+    path,
+    field
+  });
+}
+
 export function extractExplicitExecutionClass(value: unknown) {
   const record = toRecord(value);
   return normalizeString(record?.class);
@@ -213,6 +306,57 @@ function buildSandboxReadinessIssue({
     path,
     field
   };
+}
+
+function buildDefaultSandboxReadinessIssue({
+  context,
+  nodeId,
+  nodeName,
+  toolId,
+  defaultExecutionClass,
+  sandboxReadiness,
+  path,
+  field
+}: {
+  context: string;
+  nodeId: string;
+  nodeName: string;
+  toolId: string;
+  defaultExecutionClass: string;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  path: string;
+  field: string;
+}): WorkflowToolExecutionValidationIssue | null {
+  if (defaultExecutionClass !== "sandbox" && defaultExecutionClass !== "microvm") {
+    return null;
+  }
+  if (!sandboxReadiness) {
+    return null;
+  }
+
+  const readiness = sandboxReadiness.execution_classes.find(
+    (item) => item.execution_class === defaultExecutionClass
+  );
+  if (readiness?.available) {
+    return null;
+  }
+
+  const reason = readiness?.reason?.trim();
+  return {
+    nodeId,
+    nodeName,
+    message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前 sandbox readiness 还没有准备好对应执行链路。${reason ? ` ${reason}` : ""}`,
+    path,
+    field
+  };
+}
+
+function normalizeStrongDefaultExecutionClass(value: unknown) {
+  const normalized = normalizeString(value);
+  if (normalized !== "sandbox" && normalized !== "microvm") {
+    return null;
+  }
+  return normalized;
 }
 
 function normalizeString(value: unknown) {

@@ -5,6 +5,7 @@ import type {
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
 import {
+  buildDefaultExecutionCapabilityIssue,
   buildExecutionCapabilityIssue,
   extractExplicitExecutionClass,
   isAdapterVisible,
@@ -130,6 +131,22 @@ function buildToolNodeExecutionIssues({
     toRecord(node?.runtimePolicy)?.execution
   );
   if (!requestedExecutionClass) {
+    const defaultIssue = buildDefaultExecutionCapabilityIssue({
+      context: `Tool 节点 ${nodeName} (${nodeId})`,
+      nodeId,
+      nodeName,
+      toolId,
+      tool,
+      ecosystem,
+      adapterId,
+      adapters,
+      sandboxReadiness,
+      path: `nodes.${nodeIndex}.config.tool.toolId`,
+      field: "toolId"
+    });
+    if (defaultIssue) {
+      issues.push(defaultIssue);
+    }
     return issues;
   }
 
@@ -215,6 +232,26 @@ function buildAgentExecutionIssues({
         return;
       }
 
+      if (!policyExecutionClass) {
+        const defaultIssue = buildDefaultExecutionCapabilityIssue({
+          context: `LLM Agent 节点 ${nodeName} (${nodeId}) 的 toolPolicy.allowedToolIds`,
+          nodeId,
+          nodeName,
+          toolId,
+          tool,
+          ecosystem: tool.ecosystem,
+          adapterId: null,
+          adapters,
+          sandboxReadiness,
+          path: `nodes.${nodeIndex}.config.toolPolicy.allowedToolIds`,
+          field: "allowedToolIds"
+        });
+        if (defaultIssue) {
+          issues.push(defaultIssue);
+        }
+        return;
+      }
+
       const capabilityIssue = buildExecutionCapabilityIssue({
         context: `LLM Agent 节点 ${nodeName} (${nodeId}) 的 toolPolicy.allowedToolIds`,
         nodeId,
@@ -274,6 +311,22 @@ function buildAgentExecutionIssues({
 
       const requestedExecutionClass = extractExplicitExecutionClass(toolCall.execution);
       if (!requestedExecutionClass) {
+        const defaultIssue = buildDefaultExecutionCapabilityIssue({
+          context: `LLM Agent 节点 ${nodeName} (${nodeId}) 的 mockPlan.toolCalls[${index + 1}]`,
+          nodeId,
+          nodeName,
+          toolId,
+          tool,
+          ecosystem,
+          adapterId,
+          adapters,
+          sandboxReadiness,
+          path: `nodes.${nodeIndex}.config.mockPlan.toolCalls.${index}.toolId`,
+          field: "toolId"
+        });
+        if (defaultIssue) {
+          issues.push(defaultIssue);
+        }
         return;
       }
 
