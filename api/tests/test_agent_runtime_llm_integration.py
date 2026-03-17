@@ -468,6 +468,113 @@ def test_llm_agent_skill_binding_limits_injection_to_selected_phase(
     assert "[Skills]" not in finalize_content
 
 
+def test_llm_agent_lazy_fetches_matching_skill_reference_body_at_runtime(
+    sqlite_session: Session,
+) -> None:
+    runtime = _create_runtime_with_llm(
+        [
+            _openai_response("Plan with runtime-fetched skill reference."),
+            _openai_response("Final answer with budget guardrails."),
+        ]
+    )
+
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Summarize findings, cite evidence, and end with open questions.",
+        )
+    )
+    sqlite_session.add_all(
+        [
+            SkillReferenceRecord(
+                id="ref-handoff",
+                skill_id="skill-research-brief",
+                name="Operator Handoff",
+                description="Close with next actions.",
+                body="Always include what the operator should verify next.",
+            ),
+            SkillReferenceRecord(
+                id="ref-budget",
+                skill_id="skill-research-brief",
+                name="Budget Control",
+                description="Budget guardrails and cost limits.",
+                body="State the budget ceiling and warn before overspending.",
+            ),
+        ]
+    )
+
+    workflow = Workflow(
+        id="wf-agent-skill-runtime-fetch",
+        name="Agent Skill Runtime Fetch Test",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "goal": "Keep the answer inside the available budget guardrails.",
+                        "prompt": (
+                            "Draft a response using the bound skill and mention "
+                            "budget guardrails."
+                        ),
+                        "skillIds": ["skill-research-brief"],
+                        "skillBinding": {
+                            "enabledPhases": ["main_plan"],
+                            "promptBudgetChars": 512,
+                            "references": [],
+                        },
+                        "model": {
+                            "provider": "openai",
+                            "modelId": "gpt-4o",
+                            "apiKey": "sk-test-key",
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "budget review"})
+
+    assert artifacts.run.status == "succeeded"
+    assert "agent.skill.references.loaded" in [event.event_type for event in artifacts.events]
+
+    loaded_event = next(
+        event for event in artifacts.events if event.event_type == "agent.skill.references.loaded"
+    )
+    assert loaded_event.payload == {
+        "node_id": "agent",
+        "phase": "main_plan",
+        "references": [
+            {"skill_id": "skill-research-brief", "reference_id": "ref-budget"}
+        ],
+    }
+
+    captured_requests = runtime._llm_provider._captured_requests  # type: ignore[attr-defined]
+    assert captured_requests
+    combined_content = "\n".join(
+        str(message.get("content", ""))
+        for message in captured_requests[0]["body"]["messages"]
+        if isinstance(message, dict)
+    )
+    assert "State the budget ceiling and warn before overspending." in combined_content
+    assert "Always include what the operator should verify next." not in combined_content
+
+
 # ---------------------------------------------------------------------------
 # Test: LLM finalize with tools
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from urllib.parse import urlencode
@@ -25,6 +26,9 @@ from app.schemas.skill import (
 
 class SkillCatalogError(ValueError):
     pass
+
+
+_REFERENCE_QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9_]{3,}|[\u4e00-\u9fff]{2,}")
 
 
 @dataclass(frozen=True)
@@ -258,6 +262,71 @@ class SkillCatalogService:
                 )
             )
         return prompt_docs
+
+    def suggest_reference_ids(
+        self,
+        db: Session,
+        *,
+        skill_ids: Sequence[str],
+        query_text: str,
+        workspace_id: str = "default",
+        excluded_reference_ids_by_skill: Mapping[str, Sequence[str]] | None = None,
+        max_references_per_skill: int = 1,
+    ) -> dict[str, list[str]]:
+        normalized_skill_ids = self._normalize_skill_ids(skill_ids)
+        if not normalized_skill_ids:
+            return {}
+
+        query_tokens = self._tokenize_reference_query(query_text)
+        if not query_tokens:
+            return {}
+
+        excluded_reference_ids = self._normalize_reference_selections(
+            excluded_reference_ids_by_skill
+        )
+        reference_rows = db.scalars(
+            select(SkillReferenceRecord)
+            .join(SkillRecord, SkillRecord.id == SkillReferenceRecord.skill_id)
+            .where(
+                SkillRecord.workspace_id == workspace_id,
+                SkillReferenceRecord.skill_id.in_(normalized_skill_ids),
+            )
+            .order_by(
+                SkillReferenceRecord.skill_id.asc(),
+                SkillReferenceRecord.name.asc(),
+                SkillReferenceRecord.id.asc(),
+            )
+        ).all()
+        references_by_skill: dict[str, list[SkillReferenceRecord]] = {}
+        for reference in reference_rows:
+            references_by_skill.setdefault(reference.skill_id, []).append(reference)
+
+        per_skill_limit = max(1, int(max_references_per_skill))
+        suggestions: dict[str, list[str]] = {}
+        for skill_id in normalized_skill_ids:
+            excluded_ids = excluded_reference_ids.get(skill_id, frozenset())
+            ranked_reference_ids: list[tuple[int, str, str]] = []
+            for reference in references_by_skill.get(skill_id, []):
+                if reference.id in excluded_ids:
+                    continue
+                score = self._score_reference_query_match(query_tokens, reference)
+                if score <= 0:
+                    continue
+                ranked_reference_ids.append(
+                    (
+                        -score,
+                        reference.name.lower(),
+                        reference.id,
+                    )
+                )
+            if not ranked_reference_ids:
+                continue
+            ranked_reference_ids.sort()
+            suggestions[skill_id] = [
+                reference_id
+                for _, _, reference_id in ranked_reference_ids[:per_skill_limit]
+            ]
+        return suggestions
 
     def build_reference_retrieval(
         self,
@@ -503,6 +572,24 @@ class SkillCatalogService:
             if skill_id and skill_id not in normalized:
                 normalized.append(skill_id)
         return normalized
+
+    @classmethod
+    def _tokenize_reference_query(cls, value: str) -> frozenset[str]:
+        if not isinstance(value, str) or not value.strip():
+            return frozenset()
+        return frozenset(
+            match.group(0).lower() for match in _REFERENCE_QUERY_TOKEN_RE.finditer(value)
+        )
+
+    @classmethod
+    def _score_reference_query_match(
+        cls,
+        query_tokens: frozenset[str],
+        reference: SkillReferenceRecord,
+    ) -> int:
+        name_tokens = cls._tokenize_reference_query(reference.name)
+        description_tokens = cls._tokenize_reference_query(reference.description)
+        return len(query_tokens & name_tokens) * 3 + len(query_tokens & description_tokens)
 
     @staticmethod
     def _read_workspace_id(params: Mapping[str, object]) -> str:

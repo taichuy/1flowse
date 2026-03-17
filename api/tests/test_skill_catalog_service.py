@@ -156,3 +156,47 @@ def test_invoke_mcp_method_returns_skill_reference_details(
         "description": "Close with next actions.",
         "body": "Always include recommended operator follow-up.",
     }
+
+
+def test_suggest_reference_ids_picks_best_query_match(
+    sqlite_session: Session,
+) -> None:
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Summarize findings.",
+        )
+    )
+    sqlite_session.add_all(
+        [
+            SkillReferenceRecord(
+                id="ref-handoff",
+                skill_id="skill-research-brief",
+                name="Operator Handoff",
+                description="Close with next actions for the operator.",
+                body="Always include operator follow-up.",
+            ),
+            SkillReferenceRecord(
+                id="ref-budget",
+                skill_id="skill-research-brief",
+                name="Budget Control",
+                description="Capture budget guardrails and cost limits.",
+                body="Always state the current budget ceiling.",
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    service = SkillCatalogService()
+
+    suggestions = service.suggest_reference_ids(
+        sqlite_session,
+        skill_ids=["skill-research-brief"],
+        query_text="Need stricter budget guardrails before we continue.",
+        workspace_id="default",
+    )
+
+    assert suggestions == {"skill-research-brief": ["ref-budget"]}
