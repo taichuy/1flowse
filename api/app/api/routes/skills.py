@@ -7,6 +7,8 @@ from app.schemas.skill import (
     SkillDocDetail,
     SkillDocListItem,
     SkillDocUpdate,
+    SkillMcpCall,
+    SkillMcpResponse,
     SkillReferenceDocDetail,
 )
 from app.services.skill_catalog import SkillCatalogError, SkillCatalogService
@@ -35,6 +37,24 @@ def create_skill(payload: SkillDocCreate, db: Session = Depends(get_db)) -> Skil
     db.commit()
     db.refresh(record)
     return skill_catalog_service.serialize_detail(db, record)
+
+
+@router.post("/mcp/call", response_model=SkillMcpResponse)
+def call_skill_catalog_mcp(
+    payload: SkillMcpCall,
+    db: Session = Depends(get_db),
+) -> SkillMcpResponse:
+    try:
+        return skill_catalog_service.invoke_mcp_method(
+            db,
+            method=payload.method,
+            params=payload.params,
+        )
+    except SkillCatalogError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/{skill_id}", response_model=SkillDocDetail)

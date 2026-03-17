@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -108,6 +109,13 @@ class SkillPromptReference(BaseModel):
     name: str
     description: str
     body: str | None = None
+    retrieval: SkillReferenceRetrieval | None = None
+
+
+class SkillReferenceRetrieval(BaseModel):
+    http_path: str
+    mcp_method: str = "skills.get_reference"
+    mcp_params: dict[str, str] = Field(default_factory=dict)
 
 
 class SkillPromptDoc(BaseModel):
@@ -116,3 +124,13 @@ class SkillPromptDoc(BaseModel):
     description: str
     body: str
     references: list[SkillPromptReference] = Field(default_factory=list)
+
+
+class SkillMcpCall(BaseModel):
+    method: str = Field(min_length=1, max_length=64)
+    params: dict[str, str] = Field(default_factory=dict)
+
+
+class SkillMcpResponse(BaseModel):
+    method: str
+    result: Any

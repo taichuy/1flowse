@@ -348,6 +348,11 @@ def test_llm_agent_injects_bound_skill_docs_into_llm_context(
     assert "[Skills]" in combined_content
     assert "Research Brief" in combined_content
     assert "Operator Handoff" in combined_content
+    assert "skills.get_reference" in combined_content
+    assert (
+        "/api/skills/skill-research-brief/references/ref-handoff?workspace_id=default"
+        in combined_content
+    )
 
 
 def test_llm_agent_skill_binding_limits_injection_to_selected_phase(
@@ -454,6 +459,11 @@ def test_llm_agent_skill_binding_limits_injection_to_selected_phase(
     assert "Research Brief" in plan_content
     assert "Operator Handoff" in plan_content
     assert "Always include what the operator should verify next." in plan_content
+    assert "skills.get_reference" in plan_content
+    assert (
+        "/api/skills/skill-research-brief/references/ref-budget?workspace_id=default"
+        in plan_content
+    )
     assert "This body should stay out of prompt injection" not in plan_content
     assert "[Skills]" not in finalize_content
 

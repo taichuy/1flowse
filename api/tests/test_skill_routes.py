@@ -48,6 +48,50 @@ def test_skill_catalog_crud_and_reference_retrieval(client: TestClient) -> None:
     assert reference_response.status_code == 200
     assert reference_response.json()["body"].startswith("Use sections")
 
+    mcp_list_response = client.post(
+        "/api/skills/mcp/call",
+        json={
+            "method": "skills.list",
+            "params": {"workspace_id": "default"},
+        },
+    )
+    assert mcp_list_response.status_code == 200
+    assert mcp_list_response.json()["result"][0]["id"] == "skill-research-brief"
+
+    mcp_detail_response = client.post(
+        "/api/skills/mcp/call",
+        json={
+            "method": "skills.get",
+            "params": {"skill_id": "skill-research-brief"},
+        },
+    )
+    assert mcp_detail_response.status_code == 200
+    assert mcp_detail_response.json()["result"]["references"] == [
+        {
+            "id": "ref-structure",
+            "name": "Brief Structure",
+            "description": "Outline expected output sections.",
+        }
+    ]
+
+    mcp_reference_response = client.post(
+        "/api/skills/mcp/call",
+        json={
+            "method": "skills.get_reference",
+            "params": {
+                "skill_id": "skill-research-brief",
+                "reference_id": "ref-structure",
+            },
+        },
+    )
+    assert mcp_reference_response.status_code == 200
+    assert mcp_reference_response.json()["result"] == {
+        "id": "ref-structure",
+        "name": "Brief Structure",
+        "description": "Outline expected output sections.",
+        "body": "Use sections for summary, evidence, risks, and next steps.",
+    }
+
     update_response = client.put(
         "/api/skills/skill-research-brief",
         json={

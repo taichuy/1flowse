@@ -51,6 +51,17 @@ def test_build_prompt_docs_limits_budget_and_selected_reference_bodies(
     assert len(doc.body) + len(references_by_id["ref-handoff"].body or "") <= 90
     assert references_by_id["ref-handoff"].body is not None
     assert references_by_id["ref-budget"].body is None
+    assert references_by_id["ref-handoff"].retrieval is not None
+    assert references_by_id["ref-handoff"].retrieval.http_path.endswith(
+        "/api/skills/skill-research-brief/references/ref-handoff?workspace_id=default"
+    )
+    assert references_by_id["ref-budget"].retrieval is not None
+    assert references_by_id["ref-budget"].retrieval.mcp_method == "skills.get_reference"
+    assert references_by_id["ref-budget"].retrieval.mcp_params == {
+        "skill_id": "skill-research-brief",
+        "reference_id": "ref-budget",
+        "workspace_id": "default",
+    }
     assert doc.body.endswith("…") or (references_by_id["ref-handoff"].body or "").endswith("…")
 
 
@@ -80,3 +91,68 @@ def test_build_prompt_docs_rejects_missing_selected_reference(
         assert "Missing skill references" in str(exc)
     else:
         raise AssertionError("Expected missing selected skill reference to fail fast.")
+
+
+def test_invoke_mcp_method_returns_skill_reference_details(
+    sqlite_session: Session,
+) -> None:
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Summarize findings.",
+        )
+    )
+    sqlite_session.add(
+        SkillReferenceRecord(
+            id="ref-handoff",
+            skill_id="skill-research-brief",
+            name="Operator Handoff",
+            description="Close with next actions.",
+            body="Always include recommended operator follow-up.",
+        )
+    )
+    sqlite_session.commit()
+
+    service = SkillCatalogService()
+
+    list_response = service.invoke_mcp_method(
+        sqlite_session,
+        method="skills.list",
+        params={"workspace_id": "default"},
+    )
+    assert list_response.method == "skills.list"
+    assert list_response.result[0]["id"] == "skill-research-brief"
+
+    detail_response = service.invoke_mcp_method(
+        sqlite_session,
+        method="skills.get",
+        params={"skill_id": "skill-research-brief"},
+    )
+    assert detail_response.method == "skills.get"
+    assert detail_response.result["references"] == [
+        {
+            "id": "ref-handoff",
+            "name": "Operator Handoff",
+            "description": "Close with next actions.",
+        }
+    ]
+
+    reference_response = service.invoke_mcp_method(
+        sqlite_session,
+        method="skills.get_reference",
+        params={
+            "skill_id": "skill-research-brief",
+            "reference_id": "ref-handoff",
+            "workspace_id": "default",
+        },
+    )
+    assert reference_response.method == "skills.get_reference"
+    assert reference_response.result == {
+        "id": "ref-handoff",
+        "name": "Operator Handoff",
+        "description": "Close with next actions.",
+        "body": "Always include recommended operator follow-up.",
+    }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from sqlalchemy import delete, select
@@ -13,10 +14,12 @@ from app.schemas.skill import (
     SkillDocDetail,
     SkillDocListItem,
     SkillDocUpdate,
+    SkillMcpResponse,
     SkillPromptDoc,
     SkillPromptReference,
     SkillReferenceDocDetail,
     SkillReferenceDocSummary,
+    SkillReferenceRetrieval,
 )
 
 
@@ -238,6 +241,11 @@ class SkillCatalogService:
                         name=reference.name,
                         description=reference.description,
                         body=reference_body,
+                        retrieval=self.build_reference_retrieval(
+                            skill_id=record.id,
+                            reference_id=reference.id,
+                            workspace_id=workspace_id,
+                        ),
                     )
                 )
             prompt_docs.append(
@@ -250,6 +258,90 @@ class SkillCatalogService:
                 )
             )
         return prompt_docs
+
+    def build_reference_retrieval(
+        self,
+        *,
+        skill_id: str,
+        reference_id: str,
+        workspace_id: str = "default",
+    ) -> SkillReferenceRetrieval:
+        query = urlencode({"workspace_id": workspace_id}) if workspace_id else ""
+        http_path = f"/api/skills/{skill_id}/references/{reference_id}"
+        if query:
+            http_path = f"{http_path}?{query}"
+        return SkillReferenceRetrieval(
+            http_path=http_path,
+            mcp_method="skills.get_reference",
+            mcp_params={
+                "skill_id": skill_id,
+                "reference_id": reference_id,
+                "workspace_id": workspace_id,
+            },
+        )
+
+    def invoke_mcp_method(
+        self,
+        db: Session,
+        *,
+        method: str,
+        params: Mapping[str, object] | None = None,
+    ) -> SkillMcpResponse:
+        normalized_method = str(method or "").strip()
+        raw_params = params or {}
+        workspace_id = self._read_workspace_id(raw_params)
+
+        if normalized_method == "skills.list":
+            result = [
+                item.model_dump(mode="python")
+                for item in self.list_skills(db, workspace_id=workspace_id)
+            ]
+            return SkillMcpResponse(method=normalized_method, result=result)
+
+        if normalized_method == "skills.get":
+            skill_id = self._read_required_param(
+                raw_params,
+                method=normalized_method,
+                keys=("skill_id", "skillId"),
+            )
+            record = self.get_skill(db, skill_id=skill_id, workspace_id=workspace_id)
+            if record is None:
+                raise SkillCatalogError(f"Skill '{skill_id}' not found.")
+            return SkillMcpResponse(
+                method=normalized_method,
+                result=self.serialize_detail(db, record).model_dump(mode="python"),
+            )
+
+        if normalized_method == "skills.get_reference":
+            skill_id = self._read_required_param(
+                raw_params,
+                method=normalized_method,
+                keys=("skill_id", "skillId"),
+            )
+            reference_id = self._read_required_param(
+                raw_params,
+                method=normalized_method,
+                keys=("reference_id", "referenceId", "ref_id", "refId"),
+            )
+            reference = self.get_reference(
+                db,
+                skill_id=skill_id,
+                reference_id=reference_id,
+                workspace_id=workspace_id,
+            )
+            if reference is None:
+                raise SkillCatalogError(
+                    f"Skill reference '{skill_id}:{reference_id}' not found."
+                )
+            return SkillMcpResponse(
+                method=normalized_method,
+                result=self.serialize_reference_detail(reference).model_dump(mode="python"),
+            )
+
+        raise SkillCatalogError(
+            "Unsupported skill retrieval method: "
+            f"{normalized_method or '<empty>'}."
+        )
 
     def build_reference_index(
         self,
@@ -411,3 +503,31 @@ class SkillCatalogService:
             if skill_id and skill_id not in normalized:
                 normalized.append(skill_id)
         return normalized
+
+    @staticmethod
+    def _read_workspace_id(params: Mapping[str, object]) -> str:
+        workspace_id = str(
+            params.get("workspace_id") or params.get("workspaceId") or "default"
+        ).strip()
+        if not workspace_id:
+            raise SkillCatalogError("workspace_id must be a non-empty string.")
+        return workspace_id
+
+    @staticmethod
+    def _read_required_param(
+        params: Mapping[str, object],
+        *,
+        method: str,
+        keys: Sequence[str],
+    ) -> str:
+        for key in keys:
+            value = params.get(key)
+            if value is None:
+                continue
+            normalized = str(value).strip()
+            if normalized:
+                return normalized
+        joined_keys = ", ".join(keys)
+        raise SkillCatalogError(
+            f"Method '{method}' requires one of: {joined_keys}."
+        )
