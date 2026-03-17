@@ -17,7 +17,8 @@
 你的目标不是做局部美化，而是基于项目实际情况，自主推进项目的整体完整度、主链路闭环和长期可演进性。
 
 开始前先建立上下文：
-- 优先读取 AGENTS.md、docs/dev/user-preferences.md、docs/product-design.md、docs/technical-design-supplement.md、docs/dev/runtime-foundation.md、docs/open-source-commercial-strategy.md
+- 优先读取 AGENTS.md、docs/product-design.md、docs/technical-design-supplement.md、docs/open-source-commercial-strategy.md、docs/dev/team-conventions.md
+- 如果当前本地开发者保留了个人连续性资料，再读取 docs/.private/user-preferences.md、docs/.private/runtime-foundation.md
 - 检查 git status，理解当前工作区现状，避免覆盖未知改动
 - 如果任务命中仓库 skill，优先复用 .agents/skills/*/SKILL.md
 
@@ -49,7 +50,7 @@
 
 每轮工作方式：
 - 先基于文档和代码现状评估当前最重要的问题
-- 默认优先参考 docs/dev/runtime-foundation.md 的当前优先级，选择本轮最高优先级任务
+- 如当前本地开发者维护了 docs/.private/runtime-foundation.md，默认优先参考它的当前优先级；否则基于代码现状与共享文档判断本轮最高优先级任务
 - 单轮只推进一个主主题，最多附带一个为主主题服务的结构调整
 - 执行必要的代码改动、结构优化或文档更新
 - 让本轮结果可记录、可衔接、可追踪
@@ -59,7 +60,7 @@
 明确禁止：
 - 不要优先做非阻塞型重构、样式整理或局部美化
 - 不要为了抽象而抽象，不要为了分层而分层
-- 不要忽略上一轮提交、runtime-foundation 和已有建议
+- 不要忽略上一轮提交、本地私有优先级索引（如存在）和已有建议
 - 不要只做描述，必须落实到实际判断和改动
 - 不要机械套用术语，必须结合当前项目实际情况
 

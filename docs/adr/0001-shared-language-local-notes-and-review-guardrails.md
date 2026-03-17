@@ -5,32 +5,33 @@
 
 ## 背景
 
-7Flows 仍处于快速搭骨架和持续推进主链闭环的阶段。上一轮治理调整把共享文档、ADR、skills 和新增治理条目切到“英文优先”，也把按日期的开发留痕放进了公共 `docs/history/`。继续这样做会带来两个问题：
+7Flows 仍处于快速搭骨架和持续推进主链闭环的阶段。上一轮治理调整把共享文档、ADR、技能文档和新增治理条目切到“英文优先”，也把按日期的开发留痕放进了公共 `docs/history/`。与此同时，公开开发索引里也逐步承载了大量只对当前本地开发者成立的稳定偏好与阶段优先级。继续这样做会带来三个问题：
 
 1. 关键入口里出现英文后，当前中文检索路径变差，后续 AI 与人都更容易漏掉真正重要的公共规则。
 2. 按日期的单人开发过程留痕会快速过时，把它持续放在公共仓库里，会让共享知识库越来越像流水账，而不是稳定协议层。
+3. 把个人偏好和当前轮优先级放在公共 `docs/dev/`，会让共享约定与本地连续性记忆混在一起，进一步提高过时风险。
 
-同时，prompt、skill、governance、script 和本地执行边界相关改动仍然属于高风险面，必须保留清晰的人工审查护栏。
+同时，prompt、技能文档、governance、script 和本地执行边界相关改动仍然属于高风险面，必须保留清晰的人工审查护栏。
 
 ## 决策
 
 7Flows 采用以下协作结构：
 
-1. 当前共享仓库中的重点文档、ADR、skills 和新增治理条目默认使用中文。
+1. 当前共享仓库中的重点文档、ADR、技能文档和新增治理条目默认使用中文。
 2. 如果关键入口文档中的英文内容已经影响检索、搜索或后续理解，应优先翻回中文，而不是继续扩大中英混写。
 3. 共享协作规则继续写在 `AGENTS.md` 与 `docs/dev/team-conventions.md`。
-4. 稳定的用户偏好与自治开发偏好写在 `docs/dev/user-preferences.md`。
-5. 当前实现事实与近期优先级写在 `docs/dev/runtime-foundation.md`。
-6. 当前开发者自己的本地笔记、机器偏好、临时推导和按日期开发留痕迁入 `docs/.private/`，并保持 git ignore。
+4. 当前开发者自己的稳定偏好、自治开发偏好与默认汇报口径迁入 `docs/.private/user-preferences.md`。
+5. 当前开发者自己的当前事实、结构热点、近期优先级与下一步规划迁入 `docs/.private/runtime-foundation.md`。
+6. 当前开发者自己的本地笔记、机器偏好、临时推导和按日期开发留痕继续放在 `docs/.private/`，并保持 git ignore。
 7. `docs/adr/` 继续作为需要长期保留“背景 / 决策 / 后果”的共享决策日志。
-8. prompt、skill、governance、script、bootstrap 和本地执行边界相关改动仍属于 `P0` 审查范围，必须经过人工审查，并使用 `safe-change-review` skill 做总结。
+8. prompt、技能文档、governance、script、bootstrap 和本地执行边界相关改动仍属于 `P0` 审查范围，必须经过人工审查，并使用 `safe-change-review` 技能做总结。
 9. 本地开发主链仍必须保持 local-first、loopback-first，禁止把远程脚本、外部通知端点或外部托管 bootstrap 资产写进共享开发路径。
 10. 默认仓库 PR 目标分支仍是 `taichuy_dev`，除非维护者显式宣布临时替代分支。
 
 ## 后果
 
-- 公共知识库会更聚焦在稳定规则、当前事实和长期决策，而不是继续承载按日期堆叠的个人过程留痕。
-- 当前开发者仍可在 `docs/.private/history/` 保留自己的开发连续性，但这不会再误伤共享检索入口。
+- 公共知识库会更聚焦在稳定规则、共享入口和长期决策，而不是继续承载个人偏好、阶段优先级和按日期堆叠的过程留痕。
+- 当前开发者仍可在 `docs/.private/user-preferences.md`、`docs/.private/runtime-foundation.md` 与 `docs/.private/history/` 保留自己的开发连续性，但这不会再误伤共享检索入口。
 - 关键文档与高风险协作资产需要逐步回到中文，以保证当前阶段的检索效率和理解一致性。
 - 高风险改动依然保留明确的人工审查护栏，不会因为文档分层调整而弱化。
 
@@ -38,4 +39,5 @@
 
 - 把关键共享入口中的“英文优先”规则翻回中文优先口径。
 - 停止把公共 `docs/history/` 当作默认共享事实来源。
-- 后续凡是触及 prompt、skill、governance、script、CI、Docker 或本地执行边界的改动，继续走 `safe-change-review`。
+- 停止把这类个人偏好与运行优先级文档作为公共知识入口，改为本地私有连续性文档。
+- 后续凡是触及 prompt、技能文档、governance、script、CI、Docker 或本地执行边界的改动，继续走 `safe-change-review`。

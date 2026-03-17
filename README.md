@@ -59,14 +59,15 @@
 文档建议按下面顺序阅读：
 
 1. `AGENTS.md`
-2. `docs/dev/user-preferences.md`
-3. `docs/product-design.md`
-4. `docs/open-source-commercial-strategy.md`
-5. `docs/technical-design-supplement.md`
-6. `docs/dev/runtime-foundation.md`
-7. `docs/dev/team-conventions.md`
-8. `docs/adr/`
-9. `.agents/skills/*/SKILL.md`
+2. `docs/product-design.md`
+3. `docs/open-source-commercial-strategy.md`
+4. `docs/technical-design-supplement.md`
+5. `docs/dev/team-conventions.md`
+6. `docs/adr/`
+7. `.agents/skills/*/SKILL.md`
+8. `docs/.private/user-preferences.md`（如当前本地开发者已维护）
+9. `docs/.private/runtime-foundation.md`（如当前本地开发者已维护）
+10. `docs/.private/history/`（如当前本地开发者需要衔接最近几轮）
 
 ## 本地开发
 
@@ -166,36 +167,34 @@ docker compose up -d --build
 - `docs/product-design.md`：产品定位、IR、节点体系、发布模型、前端骨架。
 - `docs/open-source-commercial-strategy.md`：OpenClaw-first 对外切口、开源/商业边界、版本分层和传播/付费对象。
 - `docs/technical-design-supplement.md`：插件兼容、插件 UI、安全、变量传递、调试模式、缓存、Durable Runtime 细节。
-- `docs/dev/runtime-foundation.md`：当前代码事实、结构热点、近期优先级。
 - `docs/dev/team-conventions.md`：共享协作约定、审查守则与团队级工程偏好。
-- `docs/dev/user-preferences.md`：稳定的用户偏好、自治开发偏好与默认汇报口径。
+- `docs/.private/user-preferences.md`：当前开发者自己的稳定偏好、自治开发偏好与默认汇报口径，默认不进 Git。
+- `docs/.private/runtime-foundation.md`：当前开发者自己的当前事实、结构热点、近期优先级与下一步规划，默认不进 Git。
 - `docs/.taichuy/`：本地开发设计讨论素材和文案草稿，默认不进 Git，也不作为仓库事实基线。
 - `docs/.private/`：当前开发者自己的本地私有笔记目录与按日期开发留痕目录，默认不进 Git，也不是共享事实来源。
 - `docs/adr/`：架构决策记录与长期协作决策。
 - `docs/history/`：不再作为共享 history 使用，当前只保留迁移说明。
 - `docs/expired/`：已废弃但保留历史价值的文档。
-- 当前共享仓库中的重点文档、ADR、skills 与新增治理条目默认使用中文；如果关键入口里仍有英文且影响检索，应优先翻回中文。
+- 当前共享仓库中的重点文档、ADR、技能文档与新增治理条目默认使用中文；如果关键入口里仍有英文且影响检索，应优先翻回中文。
 - 默认仓库 PR 目标分支是 `taichuy_dev`，除非维护者明确说明临时替代分支。
 
-## AI 协作与 Skills
+## AI 协作与技能
 
 - `.agents/skills/autonomous-development`：当用户要求 AI 作为持续迭代开发者时，用于按 7Flows 工程观判断阶段问题、单轮优先级和主链闭环推进方向。
 - `.agents/skills/development-closure`：一轮开发收尾时的验证、文档同步、提交与下一步规划闭环。
-- `.agents/skills/skill-governance`：优化 skill、AGENTS 规则和 AI 协作流程时的分层与索引治理。
-- `.agents/skills/safe-change-review`：合并前审查 prompt、skill、协作规范、脚本与本地执行边界这类 P0 高风险改动。
-- `.agents/skills/backend-code-review`：后端 review、运行时、迁移、发布接口、插件代理与安全边界审查。
+- `.agents/skills/skill-governance`：优化技能文档、AGENTS 规则和 AI 协作流程时的分层与索引治理。
+- `.agents/skills/safe-change-review`：合并前审查 prompt、技能文档、协作规范、脚本与本地执行边界这类 P0 高风险改动。
+- `.agents/skills/backend-code-review`：后端审查、运行时、迁移、发布接口、插件代理与安全边界审查。
 - `.agents/skills/backend-testing`：后端测试设计、补测、runtime 与 published surface 行为验证。
 - `.agents/skills/frontend-code-review`：前端页面、组件、工作流编辑器、调试和发布界面审查。
 - `.agents/skills/component-refactoring`：复杂 React 组件、配置面板、调试面板和编辑器壳层拆分。
 - `.agents/skills/frontend-testing`：前端测试设计、补测和测试基础设施判断。
 - `.agents/skills/orpc-contract-first`：只有在明确引入 oRPC 合同优先 API 层时才启用。
-- AI 协作开发默认先判断是否需要 `autonomous-development` / `development-closure` 这类“元流程 skill + 领域 skill”组合，再结合 `docs/dev/runtime-foundation.md` 和产品/技术/策略基线落地。
+- AI 协作开发默认先判断是否需要 `autonomous-development` / `development-closure` 这类“元流程技能 + 领域技能”组合，再结合 `docs/dev/team-conventions.md` 与产品/技术/策略基线落地；如当前本地开发者已维护私有连续性文档，再补读 `docs/.private/user-preferences.md` 与 `docs/.private/runtime-foundation.md`。
 
-## 当前优先级
+## 当前协作提醒
 
-当前研发优先级以 `docs/dev/runtime-foundation.md` 为准，当前摘要如下：
+共享仓库不再持续维护“当前研发优先级”这类容易过时的个人连续性内容。
 
-1. 继续把 graded execution 从 execution-aware 扩成真实隔离能力。
-2. 定义并落地统一敏感访问控制闭环，同时补齐 `WAITING_CALLBACK` 的后台唤醒主链。
-3. 继续治理插件兼容、工作流 schema、run diagnostics、publish streaming 和编辑器结构热点。
-4. 把“开源给协作、商业给治理”的边界继续收敛成可实现的领域模型，避免实现与对外叙事再次混线。
+- 如当前开发者本地维护了 `docs/.private/runtime-foundation.md`，可用它衔接近期优先级与下一步规划。
+- 如果本地没有这份私有索引，则应基于代码现状、`AGENTS.md`、`docs/dev/team-conventions.md` 与产品/技术/策略基线自行判断本轮优先级。

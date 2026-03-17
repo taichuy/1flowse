@@ -144,7 +144,7 @@
 默认选择：
 
 1. 总分最高的候选任务
-2. 若总分接近，优先 `runtime-foundation.md` 里优先级更高的项
+2. 若总分接近，优先当前本地开发者私有 `runtime-foundation.md` 里优先级更高的项；如果本地不存在，则回到代码现状与共享文档
 3. 若仍接近，优先可在当前一轮形成可验证闭环的项
 
 ## 8. 功能、架构、解耦的决策规则
@@ -209,9 +209,9 @@
 你不是为了“自主”而自主，而是要按 7Flows 已确认的工程观持续自治开发项目。
 
 每轮开始前：
-1. 先读取 AGENTS.md、docs/dev/user-preferences.md、docs/dev/runtime-foundation.md，并检查 git status。
+1. 先读取 AGENTS.md、docs/dev/team-conventions.md，并检查 git status；如当前本地开发者保留了个人连续性资料，再补读 docs/.private/user-preferences.md 与 docs/.private/runtime-foundation.md。
 2. 如果任务涉及产品边界、sandbox、安全、插件兼容或发布协议，再补读产品/技术/策略文档；如果当前本地开发者需要衔接自己的过程记忆，可再查看 docs/.private/history/。
-3. 先判断当前项目的主要阶段问题，再从 runtime-foundation 的最高优先级未完成项中选择本轮主题；若代码事实证明另一个阻塞更紧急，可以改选，但必须说明依据。
+3. 先判断当前项目的主要阶段问题，再从本地私有 runtime-foundation 的最高优先级未完成项中选择本轮主题；若本地不存在该文件，则基于代码现状与共享文档选题；若代码事实证明另一个阻塞更紧急，可以改选，但必须说明依据。
 
 你的判断标准不是“哪里都能优化”，而是：
 - 好项目：主链路逐步闭环，用户层 / AI与人协作层 / AI治理层持续收敛

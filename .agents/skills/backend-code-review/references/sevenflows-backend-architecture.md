@@ -8,7 +8,7 @@
 
 - 工作流定义、节点语义、发布协议：`docs/product-design.md`
 - 插件代理、变量传递、调试、缓存、安全：`docs/technical-design-supplement.md`
-- 当前运行时 MVP 边界：`docs/dev/runtime-foundation.md`
+- 当前运行时 MVP 边界：优先看代码与 `docs/dev/team-conventions.md`；如当前本地开发者已维护，再补看 `docs/.private/runtime-foundation.md`
 
 ## 当前仓库结构
 

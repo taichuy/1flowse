@@ -12,7 +12,7 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 - 新增或重写 `.agents/skills/*/SKILL.md`
 - 优化 AI 协作流程、项目开发体系或 AGENTS 规则
 - 发现某类 review / testing / refactor / 收尾动作反复出现，值得沉淀成 skill
-- 发现现有 skill 与 `docs/dev/runtime-foundation.md`、产品/技术基线或实际目录结构脱节
+- 发现现有 skill 与 `docs/dev/team-conventions.md`、产品/技术基线、本地私有连续性入口约定或实际目录结构脱节
 
 不要用于：
 
@@ -22,20 +22,23 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 ## 先读哪些事实
 
 - `AGENTS.md`
-- `docs/dev/user-preferences.md`
 - `docs/dev/team-conventions.md`
-- `docs/dev/runtime-foundation.md`
 - `docs/product-design.md`
 - `docs/open-source-commercial-strategy.md`
 - `docs/technical-design-supplement.md`
 - 目标 skill 及其 `references/*`
 
+如当前本地开发者保留了个人连续性资料，再补读：
+
+- `docs/.private/user-preferences.md`
+- `docs/.private/runtime-foundation.md`
+
 ## 规则应该落在哪一层
 
 - 仓库级长期协作规则：`AGENTS.md`
 - 团队级共享协作约定：`docs/dev/team-conventions.md`
-- 稳定的用户偏好与自治开发偏好：`docs/dev/user-preferences.md`
-- 当前仍成立的实现事实与优先级：`docs/dev/runtime-foundation.md`
+- 当前开发者自己的稳定偏好与自治开发偏好：`docs/.private/user-preferences.md`
+- 当前开发者自己的当前事实与优先级：`docs/.private/runtime-foundation.md`
 - 可重复使用的专项流程：`.agents/skills/<name>/SKILL.md`
 - 详细清单、样例、重参考材料：`.agents/skills/<name>/references/*`
 - 当前开发者的本地私有记忆与按日期开发留痕：`docs/.private/`（不提交）
@@ -77,8 +80,8 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 - `README.md` 的 AI 协作与 Skills 说明
 - `docs/README.md` 和 `docs/dev/README.md` 的索引入口
 - 相关交叉引用的其他 skill
-- `docs/dev/runtime-foundation.md` 是否需要同步“当前协作事实”
-- `docs/dev/user-preferences.md` 是否需要同步稳定的自治开发偏好
+- `docs/.private/runtime-foundation.md` 是否需要同步当前开发者自己的连续性事实
+- `docs/.private/user-preferences.md` 是否需要同步当前开发者自己的稳定自治开发偏好
 - `docs/adr/` 是否需要新增或更新 standing decision
 
 如果当前开发者确实需要保留本轮治理过程，可另写到 `docs/.private/history/`，但不要把它重新抬成共享默认入口。
@@ -92,7 +95,7 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 
 ## 常见反模式
 
-- 把项目当前事实只写在 skill 里，不同步到 `runtime-foundation.md`
-- 把共享协作规则只写在 skill 里，不同步到 `AGENTS.md`、`team-conventions.md` 或 `user-preferences.md`
+- 把共享协作规则只写在 skill 里，不同步到 `AGENTS.md`、`team-conventions.md` 或相关索引入口
+- 把当前开发者自己的连续性记忆误写回共享仓库，而不是留在 `docs/.private/`
 - 直接搬用 Dify、n8n、superpowers 的术语和目录，假装仓库已经有那套基础设施
 - skill 名字在 README 里有，目录里没有；或者目录里有，索引里没人知道

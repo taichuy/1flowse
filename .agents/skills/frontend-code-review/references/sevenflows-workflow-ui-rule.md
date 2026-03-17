@@ -8,7 +8,7 @@
 
 - 画布、节点、发布、调试、用户心智：`docs/product-design.md`
 - 插件 UI、变量传递、节点调试、值缓存、安全：`docs/technical-design-supplement.md`
-- 当前前后端基线和运行时边界：`docs/dev/runtime-foundation.md`
+- 当前前后端基线和运行时边界：优先看代码与 `docs/dev/team-conventions.md`；如当前本地开发者已维护，再补看 `docs/.private/runtime-foundation.md`
 
 ## 当前仓库现实
 

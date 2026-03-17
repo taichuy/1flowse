@@ -26,7 +26,8 @@ description: 基于 7Flows 当前仓库结构与产品架构，对 `api/` 下的
    - `docs/product-design.md`
    - `docs/open-source-commercial-strategy.md`
    - `docs/technical-design-supplement.md`
-   - `docs/dev/runtime-foundation.md`
+   - `docs/dev/team-conventions.md`
+   - `docs/.private/runtime-foundation.md`（如当前本地开发者已维护）
 3. 应用通用后端规则与 7Flows 项目规则共同审查。
 4. 输出时优先报告高风险问题：架构偏移、权限越界、运行态破坏、迁移风险、协议耦合。
 
