@@ -12,6 +12,7 @@ import {
   getWorkflowBusinessTrack,
   WORKFLOW_BUSINESS_TRACKS
 } from "@/lib/workflow-business-tracks";
+import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
 import { formatTimestamp, type ArchiveFilter, type TrackFilter } from "./shared";
 
@@ -24,6 +25,7 @@ type WorkspaceStarterTemplateListPanelProps = {
   searchQuery: string;
   activeTemplateCount: number;
   archivedTemplateCount: number;
+  templateToolGovernanceById: Map<string, WorkflowDefinitionToolGovernance>;
   bulkCandidateCounts: Record<WorkspaceStarterBulkAction, number>;
   isBulkMutating: boolean;
   lastBulkResult: WorkspaceStarterBulkActionResult | null;
@@ -43,6 +45,7 @@ export function WorkspaceStarterTemplateListPanel({
   searchQuery,
   activeTemplateCount,
   archivedTemplateCount,
+  templateToolGovernanceById,
   bulkCandidateCounts,
   isBulkMutating,
   lastBulkResult,
@@ -157,34 +160,54 @@ export function WorkspaceStarterTemplateListPanel({
         </div>
       ) : (
         <div className="starter-grid">
-          {filteredTemplates.map((template) => (
-            <button
-              key={template.id}
-              className={`starter-card ${template.id === selectedTemplateId ? "selected" : ""}`}
-              type="button"
-              onClick={() => onSelectTemplate(template.id)}
-            >
-              <div className="starter-card-header">
-                <span className="starter-track">{template.business_track}</span>
-                <div className="starter-tag-row">
-                  <span className="health-pill">
-                    {getWorkflowBusinessTrack(template.business_track).priority}
-                  </span>
-                  {template.archived ? <span className="event-chip">archived</span> : null}
+          {filteredTemplates.map((template) => {
+            const toolGovernance = templateToolGovernanceById.get(template.id);
+
+            return (
+              <button
+                key={template.id}
+                className={`starter-card ${template.id === selectedTemplateId ? "selected" : ""}`}
+                type="button"
+                onClick={() => onSelectTemplate(template.id)}
+              >
+                <div className="starter-card-header">
+                  <span className="starter-track">{template.business_track}</span>
+                  <div className="starter-tag-row">
+                    <span className="health-pill">
+                      {getWorkflowBusinessTrack(template.business_track).priority}
+                    </span>
+                    {toolGovernance && toolGovernance.strongIsolationToolCount > 0 ? (
+                      <span className="event-chip">strong isolation</span>
+                    ) : null}
+                    {toolGovernance && toolGovernance.missingToolIds.length > 0 ? (
+                      <span className="event-chip">missing tools</span>
+                    ) : null}
+                    {template.archived ? <span className="event-chip">archived</span> : null}
+                  </div>
                 </div>
-              </div>
-              <strong>{template.name}</strong>
-              <p>{template.description || "暂未填写描述。"}</p>
-              <p className="starter-focus-copy">
-                {template.workflow_focus || "暂未填写 workflow focus。"}
-              </p>
-              <div className="starter-meta-row">
-                <span>{template.definition.nodes?.length ?? 0} nodes</span>
-                <span>{template.tags.length} tags</span>
-                <span>{formatTimestamp(template.updated_at)}</span>
-              </div>
-            </button>
-          ))}
+                <strong>{template.name}</strong>
+                <p>{template.description || "暂未填写描述。"}</p>
+                <p className="starter-focus-copy">
+                  {template.workflow_focus || "暂未填写 workflow focus。"}
+                </p>
+                <div className="starter-meta-row">
+                  <span>{template.definition.nodes?.length ?? 0} nodes</span>
+                  <span>{toolGovernance?.governedToolCount ?? 0} governed tools</span>
+                  <span>{toolGovernance?.strongIsolationToolCount ?? 0} strong isolation</span>
+                  <span>{template.tags.length} tags</span>
+                  <span>{formatTimestamp(template.updated_at)}</span>
+                </div>
+                {toolGovernance && toolGovernance.missingToolIds.length > 0 ? (
+                  <p className="binding-meta">
+                    缺少 catalog tool：{toolGovernance.missingToolIds.slice(0, 2).join("、")}
+                    {toolGovernance.missingToolIds.length > 2
+                      ? ` 等 ${toolGovernance.missingToolIds.length} 个`
+                      : ""}
+                  </p>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       )}
     </article>

@@ -8,7 +8,10 @@ type WorkspaceStarterHeroSectionProps = {
   activeTemplateCount: number;
   archivedTemplateCount: number;
   filteredTemplateCount: number;
+  governedTemplateCount: number;
+  missingToolTemplateCount: number;
   selectedTemplateName: string | null;
+  strongIsolationTemplateCount: number;
   activeTrack: TrackFilter;
 };
 
@@ -16,7 +19,10 @@ export function WorkspaceStarterHeroSection({
   activeTemplateCount,
   archivedTemplateCount,
   filteredTemplateCount,
+  governedTemplateCount,
+  missingToolTemplateCount,
   selectedTemplateName,
+  strongIsolationTemplateCount,
   activeTrack
 }: WorkspaceStarterHeroSectionProps) {
   return (
@@ -32,7 +38,9 @@ export function WorkspaceStarterHeroSection({
           <span className="pill">{activeTemplateCount} active starters</span>
           <span className="pill">{archivedTemplateCount} archived starters</span>
           <span className="pill">{filteredTemplateCount} visible templates</span>
-          <span className="pill">{WORKFLOW_BUSINESS_TRACKS.length} business tracks</span>
+          <span className="pill">{governedTemplateCount} governed tool starters</span>
+          <span className="pill">{strongIsolationTemplateCount} strong isolation starters</span>
+          <span className="pill">{missingToolTemplateCount} missing tool starters</span>
         </div>
         <div className="hero-actions">
           <Link className="inline-link" href="/workflows/new">
@@ -51,7 +59,7 @@ export function WorkspaceStarterHeroSection({
           当前主线：<strong>P0 应用新建编排</strong>
         </p>
         <p className="panel-text">
-          视图能力：<strong>列表 / 筛选 / 详情 / 批量治理 / 删除</strong>
+          视图能力：<strong>列表 / 筛选 / 详情 / 批量治理 / 工具治理可见性</strong>
         </p>
         <p className="panel-text">
           当前选中：<strong>{selectedTemplateName ?? "暂无模板"}</strong>
@@ -70,8 +78,20 @@ export function WorkspaceStarterHeroSection({
             <dd>{archivedTemplateCount}</dd>
           </div>
           <div>
+            <dt>Governed</dt>
+            <dd>{governedTemplateCount}</dd>
+          </div>
+          <div>
+            <dt>Isolation</dt>
+            <dd>{strongIsolationTemplateCount}</dd>
+          </div>
+          <div>
+            <dt>Missing tool</dt>
+            <dd>{missingToolTemplateCount}</dd>
+          </div>
+          <div>
             <dt>Track</dt>
-            <dd>{activeTrack === "all" ? "All" : getWorkflowBusinessTrack(activeTrack).priority}</dd>
+            <dd>{activeTrack === "all" ? `${WORKFLOW_BUSINESS_TRACKS.length} total` : getWorkflowBusinessTrack(activeTrack).priority}</dd>
           </div>
         </dl>
       </div>

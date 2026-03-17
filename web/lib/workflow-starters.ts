@@ -10,10 +10,7 @@ import type {
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
-import {
-  compareToolsByGovernance,
-  getToolGovernanceSummary
-} from "@/lib/tool-governance";
+import { summarizeWorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
 export type WorkflowStarterTemplateId = string;
 
@@ -120,19 +117,7 @@ function buildWorkflowStarterTemplate(
   const track = getWorkflowBusinessTrack(starter.businessTrack);
   const definition = normalizeWorkflowDefinition(starter.definition);
   const nodeTypes = (definition.nodes ?? []).map((node) => node.type);
-  const referencedToolIds = collectReferencedToolIds(definition);
-  const toolIndex = new Map(tools.map((tool) => [tool.id, tool]));
-  const referencedTools = referencedToolIds
-    .map((toolId) => toolIndex.get(toolId) ?? null)
-    .filter((tool): tool is PluginToolRegistryItem => tool !== null)
-    .sort(compareToolsByGovernance);
-  const missingToolIds = referencedToolIds.filter((toolId) => !toolIndex.has(toolId));
-  const governedToolCount = referencedTools.filter(
-    (tool) => getToolGovernanceSummary(tool).governedBySensitivity
-  ).length;
-  const strongIsolationToolCount = referencedTools.filter(
-    (tool) => getToolGovernanceSummary(tool).requiresStrongIsolationByDefault
-  ).length;
+  const toolGovernance = summarizeWorkflowDefinitionToolGovernance(definition, tools);
 
   return {
     id: starter.id,
@@ -152,52 +137,13 @@ function buildWorkflowStarterTemplate(
       (nodeType) =>
         nodeCatalog.find((item) => item.type === nodeType)?.label ?? nodeType
     ),
-    referencedTools,
-    missingToolIds,
-    governedToolCount,
-    strongIsolationToolCount,
+    referencedTools: toolGovernance.referencedTools,
+    missingToolIds: toolGovernance.missingToolIds,
+    governedToolCount: toolGovernance.governedToolCount,
+    strongIsolationToolCount: toolGovernance.strongIsolationToolCount,
     tags: starter.tags,
     definition
   };
-}
-
-function collectReferencedToolIds(definition: WorkflowDefinition): string[] {
-  const referencedToolIds: string[] = [];
-  const seen = new Set<string>();
-
-  for (const node of definition.nodes ?? []) {
-    const nodeConfig = isRecord(node.config) ? node.config : {};
-    const toolConfig = isRecord(nodeConfig.tool) ? nodeConfig.tool : null;
-    const directToolId =
-      typeof toolConfig?.toolId === "string"
-        ? toolConfig.toolId
-        : typeof nodeConfig.toolId === "string"
-          ? nodeConfig.toolId
-          : null;
-    pushToolId(directToolId, referencedToolIds, seen);
-
-    const toolPolicy = isRecord(nodeConfig.toolPolicy) ? nodeConfig.toolPolicy : null;
-    const allowedToolIds = Array.isArray(toolPolicy?.allowedToolIds)
-      ? toolPolicy.allowedToolIds
-      : [];
-    for (const candidate of allowedToolIds) {
-      pushToolId(candidate, referencedToolIds, seen);
-    }
-  }
-
-  return referencedToolIds;
-}
-
-function pushToolId(value: unknown, referencedToolIds: string[], seen: Set<string>) {
-  if (typeof value !== "string") {
-    return;
-  }
-  const normalized = value.trim();
-  if (!normalized || seen.has(normalized)) {
-    return;
-  }
-  seen.add(normalized);
-  referencedToolIds.push(normalized);
 }
 
 function normalizeWorkflowDefinition(definition: WorkflowDefinition): WorkflowDefinition {

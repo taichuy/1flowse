@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import {
   bulkUpdateWorkspaceStarters,
   updateWorkspaceStarterTemplate,
@@ -9,6 +10,10 @@ import {
   WorkspaceStarterValidationError,
   type WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import {
+  summarizeWorkflowDefinitionToolGovernance,
+  type WorkflowDefinitionToolGovernance
+} from "@/lib/workflow-definition-tool-governance";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import { summarizeWorkspaceStarterSourceStatus } from "@/lib/workspace-starter-source-status";
 import {
@@ -28,8 +33,17 @@ import {
 } from "./shared";
 import { useWorkspaceStarterSource } from "./use-workspace-starter-source";
 
+const EMPTY_TEMPLATE_TOOL_GOVERNANCE: WorkflowDefinitionToolGovernance = {
+  referencedToolIds: [],
+  referencedTools: [],
+  missingToolIds: [],
+  governedToolCount: 0,
+  strongIsolationToolCount: 0
+};
+
 export function useWorkspaceStarterLibraryState(
-  initialTemplates: WorkspaceStarterTemplateItem[]
+  initialTemplates: WorkspaceStarterTemplateItem[],
+  tools: PluginToolRegistryItem[]
 ) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [activeTrack, setActiveTrack] = useState<TrackFilter>("all");
@@ -85,6 +99,16 @@ export function useWorkspaceStarterLibraryState(
     () => templates.find((template) => template.id === selectedTemplateId) ?? null,
     [selectedTemplateId, templates]
   );
+  const templateToolGovernanceById = useMemo(() => {
+    const entries = templates.map((template) => [
+      template.id,
+      summarizeWorkflowDefinitionToolGovernance(template.definition, tools)
+    ] as const);
+    return new Map(entries);
+  }, [templates, tools]);
+  const selectedTemplateToolGovernance = selectedTemplate
+    ? templateToolGovernanceById.get(selectedTemplate.id) ?? EMPTY_TEMPLATE_TOOL_GOVERNANCE
+    : EMPTY_TEMPLATE_TOOL_GOVERNANCE;
 
   const {
     clearSelectionArtifacts,
@@ -120,6 +144,28 @@ export function useWorkspaceStarterLibraryState(
   const archivedTemplateCount = useMemo(
     () => templates.filter((template) => template.archived).length,
     [templates]
+  );
+  const governedTemplateCount = useMemo(
+    () =>
+      templates.filter(
+        (template) => (templateToolGovernanceById.get(template.id)?.governedToolCount ?? 0) > 0
+      ).length,
+    [templateToolGovernanceById, templates]
+  );
+  const strongIsolationTemplateCount = useMemo(
+    () =>
+      templates.filter(
+        (template) =>
+          (templateToolGovernanceById.get(template.id)?.strongIsolationToolCount ?? 0) > 0
+      ).length,
+    [templateToolGovernanceById, templates]
+  );
+  const missingToolTemplateCount = useMemo(
+    () =>
+      templates.filter(
+        (template) => (templateToolGovernanceById.get(template.id)?.missingToolIds.length ?? 0) > 0
+      ).length,
+    [templateToolGovernanceById, templates]
   );
   const hasPendingChanges =
     selectedTemplate !== null &&
@@ -362,6 +408,7 @@ export function useWorkspaceStarterLibraryState(
     bulkActionCandidates,
     filteredTemplates,
     formState,
+    governedTemplateCount,
     handleBulkAction,
     handleRebaseFromSource,
     handleRefreshFromSource,
@@ -380,9 +427,11 @@ export function useWorkspaceStarterLibraryState(
     lastBulkResult,
     message,
     messageTone,
+    missingToolTemplateCount,
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    selectedTemplateToolGovernance,
     selectedTrackMeta,
     setActiveTrack,
     setArchiveFilter,
@@ -392,6 +441,8 @@ export function useWorkspaceStarterLibraryState(
     sourceDiff,
     sourceStatus,
     sourceStatusMessage,
+    strongIsolationTemplateCount,
+    templateToolGovernanceById,
     templates
   };
 }

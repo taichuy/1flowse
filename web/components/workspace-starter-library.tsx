@@ -7,14 +7,17 @@ import { WorkspaceStarterMetadataPanel } from "@/components/workspace-starter-li
 import { WorkspaceStarterSourceDiffPanel } from "@/components/workspace-starter-library/source-diff-panel";
 import { WorkspaceStarterTemplateListPanel } from "@/components/workspace-starter-library/template-list-panel";
 import { useWorkspaceStarterLibraryState } from "@/components/workspace-starter-library/use-workspace-starter-library-state";
+import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 
 type WorkspaceStarterLibraryProps = {
   initialTemplates: WorkspaceStarterTemplateItem[];
+  tools: PluginToolRegistryItem[];
 };
 
 export function WorkspaceStarterLibrary({
-  initialTemplates
+  initialTemplates,
+  tools
 }: WorkspaceStarterLibraryProps) {
   const {
     activeTemplateCount,
@@ -24,6 +27,7 @@ export function WorkspaceStarterLibrary({
     bulkActionCandidates,
     filteredTemplates,
     formState,
+    governedTemplateCount,
     handleBulkAction,
     handleRebaseFromSource,
     handleRefreshFromSource,
@@ -42,9 +46,11 @@ export function WorkspaceStarterLibrary({
     lastBulkResult,
     message,
     messageTone,
+    missingToolTemplateCount,
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    selectedTemplateToolGovernance,
     selectedTrackMeta,
     setActiveTrack,
     setArchiveFilter,
@@ -54,8 +60,10 @@ export function WorkspaceStarterLibrary({
     sourceDiff,
     sourceStatus,
     sourceStatusMessage,
+    strongIsolationTemplateCount,
+    templateToolGovernanceById,
     templates
-  } = useWorkspaceStarterLibraryState(initialTemplates);
+  } = useWorkspaceStarterLibraryState(initialTemplates, tools);
 
   return (
     <main className="editor-shell">
@@ -63,7 +71,10 @@ export function WorkspaceStarterLibrary({
         activeTemplateCount={activeTemplateCount}
         archivedTemplateCount={archivedTemplateCount}
         filteredTemplateCount={filteredTemplates.length}
+        governedTemplateCount={governedTemplateCount}
+        missingToolTemplateCount={missingToolTemplateCount}
         selectedTemplateName={selectedTemplate?.name ?? null}
+        strongIsolationTemplateCount={strongIsolationTemplateCount}
         activeTrack={activeTrack}
       />
 
@@ -77,6 +88,7 @@ export function WorkspaceStarterLibrary({
           searchQuery={searchQuery}
           activeTemplateCount={activeTemplateCount}
           archivedTemplateCount={archivedTemplateCount}
+          templateToolGovernanceById={templateToolGovernanceById}
           bulkCandidateCounts={{
             archive: bulkActionCandidates.archive.length,
             restore: bulkActionCandidates.restore.length,
@@ -110,6 +122,7 @@ export function WorkspaceStarterLibrary({
 
           <WorkspaceStarterDefinitionSnapshotPanel
             selectedTemplate={selectedTemplate}
+            selectedTemplateToolGovernance={selectedTemplateToolGovernance}
             sourceStatus={sourceStatus}
             sourceStatusMessage={sourceStatusMessage}
             isLoadingSourceWorkflow={isLoadingSourceWorkflow}
