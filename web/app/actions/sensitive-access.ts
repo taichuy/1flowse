@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import {
   fetchCallbackBlockerSnapshot,
-  formatCallbackBlockerDeltaSummary
+  fetchCallbackBlockerSnapshots,
+  formatCallbackBlockerDeltaSummary,
+  summarizeBulkCallbackBlockerDelta
 } from "@/lib/callback-blocker-follow-up";
 import type {
   SensitiveAccessBulkAction,
@@ -83,6 +85,19 @@ type NotificationDispatchBulkRetryResponseBody = {
   skipped_reason_summary: SensitiveAccessBulkSkipSummary[];
 };
 
+type BulkApprovalScopeItem = {
+  ticketId: string;
+  runId?: string | null;
+  nodeRunId?: string | null;
+};
+
+type BulkNotificationScopeItem = {
+  dispatchId: string;
+  approvalTicketId?: string | null;
+  runId?: string | null;
+  nodeRunId?: string | null;
+};
+
 function buildBulkSkipSummaryMessage(summary: SensitiveAccessBulkSkipSummary[]) {
   if (summary.length === 0) {
     return null;
@@ -99,7 +114,12 @@ function createEmptyBulkResultMetrics() {
     runningRunCount: 0,
     succeededRunCount: 0,
     failedRunCount: 0,
-    unknownRunCount: 0
+    unknownRunCount: 0,
+    blockerSampleCount: 0,
+    blockerChangedCount: 0,
+    blockerClearedCount: 0,
+    blockerFullyClearedCount: 0,
+    blockerStillBlockedCount: 0
   };
 }
 
@@ -125,6 +145,59 @@ function revalidateSensitiveAccessPaths(runIds: Array<string | null | undefined>
   for (const runId of uniqueRunIds) {
     revalidatePath(`/runs/${runId}`);
   }
+}
+
+function normalizeBulkApprovalScopeItems(items: BulkApprovalScopeItem[]) {
+  const seen = new Set<string>();
+  return items
+    .map((item) => ({
+      ticketId: item.ticketId.trim(),
+      runId: item.runId?.trim() || null,
+      nodeRunId: item.nodeRunId?.trim() || null
+    }))
+    .filter((item) => {
+      if (!item.ticketId || seen.has(item.ticketId)) {
+        return false;
+      }
+      seen.add(item.ticketId);
+      return true;
+    });
+}
+
+function normalizeBulkNotificationScopeItems(items: BulkNotificationScopeItem[]) {
+  const seen = new Set<string>();
+  return items
+    .map((item) => ({
+      dispatchId: item.dispatchId.trim(),
+      approvalTicketId: item.approvalTicketId?.trim() || null,
+      runId: item.runId?.trim() || null,
+      nodeRunId: item.nodeRunId?.trim() || null
+    }))
+    .filter((item) => {
+      if (!item.dispatchId || seen.has(item.dispatchId)) {
+        return false;
+      }
+      seen.add(item.dispatchId);
+      return true;
+    });
+}
+
+function buildBlockerScopeKey(runId: string | null, nodeRunId: string | null) {
+  return `${runId ?? ""}::${nodeRunId ?? ""}`;
+}
+
+function filterBlockerSnapshotsByScope(
+  snapshots: Awaited<ReturnType<typeof fetchCallbackBlockerSnapshots>>,
+  scopes: Array<{ runId?: string | null; nodeRunId?: string | null }>
+) {
+  const allowedKeys = new Set(
+    scopes
+      .map((scope) => buildBlockerScopeKey(scope.runId?.trim() || null, scope.nodeRunId?.trim() || null))
+      .filter((key) => key !== "::")
+  );
+  return snapshots.filter((item) =>
+    allowedKeys.has(buildBlockerScopeKey(item.runId, item.nodeRunId?.trim() || null))
+  );
 }
 
 export async function decideSensitiveAccessApprovalTicket(
@@ -292,11 +365,16 @@ export async function retrySensitiveAccessNotificationDispatch(
 }
 
 export async function bulkDecideSensitiveAccessApprovalTickets(input: {
-  ticketIds: string[];
+  tickets: BulkApprovalScopeItem[];
   status: Extract<SensitiveAccessBulkAction, "approved" | "rejected">;
   approvedBy: string;
 }): Promise<SensitiveAccessBulkActionResult> {
-  const ticketIds = [...new Set(input.ticketIds.map((item) => item.trim()).filter(Boolean))];
+  const tickets = normalizeBulkApprovalScopeItems(input.tickets);
+  const ticketIds = tickets.map((item) => item.ticketId);
+  const candidateBlockerScopes = tickets.map((item) => ({
+    runId: item.runId,
+    nodeRunId: item.nodeRunId
+  }));
   const approvedBy = input.approvedBy.trim();
 
   if (ticketIds.length === 0 || !approvedBy) {
@@ -313,6 +391,7 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
   }
 
   try {
+    const beforeCandidateBlockers = await fetchCallbackBlockerSnapshots(candidateBlockerScopes);
     const response = await fetch(`${getApiBaseUrl()}/api/sensitive-access/approval-tickets/bulk-decision`, {
       method: "POST",
       headers: {
@@ -349,7 +428,20 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
     const skippedCount = body?.skipped_count ?? 0;
     const skippedReasonSummary = body?.skipped_reason_summary ?? [];
     const affectedRunIds = body?.decided_items?.map((item) => item.run_id) ?? [];
+    const updatedTicketIds = new Set(body?.decided_items?.map((item) => item.id) ?? []);
+    const blockerScopes = tickets
+      .filter((item) => updatedTicketIds.has(item.ticketId))
+      .map((item) => ({
+        runId: item.runId,
+        nodeRunId: item.nodeRunId
+      }));
+    const beforeBlockers = filterBlockerSnapshotsByScope(beforeCandidateBlockers, blockerScopes);
     const { sampledRuns, followUpSummary } = await buildBulkRunFollowUpMetrics(affectedRunIds);
+    const afterBlockers = await fetchCallbackBlockerSnapshots(blockerScopes);
+    const blockerDelta = summarizeBulkCallbackBlockerDelta({
+      before: beforeBlockers,
+      after: afterBlockers
+    });
 
     return {
       action: input.status,
@@ -360,12 +452,18 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
         skippedCount,
         skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
         affectedRunCount: followUpSummary.affectedRunCount,
-        sampledRuns
+        sampledRuns,
+        blockerDeltaSummary: blockerDelta.summary
       }),
       requestedCount: body?.requested_count ?? ticketIds.length,
       updatedCount,
       skippedCount,
       skippedReasonSummary,
+      blockerSampleCount: blockerDelta.sampledScopeCount,
+      blockerChangedCount: blockerDelta.changedScopeCount,
+      blockerClearedCount: blockerDelta.clearedScopeCount,
+      blockerFullyClearedCount: blockerDelta.fullyClearedScopeCount,
+      blockerStillBlockedCount: blockerDelta.stillBlockedScopeCount,
       ...followUpSummary
     };
   } catch {
@@ -383,9 +481,14 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
 }
 
 export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
-  dispatchIds: string[];
+  dispatches: BulkNotificationScopeItem[];
 }): Promise<SensitiveAccessBulkActionResult> {
-  const dispatchIds = [...new Set(input.dispatchIds.map((item) => item.trim()).filter(Boolean))];
+  const dispatches = normalizeBulkNotificationScopeItems(input.dispatches);
+  const dispatchIds = dispatches.map((item) => item.dispatchId);
+  const candidateBlockerScopes = dispatches.map((item) => ({
+    runId: item.runId,
+    nodeRunId: item.nodeRunId
+  }));
 
   if (dispatchIds.length === 0) {
     return {
@@ -401,6 +504,7 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
   }
 
   try {
+    const beforeCandidateBlockers = await fetchCallbackBlockerSnapshots(candidateBlockerScopes);
     const response = await fetch(`${getApiBaseUrl()}/api/sensitive-access/notification-dispatches/bulk-retry`, {
       method: "POST",
       headers: {
@@ -435,7 +539,24 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
     const skippedCount = body?.skipped_count ?? 0;
     const skippedReasonSummary = body?.skipped_reason_summary ?? [];
     const affectedRunIds = body?.retried_items?.map((item) => item.approval_ticket.run_id) ?? [];
+    const updatedTicketIds = new Set(
+      body?.retried_items?.map((item) => item.approval_ticket.id) ?? []
+    );
+    const blockerScopes = dispatches
+      .filter(
+        (item) => item.approvalTicketId && updatedTicketIds.has(item.approvalTicketId)
+      )
+      .map((item) => ({
+        runId: item.runId,
+        nodeRunId: item.nodeRunId
+      }));
+    const beforeBlockers = filterBlockerSnapshotsByScope(beforeCandidateBlockers, blockerScopes);
     const { sampledRuns, followUpSummary } = await buildBulkRunFollowUpMetrics(affectedRunIds);
+    const afterBlockers = await fetchCallbackBlockerSnapshots(blockerScopes);
+    const blockerDelta = summarizeBulkCallbackBlockerDelta({
+      before: beforeBlockers,
+      after: afterBlockers
+    });
 
     return {
       action: "retry",
@@ -445,12 +566,18 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
         skippedCount,
         skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
         affectedRunCount: followUpSummary.affectedRunCount,
-        sampledRuns
+        sampledRuns,
+        blockerDeltaSummary: blockerDelta.summary
       }),
       requestedCount: body?.requested_count ?? dispatchIds.length,
       updatedCount,
       skippedCount,
       skippedReasonSummary,
+      blockerSampleCount: blockerDelta.sampledScopeCount,
+      blockerChangedCount: blockerDelta.changedScopeCount,
+      blockerClearedCount: blockerDelta.clearedScopeCount,
+      blockerFullyClearedCount: blockerDelta.fullyClearedScopeCount,
+      blockerStillBlockedCount: blockerDelta.stillBlockedScopeCount,
       ...followUpSummary
     };
   } catch {

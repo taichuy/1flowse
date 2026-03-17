@@ -97,6 +97,30 @@ export function SensitiveAccessBulkGovernanceCard({
               ) : null}
             </div>
           ) : null}
+
+          {lastResult.blockerSampleCount > 0 ? (
+            <div className="starter-tag-row">
+              <span className="event-chip">
+                blocker samples {lastResult.blockerSampleCount}
+              </span>
+              {lastResult.blockerChangedCount > 0 ? (
+                <span className="event-chip">changed {lastResult.blockerChangedCount}</span>
+              ) : null}
+              {lastResult.blockerClearedCount > 0 ? (
+                <span className="event-chip">cleared {lastResult.blockerClearedCount}</span>
+              ) : null}
+              {lastResult.blockerFullyClearedCount > 0 ? (
+                <span className="event-chip">
+                  fully cleared {lastResult.blockerFullyClearedCount}
+                </span>
+              ) : null}
+              {lastResult.blockerStillBlockedCount > 0 ? (
+                <span className="event-chip">
+                  still blocked {lastResult.blockerStillBlockedCount}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </>
       ) : null}
 

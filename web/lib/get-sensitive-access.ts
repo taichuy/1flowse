@@ -137,6 +137,11 @@ export type SensitiveAccessBulkActionResult = {
   succeededRunCount: number;
   failedRunCount: number;
   unknownRunCount: number;
+  blockerSampleCount: number;
+  blockerChangedCount: number;
+  blockerClearedCount: number;
+  blockerFullyClearedCount: number;
+  blockerStillBlockedCount: number;
 };
 
 export type SensitiveAccessInboxSnapshot = {

@@ -57,10 +57,23 @@ export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanel
 
   const decisionTicketIds = entries
     .filter((entry) => isPendingWaitingTicket(entry))
-    .map((entry) => entry.ticket.id);
+    .map((entry) => ({
+      ticketId: entry.ticket.id,
+      runId: entry.ticket.run_id ?? entry.request?.run_id ?? null,
+      nodeRunId: entry.ticket.node_run_id ?? entry.request?.node_run_id ?? null
+    }));
   const retryDispatchIds = entries.flatMap((entry) => {
     const notification = pickRetriableNotification(entry);
-    return notification ? [notification.id] : [];
+    return notification
+      ? [
+          {
+            dispatchId: notification.id,
+            approvalTicketId: entry.ticket.id,
+            runId: entry.ticket.run_id ?? entry.request?.run_id ?? null,
+            nodeRunId: entry.ticket.node_run_id ?? entry.request?.node_run_id ?? null
+          }
+        ]
+      : [];
   });
 
   const handleBulkAction = (action: SensitiveAccessBulkAction) => {
@@ -87,10 +100,10 @@ export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanel
       const result =
         action === "retry"
           ? await bulkRetrySensitiveAccessNotificationDispatches({
-              dispatchIds: candidateIds
+              dispatches: retryDispatchIds
             })
           : await bulkDecideSensitiveAccessApprovalTickets({
-              ticketIds: candidateIds,
+              tickets: decisionTicketIds,
               status: action,
               approvedBy: bulkOperator.trim()
             });

@@ -334,11 +334,13 @@ export function formatBulkApprovalDecisionResultMessage(input: {
   skippedSummary?: string | null;
   affectedRunCount: number;
   sampledRuns: BulkRunSnapshotSample[];
+  blockerDeltaSummary?: string | null;
 }) {
   const actionLabel = input.decision === "approved" ? "批准" : "拒绝";
   return joinParts([
     `批量${actionLabel} ${input.updatedCount} 条票据，跳过 ${input.skippedCount} 条。`,
     input.skippedSummary ?? null,
+    input.blockerDeltaSummary,
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
@@ -352,10 +354,12 @@ export function formatBulkNotificationRetryResultMessage(input: {
   skippedSummary?: string | null;
   affectedRunCount: number;
   sampledRuns: BulkRunSnapshotSample[];
+  blockerDeltaSummary?: string | null;
 }) {
   return joinParts([
     `批量重试 ${input.updatedCount} 条通知，跳过 ${input.skippedCount} 条。`,
     input.skippedSummary ?? null,
+    input.blockerDeltaSummary,
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
