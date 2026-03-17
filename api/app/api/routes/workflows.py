@@ -36,6 +36,8 @@ from app.services.workflow_views import (
     build_workflow_detail,
     list_workflow_run_items,
     list_workflow_version_items,
+    load_workflow_view_tool_index,
+    serialize_workflow_list_item,
 )
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -95,15 +97,8 @@ def _validate_workflow_definition_for_persistence(
 @router.get("", response_model=list[WorkflowListItem])
 def list_workflows(db: Session = Depends(get_db)) -> list[WorkflowListItem]:
     items = db.scalars(select(Workflow).order_by(Workflow.name.asc())).all()
-    return [
-        WorkflowListItem(
-            id=item.id,
-            name=item.name,
-            version=item.version,
-            status=item.status,
-        )
-        for item in items
-    ]
+    tool_index = load_workflow_view_tool_index(db)
+    return [serialize_workflow_list_item(item, tool_index=tool_index) for item in items]
 
 
 @router.post("", response_model=WorkflowDetail, status_code=status.HTTP_201_CREATED)

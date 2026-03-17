@@ -6,6 +6,15 @@ export type WorkflowListItem = {
   name: string;
   version: string;
   status: string;
+  node_count: number;
+  tool_governance: WorkflowToolGovernanceSummary;
+};
+
+export type WorkflowToolGovernanceSummary = {
+  referenced_tool_ids: string[];
+  missing_tool_ids: string[];
+  governed_tool_count: number;
+  strong_isolation_tool_count: number;
 };
 
 export type WorkflowNodeItem = {

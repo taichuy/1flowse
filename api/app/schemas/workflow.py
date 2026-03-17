@@ -180,11 +180,22 @@ class WorkflowDefinitionPreflightResult(BaseModel):
     issues: list[WorkflowDefinitionPreflightIssue] = Field(default_factory=list)
 
 
+class WorkflowToolGovernanceSummary(BaseModel):
+    referenced_tool_ids: list[str] = Field(default_factory=list)
+    missing_tool_ids: list[str] = Field(default_factory=list)
+    governed_tool_count: int = Field(default=0, ge=0)
+    strong_isolation_tool_count: int = Field(default=0, ge=0)
+
+
 class WorkflowListItem(BaseModel):
     id: str
     name: str
     version: str
     status: str
+    node_count: int = Field(default=0, ge=0)
+    tool_governance: WorkflowToolGovernanceSummary = Field(
+        default_factory=WorkflowToolGovernanceSummary
+    )
 
 
 class WorkflowVersionItem(BaseModel):

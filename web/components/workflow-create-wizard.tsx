@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
@@ -364,16 +365,11 @@ export function WorkflowCreateWizard({
           ) : (
             <div className="workflow-chip-row">
               {workflows.map((workflow) => (
-                <Link
+                <WorkflowChipLink
                   key={workflow.id}
-                  className="workflow-chip"
+                  workflow={workflow}
                   href={`/workflows/${encodeURIComponent(workflow.id)}`}
-                >
-                  <span>{workflow.name}</span>
-                  <small>
-                    {workflow.version} · {workflow.status}
-                  </small>
-                </Link>
+                />
               ))}
             </div>
           )}

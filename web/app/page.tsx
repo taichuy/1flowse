@@ -4,6 +4,7 @@ import { CredentialStorePanel } from "@/components/credential-store-panel";
 import { PluginRegistryPanel } from "@/components/plugin-registry-panel";
 import { SandboxReadinessPanel } from "@/components/sandbox-readiness-panel";
 import { StatusCard } from "@/components/status-card";
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowToolBindingPanel } from "@/components/workflow-tool-binding-panel";
 import { getCredentials } from "@/lib/get-credentials";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
@@ -218,16 +219,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           ) : (
             <div className="workflow-chip-row">
               {workflows.map((workflow) => (
-                <Link
-                  className="workflow-chip"
-                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
+                <WorkflowChipLink
                   key={`editor-${workflow.id}`}
-                >
-                  <span>{workflow.name}</span>
-                  <small>
-                    {workflow.version} · {workflow.status}
-                  </small>
-                </Link>
+                  workflow={workflow}
+                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
+                />
               ))}
             </div>
           )}

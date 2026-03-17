@@ -1,7 +1,6 @@
-import Link from "next/link";
-
 import { updateWorkflowToolBinding } from "@/app/actions/workflow";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowToolBindingForm } from "@/components/workflow-tool-binding-form";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowDetail, WorkflowListItem } from "@/lib/get-workflows";
@@ -61,16 +60,12 @@ export function WorkflowToolBindingPanel({
               const selected = workflow.id === selectedWorkflow?.id;
 
               return (
-                <Link
-                  className={`workflow-chip ${selected ? "selected" : ""}`}
-                  href={`/?workflow=${encodeURIComponent(workflow.id)}#workflow-binding`}
+                <WorkflowChipLink
                   key={workflow.id}
-                >
-                  <span>{workflow.name}</span>
-                  <small>
-                    {workflow.version} · {workflow.status}
-                  </small>
-                </Link>
+                  workflow={workflow}
+                  href={`/?workflow=${encodeURIComponent(workflow.id)}#workflow-binding`}
+                  selected={selected}
+                />
               );
             })}
           </div>

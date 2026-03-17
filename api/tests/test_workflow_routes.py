@@ -3,7 +3,9 @@
 from fastapi.testclient import TestClient
 
 from app.models.run import NodeRun, Run, RunEvent
-from app.services import workflow_definitions, workflow_library
+from app.models.workflow import Workflow, WorkflowVersion
+from app.schemas.plugin import PluginToolItem
+from app.services import workflow_definitions, workflow_library, workflow_views
 from app.services.plugin_runtime import PluginRegistry, PluginToolDefinition
 from app.services.sandbox_backends import (
     SandboxBackendCapability,
@@ -54,6 +56,15 @@ def _workflow_detail_issues(response) -> list[dict]:
     if isinstance(detail, dict) and isinstance(detail.get("issues"), list):
         return [issue for issue in detail["issues"] if isinstance(issue, dict)]
     return []
+
+
+class _FakeWorkflowLibraryService:
+    def __init__(self, tools: list[PluginToolItem]) -> None:
+        self._tools = tools
+
+    def list_tool_items(self, _db, *, workspace_id: str) -> list[PluginToolItem]:
+        assert workspace_id == "default"
+        return self._tools
 
 
 def _valid_definition(answer: str = "done", runtime_policy: dict | None = None) -> dict:
@@ -1904,3 +1915,106 @@ def test_create_workflow_rejects_non_branch_custom_edge_condition(client: TestCl
 
     assert response.status_code == 422
     assert "uses unsupported condition" in _workflow_detail_message(response)
+
+
+def test_workflow_routes_expose_tool_governance_summary(
+    client: TestClient,
+    sqlite_session,
+    monkeypatch,
+) -> None:
+    definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "tool",
+                "type": "tool",
+                "name": "Risk Search",
+                "config": {
+                    "tool": {
+                        "toolId": "native.risk-search",
+                        "ecosystem": "native",
+                    }
+                },
+            },
+            {
+                "id": "agent",
+                "type": "llm_agent",
+                "name": "Agent",
+                "config": {
+                    "toolPolicy": {
+                        "allowedToolIds": [
+                            "native.risk-search",
+                            "native.catalog-gap",
+                        ]
+                    }
+                },
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
+            {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "output"},
+        ],
+    }
+    workflow = Workflow(
+        id="wf-governance",
+        name="Governance Workflow",
+        version="0.1.0",
+        status="draft",
+        definition=definition,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-governance-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=definition,
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    sqlite_session.commit()
+
+    monkeypatch.setattr(
+        workflow_views,
+        "get_workflow_library_service",
+        lambda: _FakeWorkflowLibraryService(
+            [
+                PluginToolItem(
+                    id="native.risk-search",
+                    name="Risk Search",
+                    ecosystem="native",
+                    description="Governed native tool.",
+                    source="native",
+                    callable=True,
+                    supported_execution_classes=["inline", "sandbox"],
+                    default_execution_class="sandbox",
+                    sensitivity_level="L2",
+                )
+            ]
+        ),
+    )
+
+    list_response = client.get("/api/workflows")
+
+    assert list_response.status_code == 200
+    list_body = list_response.json()
+    assert len(list_body) == 1
+    assert list_body[0]["id"] == workflow.id
+    assert list_body[0]["node_count"] == 4
+    assert list_body[0]["tool_governance"] == {
+        "referenced_tool_ids": ["native.risk-search", "native.catalog-gap"],
+        "missing_tool_ids": ["native.catalog-gap"],
+        "governed_tool_count": 1,
+        "strong_isolation_tool_count": 1,
+    }
+
+    detail_response = client.get(f"/api/workflows/{workflow.id}")
+
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["node_count"] == 4
+    assert detail_body["tool_governance"] == list_body[0]["tool_governance"]
+    assert len(detail_body["versions"]) == 1

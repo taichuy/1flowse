@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -13,6 +11,7 @@ import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 
 import type { WorkflowEditorMessageTone } from "./shared";
 
@@ -96,16 +95,12 @@ export function WorkflowEditorSidebar({
 
         <div className="workflow-chip-row compact-stack">
           {workflows.map((item) => (
-            <Link
+            <WorkflowChipLink
               key={item.id}
-              className={`workflow-chip ${item.id === workflowId ? "selected" : ""}`}
+              workflow={item}
               href={`/workflows/${encodeURIComponent(item.id)}`}
-            >
-              <span>{item.name}</span>
-              <small>
-                {item.version} · {item.status}
-              </small>
-            </Link>
+              selected={item.id === workflowId}
+            />
           ))}
         </div>
       </article>

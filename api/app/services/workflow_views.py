@@ -7,8 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.models.run import NodeRun, Run, RunEvent
 from app.models.workflow import Workflow, WorkflowCompiledBlueprint, WorkflowVersion
+from app.schemas.plugin import PluginToolItem
 from app.schemas.run import WorkflowRunListItem
-from app.schemas.workflow import WorkflowDetail, WorkflowVersionItem
+from app.schemas.workflow import WorkflowDetail, WorkflowListItem, WorkflowVersionItem
+from app.services.workflow_definition_governance import (
+    count_workflow_nodes,
+    summarize_workflow_definition_tool_governance,
+)
+from app.services.workflow_library import get_workflow_library_service
 
 
 def _normalize_datetime(value: datetime | None) -> datetime:
@@ -74,13 +80,20 @@ def serialize_workflow_detail(
     workflow: Workflow,
     versions: list[WorkflowVersion],
     compiled_blueprints: dict[str, WorkflowCompiledBlueprint] | None = None,
+    tool_index: dict[str, PluginToolItem] | None = None,
 ) -> WorkflowDetail:
     compiled_blueprints = compiled_blueprints or {}
+    tool_index = tool_index or {}
     return WorkflowDetail(
         id=workflow.id,
         name=workflow.name,
         version=workflow.version,
         status=workflow.status,
+        node_count=count_workflow_nodes(workflow.definition),
+        tool_governance=summarize_workflow_definition_tool_governance(
+            workflow.definition,
+            tool_index=tool_index,
+        ),
         definition=workflow.definition,
         created_at=workflow.created_at,
         updated_at=workflow.updated_at,
@@ -94,6 +107,36 @@ def serialize_workflow_detail(
     )
 
 
+def serialize_workflow_list_item(
+    workflow: Workflow,
+    *,
+    tool_index: dict[str, PluginToolItem] | None = None,
+) -> WorkflowListItem:
+    tool_index = tool_index or {}
+    return WorkflowListItem(
+        id=workflow.id,
+        name=workflow.name,
+        version=workflow.version,
+        status=workflow.status,
+        node_count=count_workflow_nodes(workflow.definition),
+        tool_governance=summarize_workflow_definition_tool_governance(
+            workflow.definition,
+            tool_index=tool_index,
+        ),
+    )
+
+
+def load_workflow_view_tool_index(
+    db: Session,
+    *,
+    workspace_id: str = "default",
+) -> dict[str, PluginToolItem]:
+    return {
+        tool.id: tool
+        for tool in get_workflow_library_service().list_tool_items(db, workspace_id=workspace_id)
+    }
+
+
 def build_workflow_detail(db: Session, workflow: Workflow) -> WorkflowDetail:
     versions = db.scalars(
         select(WorkflowVersion).where(WorkflowVersion.workflow_id == workflow.id)
@@ -102,6 +145,7 @@ def build_workflow_detail(db: Session, workflow: Workflow) -> WorkflowDetail:
         workflow,
         sort_workflow_versions(versions),
         load_compiled_blueprint_lookup(db, workflow.id),
+        load_workflow_view_tool_index(db),
     )
 
 
