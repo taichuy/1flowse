@@ -163,7 +163,11 @@ def _invalid_variable_definition() -> dict:
     return definition
 
 
-def _skill_bound_definition(skill_id: str) -> dict:
+def _skill_bound_definition(
+    skill_id: str,
+    *,
+    skill_binding: dict | None = None,
+) -> dict:
     return {
         "nodes": [
             {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
@@ -174,6 +178,7 @@ def _skill_bound_definition(skill_id: str) -> dict:
                 "config": {
                     "prompt": "Use the bound skill",
                     "skillIds": [skill_id],
+                    **({"skillBinding": skill_binding} if skill_binding is not None else {}),
                 },
             },
             {"id": "output", "type": "output", "name": "Output", "config": {}},
@@ -208,6 +213,63 @@ def test_workspace_starter_create_rejects_missing_skill_reference(
     assert "missing skill documents" in message
     assert any(issue["category"] == "skill_reference" for issue in issues)
     assert any(issue.get("field") == "skillIds" for issue in issues)
+
+
+def test_workspace_starter_create_rejects_missing_skill_binding_reference(
+    client: TestClient,
+) -> None:
+    skill_response = client.post(
+        "/api/skills",
+        json={
+            "id": "skill-research-brief",
+            "workspace_id": "default",
+            "name": "Research Brief",
+            "description": "Brief writing guide.",
+            "body": "Summarize findings and open questions.",
+            "references": [
+                {
+                    "id": "ref-existing",
+                    "name": "Existing Ref",
+                    "description": "Present in catalog.",
+                    "body": "Use the current reference body.",
+                }
+            ],
+        },
+    )
+    assert skill_response.status_code == 201
+
+    response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Skill Binding Guard Starter",
+            "description": "Starter with missing skill reference binding",
+            "business_track": "编排节点能力",
+            "default_workflow_name": "Skill Binding Workflow",
+            "workflow_focus": "Skill binding validation",
+            "recommended_next_step": "Fix the missing reference binding first",
+            "tags": ["skill", "binding"],
+            "definition": _skill_bound_definition(
+                "skill-research-brief",
+                skill_binding={
+                    "enabledPhases": ["main_plan"],
+                    "references": [
+                        {
+                            "skillId": "skill-research-brief",
+                            "referenceId": "ref-missing",
+                            "phases": ["main_plan"],
+                        }
+                    ],
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    message, issues = _validation_detail(response.json())
+    assert "missing skill reference" in message
+    assert any(issue["category"] == "skill_reference" for issue in issues)
+    assert any(issue.get("field") == "skillBinding.references" for issue in issues)
 
 
 def _invalid_publish_identity_definition() -> dict:

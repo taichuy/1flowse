@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
-import re
 from typing import Any
 
 from pydantic import ValidationError
@@ -14,18 +14,18 @@ from app.schemas.workflow import WorkflowDefinitionDocument
 from app.services.plugin_registry_store import get_plugin_registry_store
 from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_plugin_registry
 from app.services.sandbox_backends import get_sandbox_backend_client
-from app.services.workflow_tool_execution_validation import (
-    collect_invalid_workflow_tool_execution_references,
-)
 from app.services.workflow_library_catalog import build_node_catalog_items
-from app.services.workflow_publish_version_references import (
-    collect_invalid_workflow_publish_version_references,
-)
 from app.services.workflow_publish_identity_validation import (
     collect_invalid_workflow_publish_identities,
 )
+from app.services.workflow_publish_version_references import (
+    collect_invalid_workflow_publish_version_references,
+)
 from app.services.workflow_skill_references import (
     collect_invalid_workflow_skill_references,
+)
+from app.services.workflow_tool_execution_validation import (
+    collect_invalid_workflow_tool_execution_references,
 )
 from app.services.workflow_variable_validation import collect_invalid_workflow_variables
 
@@ -53,7 +53,8 @@ def validate_workflow_definition(definition: dict[str, Any] | None) -> dict[str,
     invalid_publish_identities = collect_invalid_workflow_publish_identities(definition)
     if invalid_publish_identities:
         raise WorkflowDefinitionValidationError(
-            "Workflow definition contains publish endpoint identities that are not valid for persistence: "
+            "Workflow definition contains publish endpoint identities that are not valid "
+            "for persistence: "
             + "; ".join(issue["message"] for issue in invalid_publish_identities),
             issues=[
                 WorkflowDefinitionValidationIssue(
@@ -136,6 +137,16 @@ def build_workflow_skill_reference_index(
     from app.services.skill_catalog import SkillCatalogService
 
     return SkillCatalogService().build_reference_index(db, workspace_id=workspace_id)
+
+
+def build_workflow_skill_reference_ids_index(
+    db: Session,
+    *,
+    workspace_id: str = "default",
+) -> dict[str, Any]:
+    from app.services.skill_catalog import SkillCatalogService
+
+    return SkillCatalogService().build_reference_ids_by_skill(db, workspace_id=workspace_id)
 
 
 @lru_cache(maxsize=1)
@@ -382,6 +393,7 @@ def validate_persistable_workflow_definition(
     tool_index: Mapping[str, PluginToolItem] | None = None,
     adapters: list[CompatibilityAdapterRegistration] | None = None,
     skill_index: Mapping[str, Any] | None = None,
+    skill_reference_ids_index: Mapping[str, Any] | None = None,
     allowed_publish_versions: set[str] | None = None,
 ) -> dict[str, Any]:
     validated_definition = validate_workflow_definition(definition)
@@ -423,6 +435,7 @@ def validate_persistable_workflow_definition(
     invalid_skill_references = collect_invalid_workflow_skill_references(
         validated_definition,
         skill_index=skill_index,
+        skill_reference_ids_index=skill_reference_ids_index,
     )
     if invalid_skill_references:
         raise WorkflowDefinitionValidationError(

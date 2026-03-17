@@ -6,6 +6,7 @@ import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import { AuthorizedContextFields } from "@/components/workflow-node-config-form/authorized-context-fields";
 import { CredentialPicker } from "@/components/workflow-node-config-form/credential-picker";
+import { LlmAgentSkillBindingSection } from "@/components/workflow-node-config-form/llm-agent-skill-binding-section";
 import { LlmAgentSkillSection } from "@/components/workflow-node-config-form/llm-agent-skill-section";
 import { LlmAgentToolPolicyForm } from "@/components/workflow-node-config-form/llm-agent-tool-policy-form";
 import {
@@ -36,6 +37,7 @@ export function LlmAgentNodeConfigForm({
   const assistant = toRecord(config.assistant) ?? {};
   const contextAccess = toRecord(config.contextAccess) ?? {};
   const skillIds = dedupeStrings(toStringArray(config.skillIds));
+  const skillBinding = toRecord(config.skillBinding) ?? {};
   const availableNodes = nodes.filter((candidate) => candidate.id !== node.id);
   const readableArtifacts = readReadableArtifacts(contextAccess.readableArtifacts);
   const readableNodeIds = Array.from(
@@ -103,8 +105,41 @@ export function LlmAgentNodeConfigForm({
     const nextConfig = cloneRecord(config);
     if (nextSkillIds.length === 0) {
       delete nextConfig.skillIds;
+      delete nextConfig.skillBinding;
     } else {
       nextConfig.skillIds = dedupeStrings(nextSkillIds);
+
+      const nextSkillBinding = toRecord(nextConfig.skillBinding);
+      const referenceBindings = Array.isArray(nextSkillBinding?.references)
+        ? nextSkillBinding.references
+        : null;
+      if (nextSkillBinding && referenceBindings) {
+        const filteredReferenceBindings = referenceBindings.filter((item) => {
+          const reference = toRecord(item);
+          return reference && typeof reference.skillId === "string"
+            ? nextSkillIds.includes(reference.skillId)
+            : false;
+        });
+        nextSkillBinding.references = filteredReferenceBindings;
+        if (filteredReferenceBindings.length === 0) {
+          delete nextSkillBinding.references;
+        }
+        if (Object.keys(nextSkillBinding).length === 0) {
+          delete nextConfig.skillBinding;
+        } else {
+          nextConfig.skillBinding = nextSkillBinding;
+        }
+      }
+    }
+    onChange(nextConfig);
+  };
+
+  const updateSkillBinding = (nextSkillBinding: Record<string, unknown> | undefined) => {
+    const nextConfig = cloneRecord(config);
+    if (!nextSkillBinding || Object.keys(nextSkillBinding).length === 0) {
+      delete nextConfig.skillBinding;
+    } else {
+      nextConfig.skillBinding = nextSkillBinding;
     }
     onChange(nextConfig);
   };
@@ -262,6 +297,12 @@ export function LlmAgentNodeConfigForm({
       </label>
 
       <LlmAgentSkillSection skillIds={skillIds} onChange={updateSkillIds} />
+
+      <LlmAgentSkillBindingSection
+        skillBinding={skillBinding}
+        skillIds={skillIds}
+        onChange={updateSkillBinding}
+      />
 
       <div className="binding-field">
         <span className="binding-label">Capability toggles</span>

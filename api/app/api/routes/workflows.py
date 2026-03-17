@@ -19,6 +19,7 @@ from app.services.workflow_definitions import (
     WorkflowDefinitionValidationError,
     WorkflowDefinitionValidationIssue,
     build_workflow_adapter_reference_list,
+    build_workflow_skill_reference_ids_index,
     build_workflow_skill_reference_index,
     build_workflow_tool_reference_index,
     bump_workflow_version,
@@ -81,6 +82,7 @@ def _validate_workflow_definition_for_persistence(
         tool_index=build_workflow_tool_reference_index(db),
         adapters=build_workflow_adapter_reference_list(db),
         skill_index=build_workflow_skill_reference_index(db),
+        skill_reference_ids_index=build_workflow_skill_reference_ids_index(db),
         allowed_publish_versions=build_allowed_publish_workflow_versions(
             db,
             workflow_id=workflow.id if workflow is not None else None,

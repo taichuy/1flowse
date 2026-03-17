@@ -19,6 +19,7 @@ AssistantTriggerMode = Literal[
     "on_multi_tool_results",
     "on_high_risk_mode",
 ]
+SkillBindingPhase = Literal["main_plan", "assistant_distill", "main_finalize"]
 
 
 def validate_safe_expression(
@@ -96,6 +97,59 @@ class WorkflowNodeSkillBinding(BaseModel):
             if skill_id and skill_id not in normalized_skill_ids:
                 normalized_skill_ids.append(skill_id)
         self.skillIds = normalized_skill_ids
+        return self
+
+
+class WorkflowNodeSkillReferenceBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skillId: str = Field(min_length=1, max_length=64)
+    referenceId: str = Field(min_length=1, max_length=64)
+    phases: list[SkillBindingPhase] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_fields(self) -> WorkflowNodeSkillReferenceBinding:
+        self.skillId = self.skillId.strip()
+        self.referenceId = self.referenceId.strip()
+        normalized_phases: list[SkillBindingPhase] = []
+        for phase in self.phases:
+            if phase not in normalized_phases:
+                normalized_phases.append(phase)
+        self.phases = normalized_phases
+        return self
+
+
+class WorkflowNodeSkillBindingPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabledPhases: list[SkillBindingPhase] = Field(default_factory=list)
+    promptBudgetChars: int | None = Field(default=None, ge=256, le=16_000)
+    references: list[WorkflowNodeSkillReferenceBinding] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_policy(self) -> WorkflowNodeSkillBindingPolicy:
+        normalized_phases: list[SkillBindingPhase] = []
+        for phase in self.enabledPhases:
+            if phase not in normalized_phases:
+                normalized_phases.append(phase)
+        self.enabledPhases = normalized_phases
+
+        merged_reference_phases: dict[tuple[str, str], list[SkillBindingPhase]] = {}
+        for reference in self.references:
+            key = (reference.skillId, reference.referenceId)
+            phases = merged_reference_phases.setdefault(key, [])
+            for phase in reference.phases:
+                if phase not in phases:
+                    phases.append(phase)
+
+        self.references = [
+            WorkflowNodeSkillReferenceBinding(
+                skillId=skill_id,
+                referenceId=reference_id,
+                phases=phases,
+            )
+            for (skill_id, reference_id), phases in merged_reference_phases.items()
+        ]
         return self
 
 
@@ -250,6 +304,14 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
         if node_type != "llm_agent":
             raise ValueError("Only llm_agent nodes may define config.skillIds.")
         WorkflowNodeSkillBinding.model_validate({"skillIds": skill_ids})
+
+    skill_binding = config.get("skillBinding")
+    if skill_binding is not None:
+        if node_type != "llm_agent":
+            raise ValueError("Only llm_agent nodes may define config.skillBinding.")
+        if not skill_ids:
+            raise ValueError("config.skillBinding requires non-empty config.skillIds.")
+        WorkflowNodeSkillBindingPolicy.model_validate(skill_binding)
 
     tool_policy = config.get("toolPolicy")
     if tool_policy is not None:

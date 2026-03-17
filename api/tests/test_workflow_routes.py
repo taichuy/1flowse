@@ -123,7 +123,11 @@ def _bound_tool_definition(
     }
 
 
-def _skill_bound_agent_definition(skill_id: str) -> dict:
+def _skill_bound_agent_definition(
+    skill_id: str,
+    *,
+    skill_binding: dict | None = None,
+) -> dict:
     return {
         "nodes": [
             {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
@@ -134,6 +138,7 @@ def _skill_bound_agent_definition(skill_id: str) -> dict:
                 "config": {
                     "prompt": "Use the bound skill",
                     "skillIds": [skill_id],
+                    **({"skillBinding": skill_binding} if skill_binding is not None else {}),
                 },
             },
             {"id": "output", "type": "output", "name": "Output", "config": {}},
@@ -159,6 +164,109 @@ def test_create_workflow_rejects_missing_skill_reference(client: TestClient) -> 
     issues = _workflow_detail_issues(response)
     assert any(issue["category"] == "skill_reference" for issue in issues)
     assert any(issue.get("field") == "skillIds" for issue in issues)
+
+
+def test_create_workflow_rejects_missing_skill_binding_reference(client: TestClient) -> None:
+    skill_response = client.post(
+        "/api/skills",
+        json={
+            "id": "skill-research-brief",
+            "workspace_id": "default",
+            "name": "Research Brief",
+            "description": "Brief writing guide.",
+            "body": "Summarize findings and open questions.",
+            "references": [
+                {
+                    "id": "ref-existing",
+                    "name": "Existing Ref",
+                    "description": "Present in catalog.",
+                    "body": "Use the current reference body.",
+                }
+            ],
+        },
+    )
+    assert skill_response.status_code == 201
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Skill Binding Guard Workflow",
+            "definition": _skill_bound_agent_definition(
+                "skill-research-brief",
+                skill_binding={
+                    "enabledPhases": ["main_plan"],
+                    "references": [
+                        {
+                            "skillId": "skill-research-brief",
+                            "referenceId": "ref-missing",
+                            "phases": ["main_plan"],
+                        }
+                    ],
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "missing skill reference" in _workflow_detail_message(response)
+    issues = _workflow_detail_issues(response)
+    assert any(issue["category"] == "skill_reference" for issue in issues)
+    assert any(issue.get("field") == "skillBinding.references" for issue in issues)
+
+
+def test_create_workflow_accepts_skill_binding_with_case_preserved_ids(
+    client: TestClient,
+) -> None:
+    skill_response = client.post(
+        "/api/skills",
+        json={
+            "id": "SkillResearchBrief",
+            "workspace_id": "default",
+            "name": "Research Brief",
+            "description": "Brief writing guide.",
+            "body": "Summarize findings and open questions.",
+            "references": [
+                {
+                    "id": "RefExisting",
+                    "name": "Existing Ref",
+                    "description": "Present in catalog.",
+                    "body": "Use the current reference body.",
+                }
+            ],
+        },
+    )
+    assert skill_response.status_code == 201
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Skill Binding Case Workflow",
+            "definition": _skill_bound_agent_definition(
+                "SkillResearchBrief",
+                skill_binding={
+                    "enabledPhases": ["main_plan"],
+                    "references": [
+                        {
+                            "skillId": "SkillResearchBrief",
+                            "referenceId": "RefExisting",
+                            "phases": ["main_plan"],
+                        }
+                    ],
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    detail = response.json()
+    references = detail["definition"]["nodes"][1]["config"]["skillBinding"]["references"]
+    assert references == [
+        {
+            "skillId": "SkillResearchBrief",
+            "referenceId": "RefExisting",
+            "phases": ["main_plan"],
+        }
+    ]
 
 
 def _sandbox_code_definition(

@@ -10,13 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.run import AICallRecord, NodeRun
+from app.schemas.workflow_node_validation import WorkflowNodeSkillBindingPolicy
 from app.services.agent_runtime_llm_support import AgentRuntimeLLMSupportMixin
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
 from app.services.credential_store import CredentialStore
 from app.services.llm_provider import LLMProviderService, LLMResponse
 from app.services.runtime_execution_policy import resolve_tool_execution_policy
-from app.services.skill_catalog import SkillCatalogError, SkillCatalogService
 from app.services.runtime_types import (
     PHASE_STATUS_MAP,
     AgentExecutionResult,
@@ -24,6 +24,7 @@ from app.services.runtime_types import (
     ToolExecutionResult,
     WorkflowExecutionError,
 )
+from app.services.skill_catalog import SkillCatalogError, SkillCatalogService
 from app.services.tool_execution_events import build_tool_execution_events
 from app.services.tool_gateway import ToolGateway
 
@@ -78,10 +79,12 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             if "apiKey" in creds:
                 model_config["apiKey"] = creds["apiKey"]
         checkpoint = self._to_dict(node_run.checkpoint_payload)
-        skill_context = self._resolve_skill_context(db, config)
+        default_skill_context = self._resolve_skill_context(
+            db,
+            config,
+            phase="main_plan",
+        )
         enriched_node_input = dict(node_input)
-        if skill_context:
-            enriched_node_input["skill_context"] = skill_context
         working_context = self._context_service.update_working_context(
             node_run,
             role=config.get("role"),
@@ -90,14 +93,20 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             system_prompt=config.get("systemPrompt"),
             authorized_context=node_input.get("authorized_context", {}),
             global_context=node_input.get("global_context", {}),
-            skill_context=skill_context,
+            skill_context=default_skill_context,
         )
 
         self._transition_phase(node_run, "preparing", events, node)
         plan = self._restore_plan(checkpoint.get("plan"))
         if plan is None:
             self._transition_phase(node_run, "running_main", events, node)
-            plan = self._build_plan(config, model_config, enriched_node_input)
+            plan_node_input = self._build_phase_node_input(
+                db,
+                config=config,
+                base_node_input=enriched_node_input,
+                phase="main_plan",
+            )
+            plan = self._build_plan(config, model_config, plan_node_input)
             plan_llm_response = plan.llm_response
             checkpoint["plan"] = plan.as_dict()
             node_run.checkpoint_payload = deepcopy(checkpoint)
@@ -111,7 +120,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                     "global_context": node_input.get("global_context", {}),
                     "working_context": working_context,
                     "authorized_context": node_input.get("authorized_context", {}),
-                    "skill_context": skill_context,
+                    "skill_context": plan_node_input.get("skill_context"),
                 },
                 output_value=plan.as_dict(),
                 assistant=False,
@@ -291,8 +300,17 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
         evidence_pack = self._to_dict(node_run.evidence_context)
         if self._should_run_assistant(config, tool_results) and not evidence_pack:
             self._transition_phase(node_run, "assistant_distill", events, node)
+            assistant_node_input = self._build_phase_node_input(
+                db,
+                config=config,
+                base_node_input=enriched_node_input,
+                phase="assistant_distill",
+            )
             distilled_evidence, distill_llm_response = self._distill_evidence(
-                config, model_config, tool_results,
+                config,
+                model_config,
+                tool_results,
+                node_input=assistant_node_input,
             )
             evidence_artifact = self._artifact_store.create_artifact(
                 db,
@@ -322,7 +340,8 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 input_value={
                     "tool_results": [
                         self._tool_result_to_dict(result) for result in tool_results
-                    ]
+                    ],
+                    "skill_context": assistant_node_input.get("skill_context"),
                 },
                 output_value=evidence_pack,
                 assistant=True,
@@ -340,6 +359,12 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             )
 
         self._transition_phase(node_run, "main_finalize", events, node)
+        finalize_node_input = self._build_phase_node_input(
+            db,
+            config=config,
+            base_node_input=enriched_node_input,
+            phase="main_finalize",
+        )
         final_output, finalize_llm_response, streaming_deltas_emitted = self._finalize_output(
             config=config,
             model_config=model_config,
@@ -347,7 +372,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 tool_results=tool_results,
                 evidence_pack=evidence_pack,
                 artifact_refs=artifact_refs,
-                node_input=enriched_node_input,
+                node_input=finalize_node_input,
                 events=events,
                 node=node,
             )
@@ -361,6 +386,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 "tool_results": [self._tool_result_to_dict(result) for result in tool_results],
                 "evidence_pack": evidence_pack,
                 "working_context": node_run.working_context,
+                "skill_context": finalize_node_input.get("skill_context"),
             },
             output_value=final_output,
             assistant=False,
@@ -566,22 +592,91 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
         self,
         db: Session,
         config: dict[str, Any],
+        *,
+        phase: str,
     ) -> list[dict[str, Any]]:
         raw_skill_ids = config.get("skillIds")
         if not isinstance(raw_skill_ids, list):
             return []
+        if not self._skill_phase_enabled(config, phase):
+            return []
         workspace_id = str(config.get("workspaceId") or "default")
         try:
+            selected_reference_ids_by_skill = self._selected_skill_reference_ids_by_phase(
+                config,
+                phase=phase,
+            )
             return [
                 skill.model_dump(mode="python")
                 for skill in self._skill_catalog.build_prompt_docs(
                     db,
                     skill_ids=[str(skill_id) for skill_id in raw_skill_ids],
                     workspace_id=workspace_id,
+                    selected_reference_ids_by_skill=selected_reference_ids_by_skill,
+                    prompt_budget_chars=self._skill_prompt_budget_chars(config),
                 )
             ]
         except SkillCatalogError as exc:
             raise WorkflowExecutionError(str(exc)) from exc
+
+    def _build_phase_node_input(
+        self,
+        db: Session,
+        *,
+        config: dict[str, Any],
+        base_node_input: dict[str, Any],
+        phase: str,
+    ) -> dict[str, Any]:
+        phase_node_input = dict(base_node_input)
+        skill_context = self._resolve_skill_context(db, config, phase=phase)
+        if skill_context:
+            phase_node_input["skill_context"] = skill_context
+        else:
+            phase_node_input.pop("skill_context", None)
+        return phase_node_input
+
+    def _skill_phase_enabled(self, config: dict[str, Any], phase: str) -> bool:
+        skill_binding = self._skill_binding_policy(config)
+        if skill_binding is None or not skill_binding.enabledPhases:
+            return phase in {"main_plan", "main_finalize"}
+        return phase in skill_binding.enabledPhases
+
+    def _selected_skill_reference_ids_by_phase(
+        self,
+        config: dict[str, Any],
+        *,
+        phase: str,
+    ) -> dict[str, list[str]]:
+        skill_binding = self._skill_binding_policy(config)
+        if skill_binding is None:
+            return {}
+
+        selected_reference_ids_by_skill: dict[str, list[str]] = {}
+        for reference in skill_binding.references:
+            if reference.phases and phase not in reference.phases:
+                continue
+            selected_reference_ids_by_skill.setdefault(reference.skillId, []).append(
+                reference.referenceId
+            )
+        return selected_reference_ids_by_skill
+
+    def _skill_prompt_budget_chars(self, config: dict[str, Any]) -> int | None:
+        skill_binding = self._skill_binding_policy(config)
+        if skill_binding is None:
+            return None
+        return skill_binding.promptBudgetChars
+
+    def _skill_binding_policy(
+        self,
+        config: dict[str, Any],
+    ) -> WorkflowNodeSkillBindingPolicy | None:
+        raw_skill_binding = config.get("skillBinding")
+        if not isinstance(raw_skill_binding, dict):
+            return None
+        try:
+            return WorkflowNodeSkillBindingPolicy.model_validate(raw_skill_binding)
+        except Exception as exc:
+            raise WorkflowExecutionError(f"Invalid config.skillBinding: {exc}") from exc
 
     # ------------------------------------------------------------------
     # General helpers

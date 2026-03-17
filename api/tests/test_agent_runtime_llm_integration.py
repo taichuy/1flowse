@@ -170,7 +170,10 @@ def test_finalize_via_llm_when_no_mock(sqlite_session: Session) -> None:
     finalize_call = next(r for r in artifacts.ai_calls if r.role == "main_finalize")
     assert finalize_call.model_id == "gpt-4o"
     # Streaming mode records latency but not per-token usage
-    assert finalize_call.token_usage.get("latency_ms") is not None or finalize_call.token_usage == {}
+    assert (
+        finalize_call.token_usage.get("latency_ms") is not None
+        or finalize_call.token_usage == {}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +348,114 @@ def test_llm_agent_injects_bound_skill_docs_into_llm_context(
     assert "[Skills]" in combined_content
     assert "Research Brief" in combined_content
     assert "Operator Handoff" in combined_content
+
+
+def test_llm_agent_skill_binding_limits_injection_to_selected_phase(
+    sqlite_session: Session,
+) -> None:
+    runtime = _create_runtime_with_llm(
+        [
+            _openai_response("Plan with bound skill context."),
+            _openai_response("Final answer without extra skill context."),
+        ]
+    )
+
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Summarize findings, cite evidence, and end with open questions.",
+        )
+    )
+    sqlite_session.add(
+        SkillReferenceRecord(
+            id="ref-handoff",
+            skill_id="skill-research-brief",
+            name="Operator Handoff",
+            description="Close with next actions.",
+            body="Always include what the operator should verify next.",
+        )
+    )
+    sqlite_session.add(
+        SkillReferenceRecord(
+            id="ref-budget",
+            skill_id="skill-research-brief",
+            name="Budget Control",
+            description="Reference that should stay summary-only.",
+            body="This body should stay out of prompt injection unless explicitly selected.",
+        )
+    )
+
+    workflow = Workflow(
+        id="wf-agent-skill-phase-bound",
+        name="Agent Skill Phase Bound Test",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "prompt": "Draft a response using the bound skill.",
+                        "skillIds": ["skill-research-brief"],
+                        "skillBinding": {
+                            "enabledPhases": ["main_plan"],
+                            "promptBudgetChars": 256,
+                            "references": [
+                                {
+                                    "skillId": "skill-research-brief",
+                                    "referenceId": "ref-handoff",
+                                    "phases": ["main_plan"],
+                                }
+                            ],
+                        },
+                        "model": {
+                            "provider": "openai",
+                            "modelId": "gpt-4o",
+                            "apiKey": "sk-test-key",
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "skill phase test"})
+
+    assert artifacts.run.status == "succeeded"
+
+    captured_requests = runtime._llm_provider._captured_requests  # type: ignore[attr-defined]
+    assert len(captured_requests) == 2
+
+    plan_content = "\n".join(
+        str(message.get("content", ""))
+        for message in captured_requests[0]["body"]["messages"]
+        if isinstance(message, dict)
+    )
+    finalize_content = "\n".join(
+        str(message.get("content", ""))
+        for message in captured_requests[1]["body"]["messages"]
+        if isinstance(message, dict)
+    )
+
+    assert "[Skills]" in plan_content
+    assert "Research Brief" in plan_content
+    assert "Operator Handoff" in plan_content
+    assert "Always include what the operator should verify next." in plan_content
+    assert "This body should stay out of prompt injection" not in plan_content
+    assert "[Skills]" not in finalize_content
 
 
 # ---------------------------------------------------------------------------

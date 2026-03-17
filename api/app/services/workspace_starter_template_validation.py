@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.services.workflow_definitions import (
     WorkflowDefinitionValidationError,
     build_workflow_adapter_reference_list,
+    build_workflow_skill_reference_ids_index,
     build_workflow_skill_reference_index,
     build_workflow_tool_reference_index,
     bump_workflow_version,
@@ -74,6 +75,10 @@ def validate_workspace_starter_definition(
             db,
             workspace_id=workspace_id,
         ),
+        skill_reference_ids_index=build_workflow_skill_reference_ids_index(
+            db,
+            workspace_id=workspace_id,
+        ),
         allowed_publish_versions=build_allowed_publish_versions_for_template(
             db,
             workflow_id=workflow_id,
@@ -85,9 +90,12 @@ def validate_workspace_starter_definition(
         validated_definition
     )
     if portability_issues:
+        portability_message = (
+            "Workspace starter definition contains publish version pins that are not "
+            "portable for starter reuse: "
+        )
         raise WorkflowDefinitionValidationError(
-            "Workspace starter definition contains publish version pins that are not portable for starter reuse: "
-            + "; ".join(issue.message for issue in portability_issues),
+            portability_message + "; ".join(issue.message for issue in portability_issues),
             issues=portability_issues,
         )
     return validated_definition

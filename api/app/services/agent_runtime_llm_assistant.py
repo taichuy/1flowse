@@ -74,6 +74,7 @@ class AgentRuntimeLLMAssistantMixin:
         config: dict[str, Any],
         model_config: dict[str, Any],
         tool_results: list[ToolExecutionResult],
+        node_input: dict[str, Any] | None = None,
     ) -> tuple[EvidencePack, LLMResponse | None]:
         mock_output = self._to_dict(config.get("mockAssistantOutput"))
         if mock_output:
@@ -92,7 +93,11 @@ class AgentRuntimeLLMAssistantMixin:
 
         assistant_model = self._assistant_model_config(config, model_config)
         if self._has_valid_model_config(assistant_model):
-            return self._distill_evidence_via_llm(assistant_model, tool_results)
+            return self._distill_evidence_via_llm(
+                assistant_model,
+                tool_results,
+                node_input=node_input,
+            )
 
         return self._distill_evidence_synthetic(tool_results), None
 
@@ -100,6 +105,8 @@ class AgentRuntimeLLMAssistantMixin:
         self,
         model_config: dict[str, Any],
         tool_results: list[ToolExecutionResult],
+        *,
+        node_input: dict[str, Any] | None = None,
     ) -> tuple[EvidencePack, LLMResponse | None]:
         tool_data = [
             {
@@ -125,6 +132,7 @@ class AgentRuntimeLLMAssistantMixin:
                     "Respond with valid JSON only."
                 ),
                 user_prompt=user_prompt,
+                node_input=node_input,
             )
         except WorkflowExecutionError:
             _log.warning("LLM distill call failed, using synthetic evidence")

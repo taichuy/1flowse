@@ -71,7 +71,12 @@ class SkillDocUpdate(BaseModel):
 
     @model_validator(mode="after")
     def ensure_update_payload(self) -> SkillDocUpdate:
-        if self.name is None and self.description is None and self.body is None and self.references is None:
+        if (
+            self.name is None
+            and self.description is None
+            and self.body is None
+            and self.references is None
+        ):
             raise ValueError(
                 "At least one of 'name', 'description', 'body' or 'references' must be provided."
             )
@@ -102,6 +107,7 @@ class SkillPromptReference(BaseModel):
     id: str
     name: str
     description: str
+    body: str | None = None
 
 
 class SkillPromptDoc(BaseModel):
@@ -110,4 +116,3 @@ class SkillPromptDoc(BaseModel):
     description: str
     body: str
     references: list[SkillPromptReference] = Field(default_factory=list)
-
