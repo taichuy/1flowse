@@ -389,6 +389,8 @@ class RunCallbackTicketCleanupService:
         checkpoint_payload.pop("scheduled_resume", None)
         node_run.checkpoint_payload = checkpoint_payload
         node_run.status = "failed"
+        node_run.phase = "failed"
+        node_run.phase_started_at = terminated_at
         node_run.error_message = error_message
         node_run.finished_at = terminated_at
 
@@ -396,6 +398,9 @@ class RunCallbackTicketCleanupService:
         run.error_message = error_message
         run.finished_at = terminated_at
         run.current_node_id = None
+        run_checkpoint_payload = dict(run.checkpoint_payload or {})
+        run_checkpoint_payload["waiting_node_run_id"] = None
+        run.checkpoint_payload = run_checkpoint_payload
 
         db.add(
             RunEvent(

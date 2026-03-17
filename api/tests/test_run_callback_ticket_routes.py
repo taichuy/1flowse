@@ -425,8 +425,14 @@ def test_cleanup_stale_run_callback_tickets_route_scopes_to_run_and_node(
     sqlite_session: Session,
     monkeypatch,
 ) -> None:
-    target_run_id, target_ticket = _create_waiting_callback_run(sqlite_session, suffix="route-scope-a")
-    other_run_id, other_ticket = _create_waiting_callback_run(sqlite_session, suffix="route-scope-b")
+    target_run_id, target_ticket = _create_waiting_callback_run(
+        sqlite_session,
+        suffix="route-scope-a",
+    )
+    other_run_id, other_ticket = _create_waiting_callback_run(
+        sqlite_session,
+        suffix="route-scope-b",
+    )
     target_record = sqlite_session.get(RunCallbackTicket, target_ticket)
     other_record = sqlite_session.get(RunCallbackTicket, other_ticket)
     assert target_record is not None
@@ -542,10 +548,13 @@ def test_cleanup_service_terminates_waiting_callback_after_max_expired_cycles(
     assert ticket_record.status == "expired"
     assert run.status == "failed"
     assert node_run.status == "failed"
+    assert node_run.phase == "failed"
+    assert node_run.phase_started_at == run.finished_at
     assert run.error_message == (
         "Callback waiting terminated after 2 expired ticket cycle(s) (max 2)."
     )
     assert node_run.error_message == run.error_message
+    assert run.checkpoint_payload["waiting_node_run_id"] is None
     assert "callback_ticket" not in (node_run.checkpoint_payload or {})
     assert "scheduled_resume" not in (node_run.checkpoint_payload or {})
     assert (

@@ -13,6 +13,27 @@ from app.services.published_invocations import classify_invocation_reason
 from app.services.run_view_serializers import serialize_callback_waiting_lifecycle_summary
 
 
+def _resolve_callback_waiting_lifecycle(node_run: NodeRun):
+    return serialize_callback_waiting_lifecycle_summary(node_run.checkpoint_payload)
+
+
+def _is_active_waiting_node(node_run: NodeRun) -> bool:
+    lifecycle = _resolve_callback_waiting_lifecycle(node_run)
+    if lifecycle is not None and lifecycle.terminated:
+        return False
+
+    status = str(node_run.status or "").strip()
+    if status == "waiting" or status.startswith("waiting_"):
+        return True
+
+    return node_run.waiting_reason is not None and node_run.finished_at is None
+
+
+def _is_terminated_callback_waiting_node(node_run: NodeRun) -> bool:
+    lifecycle = _resolve_callback_waiting_lifecycle(node_run)
+    return bool(lifecycle is not None and lifecycle.terminated)
+
+
 def serialize_published_invocation_item(
     record,
     *,
@@ -78,20 +99,18 @@ def resolve_waiting_node_run(run: Run, node_runs: list[NodeRun]) -> NodeRun | No
         (node_run for node_run in node_runs if node_run.node_id == run.current_node_id),
         None,
     )
-    if current_node_run is not None and (
-        current_node_run.status == "waiting" or current_node_run.waiting_reason is not None
-    ):
+    if current_node_run is not None and _is_active_waiting_node(current_node_run):
         return current_node_run
 
     waiting_node_run = next(
-        (node_run for node_run in node_runs if node_run.status == "waiting"),
+        (node_run for node_run in node_runs if _is_active_waiting_node(node_run)),
         None,
     )
     if waiting_node_run is not None:
         return waiting_node_run
 
     return next(
-        (node_run for node_run in node_runs if node_run.waiting_reason is not None),
+        (node_run for node_run in node_runs if _is_terminated_callback_waiting_node(node_run)),
         None,
     )
 
@@ -100,6 +119,7 @@ def serialize_waiting_lifecycle(
     node_run: NodeRun,
     callback_tickets: list[RunCallbackTicket],
 ) -> PublishedEndpointInvocationWaitingLifecycle:
+    lifecycle = _resolve_callback_waiting_lifecycle(node_run)
     checkpoint_payload = (
         node_run.checkpoint_payload
         if isinstance(node_run.checkpoint_payload, dict)
@@ -111,14 +131,16 @@ def serialize_waiting_lifecycle(
     return PublishedEndpointInvocationWaitingLifecycle(
         node_run_id=node_run.id,
         node_status=node_run.status,
-        waiting_reason=node_run.waiting_reason,
+        waiting_reason=(
+            None
+            if lifecycle is not None and lifecycle.terminated
+            else node_run.waiting_reason
+        ),
         callback_ticket_count=len(callback_tickets),
         callback_ticket_status_counts=dict(
             sorted(Counter(ticket.status for ticket in callback_tickets).items())
         ),
-        callback_waiting_lifecycle=serialize_callback_waiting_lifecycle_summary(
-            node_run.checkpoint_payload
-        ),
+        callback_waiting_lifecycle=lifecycle,
         scheduled_resume_delay_seconds=(
             float(scheduled_delay)
             if isinstance(scheduled_delay, (int, float))
@@ -164,11 +186,12 @@ def build_waiting_lifecycle_lookup(
         selected_node_run = resolve_waiting_node_run(run, node_runs_by_run.get(run_id, []))
         if selected_node_run is None:
             continue
-        waiting_reason_lookup[run_id] = selected_node_run.waiting_reason
-        waiting_lifecycle_lookup[run_id] = serialize_waiting_lifecycle(
+        waiting_lifecycle = serialize_waiting_lifecycle(
             selected_node_run,
             callback_tickets_by_node_run.get(selected_node_run.id, []),
         )
+        waiting_reason_lookup[run_id] = waiting_lifecycle.waiting_reason
+        waiting_lifecycle_lookup[run_id] = waiting_lifecycle
     return waiting_reason_lookup, waiting_lifecycle_lookup
 
 
