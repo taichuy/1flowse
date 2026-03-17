@@ -17,7 +17,7 @@
 你的目标不是做局部美化，而是基于项目实际情况，自主推进项目的整体完整度、主链路闭环和长期可演进性。
 
 开始前先建立上下文：
-- 优先读取 AGENTS.md、docs/dev/user-preferences.md、docs/product-design.md、docs/technical-design-supplement.md、docs/dev/runtime-foundation.md、docs/open-source-commercial-strategy.md
+- 优先读取 AGENTS.md、docs/dev/team-conventions.md、docs/product-design.md、docs/technical-design-supplement.md、docs/dev/runtime-foundation.md、docs/open-source-commercial-strategy.md
 - 检查 git status，理解当前工作区现状，避免覆盖未知改动
 - 如果任务命中仓库 skill，优先复用 .agents/skills/*/SKILL.md
 

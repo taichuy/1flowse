@@ -22,7 +22,7 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 ## 先读哪些事实
 
 - `AGENTS.md`
-- `docs/dev/user-preferences.md`
+- `docs/dev/team-conventions.md`
 - `docs/dev/runtime-foundation.md`
 - `docs/product-design.md`
 - `docs/open-source-commercial-strategy.md`
@@ -36,7 +36,8 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 - 详细清单、样例、重参考材料：`.agents/skills/<name>/references/*`
 - 当前仍成立的实现事实与优先级：`docs/dev/runtime-foundation.md`
 - 带日期的决策和实现留痕：`docs/history/*.md`
-- 用户明确表达且长期有效的偏好：`docs/dev/user-preferences.md`
+- 团队级共享协作约定：`docs/dev/team-conventions.md`
+- 当前开发者的本地私有记忆：`docs/.private/`（不提交）
 
 不要把所有东西都塞进 skill，也不要把 skill 本该承载的流程退回到对话里。
 
@@ -75,6 +76,7 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 - `docs/README.md` 和 `docs/dev/README.md` 的索引入口
 - 相关交叉引用的其他 skill
 - `docs/dev/runtime-foundation.md` 是否需要同步“当前协作事实”
+- `docs/adr/` 是否需要新增或更新 standing decision
 - `docs/history/*.md` 是否需要新增本轮优化留痕
 
 ## 验证要求
@@ -87,6 +89,6 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 ## 常见反模式
 
 - 把项目当前事实只写在 skill 里，不同步到 `runtime-foundation.md`
-- 把用户稳定偏好只写在 skill 里，不同步到 `user-preferences.md`
+- 把共享协作规则只写在 skill 里，不同步到 `team-conventions.md` / `AGENTS.md`
 - 直接搬用 Dify、n8n、superpowers 的术语和目录，假装仓库已经有那套基础设施
 - skill 名字在 README 里有，目录里没有；或者目录里有，索引里没人知道

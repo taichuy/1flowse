@@ -4,6 +4,7 @@
 
 - 本文只保留当前仍成立、且对后续开发有直接指导作用的运行时事实、结构热点和优先级。
 - 产品切口、开源/商业边界与版本分层的长期基线已独立收敛到 `docs/open-source-commercial-strategy.md`；本文不再承担这部分长线策略文案。
+- Shared collaboration rules now live in `docs/dev/team-conventions.md`; per-developer local notes live in `docs/.private/` and stay uncommitted; standing architecture / collaboration decisions live in `docs/adr/`.
 - `docs/.taichuy/` 只用于本地开发设计讨论素材和草稿，默认 git ignore，不作为仓库事实来源；除非用户明确要求，否则不应把其中内容当作当前基线。
 - 带日期的阶段性开发记录统一放在 `docs/history/`；已废弃文档统一放在 `docs/expired/`，避免与当前索引混放影响检索。
 - 2026-03-14 之前的旧版长文已归档到 `docs/expired/2026-03-14-runtime-foundation-history-expired.md`，压缩过程说明放在 `docs/history/2026-03-14-runtime-foundation-compression.md`。
@@ -14,6 +15,7 @@
 
 - 项目已经具备“可编排、可调试、可发布、可追溯”的后端基础骨架，不再是只有底座的空框架。
 - 当前仍未进入“只剩界面润色或人工全链路验收”的阶段，后续开发应继续围绕主业务闭环推进，因此本轮不触发人工界面验收通知脚本。
+- 2026-03-17 本轮把单人阶段的共享偏好模型升级成协作治理结构：共享协作约定改由 `docs/dev/team-conventions.md` 承载，`docs/dev/user-preferences.md` 退化为迁移说明，个人本地记忆改入 `docs/.private/`，并新增 `docs/adr/` 与 `safe-change-review` skill 作为长期决策记录和 P0 高风险审查入口。与此同时，shared repo canonical language 从本日开始切换为 English，后续新的共享治理文档 / ADR / skill 更新不再继续写成中文。
 - 2026-03-16 再次按 `AGENTS.md`、产品/技术/策略基线、`docs/history/` 与最近一次提交复核后，可以确认：当前项目基础框架已经足够承接持续功能开发，不需要回头重搭主骨架；现阶段的核心任务是沿既有主线继续治理 runtime / waiting / diagnostics / editor 热点，避免复杂度重新堆回单体模块。
 - 2026-03-16 全量健康度复核已通过一轮真实 smoke validation：后端 `api/.venv/Scripts/uv.exe run pytest -q` 共 `300 passed in 40.25s`，前端 `web/pnpm exec tsc --noEmit` 与 `web/pnpm lint` 均通过。当前“可继续功能开发”的判断不只来自文档推演，也来自现有主链验证。
 - 2026-03-16 本轮再按“用户层 / AI 与人协作层 / AI 治理层”三层闭环复核后，可以确认：用户层已经具备首页工作台、workflow editor、publish panel、workspace starter 与 sensitive access inbox 等最小操作面；AI 与人协作层已经具备 run detail、trace export、callback waiting lifecycle、approval timeline 等共享事实入口；AI 治理层已经把 credential / context / tool / published detail access control 收进统一主链。当前缺口已从“有没有统一 sensitive access timeline”进一步收窄到“waiting callback 联合排障、publish/editor 细部体验与 operator explanation 的持续细化”；其中敏感访问 explanation 主链已先通过 `decision_label / reason_label / policy_summary` 补到 run detail、publish detail、inbox 与 access-blocked 入口，随后继续把 callback waiting + approval pending 的联合解释收口到 execution node card 与 publish invocation detail，本轮又进一步把 published invocation detail 的 callback drilldown 拆成独立 section，并补上 latest ticket / late callback / blocker summary。最新留痕已补到 `docs/history/2026-03-16-architecture-priority-refresh.md`、`docs/history/2026-03-16-sensitive-access-explanation-refresh.md`、`docs/history/2026-03-16-callback-waiting-explanation-card.md` 与 `docs/history/2026-03-16-published-callback-drilldown-refactor.md`，同日此前相关判断继续保留在 `docs/history/2026-03-16-architecture-and-delivery-readiness-refresh.md` 与 `docs/history/2026-03-16-architecture-readiness-refresh.md`。
@@ -248,7 +250,9 @@
    - 在不提前引入重 IAM 或复杂多组织计费系统的前提下，先收敛 Team / Enterprise 最小治理模型与 API 预留，明确哪些属于 Community kernel、哪些属于商业治理能力，避免后续实现、README 和对外叙事再次混线。
 9. **P2：继续收敛 Community License 的执行边界**
    - 围绕 `workspace = tenant`、多租户托管、商业化对立面、前��品牌替换和白标分发等触发条件，继续补文档、术语定义和未来商业授权入口，避免许可证文本有了但执行口径仍模糊。
-10. **P3：继续完善 AI 协作 skill 的双层体系**
+10. **P3：继续把协作治理从单人约定迁到多人可审查协议**
+   - 继续把活跃的共享治理文档、skill 与 review 入口渐进迁到 English canonical，优先清理仍直接依赖 `docs/dev/user-preferences.md` 的活跃引用，并把高风险 prompt / skill / script / local-execution-boundary 变更默认接入 `safe-change-review`。目标不是做一次性大翻译，而是逐步把共享规则、ADR、审查总结和元流程 skill 收敛成多人可读、可审查、可持续维护的协议层。
+11. **P3：继续完善 AI 协作 skill 的双层体系**
    - 根据后续实现节奏，继续补强 backend refactor、runtime debugging、发布治理验证等高复用流程，并定期复核 skill 与 `AGENTS.md`、`runtime-foundation.md`、README 索引的一致性，避免 skill 再次漂移。
-11. **P3：把 OpenClaw-first README / demo / 首页入口收成可传播资产**
+12. **P3：把 OpenClaw-first README / demo / 首页入口收成可传播资产**
    - 在策略与授权边界稳定后，继续补 README 截图、demo 路径、首页文案和示例 workflow，让“黑盒变透明”的外部入口真正可演示、可传播、可复用。

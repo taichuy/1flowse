@@ -63,9 +63,10 @@
 3. `docs/open-source-commercial-strategy.md`
 4. `docs/technical-design-supplement.md`
 5. `docs/dev/runtime-foundation.md`
-6. `docs/dev/user-preferences.md`
+6. `docs/dev/team-conventions.md`
 7. `docs/history/`
-8. `.agents/skills/*/SKILL.md`
+8. `docs/adr/`
+9. `.agents/skills/*/SKILL.md`
 
 ## 本地开发
 
@@ -166,16 +167,21 @@ docker compose up -d --build
 - `docs/open-source-commercial-strategy.md`：OpenClaw-first 对外切口、开源/商业边界、版本分层和传播/付费对象。
 - `docs/technical-design-supplement.md`：插件兼容、插件 UI、安全、变量传递、调试模式、缓存、Durable Runtime 细节。
 - `docs/dev/runtime-foundation.md`：当前代码事实、结构热点、近期优先级。
-- `docs/dev/user-preferences.md`：稳定用户偏好与长期协作约束。
+- `docs/dev/team-conventions.md`：共享协作约定、审查守则与团队级工程偏好。
+- `docs/dev/user-preferences.md`：已废弃的单人阶段偏好入口，现仅保留迁移说明。
 - `docs/.taichuy/`：本地开发设计讨论素材和文案草稿，默认不进 Git，也不作为仓库事实基线。
+- `docs/.private/`：当前开发者自己的本地私有笔记目录，默认不进 Git，也不是共享事实来源。
+- `docs/adr/`：Architecture Decision Records 与长期协作决策。
 - `docs/history/`：按日期归档的开发记录、阶段性方案与验证留痕。
 - `docs/expired/`：已废弃但保留历史价值的文档。
+- Shared governance docs, ADRs, new skills, and newly added standing repo rules are English-first from 2026-03-17 onward; legacy Chinese documents can be migrated incrementally.
 
 ## AI 协作与 Skills
 
 - `.agents/skills/autonomous-development`：当用户要求 AI 作为持续迭代开发者时，用于按 7Flows 工程观判断阶段问题、单轮优先级和主链闭环推进方向。
 - `.agents/skills/development-closure`：一轮开发收尾时的验证、文档同步、提交与下一步规划闭环。
 - `.agents/skills/skill-governance`：优化 skill、AGENTS 规则和 AI 协作流程时的分层与索引治理。
+- `.agents/skills/safe-change-review`：合并前审查 prompt、skill、协作规范、脚本与本地执行边界这类 P0 高风险改动。
 - `.agents/skills/backend-code-review`：后端 review、运行时、迁移、发布接口、插件代理与安全边界审查。
 - `.agents/skills/backend-testing`：后端测试设计、补测、runtime 与 published surface 行为验证。
 - `.agents/skills/frontend-code-review`：前端页面、组件、工作流编辑器、调试和发布界面审查。

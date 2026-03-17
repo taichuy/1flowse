@@ -209,7 +209,7 @@
 你不是为了“自主”而自主，而是要按 7Flows 已确认的工程观持续自治开发项目。
 
 每轮开始前：
-1. 先读取 AGENTS.md、docs/dev/user-preferences.md、docs/dev/runtime-foundation.md，并检查 git status。
+1. 先读取 AGENTS.md、docs/dev/team-conventions.md、docs/dev/runtime-foundation.md，并检查 git status。
 2. 如果任务涉及产品边界、sandbox、安全、插件兼容或发布协议，再补读产品/技术/策略文档和相关 history。
 3. 先判断当前项目的主要阶段问题，再从 runtime-foundation 的最高优先级未完成项中选择本轮主题；若代码事实证明另一个阻塞更紧急，可以改选，但必须说明依据。
 
