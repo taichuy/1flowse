@@ -1097,6 +1097,41 @@ def test_create_workflow_rejects_sandbox_code_dependency_contract_without_backen
     assert "builtin package set" in detail.lower()
 
 
+def test_create_workflow_rejects_sandbox_code_runtime_policy_dependency_contract_without_backend_support(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            dependency_modes=("builtin",),
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Sandbox Code Runtime Policy Dependency Workflow",
+            "definition": _sandbox_code_definition(
+                runtime_policy={
+                    "execution": {
+                        "class": "microvm",
+                        "dependencyMode": "builtin",
+                        "builtinPackageSet": "py-data-basic",
+                    }
+                }
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "Sandbox code node 'sandbox:Sandbox'" in detail
+    assert "builtin package set" in detail.lower()
+
+
 def test_create_workflow_rejects_unsupported_tool_execution_class(client: TestClient) -> None:
     adapter_response = client.post(
         "/api/plugins/adapters",

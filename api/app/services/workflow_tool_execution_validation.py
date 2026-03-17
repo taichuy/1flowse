@@ -5,7 +5,10 @@ from typing import Any
 
 from app.schemas.plugin import PluginToolItem
 from app.services.plugin_runtime import CompatibilityAdapterRegistration
-from app.services.runtime_execution_policy import resolve_execution_policy
+from app.services.runtime_execution_policy import (
+    resolve_execution_policy,
+    resolve_sandbox_code_dependency_contract,
+)
 from app.services.sandbox_backends import (
     SandboxBackendClient,
     SandboxExecutionRequest,
@@ -305,6 +308,10 @@ def _collect_sandbox_code_execution_issues(
     execution_policy = resolve_execution_policy(node)
     execution_class = execution_policy.execution_class
     context = f"Sandbox code node '{node_label}'"
+    dependency_contract = resolve_sandbox_code_dependency_contract(
+        config=config,
+        execution_policy=execution_policy,
+    )
 
     if execution_class == "subprocess":
         return []
@@ -334,22 +341,13 @@ def _collect_sandbox_code_execution_issues(
             node_input={},
             trace_id=f"node:{node.get('id')}:definition-validation",
             profile=execution_policy.profile,
-            dependency_mode=_normalize_optional_dependency_mode(config.get("dependencyMode")),
-            builtin_package_set=(
-                _normalize_optional_string(config.get("builtinPackageSet"))
-                if _normalize_optional_dependency_mode(config.get("dependencyMode")) == "builtin"
-                else None
-            ),
-            dependency_ref=(
-                _normalize_optional_string(config.get("dependencyRef"))
-                if _normalize_optional_dependency_mode(config.get("dependencyMode"))
-                == "dependency_ref"
-                else None
-            ),
+            dependency_mode=dependency_contract.dependency_mode,
+            builtin_package_set=dependency_contract.builtin_package_set,
+            dependency_ref=dependency_contract.dependency_ref,
             timeout_ms=execution_policy.timeout_ms,
             network_policy=execution_policy.network_policy,
             filesystem_policy=execution_policy.filesystem_policy,
-            backend_extensions=_normalize_optional_object(config.get("backendExtensions")),
+            backend_extensions=dependency_contract.backend_extensions,
         )
     )
     if selection.available:

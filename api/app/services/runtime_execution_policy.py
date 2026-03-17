@@ -76,6 +76,14 @@ class ResolvedExecutionPolicy:
         }
 
 
+@dataclass(frozen=True)
+class ResolvedSandboxCodeDependencyContract:
+    dependency_mode: str | None = None
+    builtin_package_set: str | None = None
+    dependency_ref: str | None = None
+    backend_extensions: dict[str, Any] | None = None
+
+
 def default_execution_class_for_node_type(node_type: str) -> str:
     if node_type == "sandbox_code":
         return "sandbox"
@@ -86,6 +94,45 @@ def default_execution_class_for_tool_ecosystem(ecosystem: str) -> str:
     if ecosystem == "native":
         return "inline"
     return "subprocess"
+
+
+def resolve_sandbox_code_dependency_contract(
+    *,
+    config: dict[str, Any] | None,
+    execution_policy: ResolvedExecutionPolicy,
+) -> ResolvedSandboxCodeDependencyContract:
+    sandbox_config = config if isinstance(config, dict) else {}
+    dependency_mode = execution_policy.dependency_mode or _normalize_enum(
+        sandbox_config.get("dependencyMode"),
+        _DEPENDENCY_MODES,
+    )
+
+    builtin_package_set = execution_policy.builtin_package_set
+    if builtin_package_set is None:
+        builtin_package_set = _normalize_optional_string(
+            sandbox_config.get("builtinPackageSet")
+        )
+    if dependency_mode != "builtin":
+        builtin_package_set = None
+
+    dependency_ref = execution_policy.dependency_ref
+    if dependency_ref is None:
+        dependency_ref = _normalize_optional_string(sandbox_config.get("dependencyRef"))
+    if dependency_mode != "dependency_ref":
+        dependency_ref = None
+
+    backend_extensions = execution_policy.backend_extensions
+    if backend_extensions is None:
+        backend_extensions = _normalize_backend_extensions(
+            sandbox_config.get("backendExtensions")
+        )
+
+    return ResolvedSandboxCodeDependencyContract(
+        dependency_mode=dependency_mode,
+        builtin_package_set=builtin_package_set,
+        dependency_ref=dependency_ref,
+        backend_extensions=backend_extensions,
+    )
 
 
 def _resolve_tool_execution_from_payload(

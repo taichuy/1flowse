@@ -31,7 +31,7 @@ const PREFLIGHT_CATEGORY_LABELS: Record<string, string> = {
   schema: "contract/schema",
   node_support: "node support",
   tool_reference: "tool reference",
-  tool_execution: "tool execution",
+  tool_execution: "execution capability",
   publish_identity: "publish identity",
   publish_version: "publish version",
   starter_portability: "starter portability",
@@ -259,7 +259,7 @@ export function useWorkflowEditorValidation({
           ? `当前 workflow definition 还有 tool catalog 引用待修正问题：${toolReferenceValidationSummary}${toolReferenceValidationSummary.endsWith("。") ? "" : "。"}请先修正 tool binding / LLM Agent tool policy 后再保存。`
           : null,
         toolExecutionValidationSummary
-          ? `当前 workflow definition 还有 tool execution capability 待修正问题：${toolExecutionValidationSummary}${toolExecutionValidationSummary.endsWith("。") ? "" : "。"}请先对齐 adapter 绑定、execution class 与 sandbox readiness，再继续保存。`
+          ? `当前 workflow definition 还有 execution capability 待修正问题：${toolExecutionValidationSummary}${toolExecutionValidationSummary.endsWith("。") ? "" : "。"}请先对齐 adapter 绑定、execution class 与 sandbox readiness，再继续保存。`
           : null,
         publishVersionValidationSummary
           ? `当前 workflow definition 还有 publish version 引用待修正问题：${publishVersionValidationSummary}${publishVersionValidationSummary.endsWith("。") ? "" : "。"}如果 endpoint 要跟随本次保存版本，请把 workflowVersion 留空。`

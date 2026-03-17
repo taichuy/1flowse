@@ -402,6 +402,62 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
     }
 
 
+def test_runtime_service_sandbox_code_uses_runtime_policy_dependency_contract(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-sandbox-runtime-policy-deps",
+        name="Sandbox Runtime Policy Dependency Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "name": "Sandbox",
+                    "config": {
+                        "language": "python",
+                        "code": 'result = {"answer": "remote"}',
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "dependencyMode": "builtin",
+                            "builtinPackageSet": "py-data-basic",
+                            "backendExtensions": {
+                                "mountPreset": "analytics",
+                            },
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _SandboxBackendClientStub()
+    RuntimeService(sandbox_backend_client=sandbox_backend_client).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "remote"},
+    )
+
+    assert len(sandbox_backend_client.requests) == 1
+    assert sandbox_backend_client.requests[0].dependency_mode == "builtin"
+    assert sandbox_backend_client.requests[0].builtin_package_set == "py-data-basic"
+    assert sandbox_backend_client.requests[0].backend_extensions == {
+        "mountPreset": "analytics"
+    }
+
+
 class _DependencyMismatchSandboxBackendClientStub:
     def __init__(self) -> None:
         self.describe_requests: list[SandboxExecutionRequest] = []

@@ -4,6 +4,7 @@ import type {
 } from "@/lib/get-plugin-registry";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
+import { resolveDefaultExecutionClass } from "@/lib/workflow-runtime-policy";
 import {
   buildDefaultExecutionCapabilityIssue,
   buildExecutionCapabilityIssue,
@@ -25,7 +26,7 @@ export function buildWorkflowToolExecutionValidationIssues(
   sandboxReadiness?: SandboxReadinessCheck | null,
   workspaceId = "default"
 ): WorkflowToolExecutionValidationIssue[] {
-  if (!Array.isArray(definition?.nodes) || tools.length === 0) {
+  if (!Array.isArray(definition?.nodes)) {
     return [];
   }
 
@@ -45,6 +46,22 @@ export function buildWorkflowToolExecutionValidationIssues(
     if (node?.type === "tool") {
       issues.push(
         ...buildToolNodeExecutionIssues({
+          node,
+          nodeId,
+          nodeName,
+          nodeIndex,
+          config,
+          toolIndex,
+          adapters: visibleAdapters,
+          sandboxReadiness
+        })
+      );
+      return;
+    }
+
+    if (node?.type === "sandbox_code") {
+      issues.push(
+        ...buildSandboxCodeExecutionIssues({
           node,
           nodeId,
           nodeName,
@@ -80,6 +97,207 @@ export function buildWorkflowToolExecutionValidationIssues(
     }
   });
   return dedupedIssues;
+}
+
+function buildSandboxCodeExecutionIssues({
+  node,
+  nodeId,
+  nodeName,
+  nodeIndex,
+  config,
+  sandboxReadiness
+}: WorkflowToolExecutionValidationContext & {
+  node: { runtimePolicy?: unknown };
+  sandboxReadiness?: SandboxReadinessCheck | null;
+}): WorkflowToolExecutionValidationIssue[] {
+  const execution = toRecord(toRecord(node?.runtimePolicy)?.execution);
+  const requestedExecutionClass =
+    extractExplicitExecutionClass(execution) ?? resolveDefaultExecutionClass("sandbox_code");
+  const context = `Sandbox code 节点 ${nodeName} (${nodeId})`;
+  const executionPath = `nodes.${nodeIndex}.runtimePolicy.execution`;
+
+  if (requestedExecutionClass === "subprocess") {
+    return [];
+  }
+
+  if (requestedExecutionClass === "inline") {
+    return [
+      {
+        nodeId,
+        nodeName,
+        message:
+          `${context} 不能使用 execution class 'inline'。当前 host-controlled MVP 路径请显式改用 ` +
+          `'subprocess'，或先为 'sandbox' / 'microvm' 准备兼容 backend。`,
+        path: executionPath,
+        field: "execution"
+      }
+    ];
+  }
+
+  if (requestedExecutionClass !== "sandbox" && requestedExecutionClass !== "microvm") {
+    return [
+      {
+        nodeId,
+        nodeName,
+        message:
+          `${context} 请求了不受支持的 execution class '${requestedExecutionClass}'。强隔离路径在 ` +
+          "兼容 sandbox backend 就绪前必须 fail-closed。",
+        path: executionPath,
+        field: "execution"
+      }
+    ];
+  }
+
+  if (!sandboxReadiness) {
+    return [];
+  }
+
+  const readiness = sandboxReadiness.execution_classes.find(
+    (item) => item.execution_class === requestedExecutionClass
+  );
+  const language = normalizeString(config.language)?.toLowerCase() ?? "python";
+  const profile = normalizeString(execution?.profile);
+  const dependencyMode = resolveSandboxDependencyMode({ config, execution });
+  const builtinPackageSet =
+    dependencyMode === "builtin"
+      ? normalizeString(execution?.builtinPackageSet) ?? normalizeString(config.builtinPackageSet)
+      : null;
+  const backendExtensions =
+    toRecord(execution?.backendExtensions) ?? toRecord(config.backendExtensions);
+  const networkPolicy = normalizeString(execution?.networkPolicy);
+  const filesystemPolicy = normalizeString(execution?.filesystemPolicy);
+
+  if (readiness?.available) {
+    const supportedLanguages = readiness.supported_languages ?? sandboxReadiness.supported_languages;
+    if (supportedLanguages.length > 0 && !supportedLanguages.includes(language)) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还没有暴露 ` +
+            `language = ${language}，sandbox_code 不能稳定落到兼容后端。`,
+          path: `nodes.${nodeIndex}.config.language`,
+          field: "language"
+        }
+      ];
+    }
+
+    const supportedProfiles = readiness.supported_profiles ?? sandboxReadiness.supported_profiles;
+    if (profile && supportedProfiles.length > 0 && !supportedProfiles.includes(profile)) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass} 并附带 profile = ${profile}，但当前 ` +
+            "sandbox readiness 聚合视图还没有暴露该 profile，sandbox_code 不能稳定落到兼容后端。",
+          path: executionPath,
+          field: "execution"
+        }
+      ];
+    }
+
+    const supportedDependencyModes =
+      readiness.supported_dependency_modes ?? sandboxReadiness.supported_dependency_modes;
+    if (dependencyMode && !supportedDependencyModes.includes(dependencyMode)) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还不支持 ` +
+            `dependencyMode = ${dependencyMode}，sandbox_code 不能稳定落到对应强隔离后端。`,
+          path: executionPath,
+          field: "execution"
+        }
+      ];
+    }
+
+    if (
+      builtinPackageSet &&
+      !(readiness.supports_builtin_package_sets ?? sandboxReadiness.supports_builtin_package_sets)
+    ) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass} 并附带 builtinPackageSet，但当前 ` +
+            "sandbox readiness 聚合视图还不支持 builtin package set hints，sandbox_code 不能稳定落到兼容后端。",
+          path: executionPath,
+          field: "execution"
+        }
+      ];
+    }
+
+    if (
+      backendExtensions &&
+      Object.keys(backendExtensions).length > 0 &&
+      !(readiness.supports_backend_extensions ?? sandboxReadiness.supports_backend_extensions)
+    ) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass} 并附带 backendExtensions，但当前 ` +
+            "sandbox readiness 聚合视图还不支持 backendExtensions payload，sandbox_code 不能稳定落到兼容后端。",
+          path: executionPath,
+          field: "execution"
+        }
+      ];
+    }
+
+    if (
+      networkPolicy &&
+      !(readiness.supports_network_policy ?? sandboxReadiness.supports_network_policy)
+    ) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass} 并附带 networkPolicy = ${networkPolicy}，但当前 ` +
+            "sandbox readiness 聚合视图还不支持 networkPolicy hints，sandbox_code 不能稳定落到兼容后端。",
+          path: executionPath,
+          field: "execution"
+        }
+      ];
+    }
+
+    if (
+      filesystemPolicy &&
+      !(readiness.supports_filesystem_policy ?? sandboxReadiness.supports_filesystem_policy)
+    ) {
+      return [
+        {
+          nodeId,
+          nodeName,
+          message:
+            `${context} 显式请求了 ${requestedExecutionClass} 并附带 filesystemPolicy = ${filesystemPolicy}，但当前 ` +
+            "sandbox readiness 聚合视图还不支持 filesystemPolicy hints，sandbox_code 不能稳定落到兼容后端。",
+          path: executionPath,
+          field: "execution"
+        }
+      ];
+    }
+
+    return [];
+  }
+
+  const reason = readiness?.reason?.trim();
+  return [
+    {
+      nodeId,
+      nodeName,
+      message:
+        `${context} 请求 execution class '${requestedExecutionClass}'，但当前没有兼容的 sandbox backend 可用。` +
+        `${reason ? ` ${reason}` : ""}`,
+      path: executionPath,
+      field: "execution"
+    }
+  ];
 }
 
 function buildToolNodeExecutionIssues({
@@ -359,6 +577,24 @@ function buildAgentExecutionIssues({
 
 function normalizeString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeDependencyMode(value: unknown) {
+  const normalized = normalizeString(value)?.toLowerCase();
+  if (!normalized || !["builtin", "dependency_ref", "backend_managed"].includes(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function resolveSandboxDependencyMode({
+  config,
+  execution
+}: {
+  config: Record<string, unknown>;
+  execution: Record<string, unknown> | null;
+}) {
+  return normalizeDependencyMode(execution?.dependencyMode) ?? normalizeDependencyMode(config.dependencyMode);
 }
 
 function normalizeToolIdList(value: unknown) {

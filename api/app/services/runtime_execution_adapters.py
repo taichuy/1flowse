@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session
 from app.models.run import NodeRun
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
-from app.services.runtime_execution_policy import ResolvedExecutionPolicy
+from app.services.runtime_execution_policy import (
+    ResolvedExecutionPolicy,
+    resolve_sandbox_code_dependency_contract,
+)
 from app.services.runtime_sandbox_code import HostSandboxCodeExecutor
 from app.services.runtime_types import (
     AuthorizedContextRefs,
@@ -70,15 +73,23 @@ def _normalize_backend_extensions(value: object) -> dict[str, Any] | None:
     return dict(value)
 
 
-def _parse_sandbox_code_dispatch_config(config: dict[str, Any]) -> SandboxCodeDispatchConfig:
+def _parse_sandbox_code_dispatch_config(
+    config: dict[str, Any],
+    *,
+    execution_policy: ResolvedExecutionPolicy,
+) -> SandboxCodeDispatchConfig:
     language = str(config.get("language") or "python").strip().lower() or "python"
     code = str(config.get("code") or "")
     if not code.strip():
         raise WorkflowExecutionError("sandbox_code nodes must define a non-empty config.code.")
 
-    dependency_mode = _normalize_optional_string(config.get("dependencyMode"))
-    builtin_package_set = _normalize_optional_string(config.get("builtinPackageSet"))
-    dependency_ref = _normalize_optional_string(config.get("dependencyRef"))
+    dependency_contract = resolve_sandbox_code_dependency_contract(
+        config=config,
+        execution_policy=execution_policy,
+    )
+    dependency_mode = dependency_contract.dependency_mode
+    builtin_package_set = dependency_contract.builtin_package_set
+    dependency_ref = dependency_contract.dependency_ref
     if builtin_package_set is not None and dependency_mode != "builtin":
         raise WorkflowExecutionError(
             "sandbox_code builtinPackageSet requires dependencyMode 'builtin'."
@@ -94,7 +105,9 @@ def _parse_sandbox_code_dispatch_config(config: dict[str, Any]) -> SandboxCodeDi
         dependency_mode=dependency_mode,
         builtin_package_set=builtin_package_set,
         dependency_ref=dependency_ref,
-        backend_extensions=_normalize_backend_extensions(config.get("backendExtensions")),
+        backend_extensions=_normalize_backend_extensions(
+            dependency_contract.backend_extensions
+        ),
     )
 
 
@@ -227,7 +240,10 @@ class RemoteSandboxExecutionAdapter:
 
     def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
         config = dict(request.node.get("config") or {})
-        dispatch_config = _parse_sandbox_code_dispatch_config(config)
+        dispatch_config = _parse_sandbox_code_dispatch_config(
+            config,
+            execution_policy=request.execution_policy,
+        )
         language = dispatch_config.language
         dependency_mode = dispatch_config.dependency_mode
         builtin_package_set = dispatch_config.builtin_package_set
@@ -377,7 +393,10 @@ class RuntimeExecutionAdapterRegistry:
         if execution_policy.execution_class in {"sandbox", "microvm"}:
             config = dict(node.get("config") or {})
             try:
-                dispatch_config = _parse_sandbox_code_dispatch_config(config)
+                dispatch_config = _parse_sandbox_code_dispatch_config(
+                    config,
+                    execution_policy=execution_policy,
+                )
             except WorkflowExecutionError as exc:
                 return NodeExecutionAvailability(
                     available=False,
