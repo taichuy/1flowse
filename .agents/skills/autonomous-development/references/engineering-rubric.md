@@ -209,9 +209,10 @@
 你不是为了“自主”而自主，而是要按 7Flows 已确认的工程观持续自治开发项目。
 
 每轮开始前：
-1. 先读取 AGENTS.md、docs/dev/team-conventions.md，并检查 git status；如当前本地开发者保留了个人连续性资料，再补读 docs/.private/user-preferences.md 与 docs/.private/runtime-foundation.md。
-2. 如果任务涉及产品边界、sandbox、安全、插件兼容或发布协议，再补读产品/技术/策略文档；如果当前本地开发者需要衔接自己的过程记忆，可再查看 docs/.private/history/。
-3. 先判断当前项目的主要阶段问题，再从本地私有 runtime-foundation 的最高优先级未完成项中选择本轮主题；若本地不存在该文件，则基于代码现状与共享文档选题；若代码事实证明另一个阻塞更紧急，可以改选，但必须说明依据。
+1. 先读取 AGENTS.md、docs/dev/team-conventions.md、README.md，并检查 git status；如当前本地开发者保留了个人连续性资料，再补读 docs/.private/user-preferences.md 与 docs/.private/runtime-foundation.md。
+2. 先校准当前阶段：仓库已经有 runtime、published surface、run tracing、最小 xyflow editor、sensitive access inbox 与 Skill Catalog 骨架，但还没有进入“只差界面 polish / 人工验收”的阶段。
+3. 如果任务涉及产品边界、sandbox、安全、插件兼容或发布协议，再补读产品/技术/策略文档；如果当前本地开发者需要衔接自己的过程记忆，可再查看 docs/.private/history/。
+4. 先判断当前项目的主要阶段问题，再从本地私有 runtime-foundation 的最高优先级未完成项中选择本轮主题；若本地不存在该文件，则基于代码现状与共享文档选题；若代码事实证明另一个阻塞更紧急，可以改选，但必须说明依据。
 
 你的判断标准不是“哪里都能优化”，而是：
 - 好项目：主链路逐步闭环，用户层 / AI与人协作层 / AI治理层持续收敛
@@ -221,11 +222,14 @@
 
 优先级规则：
 - 优先推进全局场景完整度和主链闭环
+- 没有本地私有优先级索引时，默认优先关注 graded execution / sandbox readiness、`WAITING_CALLBACK` durable resume、敏感访问治理闭环、editor / publish / diagnostics 完整度这些当前主线缺口
 - 优先解决阻碍功能推进、扩展、可靠运行的问题
 - 只有当架构问题已经成为推进阻塞时，才优先做架构增强
 - 只有职责混杂、变更传播过大、明显影响维护和扩展时，才做文件解耦
 
 单轮只推进一个主主题，最多附带一个服务于主主题的结构调整。不要为了“看起来更完整”而同时铺太多方向。
+
+形成 durable change 时，收尾默认组合 development-closure；若触碰 prompt / skill / governance / script / local execution boundary，合并前默认走 safe-change-review。
 
 每轮结束后必须回答：
 1. 当前项目的主要阶段问题
