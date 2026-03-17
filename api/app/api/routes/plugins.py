@@ -18,6 +18,11 @@ from app.services.plugin_runtime import (
     get_compatibility_adapter_health_checker,
     get_plugin_registry,
 )
+from app.services.tool_execution_governance import (
+    build_tool_sensitivity_index,
+    governed_default_execution_class,
+    resolve_tool_sensitivity_level,
+)
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
@@ -43,11 +48,26 @@ def _serialize_adapter(adapter_id: str) -> PluginAdapterRegistrationItem:
     )
 
 
-def _serialize_tool(tool_id: str) -> PluginToolItem:
+def _serialize_tool(
+    tool_id: str,
+    *,
+    sensitivity_index: dict[tuple[str, str | None, str | None], str] | None = None,
+) -> PluginToolItem:
     registry = get_plugin_registry()
     tool = registry.get_tool(tool_id)
     if tool is None:
         raise ValueError(f"Plugin tool '{tool_id}' is not registered.")
+
+    sensitivity_level = resolve_tool_sensitivity_level(
+        tool_id=tool.id,
+        ecosystem=tool.ecosystem,
+        adapter_id=None,
+        sensitivity_index=sensitivity_index,
+    )
+    default_execution_class = governed_default_execution_class(
+        configured_default_execution_class=tool.default_execution_class,
+        sensitivity_level=sensitivity_level,
+    )
 
     return PluginToolItem(
         id=tool.id,
@@ -60,7 +80,8 @@ def _serialize_tool(tool_id: str) -> PluginToolItem:
         plugin_meta=tool.plugin_meta,
         callable=(tool.ecosystem != "native") or registry.has_native_invoker(tool.id),
         supported_execution_classes=list(tool.supported_execution_classes),
-        default_execution_class=tool.default_execution_class,
+        default_execution_class=default_execution_class,
+        sensitivity_level=sensitivity_level,
     )
 
 
@@ -141,11 +162,12 @@ def sync_plugin_adapter_tools(
     for tool in tools:
         registry.register_tool(tool)
 
+    sensitivity_index = build_tool_sensitivity_index(db)
     return PluginToolSyncResult(
         adapter_id=adapter.id,
         ecosystem=adapter.ecosystem,
         discovered_count=len(tools),
-        tools=[_serialize_tool(tool.id) for tool in tools],
+        tools=[_serialize_tool(tool.id, sensitivity_index=sensitivity_index) for tool in tools],
     )
 
 
@@ -155,7 +177,11 @@ def list_plugin_tools(
 ) -> list[PluginToolItem]:
     registry = get_plugin_registry()
     get_plugin_registry_store().hydrate_registry(db, registry)
-    return [_serialize_tool(tool.id) for tool in registry.list_tools()]
+    sensitivity_index = build_tool_sensitivity_index(db)
+    return [
+        _serialize_tool(tool.id, sensitivity_index=sensitivity_index)
+        for tool in registry.list_tools()
+    ]
 
 
 @router.post(
@@ -184,4 +210,5 @@ def register_plugin_tool(
     get_plugin_registry_store().upsert_tool(db, tool)
     db.commit()
     registry.register_tool(tool)
-    return _serialize_tool(payload.id)
+    sensitivity_index = build_tool_sensitivity_index(db)
+    return _serialize_tool(payload.id, sensitivity_index=sensitivity_index)

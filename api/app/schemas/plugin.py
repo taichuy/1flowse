@@ -72,6 +72,7 @@ class PluginToolItem(BaseModel):
     callable: bool
     supported_execution_classes: list[str] = Field(default_factory=list)
     default_execution_class: str | None = None
+    sensitivity_level: Literal["L0", "L1", "L2", "L3"] | None = None
 
 
 class PluginToolSyncResult(BaseModel):

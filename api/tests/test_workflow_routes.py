@@ -1014,6 +1014,67 @@ def test_create_workflow_accepts_supported_tool_execution_class(
     assert response.status_code == 201
 
 
+def test_create_workflow_rejects_sensitivity_driven_default_execution_when_adapter_not_ready(
+    client: TestClient,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-sensitive-default",
+            "ecosystem": "compat:dify-sensitive",
+            "endpoint": "http://adapter.local/dify-sensitive",
+            "supported_execution_classes": ["subprocess"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-sensitive:plugin:demo/search",
+            "name": "Sensitive Search",
+            "ecosystem": "compat:dify-sensitive",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        },
+    )
+    assert tool_response.status_code == 201
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Sensitive Search Capability",
+            "sensitivity_level": "L2",
+            "source": "local_capability",
+            "metadata": {
+                "tool_id": "compat:dify-sensitive:plugin:demo/search",
+                "ecosystem": "compat:dify-sensitive",
+                "adapter_id": "dify-sensitive-default",
+            },
+        },
+    )
+    assert resource_response.status_code == 201
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Sensitivity Driven Default Execution Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="compat:dify-sensitive:plugin:demo/search",
+                ecosystem="compat:dify-sensitive",
+                adapter_id="dify-sensitive-default",
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "tool execution capabilities" in detail
+    assert "default execution class 'sandbox'" in detail
+    assert "dify-sensitive-default" in detail
+
+
 def test_create_workflow_accepts_native_tool_declared_sandbox_execution(
     client: TestClient,
     monkeypatch,

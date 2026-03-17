@@ -254,7 +254,13 @@ function normalizeToolItem(input: Record<string, unknown>): PluginToolRegistryIt
     plugin_meta: isRecord(input.plugin_meta) ? { ...input.plugin_meta } : null,
     callable: Boolean(input.callable),
     supported_execution_classes: asStringArray(input.supported_execution_classes),
-    default_execution_class: asOptionalString(input.default_execution_class)
+    default_execution_class: asOptionalString(input.default_execution_class),
+    sensitivity_level: asOptionalString(input.sensitivity_level) as
+      | "L0"
+      | "L1"
+      | "L2"
+      | "L3"
+      | null
   };
 }
 

@@ -116,6 +116,7 @@ def test_register_and_list_plugin_tool(client, monkeypatch) -> None:
         "callable": True,
         "supported_execution_classes": [],
         "default_execution_class": None,
+        "sensitivity_level": None,
     }
 
     list_response = client.get("/api/plugins/tools")
@@ -134,6 +135,7 @@ def test_register_and_list_plugin_tool(client, monkeypatch) -> None:
             "callable": True,
             "supported_execution_classes": ["inline"],
             "default_execution_class": None,
+            "sensitivity_level": None,
         },
         create_response.json(),
     ]
@@ -219,7 +221,60 @@ def test_sync_plugin_tools_from_adapter(client, monkeypatch) -> None:
                 "callable": True,
                 "supported_execution_classes": ["subprocess", "microvm"],
                 "default_execution_class": "subprocess",
+                "sensitivity_level": None,
             }
         ],
     }
     assert registry.get_tool("compat:dify:plugin:demo/search") is not None
+
+
+def test_list_plugin_tools_exposes_sensitivity_driven_default_execution(
+    client,
+    monkeypatch,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Risk Search",
+            supported_execution_classes=("inline", "sandbox"),
+        ),
+        invoker=lambda request: {"ok": True},
+    )
+    monkeypatch.setattr(plugin_routes, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(
+        plugin_routes,
+        "get_compatibility_adapter_health_checker",
+        lambda: _StaticHealthChecker(status="up"),
+    )
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Risk Search Capability",
+            "sensitivity_level": "L2",
+            "source": "local_capability",
+            "metadata": {"tool_id": "native.risk-search", "ecosystem": "native"},
+        },
+    )
+    assert resource_response.status_code == 201
+
+    response = client.get("/api/plugins/tools")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": "native.risk-search",
+            "name": "Risk Search",
+            "ecosystem": "native",
+            "description": "",
+            "input_schema": {},
+            "output_schema": None,
+            "source": "builtin",
+            "plugin_meta": None,
+            "callable": True,
+            "supported_execution_classes": ["inline", "sandbox"],
+            "default_execution_class": "sandbox",
+            "sensitivity_level": "L2",
+        }
+    ]

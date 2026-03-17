@@ -25,6 +25,7 @@ export type PluginToolRegistryItem = {
   callable: boolean;
   supported_execution_classes: string[];
   default_execution_class?: string | null;
+  sensitivity_level?: "L0" | "L1" | "L2" | "L3" | null;
 };
 
 export type PluginRegistrySnapshot = {

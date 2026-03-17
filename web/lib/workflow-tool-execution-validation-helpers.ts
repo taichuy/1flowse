@@ -159,6 +159,7 @@ export function buildDefaultExecutionCapabilityIssue({
   if (!defaultExecutionClass) {
     return null;
   }
+  const defaultReason = buildSensitivityReason(tool.sensitivity_level, defaultExecutionClass);
 
   if (tool.ecosystem === "native") {
     const supportedExecutionClasses = tool.supported_execution_classes?.length
@@ -170,7 +171,7 @@ export function buildDefaultExecutionCapabilityIssue({
         nodeName,
         message: `${context} 绑定的原生工具 ${toolId} 默认执行级别是 ${defaultExecutionClass}，但当前只支持 ${supportedExecutionClasses.join(
           ", "
-        )}。`,
+        )}。${defaultReason}`,
         path,
         field
       };
@@ -202,7 +203,7 @@ export function buildDefaultExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。`,
+      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。${defaultReason}`,
       path,
       field
     };
@@ -217,7 +218,7 @@ export function buildDefaultExecutionCapabilityIssue({
       nodeName,
       message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
         ", "
-      )}。`,
+      )}。${defaultReason}`,
       path,
       field
     };
@@ -357,6 +358,16 @@ function normalizeStrongDefaultExecutionClass(value: unknown) {
     return null;
   }
   return normalized;
+}
+
+function buildSensitivityReason(
+  sensitivityLevel: "L0" | "L1" | "L2" | "L3" | null | undefined,
+  defaultExecutionClass: string
+) {
+  if (!sensitivityLevel || !["L2", "L3"].includes(sensitivityLevel)) {
+    return "";
+  }
+  return ` 当前 tool sensitivity level 为 ${sensitivityLevel}，默认执行级别已按治理规则收口到 ${defaultExecutionClass}。`;
 }
 
 function normalizeString(value: unknown) {

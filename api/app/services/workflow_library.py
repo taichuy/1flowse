@@ -16,6 +16,11 @@ from app.schemas.workflow_library import (
 )
 from app.services.plugin_registry_store import get_plugin_registry_store
 from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_plugin_registry
+from app.services.tool_execution_governance import (
+    build_tool_sensitivity_index,
+    governed_default_execution_class,
+    resolve_tool_sensitivity_level,
+)
 from app.services.workflow_library_catalog import (
     build_builtin_starters,
     build_node_catalog_items,
@@ -67,10 +72,15 @@ class WorkflowLibraryService:
         registry = get_plugin_registry()
         get_plugin_registry_store().hydrate_registry(db, registry)
         tool_adapter_ids = self._load_tool_adapter_ids(db)
+        sensitivity_index = build_tool_sensitivity_index(db)
         adapters_by_id = {adapter.id: adapter for adapter in registry.list_adapters()}
 
         return [
-            self._serialize_tool_definition(tool)
+            self._serialize_tool_definition(
+                tool,
+                adapter_id=tool_adapter_ids.get(tool.id),
+                sensitivity_index=sensitivity_index,
+            )
             for tool in sorted(
                 (
                     tool
@@ -150,8 +160,24 @@ class WorkflowLibraryService:
             for item in (service.serialize(record) for record in records)
         ]
 
-    def _serialize_tool_definition(self, tool) -> PluginToolItem:
+    def _serialize_tool_definition(
+        self,
+        tool,
+        *,
+        adapter_id: str | None,
+        sensitivity_index: dict[tuple[str, str | None, str | None], str] | None,
+    ) -> PluginToolItem:
         registry = get_plugin_registry()
+        sensitivity_level = resolve_tool_sensitivity_level(
+            tool_id=tool.id,
+            ecosystem=tool.ecosystem,
+            adapter_id=adapter_id,
+            sensitivity_index=sensitivity_index,
+        )
+        default_execution_class = governed_default_execution_class(
+            configured_default_execution_class=tool.default_execution_class,
+            sensitivity_level=sensitivity_level,
+        )
         return PluginToolItem(
             id=tool.id,
             name=tool.name,
@@ -167,7 +193,8 @@ class WorkflowLibraryService:
             plugin_meta=deepcopy(tool.plugin_meta) if isinstance(tool.plugin_meta, dict) else None,
             callable=(tool.ecosystem != "native") or registry.has_native_invoker(tool.id),
             supported_execution_classes=list(tool.supported_execution_classes),
-            default_execution_class=tool.default_execution_class,
+            default_execution_class=default_execution_class,
+            sensitivity_level=sensitivity_level,
         )
 
     def _load_tool_adapter_ids(

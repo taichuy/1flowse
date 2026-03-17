@@ -19,6 +19,7 @@ from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_types import ToolExecutionResult, WorkflowExecutionError
 from app.services.sensitive_access_control import SensitiveAccessControlService
 from app.services.tool_execution_events import build_tool_execution_error_events
+from app.services.tool_execution_governance import governed_default_execution_class
 
 
 def _utcnow() -> datetime:
@@ -97,14 +98,37 @@ class ToolGateway:
         runtime_execution = (
             execution_policy.as_runtime_payload() if execution_policy is not None else {}
         )
+        sensitivity_level = None
+        if tool_record is not None:
+            sensitive_resource = self._sensitive_access.find_tool_resource(
+                db,
+                run_id=run_id,
+                tool_id=tool_id,
+                ecosystem=ecosystem,
+                adapter_id=adapter_id,
+            )
+            sensitivity_level = (
+                str(sensitive_resource.sensitivity_level).strip().upper()
+                if sensitive_resource is not None and sensitive_resource.sensitivity_level
+                else None
+            )
+        governed_default = governed_default_execution_class(
+            configured_default_execution_class=(
+                tool_record.default_execution_class if tool_record is not None else None
+            ),
+            sensitivity_level=sensitivity_level,
+        )
         if (
-            tool_record is not None
-            and tool_record.default_execution_class
+            governed_default is not None
             and (execution_policy is None or execution_policy.source == "default")
         ):
             runtime_execution = dict(runtime_execution)
-            runtime_execution["class"] = tool_record.default_execution_class
-            runtime_execution["source"] = "tool_default"
+            runtime_execution["class"] = governed_default
+            runtime_execution["source"] = (
+                "tool_default"
+                if tool_record is not None and tool_record.default_execution_class
+                else "tool_sensitivity"
+            )
         request = PluginCallRequest(
             tool_id=tool_id,
             ecosystem=ecosystem,

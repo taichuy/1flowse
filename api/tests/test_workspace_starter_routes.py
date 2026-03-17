@@ -96,6 +96,28 @@ def _agent_tool_policy_definition(
     }
 
 
+def _bound_tool_definition(*, tool_id: str, ecosystem: str, adapter_id: str | None = None) -> dict:
+    tool_binding: dict[str, str] = {"toolId": tool_id, "ecosystem": ecosystem}
+    if adapter_id is not None:
+        tool_binding["adapterId"] = adapter_id
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "tool_node",
+                "type": "tool",
+                "name": "Tool",
+                "config": {"tool": tool_binding},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
+            {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+        ],
+    }
+
+
 def _create_workspace_starter(
     client: TestClient,
     *,
@@ -382,6 +404,74 @@ def test_workspace_starter_create_accepts_supported_agent_tool_execution(
     )
 
     assert response.status_code == 201
+
+
+def test_workspace_starter_create_rejects_sensitivity_driven_default_execution(
+    client: TestClient,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-sensitive-default",
+            "ecosystem": "compat:dify-sensitive",
+            "endpoint": "http://adapter.local/dify-sensitive",
+            "supported_execution_classes": ["subprocess"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-sensitive:plugin:demo/search",
+            "name": "Sensitive Search",
+            "ecosystem": "compat:dify-sensitive",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        },
+    )
+    assert tool_response.status_code == 201
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Sensitive Search Capability",
+            "sensitivity_level": "L2",
+            "source": "local_capability",
+            "metadata": {
+                "tool_id": "compat:dify-sensitive:plugin:demo/search",
+                "ecosystem": "compat:dify-sensitive",
+                "adapter_id": "dify-sensitive-default",
+            },
+        },
+    )
+    assert resource_response.status_code == 201
+
+    response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Sensitive Default Execution Starter",
+            "description": "Template for sensitivity-driven execution guard",
+            "business_track": "编排节点能力",
+            "default_workflow_name": "Sensitive Default Execution Workflow",
+            "workflow_focus": "Sensitivity default execution focus",
+            "recommended_next_step": "Provision sandbox backend before binding tool",
+            "tags": ["execution", "sensitivity"],
+            "definition": _bound_tool_definition(
+                tool_id="compat:dify-sensitive:plugin:demo/search",
+                ecosystem="compat:dify-sensitive",
+                adapter_id="dify-sensitive-default",
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    message, issues = _validation_detail(response.json())
+    assert "tool execution capabilities" in message
+    assert "default execution class 'sandbox'" in message
+    assert any(issue["category"] == "tool_execution" for issue in issues)
 
 
 def test_workspace_starter_create_rejects_allowed_tool_default_microvm_when_backend_unavailable(
