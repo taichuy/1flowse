@@ -43,6 +43,13 @@ class SandboxExecutionClassReadinessCheck(BaseModel):
     execution_class: str
     available: bool
     backend_ids: list[str] = Field(default_factory=list)
+    supported_languages: list[str] = Field(default_factory=list)
+    supported_profiles: list[str] = Field(default_factory=list)
+    supported_dependency_modes: list[str] = Field(default_factory=list)
+    supports_builtin_package_sets: bool = False
+    supports_backend_extensions: bool = False
+    supports_network_policy: bool = False
+    supports_filesystem_policy: bool = False
     reason: str | None = None
 
 

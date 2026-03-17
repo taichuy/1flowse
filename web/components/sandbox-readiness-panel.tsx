@@ -1,4 +1,7 @@
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxExecutionClassReadinessCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 
 type SandboxReadinessPanelProps = {
   readiness: SandboxReadinessCheck;
@@ -71,23 +74,39 @@ export function SandboxReadinessPanel({ readiness }: SandboxReadinessPanelProps)
       </div>
 
       <div className="activity-list">
-        {readiness.execution_classes.map((entry) => (
-          <article className="activity-row" key={entry.execution_class}>
-            <div className="activity-header">
-              <div>
-                <h3>{entry.execution_class}</h3>
-                <p>
-                  {entry.available
-                    ? `ready via ${entry.backend_ids.join(", ")}`
-                    : entry.reason || "No compatible backend is currently ready."}
-                </p>
+        {readiness.execution_classes.map((entry) => {
+          const classCapabilityChips = buildExecutionClassCapabilityChips(entry);
+
+          return (
+            <article className="activity-row" key={entry.execution_class}>
+              <div className="activity-header">
+                <div>
+                  <h3>{entry.execution_class}</h3>
+                  <p>
+                    {entry.available
+                      ? `ready via ${entry.backend_ids.join(", ")}`
+                      : entry.reason || "No compatible backend is currently ready."}
+                  </p>
+                </div>
+                <span className={`health-pill ${entry.available ? "healthy" : "failed"}`}>
+                  {entry.available ? "ready" : "blocked"}
+                </span>
               </div>
-              <span className={`health-pill ${entry.available ? "healthy" : "failed"}`}>
-                {entry.available ? "ready" : "blocked"}
-              </span>
-            </div>
-          </article>
-        ))}
+              {classCapabilityChips.length > 0 ? (
+                <div className="event-type-strip">
+                  {classCapabilityChips.map((capability) => (
+                    <span
+                      className="event-chip"
+                      key={`${entry.execution_class}-capability-${capability}`}
+                    >
+                      {capability}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
       </div>
 
       <div className="event-type-strip">
@@ -118,4 +137,29 @@ export function SandboxReadinessPanel({ readiness }: SandboxReadinessPanelProps)
       </div>
     </article>
   );
+}
+
+function buildExecutionClassCapabilityChips(
+  entry: SandboxExecutionClassReadinessCheck
+): string[] {
+  const chips = [
+    ...entry.supported_languages.map((language) => `language ${language}`),
+    ...entry.supported_profiles.map((profile) => `profile ${profile}`),
+    ...entry.supported_dependency_modes.map((mode) => `dependency ${mode}`)
+  ];
+
+  if (entry.supports_builtin_package_sets) {
+    chips.push("builtin package sets");
+  }
+  if (entry.supports_backend_extensions) {
+    chips.push("backend extensions");
+  }
+  if (entry.supports_network_policy) {
+    chips.push("network policy");
+  }
+  if (entry.supports_filesystem_policy) {
+    chips.push("filesystem policy");
+  }
+
+  return chips;
 }

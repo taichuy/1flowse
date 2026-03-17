@@ -40,6 +40,13 @@ export type SandboxExecutionClassReadinessCheck = {
   execution_class: string;
   available: boolean;
   backend_ids: string[];
+  supported_languages: string[];
+  supported_profiles: string[];
+  supported_dependency_modes: string[];
+  supports_builtin_package_sets: boolean;
+  supports_backend_extensions: boolean;
+  supports_network_policy: boolean;
+  supports_filesystem_policy: boolean;
   reason?: string | null;
 };
 

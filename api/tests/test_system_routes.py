@@ -165,12 +165,26 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
                 "execution_class": "sandbox",
                 "available": True,
                 "backend_ids": ["sandbox-default"],
+                "supported_languages": ["python"],
+                "supported_profiles": ["python-safe"],
+                "supported_dependency_modes": ["builtin"],
+                "supports_builtin_package_sets": False,
+                "supports_backend_extensions": False,
+                "supports_network_policy": True,
+                "supports_filesystem_policy": True,
                 "reason": None,
             },
             {
                 "execution_class": "microvm",
                 "available": False,
                 "backend_ids": [],
+                "supported_languages": [],
+                "supported_profiles": [],
+                "supported_dependency_modes": [],
+                "supports_builtin_package_sets": False,
+                "supports_backend_extensions": False,
+                "supports_network_policy": False,
+                "supports_filesystem_policy": False,
                 "reason": (
                     "Healthy sandbox backends do not currently advertise execution class "
                     "'microvm': sandbox-default."
@@ -256,6 +270,13 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
                 "execution_class": "sandbox",
                 "available": False,
                 "backend_ids": [],
+                "supported_languages": [],
+                "supported_profiles": [],
+                "supported_dependency_modes": [],
+                "supports_builtin_package_sets": False,
+                "supports_backend_extensions": False,
+                "supports_network_policy": False,
+                "supports_filesystem_policy": False,
                 "reason": (
                     "Enabled sandbox backends are not currently healthy for 'sandbox': "
                     "sandbox-offline (offline)."
@@ -265,6 +286,13 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
                 "execution_class": "microvm",
                 "available": False,
                 "backend_ids": [],
+                "supported_languages": [],
+                "supported_profiles": [],
+                "supported_dependency_modes": [],
+                "supports_builtin_package_sets": False,
+                "supports_backend_extensions": False,
+                "supports_network_policy": False,
+                "supports_filesystem_policy": False,
                 "reason": (
                     "Enabled sandbox backends are not currently healthy for 'microvm': "
                     "sandbox-offline (offline)."
@@ -279,6 +307,111 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
         "supports_network_policy": False,
         "supports_filesystem_policy": False,
     }
+
+
+def test_system_overview_aggregates_sandbox_capabilities_per_execution_class(
+    client, monkeypatch
+) -> None:
+    monkeypatch.setattr(system_routes, "get_settings", lambda: SimpleNamespace(
+        env="test",
+        redis_url="redis://example",
+        s3_endpoint="http://example",
+        s3_access_key="key",
+        s3_secret_key="secret",
+        s3_region="us-east-1",
+        s3_use_ssl=False,
+    ))
+    monkeypatch.setattr(system_routes, "check_database", lambda: True)
+    monkeypatch.setattr(system_routes.redis, "from_url", lambda url: _HealthyRedis())
+    monkeypatch.setattr(system_routes.boto3, "client", lambda *args, **kwargs: _HealthyS3Client())
+    monkeypatch.setattr(system_routes, "get_plugin_registry", lambda: PluginRegistry())
+    monkeypatch.setattr(
+        system_routes,
+        "get_sandbox_backend_registry",
+        lambda: SandboxBackendRegistry(),
+    )
+    monkeypatch.setattr(
+        system_routes,
+        "get_compatibility_adapter_health_checker",
+        lambda: _StaticHealthChecker([]),
+    )
+    monkeypatch.setattr(
+        system_routes,
+        "get_sandbox_backend_health_checker",
+        lambda: _StaticSandboxHealthChecker(
+            [
+                SandboxBackendHealth(
+                    id="sandbox-default",
+                    kind="official",
+                    endpoint="http://sandbox.local",
+                    enabled=True,
+                    status="healthy",
+                    capability=SandboxBackendCapability(
+                        supported_execution_classes=("sandbox",),
+                        supported_languages=("python",),
+                        supported_profiles=("python-safe",),
+                        supported_dependency_modes=("builtin",),
+                        supports_builtin_package_sets=True,
+                        supports_network_policy=True,
+                        supports_filesystem_policy=True,
+                    ),
+                ),
+                SandboxBackendHealth(
+                    id="microvm-default",
+                    kind="community",
+                    endpoint="http://microvm.local",
+                    enabled=True,
+                    status="healthy",
+                    capability=SandboxBackendCapability(
+                        supported_execution_classes=("microvm",),
+                        supported_languages=("python", "javascript"),
+                        supported_dependency_modes=("dependency_ref",),
+                        supports_backend_extensions=True,
+                    ),
+                ),
+            ]
+        ),
+    )
+
+    response = client.get("/api/system/overview")
+
+    assert response.status_code == 200
+    sandbox_readiness = response.json()["sandbox_readiness"]
+    assert sandbox_readiness["supported_languages"] == ["javascript", "python"]
+    assert sandbox_readiness["supported_profiles"] == ["python-safe"]
+    assert sandbox_readiness["supported_dependency_modes"] == ["builtin", "dependency_ref"]
+    assert sandbox_readiness["supports_builtin_package_sets"] is True
+    assert sandbox_readiness["supports_backend_extensions"] is True
+    assert sandbox_readiness["supports_network_policy"] is True
+    assert sandbox_readiness["supports_filesystem_policy"] is True
+    assert sandbox_readiness["execution_classes"] == [
+        {
+            "execution_class": "sandbox",
+            "available": True,
+            "backend_ids": ["sandbox-default"],
+            "supported_languages": ["python"],
+            "supported_profiles": ["python-safe"],
+            "supported_dependency_modes": ["builtin"],
+            "supports_builtin_package_sets": True,
+            "supports_backend_extensions": False,
+            "supports_network_policy": True,
+            "supports_filesystem_policy": True,
+            "reason": None,
+        },
+        {
+            "execution_class": "microvm",
+            "available": True,
+            "backend_ids": ["microvm-default"],
+            "supported_languages": ["javascript", "python"],
+            "supported_profiles": [],
+            "supported_dependency_modes": ["dependency_ref"],
+            "supports_builtin_package_sets": False,
+            "supports_backend_extensions": True,
+            "supports_network_policy": False,
+            "supports_filesystem_policy": False,
+            "reason": None,
+        },
+    ]
 
 
 def test_list_plugin_adapters_returns_current_adapter_health(client, monkeypatch) -> None:

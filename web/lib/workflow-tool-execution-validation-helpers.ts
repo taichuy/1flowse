@@ -305,10 +305,11 @@ function buildSandboxReadinessIssue({
   );
   if (readiness?.available) {
     const profile = normalizeString(executionPayload?.profile);
+    const supportedProfiles = readiness.supported_profiles ?? sandboxReadiness.supported_profiles;
     if (
       profile &&
-      sandboxReadiness.supported_profiles.length > 0 &&
-      !sandboxReadiness.supported_profiles.includes(profile)
+      supportedProfiles.length > 0 &&
+      !supportedProfiles.includes(profile)
     ) {
       return {
         nodeId,
@@ -320,9 +321,11 @@ function buildSandboxReadinessIssue({
     }
 
     const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
+    const supportedDependencyModes =
+      readiness.supported_dependency_modes ?? sandboxReadiness.supported_dependency_modes;
     if (
       dependencyMode &&
-      !sandboxReadiness.supported_dependency_modes.includes(dependencyMode)
+      !supportedDependencyModes.includes(dependencyMode)
     ) {
       return {
         nodeId,
@@ -336,7 +339,7 @@ function buildSandboxReadinessIssue({
     if (
       dependencyMode === "builtin" &&
       normalizeString(executionPayload?.builtinPackageSet) &&
-      !sandboxReadiness.supports_builtin_package_sets
+      !(readiness.supports_builtin_package_sets ?? sandboxReadiness.supports_builtin_package_sets)
     ) {
       return {
         nodeId,
@@ -349,7 +352,7 @@ function buildSandboxReadinessIssue({
 
     if (
       toRecord(executionPayload?.backendExtensions) &&
-      !sandboxReadiness.supports_backend_extensions
+      !(readiness.supports_backend_extensions ?? sandboxReadiness.supports_backend_extensions)
     ) {
       return {
         nodeId,
@@ -361,7 +364,10 @@ function buildSandboxReadinessIssue({
     }
 
     const networkPolicy = normalizeString(executionPayload?.networkPolicy);
-    if (networkPolicy && !sandboxReadiness.supports_network_policy) {
+    if (
+      networkPolicy &&
+      !(readiness.supports_network_policy ?? sandboxReadiness.supports_network_policy)
+    ) {
       return {
         nodeId,
         nodeName,
@@ -372,7 +378,12 @@ function buildSandboxReadinessIssue({
     }
 
     const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
-    if (filesystemPolicy && !sandboxReadiness.supports_filesystem_policy) {
+    if (
+      filesystemPolicy &&
+      !(
+        readiness.supports_filesystem_policy ?? sandboxReadiness.supports_filesystem_policy
+      )
+    ) {
       return {
         nodeId,
         nodeName,

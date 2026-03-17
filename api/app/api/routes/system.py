@@ -69,23 +69,10 @@ def _build_sandbox_readiness(sandbox_backends: list) -> SandboxReadinessCheck:
         backend for backend in enabled_backends if backend.status in _OPERABLE_SANDBOX_STATUSES
     ]
     execution_classes = [
-        SandboxExecutionClassReadinessCheck(
+        _build_sandbox_execution_class_readiness(
+            enabled_backends=enabled_backends,
+            operable_backends=operable_backends,
             execution_class=execution_class,
-            available=bool(backend_ids := sorted(
-                backend.id
-                for backend in operable_backends
-                if execution_class in backend.capability.supported_execution_classes
-            )),
-            backend_ids=backend_ids,
-            reason=(
-                None
-                if backend_ids
-                else _build_sandbox_execution_class_reason(
-                    enabled_backends=enabled_backends,
-                    operable_backends=operable_backends,
-                    execution_class=execution_class,
-                )
-            ),
         )
         for execution_class in _SANDBOX_EXECUTION_CLASSES
     ]
@@ -134,6 +121,70 @@ def _build_sandbox_readiness(sandbox_backends: list) -> SandboxReadinessCheck:
         ),
         supports_filesystem_policy=any(
             backend.capability.supports_filesystem_policy for backend in operable_backends
+        ),
+    )
+
+
+def _build_sandbox_execution_class_readiness(
+    *,
+    enabled_backends: list,
+    operable_backends: list,
+    execution_class: str,
+) -> SandboxExecutionClassReadinessCheck:
+    class_operable_backends = [
+        backend
+        for backend in operable_backends
+        if execution_class in backend.capability.supported_execution_classes
+    ]
+    backend_ids = sorted(backend.id for backend in class_operable_backends)
+    return SandboxExecutionClassReadinessCheck(
+        execution_class=execution_class,
+        available=bool(backend_ids),
+        backend_ids=backend_ids,
+        supported_languages=sorted(
+            {
+                language
+                for backend in class_operable_backends
+                for language in backend.capability.supported_languages
+            }
+        ),
+        supported_profiles=sorted(
+            {
+                profile
+                for backend in class_operable_backends
+                for profile in backend.capability.supported_profiles
+            }
+        ),
+        supported_dependency_modes=sorted(
+            {
+                dependency_mode
+                for backend in class_operable_backends
+                for dependency_mode in backend.capability.supported_dependency_modes
+            }
+        ),
+        supports_builtin_package_sets=any(
+            backend.capability.supports_builtin_package_sets
+            for backend in class_operable_backends
+        ),
+        supports_backend_extensions=any(
+            backend.capability.supports_backend_extensions
+            for backend in class_operable_backends
+        ),
+        supports_network_policy=any(
+            backend.capability.supports_network_policy for backend in class_operable_backends
+        ),
+        supports_filesystem_policy=any(
+            backend.capability.supports_filesystem_policy
+            for backend in class_operable_backends
+        ),
+        reason=(
+            None
+            if backend_ids
+            else _build_sandbox_execution_class_reason(
+                enabled_backends=enabled_backends,
+                operable_backends=operable_backends,
+                execution_class=execution_class,
+            )
         ),
     )
 
