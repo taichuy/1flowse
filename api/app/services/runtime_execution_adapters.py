@@ -9,11 +9,6 @@ from sqlalchemy.orm import Session
 from app.models.run import NodeRun
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
-from app.services.sandbox_backends import (
-    SandboxBackendClient,
-    SandboxExecutionRequest,
-    get_sandbox_backend_client,
-)
 from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_sandbox_code import HostSandboxCodeExecutor
 from app.services.runtime_types import (
@@ -21,6 +16,11 @@ from app.services.runtime_types import (
     NodeExecutionResult,
     RuntimeEvent,
     WorkflowExecutionError,
+)
+from app.services.sandbox_backends import (
+    SandboxBackendClient,
+    SandboxExecutionRequest,
+    get_sandbox_backend_client,
 )
 
 
@@ -43,6 +43,59 @@ class NodeExecutionAvailability:
     available: bool
     blocking_reason: str | None = None
     executor_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class SandboxCodeDispatchConfig:
+    language: str
+    code: str
+    dependency_mode: str | None = None
+    builtin_package_set: str | None = None
+    dependency_ref: str | None = None
+    backend_extensions: dict[str, Any] | None = None
+
+
+def _normalize_optional_string(value: object) -> str | None:
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    return None
+
+
+def _normalize_backend_extensions(value: object) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise WorkflowExecutionError("sandbox_code backendExtensions must be an object.")
+    return dict(value)
+
+
+def _parse_sandbox_code_dispatch_config(config: dict[str, Any]) -> SandboxCodeDispatchConfig:
+    language = str(config.get("language") or "python").strip().lower() or "python"
+    code = str(config.get("code") or "")
+    if not code.strip():
+        raise WorkflowExecutionError("sandbox_code nodes must define a non-empty config.code.")
+
+    dependency_mode = _normalize_optional_string(config.get("dependencyMode"))
+    builtin_package_set = _normalize_optional_string(config.get("builtinPackageSet"))
+    dependency_ref = _normalize_optional_string(config.get("dependencyRef"))
+    if builtin_package_set is not None and dependency_mode != "builtin":
+        raise WorkflowExecutionError(
+            "sandbox_code builtinPackageSet requires dependencyMode 'builtin'."
+        )
+    if dependency_ref is not None and dependency_mode != "dependency_ref":
+        raise WorkflowExecutionError(
+            "sandbox_code dependencyRef requires dependencyMode 'dependency_ref'."
+        )
+
+    return SandboxCodeDispatchConfig(
+        language=language,
+        code=code,
+        dependency_mode=dependency_mode,
+        builtin_package_set=builtin_package_set,
+        dependency_ref=dependency_ref,
+        backend_extensions=_normalize_backend_extensions(config.get("backendExtensions")),
+    )
 
 
 class InlineExecutionAdapter:
@@ -174,29 +227,18 @@ class RemoteSandboxExecutionAdapter:
 
     def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
         config = dict(request.node.get("config") or {})
-        language = str(config.get("language") or "python").strip().lower() or "python"
-        code = str(config.get("code") or "")
-        if not code.strip():
-            raise WorkflowExecutionError("sandbox_code nodes must define a non-empty config.code.")
-        dependency_mode = self._normalize_optional_string(config.get("dependencyMode"))
-        builtin_package_set = self._normalize_optional_string(config.get("builtinPackageSet"))
-        dependency_ref = self._normalize_optional_string(config.get("dependencyRef"))
-        backend_extensions = self._normalize_backend_extensions(config.get("backendExtensions"))
-
-        if builtin_package_set is not None and dependency_mode != "builtin":
-            raise WorkflowExecutionError(
-                "sandbox_code builtinPackageSet requires dependencyMode 'builtin'."
-            )
-        if dependency_ref is not None and dependency_mode != "dependency_ref":
-            raise WorkflowExecutionError(
-                "sandbox_code dependencyRef requires dependencyMode 'dependency_ref'."
-            )
+        dispatch_config = _parse_sandbox_code_dispatch_config(config)
+        language = dispatch_config.language
+        dependency_mode = dispatch_config.dependency_mode
+        builtin_package_set = dispatch_config.builtin_package_set
+        dependency_ref = dispatch_config.dependency_ref
+        backend_extensions = dispatch_config.backend_extensions
 
         execution = self._sandbox_backend_client.execute(
             SandboxExecutionRequest(
                 execution_class=request.execution_policy.execution_class,
                 language=language,
-                code=code,
+                code=dispatch_config.code,
                 node_input=request.node_input,
                 trace_id=f"run:{request.run_id}:node:{request.node.get('id')}:sandbox_code",
                 profile=request.execution_policy.profile,
@@ -272,21 +314,6 @@ class RemoteSandboxExecutionAdapter:
             ],
         )
 
-    @staticmethod
-    def _normalize_optional_string(value: object) -> str | None:
-        if isinstance(value, str):
-            normalized = value.strip()
-            return normalized or None
-        return None
-
-    @staticmethod
-    def _normalize_backend_extensions(value: object) -> dict[str, Any] | None:
-        if value is None:
-            return None
-        if not isinstance(value, dict):
-            raise WorkflowExecutionError("sandbox_code backendExtensions must be an object.")
-        return dict(value)
-
     def _normalize_output(self, result: Any) -> dict[str, Any]:
         if isinstance(result, dict):
             return result
@@ -349,17 +376,28 @@ class RuntimeExecutionAdapterRegistry:
 
         if execution_policy.execution_class in {"sandbox", "microvm"}:
             config = dict(node.get("config") or {})
+            try:
+                dispatch_config = _parse_sandbox_code_dispatch_config(config)
+            except WorkflowExecutionError as exc:
+                return NodeExecutionAvailability(
+                    available=False,
+                    blocking_reason=str(exc),
+                )
             selection = self._sandbox_backend_client.describe_execution_backend(
                 SandboxExecutionRequest(
                     execution_class=execution_policy.execution_class,
-                    language=str(config.get("language") or "python").strip().lower() or "python",
-                    code=str(config.get("code") or ""),
+                    language=dispatch_config.language,
+                    code=dispatch_config.code,
                     node_input={},
                     trace_id=f"node:{node.get('id')}:availability",
                     profile=execution_policy.profile,
+                    dependency_mode=dispatch_config.dependency_mode,
+                    builtin_package_set=dispatch_config.builtin_package_set,
+                    dependency_ref=dispatch_config.dependency_ref,
                     timeout_ms=execution_policy.timeout_ms,
                     network_policy=execution_policy.network_policy,
                     filesystem_policy=execution_policy.filesystem_policy,
+                    backend_extensions=dispatch_config.backend_extensions,
                 )
             )
             if selection.available:

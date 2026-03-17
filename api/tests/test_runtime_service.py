@@ -275,7 +275,10 @@ class _SandboxBackendClientStub(SandboxBackendClient):
     def __init__(self) -> None:
         self.requests: list[SandboxExecutionRequest] = []
 
-    def describe_execution_backend(self, request: SandboxExecutionRequest) -> SandboxBackendSelection:
+    def describe_execution_backend(
+        self,
+        request: SandboxExecutionRequest,
+    ) -> SandboxBackendSelection:
         return SandboxBackendSelection(
             available=True,
             backend_id="sandbox-default",
@@ -400,12 +403,20 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
 
 
 class _DependencyMismatchSandboxBackendClientStub:
-    def describe_execution_backend(self, request: SandboxExecutionRequest) -> SandboxBackendSelection:
+    def __init__(self) -> None:
+        self.describe_requests: list[SandboxExecutionRequest] = []
+
+    def describe_execution_backend(
+        self,
+        request: SandboxExecutionRequest,
+    ) -> SandboxBackendSelection:
+        self.describe_requests.append(request)
         return SandboxBackendSelection(
             available=False,
             reason=(
                 "No compatible sandbox backend is currently available for the requested "
-                "execution class 'sandbox'. sandbox-default: does not support dependency mode 'dependency_ref'"
+                "execution class 'sandbox'. sandbox-default: does not support "
+                "dependency mode 'dependency_ref'"
             ),
         )
 
@@ -451,13 +462,106 @@ def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
     sqlite_session.add(workflow)
     sqlite_session.commit()
 
+    sandbox_backend_client = _DependencyMismatchSandboxBackendClientStub()
+
     with pytest.raises(
         WorkflowExecutionError,
         match="does not support dependency mode 'dependency_ref'",
     ):
-        RuntimeService(
-            sandbox_backend_client=_DependencyMismatchSandboxBackendClientStub()
-        ).execute_workflow(sqlite_session, workflow, {"topic": "remote"})
+        RuntimeService(sandbox_backend_client=sandbox_backend_client).execute_workflow(
+            sqlite_session,
+            workflow,
+            {"topic": "remote"},
+        )
+
+    assert len(sandbox_backend_client.describe_requests) == 1
+    describe_request = sandbox_backend_client.describe_requests[0]
+    assert describe_request.execution_class == "sandbox"
+    assert describe_request.dependency_mode == "dependency_ref"
+    assert describe_request.dependency_ref == "bundle:finance-safe-v1"
+
+
+class _BackendExtensionsMismatchSandboxBackendClientStub:
+    def __init__(self) -> None:
+        self.describe_requests: list[SandboxExecutionRequest] = []
+
+    def describe_execution_backend(
+        self,
+        request: SandboxExecutionRequest,
+    ) -> SandboxBackendSelection:
+        self.describe_requests.append(request)
+        return SandboxBackendSelection(
+            available=False,
+            reason=(
+                "No compatible sandbox backend is currently available for the requested "
+                "execution class 'sandbox'. sandbox-default: does not support "
+                "backendExtensions payloads"
+            ),
+        )
+
+    def execute(self, request: SandboxExecutionRequest) -> SandboxExecutionResponse:
+        raise AssertionError("execute should not be called when backend extensions are unsupported")
+
+
+def test_runtime_service_fail_closes_sandbox_code_on_backend_extensions_mismatch(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-sandbox-code-backend-extensions-mismatch",
+        name="Sandbox Backend Extensions Mismatch Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "name": "Sandbox",
+                    "config": {
+                        "language": "python",
+                        "code": 'result = {"answer": "unused"}',
+                        "backendExtensions": {
+                            "image": "python-safe:3.11",
+                            "bundle": "finance-safe-v1",
+                        },
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _BackendExtensionsMismatchSandboxBackendClientStub()
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="does not support backendExtensions payloads",
+    ):
+        RuntimeService(sandbox_backend_client=sandbox_backend_client).execute_workflow(
+            sqlite_session,
+            workflow,
+            {"topic": "remote"},
+        )
+
+    assert len(sandbox_backend_client.describe_requests) == 1
+    describe_request = sandbox_backend_client.describe_requests[0]
+    assert describe_request.execution_class == "sandbox"
+    assert describe_request.backend_extensions == {
+        "image": "python-safe:3.11",
+        "bundle": "finance-safe-v1",
+    }
 
 def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
     sqlite_session: Session,
