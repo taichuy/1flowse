@@ -21,6 +21,7 @@ import {
   pickLatestNotification,
   pickRetriableNotification
 } from "@/components/sensitive-access-inbox-panel-helpers";
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
@@ -159,6 +160,7 @@ export function SensitiveAccessInboxEntryCard({
   const request = entry.request;
   const resource = entry.resource;
   const latestNotification = pickLatestNotification(entry);
+  const callbackWaitingContext = entry.callbackWaitingContext;
 
   return (
     <article className="activity-row">
@@ -214,6 +216,23 @@ export function SensitiveAccessInboxEntryCard({
         <div className="entry-card compact-card">
           <p className="entry-card-title">Policy summary</p>
           <p className="section-copy entry-copy">{getSensitiveAccessPolicySummary(request)}</p>
+        </div>
+      ) : null}
+
+      {callbackWaitingContext ? (
+        <div className="entry-card compact-card">
+          <p className="entry-card-title">Callback waiting follow-up</p>
+          <CallbackWaitingSummaryCard
+            callbackTickets={callbackWaitingContext.callbackTickets}
+            lifecycle={callbackWaitingContext.lifecycle}
+            nodeRunId={callbackWaitingContext.nodeRunId}
+            runId={callbackWaitingContext.runId}
+            scheduledResumeDelaySeconds={callbackWaitingContext.scheduledResumeDelaySeconds}
+            scheduledResumeSource={callbackWaitingContext.scheduledResumeSource}
+            scheduledWaitingStatus={callbackWaitingContext.scheduledWaitingStatus}
+            sensitiveAccessEntries={callbackWaitingContext.sensitiveAccessEntries}
+            waitingReason={callbackWaitingContext.waitingReason}
+          />
         </div>
       ) : null}
 

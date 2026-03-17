@@ -1,4 +1,9 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { getRunExecutionView } from "@/lib/get-run-views";
+import {
+  buildSensitiveAccessInboxEntryCallbackContext,
+  type SensitiveAccessInboxCallbackContext
+} from "@/lib/sensitive-access-inbox-callback-context";
 
 export type SensitiveResourceItem = {
   id: string;
@@ -91,6 +96,7 @@ export type SensitiveAccessInboxEntry = {
   request: SensitiveAccessRequestItem | null;
   resource: SensitiveResourceItem | null;
   notifications: NotificationDispatchItem[];
+  callbackWaitingContext?: SensitiveAccessInboxCallbackContext | null;
 };
 
 export type SensitiveAccessTimelineEntry = {
@@ -209,7 +215,7 @@ export async function getSensitiveAccessInboxSnapshot({
   const requestsById = new Map(requests.map((item) => [item.id, item]));
   const resourcesById = new Map(resources.map((item) => [item.id, item]));
   const notificationsByTicketId = groupNotificationsByTicket(notifications);
-  const entries = tickets
+  const baseEntries = tickets
     .filter((ticket) => {
       if ((requestDecision || requesterType) && !requestsById.has(ticket.access_request_id)) {
         return false;
@@ -230,7 +236,27 @@ export async function getSensitiveAccessInboxSnapshot({
         resource: request ? (resourcesById.get(request.resource_id) ?? null) : null,
         notifications: notificationsByTicketId[ticket.id] ?? []
       } satisfies SensitiveAccessInboxEntry;
-    })
+    });
+
+  const runIds = [
+    ...new Set(
+      baseEntries
+        .map((entry) => entry.ticket.run_id ?? entry.request?.run_id)
+        .filter((runId): runId is string => Boolean(runId && runId.trim()))
+    )
+  ];
+  const executionViewsByRunId = new Map(
+    await Promise.all(runIds.map(async (runId) => [runId, await getRunExecutionView(runId)] as const))
+  );
+
+  const entries = baseEntries
+    .map((entry) => ({
+      ...entry,
+      callbackWaitingContext: buildSensitiveAccessInboxEntryCallbackContext(
+        entry,
+        executionViewsByRunId.get(entry.ticket.run_id ?? entry.request?.run_id ?? "") ?? null
+      )
+    }))
     .sort(
       (left, right) =>
         new Date(right.ticket.created_at).getTime() - new Date(left.ticket.created_at).getTime()
