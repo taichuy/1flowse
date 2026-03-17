@@ -5,7 +5,12 @@ from typing import Any
 
 from app.schemas.plugin import PluginToolItem
 from app.services.plugin_runtime import CompatibilityAdapterRegistration
-from app.services.sandbox_backends import SandboxBackendClient, get_sandbox_backend_client
+from app.services.runtime_execution_policy import resolve_execution_policy
+from app.services.sandbox_backends import (
+    SandboxBackendClient,
+    SandboxExecutionRequest,
+    get_sandbox_backend_client,
+)
 
 _DEPENDENCY_MODES = {"builtin", "dependency_ref", "backend_managed"}
 
@@ -59,6 +64,17 @@ def collect_invalid_workflow_tool_execution_references(
                     config=config,
                     tool_index=tool_index,
                     adapters=adapter_list,
+                    sandbox_backend_client=backend_client,
+                )
+            )
+            continue
+
+        if node_type == "sandbox_code":
+            issues.extend(
+                _collect_sandbox_code_execution_issues(
+                    node=node,
+                    node_label=node_label,
+                    config=config,
                     sandbox_backend_client=backend_client,
                 )
             )
@@ -277,6 +293,75 @@ def _collect_agent_execution_issues(
                     issues.append(target_issue)
 
     return issues
+
+
+def _collect_sandbox_code_execution_issues(
+    *,
+    node: dict[str, Any],
+    node_label: str,
+    config: dict[str, Any],
+    sandbox_backend_client: SandboxBackendClient,
+) -> list[str]:
+    execution_policy = resolve_execution_policy(node)
+    execution_class = execution_policy.execution_class
+    context = f"Sandbox code node '{node_label}'"
+
+    if execution_class == "subprocess":
+        return []
+
+    if execution_class == "inline":
+        return [
+            (
+                f"{context} cannot run with execution class 'inline'. Use explicit 'subprocess' "
+                "for the current host-controlled MVP path, or register a sandbox backend for "
+                "'sandbox' / 'microvm'."
+            )
+        ]
+
+    if execution_class not in {"sandbox", "microvm"}:
+        return [
+            (
+                f"{context} requests unsupported execution class '{execution_class}'. Strong-isolation "
+                "paths must fail closed until a compatible sandbox backend is available."
+            )
+        ]
+
+    selection = sandbox_backend_client.describe_execution_backend(
+        SandboxExecutionRequest(
+            execution_class=execution_class,
+            language=str(config.get("language") or "python").strip().lower() or "python",
+            code=str(config.get("code") or ""),
+            node_input={},
+            trace_id=f"node:{node.get('id')}:definition-validation",
+            profile=execution_policy.profile,
+            dependency_mode=_normalize_optional_dependency_mode(config.get("dependencyMode")),
+            builtin_package_set=(
+                _normalize_optional_string(config.get("builtinPackageSet"))
+                if _normalize_optional_dependency_mode(config.get("dependencyMode")) == "builtin"
+                else None
+            ),
+            dependency_ref=(
+                _normalize_optional_string(config.get("dependencyRef"))
+                if _normalize_optional_dependency_mode(config.get("dependencyMode"))
+                == "dependency_ref"
+                else None
+            ),
+            timeout_ms=execution_policy.timeout_ms,
+            network_policy=execution_policy.network_policy,
+            filesystem_policy=execution_policy.filesystem_policy,
+            backend_extensions=_normalize_optional_object(config.get("backendExtensions")),
+        )
+    )
+    if selection.available:
+        return []
+
+    backend_reason = selection.reason or "No compatible sandbox backend is currently available."
+    return [
+        (
+            f"{context} requests execution class '{execution_class}', but no compatible sandbox backend "
+            f"is currently available. {backend_reason}".strip()
+        )
+    ]
 
 
 def _validate_explicit_adapter_binding(

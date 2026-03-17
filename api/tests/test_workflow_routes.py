@@ -1012,6 +1012,91 @@ def test_create_workflow_rejects_dependency_ref_without_dependency_ref_mode(
     assert "config.dependencyRef requires config.dependencyMode = 'dependency_ref'" in detail
 
 
+def test_create_workflow_rejects_default_sandbox_code_when_backend_unavailable(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Blocked Sandbox Code Workflow",
+            "definition": _sandbox_code_definition(),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "Sandbox code node 'sandbox:Sandbox'" in detail
+    assert "execution class 'sandbox'" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
+
+
+def test_create_workflow_accepts_subprocess_sandbox_code_without_ready_backend(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Host Sandbox Code Workflow",
+            "definition": _sandbox_code_definition(
+                runtime_policy={"execution": {"class": "subprocess"}}
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["definition"]["nodes"][1]["runtimePolicy"]["execution"] == {
+        "class": "subprocess"
+    }
+
+
+def test_create_workflow_rejects_sandbox_code_dependency_contract_without_backend_support(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            dependency_modes=("builtin",),
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Sandbox Code Dependency Workflow",
+            "definition": _sandbox_code_definition(
+                config={
+                    "dependencyMode": "builtin",
+                    "builtinPackageSet": "py-data-basic",
+                },
+                runtime_policy={"execution": {"class": "microvm", "dependencyMode": "builtin"}},
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "Sandbox code node 'sandbox:Sandbox'" in detail
+    assert "builtin package set" in detail.lower()
+
+
 def test_create_workflow_rejects_unsupported_tool_execution_class(client: TestClient) -> None:
     adapter_response = client.post(
         "/api/plugins/adapters",

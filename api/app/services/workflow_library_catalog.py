@@ -128,18 +128,18 @@ def build_node_catalog_items(
         WorkflowNodeCatalogItem(
             type="sandbox_code",
             label="Sandbox Code",
-            description="为高风险代码执行预留的隔离节点，后续会挂到真实 sandbox / microvm 执行边界。",
+            description="高风险代码执行节点，当前已接入 runtime / persistence 主链，并沿 execution readiness 诚实校验。",
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
             capability_group="integration",
             business_track="编排节点能力",
-            tags=["sandbox", "code", "planned"],
+            tags=["sandbox", "code", "runtime-ready"],
             palette=_build_palette(enabled=False, order=25, x=500, y=420),
             defaults=_build_defaults(name="Sandbox Code"),
-            support_status="planned",
+            support_status="available",
             support_summary=(
-                "真实 sandbox / microvm adapter 仍在推进；当前 catalog 仅保留类型占位，"
-                "不开放进 editor palette 或 runtime 主链。"
+                "当前已进入 persistence / runtime 主链，并会在保存时按 sandbox readiness fail-closed；"
+                "由于缺少专门的节点表单与编辑体验，暂不开放进 editor palette。"
             ),
         ),
         WorkflowNodeCatalogItem(
