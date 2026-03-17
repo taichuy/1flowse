@@ -109,7 +109,7 @@ export function ExecutionNodeSkillReferenceLoadList({
       />
       <p className="section-copy entry-copy">
         These are the skill reference bodies actually injected into the agent phase, so operator
-        debugging can distinguish fixed bindings from query-driven matches.
+        debugging can distinguish fixed bindings, heuristic matches, and explicit model requests.
       </p>
       <div className="event-list">
         {skillReferenceLoads.map((load, index) => (
@@ -131,8 +131,22 @@ export function ExecutionNodeSkillReferenceLoadList({
                   <p className="event-run">
                     {reference.skill_name ?? reference.skill_id} · ref {reference.reference_id}
                   </p>
+                  {reference.fetch_reason ? (
+                    <p className="section-copy entry-copy">Reason: {reference.fetch_reason}</p>
+                  ) : null}
+                  {reference.fetch_request_index ? (
+                    <p className="section-copy entry-copy">
+                      Request round {reference.fetch_request_index}
+                      {reference.fetch_request_total
+                        ? ` / ${reference.fetch_request_total}`
+                        : ""}
+                    </p>
+                  ) : null}
                   <pre>
                     {formatJsonPayload({
+                      fetch_reason: reference.fetch_reason,
+                      fetch_request_index: reference.fetch_request_index,
+                      fetch_request_total: reference.fetch_request_total,
                       retrieval_http_path: reference.retrieval_http_path,
                       retrieval_mcp_method: reference.retrieval_mcp_method,
                       retrieval_mcp_params: reference.retrieval_mcp_params

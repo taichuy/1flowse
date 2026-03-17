@@ -100,6 +100,9 @@ class SkillReferenceLoadReferenceItem(BaseModel):
     reference_id: str
     reference_name: str | None = None
     load_source: str
+    fetch_reason: str | None = None
+    fetch_request_index: int | None = None
+    fetch_request_total: int | None = None
     retrieval_http_path: str | None = None
     retrieval_mcp_method: str | None = None
     retrieval_mcp_params: dict[str, str] = Field(default_factory=dict)

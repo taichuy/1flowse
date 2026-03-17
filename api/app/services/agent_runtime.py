@@ -21,6 +21,7 @@ from app.services.runtime_execution_policy import resolve_tool_execution_policy
 from app.services.runtime_types import (
     PHASE_STATUS_MAP,
     AgentExecutionResult,
+    AgentSkillReferenceRequest,
     RuntimeEvent,
     ToolExecutionResult,
     WorkflowExecutionError,
@@ -118,8 +119,66 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 phase="main_plan",
                 loaded_references=default_skill_reference_loads,
             )
-            plan = self._build_plan(config, model_config, plan_node_input)
+            plan = self._build_plan(
+                config,
+                model_config,
+                plan_node_input,
+                allow_skill_reference_request=True,
+            )
             plan_llm_response = plan.llm_response
+            if plan.skill_reference_request is not None and plan_llm_response is not None:
+                self._record_ai_call(
+                    db,
+                    run_id=run_id,
+                    node_run=node_run,
+                    role="main_plan_skill_reference_request",
+                    model_config=model_config,
+                    input_value={
+                        "global_context": node_input.get("global_context", {}),
+                        "working_context": working_context,
+                        "authorized_context": node_input.get("authorized_context", {}),
+                        "skill_context": plan_node_input.get("skill_context"),
+                    },
+                    output_value={
+                        "phase": "main_plan",
+                        "skill_reference_request": {
+                            "skill_id": plan.skill_reference_request.skill_id,
+                            "reference_id": plan.skill_reference_request.reference_id,
+                            "reason": plan.skill_reference_request.reason,
+                        },
+                    },
+                    assistant=False,
+                    llm_response=plan_llm_response,
+                )
+                (
+                    plan_node_input,
+                    explicit_skill_reference_loads,
+                    skill_reference_request_event,
+                ) = self._apply_plan_skill_reference_request(
+                    db,
+                    config=config,
+                    node=node,
+                    base_node_input=plan_node_input,
+                    retrieval_query=main_plan_skill_query,
+                    current_loaded_references=default_skill_reference_loads,
+                    request=plan.skill_reference_request,
+                )
+                if skill_reference_request_event is not None:
+                    events.append(skill_reference_request_event)
+                if explicit_skill_reference_loads:
+                    self._emit_skill_reference_fetch_event(
+                        events,
+                        node=node,
+                        phase="main_plan",
+                        loaded_references=explicit_skill_reference_loads,
+                    )
+                    plan = self._build_plan(
+                        config,
+                        model_config,
+                        plan_node_input,
+                        allow_skill_reference_request=False,
+                    )
+                    plan_llm_response = plan.llm_response
             checkpoint["plan"] = plan.as_dict()
             node_run.checkpoint_payload = deepcopy(checkpoint)
             self._record_ai_call(
@@ -637,6 +696,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
         *,
         phase: str,
         retrieval_query: str | None = None,
+        explicit_request: AgentSkillReferenceRequest | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         raw_skill_ids = config.get("skillIds")
         if not isinstance(raw_skill_ids, list):
@@ -649,17 +709,53 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                 config,
                 phase=phase,
             )
-            lazy_reference_ids_by_skill = self._skill_catalog.suggest_reference_ids(
+            reference_load_specs_by_skill: dict[str, list[dict[str, Any]]] = {}
+            for skill_id, reference_ids in selected_reference_ids_by_skill.items():
+                for reference_id in reference_ids:
+                    self._append_skill_reference_load_spec(
+                        reference_load_specs_by_skill,
+                        skill_id=skill_id,
+                        reference_id=reference_id,
+                        load_source="skill_binding",
+                    )
+
+            if explicit_request is not None:
+                self._append_skill_reference_load_spec(
+                    reference_load_specs_by_skill,
+                    skill_id=explicit_request.skill_id,
+                    reference_id=explicit_request.reference_id,
+                    load_source="llm_explicit_request",
+                    fetch_reason=explicit_request.reason or "Requested by planning model.",
+                    fetch_request_index=1,
+                    fetch_request_total=1,
+                )
+
+            lazy_reference_suggestions = self._skill_catalog.suggest_references(
                 db,
                 skill_ids=[str(skill_id) for skill_id in raw_skill_ids],
                 workspace_id=workspace_id,
                 query_text=retrieval_query or "",
                 excluded_reference_ids_by_skill=selected_reference_ids_by_skill,
             )
-            merged_reference_ids_by_skill = self._merge_skill_reference_ids(
-                selected_reference_ids_by_skill,
-                lazy_reference_ids_by_skill,
-            )
+            for skill_id, suggestion_items in lazy_reference_suggestions.items():
+                for suggestion_item in suggestion_items:
+                    self._append_skill_reference_load_spec(
+                        reference_load_specs_by_skill,
+                        skill_id=skill_id,
+                        reference_id=suggestion_item.reference_id,
+                        load_source="retrieval_query_match",
+                        fetch_reason=suggestion_item.fetch_reason,
+                    )
+
+            merged_reference_ids_by_skill = {
+                skill_id: [
+                    str(spec.get("reference_id"))
+                    for spec in specs
+                    if str(spec.get("reference_id") or "").strip()
+                ]
+                for skill_id, specs in reference_load_specs_by_skill.items()
+                if specs
+            }
             skill_docs = self._skill_catalog.build_prompt_docs(
                 db,
                 skill_ids=[str(skill_id) for skill_id in raw_skill_ids],
@@ -669,8 +765,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             )
             loaded_references = self._collect_inlined_skill_reference_loads(
                 skill_docs,
-                selected_reference_ids_by_skill=selected_reference_ids_by_skill,
-                lazy_reference_ids_by_skill=lazy_reference_ids_by_skill,
+                reference_load_specs_by_skill=reference_load_specs_by_skill,
             )
             return (
                 [skill.model_dump(mode="python") for skill in skill_docs],
@@ -779,32 +874,38 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
         return "\n".join(parts)
 
     @staticmethod
-    def _merge_skill_reference_ids(
-        selected_reference_ids_by_skill: dict[str, list[str]],
-        lazy_reference_ids_by_skill: dict[str, list[str]],
-    ) -> dict[str, list[str]]:
-        merged: dict[str, list[str]] = {}
-        for skill_id in set(selected_reference_ids_by_skill) | set(lazy_reference_ids_by_skill):
-            ordered_ids: list[str] = []
-            seen: set[str] = set()
-            for reference_id in selected_reference_ids_by_skill.get(skill_id, []):
-                if reference_id not in seen:
-                    ordered_ids.append(reference_id)
-                    seen.add(reference_id)
-            for reference_id in lazy_reference_ids_by_skill.get(skill_id, []):
-                if reference_id not in seen:
-                    ordered_ids.append(reference_id)
-                    seen.add(reference_id)
-            if ordered_ids:
-                merged[skill_id] = ordered_ids
-        return merged
+    def _append_skill_reference_load_spec(
+        reference_load_specs_by_skill: dict[str, list[dict[str, Any]]],
+        *,
+        skill_id: str,
+        reference_id: str,
+        load_source: str,
+        fetch_reason: str | None = None,
+        fetch_request_index: int | None = None,
+        fetch_request_total: int | None = None,
+    ) -> None:
+        if not skill_id or not reference_id:
+            return
+        specs = reference_load_specs_by_skill.setdefault(skill_id, [])
+        if any(str(spec.get("reference_id") or "") == reference_id for spec in specs):
+            return
+        spec: dict[str, Any] = {
+            "reference_id": reference_id,
+            "load_source": load_source,
+        }
+        if isinstance(fetch_reason, str) and fetch_reason.strip():
+            spec["fetch_reason"] = fetch_reason.strip()
+        if fetch_request_index is not None:
+            spec["fetch_request_index"] = int(fetch_request_index)
+        if fetch_request_total is not None:
+            spec["fetch_request_total"] = int(fetch_request_total)
+        specs.append(spec)
 
     @staticmethod
     def _collect_inlined_skill_reference_loads(
         skill_docs: list[Any],
         *,
-        selected_reference_ids_by_skill: dict[str, list[str]],
-        lazy_reference_ids_by_skill: dict[str, list[str]],
+        reference_load_specs_by_skill: dict[str, list[dict[str, Any]]],
     ) -> list[dict[str, Any]]:
         loaded_references: list[dict[str, Any]] = []
         for skill_doc in skill_docs:
@@ -815,34 +916,174 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             }
             if not references_by_id:
                 continue
-            for load_source, reference_ids in (
-                ("skill_binding", selected_reference_ids_by_skill.get(skill_doc.id, [])),
-                ("retrieval_query_match", lazy_reference_ids_by_skill.get(skill_doc.id, [])),
-            ):
-                for reference_id in reference_ids:
-                    reference = references_by_id.get(reference_id)
-                    if reference is None:
-                        continue
-                    retrieval = reference.retrieval
-                    loaded_references.append(
-                        {
-                            "skill_id": skill_doc.id,
-                            "skill_name": skill_doc.name,
-                            "reference_id": reference.id,
-                            "reference_name": reference.name,
-                            "load_source": load_source,
-                            "retrieval_http_path": (
-                                retrieval.http_path if retrieval is not None else None
-                            ),
-                            "retrieval_mcp_method": (
-                                retrieval.mcp_method if retrieval is not None else None
-                            ),
-                            "retrieval_mcp_params": (
-                                dict(retrieval.mcp_params) if retrieval is not None else {}
-                            ),
-                        }
-                    )
+            for spec in reference_load_specs_by_skill.get(skill_doc.id, []):
+                reference = references_by_id.get(str(spec.get("reference_id") or ""))
+                if reference is None:
+                    continue
+                retrieval = reference.retrieval
+                item = {
+                    "skill_id": skill_doc.id,
+                    "skill_name": skill_doc.name,
+                    "reference_id": reference.id,
+                    "reference_name": reference.name,
+                    "load_source": str(spec.get("load_source") or "unknown"),
+                    "retrieval_http_path": (
+                        retrieval.http_path if retrieval is not None else None
+                    ),
+                    "retrieval_mcp_method": (
+                        retrieval.mcp_method if retrieval is not None else None
+                    ),
+                    "retrieval_mcp_params": (
+                        dict(retrieval.mcp_params) if retrieval is not None else {}
+                    ),
+                }
+                fetch_reason = spec.get("fetch_reason")
+                if isinstance(fetch_reason, str) and fetch_reason.strip():
+                    item["fetch_reason"] = fetch_reason.strip()
+                if spec.get("fetch_request_index") is not None:
+                    item["fetch_request_index"] = int(spec["fetch_request_index"])
+                if spec.get("fetch_request_total") is not None:
+                    item["fetch_request_total"] = int(spec["fetch_request_total"])
+                loaded_references.append(item)
         return loaded_references
+
+    @staticmethod
+    def _skill_reference_load_key(item: dict[str, Any]) -> tuple[str, str]:
+        return (
+            str(item.get("skill_id") or "").strip(),
+            str(item.get("reference_id") or "").strip(),
+        )
+
+    def _apply_plan_skill_reference_request(
+        self,
+        db: Session,
+        *,
+        config: dict[str, Any],
+        node: dict[str, Any],
+        base_node_input: dict[str, Any],
+        retrieval_query: str,
+        current_loaded_references: list[dict[str, Any]],
+        request: AgentSkillReferenceRequest,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], RuntimeEvent | None]:
+        phase_node_input = dict(base_node_input)
+        workspace_id = str(config.get("workspaceId") or "default")
+        raw_skill_ids = config.get("skillIds")
+        normalized_skill_ids = (
+            [str(skill_id) for skill_id in raw_skill_ids] if isinstance(raw_skill_ids, list) else []
+        )
+        retrieval = self._skill_catalog.build_reference_retrieval(
+            skill_id=request.skill_id,
+            reference_id=request.reference_id,
+            workspace_id=workspace_id,
+        )
+        status = "loaded"
+        if request.skill_id not in normalized_skill_ids:
+            status = "skill_not_bound"
+            return phase_node_input, [], self._build_skill_reference_request_event(
+                node=node,
+                phase="main_plan",
+                request=request,
+                status=status,
+                retrieval=retrieval,
+            )
+
+        reference = self._skill_catalog.get_reference(
+            db,
+            skill_id=request.skill_id,
+            reference_id=request.reference_id,
+            workspace_id=workspace_id,
+        )
+        if reference is None:
+            status = "reference_not_found"
+            return phase_node_input, [], self._build_skill_reference_request_event(
+                node=node,
+                phase="main_plan",
+                request=request,
+                status=status,
+                retrieval=retrieval,
+            )
+
+        current_load_keys = {
+            self._skill_reference_load_key(item) for item in current_loaded_references
+        }
+        requested_load_key = (request.skill_id, request.reference_id)
+        if requested_load_key in current_load_keys:
+            status = "already_loaded"
+            return phase_node_input, [], self._build_skill_reference_request_event(
+                node=node,
+                phase="main_plan",
+                request=request,
+                status=status,
+                retrieval=retrieval,
+            )
+
+        skill_context, enriched_loaded_references = self._resolve_skill_context(
+            db,
+            config,
+            phase="main_plan",
+            retrieval_query=retrieval_query,
+            explicit_request=request,
+        )
+        requested_loaded = next(
+            (
+                item
+                for item in enriched_loaded_references
+                if self._skill_reference_load_key(item) == requested_load_key
+            ),
+            None,
+        )
+        if requested_loaded is None:
+            status = "requested_not_inlined"
+            return phase_node_input, [], self._build_skill_reference_request_event(
+                node=node,
+                phase="main_plan",
+                request=request,
+                status=status,
+                retrieval=retrieval,
+            )
+
+        delta_loads = [
+            item
+            for item in enriched_loaded_references
+            if self._skill_reference_load_key(item) not in current_load_keys
+        ]
+        if skill_context:
+            phase_node_input["skill_context"] = skill_context
+        else:
+            phase_node_input.pop("skill_context", None)
+        return phase_node_input, delta_loads, self._build_skill_reference_request_event(
+            node=node,
+            phase="main_plan",
+            request=request,
+            status=status,
+            retrieval=retrieval,
+        )
+
+    @staticmethod
+    def _build_skill_reference_request_event(
+        *,
+        node: dict[str, Any],
+        phase: str,
+        request: AgentSkillReferenceRequest,
+        status: str,
+        retrieval: Any,
+    ) -> RuntimeEvent:
+        payload: dict[str, Any] = {
+            "node_id": node["id"],
+            "phase": phase,
+            "skill_id": request.skill_id,
+            "reference_id": request.reference_id,
+            "status": status,
+            "request_index": 1,
+            "request_total": 1,
+        }
+        if request.reason.strip():
+            payload["reason"] = request.reason.strip()
+        if retrieval is not None:
+            payload["retrieval_http_path"] = getattr(retrieval, "http_path", None)
+            payload["retrieval_mcp_method"] = getattr(retrieval, "mcp_method", None)
+            payload["retrieval_mcp_params"] = dict(getattr(retrieval, "mcp_params", {}) or {})
+        return RuntimeEvent("agent.skill.references.requested", payload)
 
     @staticmethod
     def _emit_skill_reference_fetch_event(

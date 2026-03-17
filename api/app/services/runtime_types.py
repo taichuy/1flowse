@@ -156,12 +156,20 @@ class AgentToolCall:
     execution: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class AgentSkillReferenceRequest:
+    skill_id: str
+    reference_id: str
+    reason: str = ""
+
+
 @dataclass
 class AgentPlan:
     tool_calls: list[AgentToolCall] = field(default_factory=list)
     need_assistant: bool = False
     finalize_from: str = "evidence"
     analysis: str = ""
+    skill_reference_request: AgentSkillReferenceRequest | None = None
     llm_response: Any = None
 
     def as_dict(self) -> dict[str, Any]:

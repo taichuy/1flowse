@@ -200,3 +200,89 @@ def test_suggest_reference_ids_picks_best_query_match(
     )
 
     assert suggestions == {"skill-research-brief": ["ref-budget"]}
+
+
+def test_suggest_references_includes_matched_terms_reason(
+    sqlite_session: Session,
+) -> None:
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Summarize findings.",
+        )
+    )
+    sqlite_session.add(
+        SkillReferenceRecord(
+            id="ref-budget",
+            skill_id="skill-research-brief",
+            name="Budget Control",
+            description="Capture budget guardrails and cost limits.",
+            body="Always state the current budget ceiling.",
+        )
+    )
+    sqlite_session.commit()
+
+    service = SkillCatalogService()
+
+    suggestions = service.suggest_references(
+        sqlite_session,
+        skill_ids=["skill-research-brief"],
+        query_text="Need stricter budget guardrails before we continue.",
+        workspace_id="default",
+    )
+
+    assert suggestions["skill-research-brief"][0].reference_id == "ref-budget"
+    assert (
+        suggestions["skill-research-brief"][0].fetch_reason
+        == "Matched query terms: budget, guardrails"
+    )
+
+
+def test_build_prompt_docs_prioritizes_selected_reference_order(
+    sqlite_session: Session,
+) -> None:
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Brief",
+        )
+    )
+    sqlite_session.add_all(
+        [
+            SkillReferenceRecord(
+                id="ref-alpha",
+                skill_id="skill-research-brief",
+                name="Alpha Guide",
+                description="Alphabetically first reference.",
+                body="AAAAA",
+            ),
+            SkillReferenceRecord(
+                id="ref-zulu",
+                skill_id="skill-research-brief",
+                name="Zulu Guide",
+                description="Should win because the caller selected it first.",
+                body="ZZZZZ",
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    service = SkillCatalogService()
+    docs = service.build_prompt_docs(
+        sqlite_session,
+        skill_ids=["skill-research-brief"],
+        selected_reference_ids_by_skill={
+            "skill-research-brief": ["ref-zulu", "ref-alpha"]
+        },
+        prompt_budget_chars=10,
+    )
+
+    references_by_id = {reference.id: reference for reference in docs[0].references}
+    assert references_by_id["ref-zulu"].body == "ZZZZZ"
+    assert references_by_id["ref-alpha"].body in (None, "")

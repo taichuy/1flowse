@@ -391,6 +391,21 @@ def summarize_skill_reference_loads(
                         else None
                     ),
                     load_source=load_source,
+                    fetch_reason=(
+                        str(raw_reference.get("fetch_reason")).strip()
+                        if raw_reference.get("fetch_reason") is not None
+                        else None
+                    ),
+                    fetch_request_index=(
+                        int(raw_reference["fetch_request_index"])
+                        if raw_reference.get("fetch_request_index") is not None
+                        else None
+                    ),
+                    fetch_request_total=(
+                        int(raw_reference["fetch_request_total"])
+                        if raw_reference.get("fetch_request_total") is not None
+                        else None
+                    ),
                     retrieval_http_path=(
                         str(raw_reference.get("retrieval_http_path")).strip()
                         if raw_reference.get("retrieval_http_path") is not None

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from copy import deepcopy
 from typing import Any
@@ -7,11 +8,13 @@ from typing import Any
 from app.services.llm_provider import LLMResponse
 from app.services.runtime_types import (
     AgentPlan,
+    AgentSkillReferenceRequest,
     AgentToolCall,
     WorkflowExecutionError,
 )
 
 _log = logging.getLogger(__name__)
+_SKILL_REFERENCE_REQUEST_PREFIX = "SKILL_REFERENCE_REQUEST "
 
 
 class AgentRuntimeLLMPlanMixin:
@@ -40,6 +43,8 @@ class AgentRuntimeLLMPlanMixin:
         config: dict[str, Any],
         model_config: dict[str, Any],
         node_input: dict[str, Any],
+        *,
+        allow_skill_reference_request: bool = True,
     ) -> AgentPlan:
         raw_plan = self._to_dict(config.get("mockPlan"))
         raw_tool_calls = raw_plan.get("toolCalls") if raw_plan else None
@@ -70,19 +75,40 @@ class AgentRuntimeLLMPlanMixin:
             prompt = str(config.get("prompt") or "")
             if prompt:
                 try:
+                    system_prompt = (
+                        "You are a workflow planning engine. Analyze the task and "
+                        "provide a brief analysis of how to approach it. "
+                        "Be concise and actionable."
+                    )
+                    if allow_skill_reference_request and self._has_pending_skill_references(
+                        node_input
+                    ):
+                        system_prompt += (
+                            " If the current [Skills] section only gives summaries/handles and you "
+                            "need exactly one deeper skill reference body before planning, start "
+                            "your response with a single line in the format: "
+                            "SKILL_REFERENCE_REQUEST {\"skill_id\":\"...\","
+                            "\"reference_id\":\"...\",\"reason\":\"...\"}. "
+                            "After that line, include any brief analysis you can already provide. "
+                            "Only request one reference and only when it is genuinely necessary."
+                        )
                     llm_response = self._call_llm(
                         model_config=model_config,
-                        system_prompt=(
-                            "You are a workflow planning engine. Analyze the task and "
-                            "provide a brief analysis of how to approach it. "
-                            "Be concise and actionable."
-                        ),
+                        system_prompt=system_prompt,
                         user_prompt=prompt,
                         node_input=node_input,
                     )
-                    analysis = llm_response.text
+                    skill_reference_request, analysis = self._parse_plan_response(
+                        llm_response.text,
+                        allow_skill_reference_request=allow_skill_reference_request,
+                    )
                 except WorkflowExecutionError:
                     _log.warning("LLM plan call failed, using empty plan")
+                    skill_reference_request = None
+            else:
+                skill_reference_request = None
+        else:
+            skill_reference_request = None
 
         plan = AgentPlan(
             tool_calls=tool_calls,
@@ -95,8 +121,66 @@ class AgentRuntimeLLMPlanMixin:
         )
         if analysis:
             plan.analysis = analysis
+        plan.skill_reference_request = skill_reference_request
         plan.llm_response = llm_response
         return plan
+
+    @staticmethod
+    def _has_pending_skill_references(node_input: dict[str, Any]) -> bool:
+        skill_context = node_input.get("skill_context")
+        if not isinstance(skill_context, list):
+            return False
+        for skill_doc in skill_context:
+            if not isinstance(skill_doc, dict):
+                continue
+            for reference in skill_doc.get("references") or []:
+                if not isinstance(reference, dict):
+                    continue
+                has_body = isinstance(reference.get("body"), str) and bool(reference.get("body"))
+                retrieval = reference.get("retrieval")
+                if has_body or not isinstance(retrieval, dict):
+                    continue
+                if retrieval.get("http_path") or retrieval.get("mcp_method"):
+                    return True
+        return False
+
+    @staticmethod
+    def _parse_plan_response(
+        value: str,
+        *,
+        allow_skill_reference_request: bool,
+    ) -> tuple[AgentSkillReferenceRequest | None, str]:
+        if not allow_skill_reference_request or not isinstance(value, str):
+            return None, value
+
+        normalized = value.lstrip()
+        if not normalized.startswith(_SKILL_REFERENCE_REQUEST_PREFIX):
+            return None, value
+
+        request_line, _, remainder = normalized.partition("\n")
+        request_payload = request_line.removeprefix(_SKILL_REFERENCE_REQUEST_PREFIX).strip()
+        try:
+            parsed = json.loads(request_payload)
+        except json.JSONDecodeError:
+            return None, value
+        if not isinstance(parsed, dict):
+            return None, value
+
+        skill_id = str(parsed.get("skill_id") or parsed.get("skillId") or "").strip()
+        reference_id = str(
+            parsed.get("reference_id") or parsed.get("referenceId") or ""
+        ).strip()
+        if not skill_id or not reference_id:
+            return None, value
+        reason = str(parsed.get("reason") or "").strip()
+        return (
+            AgentSkillReferenceRequest(
+                skill_id=skill_id,
+                reference_id=reference_id,
+                reason=reason,
+            ),
+            remainder.lstrip(),
+        )
 
     @staticmethod
     def _restore_plan(payload: Any) -> AgentPlan | None:

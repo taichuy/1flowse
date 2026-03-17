@@ -594,6 +594,7 @@ def test_llm_agent_lazy_fetches_matching_skill_reference_body_at_runtime(
                 "reference_id": "ref-budget",
                 "reference_name": "Budget Control",
                 "load_source": "retrieval_query_match",
+                "fetch_reason": "Matched query terms: budget, guardrails",
                 "retrieval_http_path": (
                     "/api/skills/skill-research-brief/references/ref-budget"
                     "?workspace_id=default"
@@ -617,6 +618,157 @@ def test_llm_agent_lazy_fetches_matching_skill_reference_body_at_runtime(
     )
     assert "State the budget ceiling and warn before overspending." in combined_content
     assert "Always include what the operator should verify next." not in combined_content
+
+
+def test_llm_agent_can_explicitly_request_skill_reference_before_planning(
+    sqlite_session: Session,
+) -> None:
+    runtime = _create_runtime_with_llm(
+        [
+            _openai_response(
+                "SKILL_REFERENCE_REQUEST "
+                '{"skill_id":"skill-operator-brief","reference_id":"ref-canonical-signoff",'
+                '"reason":"Need the exact sign-off clause before planning."}'
+            ),
+            _openai_response("Plan after the explicit skill reference request."),
+            _openai_response("Final answer with the approved sign-off."),
+        ]
+    )
+
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-operator-brief",
+            workspace_id="default",
+            name="Operator Brief",
+            description="Draft concise operator-facing replies.",
+            body="Keep the answer concise and operational.",
+        )
+    )
+    sqlite_session.add(
+        SkillReferenceRecord(
+            id="ref-canonical-signoff",
+            skill_id="skill-operator-brief",
+            name="Meridian Appendix",
+            description="M47 phrase bank.",
+            body="Always close with: Escalate to finance before any extra spend.",
+        )
+    )
+
+    workflow = Workflow(
+        id="wf-agent-skill-explicit-request",
+        name="Agent Skill Explicit Request Test",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "goal": "Draft a concise operator response.",
+                        "prompt": "Draft a concise reply.",
+                        "skillIds": ["skill-operator-brief"],
+                        "skillBinding": {
+                            "enabledPhases": ["main_plan"],
+                            "promptBudgetChars": 512,
+                            "references": [],
+                        },
+                        "model": {
+                            "provider": "openai",
+                            "modelId": "gpt-4o",
+                            "apiKey": "sk-test-key",
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "ops reply"})
+
+    assert artifacts.run.status == "succeeded"
+
+    requested_event = next(
+        event
+        for event in artifacts.events
+        if event.event_type == "agent.skill.references.requested"
+    )
+    assert requested_event.payload == {
+        "node_id": "agent",
+        "phase": "main_plan",
+        "skill_id": "skill-operator-brief",
+        "reference_id": "ref-canonical-signoff",
+        "status": "loaded",
+        "request_index": 1,
+        "request_total": 1,
+        "reason": "Need the exact sign-off clause before planning.",
+        "retrieval_http_path": (
+            "/api/skills/skill-operator-brief/references/ref-canonical-signoff"
+            "?workspace_id=default"
+        ),
+        "retrieval_mcp_method": "skills.get_reference",
+        "retrieval_mcp_params": {
+            "skill_id": "skill-operator-brief",
+            "reference_id": "ref-canonical-signoff",
+            "workspace_id": "default",
+        },
+    }
+
+    loaded_events = [
+        event for event in artifacts.events if event.event_type == "agent.skill.references.loaded"
+    ]
+    assert loaded_events[-1].payload == {
+        "node_id": "agent",
+        "phase": "main_plan",
+        "references": [
+            {
+                "skill_id": "skill-operator-brief",
+                "skill_name": "Operator Brief",
+                "reference_id": "ref-canonical-signoff",
+                "reference_name": "Meridian Appendix",
+                "load_source": "llm_explicit_request",
+                "fetch_reason": "Need the exact sign-off clause before planning.",
+                "fetch_request_index": 1,
+                "fetch_request_total": 1,
+                "retrieval_http_path": (
+                    "/api/skills/skill-operator-brief/references/ref-canonical-signoff"
+                    "?workspace_id=default"
+                ),
+                "retrieval_mcp_method": "skills.get_reference",
+                "retrieval_mcp_params": {
+                    "skill_id": "skill-operator-brief",
+                    "reference_id": "ref-canonical-signoff",
+                    "workspace_id": "default",
+                },
+            }
+        ],
+    }
+
+    captured_requests = runtime._llm_provider._captured_requests  # type: ignore[attr-defined]
+    assert len(captured_requests) == 3
+
+    first_plan_content = "\n".join(
+        str(message.get("content", ""))
+        for message in captured_requests[0]["body"]["messages"]
+        if isinstance(message, dict)
+    )
+    second_plan_content = "\n".join(
+        str(message.get("content", ""))
+        for message in captured_requests[1]["body"]["messages"]
+        if isinstance(message, dict)
+    )
+    assert "M47 phrase bank." in first_plan_content
+    assert "Escalate to finance before any extra spend." not in first_plan_content
+    assert "Escalate to finance before any extra spend." in second_plan_content
 
 
 # ---------------------------------------------------------------------------

@@ -29,11 +29,40 @@ class SkillCatalogError(ValueError):
 
 
 _REFERENCE_QUERY_TOKEN_RE = re.compile(r"[A-Za-z0-9_]{3,}|[\u4e00-\u9fff]{2,}")
+_REFERENCE_REASON_STOPWORDS = frozenset(
+    {
+        "and",
+        "the",
+        "with",
+        "this",
+        "that",
+        "from",
+        "into",
+        "before",
+        "after",
+        "over",
+        "under",
+        "need",
+    }
+)
 
 
 @dataclass(frozen=True)
 class SkillCatalogReferenceIndexItem:
     reference_ids: frozenset[str]
+
+
+@dataclass(frozen=True)
+class SkillCatalogReferenceSuggestionItem:
+    reference_id: str
+    score: int
+    matched_terms: tuple[str, ...] = ()
+
+    @property
+    def fetch_reason(self) -> str | None:
+        if not self.matched_terms:
+            return None
+        return "Matched query terms: " + ", ".join(self.matched_terms)
 
 
 class SkillCatalogService:
@@ -230,11 +259,24 @@ class SkillCatalogService:
         for skill_id in normalized_skill_ids:
             record = record_by_id[skill_id]
             body, remaining_budget = self._consume_prompt_budget(record.body, remaining_budget)
-            selected_reference_ids = normalized_reference_selections.get(skill_id, frozenset())
+            selected_reference_ids = normalized_reference_selections.get(skill_id, ())
+            selected_reference_id_set = set(selected_reference_ids)
+            selected_reference_order = {
+                reference_id: index for index, reference_id in enumerate(selected_reference_ids)
+            }
             prompt_references: list[SkillPromptReference] = []
-            for reference in references_by_skill.get(record.id, []):
+            ordered_references = sorted(
+                references_by_skill.get(record.id, []),
+                key=lambda reference: (
+                    0 if reference.id in selected_reference_id_set else 1,
+                    selected_reference_order.get(reference.id, len(selected_reference_order)),
+                    reference.name.lower(),
+                    reference.id,
+                ),
+            )
+            for reference in ordered_references:
                 reference_body: str | None = None
-                if reference.id in selected_reference_ids:
+                if reference.id in selected_reference_id_set:
                     reference_body, remaining_budget = self._consume_prompt_budget(
                         reference.body,
                         remaining_budget,
@@ -263,7 +305,7 @@ class SkillCatalogService:
             )
         return prompt_docs
 
-    def suggest_reference_ids(
+    def suggest_references(
         self,
         db: Session,
         *,
@@ -272,7 +314,7 @@ class SkillCatalogService:
         workspace_id: str = "default",
         excluded_reference_ids_by_skill: Mapping[str, Sequence[str]] | None = None,
         max_references_per_skill: int = 1,
-    ) -> dict[str, list[str]]:
+    ) -> dict[str, list[SkillCatalogReferenceSuggestionItem]]:
         normalized_skill_ids = self._normalize_skill_ids(skill_ids)
         if not normalized_skill_ids:
             return {}
@@ -302,14 +344,14 @@ class SkillCatalogService:
             references_by_skill.setdefault(reference.skill_id, []).append(reference)
 
         per_skill_limit = max(1, int(max_references_per_skill))
-        suggestions: dict[str, list[str]] = {}
+        suggestions: dict[str, list[SkillCatalogReferenceSuggestionItem]] = {}
         for skill_id in normalized_skill_ids:
-            excluded_ids = excluded_reference_ids.get(skill_id, frozenset())
-            ranked_reference_ids: list[tuple[int, str, str]] = []
+            excluded_ids = set(excluded_reference_ids.get(skill_id, ()))
+            ranked_reference_ids: list[tuple[int, str, str, tuple[str, ...]]] = []
             for reference in references_by_skill.get(skill_id, []):
                 if reference.id in excluded_ids:
                     continue
-                score = self._score_reference_query_match(query_tokens, reference)
+                score, matched_terms = self._match_reference_query(reference, query_tokens)
                 if score <= 0:
                     continue
                 ranked_reference_ids.append(
@@ -317,16 +359,44 @@ class SkillCatalogService:
                         -score,
                         reference.name.lower(),
                         reference.id,
+                        matched_terms,
                     )
                 )
             if not ranked_reference_ids:
                 continue
             ranked_reference_ids.sort()
             suggestions[skill_id] = [
-                reference_id
-                for _, _, reference_id in ranked_reference_ids[:per_skill_limit]
+                SkillCatalogReferenceSuggestionItem(
+                    reference_id=reference_id,
+                    score=-score,
+                    matched_terms=matched_terms,
+                )
+                for score, _, reference_id, matched_terms in ranked_reference_ids[:per_skill_limit]
             ]
         return suggestions
+
+    def suggest_reference_ids(
+        self,
+        db: Session,
+        *,
+        skill_ids: Sequence[str],
+        query_text: str,
+        workspace_id: str = "default",
+        excluded_reference_ids_by_skill: Mapping[str, Sequence[str]] | None = None,
+        max_references_per_skill: int = 1,
+    ) -> dict[str, list[str]]:
+        suggestions = self.suggest_references(
+            db,
+            skill_ids=skill_ids,
+            query_text=query_text,
+            workspace_id=workspace_id,
+            excluded_reference_ids_by_skill=excluded_reference_ids_by_skill,
+            max_references_per_skill=max_references_per_skill,
+        )
+        return {
+            skill_id: [item.reference_id for item in suggestion_items]
+            for skill_id, suggestion_items in suggestions.items()
+        }
 
     def build_reference_retrieval(
         self,
@@ -502,22 +572,25 @@ class SkillCatalogService:
     @staticmethod
     def _normalize_reference_selections(
         selected_reference_ids_by_skill: Mapping[str, Sequence[str]] | None,
-    ) -> dict[str, frozenset[str]]:
+    ) -> dict[str, tuple[str, ...]]:
         if not selected_reference_ids_by_skill:
             return {}
 
-        normalized: dict[str, frozenset[str]] = {}
+        normalized: dict[str, tuple[str, ...]] = {}
         for raw_skill_id, raw_reference_ids in selected_reference_ids_by_skill.items():
             skill_id = str(raw_skill_id or "").strip()
             if not skill_id:
                 continue
-            normalized_reference_ids = {
-                str(reference_id).strip()
-                for reference_id in raw_reference_ids
-                if str(reference_id).strip()
-            }
+            normalized_reference_ids: list[str] = []
+            seen_reference_ids: set[str] = set()
+            for raw_reference_id in raw_reference_ids:
+                reference_id = str(raw_reference_id).strip()
+                if not reference_id or reference_id in seen_reference_ids:
+                    continue
+                normalized_reference_ids.append(reference_id)
+                seen_reference_ids.add(reference_id)
             if normalized_reference_ids:
-                normalized[skill_id] = frozenset(sorted(normalized_reference_ids))
+                normalized[skill_id] = tuple(normalized_reference_ids)
         return normalized
 
     @staticmethod
@@ -525,7 +598,7 @@ class SkillCatalogService:
         *,
         normalized_skill_ids: Sequence[str],
         references_by_skill: Mapping[str, Sequence[SkillReferenceRecord]],
-        selected_reference_ids_by_skill: Mapping[str, frozenset[str]],
+        selected_reference_ids_by_skill: Mapping[str, Sequence[str]],
     ) -> None:
         missing_references: list[str] = []
         selected_skill_ids = set(selected_reference_ids_by_skill)
@@ -587,9 +660,25 @@ class SkillCatalogService:
         query_tokens: frozenset[str],
         reference: SkillReferenceRecord,
     ) -> int:
+        score, _ = cls._match_reference_query(reference, query_tokens)
+        return score
+
+    @classmethod
+    def _match_reference_query(
+        cls,
+        reference: SkillReferenceRecord,
+        query_tokens: frozenset[str],
+    ) -> tuple[int, tuple[str, ...]]:
         name_tokens = cls._tokenize_reference_query(reference.name)
         description_tokens = cls._tokenize_reference_query(reference.description)
-        return len(query_tokens & name_tokens) * 3 + len(query_tokens & description_tokens)
+        raw_matched_terms = query_tokens & (name_tokens | description_tokens)
+        matched_terms = tuple(
+            sorted(term for term in raw_matched_terms if term not in _REFERENCE_REASON_STOPWORDS)
+        )
+        if not matched_terms:
+            matched_terms = tuple(sorted(raw_matched_terms))
+        score = len(query_tokens & name_tokens) * 3 + len(query_tokens & description_tokens)
+        return score, matched_terms
 
     @staticmethod
     def _read_workspace_id(params: Mapping[str, object]) -> str:

@@ -76,6 +76,9 @@ export type SkillReferenceLoadReferenceItem = {
   reference_id: string;
   reference_name?: string | null;
   load_source: string;
+  fetch_reason?: string | null;
+  fetch_request_index?: number | null;
+  fetch_request_total?: number | null;
   retrieval_http_path?: string | null;
   retrieval_mcp_method?: string | null;
   retrieval_mcp_params: Record<string, string>;

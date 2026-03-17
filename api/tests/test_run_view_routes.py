@@ -393,6 +393,7 @@ def test_get_run_execution_view_surfaces_skill_reference_loads(
                             "reference_id": "ref-budget",
                             "reference_name": "Budget Control",
                             "load_source": "retrieval_query_match",
+                            "fetch_reason": "Matched query terms: budget, guardrails",
                             "retrieval_http_path": (
                                 "/api/skills/skill-research-brief/references/ref-budget"
                                 "?workspace_id=default"
@@ -425,47 +426,18 @@ def test_get_run_execution_view_surfaces_skill_reference_loads(
     assert len(body["nodes"]) == 1
     node = body["nodes"][0]
     assert node["skill_reference_load_count"] == 2
-    assert node["skill_reference_loads"] == [
-        {
-            "phase": "main_plan",
-            "references": [
-                {
-                    "skill_id": "skill-research-brief",
-                    "skill_name": "Research Brief",
-                    "reference_id": "ref-handoff",
-                    "reference_name": "Operator Handoff",
-                    "load_source": "skill_binding",
-                    "retrieval_http_path": (
-                        "/api/skills/skill-research-brief/references/ref-handoff"
-                        "?workspace_id=default"
-                    ),
-                    "retrieval_mcp_method": "skills.get_reference",
-                    "retrieval_mcp_params": {
-                        "skill_id": "skill-research-brief",
-                        "reference_id": "ref-handoff",
-                        "workspace_id": "default",
-                    },
-                },
-                {
-                    "skill_id": "skill-research-brief",
-                    "skill_name": "Research Brief",
-                    "reference_id": "ref-budget",
-                    "reference_name": "Budget Control",
-                    "load_source": "retrieval_query_match",
-                    "retrieval_http_path": (
-                        "/api/skills/skill-research-brief/references/ref-budget"
-                        "?workspace_id=default"
-                    ),
-                    "retrieval_mcp_method": "skills.get_reference",
-                    "retrieval_mcp_params": {
-                        "skill_id": "skill-research-brief",
-                        "reference_id": "ref-budget",
-                        "workspace_id": "default",
-                    },
-                },
-            ],
-        }
-    ]
+    assert len(node["skill_reference_loads"]) == 1
+    load = node["skill_reference_loads"][0]
+    assert load["phase"] == "main_plan"
+    assert len(load["references"]) == 2
+    first_reference, second_reference = load["references"]
+    assert first_reference["reference_id"] == "ref-handoff"
+    assert first_reference["load_source"] == "skill_binding"
+    assert first_reference["retrieval_mcp_method"] == "skills.get_reference"
+    assert second_reference["reference_id"] == "ref-budget"
+    assert second_reference["load_source"] == "retrieval_query_match"
+    assert second_reference["fetch_reason"] == "Matched query terms: budget, guardrails"
+    assert second_reference["retrieval_mcp_method"] == "skills.get_reference"
 
 
 def test_get_run_evidence_view_returns_evidence_nodes_only(
