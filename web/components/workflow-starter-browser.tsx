@@ -91,8 +91,10 @@ export function WorkflowStarterBrowser({
             </div>
             <div className="starter-meta-row">
               <span>{starter.nodeCount} nodes</span>
+              <span>{starter.governedToolCount} governed tools</span>
+              <span>{starter.strongIsolationToolCount} strong isolation</span>
               <span>{starter.source.shortLabel}</span>
-              <span>{starter.tags[0]}</span>
+              <span>{starter.tags[0] ?? "starter"}</span>
             </div>
           </button>
         ))}

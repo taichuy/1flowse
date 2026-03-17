@@ -25,6 +25,7 @@ export default async function NewWorkflowPage({ searchParams }: NewWorkflowPageP
       starters={workflowLibrary.starters}
       starterSourceLanes={workflowLibrary.starterSourceLanes}
       nodeCatalog={workflowLibrary.nodes}
+      tools={workflowLibrary.tools}
       preferredStarterId={readQueryValue(resolvedSearchParams.starter)}
       workflows={workflows}
     />

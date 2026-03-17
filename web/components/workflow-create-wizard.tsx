@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
+import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
+import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type {
   WorkflowLibrarySourceLane,
@@ -29,6 +31,7 @@ type WorkflowCreateWizardProps = {
   starters: WorkflowLibraryStarterItem[];
   starterSourceLanes: WorkflowLibrarySourceLane[];
   nodeCatalog: WorkflowNodeCatalogItem[];
+  tools: PluginToolRegistryItem[];
 };
 
 export function WorkflowCreateWizard({
@@ -37,12 +40,13 @@ export function WorkflowCreateWizard({
   workflows,
   starters,
   starterSourceLanes,
-  nodeCatalog
+  nodeCatalog,
+  tools
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
   const starterTemplates = useMemo(
-    () => buildWorkflowStarterTemplates(starters, nodeCatalog),
-    [nodeCatalog, starters]
+    () => buildWorkflowStarterTemplates(starters, nodeCatalog, tools),
+    [nodeCatalog, starters, tools]
   );
   const starterTracks = useMemo(
     () => buildWorkflowStarterTracks(starterTemplates),
@@ -270,12 +274,46 @@ export function WorkflowCreateWizard({
                   <span>Nodes</span>
                   <strong>{selectedStarter.nodeCount}</strong>
                 </div>
+                <div className="summary-card">
+                  <span>Governed tools</span>
+                  <strong>{selectedStarter.governedToolCount}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Strong isolation</span>
+                  <strong>{selectedStarter.strongIsolationToolCount}</strong>
+                </div>
               </div>
               <p className="starter-focus-copy">{selectedStarter.trackSummary}</p>
               <p className="starter-focus-copy">{selectedStarter.source.summary}</p>
               <p className="starter-focus-copy">
                 下一步：{selectedStarter.recommendedNextStep}
               </p>
+              {selectedStarter.referencedTools.length > 0 ? (
+                <div className="binding-form">
+                  <p className="binding-label">Tool governance in this starter</p>
+                  <p className="binding-meta">
+                    创建前先确认 starter 已引用的工具是否默认需要 `sandbox / microvm`，避免后面进入画布后才发现治理约束。
+                  </p>
+                  {selectedStarter.referencedTools.slice(0, 2).map((tool) => (
+                    <ToolGovernanceSummary
+                      key={`starter-tool-${tool.id}`}
+                      tool={tool}
+                      title={tool.name || tool.id}
+                      subtitle={`${tool.ecosystem} · starter referenced tool`}
+                    />
+                  ))}
+                  {selectedStarter.referencedTools.length > 2 ? (
+                    <p className="binding-meta">
+                      还有 {selectedStarter.referencedTools.length - 2} 个引用工具会在进入编辑器后继续沿同一治理规则展示。
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {selectedStarter.missingToolIds.length > 0 ? (
+                <p className="sync-message error">
+                  当前 starter 引用了目录里不存在的 tool：{selectedStarter.missingToolIds.join(", ")}。
+                </p>
+              ) : null}
               <div className="starter-tag-row">
                 {selectedStarter.nodeLabels.map((nodeLabel) => (
                   <span className="event-chip" key={`summary-${nodeLabel}`}>
