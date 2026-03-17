@@ -304,6 +304,21 @@ function buildSandboxReadinessIssue({
     (item) => item.execution_class === requestedExecutionClass
   );
   if (readiness?.available) {
+    const profile = normalizeString(executionPayload?.profile);
+    if (
+      profile &&
+      sandboxReadiness.supported_profiles.length > 0 &&
+      !sandboxReadiness.supported_profiles.includes(profile)
+    ) {
+      return {
+        nodeId,
+        nodeName,
+        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 profile = ${profile}，但当前 sandbox readiness 聚合视图还没有暴露该 profile，工具 ${toolId} 不能稳定落到兼容后端。`,
+        path,
+        field
+      };
+    }
+
     const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
     if (
       dependencyMode &&
@@ -340,6 +355,28 @@ function buildSandboxReadinessIssue({
         nodeId,
         nodeName,
         message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 backendExtensions，但当前 sandbox readiness 聚合视图还不支持 backendExtensions payload，工具 ${toolId} 不能稳定落到兼容后端。`,
+        path,
+        field
+      };
+    }
+
+    const networkPolicy = normalizeString(executionPayload?.networkPolicy);
+    if (networkPolicy && !sandboxReadiness.supports_network_policy) {
+      return {
+        nodeId,
+        nodeName,
+        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 networkPolicy = ${networkPolicy}，但当前 sandbox readiness 聚合视图还不支持 networkPolicy hints，工具 ${toolId} 不能稳定落到兼容后端。`,
+        path,
+        field
+      };
+    }
+
+    const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
+    if (filesystemPolicy && !sandboxReadiness.supports_filesystem_policy) {
+      return {
+        nodeId,
+        nodeName,
+        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 filesystemPolicy = ${filesystemPolicy}，但当前 sandbox readiness 聚合视图还不支持 filesystemPolicy hints，工具 ${toolId} 不能稳定落到兼容后端。`,
         path,
         field
       };
