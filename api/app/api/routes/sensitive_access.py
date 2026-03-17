@@ -36,6 +36,7 @@ from app.services.sensitive_access_control import (
     SensitiveAccessControlError,
     SensitiveAccessControlService,
     SensitiveAccessRequestBundle,
+    SensitiveAccessTicketExpiredError,
 )
 from app.services.sensitive_access_presenters import (
     serialize_approval_ticket,
@@ -85,7 +86,7 @@ def _raise_sensitive_access_error(exc: SensitiveAccessControlError) -> None:
     status_code = (
         status.HTTP_404_NOT_FOUND
         if "not found" in detail.lower()
-        else status.HTTP_422_UNPROCESSABLE_ENTITY
+        else status.HTTP_422_UNPROCESSABLE_CONTENT
     )
     raise HTTPException(status_code=status_code, detail=detail) from exc
 
@@ -305,6 +306,9 @@ def decide_approval_ticket(
             status=payload.status,
             approved_by=payload.approved_by,
         )
+    except SensitiveAccessTicketExpiredError as exc:
+        db.commit()
+        _raise_sensitive_access_error(exc)
     except SensitiveAccessControlError as exc:
         _raise_sensitive_access_error(exc)
     db.commit()

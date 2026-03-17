@@ -8,10 +8,24 @@ celery_app = Celery(
     "sevenflows",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.heartbeat", "app.tasks.notifications", "app.tasks.runtime"],
+    include=[
+        "app.tasks.heartbeat",
+        "app.tasks.notifications",
+        "app.tasks.runtime",
+        "app.tasks.sensitive_access",
+    ],
 )
 
 beat_schedule: dict[str, dict[str, object]] = {}
+if (
+    settings.approval_ticket_expiry_schedule_enabled
+    and settings.approval_ticket_expiry_interval_seconds > 0
+):
+    beat_schedule["sensitive_access.expire_approval_tickets"] = {
+        "task": "sensitive_access.expire_approval_tickets",
+        "schedule": settings.approval_ticket_expiry_interval_seconds,
+        "kwargs": {"source": "scheduler_expiry"},
+    }
 if (
     settings.callback_ticket_cleanup_schedule_enabled
     and settings.callback_ticket_cleanup_interval_seconds > 0

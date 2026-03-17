@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     sandbox_api_key: str = "sevenflows-sandbox"
     durable_agent_runtime_enabled: bool = True
     plugin_default_timeout_ms: int = 30_000
+    approval_ticket_ttl_seconds: int = 86_400
+    approval_ticket_expiry_batch_size: int = 100
+    approval_ticket_expiry_schedule_enabled: bool = True
+    approval_ticket_expiry_interval_seconds: int = 300
     callback_ticket_ttl_seconds: int = 86_400
     callback_ticket_max_expired_cycles: int = 3
     callback_ticket_cleanup_batch_size: int = 100
