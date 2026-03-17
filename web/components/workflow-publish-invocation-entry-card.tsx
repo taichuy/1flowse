@@ -2,9 +2,18 @@ import Link from "next/link";
 
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
 import {
+  formatCallbackLifecycleLabel,
+  formatScheduledResumeLabel,
+  getCallbackWaitingHeadline,
+  listCallbackWaitingBlockerRows,
+  listCallbackWaitingChips
+} from "@/lib/callback-waiting-presenters";
+import {
+  buildPublishedInvocationInboxHref,
   formatPublishedInvocationCacheStatusLabel,
   formatPublishedInvocationReasonLabel,
-  formatPublishedInvocationSurfaceLabel
+  formatPublishedInvocationSurfaceLabel,
+  formatPublishedRunStatusLabel
 } from "@/lib/published-invocation-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
@@ -28,54 +37,6 @@ function formatMetricCounts(metrics: Record<string, number> | null | undefined):
   return parts.length ? parts.join(" · ") : "0";
 }
 
-function formatScheduledResume(item: PublishedInvocationItem): string {
-  const scheduledResume = item.run_waiting_lifecycle;
-  if (!scheduledResume?.scheduled_resume_delay_seconds) {
-    return "n/a";
-  }
-
-  const parts = [`${scheduledResume.scheduled_resume_delay_seconds}s`];
-  if (scheduledResume.scheduled_resume_source) {
-    parts.push(scheduledResume.scheduled_resume_source);
-  }
-  if (scheduledResume.scheduled_waiting_status) {
-    parts.push(scheduledResume.scheduled_waiting_status);
-  }
-  return parts.join(" · ");
-}
-
-function formatCallbackLifecycle(item: PublishedInvocationItem): string | null {
-  const lifecycle = item.run_waiting_lifecycle?.callback_waiting_lifecycle;
-  if (!lifecycle) {
-    return null;
-  }
-
-  const parts: string[] = [];
-  if (lifecycle.wait_cycle_count > 0) {
-    parts.push(`wait cycles ${lifecycle.wait_cycle_count}`);
-  }
-  if (lifecycle.expired_ticket_count > 0) {
-    parts.push(`expired ${lifecycle.expired_ticket_count}`);
-  }
-  if (lifecycle.late_callback_count > 0) {
-    parts.push(`late callbacks ${lifecycle.late_callback_count}`);
-  }
-  if (typeof lifecycle.last_resume_delay_seconds === "number") {
-    parts.push(`resume ${lifecycle.last_resume_delay_seconds}s`);
-  }
-  if (lifecycle.last_resume_backoff_attempt > 0) {
-    parts.push(`backoff #${lifecycle.last_resume_backoff_attempt}`);
-  }
-  if (lifecycle.max_expired_ticket_count > 0) {
-    parts.push(`max expired ${lifecycle.max_expired_ticket_count}`);
-  }
-  if (lifecycle.terminated) {
-    parts.push("terminated");
-  }
-
-  return parts.length ? parts.join(" · ") : "callback lifecycle tracked";
-}
-
 function hasInvocationDrilldown(item: PublishedInvocationItem): boolean {
   return Boolean(
     item.error_message ||
@@ -91,7 +52,36 @@ export function WorkflowPublishInvocationEntryCard({
   detailHref,
   detailActive
 }: WorkflowPublishInvocationEntryCardProps) {
-  const callbackLifecycle = formatCallbackLifecycle(item);
+  const waitingLifecycle = item.run_waiting_lifecycle;
+  const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
+  const scheduledResumeLabel =
+    formatScheduledResumeLabel({
+      scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+      scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
+      scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status
+    }) ?? "n/a";
+  const callbackLifecycleLabel = formatCallbackLifecycleLabel(callbackLifecycle);
+  const waitingHeadline = getCallbackWaitingHeadline({
+    lifecycle: callbackLifecycle,
+    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
+    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status
+  });
+  const waitingChips = listCallbackWaitingChips({
+    lifecycle: callbackLifecycle,
+    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds
+  });
+  const waitingBlockerRows = listCallbackWaitingBlockerRows({
+    lifecycle: callbackLifecycle,
+    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
+    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status
+  });
+  const inboxHref = buildPublishedInvocationInboxHref({
+    invocation: item,
+    callbackTickets: [],
+    sensitiveAccessEntries: []
+  });
 
   return (
     <article className="payload-card compact-card">
@@ -110,6 +100,13 @@ export function WorkflowPublishInvocationEntryCard({
         {formatPublishedInvocationSurfaceLabel(item.request_surface)} · {item.request_source} ·{" "}
         {formatTimestamp(item.created_at)} · {formatDurationMs(item.duration_ms)}
       </p>
+      {inboxHref ? (
+        <div className="tool-badge-row">
+          <Link className="event-chip inbox-filter-link" href={inboxHref}>
+            open waiting inbox
+          </Link>
+        </div>
+      ) : null}
       <dl className="compact-meta-list">
         <div>
           <dt>API key</dt>
@@ -133,7 +130,7 @@ export function WorkflowPublishInvocationEntryCard({
         </div>
         <div>
           <dt>Run status</dt>
-          <dd>{item.run_status ?? "n/a"}</dd>
+          <dd>{formatPublishedRunStatusLabel(item.run_status)}</dd>
         </div>
         <div>
           <dt>Current node</dt>
@@ -153,7 +150,7 @@ export function WorkflowPublishInvocationEntryCard({
         </div>
         <div>
           <dt>Scheduled resume</dt>
-          <dd>{formatScheduledResume(item)}</dd>
+          <dd>{scheduledResumeLabel}</dd>
         </div>
       </dl>
       {item.run_status === "waiting" ? (
@@ -163,19 +160,47 @@ export function WorkflowPublishInvocationEntryCard({
           {item.run_waiting_reason ? `，等待原因 ${item.run_waiting_reason}` : ""}。
         </p>
       ) : null}
-      {item.run_waiting_lifecycle ? (
-        <p className="section-copy entry-copy">
-          waiting drilldown：node run {item.run_waiting_lifecycle.node_run_id} · node status{" "}
-          {item.run_waiting_lifecycle.node_status}
-          {item.run_waiting_lifecycle.callback_ticket_count
-            ? ` · callback tickets ${item.run_waiting_lifecycle.callback_ticket_count}`
-            : ""}
-          {item.run_waiting_lifecycle.scheduled_resume_delay_seconds
-            ? ` · scheduled resume ${formatScheduledResume(item)}`
-            : ""}
-          {callbackLifecycle ? ` · ${callbackLifecycle}` : ""}
-          。
-        </p>
+      {waitingLifecycle ? (
+        <div className="publish-meta-grid">
+          <div className="payload-card compact-card">
+            <div className="payload-card-header">
+              <span className="status-meta">Waiting overview</span>
+            </div>
+            <p className="section-copy entry-copy">
+              {waitingHeadline ??
+                `node run ${waitingLifecycle.node_run_id} is still ${waitingLifecycle.node_status}.`}
+            </p>
+            {waitingChips.length ? <p className="binding-meta">{waitingChips.join(" · ")}</p> : null}
+            <dl className="compact-meta-list">
+              <div>
+                <dt>Node run</dt>
+                <dd>{waitingLifecycle.node_run_id}</dd>
+              </div>
+              <div>
+                <dt>Node status</dt>
+                <dd>{waitingLifecycle.node_status}</dd>
+              </div>
+              <div>
+                <dt>Callback tickets</dt>
+                <dd>
+                  {waitingLifecycle.callback_ticket_count
+                    ? `${waitingLifecycle.callback_ticket_count} · ${formatMetricCounts(waitingLifecycle.callback_ticket_status_counts)}`
+                    : "0"}
+                </dd>
+              </div>
+              <div>
+                <dt>Callback lifecycle</dt>
+                <dd>{callbackLifecycleLabel ?? "tracked in detail panel"}</dd>
+              </div>
+              {waitingBlockerRows.map((row) => (
+                <div key={`${item.id}:${row.label}`}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
       ) : null}
       {item.run_status === "succeeded" ? (
         <p className="section-copy entry-copy">
