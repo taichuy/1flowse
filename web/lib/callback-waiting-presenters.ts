@@ -3,6 +3,7 @@ import type {
   RunCallbackTicketItem
 } from "@/lib/get-run-views";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
@@ -44,6 +45,8 @@ export type CallbackWaitingDetailRow = {
   label: string;
   value: string;
 };
+
+type CallbackTicketDetailRowMode = "compact" | "detail";
 
 export type CallbackWaitingOperatorStatus = {
   kind:
@@ -330,6 +333,127 @@ export function formatCallbackWaitingSensitiveAccessSummary(
     formatSensitiveAccessDecisionLabel(entry.request),
     formatSensitiveAccessReasonLabel(entry.request),
     getSensitiveAccessPolicySummary(entry.request)
+  ]);
+}
+
+function formatOptionalTimestamp(value?: string | null): string | null {
+  const formatted = formatTimestamp(value);
+  return formatted === "n/a" ? null : formatted;
+}
+
+function formatCallbackTicketToolSummary(ticket: RunCallbackTicketItem): string {
+  const toolLabel = ticket.tool_id ?? "n/a";
+  return `${toolLabel} · call #${ticket.tool_call_index}`;
+}
+
+export function formatCallbackTicketLifecycleSummary(
+  ticket: RunCallbackTicketItem,
+  options?: {
+    includeEmpty?: boolean;
+  }
+): string | null {
+  const includeEmpty = options?.includeEmpty ?? false;
+  const lifecycleParts = [
+    formatOptionalTimestamp(ticket.created_at)
+      ? `created ${formatOptionalTimestamp(ticket.created_at)}`
+      : includeEmpty
+        ? "created n/a"
+        : null,
+    formatOptionalTimestamp(ticket.expires_at)
+      ? `expires ${formatOptionalTimestamp(ticket.expires_at)}`
+      : includeEmpty
+        ? "expires n/a"
+        : null,
+    formatOptionalTimestamp(ticket.consumed_at)
+      ? `consumed ${formatOptionalTimestamp(ticket.consumed_at)}`
+      : includeEmpty
+        ? "consumed n/a"
+        : null,
+    formatOptionalTimestamp(ticket.canceled_at)
+      ? `canceled ${formatOptionalTimestamp(ticket.canceled_at)}`
+      : includeEmpty
+        ? "canceled n/a"
+        : null,
+    formatOptionalTimestamp(ticket.expired_at)
+      ? `expired ${formatOptionalTimestamp(ticket.expired_at)}`
+      : includeEmpty
+        ? "expired n/a"
+        : null
+  ];
+
+  return formatOptionalParts(lifecycleParts);
+}
+
+export function listCallbackTicketDetailRows(
+  ticket: RunCallbackTicketItem,
+  options?: {
+    mode?: CallbackTicketDetailRowMode;
+    includeEmptyLifecycle?: boolean;
+  }
+): CallbackWaitingDetailRow[] {
+  const mode = options?.mode ?? "detail";
+  const lifecycleSummary = formatCallbackTicketLifecycleSummary(ticket, {
+    includeEmpty: options?.includeEmptyLifecycle ?? mode === "detail"
+  });
+
+  if (mode === "compact") {
+    return buildDetailRows([
+      {
+        label: "Waiting status",
+        value: `${ticket.status} · ${ticket.waiting_status}`
+      },
+      {
+        label: "Reason",
+        value: ticket.reason
+      },
+      {
+        label: "Lifecycle",
+        value: lifecycleSummary
+      }
+    ]);
+  }
+
+  return buildDetailRows([
+    {
+      label: "Ticket",
+      value: ticket.ticket
+    },
+    {
+      label: "Node run",
+      value: ticket.node_run_id
+    },
+    {
+      label: "Tool",
+      value: formatCallbackTicketToolSummary(ticket)
+    },
+    {
+      label: "Waiting status",
+      value: `${ticket.status} · ${ticket.waiting_status}`
+    },
+    {
+      label: "Reason",
+      value: ticket.reason ?? "n/a"
+    },
+    {
+      label: "Created",
+      value: formatOptionalTimestamp(ticket.created_at) ?? "n/a"
+    },
+    {
+      label: "Expires",
+      value: formatOptionalTimestamp(ticket.expires_at) ?? "n/a"
+    },
+    {
+      label: "Consumed",
+      value: formatOptionalTimestamp(ticket.consumed_at) ?? "n/a"
+    },
+    {
+      label: "Canceled",
+      value: formatOptionalTimestamp(ticket.canceled_at) ?? "n/a"
+    },
+    {
+      label: "Expired",
+      value: formatOptionalTimestamp(ticket.expired_at) ?? "n/a"
+    }
   ]);
 }
 

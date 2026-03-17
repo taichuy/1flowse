@@ -9,6 +9,7 @@ import type {
   ToolCallItem
 } from "@/lib/get-run-views";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
+import { listCallbackTicketDetailRows } from "@/lib/callback-waiting-presenters";
 import { formatDurationMs, formatJsonPayload } from "@/lib/runtime-presenters";
 
 import { ArtifactPreviewList } from "@/components/run-diagnostics-execution/shared";
@@ -162,6 +163,7 @@ export function ExecutionNodeCallbackTicketList({
       <div className="event-list">
         {callbackTickets.map((ticket) => {
           const inboxHref = buildCallbackTicketInboxHref(ticket);
+          const detailRows = listCallbackTicketDetailRows(ticket, { mode: "compact" });
           return (
             <article className="event-row compact-card" key={ticket.ticket}>
               <div className="event-meta">
@@ -178,17 +180,15 @@ export function ExecutionNodeCallbackTicketList({
                   </Link>
                 </div>
               ) : null}
+              {detailRows.map((row) => (
+                <p className="section-copy entry-copy" key={`${ticket.ticket}:${row.label}`}>
+                  {row.label}: {row.value}
+                </p>
+              ))}
               <pre>
                 {formatJsonPayload({
-                  reason: ticket.reason,
                   callback_payload: ticket.callback_payload,
-                  lifecycle: {
-                    created_at: ticket.created_at,
-                    expires_at: ticket.expires_at,
-                    consumed_at: ticket.consumed_at,
-                    canceled_at: ticket.canceled_at,
-                    expired_at: ticket.expired_at
-                  }
+                  tool_call_id: ticket.tool_call_id
                 })}
               </pre>
             </article>

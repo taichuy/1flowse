@@ -7,9 +7,9 @@ import type {
   PublishedEndpointInvocationCallbackTicketItem
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
-import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
   getCallbackWaitingHeadline,
+  listCallbackTicketDetailRows,
   listCallbackWaitingBlockerRows,
   listCallbackWaitingChips,
   listCallbackWaitingEventRows
@@ -135,6 +135,10 @@ export function WorkflowPublishInvocationCallbackSection({
               runId: invocation.run_id ?? null,
               nodeRunId: waitingLifecycle?.node_run_id ?? null
             });
+            const detailRows = listCallbackTicketDetailRows(ticket, {
+              mode: "detail",
+              includeEmptyLifecycle: true
+            });
 
             return (
               <article className="payload-card compact-card" key={ticket.ticket}>
@@ -150,48 +154,12 @@ export function WorkflowPublishInvocationCallbackSection({
                   </div>
                 ) : null}
                 <dl className="compact-meta-list">
-                  <div>
-                    <dt>Ticket</dt>
-                    <dd>{ticket.ticket}</dd>
-                  </div>
-                  <div>
-                    <dt>Node run</dt>
-                    <dd>{ticket.node_run_id}</dd>
-                  </div>
-                  <div>
-                    <dt>Tool</dt>
-                    <dd>
-                      {ticket.tool_id ?? "n/a"} · call #{ticket.tool_call_index}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Waiting status</dt>
-                    <dd>{ticket.waiting_status}</dd>
-                  </div>
-                  <div>
-                    <dt>Reason</dt>
-                    <dd>{ticket.reason ?? "n/a"}</dd>
-                  </div>
-                  <div>
-                    <dt>Created</dt>
-                    <dd>{formatTimestamp(ticket.created_at)}</dd>
-                  </div>
-                  <div>
-                    <dt>Expires</dt>
-                    <dd>{formatTimestamp(ticket.expires_at)}</dd>
-                  </div>
-                  <div>
-                    <dt>Consumed</dt>
-                    <dd>{formatTimestamp(ticket.consumed_at)}</dd>
-                  </div>
-                  <div>
-                    <dt>Canceled</dt>
-                    <dd>{formatTimestamp(ticket.canceled_at)}</dd>
-                  </div>
-                  <div>
-                    <dt>Expired</dt>
-                    <dd>{formatTimestamp(ticket.expired_at)}</dd>
-                  </div>
+                  {detailRows.map((row) => (
+                    <div key={`${ticket.ticket}:${row.label}`}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
                 </dl>
                 {ticket.callback_payload ? (
                   <>
