@@ -31,6 +31,8 @@ def test_plugin_registry_store_persists_and_hydrates_registry(sqlite_session: Se
         output_schema={"type": "object"},
         source="plugin",
         plugin_meta={"origin": "dify"},
+        supported_execution_classes=("subprocess", "microvm"),
+        default_execution_class="subprocess",
         constrained_ir={
             "ir_version": "2026-03-10",
             "kind": "tool",
@@ -62,6 +64,8 @@ def test_plugin_registry_store_persists_and_hydrates_registry(sqlite_session: Se
         output_schema={"type": "object"},
         source="plugin",
         plugin_meta={"origin": "dify"},
+        supported_execution_classes=("subprocess", "microvm"),
+        default_execution_class="subprocess",
         constrained_ir={
             "ir_version": "2026-03-10",
             "kind": "tool",

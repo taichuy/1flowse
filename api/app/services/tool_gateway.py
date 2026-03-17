@@ -94,6 +94,17 @@ class ToolGateway:
         db.flush()
 
         resolved_timeout_ms = timeout_ms or get_settings().plugin_default_timeout_ms
+        runtime_execution = (
+            execution_policy.as_runtime_payload() if execution_policy is not None else {}
+        )
+        if (
+            tool_record is not None
+            and tool_record.default_execution_class
+            and (execution_policy is None or execution_policy.source == "default")
+        ):
+            runtime_execution = dict(runtime_execution)
+            runtime_execution["class"] = tool_record.default_execution_class
+            runtime_execution["source"] = "tool_default"
         request = PluginCallRequest(
             tool_id=tool_id,
             ecosystem=ecosystem,
@@ -101,9 +112,7 @@ class ToolGateway:
             inputs=deepcopy(inputs),
             timeout_ms=resolved_timeout_ms,
             trace_id=f"run:{run_id}:node:{node_run.node_id}:tool:{tool_id}",
-            execution=(
-                execution_policy.as_runtime_payload() if execution_policy is not None else {}
-            ),
+            execution=runtime_execution,
         )
         execution_trace = self._plugin_call_proxy.describe_execution_dispatch(
             request

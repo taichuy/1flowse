@@ -115,6 +115,7 @@ def test_register_and_list_plugin_tool(client, monkeypatch) -> None:
         "plugin_meta": {"origin": "dify"},
         "callable": True,
         "supported_execution_classes": [],
+        "default_execution_class": None,
     }
 
     list_response = client.get("/api/plugins/tools")
@@ -132,6 +133,7 @@ def test_register_and_list_plugin_tool(client, monkeypatch) -> None:
             "plugin_meta": None,
             "callable": True,
             "supported_execution_classes": ["inline"],
+            "default_execution_class": None,
         },
         create_response.json(),
     ]
@@ -185,6 +187,8 @@ def test_sync_plugin_tools_from_adapter(client, monkeypatch) -> None:
                     output_schema={"type": "object"},
                     source="plugin",
                     plugin_meta={"origin": "dify"},
+                    supported_execution_classes=("subprocess", "microvm"),
+                    default_execution_class="subprocess",
                 )
             ]
         ),
@@ -213,7 +217,8 @@ def test_sync_plugin_tools_from_adapter(client, monkeypatch) -> None:
                 "source": "plugin",
                 "plugin_meta": {"origin": "dify"},
                 "callable": True,
-                "supported_execution_classes": [],
+                "supported_execution_classes": ["subprocess", "microvm"],
+                "default_execution_class": "subprocess",
             }
         ],
     }

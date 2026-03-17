@@ -45,6 +45,12 @@ class PluginToolRecord(Base):
     source: Mapped[str] = mapped_column(String(64), default="plugin", nullable=False)
     plugin_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     constrained_ir: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    supported_execution_classes: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False,
+    )
+    default_execution_class: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

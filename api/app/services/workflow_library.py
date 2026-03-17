@@ -167,6 +167,7 @@ class WorkflowLibraryService:
             plugin_meta=deepcopy(tool.plugin_meta) if isinstance(tool.plugin_meta, dict) else None,
             callable=(tool.ecosystem != "native") or registry.has_native_invoker(tool.id),
             supported_execution_classes=list(tool.supported_execution_classes),
+            default_execution_class=tool.default_execution_class,
         )
 
     def _load_tool_adapter_ids(

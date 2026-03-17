@@ -167,17 +167,39 @@ class CompatibilityAdapterCatalogClient:
                 f"for '{tool_id or top_level_id}'."
             )
 
-        return PluginToolDefinition(
-            id=tool_id or top_level_id,
-            name=name,
-            ecosystem=ecosystem,
-            description=str(constrained_ir.get("description") or item.get("description") or ""),
-            input_schema=dict(input_schema),
-            output_schema=dict(output_schema) if isinstance(output_schema, dict) else None,
-            source=str(constrained_ir.get("source") or item.get("source") or "plugin"),
-            plugin_meta=dict(plugin_meta) if isinstance(plugin_meta, dict) else None,
-            constrained_ir=constrained_ir,
+        supported_execution_classes = (
+            constrained_ir.get("supported_execution_classes")
+            or constrained_ir.get("supportedExecutionClasses")
+            or item.get("supported_execution_classes")
+            or item.get("supportedExecutionClasses")
+            or ()
         )
+        default_execution_class = (
+            constrained_ir.get("default_execution_class")
+            or constrained_ir.get("defaultExecutionClass")
+            or item.get("default_execution_class")
+            or item.get("defaultExecutionClass")
+        )
+
+        try:
+            return PluginToolDefinition(
+                id=tool_id or top_level_id,
+                name=name,
+                ecosystem=ecosystem,
+                description=str(constrained_ir.get("description") or item.get("description") or ""),
+                input_schema=dict(input_schema),
+                output_schema=dict(output_schema) if isinstance(output_schema, dict) else None,
+                source=str(constrained_ir.get("source") or item.get("source") or "plugin"),
+                plugin_meta=dict(plugin_meta) if isinstance(plugin_meta, dict) else None,
+                constrained_ir=constrained_ir,
+                supported_execution_classes=supported_execution_classes,
+                default_execution_class=default_execution_class,
+            )
+        except ValueError as exc:
+            raise PluginCatalogError(
+                f"Plugin adapter '{adapter.id}' returned invalid execution contract for "
+                f"'{tool_id or top_level_id}': {exc}"
+            ) from exc
 
 
 @lru_cache(maxsize=1)

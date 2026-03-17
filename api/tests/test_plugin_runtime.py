@@ -219,7 +219,7 @@ def test_plugin_call_proxy_invokes_compat_adapter() -> None:
         assert payload["traceId"] == "trace-compat"
         assert payload["inputs"] == {"query": "sevenflows"}
         assert payload["credentials"] == {}
-        assert payload["execution"] == {}
+        assert payload["execution"] == {"class": "subprocess", "source": "default"}
         assert payload["executionContract"] == {
             "irVersion": "2026-03-10",
             "kind": "tool_execution",
@@ -672,6 +672,75 @@ def test_plugin_call_proxy_binds_sandbox_backend_for_native_tool() -> None:
     }
 
 
+def test_plugin_call_proxy_uses_default_execution_class_for_native_tool() -> None:
+    registry = PluginRegistry()
+    captured_execution: dict[str, object] = {}
+
+    def invoker(request: PluginCallRequest) -> dict[str, object]:
+        captured_execution.update(request.execution)
+        return {"documents": ["doc-1"], "execution": request.execution}
+
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Native Risk Search",
+            supported_execution_classes=("inline", "sandbox"),
+            default_execution_class="sandbox",
+        ),
+        invoker=invoker,
+    )
+
+    proxy = PluginCallProxy(
+        registry,
+        sandbox_backend_client=_sandbox_backend_client(
+            execution_classes=("sandbox",),
+        ),
+    )
+
+    dispatch = proxy.describe_execution_dispatch(
+        PluginCallRequest(
+            tool_id="native.risk-search",
+            ecosystem="native",
+            inputs={"query": "sevenflows"},
+            trace_id="trace-native-default-sandbox",
+        )
+    )
+
+    assert dispatch.as_trace_payload() == {
+        "requested_execution_class": "sandbox",
+        "effective_execution_class": "sandbox",
+        "execution_source": "default",
+        "requested_execution_profile": None,
+        "requested_execution_timeout_ms": None,
+        "requested_network_policy": None,
+        "requested_filesystem_policy": None,
+        "executor_ref": "tool:native-sandbox",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "fallback_reason": None,
+        "blocked_reason": None,
+    }
+
+    response = proxy.invoke(
+        PluginCallRequest(
+            tool_id="native.risk-search",
+            ecosystem="native",
+            inputs={"query": "sevenflows"},
+            trace_id="trace-native-default-sandbox",
+        )
+    )
+
+    assert response.status == "success"
+    assert captured_execution == {
+        "class": "sandbox",
+        "source": "default",
+        "sandboxBackend": {
+            "id": "sandbox-default",
+            "executorRef": "sandbox-backend:sandbox-default",
+        },
+    }
+
+
 def test_plugin_call_proxy_binds_sandbox_backend_for_compat_adapter() -> None:
     registry = PluginRegistry()
     registry.register_tool(
@@ -707,7 +776,7 @@ def test_plugin_call_proxy_binds_sandbox_backend_for_compat_adapter() -> None:
                 },
             }
         else:
-            assert payload["execution"] == {}
+            assert payload["execution"] == {"class": "subprocess", "source": "default"}
         return httpx.Response(
             200,
             json={"status": "success", "output": {"documents": ["doc-1"]}, "durationMs": 9},
@@ -994,6 +1063,8 @@ def test_adapter_catalog_client_fetches_tools() -> None:
                         "output_schema": {"type": "object"},
                         "source": "plugin",
                         "plugin_meta": {"origin": "dify"},
+                        "supported_execution_classes": ["subprocess", "microvm"],
+                        "default_execution_class": "subprocess",
                         "constrained_ir": {
                             "ir_version": "2026-03-10",
                             "kind": "tool",
@@ -1044,6 +1115,8 @@ def test_adapter_catalog_client_fetches_tools() -> None:
             output_schema={"type": "object"},
             source="plugin",
             plugin_meta={"origin": "dify"},
+            supported_execution_classes=("subprocess", "microvm"),
+            default_execution_class="subprocess",
             constrained_ir={
                 "ir_version": "2026-03-10",
                 "kind": "tool",

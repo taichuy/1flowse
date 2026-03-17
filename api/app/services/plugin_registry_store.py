@@ -61,6 +61,10 @@ class PluginRegistryStore:
                         if isinstance(record.constrained_ir, dict)
                         else None
                     ),
+                    supported_execution_classes=tuple(
+                        record.supported_execution_classes or ()
+                    ),
+                    default_execution_class=record.default_execution_class,
                 )
             )
 
@@ -115,6 +119,8 @@ class PluginRegistryStore:
             if isinstance(definition.constrained_ir, dict)
             else None
         )
+        record.supported_execution_classes = list(definition.supported_execution_classes)
+        record.default_execution_class = definition.default_execution_class
         db.flush()
         return record
 

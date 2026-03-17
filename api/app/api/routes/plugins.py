@@ -60,6 +60,7 @@ def _serialize_tool(tool_id: str) -> PluginToolItem:
         plugin_meta=tool.plugin_meta,
         callable=(tool.ecosystem != "native") or registry.has_native_invoker(tool.id),
         supported_execution_classes=list(tool.supported_execution_classes),
+        default_execution_class=tool.default_execution_class,
     )
 
 
@@ -177,6 +178,8 @@ def register_plugin_tool(
         output_schema=payload.output_schema,
         source=payload.source,
         plugin_meta=payload.plugin_meta,
+        supported_execution_classes=tuple(payload.supported_execution_classes),
+        default_execution_class=payload.default_execution_class,
     )
     get_plugin_registry_store().upsert_tool(db, tool)
     db.commit()

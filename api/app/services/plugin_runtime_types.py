@@ -48,6 +48,29 @@ def normalize_supported_tool_execution_classes(
     return tuple(normalized)
 
 
+def normalize_default_tool_execution_class(
+    value: object,
+    *,
+    supported_execution_classes: tuple[str, ...],
+) -> str | None:
+    if not isinstance(value, str):
+        return None
+
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in _TOOL_EXECUTION_CLASSES:
+        raise ValueError(f"Unsupported plugin tool default execution class '{value}'.")
+    if normalized not in supported_execution_classes:
+        supported_summary = ", ".join(supported_execution_classes)
+        raise ValueError(
+            "Plugin tool default execution class "
+            f"'{normalized}' must be included in supported_execution_classes: "
+            f"{supported_summary}."
+        )
+    return normalized
+
+
 class PluginInvocationError(RuntimeError):
     pass
 
@@ -68,17 +91,27 @@ class PluginToolDefinition:
     plugin_meta: dict[str, Any] | None = None
     constrained_ir: dict[str, Any] | None = None
     supported_execution_classes: tuple[str, ...] = field(default_factory=tuple)
+    default_execution_class: str | None = None
 
     def __post_init__(self) -> None:
         default_supported_execution_classes = (
             ("inline",) if self.ecosystem == "native" else ()
         )
+        normalized_supported_execution_classes = normalize_supported_tool_execution_classes(
+            self.supported_execution_classes,
+            default=default_supported_execution_classes,
+        )
         object.__setattr__(
             self,
             "supported_execution_classes",
-            normalize_supported_tool_execution_classes(
-                self.supported_execution_classes,
-                default=default_supported_execution_classes,
+            normalized_supported_execution_classes,
+        )
+        object.__setattr__(
+            self,
+            "default_execution_class",
+            normalize_default_tool_execution_class(
+                self.default_execution_class,
+                supported_execution_classes=normalized_supported_execution_classes,
             ),
         )
 

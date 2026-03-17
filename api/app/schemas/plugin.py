@@ -40,11 +40,23 @@ class PluginToolRegistrationCreate(BaseModel):
     output_schema: dict[str, Any] | None = None
     source: str = "plugin"
     plugin_meta: dict[str, Any] | None = None
+    supported_execution_classes: list[
+        Literal["inline", "subprocess", "sandbox", "microvm"]
+    ] = Field(default_factory=list)
+    default_execution_class: Literal["inline", "subprocess", "sandbox", "microvm"] | None = None
 
     @model_validator(mode="after")
     def validate_registration_scope(self) -> "PluginToolRegistrationCreate":
         if self.ecosystem == "native":
             raise ValueError("HTTP registration currently supports only compat/plugin tools.")
+        if (
+            self.default_execution_class is not None
+            and self.supported_execution_classes
+            and self.default_execution_class not in self.supported_execution_classes
+        ):
+            raise ValueError(
+                "default_execution_class must be included in supported_execution_classes."
+            )
         return self
 
 
@@ -59,6 +71,7 @@ class PluginToolItem(BaseModel):
     plugin_meta: dict[str, Any] | None = None
     callable: bool
     supported_execution_classes: list[str] = Field(default_factory=list)
+    default_execution_class: str | None = None
 
 
 class PluginToolSyncResult(BaseModel):

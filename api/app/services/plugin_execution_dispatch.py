@@ -29,7 +29,9 @@ class PluginExecutionDispatchPlanner:
         tool = self._registry.get_tool(request.tool_id)
         requested_execution = dict(request.execution or {})
         default_execution_class = default_execution_class_for_tool_ecosystem(request.ecosystem)
-        if request.ecosystem == "native" and tool is not None:
+        if tool is not None and tool.default_execution_class is not None:
+            default_execution_class = tool.default_execution_class
+        elif request.ecosystem == "native" and tool is not None:
             supported_native_execution_classes = (
                 tool.supported_execution_classes or ("inline",)
             )
@@ -38,6 +40,12 @@ class PluginExecutionDispatchPlanner:
             requested_execution.get("class") or default_execution_class
         ).strip().lower() or default_execution_class
         execution_source = str(requested_execution.get("source") or "default").strip() or "default"
+        if (
+            tool is not None
+            and tool.default_execution_class is not None
+            and execution_source == "default"
+        ):
+            requested_execution_class = tool.default_execution_class
         requested_execution_profile = self._normalize_optional_string(
             requested_execution.get("profile")
         )
@@ -215,9 +223,6 @@ class PluginExecutionDispatchPlanner:
         sandbox_backend_id: str | None,
         sandbox_backend_executor_ref: str | None,
     ) -> dict[str, object]:
-        if not requested_execution:
-            return {}
-
         effective_execution = dict(requested_execution)
         effective_execution["class"] = effective_execution_class
         effective_execution["source"] = execution_source
