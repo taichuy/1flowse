@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.services.workflow_definitions import (
     WorkflowDefinitionValidationError,
     build_workflow_adapter_reference_list,
+    build_workflow_skill_reference_index,
     build_workflow_tool_reference_index,
     bump_workflow_version,
     validate_persistable_workflow_definition,
@@ -66,6 +67,10 @@ def validate_workspace_starter_definition(
             workspace_id=workspace_id,
         ),
         adapters=build_workflow_adapter_reference_list(
+            db,
+            workspace_id=workspace_id,
+        ),
+        skill_index=build_workflow_skill_reference_index(
             db,
             workspace_id=workspace_id,
         ),

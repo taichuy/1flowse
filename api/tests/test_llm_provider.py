@@ -313,6 +313,34 @@ def test_build_config_enriches_with_node_input():
     assert "Analyze" in content
 
 
+def test_build_config_enriches_with_skill_context():
+    cfg = build_llm_call_config(
+        model_config={"provider": "openai", "modelId": "gpt-4o", "apiKey": "k"},
+        user_prompt="Analyze",
+        node_input={
+            "skill_context": [
+                {
+                    "id": "skill-research-brief",
+                    "name": "Research Brief",
+                    "description": "Produce an auditable brief",
+                    "body": "Summarize findings and open questions.",
+                    "references": [
+                        {
+                            "id": "ref-handoff",
+                            "name": "Operator Handoff",
+                            "description": "End with next actions.",
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    content = cfg.messages[0]["content"]
+    assert "[Skills]" in content
+    assert "Research Brief" in content
+    assert "Operator Handoff" in content
+
+
 def test_build_config_missing_model_id_raises():
     with pytest.raises(LLMProviderError, match="modelId"):
         build_llm_call_config(

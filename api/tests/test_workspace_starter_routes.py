@@ -141,6 +141,53 @@ def _invalid_variable_definition() -> dict:
     return definition
 
 
+def _skill_bound_definition(skill_id: str) -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "agent",
+                "type": "llm_agent",
+                "name": "Agent",
+                "config": {
+                    "prompt": "Use the bound skill",
+                    "skillIds": [skill_id],
+                },
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+        ],
+    }
+
+
+def test_workspace_starter_create_rejects_missing_skill_reference(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Skill Guard Starter",
+            "description": "Starter with missing skill",
+            "business_track": "编排节点能力",
+            "default_workflow_name": "Skill Guard Workflow",
+            "workflow_focus": "Skill validation",
+            "recommended_next_step": "Create the missing skill first",
+            "tags": ["skill", "guard"],
+            "definition": _skill_bound_definition("skill-missing"),
+        },
+    )
+
+    assert response.status_code == 422
+    message, issues = _validation_detail(response.json())
+    assert "missing skill documents" in message
+    assert any(issue["category"] == "skill_reference" for issue in issues)
+    assert any(issue.get("field") == "skillIds" for issue in issues)
+
+
 def _invalid_publish_identity_definition() -> dict:
     definition = _valid_definition()
     definition["publish"] = [

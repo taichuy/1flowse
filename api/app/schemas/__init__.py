@@ -1,6 +1,7 @@
 __all__ = [
     "health",
     "run",
+    "skill",
     "system",
     "workflow_contract_validation",
     "workflow",

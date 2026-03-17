@@ -34,6 +34,7 @@ export function LlmAgentNodeConfigForm({
   const model = toRecord(config.model) ?? {};
   const assistant = toRecord(config.assistant) ?? {};
   const contextAccess = toRecord(config.contextAccess) ?? {};
+  const skillIds = dedupeStrings(toStringArray(config.skillIds));
   const availableNodes = nodes.filter((candidate) => candidate.id !== node.id);
   const readableArtifacts = readReadableArtifacts(contextAccess.readableArtifacts);
   const readableNodeIds = Array.from(
@@ -94,6 +95,22 @@ export function LlmAgentNodeConfigForm({
   const updateBooleanField = (field: string, checked: boolean) => {
     const nextConfig = cloneRecord(config);
     nextConfig[field] = checked;
+    onChange(nextConfig);
+  };
+
+  const updateSkillIds = (rawValue: string) => {
+    const nextConfig = cloneRecord(config);
+    const nextSkillIds = dedupeStrings(
+      rawValue
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    );
+    if (nextSkillIds.length === 0) {
+      delete nextConfig.skillIds;
+    } else {
+      nextConfig.skillIds = nextSkillIds;
+    }
     onChange(nextConfig);
   };
 
@@ -247,6 +264,19 @@ export function LlmAgentNodeConfigForm({
           onChange={(event) => updateField("prompt", event.target.value || undefined)}
           placeholder="说明当前节点如何消费输入并产出结果"
         />
+      </label>
+
+      <label className="binding-field">
+        <span className="binding-label">Skill IDs</span>
+        <textarea
+          className="editor-json-area"
+          value={skillIds.join("\n")}
+          onChange={(event) => updateSkillIds(event.target.value)}
+          placeholder="每行一个 skill id；运行时会把对应 SkillDoc 注入 llm_agent prompt"
+        />
+        <small className="section-copy">
+          这里只绑定服务侧 Skill Catalog 的 `skillIds`，用于主 AI 的认知注入；不接管本地执行。
+        </small>
       </label>
 
       <div className="binding-field">

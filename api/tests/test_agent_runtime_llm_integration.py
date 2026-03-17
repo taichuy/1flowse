@@ -7,6 +7,7 @@ import json
 import httpx
 from sqlalchemy.orm import Session
 
+from app.models.skill import SkillRecord, SkillReferenceRecord
 from app.models.workflow import Workflow
 from app.services.llm_provider import LLMProviderService
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
@@ -266,6 +267,84 @@ def test_no_model_config_falls_back_gracefully(sqlite_session: Session) -> None:
     assert artifacts.run.status == "succeeded"
     agent_run = next(nr for nr in artifacts.node_runs if nr.node_id == "agent")
     assert agent_run.output_payload == {"answer": "fallback"}
+
+
+def test_llm_agent_injects_bound_skill_docs_into_llm_context(
+    sqlite_session: Session,
+) -> None:
+    runtime = _create_runtime_with_llm([
+        _openai_response("Plan with the bound skill."),
+        _openai_response("Produced a skill-aware answer."),
+    ])
+
+    sqlite_session.add(
+        SkillRecord(
+            id="skill-research-brief",
+            workspace_id="default",
+            name="Research Brief",
+            description="Produce a concise, auditable brief.",
+            body="Summarize findings, cite evidence, and end with open questions.",
+        )
+    )
+    sqlite_session.add(
+        SkillReferenceRecord(
+            id="ref-handoff",
+            skill_id="skill-research-brief",
+            name="Operator Handoff",
+            description="Close with next actions.",
+            body="Always include what the operator should verify next.",
+        )
+    )
+
+    workflow = Workflow(
+        id="wf-agent-skill-bound",
+        name="Agent Skill Bound Test",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llm_agent",
+                    "name": "Agent",
+                    "config": {
+                        "prompt": "Draft a response using the bound skill.",
+                        "skillIds": ["skill-research-brief"],
+                        "model": {
+                            "provider": "openai",
+                            "modelId": "gpt-4o",
+                            "apiKey": "sk-test-key",
+                        },
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "skill test"})
+
+    assert artifacts.run.status == "succeeded"
+    assert any(record.role == "main_plan" for record in artifacts.ai_calls)
+
+    captured_requests = runtime._llm_provider._captured_requests  # type: ignore[attr-defined]
+    assert captured_requests
+    message_contents = [
+        message.get("content", "")
+        for message in captured_requests[0]["body"]["messages"]
+        if isinstance(message, dict)
+    ]
+    combined_content = "\n".join(str(content) for content in message_contents)
+    assert "[Skills]" in combined_content
+    assert "Research Brief" in combined_content
+    assert "Operator Handoff" in combined_content
 
 
 # ---------------------------------------------------------------------------

@@ -123,6 +123,44 @@ def _bound_tool_definition(
     }
 
 
+def _skill_bound_agent_definition(skill_id: str) -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "agent",
+                "type": "llm_agent",
+                "name": "Agent",
+                "config": {
+                    "prompt": "Use the bound skill",
+                    "skillIds": [skill_id],
+                },
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+        ],
+    }
+
+
+def test_create_workflow_rejects_missing_skill_reference(client: TestClient) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Skill Guard Workflow",
+            "definition": _skill_bound_agent_definition("skill-missing"),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "missing skill documents" in _workflow_detail_message(response)
+    issues = _workflow_detail_issues(response)
+    assert any(issue["category"] == "skill_reference" for issue in issues)
+    assert any(issue.get("field") == "skillIds" for issue in issues)
+
+
 def _sandbox_code_definition(
     *,
     config: dict | None = None,

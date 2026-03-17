@@ -372,6 +372,11 @@ def build_llm_call_config(
             context_parts.append(
                 f"[Evidence]\n{json.dumps(evidence, ensure_ascii=False)}"
             )
+        skill_context = node_input.get("skill_context")
+        if skill_context:
+            context_parts.append(
+                f"[Skills]\n{json.dumps(skill_context, ensure_ascii=False)}"
+            )
         if context_parts:
             full_user_content = "\n\n".join(context_parts) + "\n\n" + user_prompt
 

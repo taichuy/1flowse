@@ -182,4 +182,4 @@
 - 当前代码还没有独立的 `SandboxBackendRegistration / SandboxExecution` 协议，也没有把高风险隔离路径全面收口到 capability-driven 的 fail-closed 语义；相关内容当前仍属于目标设计，不应误写成已完整交付。
 - 当前 `LICENSE` 已切换为 Apache 2.0 基底 + 附加条件的 community license；后续仍需继续明确“多租户”“商业化对立面”“前端品牌替换”和“商业授权触发条件”的执行口径。
 - `organization / workspace / member / role / publish governance` 仍主要停留在目标设计，后续需要收敛成最小可实现领域模型。
-- 当前代码还没有 product-level `SkillDoc` 模型、skill retrieval API / MCP 或 `llm_agent` 注入链；后续不能把这条方向误写成已完成的 SkillHub、本地下载中心或客户端接管系统。
+- 当前代码已落地最小 product-level `SkillDoc` 模型、REST skill catalog API、reference retrieval 与 `llm_agent` 注入基础；但仍没有 MCP retrieval、重型 SkillHub、本地下载中心或客户端接管系统，后续不能把“最小认知注入层”误写成完整的 skill distribution / client takeover 平台。

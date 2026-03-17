@@ -83,6 +83,22 @@ class WorkflowNodeAssistantConfig(BaseModel):
     model: dict[str, Any] | None = None
 
 
+class WorkflowNodeSkillBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    skillIds: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_skill_ids(self) -> WorkflowNodeSkillBinding:
+        normalized_skill_ids: list[str] = []
+        for raw_skill_id in self.skillIds:
+            skill_id = raw_skill_id.strip()
+            if skill_id and skill_id not in normalized_skill_ids:
+                normalized_skill_ids.append(skill_id)
+        self.skillIds = normalized_skill_ids
+        return self
+
+
 class WorkflowNodeToolPolicy(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -228,6 +244,12 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
         if node_type != "llm_agent":
             raise ValueError("Only llm_agent nodes may define config.assistant.")
         WorkflowNodeAssistantConfig.model_validate(assistant)
+
+    skill_ids = config.get("skillIds")
+    if skill_ids is not None:
+        if node_type != "llm_agent":
+            raise ValueError("Only llm_agent nodes may define config.skillIds.")
+        WorkflowNodeSkillBinding.model_validate({"skillIds": skill_ids})
 
     tool_policy = config.get("toolPolicy")
     if tool_policy is not None:

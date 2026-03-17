@@ -48,6 +48,7 @@ from app.services.runtime_types import (
     FlowCheckpointState,
     WorkflowExecutionError,
 )
+from app.services.skill_catalog import SkillCatalogService
 from app.services.sensitive_access_control import SensitiveAccessControlService
 from app.services.tool_gateway import ToolGateway
 
@@ -101,6 +102,7 @@ class RuntimeService(
             )
         self._callback_tickets = RunCallbackTicketService()
         self._llm_provider = LLMProviderService()
+        self._skill_catalog = SkillCatalogService()
         self._execution_adapter_registry = RuntimeExecutionAdapterRegistry(
             artifact_store=self._artifact_store,
             context_service=self._context_service,
@@ -118,6 +120,7 @@ class RuntimeService(
             context_service=self._context_service,
             credential_store=self._credential_store,
             llm_provider=self._llm_provider,
+            skill_catalog=self._skill_catalog,
         )
 
     def execute_workflow(

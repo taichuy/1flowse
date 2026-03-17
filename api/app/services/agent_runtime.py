@@ -16,6 +16,7 @@ from app.services.context_service import ContextService
 from app.services.credential_store import CredentialStore
 from app.services.llm_provider import LLMProviderService, LLMResponse
 from app.services.runtime_execution_policy import resolve_tool_execution_policy
+from app.services.skill_catalog import SkillCatalogError, SkillCatalogService
 from app.services.runtime_types import (
     PHASE_STATUS_MAP,
     AgentExecutionResult,
@@ -42,12 +43,14 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
         context_service: ContextService | None = None,
         credential_store: CredentialStore | None = None,
         llm_provider: LLMProviderService | None = None,
+        skill_catalog: SkillCatalogService | None = None,
     ) -> None:
         self._tool_gateway = tool_gateway
         self._artifact_store = artifact_store or RuntimeArtifactStore()
         self._context_service = context_service or ContextService()
         self._credential_store = credential_store or CredentialStore()
         self._llm_provider = llm_provider or LLMProviderService()
+        self._skill_catalog = skill_catalog or SkillCatalogService()
 
     # ------------------------------------------------------------------
     # Main execute orchestration
@@ -75,6 +78,10 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             if "apiKey" in creds:
                 model_config["apiKey"] = creds["apiKey"]
         checkpoint = self._to_dict(node_run.checkpoint_payload)
+        skill_context = self._resolve_skill_context(db, config)
+        enriched_node_input = dict(node_input)
+        if skill_context:
+            enriched_node_input["skill_context"] = skill_context
         working_context = self._context_service.update_working_context(
             node_run,
             role=config.get("role"),
@@ -83,13 +90,14 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             system_prompt=config.get("systemPrompt"),
             authorized_context=node_input.get("authorized_context", {}),
             global_context=node_input.get("global_context", {}),
+            skill_context=skill_context,
         )
 
         self._transition_phase(node_run, "preparing", events, node)
         plan = self._restore_plan(checkpoint.get("plan"))
         if plan is None:
             self._transition_phase(node_run, "running_main", events, node)
-            plan = self._build_plan(config, model_config, node_input)
+            plan = self._build_plan(config, model_config, enriched_node_input)
             plan_llm_response = plan.llm_response
             checkpoint["plan"] = plan.as_dict()
             node_run.checkpoint_payload = deepcopy(checkpoint)
@@ -103,6 +111,7 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
                     "global_context": node_input.get("global_context", {}),
                     "working_context": working_context,
                     "authorized_context": node_input.get("authorized_context", {}),
+                    "skill_context": skill_context,
                 },
                 output_value=plan.as_dict(),
                 assistant=False,
@@ -335,13 +344,13 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             config=config,
             model_config=model_config,
             plan=plan,
-            tool_results=tool_results,
-            evidence_pack=evidence_pack,
-            artifact_refs=artifact_refs,
-            node_input=node_input,
-            events=events,
-            node=node,
-        )
+                tool_results=tool_results,
+                evidence_pack=evidence_pack,
+                artifact_refs=artifact_refs,
+                node_input=enriched_node_input,
+                events=events,
+                node=node,
+            )
         self._record_ai_call(
             db,
             run_id=run_id,
@@ -552,6 +561,27 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             if str(tool_id).strip()
         ]
         return set(allowed_tool_ids) if allowed_tool_ids else None
+
+    def _resolve_skill_context(
+        self,
+        db: Session,
+        config: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        raw_skill_ids = config.get("skillIds")
+        if not isinstance(raw_skill_ids, list):
+            return []
+        workspace_id = str(config.get("workspaceId") or "default")
+        try:
+            return [
+                skill.model_dump(mode="python")
+                for skill in self._skill_catalog.build_prompt_docs(
+                    db,
+                    skill_ids=[str(skill_id) for skill_id in raw_skill_ids],
+                    workspace_id=workspace_id,
+                )
+            ]
+        except SkillCatalogError as exc:
+            raise WorkflowExecutionError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # General helpers

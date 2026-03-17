@@ -24,6 +24,9 @@ from app.services.workflow_publish_version_references import (
 from app.services.workflow_publish_identity_validation import (
     collect_invalid_workflow_publish_identities,
 )
+from app.services.workflow_skill_references import (
+    collect_invalid_workflow_skill_references,
+)
 from app.services.workflow_variable_validation import collect_invalid_workflow_variables
 
 
@@ -123,6 +126,16 @@ def build_workflow_adapter_reference_list(
             continue
         visible_adapters.append(adapter)
     return visible_adapters
+
+
+def build_workflow_skill_reference_index(
+    db: Session,
+    *,
+    workspace_id: str = "default",
+) -> dict[str, Any]:
+    from app.services.skill_catalog import SkillCatalogService
+
+    return SkillCatalogService().build_reference_index(db, workspace_id=workspace_id)
 
 
 @lru_cache(maxsize=1)
@@ -368,6 +381,7 @@ def validate_persistable_workflow_definition(
     *,
     tool_index: Mapping[str, PluginToolItem] | None = None,
     adapters: list[CompatibilityAdapterRegistration] | None = None,
+    skill_index: Mapping[str, Any] | None = None,
     allowed_publish_versions: set[str] | None = None,
 ) -> dict[str, Any]:
     validated_definition = validate_workflow_definition(definition)
@@ -404,6 +418,25 @@ def validate_persistable_workflow_definition(
             "Workflow definition references missing or drifted tool catalog entries: "
             + "; ".join(issue.message for issue in invalid_tool_references),
             issues=invalid_tool_references,
+        )
+
+    invalid_skill_references = collect_invalid_workflow_skill_references(
+        validated_definition,
+        skill_index=skill_index,
+    )
+    if invalid_skill_references:
+        raise WorkflowDefinitionValidationError(
+            "Workflow definition references missing skill documents: "
+            + "; ".join(issue.message for issue in invalid_skill_references),
+            issues=[
+                WorkflowDefinitionValidationIssue(
+                    category="skill_reference",
+                    message=issue.message,
+                    path=issue.path,
+                    field=issue.field,
+                )
+                for issue in invalid_skill_references
+            ],
         )
 
     invalid_tool_execution_references = collect_invalid_workflow_tool_execution_references(
