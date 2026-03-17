@@ -60,6 +60,7 @@ export function CallbackWaitingInlineActions({
   const resumeForm = allowManualResume ? (
     <form action={resumeAction} className="inbox-decision-form">
       <input type="hidden" name="runId" value={runId} />
+      <input type="hidden" name="nodeRunId" value={nodeRunId ?? ""} />
       <input type="hidden" name="reason" value="operator_manual_resume_attempt" />
       <div className="binding-actions">
         <button className="action-link-button" type="submit">

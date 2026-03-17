@@ -19,6 +19,7 @@ export const DEFAULT_INLINE_OPERATOR_ID = "studio-operator";
 
 type InlineApprovalTicket = {
   id: string;
+  node_run_id?: string | null;
   status?: string | null;
   waiting_status?: string | null;
 };
@@ -36,6 +37,7 @@ type SensitiveAccessInlineActionsProps = {
   ticket?: InlineApprovalTicket | null;
   notifications?: InlineNotification[];
   runId?: string | null;
+  nodeRunId?: string | null;
   compact?: boolean;
 };
 
@@ -105,6 +107,7 @@ export function SensitiveAccessInlineActions({
   ticket,
   notifications = [],
   runId = null,
+  nodeRunId = null,
   compact = false
 }: SensitiveAccessInlineActionsProps) {
   const router = useRouter();
@@ -136,6 +139,7 @@ export function SensitiveAccessInlineActions({
         <form action={decisionAction} className="inbox-decision-form">
           <input type="hidden" name="ticketId" value={ticket?.id ?? ""} />
           <input type="hidden" name="runId" value={runId ?? ""} />
+          <input type="hidden" name="nodeRunId" value={nodeRunId ?? ticket?.node_run_id ?? ""} />
           <label className="status-meta" htmlFor={`approvedBy-${ticket?.id ?? "unknown"}`}>
             Operator
           </label>
@@ -162,6 +166,7 @@ export function SensitiveAccessInlineActions({
         <form action={retryAction} className="inbox-decision-form">
           <input type="hidden" name="dispatchId" value={retriableNotification.id} />
           <input type="hidden" name="runId" value={runId ?? ""} />
+          <input type="hidden" name="nodeRunId" value={nodeRunId ?? ticket?.node_run_id ?? ""} />
           <label
             className="status-meta"
             htmlFor={`inlineNotificationTarget-${retriableNotification.id}`}

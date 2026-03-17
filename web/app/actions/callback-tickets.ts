@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import {
+  fetchCallbackBlockerSnapshot,
+  formatCallbackBlockerDeltaSummary
+} from "@/lib/callback-blocker-follow-up";
 import { formatCleanupResultMessage } from "@/lib/operator-action-result-presenters";
 
 import { fetchRunSnapshot } from "./run-snapshot";
@@ -48,6 +52,10 @@ export async function cleanupRunCallbackTickets(
   }
 
   try {
+    const beforeBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
     const response = await fetch(`${getApiBaseUrl()}/api/runs/callback-tickets/cleanup`, {
       method: "POST",
       headers: {
@@ -81,6 +89,10 @@ export async function cleanupRunCallbackTickets(
     const terminatedCount = body?.terminated_count ?? 0;
     const matchedCount = body?.matched_count ?? 0;
     const runSnapshot = await fetchRunSnapshot(runId);
+    const afterBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
 
     return {
       status: "success",
@@ -89,6 +101,10 @@ export async function cleanupRunCallbackTickets(
         expiredCount,
         scheduledResumeCount,
         terminatedCount,
+        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
+          before: beforeBlockers,
+          after: afterBlockers
+        }),
         runSnapshot
       }),
       scopeKey

@@ -11,6 +11,7 @@ type ApprovalDecisionSnapshotInput = {
   decisionLabel?: string | null;
   reasonLabel?: string | null;
   policySummary?: string | null;
+  blockerDeltaSummary?: string | null;
   runSnapshot?: RunSnapshotInput | null;
 };
 
@@ -19,6 +20,7 @@ type CleanupRunCallbackTicketsSummary = {
   expiredCount: number;
   scheduledResumeCount: number;
   terminatedCount: number;
+  blockerDeltaSummary?: string | null;
   runSnapshot?: RunSnapshotInput | null;
 };
 
@@ -160,17 +162,21 @@ export function getManualResumeExpectationCopy() {
   return "手动恢复会立即重试当前 run；如果结果仍停在 waiting，请继续回看 callback / approval 时间线，而不是假定恢复已经完成。";
 }
 
-export function formatManualResumeResultMessage(snapshot?: RunSnapshotInput) {
-  const runStatus = snapshot?.status;
+export function formatManualResumeResultMessage(input?: {
+  runSnapshot?: RunSnapshotInput | null;
+  blockerDeltaSummary?: string | null;
+}) {
+  const runStatus = input?.runSnapshot?.status;
   if (!runStatus) {
     return "已发起恢复尝试，请立即回看当前 run 时间线，确认是否真正离开 waiting 状态。";
   }
 
-  const snapshotSummary = formatRunSnapshot(snapshot);
+  const snapshotSummary = formatRunSnapshot(input?.runSnapshot ?? {});
 
   if (runStatus === "waiting") {
     return joinParts([
       "已发起恢复尝试，但 run 仍处于 waiting。请继续检查 callback ticket、审批进度或定时恢复是否仍在阻塞。",
+      input?.blockerDeltaSummary,
       snapshotSummary
     ]);
   }
@@ -178,6 +184,7 @@ export function formatManualResumeResultMessage(snapshot?: RunSnapshotInput) {
   if (runStatus === "running") {
     return joinParts([
       "已发起恢复尝试，run 已重新进入 running。接下来重点确认节点是否继续推进，而不只是停留在恢复事件。",
+      input?.blockerDeltaSummary,
       snapshotSummary
     ]);
   }
@@ -185,6 +192,7 @@ export function formatManualResumeResultMessage(snapshot?: RunSnapshotInput) {
   if (runStatus === "succeeded") {
     return joinParts([
       "已发起恢复尝试，run 已完成 succeeded。当前阻塞链路已经解除。",
+      input?.blockerDeltaSummary,
       snapshotSummary
     ]);
   }
@@ -192,12 +200,14 @@ export function formatManualResumeResultMessage(snapshot?: RunSnapshotInput) {
   if (runStatus === "failed") {
     return joinParts([
       "已发起恢复尝试，但 run 已落到 failed。请结合 blocker timeline 与节点错误继续排障。",
+      input?.blockerDeltaSummary,
       snapshotSummary
     ]);
   }
 
   return joinParts([
     `已发起恢复尝试，当前 run 状态：${runStatus}。请继续回看时间线确认这次恢复是否真正推动了执行。`,
+    input?.blockerDeltaSummary,
     snapshotSummary
   ]);
 }
@@ -211,6 +221,7 @@ export function formatCleanupResultMessage({
   expiredCount,
   scheduledResumeCount,
   terminatedCount,
+  blockerDeltaSummary,
   runSnapshot
 }: CleanupRunCallbackTicketsSummary) {
   const runSnapshotSummary = formatRunSnapshot(runSnapshot ?? {});
@@ -218,6 +229,7 @@ export function formatCleanupResultMessage({
   if (matchedCount === 0) {
     return joinParts([
       "当前 slice 没有发现已过期的 callback ticket；如果 run 仍在等待，问题更可能在未完成审批、外部 callback 未到达，或尚未到定时恢复窗口。",
+      blockerDeltaSummary,
       runSnapshotSummary
     ]);
   }
@@ -230,6 +242,7 @@ export function formatCleanupResultMessage({
     terminatedCount > 0
       ? `另有 ${terminatedCount} 条等待链路被终止，需要按失败路径继续排障。`
       : null,
+    blockerDeltaSummary,
     runSnapshotSummary
   ]);
 }
@@ -249,6 +262,7 @@ export function formatApprovalDecisionResultMessage(
     return joinParts([
       "审批已通过，runtime 会沿原 waiting 链路继续尝试恢复；如果 run 仍停在 waiting，请继续检查 callback 或定时恢复。",
       snapshotSummary,
+      snapshot?.blockerDeltaSummary,
       runSnapshotSummary
     ]);
   }
@@ -256,6 +270,7 @@ export function formatApprovalDecisionResultMessage(
   return joinParts([
     "审批已拒绝，对应等待中的执行会保持 blocked / failed 语义；后续应转向人工处理或重新发起新的访问请求。",
     snapshotSummary,
+    snapshot?.blockerDeltaSummary,
     runSnapshotSummary
   ]);
 }
@@ -269,6 +284,7 @@ export function formatNotificationRetryResultMessage(input: {
   target?: string | null;
   error?: string | null;
   waitingStatus?: string | null;
+  blockerDeltaSummary?: string | null;
   runSnapshot?: RunSnapshotInput | null;
 }) {
   const targetLabel = input.target?.trim() ? input.target.trim() : "当前目标";
@@ -280,6 +296,7 @@ export function formatNotificationRetryResultMessage(input: {
   if (input.status === "delivered") {
     return joinParts([
       `通知已重新投递到 ${targetLabel}。这一步只表示审批请求已送达；run 仍需等待人工决策后才会继续。${waitingSummary}`,
+      input.blockerDeltaSummary,
       runSnapshotSummary
     ]);
   }
@@ -287,6 +304,7 @@ export function formatNotificationRetryResultMessage(input: {
   if (input.status === "pending") {
     return joinParts([
       `通知已按 ${targetLabel} 重新入队，等待 worker 投递。当前 run 仍会保持 waiting，直到审批完成或阻塞解除。${waitingSummary}`,
+      input.blockerDeltaSummary,
       runSnapshotSummary
     ]);
   }
@@ -296,6 +314,7 @@ export function formatNotificationRetryResultMessage(input: {
       input.error ?? "通知已重试，但当前通道仍未成功投递。",
       "这意味着审批人可能仍未收到请求，run 也不会因此自动恢复。",
       input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null,
+      input.blockerDeltaSummary,
       runSnapshotSummary
     ]);
   }
@@ -303,6 +322,7 @@ export function formatNotificationRetryResultMessage(input: {
   return joinParts([
     "通知已触发重试，请继续回看最新通知状态与审批结果，确认阻塞是否真正解除。",
     input.waitingStatus ? `当前 waiting 链路：${input.waitingStatus}。` : null,
+    input.blockerDeltaSummary,
     runSnapshotSummary
   ]);
 }

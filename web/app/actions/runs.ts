@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  fetchCallbackBlockerSnapshot,
+  formatCallbackBlockerDeltaSummary
+} from "@/lib/callback-blocker-follow-up";
 import { formatManualResumeResultMessage } from "@/lib/operator-action-result-presenters";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 
@@ -27,6 +31,7 @@ export async function resumeRun(
   formData: FormData
 ): Promise<ResumeRunState> {
   const runId = String(formData.get("runId") ?? "").trim();
+  const nodeRunId = String(formData.get("nodeRunId") ?? "").trim();
   const reason = String(formData.get("reason") ?? INITIAL_REASON).trim() || INITIAL_REASON;
 
   if (!runId) {
@@ -38,6 +43,10 @@ export async function resumeRun(
   }
 
   try {
+    const beforeBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
     const response = await fetch(`${getApiBaseUrl()}/api/runs/${runId}/resume`, {
       method: "POST",
       headers: {
@@ -62,16 +71,25 @@ export async function resumeRun(
 
     revalidateRunPaths(runId);
     const runSnapshot = await fetchRunSnapshot(runId);
+    const afterBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
 
     return {
       status: "success",
-      message: formatManualResumeResultMessage(
-        runSnapshot ?? {
-          status: body?.status,
-          currentNodeId: null,
-          waitingReason: null
-        }
-      ),
+      message: formatManualResumeResultMessage({
+        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
+          before: beforeBlockers,
+          after: afterBlockers
+        }),
+        runSnapshot:
+          runSnapshot ?? {
+            status: body?.status,
+            currentNodeId: null,
+            waitingReason: null
+          }
+      }),
       runId
     };
   } catch {

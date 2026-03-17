@@ -397,6 +397,7 @@ export function SensitiveAccessTimelineEntryList({
 
               <SensitiveAccessInlineActions
                 compact
+                nodeRunId={entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null}
                 notifications={entry.notifications}
                 runId={runId}
                 ticket={entry.approval_ticket}

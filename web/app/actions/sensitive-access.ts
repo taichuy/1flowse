@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import {
+  fetchCallbackBlockerSnapshot,
+  formatCallbackBlockerDeltaSummary
+} from "@/lib/callback-blocker-follow-up";
 import type {
   SensitiveAccessBulkAction,
   SensitiveAccessBulkActionResult,
@@ -129,6 +133,7 @@ export async function decideSensitiveAccessApprovalTicket(
 ): Promise<DecideSensitiveAccessApprovalTicketState> {
   const ticketId = String(formData.get("ticketId") ?? "").trim();
   const runId = String(formData.get("runId") ?? "").trim();
+  const nodeRunId = String(formData.get("nodeRunId") ?? "").trim();
   const decision = String(formData.get("status") ?? "").trim();
   const approvedBy = String(formData.get("approvedBy") ?? "").trim();
 
@@ -141,6 +146,10 @@ export async function decideSensitiveAccessApprovalTicket(
   }
 
   try {
+    const beforeBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
     const response = await fetch(
       `${getApiBaseUrl()}/api/sensitive-access/approval-tickets/${encodeURIComponent(ticketId)}/decision`,
       {
@@ -168,6 +177,10 @@ export async function decideSensitiveAccessApprovalTicket(
 
     revalidateSensitiveAccessPaths([runId]);
     const runSnapshot = await fetchRunSnapshot(runId);
+    const afterBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
 
     return {
       status: "success",
@@ -176,6 +189,10 @@ export async function decideSensitiveAccessApprovalTicket(
         decisionLabel: body?.request?.decision_label,
         reasonLabel: body?.request?.reason_label,
         policySummary: body?.request?.policy_summary,
+        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
+          before: beforeBlockers,
+          after: afterBlockers
+        }),
         runSnapshot
       }),
       ticketId
@@ -195,6 +212,7 @@ export async function retrySensitiveAccessNotificationDispatch(
 ): Promise<RetrySensitiveAccessNotificationDispatchState> {
   const dispatchId = String(formData.get("dispatchId") ?? "").trim();
   const runId = String(formData.get("runId") ?? "").trim();
+  const nodeRunId = String(formData.get("nodeRunId") ?? "").trim();
   const target = String(formData.get("target") ?? "").trim();
 
   if (!dispatchId) {
@@ -207,6 +225,10 @@ export async function retrySensitiveAccessNotificationDispatch(
   }
 
   try {
+    const beforeBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
     const response = await fetch(
       `${getApiBaseUrl()}/api/sensitive-access/notification-dispatches/${encodeURIComponent(dispatchId)}/retry`,
       {
@@ -234,6 +256,10 @@ export async function retrySensitiveAccessNotificationDispatch(
 
     revalidateSensitiveAccessPaths([runId]);
     const runSnapshot = await fetchRunSnapshot(runId);
+    const afterBlockers = await fetchCallbackBlockerSnapshot({
+      runId,
+      nodeRunId: nodeRunId || null
+    });
     const effectiveTarget =
       typeof body?.notification?.target === "string" && body.notification.target.trim().length > 0
         ? body.notification.target.trim()
@@ -246,6 +272,10 @@ export async function retrySensitiveAccessNotificationDispatch(
         error: body?.notification?.error,
         target: effectiveTarget,
         waitingStatus: body?.approval_ticket?.waiting_status,
+        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
+          before: beforeBlockers,
+          after: afterBlockers
+        }),
         runSnapshot
       }),
       dispatchId,

@@ -138,6 +138,9 @@ export function SensitiveAccessBlockedCard({
 
       <SensitiveAccessInlineActions
         compact
+        nodeRunId={
+          payload.approval_ticket?.node_run_id ?? payload.access_request.node_run_id ?? null
+        }
         notifications={payload.notifications}
         runId={runId}
         ticket={payload.approval_ticket}

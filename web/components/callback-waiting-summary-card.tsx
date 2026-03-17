@@ -198,6 +198,7 @@ export function CallbackWaitingSummaryCard({
       {inlineSensitiveAccessEntry ? (
         <SensitiveAccessInlineActions
           compact
+          nodeRunId={inlineSensitiveAccessEntry.approval_ticket?.node_run_id ?? nodeRunId ?? null}
           notifications={inlineSensitiveAccessEntry.notifications}
           runId={runId ?? null}
           ticket={inlineSensitiveAccessEntry.approval_ticket}
