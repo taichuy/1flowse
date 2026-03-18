@@ -158,4 +158,96 @@ describe("workflow tool execution validation", () => {
     expect(issues[0]?.message).toContain("builtin package set hints");
     expect(issues[0]?.message).toContain("Sandbox code 节点 Sandbox (sandbox)");
   });
+
+  it("在 llm_agent allowedToolIds 未显式声明 execution 时仍校验默认强隔离工具", () => {
+    const issues = buildWorkflowToolExecutionValidationIssues(
+      {
+        nodes: [
+          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+          {
+            id: "agent",
+            type: "llm_agent",
+            name: "Agent",
+            config: {
+              prompt: "Plan with tools",
+              toolPolicy: {
+                allowedToolIds: ["compat:dify-default:plugin:demo/search"]
+              }
+            }
+          },
+          { id: "output", type: "output", name: "Output", config: {} }
+        ],
+        edges: [
+          { id: "e1", sourceNodeId: "trigger", targetNodeId: "agent" },
+          { id: "e2", sourceNodeId: "agent", targetNodeId: "output" }
+        ],
+        variables: [],
+        publish: []
+      },
+      [
+        {
+          id: "compat:dify-default:plugin:demo/search",
+          name: "Demo Search Default",
+          ecosystem: "compat:dify-default",
+          description: "Search via adapter",
+          input_schema: { type: "object" },
+          output_schema: { type: "object" },
+          source: "plugin_registry",
+          callable: true,
+          supported_execution_classes: ["subprocess", "microvm"],
+          default_execution_class: "microvm",
+          sensitivity_level: "L1"
+        }
+      ],
+      [
+        {
+          id: "dify-default-microvm",
+          ecosystem: "compat:dify-default",
+          endpoint: "http://adapter.local/dify-default",
+          enabled: true,
+          healthcheck_path: "/healthz",
+          plugin_kinds: ["tool"],
+          supported_execution_classes: ["subprocess", "microvm"],
+          workspace_ids: [],
+          status: "healthy"
+        }
+      ],
+      createSandboxReadiness({
+        execution_classes: [
+          {
+            execution_class: "sandbox",
+            available: true,
+            backend_ids: ["sandbox-default"],
+            supported_languages: ["python"],
+            supported_profiles: ["python-safe"],
+            supported_dependency_modes: ["builtin"],
+            supports_builtin_package_sets: true,
+            supports_backend_extensions: false,
+            supports_network_policy: true,
+            supports_filesystem_policy: true,
+            reason: null
+          },
+          {
+            execution_class: "microvm",
+            available: false,
+            backend_ids: [],
+            supported_languages: ["python"],
+            supported_profiles: [],
+            supported_dependency_modes: ["builtin"],
+            supports_builtin_package_sets: false,
+            supports_backend_extensions: false,
+            supports_network_policy: false,
+            supports_filesystem_policy: false,
+            reason: "sandbox-default (offline)."
+          }
+        ]
+      })
+    );
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.path).toBe("nodes.1.config.toolPolicy.allowedToolIds");
+    expect(issues[0]?.field).toBe("allowedToolIds");
+    expect(issues[0]?.message).toContain("默认执行级别 microvm");
+    expect(issues[0]?.message).toContain("LLM Agent 节点 Agent (agent) 的 toolPolicy.allowedToolIds");
+  });
 });

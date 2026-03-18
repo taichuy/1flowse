@@ -462,11 +462,13 @@ def validate_persistable_workflow_definition(
         raise WorkflowDefinitionValidationError(
             "Workflow definition requests tool execution capabilities that are not currently "
             "available: "
-            + "; ".join(invalid_tool_execution_references),
+            + "; ".join(issue.message for issue in invalid_tool_execution_references),
             issues=[
                 WorkflowDefinitionValidationIssue(
                     category="tool_execution",
-                    message=issue,
+                    message=issue.message,
+                    path=issue.path,
+                    field=issue.field,
                 )
                 for issue in invalid_tool_execution_references
             ],

@@ -1594,6 +1594,14 @@ def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unava
     assert "toolPolicy.allowedToolIds" in detail
     assert "default execution class 'microvm'" in detail
     assert "no compatible sandbox backend is currently available" in detail
+    issues = _workflow_detail_issues(response)
+    assert any(
+        issue.get("category") == "tool_execution"
+        and issue.get("path") == "nodes.1.config.toolPolicy.allowedToolIds"
+        and issue.get("field") == "allowedToolIds"
+        and "default execution class 'microvm'" in issue.get("message", "")
+        for issue in issues
+    )
 
 
 def test_create_workflow_accepts_authorized_context_mcp_query(client: TestClient) -> None:

@@ -439,7 +439,7 @@ function buildAgentExecutionIssues({
     }
   }
 
-  if (toolPolicy && policyExecutionClass && normalizedAllowedToolIds.length > 0) {
+  if (toolPolicy && normalizedAllowedToolIds.length > 0) {
     const seen = new Set<string>();
     normalizedAllowedToolIds.forEach((toolId) => {
       if (seen.has(toolId)) {
