@@ -9,6 +9,7 @@ export type SensitiveAccessInboxCallbackContext = {
   nodeRunId: string;
   waitingReason?: string | null;
   lifecycle?: RunExecutionView["nodes"][number]["callback_waiting_lifecycle"];
+  callbackWaitingExplanation?: RunExecutionView["nodes"][number]["callback_waiting_explanation"];
   callbackTickets: RunExecutionView["nodes"][number]["callback_tickets"];
   sensitiveAccessEntries: SensitiveAccessTimelineEntry[];
   scheduledResumeDelaySeconds?: number | null;
@@ -129,6 +130,7 @@ export function buildSensitiveAccessInboxEntryCallbackContext(
     nodeRunId: node.node_run_id,
     waitingReason: node.waiting_reason,
     lifecycle: node.callback_waiting_lifecycle,
+    callbackWaitingExplanation: node.callback_waiting_explanation,
     callbackTickets: node.callback_tickets,
     sensitiveAccessEntries: mergeSensitiveAccessEntries(
       node.sensitive_access_entries,

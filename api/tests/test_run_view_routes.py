@@ -357,6 +357,12 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         "last_resume_source": "callback_ticket_monitor",
         "last_resume_backoff_attempt": 2,
     }
+    assert node["callback_waiting_explanation"] == {
+        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "follow_up": (
+            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+        ),
+    }
     assert node["scheduled_resume_delay_seconds"] == 0
     assert node["scheduled_resume_reason"] == "search callback pending"
     assert node["scheduled_resume_source"] == "callback_ticket_monitor"

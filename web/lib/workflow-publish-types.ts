@@ -70,6 +70,7 @@ export type PublishedEndpointInvocationItem = {
     callback_ticket_count: number;
     callback_ticket_status_counts: Record<string, number>;
     callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+    callback_waiting_explanation?: RunExecutionFocusExplanation | null;
     sensitive_access_summary?: {
       request_count: number;
       approval_ticket_count: number;

@@ -4,7 +4,8 @@ import { CallbackWaitingInlineActions } from "@/components/callback-waiting-inli
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import type {
   CallbackWaitingLifecycleSummary,
-  RunCallbackTicketItem
+  RunCallbackTicketItem,
+  RunExecutionFocusExplanation
 } from "@/lib/get-run-views";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
@@ -24,6 +25,7 @@ type CallbackWaitingSummaryCardProps = {
   lifecycle?: CallbackWaitingLifecycleSummary | null;
   callbackTickets?: RunCallbackTicketItem[];
   sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+  callbackWaitingExplanation?: RunExecutionFocusExplanation | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   waitingReason?: string | null;
   scheduledResumeDelaySeconds?: number | null;
@@ -41,6 +43,7 @@ export function CallbackWaitingSummaryCard({
   lifecycle,
   callbackTickets = [],
   sensitiveAccessEntries = [],
+  callbackWaitingExplanation,
   callbackWaitingAutomation,
   waitingReason,
   scheduledResumeDelaySeconds,
@@ -53,17 +56,20 @@ export function CallbackWaitingSummaryCard({
   nodeRunId,
   className = ""
 }: CallbackWaitingSummaryCardProps) {
-  const headline = getCallbackWaitingHeadline({
-    lifecycle,
-    callbackTickets,
-    sensitiveAccessEntries,
-    callbackWaitingAutomation,
-    scheduledResumeDelaySeconds,
-    scheduledResumeSource,
-    scheduledWaitingStatus,
-    scheduledResumeScheduledAt,
-    scheduledResumeDueAt
-  });
+  const headline =
+    callbackWaitingExplanation?.primary_signal?.trim() ||
+    getCallbackWaitingHeadline({
+      lifecycle,
+      callbackTickets,
+      sensitiveAccessEntries,
+      callbackWaitingAutomation,
+      scheduledResumeDelaySeconds,
+      scheduledResumeSource,
+      scheduledWaitingStatus,
+      scheduledResumeScheduledAt,
+      scheduledResumeDueAt
+    });
+  const callbackFollowUp = callbackWaitingExplanation?.follow_up?.trim() || null;
   const scheduledResume = formatScheduledResumeLabel({
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
@@ -194,6 +200,7 @@ export function CallbackWaitingSummaryCard({
           {row.label}: {row.value}
         </p>
       ))}
+      {callbackFollowUp ? <p className="section-copy entry-copy">{callbackFollowUp}</p> : null}
       {recommendedCtaHref ? (
         <div className="event-type-strip">
           <Link className="event-chip inbox-filter-link" href={recommendedCtaHref}>

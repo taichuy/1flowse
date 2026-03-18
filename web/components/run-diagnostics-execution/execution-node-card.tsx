@@ -171,6 +171,7 @@ export function ExecutionNodeCard({
 
       <CallbackWaitingSummaryCard
         lifecycle={node.callback_waiting_lifecycle}
+        callbackWaitingExplanation={node.callback_waiting_explanation}
         callbackTickets={node.callback_tickets}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sensitiveAccessEntries={node.sensitive_access_entries}

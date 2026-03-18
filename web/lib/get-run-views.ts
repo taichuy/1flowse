@@ -200,6 +200,7 @@ export type RunExecutionNodeItem = {
   skill_reference_loads: SkillReferenceLoadItem[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
   callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
   scheduled_resume_delay_seconds?: number | null;
   scheduled_resume_reason?: string | null;
   scheduled_resume_source?: string | null;

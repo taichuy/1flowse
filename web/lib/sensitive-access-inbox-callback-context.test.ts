@@ -206,6 +206,11 @@ function createExecutionView(): RunExecutionView {
             notifications: []
           }
         ],
+        callback_waiting_explanation: {
+          primary_signal: "当前 callback waiting 仍卡在 1 条待处理审批。",
+          follow_up:
+            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+        },
         callback_waiting_lifecycle: {
           wait_cycle_count: 1,
           issued_ticket_count: 1,
@@ -309,6 +314,9 @@ describe("sensitive access inbox callback context", () => {
     expect(context?.scheduledResumeSource).toBe("callback_ticket_monitor");
     expect(context?.scheduledResumeScheduledAt).toBe("2026-03-18T10:00:00Z");
     expect(context?.scheduledResumeDueAt).toBe("2026-03-18T10:05:00Z");
+    expect(context?.callbackWaitingExplanation?.primary_signal).toBe(
+      "当前 callback waiting 仍卡在 1 条待处理审批。"
+    );
     expect(context?.sensitiveAccessEntries).toHaveLength(1);
     expect(context?.sensitiveAccessEntries[0]?.approval_ticket?.id).toBe("ticket-1");
   });

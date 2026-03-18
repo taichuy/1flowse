@@ -36,17 +36,20 @@ export function WorkflowPublishInvocationCallbackSection({
 }: WorkflowPublishInvocationCallbackSectionProps) {
   const waitingLifecycle = invocation.run_waiting_lifecycle;
   const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
-  const headline = getCallbackWaitingHeadline({
-    lifecycle: callbackLifecycle,
-    callbackTickets,
-    sensitiveAccessEntries,
-    callbackWaitingAutomation,
-    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
-    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
-    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
-    scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
-    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
-  });
+  const headline =
+    waitingLifecycle?.callback_waiting_explanation?.primary_signal?.trim() ||
+    getCallbackWaitingHeadline({
+      lifecycle: callbackLifecycle,
+      callbackTickets,
+      sensitiveAccessEntries,
+      callbackWaitingAutomation,
+      scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+      scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
+      scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
+      scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
+      scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
+    });
+  const followUp = waitingLifecycle?.callback_waiting_explanation?.follow_up?.trim() || null;
   const chips = listCallbackWaitingChips({
     lifecycle: callbackLifecycle,
     callbackTickets,
@@ -95,6 +98,7 @@ export function WorkflowPublishInvocationCallbackSection({
       <CallbackWaitingSummaryCard
         callbackTickets={callbackTickets}
         callbackWaitingAutomation={callbackWaitingAutomation}
+        callbackWaitingExplanation={waitingLifecycle?.callback_waiting_explanation}
         lifecycle={callbackLifecycle}
         sensitiveAccessEntries={sensitiveAccessEntries}
         waitingReason={waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason}
@@ -114,6 +118,7 @@ export function WorkflowPublishInvocationCallbackSection({
               <span className="status-meta">Resume blockers</span>
             </div>
             <p className="section-copy entry-copy">{headline ?? "Callback waiting is not active."}</p>
+            {followUp ? <p className="binding-meta">{followUp}</p> : null}
             {chips.length ? (
               <p className="binding-meta">{chips.join(" · ")}</p>
             ) : null}

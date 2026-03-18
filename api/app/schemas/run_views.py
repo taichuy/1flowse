@@ -192,6 +192,7 @@ class RunExecutionNodeItem(BaseModel):
         default_factory=list
     )
     callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
     scheduled_resume_delay_seconds: float | None = None
     scheduled_resume_reason: str | None = None
     scheduled_resume_source: str | None = None

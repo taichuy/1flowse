@@ -282,6 +282,7 @@ class PublishedEndpointInvocationWaitingLifecycle(BaseModel):
     callback_ticket_count: int = 0
     callback_ticket_status_counts: dict[str, int] = Field(default_factory=dict)
     callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
     sensitive_access_summary: PublishedEndpointInvocationSensitiveAccessSummary | None = None
     scheduled_resume_delay_seconds: float | None = None
     scheduled_resume_reason: str | None = None

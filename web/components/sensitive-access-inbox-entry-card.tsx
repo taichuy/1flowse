@@ -350,6 +350,7 @@ export function SensitiveAccessInboxEntryCard({
           <CallbackWaitingSummaryCard
             callbackTickets={callbackWaitingContext.callbackTickets}
             callbackWaitingAutomation={callbackWaitingAutomation}
+            callbackWaitingExplanation={callbackWaitingContext.callbackWaitingExplanation}
             lifecycle={callbackWaitingContext.lifecycle}
             nodeRunId={callbackWaitingContext.nodeRunId}
             runId={callbackWaitingContext.runId}

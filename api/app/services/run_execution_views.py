@@ -20,6 +20,9 @@ from app.schemas.run_views import (
 from app.services.run_execution_focus_explanations import (
     build_run_execution_focus_explanation,
 )
+from app.services.callback_waiting_explanations import (
+    build_callback_waiting_explanation,
+)
 from app.services.run_view_serializers import (
     serialize_ai_call,
     serialize_callback_ticket,
@@ -235,6 +238,16 @@ def _build_execution_node_item(
     scheduled_resume = serialize_callback_waiting_scheduled_resume(
         node_run.checkpoint_payload
     )
+    callback_tickets = [
+        serialize_callback_ticket(ticket) for ticket in tickets_by_node_run[node_run.id]
+    ]
+    sensitive_access_entries = [
+        serialize_sensitive_access_timeline_entry(bundle)
+        for bundle in sensitive_access_by_node_run.get(node_run.id, [])
+    ]
+    callback_waiting_lifecycle = serialize_callback_waiting_lifecycle_summary(
+        node_run.checkpoint_payload
+    )
     return RunExecutionNodeItem(
         node_run_id=node_run.id,
         node_id=node_run.node_id,
@@ -281,20 +294,34 @@ def _build_execution_node_item(
             for tool_call in tool_calls_by_node_run[node_run.id]
         ],
         ai_calls=[serialize_ai_call(ai_call) for ai_call in ai_calls_by_node_run[node_run.id]],
-        callback_tickets=[
-            serialize_callback_ticket(ticket)
-            for ticket in tickets_by_node_run[node_run.id]
-        ],
+        callback_tickets=callback_tickets,
         skill_reference_load_count=sum(
             len(load.references) for load in skill_reference_loads
         ),
         skill_reference_loads=skill_reference_loads,
-        sensitive_access_entries=[
-            serialize_sensitive_access_timeline_entry(bundle)
-            for bundle in sensitive_access_by_node_run.get(node_run.id, [])
-        ],
-        callback_waiting_lifecycle=serialize_callback_waiting_lifecycle_summary(
-            node_run.checkpoint_payload
+        sensitive_access_entries=sensitive_access_entries,
+        callback_waiting_lifecycle=callback_waiting_lifecycle,
+        callback_waiting_explanation=build_callback_waiting_explanation(
+            lifecycle=callback_waiting_lifecycle,
+            pending_callback_ticket_count=sum(
+                1 for ticket in callback_tickets if ticket.status == "pending"
+            ),
+            pending_approval_count=sum(
+                1
+                for entry in sensitive_access_entries
+                if entry.approval_ticket is not None
+                and entry.approval_ticket.status == "pending"
+            ),
+            failed_notification_count=sum(
+                1
+                for entry in sensitive_access_entries
+                for notification in entry.notifications
+                if notification.status == "failed"
+            ),
+            scheduled_resume_delay_seconds=scheduled_resume[
+                "scheduled_resume_delay_seconds"
+            ],
+            scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
         ),
         scheduled_resume_delay_seconds=scheduled_resume[
             "scheduled_resume_delay_seconds"

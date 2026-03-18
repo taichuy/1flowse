@@ -15,6 +15,9 @@ from app.services.run_view_serializers import (
     serialize_callback_waiting_lifecycle_summary,
     serialize_callback_waiting_scheduled_resume,
 )
+from app.services.callback_waiting_explanations import (
+    build_callback_waiting_explanation,
+)
 from app.services.sensitive_access_timeline import SensitiveAccessTimelineSnapshot
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
@@ -130,6 +133,16 @@ def serialize_waiting_lifecycle(
     scheduled_resume = serialize_callback_waiting_scheduled_resume(
         node_run.checkpoint_payload
     )
+    pending_approval_count = (
+        sensitive_access_summary.pending_approval_count
+        if sensitive_access_summary is not None
+        else 0
+    )
+    failed_notification_count = (
+        sensitive_access_summary.failed_notification_count
+        if sensitive_access_summary is not None
+        else 0
+    )
     return PublishedEndpointInvocationWaitingLifecycle(
         node_run_id=node_run.id,
         node_status=node_run.status,
@@ -143,6 +156,18 @@ def serialize_waiting_lifecycle(
             sorted(Counter(ticket.status for ticket in callback_tickets).items())
         ),
         callback_waiting_lifecycle=lifecycle,
+        callback_waiting_explanation=build_callback_waiting_explanation(
+            lifecycle=lifecycle,
+            pending_callback_ticket_count=sum(
+                1 for ticket in callback_tickets if ticket.status == "pending"
+            ),
+            pending_approval_count=pending_approval_count,
+            failed_notification_count=failed_notification_count,
+            scheduled_resume_delay_seconds=scheduled_resume[
+                "scheduled_resume_delay_seconds"
+            ],
+            scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
+        ),
         sensitive_access_summary=sensitive_access_summary,
         scheduled_resume_delay_seconds=scheduled_resume[
             "scheduled_resume_delay_seconds"

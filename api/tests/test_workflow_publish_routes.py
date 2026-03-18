@@ -1540,6 +1540,12 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "waiting_reason": "callback pending",
         "callback_ticket_count": 1,
         "callback_ticket_status_counts": {"pending": 1},
+        "callback_waiting_explanation": {
+            "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+            "follow_up": (
+                "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+            ),
+        },
         "sensitive_access_summary": {
             "request_count": 1,
             "approval_ticket_count": 1,
