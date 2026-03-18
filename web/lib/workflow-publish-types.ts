@@ -216,11 +216,28 @@ export type PublishedEndpointInvocationCacheReference = {
   inventory_entry?: PublishedEndpointCacheInventoryItem | null;
 };
 
+export type PublishedEndpointInvocationSkillTraceNodeItem = {
+  node_run_id: string;
+  node_id?: string | null;
+  node_name?: string | null;
+  reference_count: number;
+  loads: SkillReferenceLoadItem[];
+};
+
+export type PublishedEndpointInvocationSkillTrace = {
+  scope: "blocking_node_run" | "run";
+  reference_count: number;
+  phase_counts: Record<string, number>;
+  source_counts: Record<string, number>;
+  nodes: PublishedEndpointInvocationSkillTraceNodeItem[];
+};
+
 export type PublishedEndpointInvocationDetailResponse = {
   invocation: PublishedEndpointInvocationItem;
   run?: PublishedEndpointInvocationRunReference | null;
   callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
   blocking_node_run_id?: string | null;
+  skill_trace?: PublishedEndpointInvocationSkillTrace | null;
   blocking_sensitive_access_entries: SensitiveAccessTimelineEntry[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
   cache: PublishedEndpointInvocationCacheReference;
@@ -311,3 +328,4 @@ export type WorkflowPublishedEndpointItem = {
   activity?: PublishedEndpointInvocationSummary | null;
   cache_inventory?: PublishedEndpointCacheInventorySummary | null;
 };
+import type { SkillReferenceLoadItem } from "@/lib/get-run-views";

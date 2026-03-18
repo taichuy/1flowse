@@ -1,3 +1,5 @@
+from collections import Counter
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,7 +12,7 @@ from app.api.routes.published_endpoint_invocation_support import (
 )
 from app.api.routes.sensitive_access_http import build_sensitive_access_blocking_response
 from app.core.database import get_db
-from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.models.run import NodeRun, Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowPublishedApiKey, WorkflowPublishedEndpoint
 from app.schemas.run_views import RunCallbackTicketItem
 from app.schemas.workflow_publish import (
@@ -18,12 +20,16 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationCacheReference,
     PublishedEndpointInvocationDetailResponse,
     PublishedEndpointInvocationRunReference,
+    PublishedEndpointInvocationSkillTrace,
+    PublishedEndpointInvocationSkillTraceNodeItem,
 )
 from app.services.published_cache import PublishedEndpointCacheService
 from app.services.published_invocation_detail_access import (
     PublishedInvocationDetailAccessService,
 )
 from app.services.published_invocations import PublishedInvocationService
+from app.services.run_execution_views import summarize_skill_reference_loads
+from app.services.runtime_records import ExecutionArtifacts
 from app.services.sensitive_access_presenters import (
     serialize_sensitive_access_timeline_entry,
 )
@@ -47,6 +53,96 @@ def _resolve_blocking_node_run_id(
         if ticket.node_run_id:
             return ticket.node_run_id
     return None
+
+
+def _count_skill_references(loads) -> int:
+    return sum(len(load.references) for load in loads)
+
+
+def _summarize_skill_reference_sources(loads) -> dict[str, int]:
+    source_counts: Counter[str] = Counter()
+    for load in loads:
+        for reference in load.references:
+            source = reference.load_source or "unknown"
+            source_counts[source] += 1
+    return dict(sorted(source_counts.items()))
+
+
+def _summarize_skill_reference_phases(loads) -> dict[str, int]:
+    phase_counts: Counter[str] = Counter()
+    for load in loads:
+        if load.references:
+            phase_counts[load.phase] += len(load.references)
+    return dict(sorted(phase_counts.items()))
+
+
+def _serialize_skill_trace_node(
+    *,
+    node_run_id: str,
+    node_run: NodeRun | None,
+    loads,
+) -> PublishedEndpointInvocationSkillTraceNodeItem:
+    return PublishedEndpointInvocationSkillTraceNodeItem(
+        node_run_id=node_run_id,
+        node_id=(node_run.node_id if node_run is not None else None),
+        node_name=(node_run.node_name if node_run is not None else None),
+        reference_count=_count_skill_references(loads),
+        loads=list(loads),
+    )
+
+
+def _build_skill_trace(
+    *,
+    run: Run | None,
+    node_runs: list[NodeRun],
+    events: list[RunEvent],
+    blocking_node_run_id: str | None,
+) -> PublishedEndpointInvocationSkillTrace | None:
+    if run is None or not node_runs or not events:
+        return None
+
+    summary = summarize_skill_reference_loads(
+        ExecutionArtifacts(
+            run=run,
+            node_runs=node_runs,
+            events=events,
+        )
+    )
+    if summary.reference_count <= 0:
+        return None
+
+    node_run_lookup = {node_run.id: node_run for node_run in node_runs}
+    if blocking_node_run_id and blocking_node_run_id in summary.by_node_run:
+        scoped_loads = summary.by_node_run[blocking_node_run_id]
+        return PublishedEndpointInvocationSkillTrace(
+            scope="blocking_node_run",
+            reference_count=_count_skill_references(scoped_loads),
+            phase_counts=_summarize_skill_reference_phases(scoped_loads),
+            source_counts=_summarize_skill_reference_sources(scoped_loads),
+            nodes=[
+                _serialize_skill_trace_node(
+                    node_run_id=blocking_node_run_id,
+                    node_run=node_run_lookup.get(blocking_node_run_id),
+                    loads=scoped_loads,
+                )
+            ],
+        )
+
+    node_ids = [node_run.id for node_run in node_runs if node_run.id in summary.by_node_run]
+    return PublishedEndpointInvocationSkillTrace(
+        scope="run",
+        reference_count=summary.reference_count,
+        phase_counts=summary.phase_counts,
+        source_counts=summary.source_counts,
+        nodes=[
+            _serialize_skill_trace_node(
+                node_run_id=node_run_id,
+                node_run=node_run_lookup.get(node_run_id),
+                loads=summary.by_node_run[node_run_id],
+            )
+            for node_run_id in node_ids
+        ],
+    )
 
 
 @router.get(
@@ -114,13 +210,25 @@ def get_published_endpoint_invocation_detail(
     run_lookup = {run.id: run} if run is not None else {}
     waiting_reason_lookup: dict[str, str | None] = {}
     waiting_lifecycle_lookup = {}
+    node_runs: list[NodeRun] = []
+    run_events: list[RunEvent] = []
     callback_ticket_items = []
     sensitive_access_entries = []
     blocking_sensitive_access_entries = []
+    skill_trace = None
     blocking_node_run_id = None
     if record.run_id:
         node_runs = (
             db.scalars(select(NodeRun).where(NodeRun.run_id == record.run_id)).all()
+            if run is not None
+            else []
+        )
+        run_events = (
+            db.scalars(
+                select(RunEvent)
+                .where(RunEvent.run_id == record.run_id)
+                .order_by(RunEvent.id.asc())
+            ).all()
             if run is not None
             else []
         )
@@ -159,6 +267,12 @@ def get_published_endpoint_invocation_detail(
                         blocking_node_run_id, []
                     )
                 ]
+            skill_trace = _build_skill_trace(
+                run=run,
+                node_runs=node_runs,
+                events=run_events,
+                blocking_node_run_id=blocking_node_run_id,
+            )
 
     invocation = serialize_published_invocation_item(
         record,
@@ -196,6 +310,7 @@ def get_published_endpoint_invocation_detail(
         ),
         callback_tickets=callback_ticket_items,
         blocking_node_run_id=blocking_node_run_id,
+        skill_trace=skill_trace,
         blocking_sensitive_access_entries=blocking_sensitive_access_entries,
         sensitive_access_entries=sensitive_access_entries,
         cache=PublishedEndpointInvocationCacheReference(

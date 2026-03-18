@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.routes.sensitive_access import service as sensitive_access_route_service
-from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.models.run import NodeRun, Run, RunCallbackTicket, RunEvent
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
     NotificationDispatchRecord,
@@ -458,6 +458,123 @@ def test_get_published_invocation_detail_includes_sensitive_access_summary_for_w
         "pending_notification_count": 0,
         "delivered_notification_count": 0,
         "failed_notification_count": 1,
+    }
+
+
+def test_get_published_invocation_detail_surfaces_blocking_skill_trace(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow_id, binding, run, node_run, invocation = _create_published_invocation_fixture(
+        client,
+        sqlite_session,
+    )
+    sqlite_session.add(
+        RunEvent(
+            run_id=run.id,
+            node_run_id=node_run.id,
+            event_type="agent.skill.references.loaded",
+            payload={
+                "node_id": node_run.node_id,
+                "phase": "main_plan",
+                "references": [
+                    {
+                        "skill_id": "skill-ops-review",
+                        "skill_name": "Ops Review",
+                        "reference_id": "ref-escalation",
+                        "reference_name": "Escalation Checklist",
+                        "load_source": "skill_binding",
+                        "retrieval_http_path": (
+                            "/api/skills/skill-ops-review/references/ref-escalation"
+                        ),
+                        "retrieval_mcp_method": "skills.get_reference",
+                        "retrieval_mcp_params": {
+                            "skill_id": "skill-ops-review",
+                            "reference_id": "ref-escalation",
+                        },
+                    },
+                    {
+                        "skill_id": "skill-ops-review",
+                        "skill_name": "Ops Review",
+                        "reference_id": "ref-risk",
+                        "reference_name": "Risk Notes",
+                        "load_source": "retrieval_query_match",
+                        "fetch_reason": "Matched query terms: callback, blocker",
+                        "fetch_request_index": 1,
+                        "fetch_request_total": 1,
+                        "retrieval_http_path": "/api/skills/skill-ops-review/references/ref-risk",
+                        "retrieval_mcp_method": "skills.get_reference",
+                        "retrieval_mcp_params": {
+                            "skill_id": "skill-ops-review",
+                            "reference_id": "ref-risk",
+                        },
+                    },
+                ],
+            },
+            created_at=datetime.now(UTC),
+        )
+    )
+    sqlite_session.commit()
+
+    detail_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}",
+        params={"requester_id": "publish-detail-reviewer"},
+    )
+
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["skill_trace"] == {
+        "scope": "blocking_node_run",
+        "reference_count": 2,
+        "phase_counts": {"main_plan": 2},
+        "source_counts": {"retrieval_query_match": 1, "skill_binding": 1},
+        "nodes": [
+            {
+                "node_run_id": node_run.id,
+                "node_id": node_run.node_id,
+                "node_name": node_run.node_name,
+                "reference_count": 2,
+                "loads": [
+                    {
+                        "phase": "main_plan",
+                        "references": [
+                            {
+                                "skill_id": "skill-ops-review",
+                                "skill_name": "Ops Review",
+                                "reference_id": "ref-escalation",
+                                "reference_name": "Escalation Checklist",
+                                "load_source": "skill_binding",
+                                "fetch_reason": None,
+                                "fetch_request_index": None,
+                                "fetch_request_total": None,
+                                "retrieval_http_path": "/api/skills/skill-ops-review/references/ref-escalation",
+                                "retrieval_mcp_method": "skills.get_reference",
+                                "retrieval_mcp_params": {
+                                    "skill_id": "skill-ops-review",
+                                    "reference_id": "ref-escalation",
+                                },
+                            },
+                            {
+                                "skill_id": "skill-ops-review",
+                                "skill_name": "Ops Review",
+                                "reference_id": "ref-risk",
+                                "reference_name": "Risk Notes",
+                                "load_source": "retrieval_query_match",
+                                "fetch_reason": "Matched query terms: callback, blocker",
+                                "fetch_request_index": 1,
+                                "fetch_request_total": 1,
+                                "retrieval_http_path": "/api/skills/skill-ops-review/references/ref-risk",
+                                "retrieval_mcp_method": "skills.get_reference",
+                                "retrieval_mcp_params": {
+                                    "skill_id": "skill-ops-review",
+                                    "reference_id": "ref-risk",
+                                },
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
     }
 
 

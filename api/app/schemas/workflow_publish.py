@@ -6,7 +6,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.run import RunDetail
-from app.schemas.run_views import CallbackWaitingLifecycleSummary, RunCallbackTicketItem
+from app.schemas.run_views import (
+    CallbackWaitingLifecycleSummary,
+    RunCallbackTicketItem,
+    SkillReferenceLoadItem,
+)
 from app.schemas.sensitive_access import SensitiveAccessTimelineEntryItem
 from app.schemas.workflow_published_endpoint import (
     WorkflowPublishedEndpointCachePolicy,
@@ -476,11 +480,28 @@ class PublishedEndpointInvocationCacheReference(BaseModel):
     inventory_entry: PublishedEndpointCacheInventoryItem | None = None
 
 
+class PublishedEndpointInvocationSkillTraceNodeItem(BaseModel):
+    node_run_id: str
+    node_id: str | None = None
+    node_name: str | None = None
+    reference_count: int = 0
+    loads: list[SkillReferenceLoadItem] = Field(default_factory=list)
+
+
+class PublishedEndpointInvocationSkillTrace(BaseModel):
+    scope: Literal["blocking_node_run", "run"]
+    reference_count: int = 0
+    phase_counts: dict[str, int] = Field(default_factory=dict)
+    source_counts: dict[str, int] = Field(default_factory=dict)
+    nodes: list[PublishedEndpointInvocationSkillTraceNodeItem] = Field(default_factory=list)
+
+
 class PublishedEndpointInvocationDetailResponse(BaseModel):
     invocation: PublishedEndpointInvocationItem
     run: PublishedEndpointInvocationRunReference | None = None
     callback_tickets: list[RunCallbackTicketItem] = Field(default_factory=list)
     blocking_node_run_id: str | None = None
+    skill_trace: PublishedEndpointInvocationSkillTrace | None = None
     blocking_sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
         default_factory=list
     )

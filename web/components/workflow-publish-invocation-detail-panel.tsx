@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-publish-invocation-callback-section";
@@ -23,6 +24,12 @@ function formatJsonPreview(value: unknown): string {
   return JSON.stringify(value ?? null, null, 2);
 }
 
+function formatMetricSummary(metrics: Record<string, number>) {
+  return Object.entries(metrics)
+    .map(([key, count]) => `${key} ${count}`)
+    .join(" · ");
+}
+
 export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref,
@@ -34,6 +41,7 @@ export function WorkflowPublishInvocationDetailPanel({
     run,
     callback_tickets: callbackTickets,
     blocking_node_run_id: blockingNodeRunId,
+    skill_trace: skillTrace,
     blocking_sensitive_access_entries: blockingSensitiveAccessEntries,
     sensitive_access_entries: sensitiveAccessEntries,
     cache
@@ -168,6 +176,46 @@ export function WorkflowPublishInvocationDetailPanel({
         sensitiveAccessEntries={sensitiveAccessEntries}
         callbackWaitingAutomation={callbackWaitingAutomation}
       />
+
+      {skillTrace ? (
+        <div>
+          <strong>Skill trace</strong>
+          <p className="section-copy entry-copy">
+            把 publish invocation 背后的 skill reference load 直接带到当前详情页，避免外部调用排障还要跳回 run detail 才能看见 agent 真正注入了哪些参考资料。
+            {skillTrace.scope === "blocking_node_run" && skillTrace.nodes[0]?.node_run_id
+              ? ` 当前优先聚焦阻塞节点 ${skillTrace.nodes[0].node_run_id}。`
+              : " 当前展示整个 run 的 skill 注入摘要。"}
+          </p>
+          <div className="tool-badge-row">
+            <span className="event-chip">refs {skillTrace.reference_count}</span>
+            {formatMetricSummary(skillTrace.phase_counts) ? (
+              <span className="event-chip">phases {formatMetricSummary(skillTrace.phase_counts)}</span>
+            ) : null}
+            {formatMetricSummary(skillTrace.source_counts) ? (
+              <span className="event-chip">sources {formatMetricSummary(skillTrace.source_counts)}</span>
+            ) : null}
+          </div>
+          <div className="publish-cache-list">
+            {skillTrace.nodes.map((node) => (
+              <div className="payload-card compact-card" key={node.node_run_id}>
+                <div className="payload-card-header">
+                  <span className="status-meta">{node.node_name ?? node.node_id ?? node.node_run_id}</span>
+                  <span className="event-chip">refs {node.reference_count}</span>
+                </div>
+                <p className="section-copy entry-copy">
+                  node run {node.node_run_id}
+                  {node.node_id ? ` · node ${node.node_id}` : ""}
+                </p>
+                <SkillReferenceLoadList
+                  skillReferenceLoads={node.loads}
+                  title="Injected references"
+                  description="当前节点真正加载到 agent phase 的 skill references。发布入口和 run detail 现在共享同一条 trace 事实。"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {involvedTools.length > 0 || unresolvedToolIds.length > 0 ? (
         <div>
