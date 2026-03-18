@@ -68,6 +68,8 @@ def serialize_callback_waiting_scheduled_resume(
         "scheduled_resume_reason": scheduled_resume["reason"],
         "scheduled_resume_source": scheduled_resume["source"],
         "scheduled_waiting_status": scheduled_resume["waiting_status"],
+        "scheduled_resume_scheduled_at": scheduled_resume["scheduled_at"],
+        "scheduled_resume_due_at": scheduled_resume["due_at"],
     }
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from math import isfinite
 from typing import Any
 
@@ -18,6 +18,21 @@ def _serialize_datetime(value: datetime | None) -> str | None:
     else:
         value = value.astimezone(UTC)
     return value.isoformat().replace("+00:00", "Z")
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _coerce_non_negative_int(value: object) -> int:
@@ -117,7 +132,52 @@ def load_callback_waiting_scheduled_resume(
         "backoff_attempt": _coerce_non_negative_int(
             scheduled_resume.get("backoff_attempt")
         ),
+        "scheduled_at": _optional_string(scheduled_resume.get("scheduled_at")),
+        "due_at": _optional_string(scheduled_resume.get("due_at")),
     }
+
+
+def build_callback_waiting_scheduled_resume(
+    *,
+    delay_seconds: float,
+    reason: str,
+    source: str,
+    waiting_status: str,
+    backoff_attempt: int,
+    scheduled_at: datetime | None = None,
+) -> dict[str, Any]:
+    normalized_delay_seconds = max(float(delay_seconds), 0.0)
+    normalized_scheduled_at = scheduled_at or datetime.now(UTC)
+    if normalized_scheduled_at.tzinfo is None:
+        normalized_scheduled_at = normalized_scheduled_at.replace(tzinfo=UTC)
+    else:
+        normalized_scheduled_at = normalized_scheduled_at.astimezone(UTC)
+    due_at = normalized_scheduled_at + timedelta(seconds=normalized_delay_seconds)
+    return {
+        "delay_seconds": normalized_delay_seconds,
+        "reason": _optional_string(reason),
+        "source": _optional_string(source),
+        "waiting_status": _optional_string(waiting_status),
+        "backoff_attempt": max(int(backoff_attempt), 0),
+        "scheduled_at": _serialize_datetime(normalized_scheduled_at),
+        "due_at": _serialize_datetime(due_at),
+    }
+
+
+def resolve_callback_waiting_scheduled_resume_due_at(
+    checkpoint_payload: dict[str, Any] | None,
+) -> datetime | None:
+    scheduled_resume = load_callback_waiting_scheduled_resume(checkpoint_payload)
+    due_at = _parse_datetime(scheduled_resume.get("due_at"))
+    if due_at is not None:
+        return due_at
+    scheduled_at = _parse_datetime(scheduled_resume.get("scheduled_at"))
+    delay_seconds = scheduled_resume.get("delay_seconds")
+    if delay_seconds is None:
+        return None
+    if scheduled_at is None:
+        return datetime.now(UTC)
+    return scheduled_at + timedelta(seconds=float(delay_seconds))
 
 
 def attach_callback_waiting_lifecycle(

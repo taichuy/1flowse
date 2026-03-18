@@ -18,9 +18,9 @@ from app.services.run_view_serializers import (
     serialize_ai_call,
     serialize_callback_ticket,
     serialize_callback_waiting_lifecycle_summary,
+    serialize_callback_waiting_scheduled_resume,
     serialize_run_artifact,
     serialize_run_callback_waiting_summary,
-    serialize_callback_waiting_scheduled_resume,
     serialize_tool_call,
 )
 from app.services.runtime_execution_policy import (
@@ -276,6 +276,10 @@ def _build_execution_node_item(
         scheduled_resume_reason=scheduled_resume["scheduled_resume_reason"],
         scheduled_resume_source=scheduled_resume["scheduled_resume_source"],
         scheduled_waiting_status=scheduled_resume["scheduled_waiting_status"],
+        scheduled_resume_scheduled_at=scheduled_resume[
+            "scheduled_resume_scheduled_at"
+        ],
+        scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
     )
 
 

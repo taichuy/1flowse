@@ -143,6 +143,8 @@ def _create_published_invocation_fixture(
                 "reason": "callback pending",
                 "source": "callback_ticket_monitor",
                 "waiting_status": "waiting_callback",
+                "scheduled_at": now.isoformat().replace("+00:00", "Z"),
+                "due_at": (now + timedelta(seconds=30)).isoformat().replace("+00:00", "Z"),
             }
         },
         working_context={},

@@ -876,6 +876,8 @@ def test_llm_agent_waiting_callback_can_schedule_resume(
     assert waiting_run.status == "waiting_callback"
     assert waiting_run.phase == "waiting_callback"
     assert waiting_run.checkpoint_payload["scheduled_resume"]["delay_seconds"] == 3.0
+    assert waiting_run.checkpoint_payload["scheduled_resume"]["scheduled_at"] is not None
+    assert waiting_run.checkpoint_payload["scheduled_resume"]["due_at"] is not None
     assert len(scheduled_resumes) == 1
     assert scheduled_resumes[0].delay_seconds == 3.0
     assert "run.resume.scheduled" in [event.event_type for event in first_pass.events]

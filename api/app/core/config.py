@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     callback_ticket_cleanup_batch_size: int = 100
     callback_ticket_cleanup_schedule_enabled: bool = True
     callback_ticket_cleanup_interval_seconds: int = 300
+    waiting_resume_monitor_batch_size: int = 100
+    waiting_resume_monitor_schedule_enabled: bool = True
+    waiting_resume_monitor_interval_seconds: int = 300
     notification_delivery_timeout_seconds: float = 10.0
     notification_webhook_default_target: str = ""
     notification_slack_default_target: str = ""

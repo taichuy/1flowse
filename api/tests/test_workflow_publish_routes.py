@@ -1352,6 +1352,8 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
                 "reason": "callback pending",
                 "source": "callback_ticket_monitor",
                 "waiting_status": "waiting_callback",
+                "scheduled_at": now.isoformat().replace("+00:00", "Z"),
+                "due_at": (now + timedelta(seconds=30)).isoformat().replace("+00:00", "Z"),
             }
         },
         working_context={},
@@ -1561,6 +1563,10 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "scheduled_resume_reason": "callback pending",
         "scheduled_resume_source": "callback_ticket_monitor",
         "scheduled_waiting_status": "waiting_callback",
+        "scheduled_resume_scheduled_at": now.isoformat().replace("+00:00", "Z"),
+        "scheduled_resume_due_at": (now + timedelta(seconds=30)).isoformat().replace(
+            "+00:00", "Z"
+        ),
     }
     assert detail_body["run"] == {
         "id": run.id,

@@ -163,6 +163,8 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
         "source": "route_cleanup",
         "waiting_status": "waiting_callback",
         "backoff_attempt": 1,
+        "scheduled_at": node_run.checkpoint_payload["scheduled_resume"]["scheduled_at"],
+        "due_at": node_run.checkpoint_payload["scheduled_resume"]["due_at"],
     }
     assert event is not None
     assert event.payload["ticket"] == ticket
@@ -334,6 +336,8 @@ def test_cleanup_service_can_schedule_immediate_resume_for_expired_callback_tick
         "source": "callback_ticket_monitor",
         "waiting_status": "waiting_callback",
         "backoff_attempt": 1,
+        "scheduled_at": node_run.checkpoint_payload["scheduled_resume"]["scheduled_at"],
+        "due_at": node_run.checkpoint_payload["scheduled_resume"]["due_at"],
     }
     assert resume_event is not None
     assert resume_event.payload == {
@@ -406,6 +410,8 @@ def test_cleanup_service_applies_backoff_after_repeated_callback_expirations(
         "source": "callback_ticket_monitor",
         "waiting_status": "waiting_callback",
         "backoff_attempt": 2,
+        "scheduled_at": node_run.checkpoint_payload["scheduled_resume"]["scheduled_at"],
+        "due_at": node_run.checkpoint_payload["scheduled_resume"]["due_at"],
     }
     lifecycle = node_run.checkpoint_payload["callback_waiting_lifecycle"]
     assert lifecycle["expired_ticket_count"] == 2
@@ -486,6 +492,8 @@ def test_cleanup_service_schedules_only_one_resume_per_run_in_single_batch(
         "source": "callback_ticket_monitor",
         "waiting_status": "waiting_callback",
         "backoff_attempt": 1,
+        "scheduled_at": node_run.checkpoint_payload["scheduled_resume"]["scheduled_at"],
+        "due_at": node_run.checkpoint_payload["scheduled_resume"]["due_at"],
     }
 
 

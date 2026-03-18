@@ -1491,6 +1491,8 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
         "source": "route_test",
         "waiting_status": "waiting_callback",
         "backoff_attempt": 1,
+        "scheduled_at": waiting_run.checkpoint_payload["scheduled_resume"]["scheduled_at"],
+        "due_at": waiting_run.checkpoint_payload["scheduled_resume"]["due_at"],
     }
     assert lifecycle == {
         "wait_cycle_count": 1,

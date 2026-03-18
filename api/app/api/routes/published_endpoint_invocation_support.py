@@ -145,6 +145,10 @@ def serialize_waiting_lifecycle(
         scheduled_resume_reason=scheduled_resume["scheduled_resume_reason"],
         scheduled_resume_source=scheduled_resume["scheduled_resume_source"],
         scheduled_waiting_status=scheduled_resume["scheduled_waiting_status"],
+        scheduled_resume_scheduled_at=scheduled_resume[
+            "scheduled_resume_scheduled_at"
+        ],
+        scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
     )
 
 

@@ -70,6 +70,8 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                 "source": "callback_ticket_monitor",
                 "waiting_status": "waiting_callback",
                 "backoff_attempt": 2,
+                "scheduled_at": "2026-03-11T10:05:00Z",
+                "due_at": "2026-03-11T10:05:00Z",
             },
         },
         artifact_refs=["artifact://artifact-tool", "artifact://artifact-evidence"],
@@ -347,6 +349,8 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert node["scheduled_resume_reason"] == "search callback pending"
     assert node["scheduled_resume_source"] == "callback_ticket_monitor"
     assert node["scheduled_waiting_status"] == "waiting_callback"
+    assert node["scheduled_resume_scheduled_at"] == "2026-03-11T10:05:00Z"
+    assert node["scheduled_resume_due_at"] == "2026-03-11T10:05:00Z"
 
 
 def test_get_run_execution_view_includes_dependency_contract_fields(

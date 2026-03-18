@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.models.run import NodeRun, Run, RunEvent
 from app.services.callback_waiting_lifecycle import (
     apply_callback_waiting_termination_policy,
+    build_callback_waiting_scheduled_resume,
     compute_callback_cleanup_backoff_delay_seconds,
     load_callback_waiting_lifecycle,
     record_callback_resume_schedule,
@@ -384,13 +385,13 @@ class RunCallbackTicketCleanupService:
             source=scheduled_resume.source,
             backoff_attempt=backoff_attempt,
         )
-        checkpoint_payload["scheduled_resume"] = {
-            "delay_seconds": scheduled_resume.delay_seconds,
-            "reason": scheduled_resume.reason,
-            "source": scheduled_resume.source,
-            "waiting_status": waiting_status,
-            "backoff_attempt": backoff_attempt,
-        }
+        checkpoint_payload["scheduled_resume"] = build_callback_waiting_scheduled_resume(
+            delay_seconds=scheduled_resume.delay_seconds,
+            reason=scheduled_resume.reason,
+            source=scheduled_resume.source,
+            waiting_status=waiting_status,
+            backoff_attempt=backoff_attempt,
+        )
         node_run.checkpoint_payload = checkpoint_payload
         db.add(
             RunEvent(

@@ -35,6 +35,15 @@ if (
         "schedule": settings.callback_ticket_cleanup_interval_seconds,
         "kwargs": {"source": "scheduler_cleanup"},
     }
+if (
+    settings.waiting_resume_monitor_schedule_enabled
+    and settings.waiting_resume_monitor_interval_seconds > 0
+):
+    beat_schedule["runtime.monitor_waiting_resumes"] = {
+        "task": "runtime.monitor_waiting_resumes",
+        "schedule": settings.waiting_resume_monitor_interval_seconds,
+        "kwargs": {"source": "scheduler_waiting_resume_monitor"},
+    }
 
 celery_app.conf.update(
     task_track_started=True,

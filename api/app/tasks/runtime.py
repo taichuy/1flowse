@@ -5,6 +5,7 @@ from app.core.database import SessionLocal
 from app.models.run import Run
 from app.services.run_callback_ticket_cleanup import RunCallbackTicketCleanupService
 from app.services.runtime import RuntimeService, WorkflowExecutionError
+from app.services.waiting_resume_monitor import WaitingResumeMonitorService
 
 
 @celery_app.task(name="runtime.resume_run")
@@ -74,4 +75,26 @@ def cleanup_callback_tickets_task(
             "expired_count": result.expired_count,
             "run_ids": result.run_ids,
             "tickets": [item.ticket for item in result.items],
+        }
+
+
+@celery_app.task(name="runtime.monitor_waiting_resumes")
+def monitor_waiting_resumes_task(
+    limit: int | None = None,
+    source: str = "scheduler_waiting_resume_monitor",
+) -> dict[str, object]:
+    with SessionLocal() as db:
+        result = WaitingResumeMonitorService().schedule_due_resumes(
+            db,
+            limit=limit,
+            source=source,
+        )
+        db.commit()
+        return {
+            "source": result.source,
+            "limit": result.limit,
+            "matched_count": result.matched_count,
+            "scheduled_count": result.scheduled_count,
+            "run_ids": result.run_ids,
+            "node_run_ids": [item.node_run_id for item in result.items],
         }
