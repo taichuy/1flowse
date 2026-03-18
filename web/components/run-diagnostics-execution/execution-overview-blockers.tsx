@@ -96,6 +96,8 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               scheduledWaitingStatus={focusNode.scheduled_waiting_status}
               scheduledResumeScheduledAt={focusNode.scheduled_resume_scheduled_at}
               scheduledResumeDueAt={focusNode.scheduled_resume_due_at}
+              scheduledResumeRequeuedAt={focusNode.scheduled_resume_requeued_at}
+              scheduledResumeRequeueSource={focusNode.scheduled_resume_requeue_source}
               sensitiveAccessEntries={focusNode.sensitive_access_entries}
               waitingReason={focusNode.waiting_reason}
             />
@@ -181,6 +183,8 @@ export function RunDiagnosticsExecutionOverviewBlockers({
                 scheduledWaitingStatus={node.scheduled_waiting_status}
                 scheduledResumeScheduledAt={node.scheduled_resume_scheduled_at}
                 scheduledResumeDueAt={node.scheduled_resume_due_at}
+                scheduledResumeRequeuedAt={node.scheduled_resume_requeued_at}
+                scheduledResumeRequeueSource={node.scheduled_resume_requeue_source}
                 sensitiveAccessEntries={node.sensitive_access_entries}
                 waitingReason={node.waiting_reason}
               />

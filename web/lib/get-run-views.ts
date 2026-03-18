@@ -207,6 +207,8 @@ export type RunExecutionNodeItem = {
   scheduled_waiting_status?: string | null;
   scheduled_resume_scheduled_at?: string | null;
   scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
 };
 
 export type RunExecutionView = {

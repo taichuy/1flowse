@@ -17,6 +17,8 @@ export type SensitiveAccessInboxCallbackContext = {
   scheduledWaitingStatus?: string | null;
   scheduledResumeScheduledAt?: string | null;
   scheduledResumeDueAt?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
 };
 
 function trimOrNull(value?: string | null) {
@@ -29,6 +31,7 @@ function hasCallbackSignals(node: RunExecutionView["nodes"][number]) {
     node.waiting_reason ||
       node.callback_waiting_lifecycle ||
       typeof node.scheduled_resume_delay_seconds === "number" ||
+      node.scheduled_resume_requeued_at ||
       node.callback_tickets.length > 0
   );
 }
@@ -140,6 +143,8 @@ export function buildSensitiveAccessInboxEntryCallbackContext(
     scheduledResumeSource: node.scheduled_resume_source,
     scheduledWaitingStatus: node.scheduled_waiting_status,
     scheduledResumeScheduledAt: node.scheduled_resume_scheduled_at,
-    scheduledResumeDueAt: node.scheduled_resume_due_at
+    scheduledResumeDueAt: node.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: node.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: node.scheduled_resume_requeue_source
   };
 }

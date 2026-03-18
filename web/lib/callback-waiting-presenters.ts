@@ -46,6 +46,8 @@ type CallbackWaitingExplanationInput = {
   scheduledWaitingStatus?: string | null;
   scheduledResumeScheduledAt?: string | null;
   scheduledResumeDueAt?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
 };
 
 const AUTOMATION_STATUS_LABELS: Record<string, string> = {
@@ -70,6 +72,13 @@ function hasScheduledResumeDelay(
     typeof scheduledResumeDelaySeconds === "number" &&
     Number.isFinite(scheduledResumeDelaySeconds)
   );
+}
+
+function hasScheduledResumeRequeue(
+  scheduledResumeRequeuedAt?: string | null,
+  scheduledResumeRequeueSource?: string | null
+) {
+  return Boolean(scheduledResumeRequeuedAt || scheduledResumeRequeueSource);
 }
 
 export type CallbackWaitingDetailRow = {
@@ -172,13 +181,19 @@ function pickRelevantAutomationStep({
   lifecycle,
   callbackWaitingAutomation,
   scheduledResumeDelaySeconds,
-  scheduledResumeDueAt
+  scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: CallbackWaitingExplanationInput): CallbackWaitingAutomationStepCheck | null {
   if (!callbackWaitingAutomation?.steps?.length) {
     return null;
   }
 
-  if (hasScheduledResumeDelay(scheduledResumeDelaySeconds) || scheduledResumeDueAt) {
+  if (
+    hasScheduledResumeDelay(scheduledResumeDelaySeconds) ||
+    scheduledResumeDueAt ||
+    hasScheduledResumeRequeue(scheduledResumeRequeuedAt, scheduledResumeRequeueSource)
+  ) {
     return (
       callbackWaitingAutomation.steps.find((step) => step.key === "waiting_resume_monitor") ?? null
     );
@@ -275,8 +290,29 @@ function shouldSurfaceAutomationHealth(input: CallbackWaitingExplanationInput) {
     input.callbackWaitingAutomation &&
       (hasScheduledResumeDelay(input.scheduledResumeDelaySeconds) ||
         input.scheduledResumeDueAt ||
+        hasScheduledResumeRequeue(
+          input.scheduledResumeRequeuedAt,
+          input.scheduledResumeRequeueSource
+        ) ||
         (input.lifecycle?.expired_ticket_count ?? 0) > 0)
   );
+}
+
+function formatScheduledResumeRequeueLabel({
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
+}: Pick<
+  CallbackWaitingExplanationInput,
+  "scheduledResumeRequeuedAt" | "scheduledResumeRequeueSource"
+>) {
+  if (!hasScheduledResumeRequeue(scheduledResumeRequeuedAt, scheduledResumeRequeueSource)) {
+    return null;
+  }
+
+  return formatOptionalParts([
+    scheduledResumeRequeueSource ? `requeued by ${scheduledResumeRequeueSource}` : "requeued",
+    formatOptionalTimestamp(scheduledResumeRequeuedAt)
+  ]);
 }
 
 function buildDetailRows(
@@ -296,7 +332,9 @@ export function formatScheduledResumeLabel({
   scheduledResumeSource,
   scheduledWaitingStatus,
   scheduledResumeScheduledAt,
-  scheduledResumeDueAt
+  scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: Pick<
   CallbackWaitingExplanationInput,
   | "scheduledResumeDelaySeconds"
@@ -304,6 +342,8 @@ export function formatScheduledResumeLabel({
   | "scheduledWaitingStatus"
   | "scheduledResumeScheduledAt"
   | "scheduledResumeDueAt"
+  | "scheduledResumeRequeuedAt"
+  | "scheduledResumeRequeueSource"
 >): string | null {
   const timingState = resolveScheduledResumeTiming({
     scheduledResumeDelaySeconds,
@@ -322,7 +362,11 @@ export function formatScheduledResumeLabel({
     scheduledResumeSource,
     scheduledWaitingStatus,
     timingState?.isOverdue ? "overdue" : null,
-    timingState?.dueAtLabel ? `due ${timingState.dueAtLabel}` : null
+    timingState?.dueAtLabel ? `due ${timingState.dueAtLabel}` : null,
+    formatScheduledResumeRequeueLabel({
+      scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource
+    })
   ]);
 }
 
@@ -702,13 +746,19 @@ export function getCallbackWaitingHeadline({
   callbackTickets = [],
   sensitiveAccessEntries = [],
   scheduledResumeDelaySeconds,
-  scheduledResumeDueAt
+  scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: CallbackWaitingExplanationInput): string | null {
   const pendingApprovalCount = countPendingApprovals(sensitiveAccessEntries);
   const pendingTicketCount = callbackTickets.filter((ticket) => ticket.status === "pending").length;
   const scheduledResumeTiming = resolveScheduledResumeTiming({
     scheduledResumeDelaySeconds,
     scheduledResumeDueAt
+  });
+  const scheduledResumeRequeueLabel = formatScheduledResumeRequeueLabel({
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
 
   if (pendingApprovalCount > 0 && pendingTicketCount > 0) {
@@ -728,6 +778,12 @@ export function getCallbackWaitingHeadline({
   }
   if ((lifecycle?.late_callback_count ?? 0) > 0) {
     return `${formatCountLabel(lifecycle?.late_callback_count ?? 0, "late callback")} was recorded during resume handling.`;
+  }
+  if (scheduledResumeRequeueLabel) {
+    return formatOptionalParts([
+      "Scheduled resume was requeued",
+      scheduledResumeRequeueLabel
+    ]);
   }
   if (scheduledResumeTiming?.isOverdue) {
     return formatOptionalParts([
@@ -749,7 +805,9 @@ export function listCallbackWaitingOperatorStatuses({
   scheduledResumeSource,
   scheduledWaitingStatus,
   scheduledResumeScheduledAt,
-  scheduledResumeDueAt
+  scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: CallbackWaitingExplanationInput): CallbackWaitingOperatorStatus[] {
   const statuses: CallbackWaitingOperatorStatus[] = [];
   const pendingApprovalCount = countPendingApprovals(sensitiveAccessEntries);
@@ -759,6 +817,10 @@ export function listCallbackWaitingOperatorStatuses({
     scheduledResumeDelaySeconds,
     scheduledResumeScheduledAt,
     scheduledResumeDueAt
+  });
+  const scheduledResumeRequeueLabel = formatScheduledResumeRequeueLabel({
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
 
   if (pendingApprovalCount > 0) {
@@ -780,29 +842,36 @@ export function listCallbackWaitingOperatorStatuses({
   if (hasScheduledResumeDelay(scheduledResumeDelaySeconds) || scheduledResumeTiming) {
     statuses.push({
       kind: "scheduled_resume_pending",
-      label: scheduledResumeTiming?.isOverdue
-        ? "scheduled resume overdue"
-        : "scheduled resume queued",
+      label: scheduledResumeRequeueLabel
+        ? "scheduled resume requeued"
+        : scheduledResumeTiming?.isOverdue
+          ? "scheduled resume overdue"
+          : "scheduled resume queued",
       detail:
         formatOptionalParts([
-          scheduledResumeTiming?.isOverdue
-            ? "scheduled resume passed its due time"
-            : hasScheduledResumeDelay(scheduledResumeDelaySeconds)
-              ? `runtime will retry in ${scheduledResumeDelaySeconds}s`
-              : "runtime already queued a scheduled resume",
+          scheduledResumeRequeueLabel
+            ? "waiting resume monitor already requeued the stalled resume"
+            : scheduledResumeTiming?.isOverdue
+              ? "scheduled resume passed its due time"
+              : hasScheduledResumeDelay(scheduledResumeDelaySeconds)
+                ? `runtime will retry in ${scheduledResumeDelaySeconds}s`
+                : "runtime already queued a scheduled resume",
           scheduledResumeSource,
           scheduledWaitingStatus,
           formatScheduledResumeTimingLabel({
             scheduledResumeDelaySeconds,
             scheduledResumeScheduledAt,
             scheduledResumeDueAt
-          })
+          }),
+          scheduledResumeRequeueLabel
         ]) ??
-        (scheduledResumeTiming?.isOverdue
-          ? "scheduled resume passed its due time"
-          : hasScheduledResumeDelay(scheduledResumeDelaySeconds)
-            ? `runtime will retry in ${scheduledResumeDelaySeconds}s`
-            : "runtime already queued a scheduled resume")
+        (scheduledResumeRequeueLabel
+          ? `waiting resume monitor already requeued the stalled resume · ${scheduledResumeRequeueLabel}`
+          : scheduledResumeTiming?.isOverdue
+            ? "scheduled resume passed its due time"
+            : hasScheduledResumeDelay(scheduledResumeDelaySeconds)
+              ? `runtime will retry in ${scheduledResumeDelaySeconds}s`
+              : "runtime already queued a scheduled resume")
     });
   }
 
@@ -849,7 +918,9 @@ export function listCallbackWaitingBlockerRows(
     scheduledResumeSource,
     scheduledWaitingStatus,
     scheduledResumeScheduledAt,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   }: CallbackWaitingExplanationInput,
   options?: {
     includeRecommendedActionRow?: boolean;
@@ -870,7 +941,9 @@ export function listCallbackWaitingBlockerRows(
     scheduledResumeSource,
     scheduledWaitingStatus,
     scheduledResumeScheduledAt,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
   const recommendedAction = getCallbackWaitingRecommendedAction({
     lifecycle,
@@ -881,7 +954,9 @@ export function listCallbackWaitingBlockerRows(
     scheduledResumeSource,
     scheduledWaitingStatus,
     scheduledResumeScheduledAt,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
 
   return buildDetailRows([
@@ -912,7 +987,16 @@ export function listCallbackWaitingBlockerRows(
         scheduledResumeSource,
         scheduledWaitingStatus,
         scheduledResumeScheduledAt,
-        scheduledResumeDueAt
+        scheduledResumeDueAt,
+        scheduledResumeRequeuedAt,
+        scheduledResumeRequeueSource
+      })
+    },
+    {
+      label: "Latest requeue",
+      value: formatScheduledResumeRequeueLabel({
+        scheduledResumeRequeuedAt,
+        scheduledResumeRequeueSource
       })
     },
     {
@@ -934,7 +1018,9 @@ export function listCallbackWaitingBlockerRows(
         scheduledResumeSource,
         scheduledWaitingStatus,
         scheduledResumeScheduledAt,
-        scheduledResumeDueAt
+        scheduledResumeDueAt,
+        scheduledResumeRequeuedAt,
+        scheduledResumeRequeueSource
       })
         ? formatCallbackWaitingAutomationSummary({
             lifecycle,
@@ -945,7 +1031,9 @@ export function listCallbackWaitingBlockerRows(
             scheduledResumeSource,
             scheduledWaitingStatus,
             scheduledResumeScheduledAt,
-            scheduledResumeDueAt
+            scheduledResumeDueAt,
+            scheduledResumeRequeuedAt,
+            scheduledResumeRequeueSource
           })
         : null
     },
@@ -970,11 +1058,15 @@ export function listCallbackWaitingBlockerRows(
 export function listCallbackWaitingEventRows({
   lifecycle,
   waitingReason,
-  waitingNodeRunId
+  waitingNodeRunId,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: {
   lifecycle?: CallbackWaitingLifecycleSummary | null;
   waitingReason?: string | null;
   waitingNodeRunId?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
 }): CallbackWaitingDetailRow[] {
   return buildDetailRows([
     {
@@ -984,6 +1076,13 @@ export function listCallbackWaitingEventRows({
     {
       label: "Latest late callback",
       value: formatLatestLateCallbackLabel(lifecycle)
+    },
+    {
+      label: "Latest resume requeue",
+      value: formatScheduledResumeRequeueLabel({
+        scheduledResumeRequeuedAt,
+        scheduledResumeRequeueSource
+      })
     },
     {
       label: "Waiting node run",
@@ -1002,7 +1101,9 @@ export function listCallbackWaitingChips({
   sensitiveAccessEntries = [],
   callbackWaitingAutomation,
   scheduledResumeDelaySeconds,
-  scheduledResumeDueAt
+  scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: CallbackWaitingExplanationInput): string[] {
   const chips: string[] = [];
   const scheduledResumeTiming = resolveScheduledResumeTiming({
@@ -1034,7 +1135,9 @@ export function listCallbackWaitingChips({
     if (typeof lifecycle.last_resume_delay_seconds === "number") {
       chips.push(`resume ${lifecycle.last_resume_delay_seconds}s`);
     }
-    if (scheduledResumeTiming?.isOverdue) {
+    if (hasScheduledResumeRequeue(scheduledResumeRequeuedAt, scheduledResumeRequeueSource)) {
+      chips.push("requeued");
+    } else if (scheduledResumeTiming?.isOverdue) {
       chips.push("resume overdue");
     } else if (
       typeof lifecycle.last_resume_delay_seconds !== "number" &&
@@ -1045,6 +1148,8 @@ export function listCallbackWaitingChips({
     if (lifecycle.terminated) {
       chips.push("terminated");
     }
+  } else if (hasScheduledResumeRequeue(scheduledResumeRequeuedAt, scheduledResumeRequeueSource)) {
+    chips.push("requeued");
   } else if (scheduledResumeTiming?.isOverdue) {
     chips.push("resume overdue");
   } else if (hasScheduledResumeDelay(scheduledResumeDelaySeconds)) {
@@ -1058,7 +1163,9 @@ export function listCallbackWaitingChips({
       sensitiveAccessEntries,
       callbackWaitingAutomation,
       scheduledResumeDelaySeconds,
-      scheduledResumeDueAt
+      scheduledResumeDueAt,
+      scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource
     }) &&
     callbackWaitingAutomation &&
     callbackWaitingAutomation.scheduler_health_status !== "healthy"
@@ -1078,7 +1185,9 @@ export function getCallbackWaitingRecommendedAction({
   callbackWaitingAutomation,
   scheduledResumeDelaySeconds,
   scheduledResumeScheduledAt,
-  scheduledResumeDueAt
+  scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource
 }: CallbackWaitingExplanationInput): CallbackWaitingRecommendedAction | null {
   const pendingApprovalCount = countPendingApprovals(sensitiveAccessEntries);
   const failedNotificationCount = countFailedNotifications(sensitiveAccessEntries);
@@ -1089,6 +1198,10 @@ export function getCallbackWaitingRecommendedAction({
     scheduledResumeDelaySeconds,
     scheduledResumeScheduledAt,
     scheduledResumeDueAt
+  });
+  const scheduledResumeRequeueLabel = formatScheduledResumeRequeueLabel({
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
   const inlineSensitiveAccessEntry = pickCallbackWaitingInlineSensitiveAccessEntry(
     sensitiveAccessEntries
@@ -1141,6 +1254,20 @@ export function getCallbackWaitingRecommendedAction({
     };
   }
 
+  if (scheduledResumeRequeueLabel) {
+    return {
+      kind: "watch_scheduled_resume",
+      label: "Watch the requeued resume",
+      detail:
+        formatOptionalParts([
+          "The waiting resume monitor already requeued the stalled resume",
+          scheduledResumeRequeueLabel,
+          "watch the worker consume that attempt before forcing another resume"
+        ]) ?? "The waiting resume monitor already requeued the stalled resume.",
+      ctaLabel: "Open waiting inbox"
+    };
+  }
+
   if (scheduledResumeTiming?.isOverdue) {
     const automationSummary = formatCallbackWaitingAutomationSummary({
       lifecycle,
@@ -1149,7 +1276,9 @@ export function getCallbackWaitingRecommendedAction({
       callbackWaitingAutomation,
       scheduledResumeDelaySeconds,
       scheduledResumeScheduledAt,
-      scheduledResumeDueAt
+      scheduledResumeDueAt,
+      scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource
     });
 
     return {

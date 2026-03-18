@@ -52,7 +52,9 @@ export function WorkflowPublishInvocationCallbackSection({
       scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
       scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
       scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
-      scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
+      scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at,
+      scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+      scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
     });
   const followUp = resolvedCallbackWaitingExplanation?.follow_up?.trim() || null;
   const chips = listCallbackWaitingChips({
@@ -61,7 +63,9 @@ export function WorkflowPublishInvocationCallbackSection({
     sensitiveAccessEntries,
     callbackWaitingAutomation,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
-    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
+    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
   });
   const blockerRows = listCallbackWaitingBlockerRows({
     lifecycle: callbackLifecycle,
@@ -72,12 +76,16 @@ export function WorkflowPublishInvocationCallbackSection({
     scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
     scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
     scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
-    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
+    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
   });
   const eventRows = listCallbackWaitingEventRows({
     lifecycle: callbackLifecycle,
     waitingReason: waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason,
-    waitingNodeRunId: waitingLifecycle?.node_run_id ?? invocation.run_current_node_id ?? null
+    waitingNodeRunId: waitingLifecycle?.node_run_id ?? invocation.run_current_node_id ?? null,
+    scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
   });
   const inboxHref = buildPublishedInvocationInboxHref({
     invocation,
@@ -112,6 +120,8 @@ export function WorkflowPublishInvocationCallbackSection({
         scheduledWaitingStatus={waitingLifecycle?.scheduled_waiting_status}
         scheduledResumeScheduledAt={waitingLifecycle?.scheduled_resume_scheduled_at}
         scheduledResumeDueAt={waitingLifecycle?.scheduled_resume_due_at}
+        scheduledResumeRequeuedAt={waitingLifecycle?.scheduled_resume_requeued_at}
+        scheduledResumeRequeueSource={waitingLifecycle?.scheduled_resume_requeue_source}
         inboxHref={inboxHref}
         runId={invocation.run_id ?? null}
         nodeRunId={waitingLifecycle?.node_run_id ?? null}

@@ -167,6 +167,12 @@ def serialize_waiting_lifecycle(
                 "scheduled_resume_delay_seconds"
             ],
             scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
+            scheduled_resume_requeued_at=scheduled_resume[
+                "scheduled_resume_requeued_at"
+            ],
+            scheduled_resume_requeue_source=scheduled_resume[
+                "scheduled_resume_requeue_source"
+            ],
         ),
         sensitive_access_summary=sensitive_access_summary,
         scheduled_resume_delay_seconds=scheduled_resume[

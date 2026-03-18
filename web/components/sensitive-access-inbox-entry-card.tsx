@@ -359,6 +359,8 @@ export function SensitiveAccessInboxEntryCard({
             scheduledWaitingStatus={callbackWaitingContext.scheduledWaitingStatus}
             scheduledResumeScheduledAt={callbackWaitingContext.scheduledResumeScheduledAt}
             scheduledResumeDueAt={callbackWaitingContext.scheduledResumeDueAt}
+            scheduledResumeRequeuedAt={callbackWaitingContext.scheduledResumeRequeuedAt}
+            scheduledResumeRequeueSource={callbackWaitingContext.scheduledResumeRequeueSource}
             sensitiveAccessEntries={callbackWaitingContext.sensitiveAccessEntries}
             waitingReason={callbackWaitingContext.waitingReason}
           />

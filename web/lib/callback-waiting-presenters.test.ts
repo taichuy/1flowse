@@ -102,6 +102,29 @@ describe("callback waiting presenters", () => {
     });
   });
 
+  it("当 waiting resume monitor 已重入队时，不再把 scheduled resume 标成 overdue", () => {
+    const scheduledAt = formatTimestamp("2026-03-18T10:00:00Z");
+    const dueAt = formatTimestamp("2026-03-18T10:05:00Z");
+    const requeuedAt = formatTimestamp("2026-03-18T10:06:00Z");
+
+    expect(
+      listCallbackWaitingOperatorStatuses({
+        scheduledResumeDelaySeconds: 5,
+        scheduledResumeSource: "callback_ticket_monitor",
+        scheduledWaitingStatus: "waiting_callback",
+        scheduledResumeScheduledAt: "2026-03-18T10:00:00Z",
+        scheduledResumeDueAt: "2026-03-18T10:05:00Z",
+        scheduledResumeRequeuedAt: "2026-03-18T10:06:00Z",
+        scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor"
+      })
+    ).toContainEqual({
+      kind: "scheduled_resume_pending",
+      label: "scheduled resume requeued",
+      detail:
+        `waiting resume monitor already requeued the stalled resume · callback_ticket_monitor · waiting_callback · scheduled ${scheduledAt} · due ${dueAt} · overdue · requeued by scheduler_waiting_resume_monitor · ${requeuedAt}`
+    });
+  });
+
   it("在 chips 中把 overdue resume 单独标出来", () => {
     expect(
       listCallbackWaitingChips({
@@ -110,6 +133,19 @@ describe("callback waiting presenters", () => {
         scheduledResumeDueAt: "2026-03-18T10:05:00Z"
       })
     ).toContain("resume overdue");
+  });
+
+  it("在 chips 中把 requeued resume 单独标出来，而不是继续标 overdue", () => {
+    const chips = listCallbackWaitingChips({
+      lifecycle: createLifecycle(),
+      scheduledResumeDelaySeconds: 5,
+      scheduledResumeDueAt: "2026-03-18T10:05:00Z",
+      scheduledResumeRequeuedAt: "2026-03-18T10:06:00Z",
+      scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor"
+    });
+
+    expect(chips).toContain("requeued");
+    expect(chips).not.toContain("resume overdue");
   });
 
   it("当 scheduled resume 逾期未触发时，建议人工恢复而不是继续等待", () => {
@@ -123,6 +159,22 @@ describe("callback waiting presenters", () => {
       kind: "manual_resume",
       label: "Scheduled resume is overdue",
       ctaLabel: "Try manual resume"
+    });
+  });
+
+  it("当 scheduled resume 已被重入队时，建议先观察这次 requeue", () => {
+    expect(
+      getCallbackWaitingRecommendedAction({
+        scheduledResumeDelaySeconds: 5,
+        scheduledResumeScheduledAt: "2026-03-18T10:00:00Z",
+        scheduledResumeDueAt: "2026-03-18T10:05:00Z",
+        scheduledResumeRequeuedAt: "2026-03-18T10:06:00Z",
+        scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor"
+      })
+    ).toMatchObject({
+      kind: "watch_scheduled_resume",
+      label: "Watch the requeued resume",
+      ctaLabel: "Open waiting inbox"
     });
   });
 
@@ -166,6 +218,21 @@ describe("callback waiting presenters", () => {
         value: expect.stringContaining("Requeue due waiting callbacks: degraded")
       })
     );
+  });
+
+  it("在 blocker rows 里展示最近一次 scheduled resume requeue", () => {
+    const requeuedAt = formatTimestamp("2026-03-18T10:06:00Z");
+
+    const rows = listCallbackWaitingBlockerRows({
+      scheduledResumeDelaySeconds: 5,
+      scheduledResumeRequeuedAt: "2026-03-18T10:06:00Z",
+      scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor"
+    });
+
+    expect(rows).toContainEqual({
+      label: "Latest requeue",
+      value: `requeued by scheduler_waiting_resume_monitor · ${requeuedAt}`
+    });
   });
 
   it("在 resume blocker 有 scheduler 问题时补 scheduler chip", () => {

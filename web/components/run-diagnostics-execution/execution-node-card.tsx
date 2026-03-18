@@ -184,6 +184,8 @@ export function ExecutionNodeCard({
         scheduledWaitingStatus={node.scheduled_waiting_status}
         scheduledResumeScheduledAt={node.scheduled_resume_scheduled_at}
         scheduledResumeDueAt={node.scheduled_resume_due_at}
+        scheduledResumeRequeuedAt={node.scheduled_resume_requeued_at}
+        scheduledResumeRequeueSource={node.scheduled_resume_requeue_source}
       />
 
       <MetricChipRow

@@ -33,6 +33,8 @@ type CallbackWaitingSummaryCardProps = {
   scheduledWaitingStatus?: string | null;
   scheduledResumeScheduledAt?: string | null;
   scheduledResumeDueAt?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
   inboxHref?: string | null;
   runId?: string | null;
   nodeRunId?: string | null;
@@ -51,6 +53,8 @@ export function CallbackWaitingSummaryCard({
   scheduledWaitingStatus,
   scheduledResumeScheduledAt,
   scheduledResumeDueAt,
+  scheduledResumeRequeuedAt,
+  scheduledResumeRequeueSource,
   inboxHref,
   runId,
   nodeRunId,
@@ -67,7 +71,9 @@ export function CallbackWaitingSummaryCard({
       scheduledResumeSource,
       scheduledWaitingStatus,
       scheduledResumeScheduledAt,
-      scheduledResumeDueAt
+      scheduledResumeDueAt,
+      scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource
     });
   const callbackFollowUp = callbackWaitingExplanation?.follow_up?.trim() || null;
   const scheduledResume = formatScheduledResumeLabel({
@@ -75,7 +81,9 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeSource,
     scheduledWaitingStatus,
     scheduledResumeScheduledAt,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
   const lifecycleSummary = formatCallbackLifecycleLabel(lifecycle);
   const inlineSensitiveAccessEntry = pickCallbackWaitingInlineSensitiveAccessEntry(
@@ -90,7 +98,9 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeSource,
     scheduledWaitingStatus,
     scheduledResumeScheduledAt,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
   const chips = listCallbackWaitingChips({
     lifecycle,
@@ -98,7 +108,9 @@ export function CallbackWaitingSummaryCard({
     sensitiveAccessEntries,
     callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
   const recommendedAction = getCallbackWaitingRecommendedAction({
     lifecycle,
@@ -109,7 +121,9 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeSource,
     scheduledWaitingStatus,
     scheduledResumeScheduledAt,
-    scheduledResumeDueAt
+    scheduledResumeDueAt,
+    scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource
   });
   const blockerRows = listCallbackWaitingBlockerRows(
     {
@@ -121,7 +135,9 @@ export function CallbackWaitingSummaryCard({
       scheduledResumeSource,
       scheduledWaitingStatus,
       scheduledResumeScheduledAt,
-      scheduledResumeDueAt
+      scheduledResumeDueAt,
+      scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource
     },
     {
       includeTerminationRow: false
