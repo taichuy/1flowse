@@ -173,6 +173,7 @@ class SensitiveAccessTimelineEntryItem(BaseModel):
     resource: SensitiveResourceItem
     approval_ticket: ApprovalTicketItem | None = None
     notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+    outcome_explanation: SignalFollowUpExplanation | None = None
 
 
 class SensitiveAccessRequestResponse(SensitiveAccessTimelineEntryItem):

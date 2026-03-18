@@ -67,6 +67,11 @@ export type NotificationDispatchItem = {
   created_at: string;
 };
 
+export type SignalFollowUpExplanation = {
+  primary_signal?: string | null;
+  follow_up?: string | null;
+};
+
 export type NotificationChannelCapabilityItem = {
   channel: "in_app" | "webhook" | "feishu" | "slack" | "email";
   delivery_mode: "inline" | "worker";
@@ -109,6 +114,7 @@ export type SensitiveAccessTimelineEntry = {
   resource: SensitiveResourceItem;
   approval_ticket?: ApprovalTicketItem | null;
   notifications: NotificationDispatchItem[];
+  outcome_explanation?: SignalFollowUpExplanation | null;
 };
 
 export type SensitiveAccessInboxSummary = {

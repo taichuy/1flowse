@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -12,7 +12,6 @@ from app.services.callback_waiting_lifecycle import (
     load_callback_waiting_lifecycle,
     load_callback_waiting_scheduled_resume,
     record_callback_waiting_resume_requeued,
-    resolve_callback_waiting_scheduled_resume_due_at,
 )
 from app.services.run_resume_scheduler import RunResumeScheduler, get_run_resume_scheduler
 
@@ -99,8 +98,9 @@ class WaitingResumeMonitorService:
             scheduled_resume = load_callback_waiting_scheduled_resume(
                 node_run.checkpoint_payload
             )
-            due_at = resolve_callback_waiting_scheduled_resume_due_at(
-                node_run.checkpoint_payload
+            due_at = self._resolve_scheduled_resume_due_at(
+                scheduled_resume=scheduled_resume,
+                fallback_now=effective_now,
             )
             if due_at is None or due_at > effective_now:
                 continue
@@ -235,6 +235,34 @@ class WaitingResumeMonitorService:
         if parsed.tzinfo is None:
             return parsed.replace(tzinfo=UTC)
         return parsed.astimezone(UTC)
+
+    def _resolve_scheduled_resume_due_at(
+        self,
+        *,
+        scheduled_resume: dict[str, object],
+        fallback_now: datetime,
+    ) -> datetime | None:
+        due_at = self._parse_datetime(
+            str(scheduled_resume.get("due_at") or "").strip() or None
+        )
+        if due_at is not None:
+            return due_at
+
+        delay_seconds = scheduled_resume.get("delay_seconds")
+        if delay_seconds is None:
+            return None
+
+        scheduled_at = self._parse_datetime(
+            str(scheduled_resume.get("scheduled_at") or "").strip() or None
+        )
+        if scheduled_at is None:
+            return fallback_now
+
+        try:
+            normalized_delay_seconds = max(float(delay_seconds), 0.0)
+        except (TypeError, ValueError):
+            return scheduled_at
+        return scheduled_at + timedelta(seconds=normalized_delay_seconds)
 
     def _was_recently_requeued(
         self,

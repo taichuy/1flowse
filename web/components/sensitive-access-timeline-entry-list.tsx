@@ -338,6 +338,16 @@ export function SensitiveAccessTimelineEntryList({
                 </p>
               ) : null}
 
+              {entry.outcome_explanation?.primary_signal ? (
+                <p className="section-copy entry-copy">
+                  {entry.outcome_explanation.primary_signal}
+                </p>
+              ) : null}
+
+              {entry.outcome_explanation?.follow_up ? (
+                <p className="binding-meta">{entry.outcome_explanation.follow_up}</p>
+              ) : null}
+
               <dl className="compact-meta-list">
                 <div>
                   <dt>Requested</dt>

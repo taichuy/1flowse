@@ -10,6 +10,7 @@ from app.services.sensitive_access_reasoning import describe_sensitive_access_re
 from app.services.sensitive_access_types import (
     ApprovalDecisionBundle,
     NotificationDispatchRetryBundle,
+    SensitiveAccessRequestBundle,
 )
 
 _APPROVAL_SKIP_REASON_LABELS = {
@@ -121,6 +122,110 @@ def build_notification_retry_outcome_explanation(
         primary_signal=primary_signal,
         follow_up=follow_up,
     )
+
+
+def build_sensitive_access_timeline_outcome_explanation(
+    bundle: SensitiveAccessRequestBundle,
+) -> SignalFollowUpExplanation | None:
+    reasoning = describe_sensitive_access_reasoning(
+        decision=bundle.access_request.decision,
+        reason_code=bundle.access_request.reason_code,
+    )
+    ticket = bundle.approval_ticket
+    notification_status_counts = Counter(
+        item.status for item in bundle.notifications if item.status
+    )
+    delivered_count = notification_status_counts.get("delivered", 0)
+    pending_count = notification_status_counts.get("pending", 0)
+    failed_count = notification_status_counts.get("failed", 0)
+
+    if ticket is not None and ticket.status in {"approved", "rejected"}:
+        return build_approval_decision_outcome_explanation(
+            ApprovalDecisionBundle(
+                access_request=bundle.access_request,
+                approval_ticket=ticket,
+                notifications=bundle.notifications,
+            )
+        )
+
+    if ticket is not None and ticket.status == "expired":
+        return SignalFollowUpExplanation(
+            primary_signal="审批票据已过期，对应 waiting 链路当前不会继续自动恢复。",
+            follow_up=_join_parts(
+                [
+                    reasoning.policy_summary,
+                    (
+                        f"历史上已有 {delivered_count} 条通知送达审批人。"
+                        if delivered_count > 0
+                        else None
+                    ),
+                    (
+                        f"仍有 {failed_count} 条通知投递失败，可先回看失败原因再决定是否补发。"
+                        if failed_count > 0
+                        else None
+                    ),
+                    "如需继续放行，应重新发起新的访问请求并生成新的审批票据。",
+                ]
+            ),
+        )
+
+    if ticket is not None and ticket.status == "pending":
+        notification_follow_up = None
+        if delivered_count > 0 and failed_count > 0:
+            notification_follow_up = (
+                f"已有 {delivered_count} 条通知送达审批人，但仍有 {failed_count} 条通知在当前通道失败。"
+            )
+        elif delivered_count > 0:
+            notification_follow_up = f"已有 {delivered_count} 条通知送达审批人，可直接在 inbox 里处理。"
+        elif pending_count > 0:
+            notification_follow_up = f"已有 {pending_count} 条通知正在等待 worker 投递。"
+        elif failed_count > 0:
+            notification_follow_up = (
+                f"最近 {failed_count} 条通知投递失败，请优先重试通知或更换目标。"
+            )
+        else:
+            notification_follow_up = "当前还没有成功送达通知，请先检查通知链路或手动触发重试。"
+
+        return SignalFollowUpExplanation(
+            primary_signal="敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。",
+            follow_up=_join_parts(
+                [
+                    reasoning.policy_summary,
+                    notification_follow_up,
+                    "审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。",
+                ]
+            ),
+        )
+
+    if bundle.access_request.decision in {"allow", "allow_masked"}:
+        return SignalFollowUpExplanation(
+            primary_signal="本次敏感访问已按策略放行，当前不需要额外审批。",
+            follow_up=reasoning.policy_summary,
+        )
+
+    if bundle.access_request.decision == "deny":
+        return SignalFollowUpExplanation(
+            primary_signal="本次敏感访问已被策略拒绝，对应节点不会继续自动执行。",
+            follow_up=_join_parts(
+                [
+                    reasoning.policy_summary,
+                    "如条件变化，应重新发起新的访问请求，而不是依赖当前 blocked 链路自动恢复。",
+                ]
+            ),
+        )
+
+    if bundle.access_request.decision == "require_approval":
+        return SignalFollowUpExplanation(
+            primary_signal="本次敏感访问需要审批，但当前还没有可追踪的审批票据。",
+            follow_up=_join_parts(
+                [
+                    reasoning.policy_summary,
+                    "请先检查审批票据生成与通知链路，避免 waiting 节点长期停在无票据状态。",
+                ]
+            ),
+        )
+
+    return None
 
 
 def build_bulk_approval_decision_outcome_explanation(

@@ -319,6 +319,13 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         node["sensitive_access_entries"][0]["request"]["policy_summary"]
         == "High-sensitivity access must be reviewed by an operator before the workflow can resume."
     )
+    assert node["sensitive_access_entries"][0]["outcome_explanation"] == {
+        "primary_signal": "敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。",
+        "follow_up": (
+            "High-sensitivity access must be reviewed by an operator before the workflow can resume. "
+            "已有 1 条通知送达审批人，可直接在 inbox 里处理。 审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。"
+        ),
+    }
     assert node["sensitive_access_entries"][0]["approval_ticket"]["status"] == "pending"
     assert node["sensitive_access_entries"][0]["notifications"] == [
         {

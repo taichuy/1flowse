@@ -1644,6 +1644,13 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         detail_body["blocking_sensitive_access_entries"][0]["request"]["id"]
         == sensitive_request.id
     )
+    assert detail_body["blocking_sensitive_access_entries"][0]["outcome_explanation"] == {
+        "primary_signal": "审批已通过，对应 waiting 链路已交回 runtime 恢复。",
+        "follow_up": (
+            "An operator approved the request and the blocked workflow can resume. "
+            "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
+        ),
+    }
     assert len(detail_body["sensitive_access_entries"]) == 2
     assert detail_body["sensitive_access_entries"][0]["resource"]["label"] == (
         "Published Search Tool"
@@ -1659,6 +1666,13 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     assert detail_body["sensitive_access_entries"][0]["request"]["policy_summary"] == (
         "An operator approved the request and the blocked workflow can resume."
     )
+    assert detail_body["sensitive_access_entries"][0]["outcome_explanation"] == {
+        "primary_signal": "审批已通过，对应 waiting 链路已交回 runtime 恢复。",
+        "follow_up": (
+            "An operator approved the request and the blocked workflow can resume. "
+            "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
+        ),
+    }
     assert detail_body["sensitive_access_entries"][0]["approval_ticket"] == {
         "id": approval_ticket.id,
         "access_request_id": sensitive_request.id,
@@ -1687,6 +1701,10 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "Published Other Tool"
     )
     assert detail_body["sensitive_access_entries"][1]["request"]["decision"] == "deny"
+    assert detail_body["sensitive_access_entries"][1]["outcome_explanation"] == {
+        "primary_signal": "本次敏感访问已被策略拒绝，对应节点不会继续自动执行。",
+        "follow_up": "如条件变化，应重新发起新的访问请求，而不是依赖当前 blocked 链路自动恢复。",
+    }
     assert detail_body["cache"] == {
         "cache_status": "hit",
         "cache_key": cache_entry.cache_key,
