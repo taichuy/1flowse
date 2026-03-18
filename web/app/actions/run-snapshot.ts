@@ -30,6 +30,20 @@ type RunDetailResponseBody = {
   }>;
 };
 
+type RunExecutionViewResponseBody = {
+  status?: string | null;
+  workflow_id?: string | null;
+  execution_focus_reason?: string | null;
+  execution_focus_node?: {
+    node_id?: string | null;
+    node_run_id?: string | null;
+  } | null;
+  execution_focus_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+};
+
 function readCurrentWaitingReason(body: RunDetailResponseBody | null) {
   const currentNodeId = body?.current_node_id?.trim();
   if (!currentNodeId || !Array.isArray(body?.node_runs)) {
@@ -40,6 +54,26 @@ function readCurrentWaitingReason(body: RunDetailResponseBody | null) {
   return currentNodeRun?.waiting_reason ?? null;
 }
 
+async function fetchRunExecutionView(
+  runId: string
+): Promise<RunExecutionViewResponseBody | null> {
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/runs/${encodeURIComponent(runId)}/execution-view`,
+      {
+        cache: "no-store"
+      }
+    );
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json().catch(() => null)) as RunExecutionViewResponseBody | null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | null> {
   const normalizedRunId = runId.trim();
   if (!normalizedRunId) {
@@ -47,19 +81,33 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/runs/${normalizedRunId}`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/runs/${encodeURIComponent(normalizedRunId)}`, {
       cache: "no-store"
     });
     if (!response.ok) {
       return null;
     }
 
-    const body = (await response.json().catch(() => null)) as RunDetailResponseBody | null;
+    const [body, executionView] = await Promise.all([
+      response.json().catch(() => null) as Promise<RunDetailResponseBody | null>,
+      fetchRunExecutionView(normalizedRunId)
+    ]);
+
     return {
-      status: body?.status,
-      workflowId: body?.workflow_id,
+      status: body?.status ?? executionView?.status ?? null,
+      workflowId: body?.workflow_id ?? executionView?.workflow_id ?? null,
       currentNodeId: body?.current_node_id,
-      waitingReason: readCurrentWaitingReason(body)
+      waitingReason: readCurrentWaitingReason(body),
+      executionFocusReason: executionView?.execution_focus_reason ?? null,
+      executionFocusNodeId: executionView?.execution_focus_node?.node_id ?? null,
+      executionFocusNodeRunId: executionView?.execution_focus_node?.node_run_id ?? null,
+      executionFocusExplanation: executionView?.execution_focus_explanation
+        ? {
+            primary_signal:
+              executionView.execution_focus_explanation.primary_signal ?? null,
+            follow_up: executionView.execution_focus_explanation.follow_up ?? null
+          }
+        : null
     };
   } catch {
     return null;
