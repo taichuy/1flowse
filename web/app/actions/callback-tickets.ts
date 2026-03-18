@@ -42,11 +42,11 @@ export async function cleanupRunCallbackTickets(
   }
 
   try {
-    const callbackWaitingAutomation = (await getSystemOverview()).callback_waiting_automation;
+    const beforeAutomation = (await getSystemOverview()).callback_waiting_automation;
     const beforeBlockers = await fetchCallbackBlockerSnapshot({
       runId,
       nodeRunId: nodeRunId || null,
-      callbackWaitingAutomation
+      callbackWaitingAutomation: beforeAutomation
     });
     const response = await fetch(`${getApiBaseUrl()}/api/runs/callback-tickets/cleanup`, {
       method: "POST",
@@ -83,10 +83,11 @@ export async function cleanupRunCallbackTickets(
       runIds: body?.run_ids?.length ? body.run_ids : [runId],
       workflowIds: [runSnapshot?.workflowId]
     });
+    const afterAutomation = (await getSystemOverview()).callback_waiting_automation;
     const afterBlockers = await fetchCallbackBlockerSnapshot({
       runId,
       nodeRunId: nodeRunId || null,
-      callbackWaitingAutomation
+      callbackWaitingAutomation: afterAutomation
     });
 
     return {

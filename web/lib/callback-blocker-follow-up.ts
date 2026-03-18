@@ -1,6 +1,8 @@
 import {
   getCallbackWaitingRecommendedAction,
+  getCallbackWaitingAutomationHealthSnapshot,
   listCallbackWaitingOperatorStatuses,
+  type CallbackWaitingAutomationHealthSnapshot,
   type CallbackWaitingOperatorStatus,
   type CallbackWaitingRecommendedAction
 } from "@/lib/callback-waiting-presenters";
@@ -11,6 +13,7 @@ export type CallbackBlockerSnapshot = {
   nodeRunId?: string | null;
   operatorStatuses: CallbackWaitingOperatorStatus[];
   recommendedAction?: CallbackWaitingRecommendedAction | null;
+  automationHealth?: CallbackWaitingAutomationHealthSnapshot | null;
 };
 
 export type CallbackBlockerScope = {
@@ -106,6 +109,79 @@ function getRecommendedActionLabel(snapshot?: CallbackBlockerSnapshot | null) {
   return snapshot?.recommendedAction?.label?.trim() || null;
 }
 
+function getAutomationHealthSignature(snapshot?: CallbackBlockerSnapshot | null) {
+  const health = snapshot?.automationHealth;
+  if (!health) {
+    return null;
+  }
+
+  return [
+    health.overallStatus?.trim() || "",
+    health.schedulerHealthStatus?.trim() || "",
+    health.relevantStepKey?.trim() || "",
+    health.relevantStepHealthStatus?.trim() || ""
+  ].join("|");
+}
+
+function formatAutomationHealthState(health?: CallbackWaitingAutomationHealthSnapshot | null) {
+  if (!health) {
+    return null;
+  }
+
+  if (health.relevantStepLabel?.trim() && health.relevantStepHealthStatus?.trim()) {
+    return [
+      `${health.relevantStepLabel.trim()}=${health.relevantStepHealthStatus.trim()}`,
+      health.overallStatus?.trim() ? `overall ${health.overallStatus.trim()}` : null,
+      health.schedulerHealthStatus?.trim()
+        ? `scheduler ${health.schedulerHealthStatus.trim()}`
+        : null
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(" · ");
+  }
+
+  return [
+    health.overallStatus?.trim() ? `overall ${health.overallStatus.trim()}` : null,
+    health.schedulerHealthStatus?.trim()
+      ? `scheduler ${health.schedulerHealthStatus.trim()}`
+      : null
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+}
+
+function formatAutomationHealthDelta({
+  before,
+  after
+}: {
+  before?: CallbackBlockerSnapshot | null;
+  after?: CallbackBlockerSnapshot | null;
+}) {
+  const beforeHealth = before?.automationHealth ?? null;
+  const afterHealth = after?.automationHealth ?? null;
+
+  if (!beforeHealth && !afterHealth) {
+    return null;
+  }
+
+  if (!afterHealth) {
+    return "Automation 摘要暂不可用，请回到 system overview 确认 scheduler 与后台补偿是否仍然健康。";
+  }
+
+  const beforeSignature = getAutomationHealthSignature(before);
+  const afterSignature = getAutomationHealthSignature(after);
+  if (beforeSignature && beforeSignature !== afterSignature) {
+    const beforeState = formatAutomationHealthState(beforeHealth);
+    const afterState = formatAutomationHealthState(afterHealth);
+    return joinParts([
+      beforeState && afterState ? `Automation 变化：${beforeState} → ${afterState}。` : null,
+      `Automation 摘要：${afterHealth.summary}。`
+    ]);
+  }
+
+  return `Automation 摘要：${afterHealth.summary}。`;
+}
+
 export async function fetchCallbackBlockerSnapshot({
   runId,
   nodeRunId,
@@ -146,6 +222,17 @@ export async function fetchCallbackBlockerSnapshot({
     nodeRunId: node.node_run_id,
     operatorStatuses,
     recommendedAction: getCallbackWaitingRecommendedAction({
+      lifecycle: node.callback_waiting_lifecycle,
+      callbackTickets: node.callback_tickets,
+      sensitiveAccessEntries: node.sensitive_access_entries,
+      callbackWaitingAutomation,
+      scheduledResumeDelaySeconds: node.scheduled_resume_delay_seconds,
+      scheduledResumeSource: node.scheduled_resume_source,
+      scheduledWaitingStatus: node.scheduled_waiting_status,
+      scheduledResumeScheduledAt: node.scheduled_resume_scheduled_at,
+      scheduledResumeDueAt: node.scheduled_resume_due_at
+    }),
+    automationHealth: getCallbackWaitingAutomationHealthSnapshot({
       lifecycle: node.callback_waiting_lifecycle,
       callbackTickets: node.callback_tickets,
       sensitiveAccessEntries: node.sensitive_access_entries,
@@ -221,7 +308,8 @@ export function formatCallbackBlockerDeltaSummary({
       : null,
     after && beforeActionLabel === afterActionLabel && afterActionLabel
       ? `建议动作仍是“${afterActionLabel}”。`
-      : null
+      : null,
+    formatAutomationHealthDelta({ before, after })
   ]);
 }
 
@@ -240,6 +328,8 @@ export function summarizeBulkCallbackBlockerDelta({
     const afterKinds = getOperatorStatusKinds(afterItem?.snapshot);
     const beforeAction = getRecommendedActionLabel(beforeItem.snapshot);
     const afterAction = getRecommendedActionLabel(afterItem?.snapshot);
+    const beforeAutomation = getAutomationHealthSignature(beforeItem.snapshot);
+    const afterAutomation = getAutomationHealthSignature(afterItem?.snapshot);
 
     return {
       runId: beforeItem.runId,
@@ -249,7 +339,9 @@ export function summarizeBulkCallbackBlockerDelta({
         after: afterItem?.snapshot ?? null
       }),
       changed:
-        beforeKinds.join("|") !== afterKinds.join("|") || beforeAction !== afterAction,
+        beforeKinds.join("|") !== afterKinds.join("|") ||
+        beforeAction !== afterAction ||
+        beforeAutomation !== afterAutomation,
       cleared: beforeKinds.some((kind) => !afterKinds.includes(kind)),
       fullyCleared: beforeKinds.length > 0 && afterKinds.length === 0,
       stillBlocked: afterKinds.length > 0

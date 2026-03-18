@@ -104,6 +104,15 @@ export type CallbackWaitingRecommendedAction = {
   ctaLabel?: string;
 };
 
+export type CallbackWaitingAutomationHealthSnapshot = {
+  summary: string;
+  overallStatus?: string | null;
+  schedulerHealthStatus?: string | null;
+  relevantStepKey?: string | null;
+  relevantStepLabel?: string | null;
+  relevantStepHealthStatus?: string | null;
+};
+
 type ScheduledResumeTimingState = {
   scheduledAtLabel: string | null;
   dueAtLabel: string | null;
@@ -235,6 +244,30 @@ function formatCallbackWaitingAutomationSummary(
     `overall ${formatAutomationStatusLabel(automation.status) ?? automation.status}`,
     automation.scheduler_health_detail || automation.detail
   ]);
+}
+
+export function getCallbackWaitingAutomationHealthSnapshot(
+  input: CallbackWaitingExplanationInput
+): CallbackWaitingAutomationHealthSnapshot | null {
+  const automation = input.callbackWaitingAutomation;
+  if (!automation) {
+    return null;
+  }
+
+  const summary = formatCallbackWaitingAutomationSummary(input);
+  if (!summary) {
+    return null;
+  }
+
+  const relevantStep = pickRelevantAutomationStep(input);
+  return {
+    summary,
+    overallStatus: automation.status,
+    schedulerHealthStatus: automation.scheduler_health_status,
+    relevantStepKey: relevantStep?.key ?? null,
+    relevantStepLabel: relevantStep?.label ?? null,
+    relevantStepHealthStatus: relevantStep?.scheduler_health.health_status ?? null
+  };
 }
 
 function shouldSurfaceAutomationHealth(input: CallbackWaitingExplanationInput) {

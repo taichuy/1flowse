@@ -37,11 +37,11 @@ export async function resumeRun(
   }
 
   try {
-    const callbackWaitingAutomation = (await getSystemOverview()).callback_waiting_automation;
+    const beforeAutomation = (await getSystemOverview()).callback_waiting_automation;
     const beforeBlockers = await fetchCallbackBlockerSnapshot({
       runId,
       nodeRunId: nodeRunId || null,
-      callbackWaitingAutomation
+      callbackWaitingAutomation: beforeAutomation
     });
     const response = await fetch(`${getApiBaseUrl()}/api/runs/${runId}/resume`, {
       method: "POST",
@@ -70,10 +70,11 @@ export async function resumeRun(
       runIds: [runId],
       workflowIds: [runSnapshot?.workflowId]
     });
+    const afterAutomation = (await getSystemOverview()).callback_waiting_automation;
     const afterBlockers = await fetchCallbackBlockerSnapshot({
       runId,
       nodeRunId: nodeRunId || null,
-      callbackWaitingAutomation
+      callbackWaitingAutomation: afterAutomation
     });
 
     return {

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunExecutionView } from "./get-run-views";
-import { fetchCallbackBlockerSnapshot } from "./callback-blocker-follow-up";
+import {
+  fetchCallbackBlockerSnapshot,
+  formatCallbackBlockerDeltaSummary,
+  summarizeBulkCallbackBlockerDelta,
+  type CallbackBlockerSnapshot
+} from "./callback-blocker-follow-up";
 import { getRunExecutionView } from "./get-run-views";
 
 vi.mock("@/lib/get-run-views", () => ({
@@ -110,6 +115,37 @@ function createExecutionView(): RunExecutionView {
   };
 }
 
+function createAutomationCheck(overrides?: Partial<NonNullable<Parameters<typeof fetchCallbackBlockerSnapshot>[0]["callbackWaitingAutomation"]>>) {
+  return {
+    status: "partial",
+    scheduler_required: true,
+    detail: "`WAITING_CALLBACK` 只完成了部分后台补偿配置。",
+    scheduler_health_status: "degraded",
+    scheduler_health_detail: "waiting resume monitor 最近没有成功执行。",
+    steps: [
+      {
+        key: "waiting_resume_monitor",
+        label: "Requeue due waiting callbacks",
+        task: "runtime.monitor_waiting_resumes",
+        source: "scheduler_waiting_resume_monitor",
+        enabled: true,
+        interval_seconds: 30,
+        detail: "周期扫描到期的 waiting callback。",
+        scheduler_health: {
+          health_status: "degraded",
+          detail: "最近执行事实已超过调度窗口。",
+          last_status: "succeeded",
+          last_started_at: null,
+          last_finished_at: "2026-03-18T09:00:00Z",
+          matched_count: 0,
+          affected_count: 0
+        }
+      }
+    ],
+    ...overrides
+  };
+}
+
 describe("callback blocker follow-up", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -148,33 +184,7 @@ describe("callback blocker follow-up", () => {
     const snapshot = await fetchCallbackBlockerSnapshot({
       runId: "run-callback-follow-up",
       nodeRunId: "node-run-1",
-      callbackWaitingAutomation: {
-        status: "partial",
-        scheduler_required: true,
-        detail: "`WAITING_CALLBACK` 只完成了部分后台补偿配置。",
-        scheduler_health_status: "degraded",
-        scheduler_health_detail: "waiting resume monitor 最近没有成功执行。",
-        steps: [
-          {
-            key: "waiting_resume_monitor",
-            label: "Requeue due waiting callbacks",
-            task: "runtime.monitor_waiting_resumes",
-            source: "scheduler_waiting_resume_monitor",
-            enabled: true,
-            interval_seconds: 30,
-            detail: "周期扫描到期的 waiting callback。",
-            scheduler_health: {
-              health_status: "degraded",
-              detail: "最近执行事实已超过调度窗口。",
-              last_status: "succeeded",
-              last_started_at: null,
-              last_finished_at: "2026-03-18T09:00:00Z",
-              matched_count: 0,
-              affected_count: 0
-            }
-          }
-        ]
-      }
+      callbackWaitingAutomation: createAutomationCheck()
     });
 
     expect(snapshot?.recommendedAction).toMatchObject({
@@ -184,5 +194,102 @@ describe("callback blocker follow-up", () => {
     expect(snapshot?.recommendedAction?.detail).toContain(
       "automation Requeue due waiting callbacks: degraded"
     );
+    expect(snapshot?.automationHealth).toMatchObject({
+      overallStatus: "partial",
+      schedulerHealthStatus: "degraded",
+      relevantStepKey: "waiting_resume_monitor",
+      relevantStepLabel: "Requeue due waiting callbacks",
+      relevantStepHealthStatus: "degraded"
+    });
+  });
+
+  it("在 blocker 未变化时也汇报 automation health 变化", () => {
+    const before: CallbackBlockerSnapshot = {
+      nodeRunId: "node-run-1",
+      operatorStatuses: [
+        {
+          kind: "scheduled_resume_pending",
+          label: "scheduled resume queued",
+          detail: "runtime will retry in 30s"
+        }
+      ],
+      recommendedAction: {
+        kind: "watch_scheduled_resume",
+        label: "Watch the scheduled resume",
+        detail: "等待 scheduler 补偿。"
+      },
+      automationHealth: {
+        summary: "Requeue due waiting callbacks: degraded",
+        overallStatus: "partial",
+        schedulerHealthStatus: "degraded",
+        relevantStepKey: "waiting_resume_monitor",
+        relevantStepLabel: "Requeue due waiting callbacks",
+        relevantStepHealthStatus: "degraded"
+      }
+    };
+    const after: CallbackBlockerSnapshot = {
+      ...before,
+      automationHealth: {
+        summary: "Requeue due waiting callbacks: healthy",
+        overallStatus: "configured",
+        schedulerHealthStatus: "healthy",
+        relevantStepKey: "waiting_resume_monitor",
+        relevantStepLabel: "Requeue due waiting callbacks",
+        relevantStepHealthStatus: "healthy"
+      }
+    };
+
+    const summary = formatCallbackBlockerDeltaSummary({ before, after });
+
+    expect(summary).toContain("阻塞变化：当前仍是 scheduled resume queued。");
+    expect(summary).toContain("Automation 变化：Requeue due waiting callbacks=degraded · overall partial · scheduler degraded → Requeue due waiting callbacks=healthy · overall configured · scheduler healthy。");
+    expect(summary).toContain("Automation 摘要：Requeue due waiting callbacks: healthy。");
+  });
+
+  it("批量 blocker 汇总会把 automation health 变化计入 changedScopeCount", () => {
+    const beforeSnapshot: CallbackBlockerSnapshot = {
+      nodeRunId: "node-run-1",
+      operatorStatuses: [
+        {
+          kind: "scheduled_resume_pending",
+          label: "scheduled resume queued",
+          detail: "runtime will retry in 30s"
+        }
+      ],
+      recommendedAction: {
+        kind: "watch_scheduled_resume",
+        label: "Watch the scheduled resume",
+        detail: "等待 scheduler 补偿。"
+      },
+      automationHealth: {
+        summary: "Requeue due waiting callbacks: degraded",
+        overallStatus: "partial",
+        schedulerHealthStatus: "degraded",
+        relevantStepKey: "waiting_resume_monitor",
+        relevantStepLabel: "Requeue due waiting callbacks",
+        relevantStepHealthStatus: "degraded"
+      }
+    };
+    const afterSnapshot: CallbackBlockerSnapshot = {
+      ...beforeSnapshot,
+      automationHealth: {
+        summary: "Requeue due waiting callbacks: healthy",
+        overallStatus: "configured",
+        schedulerHealthStatus: "healthy",
+        relevantStepKey: "waiting_resume_monitor",
+        relevantStepLabel: "Requeue due waiting callbacks",
+        relevantStepHealthStatus: "healthy"
+      }
+    };
+
+    const delta = summarizeBulkCallbackBlockerDelta({
+      before: [{ runId: "run-callback-follow-up", nodeRunId: "node-run-1", snapshot: beforeSnapshot }],
+      after: [{ runId: "run-callback-follow-up", nodeRunId: "node-run-1", snapshot: afterSnapshot }]
+    });
+
+    expect(delta.changedScopeCount).toBe(1);
+    expect(delta.stillBlockedScopeCount).toBe(1);
+    expect(delta.summary).toContain("发生变化 1 个");
+    expect(delta.summary).toContain("Automation 变化");
   });
 });
