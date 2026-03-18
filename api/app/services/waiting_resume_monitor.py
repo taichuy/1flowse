@@ -11,6 +11,7 @@ from app.models.run import NodeRun, Run, RunEvent
 from app.services.callback_waiting_lifecycle import (
     load_callback_waiting_lifecycle,
     load_callback_waiting_scheduled_resume,
+    record_callback_waiting_resume_requeued,
     resolve_callback_waiting_scheduled_resume_due_at,
 )
 from app.services.run_resume_scheduler import RunResumeScheduler, get_run_resume_scheduler
@@ -51,14 +52,23 @@ class WaitingResumeMonitorService:
         *,
         resume_scheduler: RunResumeScheduler | None = None,
         batch_size: int | None = None,
+        recent_requeue_window_seconds: float | None = None,
     ) -> None:
+        settings = get_settings()
         resolved_batch_size = (
-            get_settings().waiting_resume_monitor_batch_size
-            if batch_size is None
-            else batch_size
+            settings.waiting_resume_monitor_batch_size if batch_size is None else batch_size
         )
         self._resume_scheduler = resume_scheduler or get_run_resume_scheduler()
         self._batch_size = max(int(resolved_batch_size), 1)
+        resolved_recent_requeue_window_seconds = (
+            settings.waiting_resume_monitor_interval_seconds
+            if recent_requeue_window_seconds is None
+            else recent_requeue_window_seconds
+        )
+        self._recent_requeue_window_seconds = max(
+            float(resolved_recent_requeue_window_seconds),
+            0.0,
+        )
 
     def schedule_due_resumes(
         self,
@@ -94,6 +104,11 @@ class WaitingResumeMonitorService:
             )
             if due_at is None or due_at > effective_now:
                 continue
+            if self._was_recently_requeued(
+                scheduled_resume=scheduled_resume,
+                now=effective_now,
+            ):
+                continue
 
             waiting_status = str(
                 scheduled_resume["waiting_status"]
@@ -114,6 +129,11 @@ class WaitingResumeMonitorService:
                 reason=reason,
                 source=source,
                 db=db,
+            )
+            node_run.checkpoint_payload = record_callback_waiting_resume_requeued(
+                node_run.checkpoint_payload,
+                requeued_at=effective_now,
+                source=source,
             )
             db.add(
                 RunEvent(
@@ -136,6 +156,9 @@ class WaitingResumeMonitorService:
                             "scheduled_at"
                         ],
                         "scheduled_resume_due_at": scheduled_resume["due_at"],
+                        "scheduled_resume_requeued_at": effective_now.isoformat().replace(
+                            "+00:00", "Z"
+                        ),
                     },
                 )
             )
@@ -212,3 +235,18 @@ class WaitingResumeMonitorService:
         if parsed.tzinfo is None:
             return parsed.replace(tzinfo=UTC)
         return parsed.astimezone(UTC)
+
+    def _was_recently_requeued(
+        self,
+        *,
+        scheduled_resume: dict[str, object],
+        now: datetime,
+    ) -> bool:
+        if self._recent_requeue_window_seconds <= 0:
+            return False
+        requeued_at = self._parse_datetime(
+            str(scheduled_resume.get("requeued_at") or "").strip() or None
+        )
+        if requeued_at is None:
+            return False
+        return (now - requeued_at).total_seconds() < self._recent_requeue_window_seconds

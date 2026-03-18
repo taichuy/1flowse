@@ -288,6 +288,8 @@ class PublishedEndpointInvocationWaitingLifecycle(BaseModel):
     scheduled_waiting_status: str | None = None
     scheduled_resume_scheduled_at: datetime | None = None
     scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
 
 
 class PublishedEndpointInvocationSensitiveAccessSummary(BaseModel):

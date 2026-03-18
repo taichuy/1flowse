@@ -70,6 +70,8 @@ def serialize_callback_waiting_scheduled_resume(
         "scheduled_waiting_status": scheduled_resume["waiting_status"],
         "scheduled_resume_scheduled_at": scheduled_resume["scheduled_at"],
         "scheduled_resume_due_at": scheduled_resume["due_at"],
+        "scheduled_resume_requeued_at": scheduled_resume["requeued_at"],
+        "scheduled_resume_requeue_source": scheduled_resume["requeue_source"],
     }
 
 
@@ -117,6 +119,13 @@ def serialize_run_callback_waiting_summary(
             1
             for summary in scheduled_resume_summaries
             if summary["scheduled_resume_delay_seconds"] is not None
+            and summary["scheduled_resume_requeued_at"] is None
+        ),
+        scheduled_resume_requeued_node_count=sum(
+            1
+            for summary in scheduled_resume_summaries
+            if summary["scheduled_resume_delay_seconds"] is not None
+            and summary["scheduled_resume_requeued_at"] is not None
         ),
         resume_source_counts=dict(sorted(resume_source_counts.items())),
         scheduled_resume_source_counts=dict(

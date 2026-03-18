@@ -134,6 +134,8 @@ def load_callback_waiting_scheduled_resume(
         ),
         "scheduled_at": _optional_string(scheduled_resume.get("scheduled_at")),
         "due_at": _optional_string(scheduled_resume.get("due_at")),
+        "requeued_at": _optional_string(scheduled_resume.get("requeued_at")),
+        "requeue_source": _optional_string(scheduled_resume.get("requeue_source")),
     }
 
 
@@ -145,6 +147,8 @@ def build_callback_waiting_scheduled_resume(
     waiting_status: str,
     backoff_attempt: int,
     scheduled_at: datetime | None = None,
+    requeued_at: datetime | None = None,
+    requeue_source: str | None = None,
 ) -> dict[str, Any]:
     normalized_delay_seconds = max(float(delay_seconds), 0.0)
     normalized_scheduled_at = scheduled_at or datetime.now(UTC)
@@ -153,7 +157,7 @@ def build_callback_waiting_scheduled_resume(
     else:
         normalized_scheduled_at = normalized_scheduled_at.astimezone(UTC)
     due_at = normalized_scheduled_at + timedelta(seconds=normalized_delay_seconds)
-    return {
+    payload = {
         "delay_seconds": normalized_delay_seconds,
         "reason": _optional_string(reason),
         "source": _optional_string(source),
@@ -162,6 +166,13 @@ def build_callback_waiting_scheduled_resume(
         "scheduled_at": _serialize_datetime(normalized_scheduled_at),
         "due_at": _serialize_datetime(due_at),
     }
+    serialized_requeued_at = _serialize_datetime(requeued_at)
+    serialized_requeue_source = _optional_string(requeue_source)
+    if serialized_requeued_at is not None:
+        payload["requeued_at"] = serialized_requeued_at
+    if serialized_requeue_source is not None:
+        payload["requeue_source"] = serialized_requeue_source
+    return payload
 
 
 def resolve_callback_waiting_scheduled_resume_due_at(
@@ -186,6 +197,15 @@ def attach_callback_waiting_lifecycle(
 ) -> dict[str, Any]:
     payload = dict(checkpoint_payload or {})
     payload[CALLBACK_WAITING_LIFECYCLE_KEY] = deepcopy(lifecycle)
+    return payload
+
+
+def attach_callback_waiting_scheduled_resume(
+    checkpoint_payload: dict[str, Any] | None,
+    scheduled_resume: dict[str, Any],
+) -> dict[str, Any]:
+    payload = dict(checkpoint_payload or {})
+    payload[CALLBACK_WAITING_SCHEDULED_RESUME_KEY] = deepcopy(scheduled_resume)
     return payload
 
 
@@ -273,6 +293,23 @@ def record_callback_resume_schedule(
     lifecycle["last_resume_source"] = _optional_string(source)
     lifecycle["last_resume_backoff_attempt"] = max(int(backoff_attempt), 0)
     return attach_callback_waiting_lifecycle(checkpoint_payload, lifecycle)
+
+
+def record_callback_waiting_resume_requeued(
+    checkpoint_payload: dict[str, Any] | None,
+    *,
+    requeued_at: datetime | None,
+    source: str,
+) -> dict[str, Any]:
+    payload = dict(checkpoint_payload or {})
+    raw = payload.get(CALLBACK_WAITING_SCHEDULED_RESUME_KEY)
+    if not isinstance(raw, dict):
+        return payload
+
+    scheduled_resume = load_callback_waiting_scheduled_resume(payload)
+    scheduled_resume["requeued_at"] = _serialize_datetime(requeued_at)
+    scheduled_resume["requeue_source"] = _optional_string(source)
+    return attach_callback_waiting_scheduled_resume(payload, scheduled_resume)
 
 
 def record_late_callback_delivery(

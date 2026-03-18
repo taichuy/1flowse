@@ -34,6 +34,7 @@ class RunCallbackWaitingSummary(BaseModel):
     late_callback_count: int = 0
     resume_schedule_count: int = 0
     scheduled_resume_pending_node_count: int = 0
+    scheduled_resume_requeued_node_count: int = 0
     resume_source_counts: dict[str, int] = Field(default_factory=dict)
     scheduled_resume_source_counts: dict[str, int] = Field(default_factory=dict)
     termination_reason_counts: dict[str, int] = Field(default_factory=dict)
@@ -167,6 +168,8 @@ class RunExecutionNodeItem(BaseModel):
     scheduled_waiting_status: str | None = None
     scheduled_resume_scheduled_at: datetime | None = None
     scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
 
 
 class RunExecutionView(BaseModel):

@@ -270,6 +270,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         "late_callback_count": 1,
         "resume_schedule_count": 1,
         "scheduled_resume_pending_node_count": 1,
+        "scheduled_resume_requeued_node_count": 0,
         "resume_source_counts": {"callback_ticket_monitor": 1},
         "scheduled_resume_source_counts": {"callback_ticket_monitor": 1},
         "termination_reason_counts": {},
