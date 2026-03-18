@@ -653,6 +653,13 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
         "succeeded_run_count": 0,
         "failed_run_count": 0,
         "unknown_run_count": 0,
+        "explanation": {
+            "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+            "follow_up": (
+                f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+                "重点信号：等待原因：waiting approval 后续动作：下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。"
+            ),
+        },
         "sampled_runs": [
             {
                 "run_id": run.id,
@@ -968,6 +975,13 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
         "succeeded_run_count": 0,
         "failed_run_count": 0,
         "unknown_run_count": 0,
+        "explanation": {
+            "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+            "follow_up": (
+                f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+                "重点信号：等待原因：waiting approval 后续动作：下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+            ),
+        },
         "sampled_runs": [
             {
                 "run_id": run.id,

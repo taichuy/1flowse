@@ -38,3 +38,4 @@ class OperatorRunFollowUpSummary(BaseModel):
     failed_run_count: int = 0
     unknown_run_count: int = 0
     sampled_runs: list[OperatorRunSnapshotSample] = Field(default_factory=list)
+    explanation: SignalFollowUpExplanation | None = None

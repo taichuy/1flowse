@@ -159,6 +159,7 @@ export function formatOperatorOutcomeExplanationMessage(input: {
 
 export function formatBulkOperatorOutcomeExplanationMessage(input: {
   explanation?: OutcomeExplanationInput | null;
+  runFollowUpExplanation?: OutcomeExplanationInput | null;
   blockerDeltaSummary?: string | null;
   affectedRunCount: number;
   sampledRuns: BulkRunSnapshotSample[];
@@ -166,6 +167,8 @@ export function formatBulkOperatorOutcomeExplanationMessage(input: {
 }) {
   const primarySignal = input.explanation?.primary_signal?.trim() || null;
   const followUp = input.explanation?.follow_up?.trim() || null;
+  const runFollowUpPrimarySignal = input.runFollowUpExplanation?.primary_signal?.trim() || null;
+  const runFollowUpFollowUp = input.runFollowUpExplanation?.follow_up?.trim() || null;
   if (!primarySignal && !followUp) {
     return input.fallback;
   }
@@ -175,10 +178,14 @@ export function formatBulkOperatorOutcomeExplanationMessage(input: {
       primarySignal,
       followUp,
       input.blockerDeltaSummary,
-      formatBulkRunFollowUp({
-        affectedRunCount: input.affectedRunCount,
-        sampledRuns: input.sampledRuns
-      })
+      joinParts([
+        runFollowUpPrimarySignal,
+        runFollowUpFollowUp
+      ]) ??
+        formatBulkRunFollowUp({
+          affectedRunCount: input.affectedRunCount,
+          sampledRuns: input.sampledRuns
+        })
     ]) ?? input.fallback
   );
 }

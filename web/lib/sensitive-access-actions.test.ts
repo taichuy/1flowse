@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  bulkDecideSensitiveAccessApprovalTickets,
   bulkRetrySensitiveAccessNotificationDispatches,
-  decideSensitiveAccessApprovalTicket
+  decideSensitiveAccessApprovalTicket,
+  retrySensitiveAccessNotificationDispatch
 } from "@/app/actions/sensitive-access";
 import {
   revalidateOperatorFollowUpByRunIds,
@@ -137,6 +139,10 @@ describe("sensitive access actions", () => {
           succeeded_run_count: 0,
           failed_run_count: 0,
           unknown_run_count: 0,
+          explanation: {
+            primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+            follow_up: "run run-1：当前 run 状态：waiting。 当前节点：review。 重点信号：仍在等待审批结果。"
+          },
           sampled_runs: [
             {
               run_id: "run-1",
@@ -184,7 +190,165 @@ describe("sensitive access actions", () => {
     expect(result.message).toContain("批量通知已重试。");
     expect(result.message).toContain("继续等待审批人与 callback 后续推进。");
     expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
-    expect(result.message).toContain("本次影响 1 个 run");
+    expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
+    expect(revalidateOperatorFollowUpByRunIds).toHaveBeenCalledWith(["run-1"]);
+    expect(fetchRunSnapshot).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("单条通知重试直接消费后端 callback blocker delta 与 run snapshot", async () => {
+    vi.mocked(fetchRunSnapshot).mockResolvedValue({
+      status: "waiting",
+      workflowId: "wf-fallback"
+    });
+    vi.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        outcome_explanation: {
+          primary_signal: "通知已重新投递。",
+          follow_up: "等待审批人与 callback 后续推进。"
+        },
+        callback_blocker_delta: {
+          sampled_scope_count: 1,
+          changed_scope_count: 1,
+          cleared_scope_count: 0,
+          fully_cleared_scope_count: 0,
+          still_blocked_scope_count: 1,
+          summary: "阻塞变化：仍有 1 个 operator blocker 需要审批。"
+        },
+        notification: {
+          status: "pending",
+          target: "ops@example.com"
+        },
+        approval_ticket: {
+          waiting_status: "waiting"
+        },
+        run_snapshot: {
+          workflow_id: "wf-1",
+          status: "waiting",
+          current_node_id: "review",
+          execution_focus_node_id: "review",
+          execution_focus_explanation: {
+            primary_signal: "仍在等待审批结果。",
+            follow_up: "继续观察审批与 callback。"
+          }
+        }
+      })
+    );
+
+    const formData = new FormData();
+    formData.set("dispatchId", "dispatch-1");
+    formData.set("runId", "run-1");
+    formData.set("target", "ops@example.com");
+
+    const result = await retrySensitiveAccessNotificationDispatch(
+      { status: "idle", message: "", dispatchId: "dispatch-1", target: "ops@example.com" },
+      formData
+    );
+
+    expect(result).toMatchObject({
+      status: "success",
+      dispatchId: "dispatch-1",
+      target: "ops@example.com"
+    });
+    expect(result.message).toContain("通知已重新投递。");
+    expect(result.message).toContain("等待审批人与 callback 后续推进。");
+    expect(result.message).toContain("阻塞变化：仍有 1 个 operator blocker 需要审批。");
+    expect(result.message).toContain("当前 run 状态：waiting。");
+    expect(fetchRunSnapshot).not.toHaveBeenCalled();
+    expect(revalidateOperatorFollowUpPaths).toHaveBeenCalledWith({
+      runIds: ["run-1"],
+      workflowIds: ["wf-1"]
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("批量审批优先消费后端 blocker delta 与 run follow-up explanation", async () => {
+    vi.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        requested_count: 1,
+        decided_count: 1,
+        skipped_count: 0,
+        outcome_explanation: {
+          primary_signal: "批量审批已通过。",
+          follow_up: "继续观察 waiting 与 callback 后续推进。"
+        },
+        callback_blocker_delta: {
+          sampled_scope_count: 1,
+          changed_scope_count: 1,
+          cleared_scope_count: 1,
+          fully_cleared_scope_count: 1,
+          still_blocked_scope_count: 0,
+          summary: "已回读 1 个 blocker 样本；发生变化 1 个。"
+        },
+        decided_items: [
+          {
+            id: "ticket-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1"
+          }
+        ],
+        skipped_reason_summary: [],
+        run_follow_up: {
+          affected_run_count: 1,
+          sampled_run_count: 1,
+          waiting_run_count: 1,
+          running_run_count: 0,
+          succeeded_run_count: 0,
+          failed_run_count: 0,
+          unknown_run_count: 0,
+          explanation: {
+            primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+            follow_up: "run run-1：当前 run 状态：waiting。 当前节点：review。 重点信号：等待原因：waiting approval"
+          },
+          sampled_runs: [
+            {
+              run_id: "run-1",
+              snapshot: {
+                workflow_id: "wf-1",
+                status: "waiting",
+                current_node_id: "review",
+                execution_focus_explanation: {
+                  primary_signal: "等待原因：waiting approval",
+                  follow_up: "继续观察 runtime 是否恢复。"
+                }
+              }
+            }
+          ]
+        }
+      })
+    );
+
+    const result = await bulkDecideSensitiveAccessApprovalTickets({
+      tickets: [
+        {
+          ticketId: "ticket-1",
+          runId: "run-1",
+          nodeRunId: "node-run-1"
+        }
+      ],
+      status: "approved",
+      approvedBy: "operator-1"
+    });
+
+    expect(result).toMatchObject({
+      action: "approved",
+      status: "success",
+      requestedCount: 1,
+      updatedCount: 1,
+      skippedCount: 0,
+      blockerSampleCount: 1,
+      blockerChangedCount: 1,
+      blockerClearedCount: 1,
+      blockerFullyClearedCount: 1,
+      blockerStillBlockedCount: 0,
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1
+    });
+    expect(result.message).toContain("批量审批已通过。");
+    expect(result.message).toContain("继续观察 waiting 与 callback 后续推进。");
+    expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
+    expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
     expect(revalidateOperatorFollowUpByRunIds).toHaveBeenCalledWith(["run-1"]);
     expect(fetchRunSnapshot).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenCalledTimes(1);

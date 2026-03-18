@@ -39,6 +39,11 @@ describe("operator-action-result-presenters", () => {
         primary_signal: "本次已批准 1 条审批票据，并把对应 waiting 链路交回 runtime 恢复。",
         follow_up: "后续请继续回看对应 run detail / inbox slice，确认 waiting 是否真正继续前进。"
       },
+      runFollowUpExplanation: {
+        primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+        follow_up:
+          "run run-12345678：当前 run 状态：waiting。 当前节点：mock_tool。 重点信号：等待原因：waiting approval"
+      },
       affectedRunCount: 1,
       sampledRuns: [
         {
@@ -59,8 +64,8 @@ describe("operator-action-result-presenters", () => {
       fallback: "fallback"
     });
 
-    expect(message).toContain("本次影响 1 个 run；已回读 1 个样本");
-    expect(message).toContain("run run-1234：当前 run 状态：waiting。");
+    expect(message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
+    expect(message).toContain("run run-12345678：当前 run 状态：waiting。");
     expect(message).toContain("重点信号：等待原因：waiting approval");
     expect(message).not.toContain("waiting reason：waiting approval");
   });

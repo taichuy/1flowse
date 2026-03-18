@@ -101,6 +101,7 @@ type OperatorRunFollowUpBody = {
   succeeded_run_count?: number;
   failed_run_count?: number;
   unknown_run_count?: number;
+  explanation?: OutcomeExplanationBody | null;
   sampled_runs?: Array<{
     run_id: string;
     snapshot?: OperatorRunSnapshotBody | null;
@@ -507,6 +508,7 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
       status: "success",
       message: formatBulkOperatorOutcomeExplanationMessage({
         explanation: body?.outcome_explanation,
+        runFollowUpExplanation: body?.run_follow_up?.explanation,
         blockerDeltaSummary: blockerDelta?.summary,
         affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns,
@@ -616,6 +618,7 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
       status: "success",
       message: formatBulkOperatorOutcomeExplanationMessage({
         explanation: body?.outcome_explanation,
+        runFollowUpExplanation: body?.run_follow_up?.explanation,
         blockerDeltaSummary: blockerDelta?.summary,
         affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns,

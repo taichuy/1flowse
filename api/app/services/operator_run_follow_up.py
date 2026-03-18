@@ -8,11 +8,123 @@ from app.schemas.operator_follow_up import (
     OperatorRunSnapshot,
     OperatorRunSnapshotSample,
 )
+from app.schemas.explanations import SignalFollowUpExplanation
 from app.schemas.run_views import RunExecutionView
 from app.services.run_views import RunViewService
 
 
 run_view_service = RunViewService()
+
+
+def _join_parts(parts: Iterable[str | None]) -> str | None:
+    normalized = [part.strip() for part in parts if isinstance(part, str) and part.strip()]
+    if not normalized:
+        return None
+    return " ".join(normalized)
+
+
+def _format_run_snapshot_summary(snapshot: OperatorRunSnapshot | None) -> str | None:
+    if snapshot is None:
+        return None
+
+    normalized_status = str(snapshot.status or "").strip()
+    if not normalized_status:
+        return None
+
+    execution_focus_primary_signal = (
+        snapshot.execution_focus_explanation.primary_signal.strip()
+        if snapshot.execution_focus_explanation is not None
+        and snapshot.execution_focus_explanation.primary_signal
+        else None
+    )
+    execution_focus_follow_up = (
+        snapshot.execution_focus_explanation.follow_up.strip()
+        if snapshot.execution_focus_explanation is not None
+        and snapshot.execution_focus_explanation.follow_up
+        else None
+    )
+    normalized_focus_node_id = str(snapshot.execution_focus_node_id or "").strip() or None
+    normalized_current_node_id = str(snapshot.current_node_id or "").strip() or None
+    normalized_waiting_reason = str(snapshot.waiting_reason or "").strip() or None
+
+    return _join_parts(
+        [
+            f"当前 run 状态：{normalized_status}。",
+            f"当前节点：{normalized_current_node_id}。"
+            if normalized_current_node_id
+            else None,
+            f"聚焦节点：{normalized_focus_node_id}。"
+            if normalized_focus_node_id
+            and normalized_focus_node_id != normalized_current_node_id
+            else None,
+            f"重点信号：{execution_focus_primary_signal}"
+            if execution_focus_primary_signal
+            else None,
+            f"后续动作：{execution_focus_follow_up}"
+            if execution_focus_follow_up
+            else None,
+            f"waiting reason：{normalized_waiting_reason}。"
+            if not execution_focus_primary_signal and normalized_waiting_reason
+            else None,
+        ]
+    )
+
+
+def _format_status_distribution(summary: OperatorRunFollowUpSummary) -> str:
+    status_counts = [
+        ("waiting", summary.waiting_run_count),
+        ("running", summary.running_run_count),
+        ("succeeded", summary.succeeded_run_count),
+        ("failed", summary.failed_run_count),
+        ("unknown", summary.unknown_run_count),
+    ]
+    parts = [f"{status} {count}" for status, count in status_counts if count > 0]
+    return "、".join(parts) if parts else "unknown"
+
+
+def _build_operator_run_follow_up_explanation(
+    summary: OperatorRunFollowUpSummary,
+) -> SignalFollowUpExplanation | None:
+    if summary.affected_run_count <= 0:
+        return None
+
+    sample_count = len(summary.sampled_runs)
+    if sample_count > 0:
+        primary_signal = (
+            f"本次影响 {summary.affected_run_count} 个 run；"
+            f"整体状态分布：{_format_status_distribution(summary)}。"
+            f"已回读 {sample_count} 个样本。"
+        )
+    else:
+        primary_signal = f"本次影响 {summary.affected_run_count} 个 run；当前还未读取到可用的 run 快照。"
+
+    sample_summaries = []
+    for item in summary.sampled_runs:
+        snapshot_summary = _format_run_snapshot_summary(item.snapshot)
+        sample_summaries.append(
+            (
+                f"run {item.run_id}：{snapshot_summary}"
+                if snapshot_summary
+                else f"run {item.run_id}：暂未读取到最新快照。"
+            )
+        )
+
+    remaining_count = max(summary.affected_run_count - sample_count, 0)
+    follow_up = _join_parts(
+        [
+            " ".join(sample_summaries) if sample_summaries else None,
+            (
+                f"其余 {remaining_count} 个 run 可继续到对应 run detail / inbox slice 查看后续推进。"
+                if remaining_count > 0
+                else None
+            ),
+        ]
+    )
+
+    return SignalFollowUpExplanation(
+        primary_signal=primary_signal,
+        follow_up=follow_up,
+    )
 
 
 def _normalize_run_ids(run_ids: Iterable[str | None], *, limit: int | None = None) -> list[str]:
@@ -195,4 +307,5 @@ def build_operator_run_follow_up_summary(
             )
         )
 
+    summary.explanation = _build_operator_run_follow_up_explanation(summary)
     return summary
