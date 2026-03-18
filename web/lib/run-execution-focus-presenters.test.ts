@@ -162,4 +162,40 @@ describe("run execution focus presenters", () => {
     expect(followUp).toContain("已安排自动 resume（30s）");
     expect(followUp).toContain("2026-03-18T10:00:30Z");
   });
+
+  it("把 inline 强隔离错配解释成明确的 execution class 阻断", () => {
+    const node = createExecutionNode({
+      execution_blocking_reason:
+        "sandbox_code cannot run with execution class 'inline'. Use explicit 'subprocess' for the current host-controlled MVP path, or register a sandbox backend for 'sandbox' / 'microvm'."
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行阻断：当前节点要求受控执行，但 execution class 仍是 inline。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("调整为 subprocess");
+  });
+
+  it("把缺失 sandbox backend 解释成 fail-closed 阻断", () => {
+    const node = createExecutionNode({
+      execution_blocking_reason:
+        "sandbox_code requested execution class 'sandbox', but no compatible sandbox backend is registered. Strong-isolation paths must fail closed until a sandbox backend is available."
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行阻断：当前节点要求强隔离执行，但没有兼容的 sandbox backend 可用。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("fail-closed");
+  });
+
+  it("把 sandbox capability 不兼容解释成配置与 backend 能力不匹配", () => {
+    const node = createExecutionNode({
+      execution_blocking_reason:
+        "兼容 backend 细节：backend-a: does not support networkPolicy = egress；backend-b: does not support filesystemPolicy = workspace-write"
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行阻断：sandbox backend 能力与当前节点配置不兼容（2 项）。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("backend capability");
+  });
 });

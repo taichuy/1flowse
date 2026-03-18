@@ -167,13 +167,13 @@ export function RunDiagnosticsExecutionOverview({
         </>
       ) : null}
 
-      {callbackWaiting.node_count > 0 ? (
-        <>
       <RunDiagnosticsExecutionOverviewBlockers
         executionView={executionView}
         callbackWaitingAutomation={callbackWaitingAutomation}
       />
 
+      {callbackWaiting.node_count > 0 ? (
+        <>
           <MetricChipRow
             title="Resume sources"
             emptyCopy="No callback resumes have been scheduled yet."

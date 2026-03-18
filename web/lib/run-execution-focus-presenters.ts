@@ -17,10 +17,113 @@ type ExecutionFocusExplainableNode = Pick<
   | "sensitive_access_entries"
 >;
 
+type ExecutionBlockingInsight = {
+  primarySignal: string;
+  followUp: string;
+};
+
 export function formatMetricSummary(metrics: Record<string, number>) {
   return Object.entries(metrics)
     .map(([key, count]) => `${key} ${count}`)
     .join(" · ");
+}
+
+function splitCompatibilityDetails(reason: string): string[] {
+  const prefix = "兼容 backend 细节：";
+  const detail = reason.startsWith(prefix) ? reason.slice(prefix.length).trim() : reason;
+  return detail
+    .split(/[;；]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function resolveExecutionBlockingInsight(
+  node: ExecutionFocusExplainableNode
+): ExecutionBlockingInsight | null {
+  const reason = node.execution_blocking_reason?.trim();
+  const normalized = reason?.toLowerCase() ?? "";
+
+  if (reason) {
+    if (normalized.includes("cannot run with execution class 'inline'")) {
+      return {
+        primarySignal: "执行阻断：当前节点要求受控执行，但 execution class 仍是 inline。",
+        followUp:
+          "下一步：把 execution class 调整为 subprocess，或为 sandbox / microvm 注册兼容 backend；强隔离路径不要静默退回 inline。"
+      };
+    }
+
+    if (
+      normalized.includes("no compatible sandbox backend") ||
+      normalized.includes("strong-isolation paths must fail closed")
+    ) {
+      return {
+        primarySignal: "执行阻断：当前节点要求强隔离执行，但没有兼容的 sandbox backend 可用。",
+        followUp:
+          "下一步：先恢复或注册兼容的 sandbox backend，再重试当前节点；在此之前继续保持 fail-closed。"
+      };
+    }
+
+    if (
+      normalized.includes("compatibility adapter") &&
+      normalized.includes("does not support requested execution class")
+    ) {
+      return {
+        primarySignal: "执行阻断：当前 compat adapter 不支持请求的 execution class。",
+        followUp:
+          "下一步：先把节点执行级别调回 adapter 支持范围，或补齐支持该 execution class 的 compat adapter。"
+      };
+    }
+
+    if (
+      normalized.includes("native tool") &&
+      normalized.includes("does not support requested execution class")
+    ) {
+      return {
+        primarySignal: "执行阻断：当前 tool 默认执行边界不支持请求的 execution class。",
+        followUp:
+          "下一步：先核对 tool 的默认 execution class 和治理配置，不支持时不要强推到更重的隔离级别。"
+      };
+    }
+
+    const compatibilityDetails = splitCompatibilityDetails(reason);
+    if (
+      reason.startsWith("兼容 backend 细节：") ||
+      compatibilityDetails.some((item) => item.toLowerCase().includes("does not support"))
+    ) {
+      return {
+        primarySignal:
+          compatibilityDetails.length > 0
+            ? `执行阻断：sandbox backend 能力与当前节点配置不兼容（${compatibilityDetails.length} 项）。`
+            : "执行阻断：sandbox backend 能力与当前节点配置不兼容。",
+        followUp:
+          "下一步：优先核对 profile、language、dependency mode、network/filesystem policy 与 backend capability 是否一致。"
+      };
+    }
+
+    return {
+      primarySignal: `执行阻断：${reason}`,
+      followUp:
+        "下一步：优先核对 execution class、sandbox backend readiness 和 tool governance 是否匹配。"
+    };
+  }
+
+  if (node.execution_unavailable_count > 0) {
+    return {
+      primarySignal: `执行阻断：当前节点记录了 ${node.execution_unavailable_count} 次 execution unavailable。`,
+      followUp:
+        "下一步：优先核对 execution class、sandbox backend readiness 和 tool governance 是否匹配。"
+    };
+  }
+
+  if (node.execution_blocked_count > 0) {
+    return {
+      primarySignal: `执行阻断：当前节点记录了 ${node.execution_blocked_count} 次 execution blocked。`,
+      followUp:
+        "下一步：优先回到 execution policy 和 tool governance 事实链确认是谁阻断了执行。"
+    };
+  }
+
+  return null;
 }
 
 export function formatExecutionFocusReasonLabel(
@@ -50,8 +153,9 @@ function countPendingApprovalTickets(node: ExecutionFocusExplainableNode) {
 }
 
 export function formatExecutionFocusPrimarySignal(node: ExecutionFocusExplainableNode): string | null {
-  if (node.execution_blocking_reason) {
-    return `执行阻断：${node.execution_blocking_reason}`;
+  const blockingInsight = resolveExecutionBlockingInsight(node);
+  if (blockingInsight) {
+    return blockingInsight.primarySignal;
   }
   if (node.waiting_reason) {
     return `等待原因：${node.waiting_reason}`;
@@ -90,8 +194,9 @@ export function formatExecutionFocusFollowUp(node: ExecutionFocusExplainableNode
     return `下一步：当前节点已安排自动 resume（${node.scheduled_resume_delay_seconds}s）${dueCopy}，优先观察调度补偿是否恢复。`;
   }
 
-  if (node.execution_blocking_reason || node.execution_unavailable_count > 0) {
-    return "下一步：优先核对 execution class、sandbox backend readiness 和 tool governance 是否匹配。";
+  const blockingInsight = resolveExecutionBlockingInsight(node);
+  if (blockingInsight) {
+    return blockingInsight.followUp;
   }
 
   if (node.waiting_reason) {

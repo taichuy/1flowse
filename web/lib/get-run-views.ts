@@ -145,6 +145,7 @@ export type RunCallbackWaitingSummary = {
   late_callback_count: number;
   resume_schedule_count: number;
   scheduled_resume_pending_node_count: number;
+  scheduled_resume_requeued_node_count: number;
   resume_source_counts: Record<string, number>;
   scheduled_resume_source_counts: Record<string, number>;
   termination_reason_counts: Record<string, number>;

@@ -3,6 +3,12 @@ import type { RunExecutionNodeItem, RunExecutionView } from "@/lib/get-run-views
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import {
+  countPendingApprovals,
+  countPendingTickets,
+  hasScheduledResume,
+  pickTopBlockerNodes
+} from "@/lib/run-execution-blockers";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
   formatExecutionFocusFollowUp,
@@ -11,19 +17,6 @@ import {
   formatMetricSummary
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
-
-function countPendingApprovals(node: RunExecutionNodeItem): number {
-  return node.sensitive_access_entries.filter((entry) => entry.approval_ticket?.status === "pending")
-    .length;
-}
-
-function countPendingTickets(node: RunExecutionNodeItem): number {
-  return node.callback_tickets.filter((ticket) => ticket.status === "pending").length;
-}
-
-function hasScheduledResume(node: RunExecutionNodeItem): boolean {
-  return typeof node.scheduled_resume_delay_seconds === "number";
-}
 
 function buildNodeInboxHref(node: RunExecutionNodeItem): string | null {
   const latestApprovalEntry = node.sensitive_access_entries.find((entry) => entry.approval_ticket);
@@ -39,46 +32,6 @@ function buildNodeInboxHref(node: RunExecutionNodeItem): string | null {
     accessRequestId: latestApprovalEntry?.request.id ?? null,
     approvalTicketId: latestApprovalEntry?.approval_ticket?.id ?? null
   });
-}
-
-function getNodePriorityScore(node: RunExecutionNodeItem): number {
-  const pendingApprovals = countPendingApprovals(node);
-  const pendingTickets = countPendingTickets(node);
-  const lifecycle = node.callback_waiting_lifecycle;
-
-  let score = 0;
-  score += pendingApprovals * 100;
-  score += pendingTickets * 80;
-  score += (lifecycle?.expired_ticket_count ?? 0) * 20;
-  score += (lifecycle?.late_callback_count ?? 0) * 15;
-  score += node.callback_tickets.length * 5;
-  score += node.sensitive_access_entries.length * 3;
-  if (hasScheduledResume(node)) {
-    score -= 20;
-  }
-  if (node.status.includes("waiting")) {
-    score += 10;
-  }
-  if (lifecycle?.terminated) {
-    score -= 25;
-  }
-  return score;
-}
-
-function pickTopBlockerNodes(executionView: RunExecutionView): RunExecutionNodeItem[] {
-  return executionView.nodes
-    .filter((node) => {
-      return (
-        countPendingApprovals(node) > 0 ||
-        countPendingTickets(node) > 0 ||
-        hasScheduledResume(node) ||
-        node.callback_tickets.length > 0 ||
-        node.sensitive_access_entries.length > 0 ||
-        Boolean(node.waiting_reason)
-      );
-    })
-    .sort((left, right) => getNodePriorityScore(right) - getNodePriorityScore(left))
-    .slice(0, 3);
 }
 
 export function RunDiagnosticsExecutionOverviewBlockers({

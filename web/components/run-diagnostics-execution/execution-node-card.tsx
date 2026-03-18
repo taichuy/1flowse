@@ -19,6 +19,10 @@ import {
 } from "@/components/run-diagnostics-execution/execution-node-card-sections";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
+import {
+  formatExecutionFocusFollowUp,
+  formatExecutionFocusPrimarySignal
+} from "@/lib/run-execution-focus-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 function formatExecutionBackendExtensions(
@@ -55,6 +59,11 @@ export function ExecutionNodeCard({
   const backendExtensionsPreview = formatExecutionBackendExtensions(
     node.execution_backend_extensions
   );
+  const executionPrimarySignal = formatExecutionFocusPrimarySignal(node);
+  const executionFollowUp = formatExecutionFocusFollowUp(node);
+  const rawBlockingCopy = node.execution_blocking_reason
+    ? `Execution blocked: ${node.execution_blocking_reason}`
+    : null;
 
   return (
     <article className="timeline-row">
@@ -130,12 +139,20 @@ export function ExecutionNodeCard({
         <span className="event-chip">unavailable {node.execution_unavailable_count}</span>
       </div>
 
-      {node.execution_fallback_reason ? (
+      {executionPrimarySignal ? (
+        <p className={node.execution_blocking_reason ? "run-error-message" : "activity-copy"}>
+          {executionPrimarySignal}
+        </p>
+      ) : null}
+
+      {executionFollowUp ? <p className="binding-meta">{executionFollowUp}</p> : null}
+
+      {node.execution_fallback_reason && !node.execution_blocking_reason ? (
         <p className="activity-copy">Execution fallback: {node.execution_fallback_reason}</p>
       ) : null}
 
-      {node.execution_blocking_reason ? (
-        <p className="run-error-message">Execution blocked: {node.execution_blocking_reason}</p>
+      {rawBlockingCopy && executionPrimarySignal !== `执行阻断：${node.execution_blocking_reason}` ? (
+        <p className="activity-copy">{rawBlockingCopy}</p>
       ) : null}
 
       <div className="event-type-strip">

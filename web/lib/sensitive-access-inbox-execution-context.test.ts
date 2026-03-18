@@ -181,6 +181,7 @@ function createExecutionView(
         late_callback_count: 0,
         resume_schedule_count: 0,
         scheduled_resume_pending_node_count: 0,
+        scheduled_resume_requeued_node_count: 0,
         resume_source_counts: {},
         scheduled_resume_source_counts: {},
         termination_reason_counts: {}
