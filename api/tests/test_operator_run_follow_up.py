@@ -1,6 +1,11 @@
 from datetime import UTC, datetime
 
 from app.models.run import NodeRun, Run, RunEvent
+from app.services.callback_waiting_lifecycle import (
+    build_callback_waiting_scheduled_resume,
+    record_callback_resume_schedule,
+    record_callback_ticket_issued,
+)
 from app.services.operator_run_follow_up import (
     build_operator_run_follow_up_summary,
     load_operator_run_snapshot,
@@ -233,5 +238,92 @@ def test_load_operator_run_snapshot_surfaces_execution_fallback_focus(
         "follow_up": (
             "下一步：如果这条节点需要受控执行或强隔离，应补齐对应 execution adapter；"
             "不要把当前 fallback 当成长期默认。"
+        ),
+    }
+
+
+def test_load_operator_run_snapshot_prefers_callback_waiting_explanation(
+    sqlite_session,
+    sample_workflow,
+):
+    scheduled_at = datetime(2026, 3, 20, 10, 0, tzinfo=UTC)
+    checkpoint_payload = record_callback_ticket_issued(
+        {},
+        reason="Waiting for external callback",
+        issued_at=scheduled_at,
+    )
+    checkpoint_payload = record_callback_resume_schedule(
+        checkpoint_payload,
+        delay_seconds=30,
+        reason="callback pending",
+        source="callback_ticket_monitor",
+        backoff_attempt=1,
+    )
+    checkpoint_payload = {
+        **checkpoint_payload,
+        "scheduled_resume": build_callback_waiting_scheduled_resume(
+            delay_seconds=30,
+            reason="callback pending",
+            source="callback_ticket_monitor",
+            waiting_status="waiting_callback",
+            backoff_attempt=1,
+            scheduled_at=scheduled_at,
+        ),
+    }
+
+    run = Run(
+        id="run-follow-up-callback-waiting",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        compiled_blueprint_id=None,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-follow-up-callback-waiting",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting",
+        phase="waiting",
+        input_payload={},
+        checkpoint_payload=checkpoint_payload,
+        working_context={},
+        waiting_reason="Waiting for callback",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    sqlite_session.commit()
+
+    summary = build_operator_run_follow_up_summary(sqlite_session, [run.id])
+
+    snapshot = summary.sampled_runs[0].snapshot
+    assert snapshot is not None
+    assert snapshot.execution_focus_explanation is not None
+    assert snapshot.execution_focus_explanation.model_dump() == {
+        "primary_signal": "等待原因：Waiting for callback",
+        "follow_up": (
+            "下一步：当前节点已安排自动 resume（30.0s），预计在 2026-03-20T10:00:30Z 左右触发，"
+            "优先观察调度补偿是否恢复。"
+        ),
+    }
+    assert snapshot.callback_waiting_explanation is not None
+    assert snapshot.callback_waiting_explanation.model_dump() == {
+        "primary_signal": "系统已经安排 30s 后再次尝试恢复 callback waiting。",
+        "follow_up": (
+            "下一步：先观察自动恢复链路；只有在需要绕过当前 backoff 时，再手动 resume 或 cleanup。"
+        ),
+    }
+    assert summary.explanation is not None
+    assert summary.explanation.model_dump() == {
+        "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+        "follow_up": (
+            "run run-follow-up-callback-waiting：当前 run 状态：waiting。 当前节点：mock_tool。 "
+            "重点信号：系统已经安排 30s 后再次尝试恢复 callback waiting。 "
+            "后续动作：下一步：先观察自动恢复链路；只有在需要绕过当前 backoff 时，再手动 resume 或 cleanup。"
         ),
     }

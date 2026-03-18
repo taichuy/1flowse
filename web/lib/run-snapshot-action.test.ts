@@ -61,7 +61,8 @@ describe("fetchRunSnapshot", () => {
       executionFocusExplanation: {
         primary_signal: "执行阻断：当前节点仍在等待审批。",
         follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
-      }
+      },
+      callbackWaitingExplanation: null
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -90,7 +91,11 @@ describe("fetchRunSnapshot", () => {
           execution_focus_reason: "blocked_execution",
           execution_focus_node: {
             node_id: "tool-a",
-            node_run_id: "node-run-1"
+            node_run_id: "node-run-1",
+            callback_waiting_explanation: {
+              primary_signal: "当前仍有 1 条 callback ticket 等待外部回调。",
+              follow_up: "下一步：先等待外部 callback 到达，再观察自动 resume。"
+            }
           },
           execution_focus_explanation: {
             primary_signal: "执行阻断：当前节点仍在等待审批。",
@@ -115,6 +120,10 @@ describe("fetchRunSnapshot", () => {
       executionFocusExplanation: {
         primary_signal: "执行阻断：当前节点仍在等待审批。",
         follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
+      },
+      callbackWaitingExplanation: {
+        primary_signal: "当前仍有 1 条 callback ticket 等待外部回调。",
+        follow_up: "下一步：先等待外部 callback 到达，再观察自动 resume。"
       }
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -154,7 +163,8 @@ describe("fetchRunSnapshot", () => {
       executionFocusReason: null,
       executionFocusNodeId: null,
       executionFocusNodeRunId: null,
-      executionFocusExplanation: null
+      executionFocusExplanation: null,
+      callbackWaitingExplanation: null
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

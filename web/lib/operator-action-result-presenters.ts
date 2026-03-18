@@ -11,6 +11,10 @@ type RunSnapshotInput = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  callbackWaitingExplanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
 };
 
 type ApprovalDecisionSnapshotInput = {
@@ -66,7 +70,8 @@ function formatRunSnapshot({
   currentNodeId,
   waitingReason,
   executionFocusNodeId,
-  executionFocusExplanation
+  executionFocusExplanation,
+  callbackWaitingExplanation
 }: RunSnapshotInput) {
   const normalizedStatus = status?.trim() || null;
   if (!normalizedStatus) {
@@ -76,8 +81,20 @@ function formatRunSnapshot({
   const executionFocusPrimarySignal =
     executionFocusExplanation?.primary_signal?.trim() || null;
   const executionFocusFollowUp = executionFocusExplanation?.follow_up?.trim() || null;
+  const callbackWaitingPrimarySignal =
+    callbackWaitingExplanation?.primary_signal?.trim() || null;
+  const callbackWaitingFollowUp = callbackWaitingExplanation?.follow_up?.trim() || null;
   const normalizedFocusNodeId = executionFocusNodeId?.trim() || null;
   const normalizedCurrentNodeId = currentNodeId?.trim() || null;
+  const shouldPreferCallbackWaitingExplanation =
+    Boolean(callbackWaitingPrimarySignal) &&
+    (!executionFocusPrimarySignal || executionFocusPrimarySignal.startsWith("等待原因："));
+  const effectivePrimarySignal = shouldPreferCallbackWaitingExplanation
+    ? callbackWaitingPrimarySignal
+    : executionFocusPrimarySignal;
+  const effectiveFollowUp = shouldPreferCallbackWaitingExplanation && callbackWaitingFollowUp
+    ? callbackWaitingFollowUp
+    : executionFocusFollowUp;
 
   return joinParts([
     `当前 run 状态：${normalizedStatus}。`,
@@ -85,9 +102,9 @@ function formatRunSnapshot({
     normalizedFocusNodeId && normalizedFocusNodeId !== normalizedCurrentNodeId
       ? `聚焦节点：${normalizedFocusNodeId}。`
       : null,
-    executionFocusPrimarySignal ? `重点信号：${executionFocusPrimarySignal}` : null,
-    executionFocusFollowUp ? `后续动作：${executionFocusFollowUp}` : null,
-    !executionFocusPrimarySignal && waitingReason ? `waiting reason：${waitingReason}。` : null
+    effectivePrimarySignal ? `重点信号：${effectivePrimarySignal}` : null,
+    effectiveFollowUp ? `后续动作：${effectiveFollowUp}` : null,
+    !effectivePrimarySignal && waitingReason ? `waiting reason：${waitingReason}。` : null
   ]);
 }
 
@@ -151,13 +168,16 @@ export function formatOperatorOutcomeExplanationMessage(input: {
     return input.fallback;
   }
 
+  const runFollowUpSummary =
+    joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ||
+    formatRunSnapshot(input.runSnapshot ?? {});
+
   return (
     joinParts([
       primarySignal,
       followUp,
       input.blockerDeltaSummary,
-      joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ??
-        formatRunSnapshot(input.runSnapshot ?? {})
+      runFollowUpSummary
     ]) ?? input.fallback
   );
 }
@@ -178,19 +198,19 @@ export function formatBulkOperatorOutcomeExplanationMessage(input: {
     return input.fallback;
   }
 
+  const runFollowUpSummary =
+    joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ||
+    formatBulkRunFollowUp({
+      affectedRunCount: input.affectedRunCount,
+      sampledRuns: input.sampledRuns
+    });
+
   return (
     joinParts([
       primarySignal,
       followUp,
       input.blockerDeltaSummary,
-      joinParts([
-        runFollowUpPrimarySignal,
-        runFollowUpFollowUp
-      ]) ??
-        formatBulkRunFollowUp({
-          affectedRunCount: input.affectedRunCount,
-          sampledRuns: input.sampledRuns
-        })
+      runFollowUpSummary
     ]) ?? input.fallback
   );
 }

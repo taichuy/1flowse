@@ -43,9 +43,38 @@ def _format_run_snapshot_summary(snapshot: OperatorRunSnapshot | None) -> str | 
         and snapshot.execution_focus_explanation.follow_up
         else None
     )
+    callback_waiting_primary_signal = (
+        snapshot.callback_waiting_explanation.primary_signal.strip()
+        if snapshot.callback_waiting_explanation is not None
+        and snapshot.callback_waiting_explanation.primary_signal
+        else None
+    )
+    callback_waiting_follow_up = (
+        snapshot.callback_waiting_explanation.follow_up.strip()
+        if snapshot.callback_waiting_explanation is not None
+        and snapshot.callback_waiting_explanation.follow_up
+        else None
+    )
     normalized_focus_node_id = str(snapshot.execution_focus_node_id or "").strip() or None
     normalized_current_node_id = str(snapshot.current_node_id or "").strip() or None
     normalized_waiting_reason = str(snapshot.waiting_reason or "").strip() or None
+    should_prefer_callback_waiting_explanation = bool(
+        callback_waiting_primary_signal
+        and (
+            execution_focus_primary_signal is None
+            or execution_focus_primary_signal.startswith("等待原因：")
+        )
+    )
+    effective_primary_signal = (
+        callback_waiting_primary_signal
+        if should_prefer_callback_waiting_explanation
+        else execution_focus_primary_signal
+    )
+    effective_follow_up = (
+        callback_waiting_follow_up
+        if should_prefer_callback_waiting_explanation and callback_waiting_follow_up
+        else execution_focus_follow_up
+    )
 
     return _join_parts(
         [
@@ -57,14 +86,14 @@ def _format_run_snapshot_summary(snapshot: OperatorRunSnapshot | None) -> str | 
             if normalized_focus_node_id
             and normalized_focus_node_id != normalized_current_node_id
             else None,
-            f"重点信号：{execution_focus_primary_signal}"
-            if execution_focus_primary_signal
+            f"重点信号：{effective_primary_signal}"
+            if effective_primary_signal
             else None,
-            f"后续动作：{execution_focus_follow_up}"
-            if execution_focus_follow_up
+            f"后续动作：{effective_follow_up}"
+            if effective_follow_up
             else None,
             f"waiting reason：{normalized_waiting_reason}。"
-            if not execution_focus_primary_signal and normalized_waiting_reason
+            if not effective_primary_signal and normalized_waiting_reason
             else None,
         ]
     )
@@ -207,6 +236,11 @@ def build_operator_run_snapshot(
         execution_focus_explanation=(
             execution_view.execution_focus_explanation
             if execution_view is not None
+            else None
+        ),
+        callback_waiting_explanation=(
+            execution_focus_node.callback_waiting_explanation
+            if execution_focus_node is not None
             else None
         ),
     )

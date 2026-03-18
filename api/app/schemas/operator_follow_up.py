@@ -22,6 +22,7 @@ class OperatorRunSnapshot(BaseModel):
     execution_focus_node_id: str | None = None
     execution_focus_node_run_id: str | None = None
     execution_focus_explanation: SignalFollowUpExplanation | None = None
+    callback_waiting_explanation: SignalFollowUpExplanation | None = None
 
 
 class OperatorRunSnapshotSample(BaseModel):

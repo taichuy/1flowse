@@ -93,6 +93,10 @@ type OperatorRunSnapshotBody = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  callback_waiting_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
 };
 
 type OperatorRunFollowUpBody = {
@@ -197,6 +201,12 @@ function toRunSnapshot(snapshot?: OperatorRunSnapshotBody | null) {
       ? {
           primary_signal: snapshot.execution_focus_explanation.primary_signal ?? null,
           follow_up: snapshot.execution_focus_explanation.follow_up ?? null
+        }
+      : null,
+    callbackWaitingExplanation: snapshot.callback_waiting_explanation
+      ? {
+          primary_signal: snapshot.callback_waiting_explanation.primary_signal ?? null,
+          follow_up: snapshot.callback_waiting_explanation.follow_up ?? null
         }
       : null
   };

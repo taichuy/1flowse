@@ -227,6 +227,10 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
                 "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
             ),
         },
+        "callback_waiting_explanation": {
+            "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+            "follow_up": "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。",
+        },
     }
     assert request_body["run_follow_up"] == {
         "affected_run_count": 1,
@@ -240,8 +244,8 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
             "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
             "follow_up": (
                 f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
-                "重点信号：等待原因：waiting approval 后续动作："
-                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+                "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
+                "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
             ),
         },
         "sampled_runs": [
@@ -304,6 +308,7 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
                 "下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。"
             ),
         },
+        "callback_waiting_explanation": None,
     }
     assert decision_body["run_follow_up"] is not None
     assert decision_body["run_follow_up"]["affected_run_count"] == 1
@@ -754,6 +759,7 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
                             "不要只盯单次 invocation 返回。"
                         ),
                     },
+                    "callback_waiting_explanation": None,
                 },
             }
         ],
@@ -893,6 +899,10 @@ def test_retry_notification_dispatch_creates_new_attempt(
                 "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
             ),
         },
+        "callback_waiting_explanation": {
+            "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+            "follow_up": "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。",
+        },
     }
     assert retry_body["run_follow_up"] is not None
     assert retry_body["run_follow_up"]["affected_run_count"] == 1
@@ -912,8 +922,8 @@ def test_retry_notification_dispatch_creates_new_attempt(
         "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
         "follow_up": (
             f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
-            "重点信号：等待原因：waiting approval 后续动作："
-            "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
+            "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
         ),
     }
 
@@ -1077,8 +1087,8 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
             "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
             "follow_up": (
                 f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
-                "重点信号：等待原因：waiting approval 后续动作："
-                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+                "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
+                "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
             ),
         },
         "sampled_runs": [
@@ -1098,6 +1108,10 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
                             "下一步：优先处理这条 sensitive access 审批票据，"
                             "再观察 waiting 节点是否恢复。"
                         ),
+                    },
+                    "callback_waiting_explanation": {
+                        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+                        "follow_up": "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。",
                     },
                 },
             }

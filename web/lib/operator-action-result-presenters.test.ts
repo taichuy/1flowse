@@ -71,6 +71,38 @@ describe("operator-action-result-presenters", () => {
     expect(message).not.toContain("waiting reason：waiting approval");
   });
 
+  it("callback waiting explanation 会覆盖泛化 waiting focus 文案", () => {
+    const message = formatOperatorOutcomeExplanationMessage({
+      explanation: {
+        primary_signal: "cleanup 已重新安排恢复。",
+        follow_up: "继续观察 worker 是否真正消费这次恢复。"
+      },
+      runSnapshot: {
+        status: "waiting",
+        currentNodeId: "mock_tool",
+        waitingReason: "Waiting for callback",
+        executionFocusNodeId: "mock_tool",
+        executionFocusExplanation: {
+          primary_signal: "等待原因：Waiting for callback",
+          follow_up: "下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。"
+        },
+        callbackWaitingExplanation: {
+          primary_signal: "当前仍有 1 条 callback ticket 等待外部回调。",
+          follow_up:
+            "下一步：先等待外部 callback 到达。如超时未到，再观察自动 resume 是否按 30.0s 计划触发。"
+        }
+      },
+      fallback: "fallback"
+    });
+
+    expect(message).toContain("cleanup 已重新安排恢复。");
+    expect(message).toContain("重点信号：当前仍有 1 条 callback ticket 等待外部回调。");
+    expect(message).toContain(
+      "后续动作：下一步：先等待外部 callback 到达。如超时未到，再观察自动 resume 是否按 30.0s 计划触发。"
+    );
+    expect(message).not.toContain("重点信号：等待原因：Waiting for callback");
+  });
+
   it("callback cleanup 结果优先展示 backend run follow-up explanation", () => {
     const message = formatCleanupResultMessage({
       matchedCount: 1,

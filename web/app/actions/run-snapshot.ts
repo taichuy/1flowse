@@ -12,6 +12,10 @@ export type RunSnapshot = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  callbackWaitingExplanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
 };
 
 export type RunSnapshotWithId = {
@@ -46,6 +50,10 @@ type RunExecutionViewResponseBody = {
   execution_focus_node?: {
     node_id?: string | null;
     node_run_id?: string | null;
+    callback_waiting_explanation?: {
+      primary_signal?: string | null;
+      follow_up?: string | null;
+    } | null;
   } | null;
   execution_focus_explanation?: {
     primary_signal?: string | null;
@@ -137,6 +145,14 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
             primary_signal:
               executionView.execution_focus_explanation.primary_signal ?? null,
             follow_up: executionView.execution_focus_explanation.follow_up ?? null
+          }
+        : null,
+      callbackWaitingExplanation: executionView?.execution_focus_node?.callback_waiting_explanation
+        ? {
+            primary_signal:
+              executionView.execution_focus_node.callback_waiting_explanation.primary_signal ?? null,
+            follow_up:
+              executionView.execution_focus_node.callback_waiting_explanation.follow_up ?? null
           }
         : null
     };
