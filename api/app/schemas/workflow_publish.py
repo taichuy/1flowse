@@ -276,12 +276,25 @@ class PublishedEndpointInvocationWaitingLifecycle(BaseModel):
     callback_ticket_count: int = 0
     callback_ticket_status_counts: dict[str, int] = Field(default_factory=dict)
     callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
+    sensitive_access_summary: PublishedEndpointInvocationSensitiveAccessSummary | None = None
     scheduled_resume_delay_seconds: float | None = None
     scheduled_resume_reason: str | None = None
     scheduled_resume_source: str | None = None
     scheduled_waiting_status: str | None = None
     scheduled_resume_scheduled_at: datetime | None = None
     scheduled_resume_due_at: datetime | None = None
+
+
+class PublishedEndpointInvocationSensitiveAccessSummary(BaseModel):
+    request_count: int = 0
+    approval_ticket_count: int = 0
+    pending_approval_count: int = 0
+    approved_approval_count: int = 0
+    rejected_approval_count: int = 0
+    expired_approval_count: int = 0
+    pending_notification_count: int = 0
+    delivered_notification_count: int = 0
+    failed_notification_count: int = 0
 
 
 class PublishedEndpointInvocationItem(BaseModel):

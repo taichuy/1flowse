@@ -69,6 +69,17 @@ export type PublishedEndpointInvocationItem = {
     callback_ticket_count: number;
     callback_ticket_status_counts: Record<string, number>;
     callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+    sensitive_access_summary?: {
+      request_count: number;
+      approval_ticket_count: number;
+      pending_approval_count: number;
+      approved_approval_count: number;
+      rejected_approval_count: number;
+      expired_approval_count: number;
+      pending_notification_count: number;
+      delivered_notification_count: number;
+      failed_notification_count: number;
+    } | null;
     scheduled_resume_delay_seconds?: number | null;
     scheduled_resume_reason?: string | null;
     scheduled_resume_source?: string | null;

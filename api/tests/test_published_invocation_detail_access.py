@@ -9,6 +9,7 @@ from app.api.routes.sensitive_access import service as sensitive_access_route_se
 from app.models.run import NodeRun, Run, RunCallbackTicket
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
+    NotificationDispatchRecord,
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
 )
@@ -62,6 +63,70 @@ def _seed_run_sensitive_access(
     )
     sqlite_session.commit()
     return resource
+
+
+def _seed_pending_blocking_sensitive_access(
+    sqlite_session: Session,
+    *,
+    run_id: str,
+    node_run_id: str,
+    sensitivity_level: str = "L2",
+) -> None:
+    now = datetime.now(UTC)
+    resource = SensitiveResourceRecord(
+        id=str(uuid4()),
+        label=f"Published invocation blocker resource {sensitivity_level}",
+        description="Seeded pending approval blocker for published invocation detail tests.",
+        sensitivity_level=sensitivity_level,
+        source="local_capability",
+        metadata_payload={
+            "run_id": run_id,
+            "tool_id": "native.search",
+        },
+        created_at=now,
+        updated_at=now,
+    )
+    access_request = SensitiveAccessRequestRecord(
+        id=str(uuid4()),
+        run_id=run_id,
+        node_run_id=node_run_id,
+        requester_type="workflow",
+        requester_id="mock_tool",
+        resource_id=resource.id,
+        action_type="invoke",
+        purpose_text="seed pending sensitive access blocker",
+        decision="require_approval",
+        reason_code="approval_required_high_sensitive_access",
+        created_at=now,
+        decided_at=None,
+    )
+    approval_ticket = ApprovalTicketRecord(
+        id=str(uuid4()),
+        access_request_id=access_request.id,
+        run_id=run_id,
+        node_run_id=node_run_id,
+        status="pending",
+        waiting_status="waiting",
+        approved_by=None,
+        decided_at=None,
+        expires_at=now + timedelta(minutes=30),
+        created_at=now,
+    )
+    notification = NotificationDispatchRecord(
+        id=str(uuid4()),
+        approval_ticket_id=approval_ticket.id,
+        channel="in_app",
+        target="sensitive-access-inbox",
+        status="failed",
+        delivered_at=None,
+        error="delivery failed",
+        created_at=now,
+    )
+    sqlite_session.add(resource)
+    sqlite_session.add(access_request)
+    sqlite_session.add(approval_ticket)
+    sqlite_session.add(notification)
+    sqlite_session.commit()
 
 
 def _create_published_invocation_fixture(
@@ -360,6 +425,40 @@ def test_get_published_invocation_detail_allows_moderate_sensitive_runs_without_
     ).one()
     assert access_request_record.decision == "allow"
     assert access_request_record.reason_code == "allow_human_moderate_runtime_use"
+
+
+def test_get_published_invocation_detail_includes_sensitive_access_summary_for_waiting_node(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow_id, binding, run, node_run, invocation = _create_published_invocation_fixture(
+        client,
+        sqlite_session,
+    )
+    _seed_pending_blocking_sensitive_access(
+        sqlite_session,
+        run_id=run.id,
+        node_run_id=node_run.id,
+    )
+
+    detail_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}",
+        params={"requester_id": "human-reviewer"},
+    )
+
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["invocation"]["run_waiting_lifecycle"]["sensitive_access_summary"] == {
+        "request_count": 1,
+        "approval_ticket_count": 1,
+        "pending_approval_count": 1,
+        "approved_approval_count": 0,
+        "rejected_approval_count": 0,
+        "expired_approval_count": 0,
+        "pending_notification_count": 0,
+        "delivered_notification_count": 0,
+        "failed_notification_count": 1,
+    }
 
 
 def test_list_published_cache_inventory_requires_approval_for_high_sensitive_runs(

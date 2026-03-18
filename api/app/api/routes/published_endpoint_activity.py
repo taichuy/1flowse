@@ -46,6 +46,7 @@ from app.services.published_invocation_exports import (
 from app.services.published_invocations import (
     PublishedInvocationService,
 )
+from app.services.sensitive_access_timeline import load_sensitive_access_timelines
 
 router = APIRouter(prefix="/workflows", tags=["published-endpoint-activity"])
 published_invocation_service = PublishedInvocationService()
@@ -208,10 +209,15 @@ def _build_published_endpoint_invocation_list_response(
         callback_tickets = db.scalars(
             select(RunCallbackTicket).where(RunCallbackTicket.run_id.in_(run_ids))
         ).all()
+        sensitive_access_timelines = load_sensitive_access_timelines(
+            db,
+            run_ids=run_ids,
+        )
         waiting_reason_lookup, waiting_lifecycle_lookup = build_waiting_lifecycle_lookup(
             run_lookup,
             node_runs,
             callback_tickets,
+            sensitive_access_timelines,
         )
 
     return records, PublishedEndpointInvocationListResponse(

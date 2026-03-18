@@ -13,7 +13,9 @@ import {
   formatPublishedInvocationCacheStatusLabel,
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
-  formatPublishedRunStatusLabel
+  formatPublishedRunStatusLabel,
+  listPublishedInvocationSensitiveAccessChips,
+  listPublishedInvocationSensitiveAccessRows
 } from "@/lib/published-invocation-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
@@ -71,12 +73,18 @@ export function WorkflowPublishInvocationEntryCard({
     lifecycle: callbackLifecycle,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds
   });
+  const sensitiveAccessChips = listPublishedInvocationSensitiveAccessChips(
+    waitingLifecycle?.sensitive_access_summary
+  );
   const waitingBlockerRows = listCallbackWaitingBlockerRows({
     lifecycle: callbackLifecycle,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
     scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
     scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status
   });
+  const sensitiveAccessRows = listPublishedInvocationSensitiveAccessRows(
+    waitingLifecycle?.sensitive_access_summary
+  );
   const inboxHref = buildPublishedInvocationInboxHref({
     invocation: item,
     callbackTickets: [],
@@ -170,7 +178,11 @@ export function WorkflowPublishInvocationEntryCard({
               {waitingHeadline ??
                 `node run ${waitingLifecycle.node_run_id} is still ${waitingLifecycle.node_status}.`}
             </p>
-            {waitingChips.length ? <p className="binding-meta">{waitingChips.join(" · ")}</p> : null}
+            {waitingChips.length || sensitiveAccessChips.length ? (
+              <p className="binding-meta">
+                {[...waitingChips, ...sensitiveAccessChips].join(" · ")}
+              </p>
+            ) : null}
             <dl className="compact-meta-list">
               <div>
                 <dt>Node run</dt>
@@ -194,6 +206,12 @@ export function WorkflowPublishInvocationEntryCard({
               </div>
               {waitingBlockerRows.map((row) => (
                 <div key={`${item.id}:${row.label}`}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+              {sensitiveAccessRows.map((row) => (
+                <div key={`${item.id}:sensitive:${row.label}`}>
                   <dt>{row.label}</dt>
                   <dd>{row.value}</dd>
                 </div>

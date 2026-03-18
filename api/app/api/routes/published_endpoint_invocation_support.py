@@ -7,6 +7,7 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationApiKeyUsageItem,
     PublishedEndpointInvocationItem,
     PublishedEndpointInvocationRequestSurface,
+    PublishedEndpointInvocationSensitiveAccessSummary,
     PublishedEndpointInvocationWaitingLifecycle,
 )
 from app.services.published_invocations import classify_invocation_reason
@@ -14,6 +15,8 @@ from app.services.run_view_serializers import (
     serialize_callback_waiting_lifecycle_summary,
     serialize_callback_waiting_scheduled_resume,
 )
+from app.services.sensitive_access_timeline import SensitiveAccessTimelineSnapshot
+from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
 
 def _resolve_callback_waiting_lifecycle(node_run: NodeRun):
@@ -121,6 +124,7 @@ def resolve_waiting_node_run(run: Run, node_runs: list[NodeRun]) -> NodeRun | No
 def serialize_waiting_lifecycle(
     node_run: NodeRun,
     callback_tickets: list[RunCallbackTicket],
+    sensitive_access_summary: PublishedEndpointInvocationSensitiveAccessSummary | None = None,
 ) -> PublishedEndpointInvocationWaitingLifecycle:
     lifecycle = _resolve_callback_waiting_lifecycle(node_run)
     scheduled_resume = serialize_callback_waiting_scheduled_resume(
@@ -139,6 +143,7 @@ def serialize_waiting_lifecycle(
             sorted(Counter(ticket.status for ticket in callback_tickets).items())
         ),
         callback_waiting_lifecycle=lifecycle,
+        sensitive_access_summary=sensitive_access_summary,
         scheduled_resume_delay_seconds=scheduled_resume[
             "scheduled_resume_delay_seconds"
         ],
@@ -156,6 +161,7 @@ def build_waiting_lifecycle_lookup(
     run_lookup: dict[str, Run],
     node_runs: list[NodeRun],
     callback_tickets: list[RunCallbackTicket],
+    sensitive_access_timeline_by_run: dict[str, SensitiveAccessTimelineSnapshot] | None = None,
 ) -> tuple[
     dict[str, str | None],
     dict[str, PublishedEndpointInvocationWaitingLifecycle | None],
@@ -174,13 +180,55 @@ def build_waiting_lifecycle_lookup(
         selected_node_run = resolve_waiting_node_run(run, node_runs_by_run.get(run_id, []))
         if selected_node_run is None:
             continue
+        sensitive_access_summary = _summarize_sensitive_access_bundles(
+            sensitive_access_timeline_by_run.get(run_id).by_node_run.get(selected_node_run.id, [])
+            if sensitive_access_timeline_by_run is not None
+            and sensitive_access_timeline_by_run.get(run_id) is not None
+            else []
+        )
         waiting_lifecycle = serialize_waiting_lifecycle(
             selected_node_run,
             callback_tickets_by_node_run.get(selected_node_run.id, []),
+            sensitive_access_summary,
         )
         waiting_reason_lookup[run_id] = waiting_lifecycle.waiting_reason
         waiting_lifecycle_lookup[run_id] = waiting_lifecycle
     return waiting_reason_lookup, waiting_lifecycle_lookup
+
+
+def _summarize_sensitive_access_bundles(
+    bundles: list[SensitiveAccessRequestBundle],
+) -> PublishedEndpointInvocationSensitiveAccessSummary | None:
+    if not bundles:
+        return None
+
+    approval_tickets = [
+        bundle.approval_ticket for bundle in bundles if bundle.approval_ticket is not None
+    ]
+    notifications = [
+        notification for bundle in bundles for notification in bundle.notifications
+    ]
+    return PublishedEndpointInvocationSensitiveAccessSummary(
+        request_count=len(bundles),
+        approval_ticket_count=len(approval_tickets),
+        pending_approval_count=sum(1 for ticket in approval_tickets if ticket.status == "pending"),
+        approved_approval_count=sum(
+            1 for ticket in approval_tickets if ticket.status == "approved"
+        ),
+        rejected_approval_count=sum(
+            1 for ticket in approval_tickets if ticket.status == "rejected"
+        ),
+        expired_approval_count=sum(1 for ticket in approval_tickets if ticket.status == "expired"),
+        pending_notification_count=sum(
+            1 for notification in notifications if notification.status == "pending"
+        ),
+        delivered_notification_count=sum(
+            1 for notification in notifications if notification.status == "delivered"
+        ),
+        failed_notification_count=sum(
+            1 for notification in notifications if notification.status == "failed"
+        ),
+    )
 
 
 def serialize_callback_ticket_item(ticket: RunCallbackTicket) -> RunCallbackTicketItem:

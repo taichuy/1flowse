@@ -11,8 +11,8 @@ from app.api.routes.published_endpoint_invocation_support import (
 from app.api.routes.sensitive_access_http import build_sensitive_access_blocking_response
 from app.core.database import get_db
 from app.models.run import NodeRun, Run, RunCallbackTicket
-from app.schemas.run_views import RunCallbackTicketItem
 from app.models.workflow import Workflow, WorkflowPublishedApiKey, WorkflowPublishedEndpoint
+from app.schemas.run_views import RunCallbackTicketItem
 from app.schemas.workflow_publish import (
     PublishedEndpointInvocationApiKeyUsageItem,
     PublishedEndpointInvocationCacheReference,
@@ -133,14 +133,15 @@ def get_published_endpoint_invocation_detail(
             serialize_callback_ticket_item(ticket) for ticket in callback_tickets
         ]
         if run is not None:
+            sensitive_access_timeline = load_sensitive_access_timeline(
+                db,
+                run_id=record.run_id,
+            )
             waiting_reason_lookup, waiting_lifecycle_lookup = build_waiting_lifecycle_lookup(
                 run_lookup,
                 node_runs,
                 callback_tickets,
-            )
-            sensitive_access_timeline = load_sensitive_access_timeline(
-                db,
-                run_id=record.run_id,
+                {record.run_id: sensitive_access_timeline},
             )
             blocking_node_run_id = _resolve_blocking_node_run_id(
                 run_id=record.run_id,

@@ -4,6 +4,14 @@ from app.api.routes.published_endpoint_invocation_support import (
     build_waiting_lifecycle_lookup,
 )
 from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.models.sensitive_access import (
+    ApprovalTicketRecord,
+    NotificationDispatchRecord,
+    SensitiveAccessRequestRecord,
+    SensitiveResourceRecord,
+)
+from app.services.sensitive_access_timeline import SensitiveAccessTimelineSnapshot
+from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
 
 def test_build_waiting_lifecycle_lookup_keeps_terminated_callback_context_without_waiting_reason(
@@ -105,3 +113,133 @@ def test_build_waiting_lifecycle_lookup_keeps_terminated_callback_context_withou
         waiting_lifecycle.callback_waiting_lifecycle.termination_reason
         == "callback_waiting_max_expired_tickets_reached"
     )
+
+
+def test_build_waiting_lifecycle_lookup_includes_blocking_sensitive_access_summary() -> None:
+    now = datetime(2026, 3, 18, 9, 0, tzinfo=UTC)
+    run = Run(
+        id="run-sensitive-summary",
+        workflow_id="wf-sensitive-summary",
+        workflow_version="0.1.0",
+        status="waiting_callback",
+        input_payload={"question": "hello"},
+        checkpoint_payload={"waiting_node_run_id": "node-run-sensitive-summary"},
+        current_node_id="tool_wait",
+        error_message=None,
+        started_at=now,
+        finished_at=None,
+        created_at=now,
+    )
+    node_run = NodeRun(
+        id="node-run-sensitive-summary",
+        run_id=run.id,
+        node_id="tool_wait",
+        node_name="Tool Wait",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        retry_count=0,
+        input_payload={"question": "hello"},
+        output_payload=None,
+        checkpoint_payload={},
+        working_context={},
+        evidence_context=None,
+        artifact_refs=[],
+        error_message=None,
+        waiting_reason="callback pending",
+        started_at=now,
+        phase_started_at=now,
+        finished_at=None,
+        created_at=now,
+    )
+    callback_ticket = RunCallbackTicket(
+        id="ticket-sensitive-summary",
+        run_id=run.id,
+        node_run_id=node_run.id,
+        tool_call_id=None,
+        tool_id="native.search",
+        tool_call_index=0,
+        waiting_status="waiting_callback",
+        status="pending",
+        reason="callback pending",
+        callback_payload=None,
+        created_at=now,
+        expires_at=now,
+    )
+    resource = SensitiveResourceRecord(
+        id="resource-sensitive-summary",
+        label="Search tool",
+        description="Requires approval",
+        sensitivity_level="L3",
+        source="local_capability",
+        metadata_payload={"tool_id": "native.search"},
+        created_at=now,
+        updated_at=now,
+    )
+    access_request = SensitiveAccessRequestRecord(
+        id="access-sensitive-summary",
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_type="workflow",
+        requester_id=node_run.node_id,
+        resource_id=resource.id,
+        action_type="invoke",
+        purpose_text="Invoke search tool",
+        decision="require_approval",
+        reason_code="approval_required_high_sensitive_access",
+        created_at=now,
+        decided_at=None,
+    )
+    approval_ticket = ApprovalTicketRecord(
+        id="approval-sensitive-summary",
+        access_request_id=access_request.id,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        status="pending",
+        waiting_status="waiting",
+        approved_by=None,
+        decided_at=None,
+        expires_at=now,
+        created_at=now,
+    )
+    notification = NotificationDispatchRecord(
+        id="notification-sensitive-summary",
+        approval_ticket_id=approval_ticket.id,
+        channel="in_app",
+        target="sensitive-access-inbox",
+        status="failed",
+        delivered_at=None,
+        error="inbox unavailable",
+        created_at=now,
+    )
+    bundle = SensitiveAccessRequestBundle(
+        resource=resource,
+        access_request=access_request,
+        approval_ticket=approval_ticket,
+        notifications=[notification],
+    )
+    sensitive_access_snapshot = SensitiveAccessTimelineSnapshot(
+        bundles=[bundle],
+        by_node_run={node_run.id: [bundle]},
+        request_count=1,
+        approval_ticket_count=1,
+        notification_count=1,
+        decision_counts={"require_approval": 1},
+        approval_status_counts={"pending": 1},
+        notification_status_counts={"failed": 1},
+    )
+
+    _, waiting_lifecycle_lookup = build_waiting_lifecycle_lookup(
+        {run.id: run},
+        [node_run],
+        [callback_ticket],
+        {run.id: sensitive_access_snapshot},
+    )
+
+    waiting_lifecycle = waiting_lifecycle_lookup[run.id]
+    assert waiting_lifecycle is not None
+    assert waiting_lifecycle.sensitive_access_summary is not None
+    assert waiting_lifecycle.sensitive_access_summary.request_count == 1
+    assert waiting_lifecycle.sensitive_access_summary.approval_ticket_count == 1
+    assert waiting_lifecycle.sensitive_access_summary.pending_approval_count == 1
+    assert waiting_lifecycle.sensitive_access_summary.failed_notification_count == 1
