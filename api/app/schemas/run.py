@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.explanations import SignalFollowUpExplanation
 from app.schemas.operator_follow_up import OperatorRunFollowUpSummary
 
 
@@ -219,6 +220,12 @@ class RunDetail(BaseModel):
     tool_calls: list[ToolCallItem] = Field(default_factory=list)
     ai_calls: list[AICallItem] = Field(default_factory=list)
     events: list[RunEventItem] = Field(default_factory=list)
+
+
+class RunResumeResponse(BaseModel):
+    run: RunDetail
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
 class RunCallbackResponse(BaseModel):

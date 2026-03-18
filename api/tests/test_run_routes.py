@@ -8,6 +8,12 @@ from sqlalchemy.orm import Session
 from app.api.routes import runs as run_routes
 from app.models.run import Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
+from app.schemas.explanations import SignalFollowUpExplanation
+from app.schemas.operator_follow_up import (
+    OperatorRunFollowUpSummary,
+    OperatorRunSnapshot,
+    OperatorRunSnapshotSample,
+)
 from app.services.compiled_blueprints import CompiledBlueprintService
 from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
 from app.services.run_resume_scheduler import RunResumeScheduler
@@ -426,6 +432,85 @@ def test_resume_run_route_forwards_source_and_reason(
         "source": "operator_callback_resume",
         "reason": "operator_manual_resume_attempt",
     }
+    resume_body = resume_response.json()
+    assert resume_body["run"]["id"] == run_id
+    assert resume_body["outcome_explanation"] is not None
+    assert resume_body["run_follow_up"] is not None
+    assert resume_body["run_follow_up"]["affected_run_count"] == 1
+
+
+def test_resume_run_route_returns_operator_follow_up_summary(
+    client: TestClient,
+    sample_workflow: Workflow,
+    monkeypatch,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "resume-summary"}},
+    )
+
+    assert response.status_code == 201
+    run_id = response.json()["id"]
+
+    def fake_resume_run(
+        db,
+        target_run_id: str,
+        *,
+        source: str = "manual",
+        reason: str | None = None,
+    ):
+        return run_routes.runtime_service.load_run(db, target_run_id)
+
+    def fake_build_operator_run_follow_up_summary(db, run_ids):
+        assert run_ids == [run_id]
+        return OperatorRunFollowUpSummary(
+            affected_run_count=1,
+            sampled_run_count=1,
+            waiting_run_count=1,
+            sampled_runs=[
+                OperatorRunSnapshotSample(
+                    run_id=run_id,
+                    snapshot=OperatorRunSnapshot(
+                        workflow_id=sample_workflow.id,
+                        status="waiting",
+                        current_node_id="mock_tool",
+                        waiting_reason="waiting_callback",
+                    ),
+                )
+            ],
+            explanation=SignalFollowUpExplanation(
+                primary_signal="本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+                follow_up="run sample：当前 run 状态：waiting。 当前节点：mock_tool。",
+            ),
+        )
+
+    monkeypatch.setattr(run_routes.runtime_service, "resume_run", fake_resume_run)
+    monkeypatch.setattr(
+        run_routes,
+        "build_operator_run_follow_up_summary",
+        fake_build_operator_run_follow_up_summary,
+    )
+
+    resume_response = client.post(
+        f"/api/runs/{run_id}/resume",
+        json={
+            "source": "operator_callback_resume",
+            "reason": "operator_manual_resume_attempt",
+        },
+    )
+
+    assert resume_response.status_code == 200
+    body = resume_response.json()
+    assert body["run"]["id"] == run_id
+    assert body["outcome_explanation"] == {
+        "primary_signal": "已发起手动恢复，但 run 仍处于 waiting。",
+        "follow_up": (
+            "请继续检查 callback ticket、审批进度或定时恢复是否仍在阻塞。 "
+            "run sample：当前 run 状态：waiting。 当前节点：mock_tool。"
+        ),
+    }
+    assert body["run_follow_up"]["affected_run_count"] == 1
+    assert body["run_follow_up"]["sampled_runs"][0]["snapshot"]["status"] == "waiting"
 
 
 def _parse_trace_datetime(value: str) -> datetime:

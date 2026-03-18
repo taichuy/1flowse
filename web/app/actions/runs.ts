@@ -4,7 +4,10 @@ import {
   fetchCallbackBlockerSnapshot,
   formatCallbackBlockerDeltaSummary
 } from "@/lib/callback-blocker-follow-up";
-import { formatManualResumeResultMessage } from "@/lib/operator-action-result-presenters";
+import {
+  formatManualResumeResultMessage,
+  formatOperatorOutcomeExplanationMessage
+} from "@/lib/operator-action-result-presenters";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import { getSystemOverview } from "@/lib/get-system-overview";
 
@@ -55,7 +58,20 @@ export async function resumeRun(
       cache: "no-store"
     });
 
-    const body = (await response.json().catch(() => null)) as ({ detail?: string } & { status?: string }) | null;
+    const body = (await response.json().catch(() => null)) as
+      | {
+          detail?: string;
+          run?: {
+            workflow_id?: string | null;
+            status?: string | null;
+            current_node_id?: string | null;
+          } | null;
+          outcome_explanation?: {
+            primary_signal?: string | null;
+            follow_up?: string | null;
+          } | null;
+        }
+      | null;
 
     if (!response.ok) {
       return {
@@ -76,21 +92,33 @@ export async function resumeRun(
       nodeRunId: nodeRunId || null,
       callbackWaitingAutomation: afterAutomation
     });
+    const blockerDeltaSummary = formatCallbackBlockerDeltaSummary({
+      before: beforeBlockers,
+      after: afterBlockers
+    });
 
     return {
       status: "success",
-      message: formatManualResumeResultMessage({
-        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
-          before: beforeBlockers,
-          after: afterBlockers
-        }),
+      message: formatOperatorOutcomeExplanationMessage({
+        explanation: body?.outcome_explanation,
+        blockerDeltaSummary,
         runSnapshot:
           runSnapshot ?? {
-            status: body?.status,
-            workflowId: null,
-            currentNodeId: null,
+            status: body?.run?.status,
+            workflowId: body?.run?.workflow_id ?? null,
+            currentNodeId: body?.run?.current_node_id ?? null,
             waitingReason: null
-          }
+          },
+        fallback: formatManualResumeResultMessage({
+          blockerDeltaSummary,
+          runSnapshot:
+            runSnapshot ?? {
+              status: body?.run?.status,
+              workflowId: body?.run?.workflow_id ?? null,
+              currentNodeId: body?.run?.current_node_id ?? null,
+              waitingReason: null
+            }
+        })
       }),
       runId
     };

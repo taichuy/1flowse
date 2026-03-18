@@ -17,8 +17,11 @@ from app.schemas.run import (
     RunDetail,
     RunEventItem,
     RunResumeRequest,
+    RunResumeResponse,
     RunTrace,
 )
+from app.services.operator_run_follow_up import build_operator_run_follow_up_summary
+from app.services.run_action_explanations import build_manual_resume_outcome_explanation
 from app.services.run_trace_export_access import RunTraceExportAccessService
 from app.services.run_trace_views import (
     build_trace_export_filename,
@@ -90,12 +93,12 @@ def get_run(
     return serialize_run_detail(artifacts, include_events=include_events)
 
 
-@router.post("/runs/{run_id}/resume", response_model=RunDetail)
+@router.post("/runs/{run_id}/resume", response_model=RunResumeResponse)
 def resume_run(
     run_id: str,
     payload: RunResumeRequest | None = None,
     db: Session = Depends(get_db),
-) -> RunDetail:
+) -> RunResumeResponse:
     try:
         request = payload or RunResumeRequest()
         artifacts = runtime_service.resume_run(
@@ -110,7 +113,12 @@ def resume_run(
             detail=str(exc),
         ) from exc
 
-    return serialize_run_detail(artifacts)
+    run_follow_up = build_operator_run_follow_up_summary(db, [run_id])
+    return RunResumeResponse(
+        run=serialize_run_detail(artifacts),
+        outcome_explanation=build_manual_resume_outcome_explanation(run_follow_up),
+        run_follow_up=run_follow_up,
+    )
 
 
 @router.post("/runs/callbacks/{ticket}", response_model=RunCallbackResponse)
