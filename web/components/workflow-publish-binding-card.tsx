@@ -3,6 +3,7 @@ import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocke
 import { WorkflowPublishActivityPanel } from "@/components/workflow-publish-activity-panel";
 import { WorkflowPublishApiKeyManager } from "@/components/workflow-publish-api-key-manager";
 import { WorkflowPublishLifecycleForm } from "@/components/workflow-publish-lifecycle-form";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type {
   PublishedEndpointApiKeyItem,
@@ -27,6 +28,7 @@ type WorkflowPublishBindingCardProps = {
   selectedInvocationDetail: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse>;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 };
 
 export function WorkflowPublishBindingCard({
@@ -39,7 +41,8 @@ export function WorkflowPublishBindingCard({
   selectedInvocationId,
   selectedInvocationDetail,
   rateLimitWindowAudit,
-  activeInvocationFilter
+  activeInvocationFilter,
+  callbackWaitingAutomation
 }: WorkflowPublishBindingCardProps) {
   const cacheSummary = binding.cache_inventory;
   const activity = binding.activity;
@@ -148,6 +151,7 @@ export function WorkflowPublishBindingCard({
         selectedInvocationDetailHref={null}
         clearInvocationDetailHref={null}
         rateLimitWindowAudit={rateLimitWindowAudit}
+        callbackWaitingAutomation={callbackWaitingAutomation}
         activeInvocationFilter={activeInvocationFilter}
       />
 

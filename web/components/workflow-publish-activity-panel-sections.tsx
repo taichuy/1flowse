@@ -1,3 +1,4 @@
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
 import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
 import { WorkflowPublishInvocationDetailPanel } from "@/components/workflow-publish-invocation-detail-panel";
@@ -242,6 +243,7 @@ type WorkflowPublishActivityDetailsProps = {
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   selectedInvocationId: string | null;
   selectedInvocationDetail: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse>;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   buildInvocationDetailHref: (invocationId: string) => string;
   clearInvocationDetailHref: string | null;
 };
@@ -251,6 +253,7 @@ export function WorkflowPublishActivityDetails({
   invocationAudit,
   selectedInvocationId,
   selectedInvocationDetail,
+  callbackWaitingAutomation,
   buildInvocationDetailHref,
   clearInvocationDetailHref
 }: WorkflowPublishActivityDetailsProps) {
@@ -316,6 +319,7 @@ export function WorkflowPublishActivityDetails({
                 clearHref={clearInvocationDetailHref}
                 detail={selectedInvocationDetail.data}
                 tools={tools}
+                callbackWaitingAutomation={callbackWaitingAutomation}
               />
             ) : selectedInvocationDetail?.kind === "blocked" ? (
               <SensitiveAccessBlockedCard

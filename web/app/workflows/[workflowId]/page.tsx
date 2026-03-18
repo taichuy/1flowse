@@ -182,6 +182,7 @@ export default async function WorkflowEditorPage({
         invocationDetailsByBinding={invocationDetailsByBinding}
         selectedInvocationId={requestedInvocationId?.trim() ? requestedInvocationId.trim() : null}
         rateLimitWindowAuditsByBinding={rateLimitWindowAuditsByBinding}
+        callbackWaitingAutomation={systemOverview.callback_waiting_automation}
         activeInvocationFilter={{
           bindingId: activeInvocationFilter?.bindingId ?? null,
           status: activeInvocationFilter?.status ?? null,

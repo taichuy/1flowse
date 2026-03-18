@@ -1,12 +1,15 @@
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { RunExecutionView } from "@/lib/get-run-views";
 
 import { RunDiagnosticsExecutionOverviewBlockers } from "@/components/run-diagnostics-execution/execution-overview-blockers";
 import { MetricChipRow, SummaryCard } from "@/components/run-diagnostics-execution/shared";
 
 export function RunDiagnosticsExecutionOverview({
-  executionView
+  executionView,
+  callbackWaitingAutomation
 }: {
   executionView: RunExecutionView | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 }) {
   if (!executionView) {
     return <p className="empty-state">Execution view is unavailable for this run.</p>;
@@ -166,7 +169,10 @@ export function RunDiagnosticsExecutionOverview({
 
       {callbackWaiting.node_count > 0 ? (
         <>
-          <RunDiagnosticsExecutionOverviewBlockers executionView={executionView} />
+      <RunDiagnosticsExecutionOverviewBlockers
+        executionView={executionView}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+      />
 
           <MetricChipRow
             title="Resume sources"

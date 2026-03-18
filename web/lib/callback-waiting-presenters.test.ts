@@ -4,6 +4,7 @@ import type { CallbackWaitingLifecycleSummary } from "./get-run-views";
 import {
   formatScheduledResumeLabel,
   getCallbackWaitingRecommendedAction,
+  listCallbackWaitingBlockerRows,
   listCallbackWaitingChips,
   listCallbackWaitingOperatorStatuses
 } from "./callback-waiting-presenters";
@@ -123,5 +124,65 @@ describe("callback waiting presenters", () => {
       label: "Scheduled resume is overdue",
       ctaLabel: "Try manual resume"
     });
+  });
+
+  it("把 waiting resume monitor 的 scheduler health 接到 blocker rows", () => {
+    const rows = listCallbackWaitingBlockerRows({
+      scheduledResumeDelaySeconds: 5,
+      scheduledResumeScheduledAt: "2026-03-18T10:00:00Z",
+      scheduledResumeDueAt: "2026-03-18T10:05:00Z",
+      callbackWaitingAutomation: {
+        status: "partial",
+        scheduler_required: true,
+        detail: "`WAITING_CALLBACK` 只完成了部分后台补偿配置。",
+        scheduler_health_status: "degraded",
+        scheduler_health_detail: "waiting resume monitor 最近没有成功执行。",
+        steps: [
+          {
+            key: "waiting_resume_monitor",
+            label: "Requeue due waiting callbacks",
+            task: "runtime.monitor_waiting_resumes",
+            source: "scheduler_waiting_resume_monitor",
+            enabled: true,
+            interval_seconds: 30,
+            detail: "周期扫描到期的 waiting callback。",
+            scheduler_health: {
+              health_status: "degraded",
+              detail: "最近执行事实已超过调度窗口。",
+              last_status: "succeeded",
+              last_started_at: null,
+              last_finished_at: "2026-03-18T09:00:00Z",
+              matched_count: 0,
+              affected_count: 0
+            }
+          }
+        ]
+      }
+    });
+
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        label: "Automation",
+        value: expect.stringContaining("Requeue due waiting callbacks: degraded")
+      })
+    );
+  });
+
+  it("在 resume blocker 有 scheduler 问题时补 scheduler chip", () => {
+    expect(
+      listCallbackWaitingChips({
+        lifecycle: createLifecycle(),
+        scheduledResumeDelaySeconds: 5,
+        scheduledResumeDueAt: "2026-03-18T10:05:00Z",
+        callbackWaitingAutomation: {
+          status: "configured",
+          scheduler_required: true,
+          detail: "`WAITING_CALLBACK` 后台补偿链路已完成配置。",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "至少一个步骤缺少最近执行事实。",
+          steps: []
+        }
+      })
+    ).toContain("scheduler degraded");
   });
 });

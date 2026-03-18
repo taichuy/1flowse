@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-publish-invocation-callback-section";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
 import {
@@ -15,6 +16,7 @@ type WorkflowPublishInvocationDetailPanelProps = {
   detail: PublishedEndpointInvocationDetailResponse;
   clearHref: string;
   tools: PluginToolRegistryItem[];
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 };
 
 function formatJsonPreview(value: unknown): string {
@@ -24,7 +26,8 @@ function formatJsonPreview(value: unknown): string {
 export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref,
-  tools
+  tools,
+  callbackWaitingAutomation
 }: WorkflowPublishInvocationDetailPanelProps) {
   const {
     invocation,
@@ -163,6 +166,7 @@ export function WorkflowPublishInvocationDetailPanel({
         invocation={invocation}
         callbackTickets={callbackTickets}
         sensitiveAccessEntries={sensitiveAccessEntries}
+        callbackWaitingAutomation={callbackWaitingAutomation}
       />
 
       {involvedTools.length > 0 || unresolvedToolIds.length > 0 ? (

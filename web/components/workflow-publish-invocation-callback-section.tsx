@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type {
   PublishedEndpointInvocationItem,
   PublishedEndpointInvocationCallbackTicketItem
@@ -20,6 +21,7 @@ type WorkflowPublishInvocationCallbackSectionProps = {
   invocation: PublishedEndpointInvocationItem;
   callbackTickets: PublishedEndpointInvocationCallbackTicketItem[];
   sensitiveAccessEntries: SensitiveAccessTimelineEntry[];
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 };
 
 function formatJsonPreview(value: unknown): string {
@@ -29,7 +31,8 @@ function formatJsonPreview(value: unknown): string {
 export function WorkflowPublishInvocationCallbackSection({
   invocation,
   callbackTickets,
-  sensitiveAccessEntries
+  sensitiveAccessEntries,
+  callbackWaitingAutomation
 }: WorkflowPublishInvocationCallbackSectionProps) {
   const waitingLifecycle = invocation.run_waiting_lifecycle;
   const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
@@ -37,6 +40,7 @@ export function WorkflowPublishInvocationCallbackSection({
     lifecycle: callbackLifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
     scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
     scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
@@ -47,6 +51,7 @@ export function WorkflowPublishInvocationCallbackSection({
     lifecycle: callbackLifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
     scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
   });
@@ -54,6 +59,7 @@ export function WorkflowPublishInvocationCallbackSection({
     lifecycle: callbackLifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
     scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
     scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
@@ -88,6 +94,7 @@ export function WorkflowPublishInvocationCallbackSection({
       ) : null}
       <CallbackWaitingSummaryCard
         callbackTickets={callbackTickets}
+        callbackWaitingAutomation={callbackWaitingAutomation}
         lifecycle={callbackLifecycle}
         sensitiveAccessEntries={sensitiveAccessEntries}
         waitingReason={waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason}

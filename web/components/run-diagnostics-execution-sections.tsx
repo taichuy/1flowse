@@ -1,3 +1,4 @@
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { RunEvidenceView, RunExecutionView } from "@/lib/get-run-views";
 
 import { EvidenceNodeCard } from "@/components/run-diagnostics-execution/evidence-node-card";
@@ -8,11 +9,13 @@ import { RunDiagnosticsExecutionOverview } from "@/components/run-diagnostics-ex
 type RunDiagnosticsExecutionSectionsProps = {
   executionView: RunExecutionView | null;
   evidenceView: RunEvidenceView | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 };
 
 export function RunDiagnosticsExecutionSections({
   executionView,
-  evidenceView
+  evidenceView,
+  callbackWaitingAutomation
 }: RunDiagnosticsExecutionSectionsProps) {
   return (
     <>
@@ -29,7 +32,10 @@ export function RunDiagnosticsExecutionSections({
             </p>
           </div>
 
-          <RunDiagnosticsExecutionOverview executionView={executionView} />
+          <RunDiagnosticsExecutionOverview
+            executionView={executionView}
+            callbackWaitingAutomation={callbackWaitingAutomation}
+          />
         </article>
 
         <article className="diagnostic-panel">
@@ -68,7 +74,12 @@ export function RunDiagnosticsExecutionSections({
           ) : (
             <div className="timeline-list">
               {executionView.nodes.map((node) => (
-                <ExecutionNodeCard key={node.node_run_id} node={node} runId={executionView.run_id} />
+                <ExecutionNodeCard
+                  key={node.node_run_id}
+                  node={node}
+                  runId={executionView.run_id}
+                  callbackWaitingAutomation={callbackWaitingAutomation}
+                />
               ))}
             </div>
           )}

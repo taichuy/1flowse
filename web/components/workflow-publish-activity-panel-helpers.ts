@@ -1,3 +1,4 @@
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type {
   PluginToolRegistryItem,
 } from "@/lib/get-plugin-registry";
@@ -30,6 +31,7 @@ export type WorkflowPublishActivityPanelProps = {
   clearInvocationDetailHref: string | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 };
 
 export const TIME_WINDOW_OPTIONS = [

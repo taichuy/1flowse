@@ -1,3 +1,4 @@
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { RunExecutionNodeItem } from "@/lib/get-run-views";
 import {
   formatDuration,
@@ -30,7 +31,15 @@ function formatExecutionBackendExtensions(
   return JSON.stringify(value);
 }
 
-export function ExecutionNodeCard({ node, runId }: { node: RunExecutionNodeItem; runId: string }) {
+export function ExecutionNodeCard({
+  node,
+  runId,
+  callbackWaitingAutomation
+}: {
+  node: RunExecutionNodeItem;
+  runId: string;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+}) {
   const latestApprovalEntry = node.sensitive_access_entries.find((entry) => entry.approval_ticket);
   const inboxHref =
     node.sensitive_access_entries.length > 0 || node.callback_tickets.length > 0
@@ -146,6 +155,7 @@ export function ExecutionNodeCard({ node, runId }: { node: RunExecutionNodeItem;
       <CallbackWaitingSummaryCard
         lifecycle={node.callback_waiting_lifecycle}
         callbackTickets={node.callback_tickets}
+        callbackWaitingAutomation={callbackWaitingAutomation}
         sensitiveAccessEntries={node.sensitive_access_entries}
         waitingReason={node.waiting_reason}
         inboxHref={inboxHref}

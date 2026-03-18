@@ -1,3 +1,4 @@
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { RunExecutionNodeItem, RunExecutionView } from "@/lib/get-run-views";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
@@ -74,9 +75,11 @@ function pickTopBlockerNodes(executionView: RunExecutionView): RunExecutionNodeI
 }
 
 export function RunDiagnosticsExecutionOverviewBlockers({
-  executionView
+  executionView,
+  callbackWaitingAutomation
 }: {
   executionView: RunExecutionView;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
 }) {
   const blockerNodes = pickTopBlockerNodes(executionView);
 
@@ -120,6 +123,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               ) : null}
               <CallbackWaitingSummaryCard
                 callbackTickets={node.callback_tickets}
+                callbackWaitingAutomation={callbackWaitingAutomation}
                 className="callback-waiting-summary-card"
                 inboxHref={inboxHref}
                 lifecycle={lifecycle}

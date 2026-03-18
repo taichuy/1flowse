@@ -2,6 +2,10 @@ import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem
 } from "@/lib/get-run-views";
+import type {
+  CallbackWaitingAutomationCheck,
+  CallbackWaitingAutomationStepCheck
+} from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
@@ -36,11 +40,27 @@ type CallbackWaitingExplanationInput = {
   lifecycle?: CallbackWaitingLifecycleSummary | null;
   callbackTickets?: RunCallbackTicketItem[];
   sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   scheduledResumeDelaySeconds?: number | null;
   scheduledResumeSource?: string | null;
   scheduledWaitingStatus?: string | null;
   scheduledResumeScheduledAt?: string | null;
   scheduledResumeDueAt?: string | null;
+};
+
+const AUTOMATION_STATUS_LABELS: Record<string, string> = {
+  configured: "configured",
+  partial: "partial",
+  disabled: "disabled",
+  unknown: "unknown"
+};
+
+const SCHEDULER_HEALTH_LABELS: Record<string, string> = {
+  healthy: "healthy",
+  degraded: "degraded",
+  offline: "offline",
+  disabled: "disabled",
+  unknown: "unknown"
 };
 
 function hasScheduledResumeDelay(
@@ -121,6 +141,109 @@ function formatOptionalParts(parts: Array<string | null | undefined>): string | 
     .map((item) => item?.trim())
     .filter((item): item is string => Boolean(item));
   return normalized.length ? normalized.join(" · ") : null;
+}
+
+function formatAutomationStatusLabel(status?: string | null) {
+  const normalized = status?.trim();
+  if (!normalized) {
+    return null;
+  }
+  return AUTOMATION_STATUS_LABELS[normalized] ?? normalized;
+}
+
+function formatSchedulerHealthLabel(status?: string | null) {
+  const normalized = status?.trim();
+  if (!normalized) {
+    return null;
+  }
+  return SCHEDULER_HEALTH_LABELS[normalized] ?? normalized;
+}
+
+function pickRelevantAutomationStep({
+  lifecycle,
+  callbackWaitingAutomation,
+  scheduledResumeDelaySeconds,
+  scheduledResumeDueAt
+}: CallbackWaitingExplanationInput): CallbackWaitingAutomationStepCheck | null {
+  if (!callbackWaitingAutomation?.steps?.length) {
+    return null;
+  }
+
+  if (hasScheduledResumeDelay(scheduledResumeDelaySeconds) || scheduledResumeDueAt) {
+    return (
+      callbackWaitingAutomation.steps.find((step) => step.key === "waiting_resume_monitor") ?? null
+    );
+  }
+
+  if ((lifecycle?.expired_ticket_count ?? 0) > 0) {
+    return (
+      callbackWaitingAutomation.steps.find((step) => step.key === "callback_ticket_cleanup") ?? null
+    );
+  }
+
+  return null;
+}
+
+function formatAutomationStepSummary(step: CallbackWaitingAutomationStepCheck) {
+  const latestActivityAt =
+    step.scheduler_health.last_finished_at ?? step.scheduler_health.last_started_at ?? null;
+  const latestActivityLabel = step.scheduler_health.last_finished_at
+    ? "last finished"
+    : step.scheduler_health.last_started_at
+      ? "last started"
+      : null;
+
+  return formatOptionalParts([
+    `${step.label}: ${formatSchedulerHealthLabel(step.scheduler_health.health_status) ?? step.scheduler_health.health_status}`,
+    step.scheduler_health.detail || step.detail,
+    latestActivityAt && latestActivityLabel
+      ? `${latestActivityLabel} ${formatTimestamp(latestActivityAt)}`
+      : null,
+    step.scheduler_health.last_status ? `latest status ${step.scheduler_health.last_status}` : null,
+    step.scheduler_health.last_status || step.scheduler_health.matched_count > 0 || step.scheduler_health.affected_count > 0
+      ? `matched ${step.scheduler_health.matched_count} · affected ${step.scheduler_health.affected_count}`
+      : null
+  ]);
+}
+
+function formatCallbackWaitingAutomationSummary(
+  input: CallbackWaitingExplanationInput
+): string | null {
+  const automation = input.callbackWaitingAutomation;
+  if (!automation) {
+    return null;
+  }
+
+  const relevantStep = pickRelevantAutomationStep(input);
+  const relevantSummary = relevantStep ? formatAutomationStepSummary(relevantStep) : null;
+  const overallSummary = formatOptionalParts([
+    relevantSummary ? null : `automation ${formatAutomationStatusLabel(automation.status) ?? automation.status}`,
+    relevantSummary ? null : `scheduler ${formatSchedulerHealthLabel(automation.scheduler_health_status) ?? automation.scheduler_health_status}`,
+    !relevantSummary ? automation.scheduler_health_detail || automation.detail : null
+  ]);
+
+  if (!relevantSummary) {
+    return overallSummary;
+  }
+
+  if (automation.status === "configured" && automation.scheduler_health_status === "healthy") {
+    return relevantSummary;
+  }
+
+  return formatOptionalParts([
+    relevantSummary,
+    `overall ${formatAutomationStatusLabel(automation.status) ?? automation.status}`,
+    automation.scheduler_health_detail || automation.detail
+  ]);
+}
+
+function shouldSurfaceAutomationHealth(input: CallbackWaitingExplanationInput) {
+  return Boolean(
+    input.callbackWaitingAutomation &&
+      (hasScheduledResumeDelay(input.scheduledResumeDelaySeconds) ||
+        input.scheduledResumeDueAt ||
+        (input.lifecycle?.expired_ticket_count ?? 0) > 0)
+  );
 }
 
 function buildDetailRows(
@@ -688,6 +811,7 @@ export function listCallbackWaitingBlockerRows(
     lifecycle,
     callbackTickets = [],
     sensitiveAccessEntries = [],
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
     scheduledWaitingStatus,
@@ -708,6 +832,7 @@ export function listCallbackWaitingBlockerRows(
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
     scheduledWaitingStatus,
@@ -718,6 +843,7 @@ export function listCallbackWaitingBlockerRows(
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
     scheduledWaitingStatus,
@@ -763,6 +889,32 @@ export function listCallbackWaitingBlockerRows(
         scheduledResumeScheduledAt,
         scheduledResumeDueAt
       })
+    },
+    {
+      label: "Automation",
+      value: shouldSurfaceAutomationHealth({
+        lifecycle,
+        callbackTickets,
+        sensitiveAccessEntries,
+        callbackWaitingAutomation,
+        scheduledResumeDelaySeconds,
+        scheduledResumeSource,
+        scheduledWaitingStatus,
+        scheduledResumeScheduledAt,
+        scheduledResumeDueAt
+      })
+        ? formatCallbackWaitingAutomationSummary({
+            lifecycle,
+            callbackTickets,
+            sensitiveAccessEntries,
+            callbackWaitingAutomation,
+            scheduledResumeDelaySeconds,
+            scheduledResumeSource,
+            scheduledWaitingStatus,
+            scheduledResumeScheduledAt,
+            scheduledResumeDueAt
+          })
+        : null
     },
     {
       label: "Lifecycle",
@@ -815,6 +967,7 @@ export function listCallbackWaitingChips({
   lifecycle,
   callbackTickets = [],
   sensitiveAccessEntries = [],
+  callbackWaitingAutomation,
   scheduledResumeDelaySeconds,
   scheduledResumeDueAt
 }: CallbackWaitingExplanationInput): string[] {
@@ -865,6 +1018,23 @@ export function listCallbackWaitingChips({
     chips.push(`scheduled ${scheduledResumeDelaySeconds}s`);
   }
 
+  if (
+    shouldSurfaceAutomationHealth({
+      lifecycle,
+      callbackTickets,
+      sensitiveAccessEntries,
+      callbackWaitingAutomation,
+      scheduledResumeDelaySeconds,
+      scheduledResumeDueAt
+    }) &&
+    callbackWaitingAutomation &&
+    callbackWaitingAutomation.scheduler_health_status !== "healthy"
+  ) {
+    chips.push(
+      `scheduler ${formatSchedulerHealthLabel(callbackWaitingAutomation.scheduler_health_status) ?? callbackWaitingAutomation.scheduler_health_status}`
+    );
+  }
+
   return chips;
 }
 
@@ -872,6 +1042,7 @@ export function getCallbackWaitingRecommendedAction({
   lifecycle,
   callbackTickets = [],
   sensitiveAccessEntries = [],
+  callbackWaitingAutomation,
   scheduledResumeDelaySeconds,
   scheduledResumeScheduledAt,
   scheduledResumeDueAt
@@ -938,6 +1109,16 @@ export function getCallbackWaitingRecommendedAction({
   }
 
   if (scheduledResumeTiming?.isOverdue) {
+    const automationSummary = formatCallbackWaitingAutomationSummary({
+      lifecycle,
+      callbackTickets,
+      sensitiveAccessEntries,
+      callbackWaitingAutomation,
+      scheduledResumeDelaySeconds,
+      scheduledResumeScheduledAt,
+      scheduledResumeDueAt
+    });
+
     return {
       kind: "manual_resume",
       label: "Scheduled resume is overdue",
@@ -945,6 +1126,7 @@ export function getCallbackWaitingRecommendedAction({
         formatOptionalParts([
           "The runtime already missed the scheduled resume window",
           scheduledResumeTiming.dueAtLabel ? `due ${scheduledResumeTiming.dueAtLabel}` : null,
+          automationSummary ? `automation ${automationSummary}` : null,
           "inspect the scheduler or worker and use manual resume if the run should already have progressed"
         ]) ?? "The runtime already missed the scheduled resume window.",
       ctaLabel: "Try manual resume"

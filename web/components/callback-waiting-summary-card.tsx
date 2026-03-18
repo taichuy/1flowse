@@ -6,6 +6,7 @@ import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem
 } from "@/lib/get-run-views";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
@@ -23,6 +24,7 @@ type CallbackWaitingSummaryCardProps = {
   lifecycle?: CallbackWaitingLifecycleSummary | null;
   callbackTickets?: RunCallbackTicketItem[];
   sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   waitingReason?: string | null;
   scheduledResumeDelaySeconds?: number | null;
   scheduledResumeSource?: string | null;
@@ -39,6 +41,7 @@ export function CallbackWaitingSummaryCard({
   lifecycle,
   callbackTickets = [],
   sensitiveAccessEntries = [],
+  callbackWaitingAutomation,
   waitingReason,
   scheduledResumeDelaySeconds,
   scheduledResumeSource,
@@ -54,6 +57,7 @@ export function CallbackWaitingSummaryCard({
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
     scheduledWaitingStatus,
@@ -75,6 +79,7 @@ export function CallbackWaitingSummaryCard({
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
     scheduledWaitingStatus,
@@ -85,6 +90,7 @@ export function CallbackWaitingSummaryCard({
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeDueAt
   });
@@ -92,6 +98,7 @@ export function CallbackWaitingSummaryCard({
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
     scheduledWaitingStatus,
@@ -103,6 +110,7 @@ export function CallbackWaitingSummaryCard({
       lifecycle,
       callbackTickets,
       sensitiveAccessEntries,
+      callbackWaitingAutomation,
       scheduledResumeDelaySeconds,
       scheduledResumeSource,
       scheduledWaitingStatus,
