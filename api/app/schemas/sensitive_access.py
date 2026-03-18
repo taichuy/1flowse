@@ -188,7 +188,8 @@ class SensitiveAccessTimelineEntryItem(BaseModel):
 
 
 class SensitiveAccessRequestResponse(SensitiveAccessTimelineEntryItem):
-    pass
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
 class ApprovalTicketDecisionRequest(BaseModel):

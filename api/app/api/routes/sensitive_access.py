@@ -88,13 +88,23 @@ def _resolve_single_run_follow_up(
 
 def _serialize_access_bundle(
     bundle: SensitiveAccessRequestBundle,
+    *,
+    db: Session,
 ) -> SensitiveAccessRequestResponse:
     timeline_entry = serialize_sensitive_access_timeline_entry(bundle)
+    run_follow_up = None
+    run_snapshot = None
+    run_id = bundle.access_request.run_id
+    if run_id:
+        run_follow_up, run_snapshot = _resolve_single_run_follow_up(db, run_id=run_id)
     return SensitiveAccessRequestResponse(
         request=timeline_entry.request,
         resource=timeline_entry.resource,
         approval_ticket=timeline_entry.approval_ticket,
         notifications=timeline_entry.notifications,
+        outcome_explanation=timeline_entry.outcome_explanation,
+        run_snapshot=run_snapshot,
+        run_follow_up=run_follow_up,
     )
 
 
@@ -263,7 +273,7 @@ def create_sensitive_access_request(
     except SensitiveAccessControlError as exc:
         _raise_sensitive_access_error(exc)
     db.commit()
-    return _serialize_access_bundle(bundle)
+    return _serialize_access_bundle(bundle, db=db)
 
 
 @router.get("/requests", response_model=list[SensitiveAccessRequestItem])

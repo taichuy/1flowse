@@ -94,6 +94,12 @@ def test_request_low_sensitivity_access_allows_without_ticket(
     )
     assert body["approval_ticket"] is None
     assert body["notifications"] == []
+    assert body["outcome_explanation"] == {
+        "primary_signal": "本次敏感访问已按策略放行，当前不需要额外审批。",
+        "follow_up": "Default policy allows low-sensitivity resources without extra review.",
+    }
+    assert body["run_snapshot"] is None
+    assert body["run_follow_up"] is None
 
     stored_requests = sqlite_session.query(SensitiveAccessRequestRecord).all()
     assert len(stored_requests) == 1
@@ -198,6 +204,53 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
             "created_at": request_body["notifications"][0]["created_at"],
         }
     ]
+    assert request_body["outcome_explanation"] == {
+        "primary_signal": "敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。",
+        "follow_up": (
+            "High-sensitivity access must be reviewed by an operator before "
+            "the workflow can resume. "
+            "已有 1 条通知送达审批人，可直接在 inbox 里处理。 "
+            "审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。"
+        ),
+    }
+    assert request_body["run_snapshot"] == {
+        "workflow_id": sample_workflow.id,
+        "status": "waiting",
+        "current_node_id": "mock_tool",
+        "waiting_reason": "waiting approval",
+        "execution_focus_reason": "blocking_node_run",
+        "execution_focus_node_id": "mock_tool",
+        "execution_focus_node_run_id": node_run.id,
+        "execution_focus_explanation": {
+            "primary_signal": "等待原因：waiting approval",
+            "follow_up": (
+                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+            ),
+        },
+    }
+    assert request_body["run_follow_up"] == {
+        "affected_run_count": 1,
+        "sampled_run_count": 1,
+        "waiting_run_count": 1,
+        "running_run_count": 0,
+        "succeeded_run_count": 0,
+        "failed_run_count": 0,
+        "unknown_run_count": 0,
+        "explanation": {
+            "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+            "follow_up": (
+                f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+                "重点信号：等待原因：waiting approval 后续动作："
+                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+            ),
+        },
+        "sampled_runs": [
+            {
+                "run_id": run.id,
+                "snapshot": request_body["run_snapshot"],
+            }
+        ],
+    }
 
     decision_response = client.post(
         f"/api/sensitive-access/approval-tickets/{approval_ticket['id']}/decision",
