@@ -39,7 +39,7 @@
 
 - `loop` 节点尚未在 MVP 执行器中开放执行。
 - 独立的 `SandboxBackendRegistration / SandboxExecution` 协议尚未完全成型；当前 `sandbox_code` 已进入持久化与 runtime 主链，并在保存时按 sandbox readiness fail-closed，但 editor palette 仍默认隐藏，host-subprocess 只算 MVP 参考执行路径，不应误写成正式沙箱产品能力。
-- `WAITING_CALLBACK` 已具备 callback ticket cleanup + waiting resume monitor 的后台补偿链路，并且首页会显示当前自动恢复配置；但完整 scheduler / callback bus、跨入口 blocker explanation 与更强的 operator 闭环仍需继续补齐。
+- `WAITING_CALLBACK` 已具备 callback ticket cleanup + waiting resume monitor 的后台补偿链路；首页不仅会显示当前自动恢复配置，也会显示这些 scheduler 任务最近是否真的跑过。但完整 scheduler / callback bus、跨入口 blocker explanation 与更强的 operator 闭环仍需继续补齐。
 - 发布网关虽然已拆出多个子模块，但主网关和发布治理仍在持续治理中。
 - 节点配置、工作流编辑器和发布治理前端仍处于“可继续扩展”的阶段，不应假装成品已齐全。
 - OpenClaw-first 的对外切口已经明确，但仓库当前仍未提供“开箱即用的一键 OpenClaw 会话接管 / demo 套件”；相关接入路径和传播素材仍需继续补齐。
@@ -164,6 +164,7 @@ docker compose up -d --build
 
 - API 当前已提供 health、workflows、workflow publish、published gateway、runs、run views、system overview、plugins、credentials、workspace starters 等主干路由。
 - Web 首页当前更偏“工作台 / 诊断入口”，会展示服务健康、adapter、tools、workflow、credentials、recent runs、敏感访问审批摘要与 run events 聚合摘要。
+- `system overview` 里的 callback waiting automation 现已同时暴露“是否配置”与“最近一次 scheduler 执行事实”，可直接区分“beat 已配置”还是“beat 真跑过”。
 - `web/app/sensitive-access/page.tsx` 已提供最小审批 / 通知收件箱入口，可查看 `ApprovalTicket / NotificationDispatch`、直接做批准 / 拒绝决策，并对最新失败通知执行手动重试；页面现在也会展示 notification channel health 与 target 规则，帮助 operator 提前判断哪些渠道当前 ready、哪些 target 形式才会进入真实 worker 主链。
 - 最小 workflow editor 已经可以编辑并保存工作流定义。结构化表单目前已覆盖 `runtimePolicy.execution / retry / join`、节点 `input/output schema` 与 workflow `publish` draft 配置，但正式的 publish governance、approval timeline 与 notification delivery 仍在持续补齐。
 

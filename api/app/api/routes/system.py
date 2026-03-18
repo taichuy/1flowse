@@ -1,6 +1,7 @@
 import json
 from collections import Counter
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 import boto3
 import redis
@@ -14,6 +15,7 @@ from app.models.run import Run, RunEvent
 from app.schemas.system import (
     CallbackWaitingAutomationCheck,
     CallbackWaitingAutomationStepCheck,
+    CallbackWaitingAutomationStepSchedulerHealthCheck,
     CompatibilityAdapterCheck,
     PluginToolCheck,
     RecentRunCheck,
@@ -34,6 +36,7 @@ from app.services.sandbox_backends import (
     get_sandbox_backend_health_checker,
     get_sandbox_backend_registry,
 )
+from app.services.scheduled_task_activity import ScheduledTaskActivityService
 
 router = APIRouter(tags=["system"])
 
@@ -42,6 +45,115 @@ _RECENT_EVENT_LIMIT = 8
 _PAYLOAD_PREVIEW_LIMIT = 180
 _SANDBOX_EXECUTION_CLASSES = ("sandbox", "microvm")
 _OPERABLE_SANDBOX_STATUSES = {"healthy", "degraded"}
+_SCHEDULED_TASK_ACTIVITY = ScheduledTaskActivityService()
+
+
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
+
+
+def _build_callback_step_scheduler_health(
+    *,
+    step: CallbackWaitingAutomationStepCheck,
+    latest_run,
+    now: datetime,
+) -> CallbackWaitingAutomationStepSchedulerHealthCheck:
+    if not step.enabled:
+        return CallbackWaitingAutomationStepSchedulerHealthCheck(
+            health_status="disabled",
+            detail="当前未启用该周期任务，无需检查 scheduler 最近执行事实。",
+        )
+
+    if latest_run is None:
+        return CallbackWaitingAutomationStepSchedulerHealthCheck(
+            health_status="stale",
+            detail=(
+                "调度已配置，但还没有记录到最近执行事实；"
+                "无法确认 scheduler / worker 是否真的跑过。"
+            ),
+        )
+
+    last_started_at = _normalize_datetime(latest_run.started_at)
+    last_finished_at = _normalize_datetime(latest_run.finished_at)
+    last_seen_at = last_finished_at or last_started_at
+    interval_seconds = max(int(step.interval_seconds or 0), 0)
+    stale_after = timedelta(seconds=max(interval_seconds * 2, 60))
+
+    base = CallbackWaitingAutomationStepSchedulerHealthCheck(
+        last_status=latest_run.status,
+        last_started_at=last_started_at,
+        last_finished_at=last_finished_at,
+        matched_count=max(int(latest_run.matched_count or 0), 0),
+        affected_count=max(int(latest_run.affected_count or 0), 0),
+    )
+
+    if latest_run.status == "failed":
+        base.health_status = "failed"
+        base.detail = (
+            latest_run.detail
+            or "最近一次 scheduler 执行失败；需要检查 beat / worker 日志和任务异常。"
+        )
+        return base
+
+    if latest_run.status == "running":
+        if last_started_at is not None and now - last_started_at <= stale_after:
+            base.health_status = "running"
+            base.detail = "最近一次 scheduler 执行仍在进行中，暂未超出调度窗口。"
+        else:
+            base.health_status = "stale"
+            base.detail = (
+                "最近一次 scheduler 执行长时间停留在 running，"
+                "可能存在 worker 卡住或结果未回写。"
+            )
+        return base
+
+    if last_seen_at is None:
+        base.health_status = "stale"
+        base.detail = "已记录任务实例，但缺少 started/finished 时间，无法确认 scheduler 新鲜度。"
+        return base
+
+    if now - last_seen_at > stale_after:
+        base.health_status = "stale"
+        base.detail = (
+            "最近一次 scheduler 执行已超过两个调度周期；"
+            "可能存在 beat 未运行、worker 漏跑或任务未继续入队。"
+        )
+        return base
+
+    base.health_status = "healthy"
+    base.detail = "最近一次 scheduler 执行事实仍在调度窗口内。"
+    return base
+
+
+def _summarize_callback_waiting_scheduler_health(
+    steps: list[CallbackWaitingAutomationStepCheck],
+) -> tuple[str, str]:
+    enabled_steps = [step for step in steps if step.enabled]
+    if not enabled_steps:
+        return (
+            "disabled",
+            "当前没有启用的 callback waiting 后台调度步骤，因此不存在 scheduler 新鲜度可检查项。",
+        )
+
+    health_statuses = {step.scheduler_health.health_status for step in enabled_steps}
+    if "failed" in health_statuses:
+        return (
+            "failed",
+            "至少一个已启用的 callback waiting 后台任务最近执行失败；当前补偿链路不可信。",
+        )
+    if health_statuses.issubset({"healthy", "running"}):
+        return (
+            "healthy",
+            "所有已启用的 callback waiting 后台任务都记录到了最近执行事实。",
+        )
+    return (
+        "degraded",
+        "callback waiting 后台任务虽然已配置，但至少一个步骤缺少最近执行事实或已超过调度窗口。",
+    )
 
 
 def _serialize_sandbox_backend(backend) -> SandboxBackendCheck:
@@ -220,7 +332,16 @@ def _build_sandbox_execution_class_reason(
 
 def _build_callback_waiting_automation(
     settings,
+    db: Session,
 ) -> CallbackWaitingAutomationCheck:
+    latest_task_runs = _SCHEDULED_TASK_ACTIVITY.latest_runs_by_task(
+        db,
+        task_names=(
+            "runtime.cleanup_callback_tickets",
+            "runtime.monitor_waiting_resumes",
+        ),
+    )
+    now = datetime.now(UTC)
     cleanup_enabled = (
         settings.callback_ticket_cleanup_schedule_enabled
         and settings.callback_ticket_cleanup_interval_seconds > 0
@@ -247,6 +368,7 @@ def _build_callback_waiting_automation(
                 if cleanup_enabled
                 else "当前未配置周期清理；过期 callback ticket 需要依赖手动治理入口。"
             ),
+            scheduler_health=CallbackWaitingAutomationStepSchedulerHealthCheck(),
         ),
         CallbackWaitingAutomationStepCheck(
             key="waiting_resume_monitor",
@@ -262,10 +384,21 @@ def _build_callback_waiting_automation(
             detail=(
                 "周期扫描到期的 `WAITING_CALLBACK` node，并补发后台 requeue / resume。"
                 if monitor_enabled
-                else "当前未配置周期 waiting resume monitor；到期 waiting callback 仍需要依赖 callback 投递或手动恢复。"
+                else (
+                    "当前未配置周期 waiting resume monitor；"
+                    "到期 waiting callback 仍需要依赖 callback 投递或手动恢复。"
+                )
             ),
+            scheduler_health=CallbackWaitingAutomationStepSchedulerHealthCheck(),
         ),
     ]
+
+    for step in steps:
+        step.scheduler_health = _build_callback_step_scheduler_health(
+            step=step,
+            latest_run=latest_task_runs.get(step.task),
+            now=now,
+        )
 
     if cleanup_enabled and monitor_enabled:
         status = "configured"
@@ -280,13 +413,20 @@ def _build_callback_waiting_automation(
     else:
         status = "disabled"
         detail = (
-            "`WAITING_CALLBACK` 未启用后台补偿调度；当前仍依赖直接 callback、手动 cleanup 或手动 resume。"
+            "`WAITING_CALLBACK` 未启用后台补偿调度；"
+            "当前仍依赖直接 callback、手动 cleanup 或手动 resume。"
         )
+
+    scheduler_health_status, scheduler_health_detail = (
+        _summarize_callback_waiting_scheduler_health(steps)
+    )
 
     return CallbackWaitingAutomationCheck(
         status=status,
         scheduler_required=True,
         detail=detail,
+        scheduler_health_status=scheduler_health_status,
+        scheduler_health_detail=scheduler_health_detail,
         steps=steps,
     )
 
@@ -434,6 +574,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
             "runtime-worker-skeleton",
             "runtime-run-tracking",
             "callback-waiting-automation-summary",
+            "callback-waiting-automation-health",
             "sandbox-ready",
             "sandbox-backend-registry",
             "sandbox-readiness-summary",
@@ -466,7 +607,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
             for tool in registry.list_tools()
         ],
         runtime_activity=_build_runtime_activity(db),
-        callback_waiting_automation=_build_callback_waiting_automation(settings),
+        callback_waiting_automation=_build_callback_waiting_automation(settings, db),
     )
 
 

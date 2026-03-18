@@ -2,6 +2,7 @@ from app.core.database import Base
 from app.models.credential import Credential
 from app.models.plugin import PluginAdapterRecord, PluginToolRecord
 from app.models.run import AICallRecord, NodeRun, Run, RunArtifact, RunEvent, ToolCallRecord
+from app.models.scheduler import ScheduledTaskRunRecord
 from app.models.skill import SkillRecord, SkillReferenceRecord
 from app.models.sensitive_access import (
     ApprovalTicketRecord,
@@ -32,6 +33,7 @@ __all__ = [
     "RunArtifact",
     "ToolCallRecord",
     "AICallRecord",
+    "ScheduledTaskRunRecord",
     "SkillRecord",
     "SkillReferenceRecord",
     "SensitiveResourceRecord",

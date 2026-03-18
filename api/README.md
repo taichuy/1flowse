@@ -26,7 +26,7 @@ uv run celery -A app.core.celery_app.celery_app beat --loglevel INFO
 - `SEVENFLOWS_CALLBACK_TICKET_CLEANUP_INTERVAL_SECONDS` -> `runtime.cleanup_callback_tickets`
 - `SEVENFLOWS_WAITING_RESUME_MONITOR_INTERVAL_SECONDS` -> `runtime.monitor_waiting_resumes`
 
-两者都依赖单独启动的 scheduler 进程；如果 beat 未运行，API / worker 本身不会自动代替这些周期治理动作。
+两者都依赖单独启动的 scheduler 进程；如果 beat 未运行，API / worker 本身不会自动代替这些周期治理动作。`/api/system/overview` 现已额外暴露这两类任务最近一次执行事实，便于区分“配置已打开”和“scheduler 最近真的跑过”。
 
 ## 迁移
 

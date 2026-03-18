@@ -115,12 +115,25 @@ export type CallbackWaitingAutomationStepCheck = {
   enabled: boolean;
   interval_seconds?: number | null;
   detail: string;
+  scheduler_health: CallbackWaitingAutomationStepSchedulerHealthCheck;
+};
+
+export type CallbackWaitingAutomationStepSchedulerHealthCheck = {
+  health_status: string;
+  detail: string;
+  last_status?: string | null;
+  last_started_at?: string | null;
+  last_finished_at?: string | null;
+  matched_count: number;
+  affected_count: number;
 };
 
 export type CallbackWaitingAutomationCheck = {
   status: string;
   scheduler_required: boolean;
   detail: string;
+  scheduler_health_status: string;
+  scheduler_health_detail: string;
   steps: CallbackWaitingAutomationStepCheck[];
 };
 
@@ -179,6 +192,8 @@ const fallback: SystemOverview = {
     status: "disabled",
     scheduler_required: true,
     detail: "`WAITING_CALLBACK` 后台补偿状态当前不可见，请先启动 api 服务。",
+    scheduler_health_status: "unknown",
+    scheduler_health_detail: "当前还拿不到 scheduler 最近执行事实。",
     steps: []
   }
 };

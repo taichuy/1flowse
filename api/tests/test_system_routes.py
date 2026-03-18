@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from app.api.routes import system as system_routes
 from app.models.run import Run, RunEvent
+from app.models.scheduler import ScheduledTaskRunRecord
 from app.services.plugin_runtime import (
     CompatibilityAdapterHealth,
     PluginRegistry,
@@ -59,7 +60,11 @@ def _build_settings(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**values)
 
 
-def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> None:
+def test_system_overview_includes_plugin_adapter_health(
+    client,
+    sqlite_session,
+    monkeypatch,
+) -> None:
     registry = PluginRegistry()
     sandbox_registry = SandboxBackendRegistry()
     registry.register_tool(
@@ -114,6 +119,38 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
             ]
         ),
     )
+    timestamp = datetime.now(UTC)
+    sqlite_session.add_all(
+        [
+            ScheduledTaskRunRecord(
+                id="task-run-cleanup",
+                task_name="runtime.cleanup_callback_tickets",
+                source="scheduler_cleanup",
+                status="succeeded",
+                matched_count=1,
+                affected_count=1,
+                detail="cleanup ok",
+                summary_payload={},
+                started_at=timestamp,
+                finished_at=timestamp,
+            ),
+            ScheduledTaskRunRecord(
+                id="task-run-monitor",
+                task_name="runtime.monitor_waiting_resumes",
+                source="scheduler_waiting_resume_monitor",
+                status="succeeded",
+                matched_count=2,
+                affected_count=1,
+                detail="monitor ok",
+                summary_payload={},
+                started_at=timestamp,
+                finished_at=timestamp,
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    timestamp_value = timestamp.isoformat().replace("+00:00", "Z")
 
     response = client.get("/api/system/overview")
 
@@ -125,6 +162,7 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
     assert "sandbox-backend-registry" in body["capabilities"]
     assert "sandbox-readiness-summary" in body["capabilities"]
     assert "callback-waiting-automation-summary" in body["capabilities"]
+    assert "callback-waiting-automation-health" in body["capabilities"]
     assert "plugin-tool-catalog-visible" in body["capabilities"]
     assert "runtime-events-visible" in body["capabilities"]
     assert body["plugin_adapters"] == [
@@ -223,7 +261,12 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
     assert body["callback_waiting_automation"] == {
         "status": "configured",
         "scheduler_required": True,
-        "detail": "`WAITING_CALLBACK` 后台补偿链路已完成配置，但仍依赖独立 scheduler 进程实际运行。",
+        "detail": (
+            "`WAITING_CALLBACK` 后台补偿链路已完成配置，"
+            "但仍依赖独立 scheduler 进程实际运行。"
+        ),
+        "scheduler_health_status": "healthy",
+        "scheduler_health_detail": "所有已启用的 callback waiting 后台任务都记录到了最近执行事实。",
         "steps": [
             {
                 "key": "callback_ticket_cleanup",
@@ -232,7 +275,19 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
                 "source": "scheduler_cleanup",
                 "enabled": True,
                 "interval_seconds": 300,
-                "detail": "周期清理 stale callback ticket，并在条件满足时沿同一事实链补发即时 resume。",
+                "detail": (
+                    "周期清理 stale callback ticket，"
+                    "并在条件满足时沿同一事实链补发即时 resume。"
+                ),
+                "scheduler_health": {
+                    "health_status": "healthy",
+                    "detail": "最近一次 scheduler 执行事实仍在调度窗口内。",
+                    "last_status": "succeeded",
+                    "last_started_at": timestamp_value,
+                    "last_finished_at": timestamp_value,
+                    "matched_count": 1,
+                    "affected_count": 1,
+                },
             },
             {
                 "key": "waiting_resume_monitor",
@@ -242,6 +297,15 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
                 "enabled": True,
                 "interval_seconds": 300,
                 "detail": "周期扫描到期的 `WAITING_CALLBACK` node，并补发后台 requeue / resume。",
+                "scheduler_health": {
+                    "health_status": "healthy",
+                    "detail": "最近一次 scheduler 执行事实仍在调度窗口内。",
+                    "last_status": "succeeded",
+                    "last_started_at": timestamp_value,
+                    "last_finished_at": timestamp_value,
+                    "matched_count": 2,
+                    "affected_count": 1,
+                },
             },
         ],
     }
@@ -346,7 +410,15 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
     assert body["callback_waiting_automation"] == {
         "status": "disabled",
         "scheduler_required": True,
-        "detail": "`WAITING_CALLBACK` 未启用后台补偿调度；当前仍依赖直接 callback、手动 cleanup 或手动 resume。",
+        "detail": (
+            "`WAITING_CALLBACK` 未启用后台补偿调度；"
+            "当前仍依赖直接 callback、手动 cleanup 或手动 resume。"
+        ),
+        "scheduler_health_status": "disabled",
+        "scheduler_health_detail": (
+            "当前没有启用的 callback waiting 后台调度步骤，"
+            "因此不存在 scheduler 新鲜度可检查项。"
+        ),
         "steps": [
             {
                 "key": "callback_ticket_cleanup",
@@ -356,6 +428,15 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
                 "enabled": False,
                 "interval_seconds": None,
                 "detail": "当前未配置周期清理；过期 callback ticket 需要依赖手动治理入口。",
+                "scheduler_health": {
+                    "health_status": "disabled",
+                    "detail": "当前未启用该周期任务，无需检查 scheduler 最近执行事实。",
+                    "last_status": None,
+                    "last_started_at": None,
+                    "last_finished_at": None,
+                    "matched_count": 0,
+                    "affected_count": 0,
+                },
             },
             {
                 "key": "waiting_resume_monitor",
@@ -364,7 +445,19 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
                 "source": "scheduler_waiting_resume_monitor",
                 "enabled": False,
                 "interval_seconds": None,
-                "detail": "当前未配置周期 waiting resume monitor；到期 waiting callback 仍需要依赖 callback 投递或手动恢复。",
+                "detail": (
+                    "当前未配置周期 waiting resume monitor；"
+                    "到期 waiting callback 仍需要依赖 callback 投递或手动恢复。"
+                ),
+                "scheduler_health": {
+                    "health_status": "disabled",
+                    "detail": "当前未启用该周期任务，无需检查 scheduler 最近执行事实。",
+                    "last_status": None,
+                    "last_started_at": None,
+                    "last_finished_at": None,
+                    "matched_count": 0,
+                    "affected_count": 0,
+                },
             },
         ],
     }

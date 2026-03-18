@@ -1,4 +1,5 @@
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import { formatTimestamp } from "@/lib/runtime-presenters";
 
 type CallbackWaitingAutomationPanelProps = {
   automation: CallbackWaitingAutomationCheck;
@@ -14,6 +15,23 @@ const statusClassMap: Record<string, string> = {
   configured: "healthy",
   partial: "degraded",
   disabled: "failed"
+};
+
+const schedulerHealthLabelMap: Record<string, string> = {
+  healthy: "healthy",
+  degraded: "degraded",
+  failed: "failed",
+  disabled: "disabled",
+  unknown: "unknown"
+};
+
+const stepHealthClassMap: Record<string, string> = {
+  healthy: "healthy",
+  running: "degraded",
+  stale: "degraded",
+  failed: "failed",
+  disabled: "muted",
+  unknown: "muted"
 };
 
 export function CallbackWaitingAutomationPanel({
@@ -44,6 +62,13 @@ export function CallbackWaitingAutomationPanel({
           <strong>{enabledSteps.length} / {automation.steps.length}</strong>
         </article>
         <article className="summary-card">
+          <span>Scheduler health</span>
+          <strong>
+            {schedulerHealthLabelMap[automation.scheduler_health_status] ??
+              automation.scheduler_health_status}
+          </strong>
+        </article>
+        <article className="summary-card">
           <span>Scheduler required</span>
           <strong>{automation.scheduler_required ? "yes" : "no"}</strong>
         </article>
@@ -63,12 +88,27 @@ export function CallbackWaitingAutomationPanel({
                 </p>
               </div>
               <span
-                className={`health-pill ${step.enabled ? "healthy" : "failed"}`}
+                className={`health-pill ${stepHealthClassMap[step.scheduler_health.health_status] ?? (step.enabled ? "healthy" : "failed")}`}
               >
-                {step.enabled ? "enabled" : "disabled"}
+                {step.enabled
+                  ? step.scheduler_health.health_status
+                  : "disabled"}
               </span>
             </div>
             <p className="activity-copy">{step.detail}</p>
+            <p className="activity-copy">
+              {step.scheduler_health.detail}
+              {step.scheduler_health.last_finished_at
+                ? ` 最近完成于 ${formatTimestamp(step.scheduler_health.last_finished_at)}。`
+                : step.scheduler_health.last_started_at
+                  ? ` 最近启动于 ${formatTimestamp(step.scheduler_health.last_started_at)}。`
+                  : ""}
+            </p>
+            {step.enabled ? (
+              <p className="activity-copy">
+                latest status {step.scheduler_health.last_status ?? "N/A"} · matched {step.scheduler_health.matched_count} · affected {step.scheduler_health.affected_count}
+              </p>
+            ) : null}
           </article>
         ))}
       </div>
@@ -77,12 +117,18 @@ export function CallbackWaitingAutomationPanel({
         <span className={`event-chip ${statusClassMap[automation.status] ?? ""}`}>
           {statusLabelMap[automation.status] ?? automation.status}
         </span>
+        <span
+          className={`event-chip ${stepHealthClassMap[automation.scheduler_health_status] ?? ""}`}
+        >
+          scheduler {schedulerHealthLabelMap[automation.scheduler_health_status] ?? automation.scheduler_health_status}
+        </span>
         {automation.scheduler_required ? (
           <span className="event-chip">needs separate scheduler</span>
         ) : null}
       </div>
 
       <p className="section-copy compact">{automation.detail}</p>
+      <p className="section-copy compact">{automation.scheduler_health_detail}</p>
     </article>
   );
 }

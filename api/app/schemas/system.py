@@ -118,12 +118,27 @@ class CallbackWaitingAutomationStepCheck(BaseModel):
     enabled: bool
     interval_seconds: int | None = None
     detail: str = ""
+    scheduler_health: "CallbackWaitingAutomationStepSchedulerHealthCheck" = Field(
+        default_factory=lambda: CallbackWaitingAutomationStepSchedulerHealthCheck()
+    )
+
+
+class CallbackWaitingAutomationStepSchedulerHealthCheck(BaseModel):
+    health_status: str = "unknown"
+    detail: str = ""
+    last_status: str | None = None
+    last_started_at: datetime | None = None
+    last_finished_at: datetime | None = None
+    matched_count: int = 0
+    affected_count: int = 0
 
 
 class CallbackWaitingAutomationCheck(BaseModel):
     status: str = "disabled"
     scheduler_required: bool = True
     detail: str = ""
+    scheduler_health_status: str = "unknown"
+    scheduler_health_detail: str = ""
     steps: list[CallbackWaitingAutomationStepCheck] = Field(default_factory=list)
 
 
