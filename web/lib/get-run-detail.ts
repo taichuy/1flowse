@@ -37,6 +37,20 @@ export type RunDetail = {
   event_type_counts: Record<string, number>;
   first_event_at?: string | null;
   last_event_at?: string | null;
+  blocking_node_run_id?: string | null;
+  execution_focus_reason?: string | null;
+  execution_focus_node?: {
+    node_run_id: string;
+    node_id: string;
+    node_name: string;
+    node_type: string;
+    status: string;
+    phase?: string | null;
+  } | null;
+  execution_focus_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
   node_runs: NodeRunItem[];
   events: RunEventItem[];
 };

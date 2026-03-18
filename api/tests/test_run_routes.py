@@ -214,6 +214,26 @@ def test_get_run_execution_view_summarizes_execution_fallback_signals(
     assert node["execution_unavailable_count"] == 0
     assert node["execution_fallback_reason"] == "execution_class_not_implemented_for_node_type"
 
+    run_detail_response = client.get(
+        f"/api/runs/{run_id}", params={"include_events": "false"}
+    )
+
+    assert run_detail_response.status_code == 200
+    run_detail_body = run_detail_response.json()
+    assert run_detail_body["blocking_node_run_id"] is None
+    assert run_detail_body["execution_focus_reason"] == "fallback_node"
+    assert run_detail_body["execution_focus_node"]["node_id"] == "tool"
+    assert run_detail_body["execution_focus_node"]["node_type"] == "tool"
+    assert run_detail_body["execution_focus_explanation"] == {
+        "primary_signal": (
+            "执行降级：当前节点尚未实现请求的 execution class，已临时回退到 inline。"
+        ),
+        "follow_up": (
+            "下一步：如果这条节点需要受控执行或强隔离，应补齐对应 execution adapter；"
+            "不要把当前 fallback 当成长期默认。"
+        ),
+    }
+
 
 def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_nodes(
     client: TestClient,

@@ -32,7 +32,11 @@ from app.services.run_trace_views import (
     load_run_trace,
     serialize_trace_export_jsonl,
 )
-from app.services.run_views import serialize_run_detail, serialize_run_event
+from app.services.run_views import (
+    build_run_execution_view_for_artifacts,
+    serialize_run_detail,
+    serialize_run_event,
+)
 from app.services.runtime import RuntimeService, WorkflowExecutionError
 
 router = APIRouter(tags=["runs"])
@@ -82,7 +86,8 @@ def execute_workflow(
             detail=str(exc),
         ) from exc
 
-    return serialize_run_detail(artifacts)
+    execution_view = build_run_execution_view_for_artifacts(db, artifacts)
+    return serialize_run_detail(artifacts, execution_view=execution_view)
 
 
 @router.get("/runs/{run_id}", response_model=RunDetail)
@@ -94,7 +99,12 @@ def get_run(
     artifacts = runtime_service.load_run(db, run_id)
     if artifacts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
-    return serialize_run_detail(artifacts, include_events=include_events)
+    execution_view = build_run_execution_view_for_artifacts(db, artifacts)
+    return serialize_run_detail(
+        artifacts,
+        include_events=include_events,
+        execution_view=execution_view,
+    )
 
 
 @router.post("/runs/{run_id}/resume", response_model=RunResumeResponse)
@@ -120,8 +130,9 @@ def resume_run(
 
     after_blocker = capture_callback_blocker_snapshot(db, run_id=artifacts.run.id)
     run_follow_up = build_operator_run_follow_up_summary(db, [run_id])
+    execution_view = build_run_execution_view_for_artifacts(db, artifacts)
     return RunResumeResponse(
-        run=serialize_run_detail(artifacts),
+        run=serialize_run_detail(artifacts, execution_view=execution_view),
         outcome_explanation=build_manual_resume_outcome_explanation(run_follow_up),
         callback_blocker_delta=build_callback_blocker_delta_summary(
             before=before_blocker,
@@ -155,12 +166,13 @@ def receive_run_callback(
             detail=str(exc),
         ) from exc
 
+    execution_view = build_run_execution_view_for_artifacts(db, callback.artifacts)
     return RunCallbackResponse(
         callback_status=callback.callback_status,
         ticket=callback.ticket,
         run_id=callback.run_id,
         node_run_id=callback.node_run_id,
-        run=serialize_run_detail(callback.artifacts),
+        run=serialize_run_detail(callback.artifacts, execution_view=execution_view),
     )
 
 

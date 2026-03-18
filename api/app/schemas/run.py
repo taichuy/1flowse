@@ -198,6 +198,23 @@ class AICallItem(BaseModel):
     finished_at: datetime | None = None
 
 
+RunDetailExecutionFocusReason = Literal[
+    "blocking_node_run",
+    "blocked_execution",
+    "current_node",
+    "fallback_node",
+]
+
+
+class RunDetailExecutionFocusNode(BaseModel):
+    node_run_id: str
+    node_id: str
+    node_name: str
+    node_type: str
+    status: str
+    phase: str | None = None
+
+
 class RunDetail(BaseModel):
     id: str
     workflow_id: str
@@ -216,6 +233,10 @@ class RunDetail(BaseModel):
     event_type_counts: dict[str, int] = Field(default_factory=dict)
     first_event_at: datetime | None = None
     last_event_at: datetime | None = None
+    blocking_node_run_id: str | None = None
+    execution_focus_reason: RunDetailExecutionFocusReason | None = None
+    execution_focus_node: RunDetailExecutionFocusNode | None = None
+    execution_focus_explanation: SignalFollowUpExplanation | None = None
     node_runs: list[NodeRunItem]
     artifacts: list[RunArtifactItem] = Field(default_factory=list)
     tool_calls: list[ToolCallItem] = Field(default_factory=list)

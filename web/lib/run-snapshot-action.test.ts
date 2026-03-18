@@ -19,10 +19,57 @@ describe("fetchRunSnapshot", () => {
     vi.unstubAllGlobals();
   });
 
-  it("合并 run detail 与 execution view，优先返回 backend execution focus", async () => {
+  it("run detail 已带 execution focus 时不再额外请求 execution view", async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.endsWith("/api/runs/run-123")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-1",
+          current_node_id: "tool-a",
+          execution_focus_reason: "blocked_execution",
+          execution_focus_node: {
+            node_id: "tool-a",
+            node_run_id: "node-run-1"
+          },
+          execution_focus_explanation: {
+            primary_signal: "执行阻断：当前节点仍在等待审批。",
+            follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
+          },
+          node_runs: [
+            {
+              node_id: "tool-a",
+              waiting_reason: "waiting approval"
+            }
+          ]
+        });
+      }
+
+      throw new Error(`unexpected fetch url: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchRunSnapshot("run-123")).resolves.toEqual({
+      status: "waiting",
+      workflowId: "workflow-1",
+      currentNodeId: "tool-a",
+      waitingReason: "waiting approval",
+      executionFocusReason: "blocked_execution",
+      executionFocusNodeId: "tool-a",
+      executionFocusNodeRunId: "node-run-1",
+      executionFocusExplanation: {
+        primary_signal: "执行阻断：当前节点仍在等待审批。",
+        follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
+      }
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("run detail 尚未带 execution focus 时回退读取 execution view", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/runs/run-234")) {
         return createJsonResponse({
           status: "waiting",
           workflow_id: "workflow-1",
@@ -36,7 +83,7 @@ describe("fetchRunSnapshot", () => {
         });
       }
 
-      if (url.endsWith("/api/runs/run-123/execution-view")) {
+      if (url.endsWith("/api/runs/run-234/execution-view")) {
         return createJsonResponse({
           status: "waiting",
           workflow_id: "workflow-1",
@@ -57,7 +104,7 @@ describe("fetchRunSnapshot", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchRunSnapshot("run-123")).resolves.toEqual({
+    await expect(fetchRunSnapshot("run-234")).resolves.toEqual({
       status: "waiting",
       workflowId: "workflow-1",
       currentNodeId: "tool-a",
@@ -109,6 +156,7 @@ describe("fetchRunSnapshot", () => {
       executionFocusNodeRunId: null,
       executionFocusExplanation: null
     });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("run detail 不可用时返回 null", async () => {

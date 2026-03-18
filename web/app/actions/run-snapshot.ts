@@ -23,6 +23,15 @@ type RunDetailResponseBody = {
   status?: string;
   workflow_id?: string | null;
   current_node_id?: string | null;
+  execution_focus_reason?: string | null;
+  execution_focus_node?: {
+    node_id?: string | null;
+    node_run_id?: string | null;
+  } | null;
+  execution_focus_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
   node_runs?: Array<{
     node_id?: string | null;
     status?: string | null;
@@ -52,6 +61,18 @@ function readCurrentWaitingReason(body: RunDetailResponseBody | null) {
 
   const currentNodeRun = body.node_runs.find((item) => item.node_id === currentNodeId);
   return currentNodeRun?.waiting_reason ?? null;
+}
+
+function hasRunDetailExecutionFocus(body: RunDetailResponseBody | null) {
+  if (!body || typeof body !== "object") {
+    return false;
+  }
+
+  return (
+    Object.prototype.hasOwnProperty.call(body, "execution_focus_reason") ||
+    Object.prototype.hasOwnProperty.call(body, "execution_focus_node") ||
+    Object.prototype.hasOwnProperty.call(body, "execution_focus_explanation")
+  );
 }
 
 async function fetchRunExecutionView(
@@ -88,20 +109,30 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
       return null;
     }
 
-    const [body, executionView] = await Promise.all([
-      response.json().catch(() => null) as Promise<RunDetailResponseBody | null>,
-      fetchRunExecutionView(normalizedRunId)
-    ]);
+    const body = (await response.json().catch(() => null)) as RunDetailResponseBody | null;
+    const executionView = hasRunDetailExecutionFocus(body)
+      ? null
+      : await fetchRunExecutionView(normalizedRunId);
 
     return {
       status: body?.status ?? executionView?.status ?? null,
       workflowId: body?.workflow_id ?? executionView?.workflow_id ?? null,
       currentNodeId: body?.current_node_id,
       waitingReason: readCurrentWaitingReason(body),
-      executionFocusReason: executionView?.execution_focus_reason ?? null,
-      executionFocusNodeId: executionView?.execution_focus_node?.node_id ?? null,
-      executionFocusNodeRunId: executionView?.execution_focus_node?.node_run_id ?? null,
-      executionFocusExplanation: executionView?.execution_focus_explanation
+      executionFocusReason:
+        body?.execution_focus_reason ?? executionView?.execution_focus_reason ?? null,
+      executionFocusNodeId:
+        body?.execution_focus_node?.node_id ?? executionView?.execution_focus_node?.node_id ?? null,
+      executionFocusNodeRunId:
+        body?.execution_focus_node?.node_run_id ??
+        executionView?.execution_focus_node?.node_run_id ??
+        null,
+      executionFocusExplanation: body?.execution_focus_explanation
+        ? {
+            primary_signal: body.execution_focus_explanation.primary_signal ?? null,
+            follow_up: body.execution_focus_explanation.follow_up ?? null
+          }
+        : executionView?.execution_focus_explanation
         ? {
             primary_signal:
               executionView.execution_focus_explanation.primary_signal ?? null,
