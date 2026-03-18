@@ -112,6 +112,10 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
             },
         )
     )
+    run = sqlite_session.get(Run, run_id)
+    assert run is not None
+    run.current_node_id = "mock_tool"
+    run.status = "running"
     sqlite_session.commit()
 
     execution_view_response = client.get(f"/api/runs/{run_id}/execution-view")
@@ -121,6 +125,12 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
     assert body["summary"]["execution_sandbox_backend_counts"] == {"sandbox-default": 1}
 
     node = next(item for item in body["nodes"] if item["node_id"] == "mock_tool")
+    assert node["requested_execution_class"] == "microvm"
+    assert node["requested_execution_source"] == "runtime_policy"
+    assert node["requested_execution_profile"] == "strict"
+    assert node["requested_execution_timeout_ms"] == 5000
+    assert node["requested_execution_network_policy"] == "isolated"
+    assert node["requested_execution_filesystem_policy"] == "ephemeral"
     assert node["effective_execution_class"] == "microvm"
     assert node["execution_executor_ref"] == "tool:compat-adapter:dify-default"
     assert node["execution_sandbox_backend_id"] == "sandbox-default"
@@ -128,6 +138,37 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
         node["execution_sandbox_backend_executor_ref"]
         == "sandbox-backend:sandbox-default"
     )
+
+    run_detail_response = client.get(
+        f"/api/runs/{run_id}", params={"include_events": "false"}
+    )
+
+    assert run_detail_response.status_code == 200
+    run_detail_body = run_detail_response.json()
+    assert run_detail_body["execution_focus_reason"] == "current_node"
+    focus_node = run_detail_body["execution_focus_node"]
+    assert focus_node["node_run_id"] == tool_node_run["id"]
+    assert focus_node["node_id"] == "mock_tool"
+    assert focus_node["node_name"] == "Mock Tool"
+    assert focus_node["node_type"] == "tool"
+    assert focus_node["status"] == "succeeded"
+    assert focus_node["execution_class"] == "inline"
+    assert focus_node["execution_source"] == "default"
+    assert focus_node["requested_execution_class"] == "microvm"
+    assert focus_node["requested_execution_source"] == "runtime_policy"
+    assert focus_node["requested_execution_profile"] == "strict"
+    assert focus_node["requested_execution_timeout_ms"] == 5000
+    assert focus_node["requested_execution_network_policy"] == "isolated"
+    assert focus_node["requested_execution_filesystem_policy"] == "ephemeral"
+    assert focus_node["effective_execution_class"] == "microvm"
+    assert focus_node["execution_executor_ref"] == "tool:compat-adapter:dify-default"
+    assert focus_node["execution_sandbox_backend_id"] == "sandbox-default"
+    assert (
+        focus_node["execution_sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default"
+    )
+    assert focus_node["execution_blocking_reason"] is None
+    assert focus_node["execution_fallback_reason"] is None
 
 
 def test_get_run_execution_view_summarizes_execution_fallback_signals(

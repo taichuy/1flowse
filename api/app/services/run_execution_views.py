@@ -60,6 +60,15 @@ class NodeExecutionSignalSnapshot:
     blocked_count: int = 0
     unavailable_count: int = 0
     requested_execution_class: str | None = None
+    requested_execution_source: str | None = None
+    requested_execution_profile: str | None = None
+    requested_execution_timeout_ms: int | None = None
+    requested_network_policy: str | None = None
+    requested_filesystem_policy: str | None = None
+    requested_dependency_mode: str | None = None
+    requested_builtin_package_set: str | None = None
+    requested_dependency_ref: str | None = None
+    requested_backend_extensions: dict[str, object] | None = None
     effective_execution_class: str | None = None
     executor_ref: str | None = None
     sandbox_backend_id: str | None = None
@@ -260,6 +269,36 @@ def _build_execution_node_item(
         execution_fallback_count=(execution_signal.fallback_count if execution_signal else 0),
         execution_blocked_count=(execution_signal.blocked_count if execution_signal else 0),
         execution_unavailable_count=(execution_signal.unavailable_count if execution_signal else 0),
+        requested_execution_class=(
+            execution_signal.requested_execution_class if execution_signal else None
+        ),
+        requested_execution_source=(
+            execution_signal.requested_execution_source if execution_signal else None
+        ),
+        requested_execution_profile=(
+            execution_signal.requested_execution_profile if execution_signal else None
+        ),
+        requested_execution_timeout_ms=(
+            execution_signal.requested_execution_timeout_ms if execution_signal else None
+        ),
+        requested_execution_network_policy=(
+            execution_signal.requested_network_policy if execution_signal else None
+        ),
+        requested_execution_filesystem_policy=(
+            execution_signal.requested_filesystem_policy if execution_signal else None
+        ),
+        requested_execution_dependency_mode=(
+            execution_signal.requested_dependency_mode if execution_signal else None
+        ),
+        requested_execution_builtin_package_set=(
+            execution_signal.requested_builtin_package_set if execution_signal else None
+        ),
+        requested_execution_dependency_ref=(
+            execution_signal.requested_dependency_ref if execution_signal else None
+        ),
+        requested_execution_backend_extensions=(
+            execution_signal.requested_backend_extensions if execution_signal else None
+        ),
         effective_execution_class=(
             execution_signal.effective_execution_class if execution_signal else None
         ),
@@ -531,6 +570,33 @@ def summarize_execution_signals(artifacts: ExecutionArtifacts) -> RunExecutionSi
         requested_execution_class = payload.get("requested_execution_class")
         if isinstance(requested_execution_class, str) and requested_execution_class.strip():
             snapshot.requested_execution_class = requested_execution_class
+        requested_execution_source = payload.get("execution_source")
+        if isinstance(requested_execution_source, str) and requested_execution_source.strip():
+            snapshot.requested_execution_source = requested_execution_source
+        requested_execution_profile = payload.get("requested_execution_profile")
+        if isinstance(requested_execution_profile, str) and requested_execution_profile.strip():
+            snapshot.requested_execution_profile = requested_execution_profile
+        requested_execution_timeout_ms = payload.get("requested_execution_timeout_ms")
+        if isinstance(requested_execution_timeout_ms, int):
+            snapshot.requested_execution_timeout_ms = requested_execution_timeout_ms
+        requested_network_policy = payload.get("requested_network_policy")
+        if isinstance(requested_network_policy, str) and requested_network_policy.strip():
+            snapshot.requested_network_policy = requested_network_policy
+        requested_filesystem_policy = payload.get("requested_filesystem_policy")
+        if isinstance(requested_filesystem_policy, str) and requested_filesystem_policy.strip():
+            snapshot.requested_filesystem_policy = requested_filesystem_policy
+        requested_dependency_mode = payload.get("requested_dependency_mode")
+        if isinstance(requested_dependency_mode, str) and requested_dependency_mode.strip():
+            snapshot.requested_dependency_mode = requested_dependency_mode
+        requested_builtin_package_set = payload.get("requested_builtin_package_set")
+        if isinstance(requested_builtin_package_set, str) and requested_builtin_package_set.strip():
+            snapshot.requested_builtin_package_set = requested_builtin_package_set
+        requested_dependency_ref = payload.get("requested_dependency_ref")
+        if isinstance(requested_dependency_ref, str) and requested_dependency_ref.strip():
+            snapshot.requested_dependency_ref = requested_dependency_ref
+        requested_backend_extensions = payload.get("requested_backend_extensions")
+        if isinstance(requested_backend_extensions, dict):
+            snapshot.requested_backend_extensions = requested_backend_extensions
         effective_execution_class = payload.get("effective_execution_class")
         if isinstance(effective_execution_class, str) and effective_execution_class.strip():
             snapshot.effective_execution_class = effective_execution_class

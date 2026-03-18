@@ -35,6 +35,54 @@ function formatExecutionBackendExtensions(
   return JSON.stringify(value);
 }
 
+function formatRequestedExecutionSummary(node: RunExecutionNodeItem): string | null {
+  if (!node.requested_execution_class) {
+    return null;
+  }
+
+  const segments = [
+    `class ${node.requested_execution_class}`,
+    node.requested_execution_source ? `source ${node.requested_execution_source}` : null,
+    node.requested_execution_profile ? `profile ${node.requested_execution_profile}` : null,
+    typeof node.requested_execution_timeout_ms === "number"
+      ? `timeout ${formatDurationMs(node.requested_execution_timeout_ms)}`
+      : null,
+    node.requested_execution_network_policy
+      ? `network ${node.requested_execution_network_policy}`
+      : null,
+    node.requested_execution_filesystem_policy
+      ? `fs ${node.requested_execution_filesystem_policy}`
+      : null,
+    node.requested_execution_dependency_mode
+      ? `deps ${node.requested_execution_dependency_mode}`
+      : null,
+    node.requested_execution_builtin_package_set
+      ? `builtin ${node.requested_execution_builtin_package_set}`
+      : null,
+    node.requested_execution_dependency_ref
+      ? `dep ref ${node.requested_execution_dependency_ref}`
+      : null
+  ].filter((segment): segment is string => Boolean(segment));
+
+  return segments.length > 0 ? segments.join(" · ") : null;
+}
+
+function shouldShowRequestedExecution(node: RunExecutionNodeItem): boolean {
+  return Boolean(
+    node.requested_execution_class &&
+      (node.requested_execution_class !== node.execution_class ||
+        node.requested_execution_source !== node.execution_source ||
+        node.requested_execution_profile ||
+        typeof node.requested_execution_timeout_ms === "number" ||
+        node.requested_execution_network_policy ||
+        node.requested_execution_filesystem_policy ||
+        node.requested_execution_dependency_mode ||
+        node.requested_execution_builtin_package_set ||
+        node.requested_execution_dependency_ref ||
+        node.requested_execution_backend_extensions)
+  );
+}
+
 export function ExecutionNodeCard({
   node,
   runId,
@@ -59,6 +107,11 @@ export function ExecutionNodeCard({
   const backendExtensionsPreview = formatExecutionBackendExtensions(
     node.execution_backend_extensions
   );
+  const requestedBackendExtensionsPreview = formatExecutionBackendExtensions(
+    node.requested_execution_backend_extensions
+  );
+  const requestedExecutionSummary = formatRequestedExecutionSummary(node);
+  const showRequestedExecution = shouldShowRequestedExecution(node);
   const executionPrimarySignal = formatExecutionFocusPrimarySignal(node);
   const executionFollowUp = formatExecutionFocusFollowUp(node);
   const rawBlockingCopy = node.execution_blocking_reason
@@ -130,6 +183,16 @@ export function ExecutionNodeCard({
 
       {backendExtensionsPreview ? (
         <p className="activity-copy">Backend extensions {backendExtensionsPreview}</p>
+      ) : null}
+
+      {showRequestedExecution && requestedExecutionSummary ? (
+        <p className="activity-copy">Dispatch request {requestedExecutionSummary}</p>
+      ) : null}
+
+      {showRequestedExecution && requestedBackendExtensionsPreview ? (
+        <p className="activity-copy">
+          Dispatch backend extensions {requestedBackendExtensionsPreview}
+        </p>
       ) : null}
 
       <div className="event-type-strip">

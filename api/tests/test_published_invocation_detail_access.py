@@ -558,6 +558,11 @@ def test_get_published_invocation_detail_surfaces_execution_fallback_explanation
             payload={
                 "node_id": node_run.node_id,
                 "requested_execution_class": "microvm",
+                "execution_source": "runtime_policy",
+                "requested_execution_profile": "strict",
+                "requested_execution_timeout_ms": 5000,
+                "requested_network_policy": "isolated",
+                "requested_filesystem_policy": "ephemeral",
                 "effective_execution_class": "inline",
                 "executor_ref": "runtime:inline-fallback:microvm",
                 "reason": "execution_class_not_implemented_for_node_type",
@@ -577,6 +582,18 @@ def test_get_published_invocation_detail_surfaces_execution_fallback_explanation
     assert detail_body["execution_focus_reason"] == "fallback_node"
     assert detail_body["execution_focus_node"]["node_run_id"] == node_run.id
     assert detail_body["execution_focus_node"]["execution_class"] == "inline"
+    assert detail_body["execution_focus_node"]["requested_execution_class"] == "microvm"
+    assert detail_body["execution_focus_node"]["requested_execution_source"] == "runtime_policy"
+    assert detail_body["execution_focus_node"]["requested_execution_profile"] == "strict"
+    assert detail_body["execution_focus_node"]["requested_execution_timeout_ms"] == 5000
+    assert (
+        detail_body["execution_focus_node"]["requested_execution_network_policy"]
+        == "isolated"
+    )
+    assert (
+        detail_body["execution_focus_node"]["requested_execution_filesystem_policy"]
+        == "ephemeral"
+    )
     assert detail_body["execution_focus_node"]["effective_execution_class"] == "inline"
     assert (
         detail_body["execution_focus_node"]["execution_fallback_reason"]

@@ -39,6 +39,24 @@ def _serialize_run_detail_execution_focus_node(
         node_type=focus_node.node_type,
         status=focus_node.status,
         phase=focus_node.phase,
+        execution_class=focus_node.execution_class,
+        execution_source=focus_node.execution_source,
+        requested_execution_class=focus_node.requested_execution_class,
+        requested_execution_source=focus_node.requested_execution_source,
+        requested_execution_profile=focus_node.requested_execution_profile,
+        requested_execution_timeout_ms=focus_node.requested_execution_timeout_ms,
+        requested_execution_network_policy=focus_node.requested_execution_network_policy,
+        requested_execution_filesystem_policy=(
+            focus_node.requested_execution_filesystem_policy
+        ),
+        effective_execution_class=focus_node.effective_execution_class,
+        execution_executor_ref=focus_node.execution_executor_ref,
+        execution_sandbox_backend_id=focus_node.execution_sandbox_backend_id,
+        execution_sandbox_backend_executor_ref=(
+            focus_node.execution_sandbox_backend_executor_ref
+        ),
+        execution_blocking_reason=focus_node.execution_blocking_reason,
+        execution_fallback_reason=focus_node.execution_fallback_reason,
     )
 
 

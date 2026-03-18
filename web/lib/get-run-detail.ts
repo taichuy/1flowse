@@ -46,6 +46,20 @@ export type RunDetail = {
     node_type: string;
     status: string;
     phase?: string | null;
+    execution_class?: string | null;
+    execution_source?: string | null;
+    requested_execution_class?: string | null;
+    requested_execution_source?: string | null;
+    requested_execution_profile?: string | null;
+    requested_execution_timeout_ms?: number | null;
+    requested_execution_network_policy?: string | null;
+    requested_execution_filesystem_policy?: string | null;
+    effective_execution_class?: string | null;
+    execution_executor_ref?: string | null;
+    execution_sandbox_backend_id?: string | null;
+    execution_sandbox_backend_executor_ref?: string | null;
+    execution_blocking_reason?: string | null;
+    execution_fallback_reason?: string | null;
   } | null;
   execution_focus_explanation?: {
     primary_signal?: string | null;
