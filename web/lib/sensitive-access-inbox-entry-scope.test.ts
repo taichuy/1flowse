@@ -103,6 +103,7 @@ describe("resolveSensitiveAccessInboxEntryScope", () => {
         runId: "run-focus",
         focusReason: "blocked_execution",
         focusMatchesEntry: false,
+        skillTrace: null,
         entryNode: {
           node_run_id: "node-entry",
           node_id: "node-entry",

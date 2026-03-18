@@ -22,9 +22,13 @@ import {
   pickRetriableNotification
 } from "@/components/sensitive-access-inbox-panel-helpers";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
-import { formatExecutionFocusReasonLabel } from "@/lib/run-execution-focus-presenters";
+import {
+  formatExecutionFocusReasonLabel,
+  formatMetricSummary
+} from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { resolveSensitiveAccessInboxEntryScope } from "@/lib/sensitive-access-inbox-entry-scope";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
@@ -287,8 +291,49 @@ export function SensitiveAccessInboxEntryCard({
               <Link className="event-chip inbox-filter-link" href={focusInboxHref}>
                 slice to focus node
               </Link>
-            ) : null}
+              ) : null}
           </div>
+          {executionContext.skillTrace ? (
+            <div className="event-list">
+              <div className="entry-card compact-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">Focused skill trace</span>
+                  <span className="event-chip">
+                    refs {executionContext.skillTrace.reference_count}
+                  </span>
+                </div>
+                <p className="section-copy entry-copy">
+                  {executionContext.skillTrace.scope === "execution_focus_node"
+                    ? "当前 operator inbox 已直接消费 execution focus 节点的 skill trace，无需再跳回 run detail 才能看见 agent 实际加载的参考资料。"
+                    : "当前 focus 节点没有独立 skill trace，因此这里回退展示整个 run 的 skill 注入摘要。"}
+                </p>
+                <div className="tool-badge-row">
+                  {formatMetricSummary(executionContext.skillTrace.phase_counts) ? (
+                    <span className="event-chip">
+                      phases {formatMetricSummary(executionContext.skillTrace.phase_counts)}
+                    </span>
+                  ) : null}
+                  {formatMetricSummary(executionContext.skillTrace.source_counts) ? (
+                    <span className="event-chip">
+                      sources {formatMetricSummary(executionContext.skillTrace.source_counts)}
+                    </span>
+                  ) : null}
+                </div>
+                {executionContext.skillTrace.nodes.map((node) => (
+                  <div key={node.node_run_id}>
+                    <p className="section-copy entry-copy">
+                      {node.node_name ?? node.node_id ?? node.node_run_id} · node run {node.node_run_id}
+                    </p>
+                    <SkillReferenceLoadList
+                      skillReferenceLoads={node.loads}
+                      title="Injected references"
+                      description="当前 operator 入口、run detail 和 publish detail 现在围绕同一份 skill trace 事实解释 agent 注入来源。"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RunExecutionView } from "@/lib/get-run-views";
+import type { RunExecutionSkillTrace, RunExecutionView } from "@/lib/get-run-views";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 
 import { buildSensitiveAccessInboxEntryExecutionContext } from "./sensitive-access-inbox-execution-context";
@@ -194,6 +194,59 @@ function createExecutionView(
   };
 }
 
+function createSkillTrace(
+  overrides: Partial<RunExecutionSkillTrace> = {}
+): RunExecutionSkillTrace {
+  return {
+    scope: "execution_focus_node",
+    reference_count: 2,
+    phase_counts: { planning: 2 },
+    source_counts: { explicit_request: 2 },
+    nodes: [
+      {
+        node_run_id: "node-run-1",
+        node_id: "tool_wait",
+        node_name: "Tool Wait",
+        reference_count: 2,
+        loads: [
+          {
+            phase: "planning",
+            references: [
+              {
+                skill_id: "skill.search",
+                skill_name: "Search",
+                reference_id: "ref-1",
+                reference_name: "Search policy",
+                load_source: "explicit_request",
+                fetch_reason: "tool requested search guidance",
+                fetch_request_index: 1,
+                fetch_request_total: 1,
+                retrieval_http_path: "/skills/search/references/ref-1",
+                retrieval_mcp_method: null,
+                retrieval_mcp_params: {}
+              },
+              {
+                skill_id: "skill.search",
+                skill_name: "Search",
+                reference_id: "ref-2",
+                reference_name: "Safety boundary",
+                load_source: "explicit_request",
+                fetch_reason: null,
+                fetch_request_index: 1,
+                fetch_request_total: 1,
+                retrieval_http_path: "/skills/search/references/ref-2",
+                retrieval_mcp_method: null,
+                retrieval_mcp_params: {}
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    ...overrides
+  };
+}
+
 describe("sensitive access inbox execution context", () => {
   it("为 inbox 条目复用后端选出的 execution focus 节点", () => {
     const context = buildSensitiveAccessInboxEntryExecutionContext(
@@ -246,5 +299,46 @@ describe("sensitive access inbox execution context", () => {
     expect(context?.entryNode?.node_run_id).toBe("node-run-1");
     expect(context?.focusNode.node_run_id).toBe("node-run-2");
     expect(context?.focusNode.execution_blocking_reason).toContain("sandbox backend unavailable");
+  });
+
+  it("把 run execution view 已有的 skill trace 一起带到 inbox execution context", () => {
+    const context = buildSensitiveAccessInboxEntryExecutionContext(
+      createInboxEntry(),
+      createExecutionView({
+        skill_trace: createSkillTrace()
+      })
+    );
+
+    expect(context).not.toBeNull();
+    expect(context?.skillTrace?.scope).toBe("execution_focus_node");
+    expect(context?.skillTrace?.reference_count).toBe(2);
+    expect(context?.skillTrace?.nodes[0]?.node_run_id).toBe("node-run-1");
+  });
+
+  it("在 focus 节点缺少独立 trace 时保留 run 级 skill 摘要", () => {
+    const context = buildSensitiveAccessInboxEntryExecutionContext(
+      createInboxEntry(),
+      createExecutionView({
+        skill_trace: createSkillTrace({
+          scope: "run",
+          reference_count: 3,
+          source_counts: { phase_binding: 3 },
+          nodes: [
+            {
+              node_run_id: "node-run-2",
+              node_id: "agent-plan",
+              node_name: "Agent Plan",
+              reference_count: 3,
+              loads: []
+            }
+          ]
+        })
+      })
+    );
+
+    expect(context).not.toBeNull();
+    expect(context?.skillTrace?.scope).toBe("run");
+    expect(context?.skillTrace?.source_counts).toEqual({ phase_binding: 3 });
+    expect(context?.skillTrace?.nodes[0]?.node_run_id).toBe("node-run-2");
   });
 });

@@ -1,6 +1,7 @@
 import type {
   RunExecutionFocusReason,
   RunExecutionNodeItem,
+  RunExecutionSkillTrace,
   RunExecutionView
 } from "@/lib/get-run-views";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
@@ -11,6 +12,7 @@ export type SensitiveAccessInboxExecutionContext = {
   focusNode: RunExecutionNodeItem;
   focusReason?: RunExecutionFocusReason | null;
   focusMatchesEntry: boolean;
+  skillTrace: RunExecutionSkillTrace | null;
 };
 
 function trimOrNull(value?: string | null) {
@@ -46,7 +48,7 @@ export function buildSensitiveAccessInboxEntryExecutionContext(
   entry: SensitiveAccessInboxEntry,
   executionView?: Pick<
     RunExecutionView,
-    "run_id" | "nodes" | "execution_focus_reason" | "execution_focus_node"
+    "run_id" | "nodes" | "execution_focus_reason" | "execution_focus_node" | "skill_trace"
   > | null
 ): SensitiveAccessInboxExecutionContext | null {
   const runId =
@@ -64,6 +66,7 @@ export function buildSensitiveAccessInboxEntryExecutionContext(
     entryNode,
     focusNode,
     focusReason: executionView?.execution_focus_reason ?? null,
-    focusMatchesEntry: entryNode?.node_run_id === focusNode.node_run_id
+    focusMatchesEntry: entryNode?.node_run_id === focusNode.node_run_id,
+    skillTrace: executionView?.skill_trace ?? null
   };
 }
