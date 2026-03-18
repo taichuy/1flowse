@@ -13,6 +13,8 @@ import {
   buildPublishedInvocationInboxHref
 } from "@/lib/published-invocation-presenters";
 import {
+  formatExecutionFocusFollowUp,
+  formatExecutionFocusPrimarySignal,
   formatExecutionFocusReasonLabel,
   formatMetricSummary
 } from "@/lib/run-execution-focus-presenters";
@@ -67,6 +69,12 @@ export function WorkflowPublishInvocationDetailPanel({
     .map((toolId) => toolsById.get(toolId) ?? null)
     .filter((tool): tool is PluginToolRegistryItem => tool !== null);
   const unresolvedToolIds = involvedToolIds.filter((toolId) => !toolsById.has(toolId));
+  const executionFocusPrimarySignal = executionFocusNode
+    ? formatExecutionFocusPrimarySignal(executionFocusNode)
+    : null;
+  const executionFocusFollowUp = executionFocusNode
+    ? formatExecutionFocusFollowUp(executionFocusNode)
+    : null;
 
   return (
     <article className="entry-card compact-card publish-invocation-detail-panel">
@@ -177,6 +185,12 @@ export function WorkflowPublishInvocationDetailPanel({
           <p className="section-copy entry-copy">
             当前 publish invocation detail 直接复用 run diagnostics 的 execution 事实，优先聚焦当前最相关的 node run。
           </p>
+          {executionFocusPrimarySignal ? (
+            <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
+          ) : null}
+          {executionFocusFollowUp ? (
+            <p className="binding-meta">{executionFocusFollowUp}</p>
+          ) : null}
           <div className="tool-badge-row">
             <span className="event-chip">
               {formatExecutionFocusReasonLabel(executionFocusReason)}

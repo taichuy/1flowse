@@ -5,6 +5,8 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
+  formatExecutionFocusFollowUp,
+  formatExecutionFocusPrimarySignal,
   formatExecutionFocusReasonLabel,
   formatMetricSummary
 } from "@/lib/run-execution-focus-presenters";
@@ -88,6 +90,8 @@ export function RunDiagnosticsExecutionOverviewBlockers({
 }) {
   const focusNode = executionView.execution_focus_node ?? null;
   const skillTrace = executionView.skill_trace ?? null;
+  const focusNodePrimarySignal = focusNode ? formatExecutionFocusPrimarySignal(focusNode) : null;
+  const focusNodeFollowUp = focusNode ? formatExecutionFocusFollowUp(focusNode) : null;
   const blockerNodes = pickTopBlockerNodes(executionView).filter(
     (node) => node.node_run_id !== focusNode?.node_run_id
   );
@@ -116,9 +120,11 @@ export function RunDiagnosticsExecutionOverviewBlockers({
             <p className="timeline-meta">
               {focusNode.node_type} · node run {focusNode.node_run_id}
             </p>
-            <p className="binding-meta">
-              This node is selected from the backend execution facts, not guessed by the page.
-            </p>
+            <p className="binding-meta">This node is selected from backend execution facts.</p>
+            {focusNodePrimarySignal ? (
+              <p className="section-copy entry-copy">{focusNodePrimarySignal}</p>
+            ) : null}
+            {focusNodeFollowUp ? <p className="binding-meta">{focusNodeFollowUp}</p> : null}
             <CallbackWaitingSummaryCard
               callbackTickets={focusNode.callback_tickets}
               callbackWaitingAutomation={callbackWaitingAutomation}
@@ -178,6 +184,8 @@ export function RunDiagnosticsExecutionOverviewBlockers({
           const pendingTickets = countPendingTickets(node);
           const lifecycle = node.callback_waiting_lifecycle;
           const inboxHref = buildNodeInboxHref(node);
+          const primarySignal = formatExecutionFocusPrimarySignal(node);
+          const followUp = formatExecutionFocusFollowUp(node);
 
           return (
             <article className="payload-card compact-card" key={node.node_run_id}>
@@ -199,6 +207,8 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               {node.started_at ? (
                 <p className="binding-meta">Started {formatTimestamp(node.started_at)}</p>
               ) : null}
+              {primarySignal ? <p className="section-copy entry-copy">{primarySignal}</p> : null}
+              {followUp ? <p className="binding-meta">{followUp}</p> : null}
               <CallbackWaitingSummaryCard
                 callbackTickets={node.callback_tickets}
                 callbackWaitingAutomation={callbackWaitingAutomation}

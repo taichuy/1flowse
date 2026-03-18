@@ -26,7 +26,9 @@ import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import {
+  formatExecutionFocusFollowUp,
   formatExecutionFocusReasonLabel,
+  formatExecutionFocusPrimarySignal,
   formatMetricSummary
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
@@ -176,6 +178,12 @@ export function SensitiveAccessInboxEntryCard({
   const latestNotification = pickLatestNotification(entry);
   const callbackWaitingContext = entry.callbackWaitingContext;
   const executionContext = entry.executionContext;
+  const executionFocusPrimarySignal = executionContext
+    ? formatExecutionFocusPrimarySignal(executionContext.focusNode)
+    : null;
+  const executionFocusFollowUp = executionContext
+    ? formatExecutionFocusFollowUp(executionContext.focusNode)
+    : null;
   const focusInboxHref = executionContext
     ? buildSensitiveAccessInboxHref({
         runId: executionContext.runId,
@@ -274,14 +282,11 @@ export function SensitiveAccessInboxEntryCard({
               ? ` · effective ${executionContext.focusNode.effective_execution_class}`
               : ""}
           </p>
-          {executionContext.focusNode.execution_blocking_reason ? (
-            <p className="section-copy entry-copy">
-              Execution blocked: {executionContext.focusNode.execution_blocking_reason}
-            </p>
-          ) : executionContext.focusNode.waiting_reason ? (
-            <p className="section-copy entry-copy">
-              Waiting reason: {executionContext.focusNode.waiting_reason}
-            </p>
+          {executionFocusPrimarySignal ? (
+            <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
+          ) : null}
+          {executionFocusFollowUp ? (
+            <p className="binding-meta">{executionFocusFollowUp}</p>
           ) : null}
           <div className="tool-badge-row">
             <Link className="event-chip inbox-filter-link" href={`/runs/${executionContext.runId}`}>
