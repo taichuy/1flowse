@@ -3,7 +3,10 @@
 import { useMemo } from "react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type { WorkflowDefinitionPreflightIssue, WorkflowDetail } from "@/lib/get-workflows";
 import type { WorkspaceStarterValidationIssue } from "@/lib/get-workspace-starters";
@@ -116,6 +119,7 @@ type UseWorkflowEditorValidationOptions = {
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   serverValidationIssues: WorkflowDefinitionPreflightIssue[];
 };
 
@@ -127,6 +131,7 @@ export function useWorkflowEditorValidation({
   tools,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   serverValidationIssues
 }: UseWorkflowEditorValidationOptions) {
   const unsupportedNodes = useMemo(
@@ -167,9 +172,12 @@ export function useWorkflowEditorValidation({
         currentDefinition,
         tools,
         adapters,
-        sandboxReadiness
+        {
+          sandboxReadiness,
+          sandboxBackends
+        }
       ),
-    [adapters, currentDefinition, sandboxReadiness, tools]
+    [adapters, currentDefinition, sandboxBackends, sandboxReadiness, tools]
   );
   const toolExecutionValidationSummary = useMemo(
     () => summarizeIssueMessages(toolExecutionValidationIssues),

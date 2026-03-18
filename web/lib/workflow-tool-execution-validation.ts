@@ -2,18 +2,23 @@ import type {
   PluginAdapterRegistryItem,
   PluginToolRegistryItem
 } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
 import { resolveDefaultExecutionClass } from "@/lib/workflow-runtime-policy";
 import {
   buildDefaultExecutionCapabilityIssue,
   buildExecutionCapabilityIssue,
+  describeSandboxBackendCompatibility,
   extractExplicitExecutionClass,
   isAdapterVisible,
   validateExplicitAdapterBinding
 } from "@/lib/workflow-tool-execution-validation-helpers";
 import type {
   WorkflowToolExecutionValidationContext,
+  WorkflowToolExecutionValidationRuntimeOptions,
   WorkflowToolExecutionValidationIssue
 } from "@/lib/workflow-tool-execution-validation-types";
 
@@ -23,15 +28,16 @@ export function buildWorkflowToolExecutionValidationIssues(
   definition: WorkflowDefinition,
   tools: PluginToolRegistryItem[],
   adapters: PluginAdapterRegistryItem[],
-  sandboxReadiness?: SandboxReadinessCheck | null,
-  workspaceId = "default"
+  runtimeOptions: WorkflowToolExecutionValidationRuntimeOptions = {}
 ): WorkflowToolExecutionValidationIssue[] {
   if (!Array.isArray(definition?.nodes)) {
     return [];
   }
 
   const toolIndex = new Map(tools.map((tool) => [tool.id, tool]));
-  const visibleAdapters = adapters.filter((adapter) => isAdapterVisible(adapter, workspaceId));
+  const visibleAdapters = adapters.filter((adapter) =>
+    isAdapterVisible(adapter, runtimeOptions.workspaceId ?? "default")
+  );
   const issues: WorkflowToolExecutionValidationIssue[] = [];
 
   definition.nodes.forEach((node, nodeIndex) => {
@@ -53,7 +59,8 @@ export function buildWorkflowToolExecutionValidationIssues(
           config,
           toolIndex,
           adapters: visibleAdapters,
-          sandboxReadiness
+          sandboxReadiness: runtimeOptions.sandboxReadiness,
+          sandboxBackends: runtimeOptions.sandboxBackends
         })
       );
       return;
@@ -69,7 +76,8 @@ export function buildWorkflowToolExecutionValidationIssues(
           config,
           toolIndex,
           adapters: visibleAdapters,
-          sandboxReadiness
+          sandboxReadiness: runtimeOptions.sandboxReadiness,
+          sandboxBackends: runtimeOptions.sandboxBackends
         })
       );
       return;
@@ -84,7 +92,8 @@ export function buildWorkflowToolExecutionValidationIssues(
           config,
           toolIndex,
           adapters: visibleAdapters,
-          sandboxReadiness
+          sandboxReadiness: runtimeOptions.sandboxReadiness,
+          sandboxBackends: runtimeOptions.sandboxBackends
         })
       );
     }
@@ -105,10 +114,12 @@ function buildSandboxCodeExecutionIssues({
   nodeName,
   nodeIndex,
   config,
-  sandboxReadiness
+  sandboxReadiness,
+  sandboxBackends
 }: WorkflowToolExecutionValidationContext & {
   node: { runtimePolicy?: unknown };
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
 }): WorkflowToolExecutionValidationIssue[] {
   const execution = toRecord(toRecord(node?.runtimePolicy)?.execution);
   const requestedExecutionClass =
@@ -152,9 +163,6 @@ function buildSandboxCodeExecutionIssues({
     return [];
   }
 
-  const readiness = sandboxReadiness.execution_classes.find(
-    (item) => item.execution_class === requestedExecutionClass
-  );
   const language = normalizeString(config.language)?.toLowerCase() ?? "python";
   const profile = normalizeString(execution?.profile);
   const dependencyMode = resolveSandboxDependencyMode({ config, execution });
@@ -166,134 +174,35 @@ function buildSandboxCodeExecutionIssues({
     toRecord(execution?.backendExtensions) ?? toRecord(config.backendExtensions);
   const networkPolicy = normalizeString(execution?.networkPolicy);
   const filesystemPolicy = normalizeString(execution?.filesystemPolicy);
+  const compatibility = describeSandboxBackendCompatibility({
+    requestedExecutionClass,
+    executionPayload: {
+      ...(execution ?? {}),
+      ...(profile ? { profile } : {}),
+      ...(dependencyMode ? { dependencyMode } : {}),
+      ...(builtinPackageSet ? { builtinPackageSet } : {}),
+      ...(backendExtensions && Object.keys(backendExtensions).length > 0
+        ? { backendExtensions }
+        : {}),
+      ...(networkPolicy ? { networkPolicy } : {}),
+      ...(filesystemPolicy ? { filesystemPolicy } : {})
+    },
+    sandboxReadiness,
+    sandboxBackends,
+    language
+  });
 
-  if (readiness?.available) {
-    const supportedLanguages = readiness.supported_languages ?? sandboxReadiness.supported_languages;
-    if (supportedLanguages.length > 0 && !supportedLanguages.includes(language)) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还没有暴露 ` +
-            `language = ${language}，sandbox_code 不能稳定落到兼容后端。`,
-          path: `nodes.${nodeIndex}.config.language`,
-          field: "language"
-        }
-      ];
-    }
-
-    const supportedProfiles = readiness.supported_profiles ?? sandboxReadiness.supported_profiles;
-    if (profile && supportedProfiles.length > 0 && !supportedProfiles.includes(profile)) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass} 并附带 profile = ${profile}，但当前 ` +
-            "sandbox readiness 聚合视图还没有暴露该 profile，sandbox_code 不能稳定落到兼容后端。",
-          path: executionPath,
-          field: "execution"
-        }
-      ];
-    }
-
-    const supportedDependencyModes =
-      readiness.supported_dependency_modes ?? sandboxReadiness.supported_dependency_modes;
-    if (dependencyMode && !supportedDependencyModes.includes(dependencyMode)) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还不支持 ` +
-            `dependencyMode = ${dependencyMode}，sandbox_code 不能稳定落到对应强隔离后端。`,
-          path: executionPath,
-          field: "execution"
-        }
-      ];
-    }
-
-    if (
-      builtinPackageSet &&
-      !(readiness.supports_builtin_package_sets ?? sandboxReadiness.supports_builtin_package_sets)
-    ) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass} 并附带 builtinPackageSet，但当前 ` +
-            "sandbox readiness 聚合视图还不支持 builtin package set hints，sandbox_code 不能稳定落到兼容后端。",
-          path: executionPath,
-          field: "execution"
-        }
-      ];
-    }
-
-    if (
-      backendExtensions &&
-      Object.keys(backendExtensions).length > 0 &&
-      !(readiness.supports_backend_extensions ?? sandboxReadiness.supports_backend_extensions)
-    ) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass} 并附带 backendExtensions，但当前 ` +
-            "sandbox readiness 聚合视图还不支持 backendExtensions payload，sandbox_code 不能稳定落到兼容后端。",
-          path: executionPath,
-          field: "execution"
-        }
-      ];
-    }
-
-    if (
-      networkPolicy &&
-      !(readiness.supports_network_policy ?? sandboxReadiness.supports_network_policy)
-    ) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass} 并附带 networkPolicy = ${networkPolicy}，但当前 ` +
-            "sandbox readiness 聚合视图还不支持 networkPolicy hints，sandbox_code 不能稳定落到兼容后端。",
-          path: executionPath,
-          field: "execution"
-        }
-      ];
-    }
-
-    if (
-      filesystemPolicy &&
-      !(readiness.supports_filesystem_policy ?? sandboxReadiness.supports_filesystem_policy)
-    ) {
-      return [
-        {
-          nodeId,
-          nodeName,
-          message:
-            `${context} 显式请求了 ${requestedExecutionClass} 并附带 filesystemPolicy = ${filesystemPolicy}，但当前 ` +
-            "sandbox readiness 聚合视图还不支持 filesystemPolicy hints，sandbox_code 不能稳定落到兼容后端。",
-          path: executionPath,
-          field: "execution"
-        }
-      ];
-    }
-
+  if (compatibility.available) {
     return [];
   }
 
-  const reason = readiness?.reason?.trim();
   return [
     {
       nodeId,
       nodeName,
       message:
         `${context} 请求 execution class '${requestedExecutionClass}'，但当前没有兼容的 sandbox backend 可用。` +
-        `${reason ? ` ${reason}` : ""}`,
+        `${compatibility.reason ? ` ${compatibility.reason}` : ""}`,
       path: executionPath,
       field: "execution"
     }
@@ -308,7 +217,8 @@ function buildToolNodeExecutionIssues({
   config,
   toolIndex,
   adapters,
-  sandboxReadiness
+  sandboxReadiness,
+  sandboxBackends
 }: WorkflowToolExecutionValidationContext & {
   node: { runtimePolicy?: unknown };
   sandboxReadiness?: SandboxReadinessCheck | null;
@@ -359,6 +269,7 @@ function buildToolNodeExecutionIssues({
       adapterId,
       adapters,
       sandboxReadiness,
+      sandboxBackends,
       path: `nodes.${nodeIndex}.config.tool.toolId`,
       field: "toolId"
     });
@@ -380,6 +291,7 @@ function buildToolNodeExecutionIssues({
     executionPayload: toRecord(toRecord(node?.runtimePolicy)?.execution),
     adapters,
     sandboxReadiness,
+    sandboxBackends,
     path: `nodes.${nodeIndex}.runtimePolicy.execution`,
     field: "execution"
   });
@@ -396,7 +308,8 @@ function buildAgentExecutionIssues({
   config,
   toolIndex,
   adapters,
-  sandboxReadiness
+  sandboxReadiness,
+  sandboxBackends
 }: WorkflowToolExecutionValidationContext): WorkflowToolExecutionValidationIssue[] {
   const issues: WorkflowToolExecutionValidationIssue[] = [];
   const toolPolicy = toRecord(config.toolPolicy);
@@ -421,6 +334,7 @@ function buildAgentExecutionIssues({
           executionPayload: toRecord(toolPolicy?.execution),
           adapters,
           sandboxReadiness,
+          sandboxBackends,
           path: `nodes.${nodeIndex}.config.toolPolicy.execution`,
           field: "execution"
         });
@@ -463,6 +377,7 @@ function buildAgentExecutionIssues({
           adapterId: null,
           adapters,
           sandboxReadiness,
+          sandboxBackends,
           path: `nodes.${nodeIndex}.config.toolPolicy.allowedToolIds`,
           field: "allowedToolIds"
         });
@@ -484,6 +399,7 @@ function buildAgentExecutionIssues({
         executionPayload: toRecord(toolPolicy?.execution),
         adapters,
         sandboxReadiness,
+        sandboxBackends,
         path: `nodes.${nodeIndex}.config.toolPolicy.execution`,
         field: "execution"
       });
@@ -542,6 +458,7 @@ function buildAgentExecutionIssues({
           adapterId,
           adapters,
           sandboxReadiness,
+          sandboxBackends,
           path: `nodes.${nodeIndex}.config.mockPlan.toolCalls.${index}.toolId`,
           field: "toolId"
         });
@@ -563,6 +480,7 @@ function buildAgentExecutionIssues({
         executionPayload: toRecord(toolCall.execution),
         adapters,
         sandboxReadiness,
+        sandboxBackends,
         path: `nodes.${nodeIndex}.config.mockPlan.toolCalls.${index}.execution`,
         field: "execution"
       });

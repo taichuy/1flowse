@@ -170,6 +170,7 @@ export default async function WorkflowEditorPage({
         tools={workflowLibrary.tools}
         adapters={pluginRegistry.adapters}
         sandboxReadiness={systemOverview.sandbox_readiness}
+        sandboxBackends={systemOverview.sandbox_backends}
         recentRuns={recentRuns}
       />
       <WorkflowPublishPanel

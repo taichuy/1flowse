@@ -1,5 +1,8 @@
 import type { PluginAdapterRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 
 import type {
   WorkflowExecutionCapabilityIssueOptions,
@@ -61,6 +64,7 @@ export function buildExecutionCapabilityIssue({
   executionPayload,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: WorkflowExecutionCapabilityIssueOptions): WorkflowToolExecutionValidationIssue | null {
@@ -77,6 +81,7 @@ export function buildExecutionCapabilityIssue({
         requestedExecutionClass,
         executionPayload,
         sandboxReadiness,
+        sandboxBackends,
         path,
         field
       });
@@ -135,6 +140,7 @@ export function buildExecutionCapabilityIssue({
     requestedExecutionClass,
     executionPayload,
     sandboxReadiness,
+    sandboxBackends,
     path,
     field
   });
@@ -155,6 +161,7 @@ export function buildDefaultExecutionCapabilityIssue({
   adapterId,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: Omit<
@@ -190,6 +197,7 @@ export function buildDefaultExecutionCapabilityIssue({
       toolId,
       defaultExecutionClass,
       sandboxReadiness,
+      sandboxBackends,
       path,
       field
     });
@@ -235,11 +243,12 @@ export function buildDefaultExecutionCapabilityIssue({
     nodeId,
     nodeName,
     toolId,
-    defaultExecutionClass,
-    sandboxReadiness,
-    path,
-    field
-  });
+      defaultExecutionClass,
+      sandboxReadiness,
+      sandboxBackends,
+      path,
+      field
+    });
 }
 
 export function extractExplicitExecutionClass(value: unknown) {
@@ -280,6 +289,7 @@ function buildSandboxReadinessIssue({
   requestedExecutionClass,
   executionPayload,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: {
@@ -290,6 +300,7 @@ function buildSandboxReadinessIssue({
   requestedExecutionClass: string;
   executionPayload: Record<string, unknown> | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   path: string;
   field: string;
 }): WorkflowToolExecutionValidationIssue | null {
@@ -303,6 +314,28 @@ function buildSandboxReadinessIssue({
   const readiness = sandboxReadiness.execution_classes.find(
     (item) => item.execution_class === requestedExecutionClass
   );
+  const compatibility = describeSandboxBackendCompatibility({
+    requestedExecutionClass,
+    executionPayload,
+    sandboxReadiness,
+    sandboxBackends
+  });
+  if (compatibility.available) {
+    return null;
+  }
+
+  if (compatibility.reason) {
+    return {
+      nodeId,
+      nodeName,
+      message:
+        `${context} 显式请求了 ${requestedExecutionClass}，但当前没有单个 sandbox backend 能同时满足工具 ${toolId} 的执行约束。` +
+        ` ${compatibility.reason}`,
+      path,
+      field
+    };
+  }
+
   if (readiness?.available) {
     const profile = normalizeString(executionPayload?.profile);
     const supportedProfiles = readiness.supported_profiles ?? sandboxReadiness.supported_profiles;
@@ -413,6 +446,7 @@ function buildDefaultSandboxReadinessIssue({
   toolId,
   defaultExecutionClass,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: {
@@ -422,6 +456,7 @@ function buildDefaultSandboxReadinessIssue({
   toolId: string;
   defaultExecutionClass: string;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   path: string;
   field: string;
 }): WorkflowToolExecutionValidationIssue | null {
@@ -432,14 +467,20 @@ function buildDefaultSandboxReadinessIssue({
     return null;
   }
 
-  const readiness = sandboxReadiness.execution_classes.find(
-    (item) => item.execution_class === defaultExecutionClass
-  );
-  if (readiness?.available) {
+  const compatibility = describeSandboxBackendCompatibility({
+    requestedExecutionClass: defaultExecutionClass,
+    executionPayload: null,
+    sandboxReadiness,
+    sandboxBackends
+  });
+  if (compatibility.available) {
     return null;
   }
 
-  const reason = readiness?.reason?.trim();
+  const readiness = sandboxReadiness.execution_classes.find(
+    (item) => item.execution_class === defaultExecutionClass
+  );
+  const reason = compatibility.reason ?? readiness?.reason?.trim();
   return {
     nodeId,
     nodeName,
@@ -455,6 +496,112 @@ function normalizeStrongDefaultExecutionClass(value: unknown) {
     return null;
   }
   return normalized;
+}
+
+export function describeSandboxBackendCompatibility({
+  requestedExecutionClass,
+  executionPayload,
+  sandboxReadiness,
+  sandboxBackends,
+  language
+}: {
+  requestedExecutionClass: string;
+  executionPayload: Record<string, unknown> | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
+  language?: string | null;
+}): { available: boolean; reason: string | null } {
+  if (requestedExecutionClass !== "sandbox" && requestedExecutionClass !== "microvm") {
+    return { available: true, reason: null };
+  }
+
+  const enabledBackends = (sandboxBackends ?? []).filter((backend) => backend.enabled);
+  if (enabledBackends.length === 0) {
+    return {
+      available: false,
+      reason:
+        sandboxReadiness?.execution_classes.find(
+          (item) => item.execution_class === requestedExecutionClass
+        )?.reason ?? null
+    };
+  }
+
+  const reasons: string[] = [];
+  const normalizedLanguage = normalizeString(language)?.toLowerCase() ?? null;
+  const profile = normalizeString(executionPayload?.profile);
+  const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
+  const builtinPackageSet = normalizeString(executionPayload?.builtinPackageSet);
+  const backendExtensions = toRecord(executionPayload?.backendExtensions);
+  const networkPolicy = normalizeString(executionPayload?.networkPolicy);
+  const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
+
+  for (const backend of enabledBackends) {
+    if (backend.status !== "healthy" && backend.status !== "degraded") {
+      reasons.push(`${backend.id}: ${backend.detail || "backend is offline"}`);
+      continue;
+    }
+
+    const capability = backend.capability;
+    if (!capability.supported_execution_classes.includes(requestedExecutionClass)) {
+      reasons.push(
+        `${backend.id}: does not support executionClass = ${requestedExecutionClass}`
+      );
+      continue;
+    }
+    if (
+      normalizedLanguage &&
+      capability.supported_languages.length > 0 &&
+      !capability.supported_languages.includes(normalizedLanguage)
+    ) {
+      reasons.push(`${backend.id}: does not support language = ${normalizedLanguage}`);
+      continue;
+    }
+    if (
+      profile &&
+      capability.supported_profiles.length > 0 &&
+      !capability.supported_profiles.includes(profile)
+    ) {
+      reasons.push(`${backend.id}: does not expose profile = ${profile}`);
+      continue;
+    }
+    if (dependencyMode) {
+      if (!capability.supported_dependency_modes.includes(dependencyMode)) {
+        reasons.push(`${backend.id}: does not support dependencyMode = ${dependencyMode}`);
+        continue;
+      }
+      if (
+        dependencyMode === "builtin" &&
+        builtinPackageSet &&
+        !capability.supports_builtin_package_sets
+      ) {
+        reasons.push(`${backend.id}: does not support builtinPackageSet hints`);
+        continue;
+      }
+    }
+    if (backendExtensions && !capability.supports_backend_extensions) {
+      reasons.push(`${backend.id}: does not support backendExtensions payload`);
+      continue;
+    }
+    if (networkPolicy && !capability.supports_network_policy) {
+      reasons.push(`${backend.id}: does not support networkPolicy = ${networkPolicy}`);
+      continue;
+    }
+    if (filesystemPolicy && !capability.supports_filesystem_policy) {
+      reasons.push(`${backend.id}: does not support filesystemPolicy = ${filesystemPolicy}`);
+      continue;
+    }
+
+    return { available: true, reason: null };
+  }
+
+  const readinessReason = sandboxReadiness?.execution_classes
+    .find((item) => item.execution_class === requestedExecutionClass)
+    ?.reason?.trim();
+  const detail = reasons.length > 0 ? reasons.join("；") : readinessReason;
+  return {
+    available: false,
+    reason: detail ? `兼容 backend 细节：${detail}` : readinessReason ?? null
+  };
 }
 
 function buildSensitivityReason(

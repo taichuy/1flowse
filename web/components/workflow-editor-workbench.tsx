@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -41,6 +44,7 @@ type WorkflowEditorWorkbenchProps = {
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   recentRuns: WorkflowRunListItem[];
 };
 
@@ -53,6 +57,7 @@ export function WorkflowEditorWorkbench({
   tools,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   recentRuns
 }: WorkflowEditorWorkbenchProps) {
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
@@ -93,6 +98,7 @@ export function WorkflowEditorWorkbench({
     tools,
     adapters,
     sandboxReadiness,
+    sandboxBackends,
     serverValidationIssues
   });
   const persistence = useWorkflowEditorPersistence({
