@@ -48,3 +48,28 @@ def test_build_run_execution_focus_explanation_uses_generic_count_when_reason_mi
         "下一步：确认 fallback 是否仍可接受；若不可接受，"
         "应回到 execution capability 与 runtime adapter 事实链继续治理。"
     )
+
+
+def test_build_run_execution_focus_explanation_maps_unsupported_strong_isolation_block() -> None:
+    explanation = build_run_execution_focus_explanation(
+        _build_execution_node(
+            node_id="branch",
+            node_name="Branch",
+            node_type="condition",
+            execution_blocking_reason=(
+                "Node type 'condition' does not implement requested strong-isolation "
+                "execution class 'microvm'. Strong-isolation paths must fail closed "
+                "until a compatible execution adapter is available."
+            ),
+            execution_unavailable_count=1,
+        )
+    )
+
+    assert explanation is not None
+    assert explanation.primary_signal == (
+        "执行阻断：当前 condition 节点尚未实现请求的强隔离 execution class。"
+    )
+    assert explanation.follow_up == (
+        "下一步：先把 execution class 调回当前实现支持范围，"
+        "或补齐对应 execution adapter；在此之前继续保持 fail-closed。"
+    )

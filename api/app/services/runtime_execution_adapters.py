@@ -371,7 +371,21 @@ class RuntimeExecutionAdapterRegistry:
         node: dict[str, Any],
         execution_policy: ResolvedExecutionPolicy,
     ) -> NodeExecutionAvailability:
-        if node.get("type") != "sandbox_code":
+        node_type = str(node.get("type") or "unknown")
+        if node_type != "sandbox_code":
+            if node_type != "tool" and execution_policy.execution_class in {
+                "sandbox",
+                "microvm",
+            }:
+                return NodeExecutionAvailability(
+                    available=False,
+                    blocking_reason=(
+                        f"Node type '{node_type}' does not implement requested "
+                        f"strong-isolation execution class '{execution_policy.execution_class}'. "
+                        "Strong-isolation paths must fail closed until a compatible "
+                        "execution adapter is available."
+                    ),
+                )
             return NodeExecutionAvailability(available=True)
 
         if execution_policy.execution_class == "subprocess":

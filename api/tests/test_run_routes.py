@@ -140,7 +140,9 @@ def test_get_run_execution_view_summarizes_execution_fallback_signals(
                     "type": "tool",
                     "name": "Tool",
                     "config": {"mock_output": {"answer": "done"}},
-                    "runtimePolicy": {"execution": {"class": "microvm", "profile": "strict"}},
+                    "runtimePolicy": {
+                        "execution": {"class": "subprocess", "profile": "strict"}
+                    },
                 },
                 {"id": "output", "type": "output", "name": "Output", "config": {}},
             ],
@@ -177,10 +179,10 @@ def test_get_run_execution_view_summarizes_execution_fallback_signals(
     assert body["summary"]["execution_fallback_node_count"] == 1
     assert body["summary"]["execution_blocked_node_count"] == 0
     assert body["summary"]["execution_unavailable_node_count"] == 0
-    assert body["summary"]["execution_requested_class_counts"] == {"microvm": 1}
+    assert body["summary"]["execution_requested_class_counts"] == {"subprocess": 1}
     assert body["summary"]["execution_effective_class_counts"] == {"inline": 1}
     assert body["summary"]["execution_executor_ref_counts"] == {
-        "runtime:inline-fallback:microvm": 1
+        "runtime:inline-fallback:subprocess": 1
     }
     assert body["blocking_node_run_id"] is None
     assert body["execution_focus_reason"] == "fallback_node"
@@ -196,14 +198,93 @@ def test_get_run_execution_view_summarizes_execution_fallback_signals(
     }
 
     node = next(item for item in body["nodes"] if item["node_id"] == "tool")
-    assert node["execution_class"] == "microvm"
+    assert node["execution_class"] == "subprocess"
     assert node["effective_execution_class"] == "inline"
-    assert node["execution_executor_ref"] == "runtime:inline-fallback:microvm"
+    assert node["execution_executor_ref"] == "runtime:inline-fallback:subprocess"
     assert node["execution_dispatched_count"] == 0
     assert node["execution_fallback_count"] == 1
     assert node["execution_blocked_count"] == 0
     assert node["execution_unavailable_count"] == 0
     assert node["execution_fallback_reason"] == "execution_class_not_implemented_for_node_type"
+
+
+def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_nodes(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-execution-view-strong-isolation",
+        name="Execution View Strong Isolation",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "condition",
+                    "name": "Branch",
+                    "config": {"selected": "true"},
+                    "runtimePolicy": {
+                        "execution": {"class": "microvm", "profile": "strict"}
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e2", "sourceNodeId": "branch", "targetNodeId": "output"},
+            ],
+        },
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-execution-view-strong-isolation-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    CompiledBlueprintService().ensure_for_workflow_version(sqlite_session, workflow_version)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"message": "strong isolation summary"}},
+    )
+    assert response.status_code == 422
+
+    persisted_run = run_routes.runtime_service.list_workflow_runs(sqlite_session, workflow.id)[0]
+    execution_view_response = client.get(f"/api/runs/{persisted_run.id}/execution-view")
+
+    assert execution_view_response.status_code == 200
+    body = execution_view_response.json()
+    assert body["summary"]["execution_dispatched_node_count"] == 0
+    assert body["summary"]["execution_fallback_node_count"] == 0
+    assert body["summary"]["execution_blocked_node_count"] == 0
+    assert body["summary"]["execution_unavailable_node_count"] == 1
+    assert body["summary"]["execution_requested_class_counts"] == {"microvm": 1}
+    assert body["summary"]["execution_effective_class_counts"] == {}
+    assert body["summary"]["execution_executor_ref_counts"] == {}
+    assert body["execution_focus_explanation"] == {
+        "primary_signal": "执行阻断：当前 condition 节点尚未实现请求的强隔离 execution class。",
+        "follow_up": (
+            "下一步：先把 execution class 调回当前实现支持范围，"
+            "或补齐对应 execution adapter；在此之前继续保持 fail-closed。"
+        ),
+    }
+
+    node = next(item for item in body["nodes"] if item["node_id"] == "branch")
+    assert node["execution_class"] == "microvm"
+    assert node["effective_execution_class"] is None
+    assert node["execution_dispatched_count"] == 0
+    assert node["execution_fallback_count"] == 0
+    assert node["execution_blocked_count"] == 0
+    assert node["execution_unavailable_count"] == 1
+    assert "Strong-isolation paths must fail closed" in (
+        node["execution_blocking_reason"] or ""
+    )
 
 
 def test_get_run_execution_view_summarizes_unavailable_sandbox_execution(

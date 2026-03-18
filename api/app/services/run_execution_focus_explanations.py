@@ -66,6 +66,17 @@ def _resolve_execution_blocking_explanation(
             "no compatible sandbox backend" in normalized
             or "strong-isolation paths must fail closed" in normalized
         ):
+            if "does not implement requested strong-isolation execution class" in normalized:
+                return RunExecutionFocusExplanation(
+                    primary_signal=(
+                        "执行阻断：当前 "
+                        f"{node.node_type} 节点尚未实现请求的强隔离 execution class。"
+                    ),
+                    follow_up=(
+                        "下一步：先把 execution class 调回当前实现支持范围，"
+                        "或补齐对应 execution adapter；在此之前继续保持 fail-closed。"
+                    ),
+                )
             return RunExecutionFocusExplanation(
                 primary_signal=(
                     "执行阻断：当前节点要求强隔离执行，但没有兼容的 sandbox backend 可用。"
