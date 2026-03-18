@@ -371,6 +371,12 @@ def test_get_published_invocation_detail_requires_approval_for_high_sensitive_ru
         "last_resume_source": "callback_ticket_monitor",
         "last_resume_backoff_attempt": 0,
     }
+    assert approved_body["callback_waiting_explanation"] == {
+        "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+        "follow_up": (
+            "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+        ),
+    }
     assert approved_body["callback_tickets"][0]["callback_payload"] == {
         "token": "secret-review-token"
     }
@@ -581,6 +587,7 @@ def test_get_published_invocation_detail_surfaces_execution_fallback_explanation
             "不要把当前 fallback 当成长期默认。"
         ),
     }
+    assert detail_body["callback_waiting_explanation"] is None
 
 
 def test_get_published_invocation_detail_surfaces_blocking_skill_trace(

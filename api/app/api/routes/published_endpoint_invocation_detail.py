@@ -76,6 +76,21 @@ def _serialize_blocking_sensitive_access_entries(
     ]
 
 
+def _resolve_callback_waiting_explanation(
+    *,
+    execution_focus_node,
+    waiting_lifecycle,
+):
+    if (
+        execution_focus_node is not None
+        and execution_focus_node.callback_waiting_explanation is not None
+    ):
+        return execution_focus_node.callback_waiting_explanation
+    if waiting_lifecycle is not None:
+        return waiting_lifecycle.callback_waiting_explanation
+    return None
+
+
 def _count_skill_references(loads) -> int:
     return sum(len(load.references) for load in loads)
 
@@ -343,6 +358,11 @@ def get_published_endpoint_invocation_detail(
         if cache_item is not None:
             cache_inventory_item = serialize_cache_inventory_item(cache_item)
 
+    callback_waiting_explanation = _resolve_callback_waiting_explanation(
+        execution_focus_node=execution_focus_node,
+        waiting_lifecycle=(waiting_lifecycle_lookup.get(record.run_id) if record.run_id else None),
+    )
+
     return PublishedEndpointInvocationDetailResponse(
         invocation=invocation,
         run=(
@@ -363,6 +383,7 @@ def get_published_endpoint_invocation_detail(
         execution_focus_reason=execution_focus_reason,
         execution_focus_node=execution_focus_node,
         execution_focus_explanation=execution_focus_explanation,
+        callback_waiting_explanation=callback_waiting_explanation,
         skill_trace=skill_trace,
         blocking_sensitive_access_entries=blocking_sensitive_access_entries,
         sensitive_access_entries=sensitive_access_entries,

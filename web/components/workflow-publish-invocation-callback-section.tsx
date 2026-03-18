@@ -5,7 +5,8 @@ import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type {
   PublishedEndpointInvocationItem,
-  PublishedEndpointInvocationCallbackTicketItem
+  PublishedEndpointInvocationCallbackTicketItem,
+  RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
@@ -22,6 +23,7 @@ type WorkflowPublishInvocationCallbackSectionProps = {
   callbackTickets: PublishedEndpointInvocationCallbackTicketItem[];
   sensitiveAccessEntries: SensitiveAccessTimelineEntry[];
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  callbackWaitingExplanation?: RunExecutionFocusExplanation | null;
 };
 
 function formatJsonPreview(value: unknown): string {
@@ -32,12 +34,15 @@ export function WorkflowPublishInvocationCallbackSection({
   invocation,
   callbackTickets,
   sensitiveAccessEntries,
-  callbackWaitingAutomation
+  callbackWaitingAutomation,
+  callbackWaitingExplanation
 }: WorkflowPublishInvocationCallbackSectionProps) {
   const waitingLifecycle = invocation.run_waiting_lifecycle;
   const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
+  const resolvedCallbackWaitingExplanation =
+    callbackWaitingExplanation ?? waitingLifecycle?.callback_waiting_explanation ?? null;
   const headline =
-    waitingLifecycle?.callback_waiting_explanation?.primary_signal?.trim() ||
+    resolvedCallbackWaitingExplanation?.primary_signal?.trim() ||
     getCallbackWaitingHeadline({
       lifecycle: callbackLifecycle,
       callbackTickets,
@@ -49,7 +54,7 @@ export function WorkflowPublishInvocationCallbackSection({
       scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
       scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
     });
-  const followUp = waitingLifecycle?.callback_waiting_explanation?.follow_up?.trim() || null;
+  const followUp = resolvedCallbackWaitingExplanation?.follow_up?.trim() || null;
   const chips = listCallbackWaitingChips({
     lifecycle: callbackLifecycle,
     callbackTickets,
@@ -98,7 +103,7 @@ export function WorkflowPublishInvocationCallbackSection({
       <CallbackWaitingSummaryCard
         callbackTickets={callbackTickets}
         callbackWaitingAutomation={callbackWaitingAutomation}
-        callbackWaitingExplanation={waitingLifecycle?.callback_waiting_explanation}
+        callbackWaitingExplanation={resolvedCallbackWaitingExplanation}
         lifecycle={callbackLifecycle}
         sensitiveAccessEntries={sensitiveAccessEntries}
         waitingReason={waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason}

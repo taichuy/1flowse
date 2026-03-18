@@ -44,6 +44,7 @@ export function WorkflowPublishInvocationDetailPanel({
     blocking_node_run_id: blockingNodeRunId,
     execution_focus_reason: executionFocusReason,
     execution_focus_node: executionFocusNode,
+    callback_waiting_explanation: callbackWaitingExplanation,
     skill_trace: skillTrace,
     blocking_sensitive_access_entries: blockingSensitiveAccessEntries,
     sensitive_access_entries: sensitiveAccessEntries,
@@ -210,6 +211,7 @@ export function WorkflowPublishInvocationDetailPanel({
         callbackTickets={callbackTickets}
         sensitiveAccessEntries={sensitiveAccessEntries}
         callbackWaitingAutomation={callbackWaitingAutomation}
+        callbackWaitingExplanation={callbackWaitingExplanation}
       />
 
       {skillTrace ? (

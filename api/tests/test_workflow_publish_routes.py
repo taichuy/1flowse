@@ -1629,6 +1629,12 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
             "若尚未回调，继续沿 ticket / inbox 事实链跟进。"
         ),
     }
+    assert detail_body["callback_waiting_explanation"] == {
+        "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+        "follow_up": (
+            "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+        ),
+    }
     assert detail_body["execution_focus_node"]["node_id"] == "tool_wait"
     assert detail_body["execution_focus_node"]["node_name"] == "Tool Wait"
     assert detail_body["execution_focus_node"]["status"] == "waiting"

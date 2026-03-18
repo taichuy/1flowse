@@ -517,6 +517,7 @@ class PublishedEndpointInvocationDetailResponse(BaseModel):
     execution_focus_reason: PublishedEndpointInvocationExecutionFocusReason | None = None
     execution_focus_node: RunExecutionNodeItem | None = None
     execution_focus_explanation: RunExecutionFocusExplanation | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
     skill_trace: PublishedEndpointInvocationSkillTrace | None = None
     blocking_sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
         default_factory=list

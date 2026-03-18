@@ -253,6 +253,7 @@ export type PublishedEndpointInvocationDetailResponse = {
   execution_focus_reason?: PublishedEndpointInvocationExecutionFocusReason | null;
   execution_focus_node?: RunExecutionNodeItem | null;
   execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
   skill_trace?: PublishedEndpointInvocationSkillTrace | null;
   blocking_sensitive_access_entries: SensitiveAccessTimelineEntry[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
