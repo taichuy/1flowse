@@ -10,6 +10,7 @@ from app.services.runtime_execution_policy import default_execution_class_for_to
 from app.services.sandbox_backends import SandboxBackendClient, get_sandbox_backend_client
 from app.services.tool_execution_isolation import (
     build_tool_execution_not_yet_isolated_reason,
+    describe_tool_execution_backend_selection,
     is_strong_tool_execution_class,
 )
 
@@ -110,10 +111,23 @@ class PluginExecutionDispatchPlanner:
             if blocked_reason is None and is_strong_tool_execution_class(
                 effective_execution_class
             ):
-                blocked_reason = build_tool_execution_not_yet_isolated_reason(
-                    tool_id=request.tool_id,
+                backend_selection = describe_tool_execution_backend_selection(
+                    sandbox_backend_client=self._sandbox_backend_client,
                     execution_class=effective_execution_class,
+                    profile=requested_execution_profile,
+                    dependency_mode=requested_dependency_mode,
+                    builtin_package_set=requested_builtin_package_set,
+                    network_policy=requested_network_policy,
+                    filesystem_policy=requested_filesystem_policy,
+                    backend_extensions=requested_backend_extensions,
                 )
+                if backend_selection is not None and not backend_selection.available:
+                    blocked_reason = backend_selection.reason
+                else:
+                    blocked_reason = build_tool_execution_not_yet_isolated_reason(
+                        tool_id=request.tool_id,
+                        execution_class=effective_execution_class,
+                    )
             return PluginExecutionDispatchPlan(
                 requested_execution_class=requested_execution_class,
                 effective_execution_class=effective_execution_class,
@@ -183,10 +197,23 @@ class PluginExecutionDispatchPlanner:
         if blocked_reason is None and is_strong_tool_execution_class(
             effective_execution_class
         ):
-            blocked_reason = build_tool_execution_not_yet_isolated_reason(
-                tool_id=request.tool_id,
+            backend_selection = describe_tool_execution_backend_selection(
+                sandbox_backend_client=self._sandbox_backend_client,
                 execution_class=effective_execution_class,
+                profile=requested_execution_profile,
+                dependency_mode=requested_dependency_mode,
+                builtin_package_set=requested_builtin_package_set,
+                network_policy=requested_network_policy,
+                filesystem_policy=requested_filesystem_policy,
+                backend_extensions=requested_backend_extensions,
             )
+            if backend_selection is not None and not backend_selection.available:
+                blocked_reason = backend_selection.reason
+            else:
+                blocked_reason = build_tool_execution_not_yet_isolated_reason(
+                    tool_id=request.tool_id,
+                    execution_class=effective_execution_class,
+                )
         return PluginExecutionDispatchPlan(
             requested_execution_class=requested_execution_class,
             effective_execution_class=effective_execution_class,

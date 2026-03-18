@@ -25,7 +25,10 @@ from app.services.sandbox_backends import (
     SandboxExecutionRequest,
     get_sandbox_backend_client,
 )
-from app.services.tool_execution_isolation import is_strong_tool_execution_class
+from app.services.tool_execution_isolation import (
+    describe_tool_execution_backend_selection,
+    is_strong_tool_execution_class,
+)
 
 
 @dataclass(frozen=True)
@@ -377,12 +380,29 @@ class RuntimeExecutionAdapterRegistry:
             if node_type == "tool" and is_strong_tool_execution_class(
                 execution_policy.execution_class
             ):
+                backend_selection = describe_tool_execution_backend_selection(
+                    sandbox_backend_client=self._sandbox_backend_client,
+                    execution_class=execution_policy.execution_class,
+                    profile=execution_policy.profile,
+                    dependency_mode=execution_policy.dependency_mode,
+                    builtin_package_set=execution_policy.builtin_package_set,
+                    network_policy=execution_policy.network_policy,
+                    filesystem_policy=execution_policy.filesystem_policy,
+                    backend_extensions=execution_policy.backend_extensions,
+                )
+                if backend_selection is not None and not backend_selection.available:
+                    return NodeExecutionAvailability(
+                        available=False,
+                        blocking_reason=backend_selection.reason,
+                    )
                 return NodeExecutionAvailability(
                     available=False,
                     blocking_reason=(
-                        "Tool nodes do not yet implement sandbox-backed tool execution for requested "
-                        f"execution class '{execution_policy.execution_class}'. Current native / compat "
-                        "invokers still run from the host / adapter boundary, so strong-isolation tool "
+                        "Tool nodes do not yet implement sandbox-backed tool execution "
+                        "for requested execution class "
+                        f"'{execution_policy.execution_class}'. Current native / compat "
+                        "invokers still run from the host / adapter boundary, so "
+                        "strong-isolation tool "
                         "paths must fail closed until a sandbox tool runner is available."
                     ),
                 )

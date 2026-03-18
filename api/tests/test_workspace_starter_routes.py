@@ -562,8 +562,8 @@ def test_workspace_starter_create_rejects_tool_execution_dependency_contract(
     assert response.status_code == 422
     message, issues = _validation_detail(response.json())
     assert "tool execution capabilities" in message
-    assert "sandbox-backed tool execution" in message
-    assert "must fail closed" in message
+    assert "no compatible sandbox backend is currently available" in message.lower()
+    assert "does not support builtin package set hints" in message
     assert any(issue["category"] == "tool_execution" for issue in issues)
 
 
@@ -692,7 +692,7 @@ def test_workspace_starter_create_rejects_allowed_tool_default_microvm_when_back
     message, issues = _validation_detail(response.json())
     assert "toolPolicy.allowedToolIds" in message
     assert "default execution class 'microvm'" in message
-    assert "sandbox-backed tool execution" in message
+    assert "no compatible sandbox backend is currently available" in message.lower()
     assert any(issue["category"] == "tool_execution" for issue in issues)
 
 

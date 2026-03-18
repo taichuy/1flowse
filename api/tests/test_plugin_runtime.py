@@ -453,34 +453,26 @@ def test_plugin_call_proxy_fail_closes_backend_extension_request_without_backend
         )
     )
 
-    assert dispatch.as_trace_payload() == {
-        "requested_execution_class": "microvm",
-        "effective_execution_class": "microvm",
-        "execution_source": "tool_call",
-        "requested_execution_profile": "compat-isolation",
-        "requested_execution_timeout_ms": 4000,
-        "requested_network_policy": "isolated",
-        "requested_filesystem_policy": "ephemeral",
-        "requested_dependency_mode": None,
-        "requested_builtin_package_set": None,
-        "requested_dependency_ref": None,
-        "requested_backend_extensions": {"mountPreset": "analytics"},
-        "executor_ref": "tool:compat-adapter:dify-default",
-        "sandbox_backend_id": None,
-        "sandbox_backend_executor_ref": None,
-        "fallback_reason": None,
-        "blocked_reason": (
-            "Tool 'compat:dify:plugin:demo/search' requests execution class 'microvm', but "
-            "7Flows does not yet implement sandbox-backed tool execution for native / compat "
-            "tool paths. Current host / adapter invokers cannot honestly enforce this "
-            "strong-isolation contract, so the path must fail closed until a sandbox tool "
-            "runner is available."
-        ),
-    }
+    payload = dispatch.as_trace_payload()
+    assert payload["requested_execution_class"] == "microvm"
+    assert payload["effective_execution_class"] == "microvm"
+    assert payload["execution_source"] == "tool_call"
+    assert payload["requested_execution_profile"] == "compat-isolation"
+    assert payload["requested_execution_timeout_ms"] == 4000
+    assert payload["requested_network_policy"] == "isolated"
+    assert payload["requested_filesystem_policy"] == "ephemeral"
+    assert payload["requested_backend_extensions"] == {"mountPreset": "analytics"}
+    assert payload["executor_ref"] == "tool:compat-adapter:dify-default"
+    assert payload["fallback_reason"] is None
+    assert payload["blocked_reason"] is not None
+    assert "no compatible sandbox backend is currently available" in str(
+        payload["blocked_reason"]
+    ).lower()
+    assert "does not support backendExtensions payloads" in str(payload["blocked_reason"])
 
     with pytest.raises(
         PluginInvocationError,
-        match="does not yet implement sandbox-backed tool execution",
+        match="No compatible sandbox backend is currently available",
     ):
         proxy.invoke(
             PluginCallRequest(
@@ -1009,33 +1001,23 @@ def test_plugin_call_proxy_fail_closes_native_builtin_package_request() -> None:
         )
     )
 
-    assert dispatch.as_trace_payload() == {
-        "requested_execution_class": "sandbox",
-        "effective_execution_class": "sandbox",
-        "execution_source": "tool_call",
-        "requested_execution_profile": None,
-        "requested_execution_timeout_ms": None,
-        "requested_network_policy": None,
-        "requested_filesystem_policy": None,
-        "requested_dependency_mode": "builtin",
-        "requested_builtin_package_set": "py-data-basic",
-        "requested_dependency_ref": None,
-        "requested_backend_extensions": None,
-        "executor_ref": "tool:native-sandbox",
-        "sandbox_backend_id": None,
-        "sandbox_backend_executor_ref": None,
-        "fallback_reason": None,
-        "blocked_reason": (
-            "Tool 'native.search' requests execution class 'sandbox', but 7Flows does not "
-            "yet implement sandbox-backed tool execution for native / compat tool paths. "
-            "Current host / adapter invokers cannot honestly enforce this strong-isolation "
-            "contract, so the path must fail closed until a sandbox tool runner is available."
-        ),
-    }
+    payload = dispatch.as_trace_payload()
+    assert payload["requested_execution_class"] == "sandbox"
+    assert payload["effective_execution_class"] == "sandbox"
+    assert payload["execution_source"] == "tool_call"
+    assert payload["requested_dependency_mode"] == "builtin"
+    assert payload["requested_builtin_package_set"] == "py-data-basic"
+    assert payload["executor_ref"] == "tool:native-sandbox"
+    assert payload["fallback_reason"] is None
+    assert payload["blocked_reason"] is not None
+    assert "no compatible sandbox backend is currently available" in str(
+        payload["blocked_reason"]
+    ).lower()
+    assert "does not support builtin package set hints" in str(payload["blocked_reason"])
 
     with pytest.raises(
         PluginInvocationError,
-        match="does not yet implement sandbox-backed tool execution",
+        match="No compatible sandbox backend is currently available",
     ):
         proxy.invoke(
             PluginCallRequest(
@@ -1051,6 +1033,66 @@ def test_plugin_call_proxy_fail_closes_native_builtin_package_request() -> None:
                 },
             )
         )
+
+
+def test_plugin_call_proxy_surfaces_backend_readiness_for_native_strong_isolation() -> None:
+    registry = PluginRegistry()
+    invoked = False
+
+    def invoker(_request: PluginCallRequest) -> dict[str, object]:
+        nonlocal invoked
+        invoked = True
+        return {"documents": ["doc-1"]}
+
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.search",
+            name="Native Search",
+            supported_execution_classes=("inline", "sandbox"),
+        ),
+        invoker=invoker,
+    )
+
+    proxy = PluginCallProxy(
+        registry,
+        sandbox_backend_client=_sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    dispatch = proxy.describe_execution_dispatch(
+        PluginCallRequest(
+            tool_id="native.search",
+            ecosystem="native",
+            inputs={"query": "sevenflows"},
+            trace_id="trace-native-backend-gap",
+            execution={"class": "sandbox", "source": "tool_call"},
+        )
+    )
+
+    payload = dispatch.as_trace_payload()
+    assert payload["requested_execution_class"] == "sandbox"
+    assert payload["effective_execution_class"] == "sandbox"
+    assert payload["executor_ref"] == "tool:native-sandbox"
+    assert payload["blocked_reason"] is not None
+    assert "no compatible sandbox backend is currently available" in str(
+        payload["blocked_reason"]
+    ).lower()
+    assert "does not support execution class 'sandbox'" in str(payload["blocked_reason"])
+
+    with pytest.raises(
+        PluginInvocationError,
+        match="No compatible sandbox backend is currently available",
+    ):
+        proxy.invoke(
+            PluginCallRequest(
+                tool_id="native.search",
+                ecosystem="native",
+                inputs={"query": "sevenflows"},
+                trace_id="trace-native-backend-gap",
+                execution={"class": "sandbox", "source": "tool_call"},
+            )
+        )
+
+    assert invoked is False
 
 
 def test_plugin_call_proxy_fail_closes_default_strong_isolation_for_native_tool() -> None:
@@ -1126,6 +1168,73 @@ def test_plugin_call_proxy_fail_closes_default_strong_isolation_for_native_tool(
         )
 
     assert invoked is False
+
+
+def test_plugin_call_proxy_surfaces_backend_readiness_for_compat_strong_isolation() -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="compat:dify:plugin:demo/search",
+            name="Search",
+            ecosystem="compat:dify",
+            source="plugin",
+            constrained_ir=_demo_search_constrained_ir(),
+        )
+    )
+    registry.register_adapter(
+        CompatibilityAdapterRegistration(
+            id="dify-microvm",
+            ecosystem="compat:dify",
+            endpoint="http://adapter.local/dify",
+            supported_execution_classes=("subprocess", "microvm"),
+        )
+    )
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        pytest.fail("compat adapter should not be invoked when sandbox backend is unavailable")
+
+    proxy = PluginCallProxy(
+        registry,
+        client_factory=lambda timeout_ms: httpx.Client(
+            transport=httpx.MockTransport(handler),
+            timeout=timeout_ms / 1000,
+        ),
+        sandbox_backend_client=_sandbox_backend_client(execution_classes=("sandbox",)),
+    )
+
+    dispatch = proxy.describe_execution_dispatch(
+        PluginCallRequest(
+            tool_id="compat:dify:plugin:demo/search",
+            ecosystem="compat:dify",
+            inputs={"query": "sevenflows"},
+            trace_id="trace-compat-backend-gap",
+            execution={"class": "microvm", "source": "tool_call"},
+        )
+    )
+
+    payload = dispatch.as_trace_payload()
+    assert payload["requested_execution_class"] == "microvm"
+    assert payload["effective_execution_class"] == "microvm"
+    assert payload["executor_ref"] == "tool:compat-adapter:dify-microvm"
+    assert payload["blocked_reason"] is not None
+    assert "no compatible sandbox backend is currently available" in str(
+        payload["blocked_reason"]
+    ).lower()
+    assert "does not support execution class 'microvm'" in str(payload["blocked_reason"])
+
+    with pytest.raises(
+        PluginInvocationError,
+        match="No compatible sandbox backend is currently available",
+    ):
+        proxy.invoke(
+            PluginCallRequest(
+                tool_id="compat:dify:plugin:demo/search",
+                ecosystem="compat:dify",
+                inputs={"query": "sevenflows"},
+                trace_id="trace-compat-backend-gap",
+                execution={"class": "microvm", "source": "tool_call"},
+            )
+        )
 
 
 def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_compat_adapter() -> None:

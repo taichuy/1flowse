@@ -1097,7 +1097,7 @@ def test_create_workflow_rejects_sandbox_code_dependency_contract_without_backen
     assert "builtin package set" in detail.lower()
 
 
-def test_create_workflow_rejects_sandbox_code_runtime_policy_dependency_contract_without_backend_support(
+def test_create_workflow_rejects_sandbox_code_runtime_policy_deps_without_backend_support(
     client: TestClient,
     monkeypatch,
 ) -> None:
@@ -1323,8 +1323,8 @@ def test_create_workflow_rejects_tool_execution_dependency_contract_without_back
     assert response.status_code == 422
     detail = _workflow_detail_message(response)
     assert "tool execution capabilities" in detail
-    assert "sandbox-backed tool execution" in detail
-    assert "must fail closed" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
+    assert "does not support builtin package set hints" in detail
 
 
 def test_create_workflow_rejects_tool_execution_dependency_contract_until_tool_runner_exists(
@@ -1533,7 +1533,7 @@ def test_create_workflow_rejects_tool_default_sandbox_when_backend_unavailable(
     assert response.status_code == 422
     detail = _workflow_detail_message(response)
     assert "default execution class 'sandbox'" in detail
-    assert "sandbox-backed tool execution" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
 
 
 def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unavailable(
@@ -1603,13 +1603,14 @@ def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unava
     detail = _workflow_detail_message(response)
     assert "toolPolicy.allowedToolIds" in detail
     assert "default execution class 'microvm'" in detail
-    assert "sandbox-backed tool execution" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
     issues = _workflow_detail_issues(response)
     assert any(
         issue.get("category") == "tool_execution"
         and issue.get("path") == "nodes.1.config.toolPolicy.allowedToolIds"
         and issue.get("field") == "allowedToolIds"
-        and "sandbox-backed tool execution" in issue.get("message", "")
+        and "no compatible sandbox backend is currently available"
+        in issue.get("message", "").lower()
         for issue in issues
     )
 

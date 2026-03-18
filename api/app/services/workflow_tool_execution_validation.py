@@ -15,7 +15,11 @@ from app.services.sandbox_backends import (
     SandboxExecutionRequest,
     get_sandbox_backend_client,
 )
-from app.services.tool_execution_isolation import is_strong_tool_execution_class
+from app.services.tool_execution_isolation import (
+    build_tool_execution_not_yet_isolated_reason,
+    describe_tool_execution_backend_selection,
+    is_strong_tool_execution_class,
+)
 
 _DEPENDENCY_MODES = {"builtin", "dependency_ref", "backend_managed"}
 
@@ -224,9 +228,11 @@ def _collect_agent_execution_issues(
                     WorkflowToolExecutionValidationIssue(
                         message=(
                             f"LLM agent node '{node_label}' declares toolPolicy.execution class "
-                            f"'{policy_execution_class}' without narrowing toolPolicy.allowedToolIds, "
-                            "but the current workspace tool catalog still contains execution-incompatible "
-                            f"tools: {rendered_tool_ids}. Scope allowedToolIds to compatible tools or "
+                            f"'{policy_execution_class}' without narrowing "
+                            "toolPolicy.allowedToolIds, but the current workspace tool catalog "
+                            "still contains execution-incompatible "
+                            f"tools: {rendered_tool_ids}. Scope allowedToolIds to compatible "
+                            "tools or "
                             "remove the explicit execution target."
                         ),
                         path=f"nodes.{node_index}.config.toolPolicy.execution",
@@ -364,8 +370,9 @@ def _collect_sandbox_code_execution_issues(
         return [
             WorkflowToolExecutionValidationIssue(
                 message=(
-                    f"{context} cannot run with execution class 'inline'. Use explicit 'subprocess' "
-                    "for the current host-controlled MVP path, or register a sandbox backend for "
+                    f"{context} cannot run with execution class 'inline'. Use explicit "
+                    "'subprocess' for the current host-controlled MVP path, or register a "
+                    "sandbox backend for "
                     "'sandbox' / 'microvm'."
                 ),
                 path=path,
@@ -377,8 +384,9 @@ def _collect_sandbox_code_execution_issues(
         return [
             WorkflowToolExecutionValidationIssue(
                 message=(
-                    f"{context} requests unsupported execution class '{execution_class}'. Strong-isolation "
-                    "paths must fail closed until a compatible sandbox backend is available."
+                    f"{context} requests unsupported execution class '{execution_class}'. "
+                    "Strong-isolation paths must fail closed until a compatible sandbox "
+                    "backend is available."
                 ),
                 path=path,
                 field="execution",
@@ -409,8 +417,8 @@ def _collect_sandbox_code_execution_issues(
     return [
         WorkflowToolExecutionValidationIssue(
             message=(
-                f"{context} requests execution class '{execution_class}', but no compatible sandbox backend "
-                f"is currently available. {backend_reason}"
+                f"{context} requests execution class '{execution_class}', but no compatible "
+                f"sandbox backend is currently available. {backend_reason}"
             ).strip(),
             path=path,
             field="execution",
@@ -477,13 +485,26 @@ def _build_execution_support_issue(
         supported_execution_classes = tuple(tool.supported_execution_classes or ("inline",))
         if requested_execution_class in supported_execution_classes:
             if is_strong_tool_execution_class(requested_execution_class):
+                backend_issue = _build_sandbox_backend_issue(
+                    context=context,
+                    tool_id=tool_id,
+                    requested_execution_class=requested_execution_class,
+                    execution_payload=execution_payload,
+                    sandbox_backend_client=sandbox_backend_client,
+                    path=path,
+                    field=field,
+                )
+                if backend_issue is not None:
+                    return backend_issue
+                runner_gap_reason = build_tool_execution_not_yet_isolated_reason(
+                    tool_id=tool_id,
+                    execution_class=requested_execution_class,
+                )
                 return WorkflowToolExecutionValidationIssue(
                     message=(
-                        f"{context} explicitly requests execution class '{requested_execution_class}' for "
-                        f"native tool '{tool_id}', but 7Flows does not yet implement sandbox-backed tool "
-                        "execution for native / compat tool paths. Current host / adapter invokers cannot "
-                        "honestly enforce this strong-isolation contract, so the path must fail closed until "
-                        "a sandbox tool runner is available."
+                        f"{context} explicitly requests execution class "
+                        f"'{requested_execution_class}' for native tool '{tool_id}', "
+                        f"but {runner_gap_reason}"
                     ),
                     path=path,
                     field=field,
@@ -531,13 +552,26 @@ def _build_execution_support_issue(
     supported_execution_classes = tuple(adapter.supported_execution_classes or ("subprocess",))
     if requested_execution_class in supported_execution_classes:
         if is_strong_tool_execution_class(requested_execution_class):
+            backend_issue = _build_sandbox_backend_issue(
+                context=context,
+                tool_id=tool_id,
+                requested_execution_class=requested_execution_class,
+                execution_payload=execution_payload,
+                sandbox_backend_client=sandbox_backend_client,
+                path=path,
+                field=field,
+            )
+            if backend_issue is not None:
+                return backend_issue
+            runner_gap_reason = build_tool_execution_not_yet_isolated_reason(
+                tool_id=tool_id,
+                execution_class=requested_execution_class,
+            )
             return WorkflowToolExecutionValidationIssue(
                 message=(
-                    f"{context} explicitly requests execution class '{requested_execution_class}' for "
-                    f"tool '{tool_id}', but 7Flows does not yet implement sandbox-backed tool execution "
-                    "for native / compat tool paths. Current host / adapter invokers cannot honestly "
-                    "enforce this strong-isolation contract, so the path must fail closed until a sandbox "
-                    "tool runner is available."
+                    f"{context} explicitly requests execution class "
+                    f"'{requested_execution_class}' for tool '{tool_id}', but "
+                    f"{runner_gap_reason}"
                 ),
                 path=path,
                 field=field,
@@ -596,13 +630,24 @@ def _build_default_execution_support_issue(
                 field=field,
             )
         if is_strong_tool_execution_class(default_execution_class):
+            backend_issue = _build_default_sandbox_backend_issue(
+                context=context,
+                tool_id=tool_id,
+                default_execution_class=default_execution_class,
+                sandbox_backend_client=sandbox_backend_client,
+                path=path,
+                field=field,
+            )
+            if backend_issue is not None:
+                return backend_issue
+            runner_gap_reason = build_tool_execution_not_yet_isolated_reason(
+                tool_id=tool_id,
+                execution_class=default_execution_class,
+            )
             return WorkflowToolExecutionValidationIssue(
                 message=(
                     f"{context} relies on native tool '{tool_id}' default execution class "
-                    f"'{default_execution_class}', but 7Flows does not yet implement sandbox-backed tool "
-                    "execution for native / compat tool paths. Current host / adapter invokers cannot "
-                    "honestly enforce this strong-isolation contract, so the path must fail closed until a "
-                    "sandbox tool runner is available."
+                    f"'{default_execution_class}', but {runner_gap_reason}"
                 ),
                 path=path,
                 field=field,
@@ -653,12 +698,24 @@ def _build_default_execution_support_issue(
         )
 
     if is_strong_tool_execution_class(default_execution_class):
+        backend_issue = _build_default_sandbox_backend_issue(
+            context=context,
+            tool_id=tool_id,
+            default_execution_class=default_execution_class,
+            sandbox_backend_client=sandbox_backend_client,
+            path=path,
+            field=field,
+        )
+        if backend_issue is not None:
+            return backend_issue
+        runner_gap_reason = build_tool_execution_not_yet_isolated_reason(
+            tool_id=tool_id,
+            execution_class=default_execution_class,
+        )
         return WorkflowToolExecutionValidationIssue(
             message=(
-                f"{context} relies on tool '{tool_id}' default execution class '{default_execution_class}', "
-                "but 7Flows does not yet implement sandbox-backed tool execution for native / compat tool "
-                "paths. Current host / adapter invokers cannot honestly enforce this strong-isolation "
-                "contract, so the path must fail closed until a sandbox tool runner is available."
+                f"{context} relies on tool '{tool_id}' default execution class "
+                f"'{default_execution_class}', but {runner_gap_reason}"
             ),
             path=path,
             field=field,
@@ -721,8 +778,8 @@ def _build_default_sandbox_backend_issue(
     return WorkflowToolExecutionValidationIssue(
         message=(
             f"{context} relies on tool '{tool_id}' default execution class "
-            f"'{default_execution_class}', but no compatible sandbox backend is currently available. "
-            f"{backend_reason}"
+            f"'{default_execution_class}', but no compatible sandbox backend is currently "
+            f"available. {backend_reason}"
         ).strip(),
         path=path,
         field=field,
@@ -744,7 +801,8 @@ def _describe_sandbox_backend_unavailable(
     if dependency_mode != "builtin":
         builtin_package_set = None
     backend_extensions = _normalize_optional_object(execution.get("backendExtensions"))
-    selection = sandbox_backend_client.describe_tool_execution_backend(
+    selection = describe_tool_execution_backend_selection(
+        sandbox_backend_client=sandbox_backend_client,
         execution_class=requested_execution_class,
         profile=_normalize_optional_string(execution.get("profile")),
         dependency_mode=dependency_mode,
@@ -753,7 +811,7 @@ def _describe_sandbox_backend_unavailable(
         filesystem_policy=_normalize_optional_string(execution.get("filesystemPolicy")),
         backend_extensions=backend_extensions,
     )
-    if selection.available:
+    if selection is None or selection.available:
         return None
     return selection.reason or "No compatible sandbox backend is currently available."
 

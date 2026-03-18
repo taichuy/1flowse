@@ -188,7 +188,7 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
 
     with pytest.raises(
         WorkflowExecutionError,
-        match="sandbox-backed tool execution",
+        match="No sandbox backend is registered",
     ):
         RuntimeService(
             plugin_call_proxy=PluginCallProxy(
@@ -215,7 +215,7 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
     ).first()
     assert tool_run is not None
     assert tool_run.status == "blocked"
-    assert "sandbox-backed tool execution" in (tool_run.error_message or "")
+    assert "No sandbox backend is registered" in (tool_run.error_message or "")
     assert invoked is False
 
     events = sqlite_session.scalars(
@@ -229,7 +229,7 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
     assert unavailable_event.payload["node_id"] == "tool"
     assert unavailable_event.payload["node_type"] == "tool"
     assert unavailable_event.payload["requested_execution_class"] == "sandbox"
-    assert "sandbox-backed tool execution" in str(unavailable_event.payload["reason"])
+    assert "No sandbox backend is registered" in str(unavailable_event.payload["reason"])
 
 
 def test_runtime_service_blocks_sandbox_code_without_registered_backend(
@@ -772,11 +772,19 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         },
     )
 
+    sandbox_backend_client = SandboxBackendClient(SandboxBackendRegistry())
+
     with pytest.raises(
         WorkflowExecutionError,
-        match="sandbox-backed tool execution",
+        match="No sandbox backend is registered",
     ):
-        RuntimeService(plugin_call_proxy=PluginCallProxy(registry)).execute_workflow(
+        RuntimeService(
+            plugin_call_proxy=PluginCallProxy(
+                registry,
+                sandbox_backend_client=sandbox_backend_client,
+            ),
+            sandbox_backend_client=sandbox_backend_client,
+        ).execute_workflow(
             sqlite_session,
             workflow,
             {"topic": "fallback"},
@@ -809,10 +817,8 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         "node_type": "tool",
         "requested_execution_class": "microvm",
         "reason": (
-            "Tool nodes do not yet implement sandbox-backed tool execution for requested "
-            "execution class 'microvm'. Current native / compat invokers still run from the "
-            "host / adapter boundary, so strong-isolation tool paths must fail closed until "
-            "a sandbox tool runner is available."
+            "No sandbox backend is registered. Strong-isolation paths must fail closed until "
+            "a compatible backend is available."
         ),
     }
 
