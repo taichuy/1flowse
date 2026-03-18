@@ -9,7 +9,7 @@
 - 7Flows 是面向多 Agent 协作的可视化工作流平台，不是 Dify ChatFlow 的复刻，也不是通用低代码平台。
 - 对外传播短期优先围绕 OpenClaw / 本地 AI 助手“黑盒变透明”的控制面切口展开，但内部产品内核仍是多 Agent workflow 平台，不退化为某个上游产品的 UI 包装层。
 - 平台内部统一以 `7Flows IR` 作为事实模型，外部协议通过适配层映射，不允许反向让 OpenAI / Anthropic / Dify 协议主导内部设计。
-- 开源给协作，商业给治理；商业能力必须建立在同一 kernel 上，不允许另起执行引擎、第二套流程模型或第二套内部 DSL。
+- 开源给协作，商业给组织治理；商业能力必须建立在同一 kernel 上，不允许另起执行引擎、第二套流程模型或第二套内部 DSL。
 - 仓库授权当前以 `LICENSE` 和 `docs/open-source-commercial-strategy.md` 为准；若采用 Apache 2.0 基底 + 附加条件的 community license，就不要再把项目误写成纯 `MIT` 或纯 `Apache-2.0`。
 - 首版核心关注点是：可编排、可调试、可发布、可兼容、可追溯。
 
