@@ -39,7 +39,7 @@
 
 - `loop` 节点尚未在 MVP 执行器中开放执行。
 - 独立的 `SandboxBackendRegistration / SandboxExecution` 协议尚未完全成型；当前 `sandbox_code` 已进入持久化与 runtime 主链，并在保存时按 sandbox readiness fail-closed，但 editor palette 仍默认隐藏，host-subprocess 只算 MVP 参考执行路径，不应误写成正式沙箱产品能力。
-- `WAITING_CALLBACK` 仍缺少后台自动唤醒与完整 scheduler / callback bus。
+- `WAITING_CALLBACK` 已具备 callback ticket cleanup + waiting resume monitor 的后台补偿链路，并且首页会显示当前自动恢复配置；但完整 scheduler / callback bus、跨入口 blocker explanation 与更强的 operator 闭环仍需继续补齐。
 - 发布网关虽然已拆出多个子模块，但主网关和发布治理仍在持续治理中。
 - 节点配置、工作流编辑器和发布治理前端仍处于“可继续扩展”的阶段，不应假装成品已齐全。
 - OpenClaw-first 的对外切口已经明确，但仓库当前仍未提供“开箱即用的一键 OpenClaw 会话接管 / demo 套件”；相关接入路径和传播素材仍需继续补齐。

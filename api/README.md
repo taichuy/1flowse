@@ -21,7 +21,12 @@ uv run celery -A app.core.celery_app.celery_app worker --loglevel INFO --pool so
 uv run celery -A app.core.celery_app.celery_app beat --loglevel INFO
 ```
 
-默认会按 `SEVENFLOWS_CALLBACK_TICKET_CLEANUP_INTERVAL_SECONDS` 周期投递 `runtime.cleanup_callback_tickets`。
+默认会按以下周期任务推进 callback waiting 的后台补偿链路：
+
+- `SEVENFLOWS_CALLBACK_TICKET_CLEANUP_INTERVAL_SECONDS` -> `runtime.cleanup_callback_tickets`
+- `SEVENFLOWS_WAITING_RESUME_MONITOR_INTERVAL_SECONDS` -> `runtime.monitor_waiting_resumes`
+
+两者都依赖单独启动的 scheduler 进程；如果 beat 未运行，API / worker 本身不会自动代替这些周期治理动作。
 
 ## 迁移
 

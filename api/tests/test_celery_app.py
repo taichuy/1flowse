@@ -45,6 +45,24 @@ def test_celery_app_registers_approval_ticket_expiry_beat_schedule(monkeypatch) 
     _reload_celery_module()
 
 
+def test_celery_app_registers_waiting_resume_monitor_beat_schedule(monkeypatch) -> None:
+    monkeypatch.setenv("SEVENFLOWS_WAITING_RESUME_MONITOR_SCHEDULE_ENABLED", "true")
+    monkeypatch.setenv("SEVENFLOWS_WAITING_RESUME_MONITOR_INTERVAL_SECONDS", "45")
+
+    module = _reload_celery_module()
+    schedule = module.celery_app.conf.beat_schedule
+
+    assert "runtime.monitor_waiting_resumes" in schedule
+    task_config = schedule["runtime.monitor_waiting_resumes"]
+    assert task_config["task"] == "runtime.monitor_waiting_resumes"
+    assert task_config["schedule"] == 45
+    assert task_config["kwargs"] == {"source": "scheduler_waiting_resume_monitor"}
+
+    monkeypatch.delenv("SEVENFLOWS_WAITING_RESUME_MONITOR_SCHEDULE_ENABLED")
+    monkeypatch.delenv("SEVENFLOWS_WAITING_RESUME_MONITOR_INTERVAL_SECONDS")
+    _reload_celery_module()
+
+
 def test_celery_app_skips_approval_ticket_expiry_schedule_when_disabled(monkeypatch) -> None:
     monkeypatch.setenv("SEVENFLOWS_APPROVAL_TICKET_EXPIRY_SCHEDULE_ENABLED", "false")
     monkeypatch.setenv("SEVENFLOWS_APPROVAL_TICKET_EXPIRY_INTERVAL_SECONDS", "90")
@@ -68,6 +86,19 @@ def test_celery_app_skips_callback_cleanup_schedule_when_disabled(monkeypatch) -
 
     monkeypatch.delenv("SEVENFLOWS_CALLBACK_TICKET_CLEANUP_SCHEDULE_ENABLED")
     monkeypatch.delenv("SEVENFLOWS_CALLBACK_TICKET_CLEANUP_INTERVAL_SECONDS")
+    _reload_celery_module()
+
+
+def test_celery_app_skips_waiting_resume_monitor_schedule_when_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("SEVENFLOWS_WAITING_RESUME_MONITOR_SCHEDULE_ENABLED", "false")
+    monkeypatch.setenv("SEVENFLOWS_WAITING_RESUME_MONITOR_INTERVAL_SECONDS", "45")
+
+    module = _reload_celery_module()
+
+    assert "runtime.monitor_waiting_resumes" not in module.celery_app.conf.beat_schedule
+
+    monkeypatch.delenv("SEVENFLOWS_WAITING_RESUME_MONITOR_SCHEDULE_ENABLED")
+    monkeypatch.delenv("SEVENFLOWS_WAITING_RESUME_MONITOR_INTERVAL_SECONDS")
     _reload_celery_module()
 
 

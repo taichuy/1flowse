@@ -12,6 +12,8 @@ from app.core.config import get_settings
 from app.core.database import check_database, get_db
 from app.models.run import Run, RunEvent
 from app.schemas.system import (
+    CallbackWaitingAutomationCheck,
+    CallbackWaitingAutomationStepCheck,
     CompatibilityAdapterCheck,
     PluginToolCheck,
     RecentRunCheck,
@@ -216,6 +218,79 @@ def _build_sandbox_execution_class_reason(
     )
 
 
+def _build_callback_waiting_automation(
+    settings,
+) -> CallbackWaitingAutomationCheck:
+    cleanup_enabled = (
+        settings.callback_ticket_cleanup_schedule_enabled
+        and settings.callback_ticket_cleanup_interval_seconds > 0
+    )
+    monitor_enabled = (
+        settings.waiting_resume_monitor_schedule_enabled
+        and settings.waiting_resume_monitor_interval_seconds > 0
+    )
+
+    steps = [
+        CallbackWaitingAutomationStepCheck(
+            key="callback_ticket_cleanup",
+            label="Expire stale callback tickets",
+            task="runtime.cleanup_callback_tickets",
+            source="scheduler_cleanup",
+            enabled=cleanup_enabled,
+            interval_seconds=(
+                settings.callback_ticket_cleanup_interval_seconds
+                if cleanup_enabled
+                else None
+            ),
+            detail=(
+                "周期清理 stale callback ticket，并在条件满足时沿同一事实链补发即时 resume。"
+                if cleanup_enabled
+                else "当前未配置周期清理；过期 callback ticket 需要依赖手动治理入口。"
+            ),
+        ),
+        CallbackWaitingAutomationStepCheck(
+            key="waiting_resume_monitor",
+            label="Requeue due waiting callbacks",
+            task="runtime.monitor_waiting_resumes",
+            source="scheduler_waiting_resume_monitor",
+            enabled=monitor_enabled,
+            interval_seconds=(
+                settings.waiting_resume_monitor_interval_seconds
+                if monitor_enabled
+                else None
+            ),
+            detail=(
+                "周期扫描到期的 `WAITING_CALLBACK` node，并补发后台 requeue / resume。"
+                if monitor_enabled
+                else "当前未配置周期 waiting resume monitor；到期 waiting callback 仍需要依赖 callback 投递或手动恢复。"
+            ),
+        ),
+    ]
+
+    if cleanup_enabled and monitor_enabled:
+        status = "configured"
+        detail = (
+            "`WAITING_CALLBACK` 后台补偿链路已完成配置，但仍依赖独立 scheduler 进程实际运行。"
+        )
+    elif cleanup_enabled or monitor_enabled:
+        status = "partial"
+        detail = (
+            "`WAITING_CALLBACK` 只完成了部分后台补偿配置；仍存在需要人工介入的恢复缺口。"
+        )
+    else:
+        status = "disabled"
+        detail = (
+            "`WAITING_CALLBACK` 未启用后台补偿调度；当前仍依赖直接 callback、手动 cleanup 或手动 resume。"
+        )
+
+    return CallbackWaitingAutomationCheck(
+        status=status,
+        scheduler_required=True,
+        detail=detail,
+        steps=steps,
+    )
+
+
 def _probe(name: str, handler: Callable[[], None]) -> ServiceCheck:
     try:
         handler()
@@ -358,6 +433,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
             "workflow-crud-skeleton",
             "runtime-worker-skeleton",
             "runtime-run-tracking",
+            "callback-waiting-automation-summary",
             "sandbox-ready",
             "sandbox-backend-registry",
             "sandbox-readiness-summary",
@@ -390,6 +466,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
             for tool in registry.list_tools()
         ],
         runtime_activity=_build_runtime_activity(db),
+        callback_waiting_automation=_build_callback_waiting_automation(settings),
     )
 
 

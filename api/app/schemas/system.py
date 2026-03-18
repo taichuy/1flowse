@@ -110,6 +110,23 @@ class RuntimeActivityCheck(BaseModel):
     recent_events: list[RecentRunEventCheck] = Field(default_factory=list)
 
 
+class CallbackWaitingAutomationStepCheck(BaseModel):
+    key: str
+    label: str
+    task: str
+    source: str
+    enabled: bool
+    interval_seconds: int | None = None
+    detail: str = ""
+
+
+class CallbackWaitingAutomationCheck(BaseModel):
+    status: str = "disabled"
+    scheduler_required: bool = True
+    detail: str = ""
+    steps: list[CallbackWaitingAutomationStepCheck] = Field(default_factory=list)
+
+
 class SystemOverview(BaseModel):
     status: str
     environment: str
@@ -120,3 +137,6 @@ class SystemOverview(BaseModel):
     sandbox_readiness: SandboxReadinessCheck = Field(default_factory=SandboxReadinessCheck)
     plugin_tools: list[PluginToolCheck] = Field(default_factory=list)
     runtime_activity: RuntimeActivityCheck = Field(default_factory=RuntimeActivityCheck)
+    callback_waiting_automation: CallbackWaitingAutomationCheck = Field(
+        default_factory=CallbackWaitingAutomationCheck
+    )

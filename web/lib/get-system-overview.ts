@@ -107,6 +107,23 @@ export type RuntimeActivityCheck = {
   recent_events: RecentRunEventCheck[];
 };
 
+export type CallbackWaitingAutomationStepCheck = {
+  key: string;
+  label: string;
+  task: string;
+  source: string;
+  enabled: boolean;
+  interval_seconds?: number | null;
+  detail: string;
+};
+
+export type CallbackWaitingAutomationCheck = {
+  status: string;
+  scheduler_required: boolean;
+  detail: string;
+  steps: CallbackWaitingAutomationStepCheck[];
+};
+
 export type SystemOverview = {
   status: string;
   environment: string;
@@ -117,6 +134,7 @@ export type SystemOverview = {
   sandbox_readiness: SandboxReadinessCheck;
   plugin_tools: PluginToolCheck[];
   runtime_activity: RuntimeActivityCheck;
+  callback_waiting_automation: CallbackWaitingAutomationCheck;
 };
 
 const fallback: SystemOverview = {
@@ -156,6 +174,12 @@ const fallback: SystemOverview = {
     },
     recent_runs: [],
     recent_events: []
+  },
+  callback_waiting_automation: {
+    status: "disabled",
+    scheduler_required: true,
+    detail: "`WAITING_CALLBACK` 后台补偿状态当前不可见，请先启动 api 服务。",
+    steps: []
   }
 };
 

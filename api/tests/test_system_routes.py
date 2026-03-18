@@ -41,6 +41,24 @@ class _StaticSandboxHealthChecker:
         return self._healths
 
 
+def _build_settings(**overrides) -> SimpleNamespace:
+    values = {
+        "env": "test",
+        "redis_url": "redis://example",
+        "s3_endpoint": "http://example",
+        "s3_access_key": "key",
+        "s3_secret_key": "secret",
+        "s3_region": "us-east-1",
+        "s3_use_ssl": False,
+        "callback_ticket_cleanup_schedule_enabled": True,
+        "callback_ticket_cleanup_interval_seconds": 300,
+        "waiting_resume_monitor_schedule_enabled": True,
+        "waiting_resume_monitor_interval_seconds": 300,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
 def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> None:
     registry = PluginRegistry()
     sandbox_registry = SandboxBackendRegistry()
@@ -52,15 +70,7 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
             source="plugin",
         )
     )
-    monkeypatch.setattr(system_routes, "get_settings", lambda: SimpleNamespace(
-        env="test",
-        redis_url="redis://example",
-        s3_endpoint="http://example",
-        s3_access_key="key",
-        s3_secret_key="secret",
-        s3_region="us-east-1",
-        s3_use_ssl=False,
-    ))
+    monkeypatch.setattr(system_routes, "get_settings", lambda: _build_settings())
     monkeypatch.setattr(system_routes, "check_database", lambda: True)
     monkeypatch.setattr(system_routes.redis, "from_url", lambda url: _HealthyRedis())
     monkeypatch.setattr(system_routes.boto3, "client", lambda *args, **kwargs: _HealthyS3Client())
@@ -114,6 +124,7 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
     assert "plugin-adapter-health-probe" in body["capabilities"]
     assert "sandbox-backend-registry" in body["capabilities"]
     assert "sandbox-readiness-summary" in body["capabilities"]
+    assert "callback-waiting-automation-summary" in body["capabilities"]
     assert "plugin-tool-catalog-visible" in body["capabilities"]
     assert "runtime-events-visible" in body["capabilities"]
     assert body["plugin_adapters"] == [
@@ -209,20 +220,44 @@ def test_system_overview_includes_plugin_adapter_health(client, monkeypatch) -> 
         "recent_runs": [],
         "recent_events": [],
     }
+    assert body["callback_waiting_automation"] == {
+        "status": "configured",
+        "scheduler_required": True,
+        "detail": "`WAITING_CALLBACK` 后台补偿链路已完成配置，但仍依赖独立 scheduler 进程实际运行。",
+        "steps": [
+            {
+                "key": "callback_ticket_cleanup",
+                "label": "Expire stale callback tickets",
+                "task": "runtime.cleanup_callback_tickets",
+                "source": "scheduler_cleanup",
+                "enabled": True,
+                "interval_seconds": 300,
+                "detail": "周期清理 stale callback ticket，并在条件满足时沿同一事实链补发即时 resume。",
+            },
+            {
+                "key": "waiting_resume_monitor",
+                "label": "Requeue due waiting callbacks",
+                "task": "runtime.monitor_waiting_resumes",
+                "source": "scheduler_waiting_resume_monitor",
+                "enabled": True,
+                "interval_seconds": 300,
+                "detail": "周期扫描到期的 `WAITING_CALLBACK` node，并补发后台 requeue / resume。",
+            },
+        ],
+    }
     assert any(service["name"] == "plugin-adapter:dify-default" for service in body["services"])
     assert any(service["name"] == "sandbox-backend:sandbox-default" for service in body["services"])
 
 
 def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatch) -> None:
-    monkeypatch.setattr(system_routes, "get_settings", lambda: SimpleNamespace(
-        env="test",
-        redis_url="redis://example",
-        s3_endpoint="http://example",
-        s3_access_key="key",
-        s3_secret_key="secret",
-        s3_region="us-east-1",
-        s3_use_ssl=False,
-    ))
+    monkeypatch.setattr(
+        system_routes,
+        "get_settings",
+        lambda: _build_settings(
+            callback_ticket_cleanup_schedule_enabled=False,
+            waiting_resume_monitor_schedule_enabled=False,
+        ),
+    )
     monkeypatch.setattr(system_routes, "check_database", lambda: True)
     monkeypatch.setattr(system_routes.redis, "from_url", lambda url: _HealthyRedis())
     monkeypatch.setattr(system_routes.boto3, "client", lambda *args, **kwargs: _HealthyS3Client())
@@ -260,7 +295,8 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
     response = client.get("/api/system/overview")
 
     assert response.status_code == 200
-    assert response.json()["sandbox_readiness"] == {
+    body = response.json()
+    assert body["sandbox_readiness"] == {
         "enabled_backend_count": 1,
         "healthy_backend_count": 0,
         "degraded_backend_count": 0,
@@ -307,20 +343,37 @@ def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatc
         "supports_network_policy": False,
         "supports_filesystem_policy": False,
     }
+    assert body["callback_waiting_automation"] == {
+        "status": "disabled",
+        "scheduler_required": True,
+        "detail": "`WAITING_CALLBACK` 未启用后台补偿调度；当前仍依赖直接 callback、手动 cleanup 或手动 resume。",
+        "steps": [
+            {
+                "key": "callback_ticket_cleanup",
+                "label": "Expire stale callback tickets",
+                "task": "runtime.cleanup_callback_tickets",
+                "source": "scheduler_cleanup",
+                "enabled": False,
+                "interval_seconds": None,
+                "detail": "当前未配置周期清理；过期 callback ticket 需要依赖手动治理入口。",
+            },
+            {
+                "key": "waiting_resume_monitor",
+                "label": "Requeue due waiting callbacks",
+                "task": "runtime.monitor_waiting_resumes",
+                "source": "scheduler_waiting_resume_monitor",
+                "enabled": False,
+                "interval_seconds": None,
+                "detail": "当前未配置周期 waiting resume monitor；到期 waiting callback 仍需要依赖 callback 投递或手动恢复。",
+            },
+        ],
+    }
 
 
 def test_system_overview_aggregates_sandbox_capabilities_per_execution_class(
     client, monkeypatch
 ) -> None:
-    monkeypatch.setattr(system_routes, "get_settings", lambda: SimpleNamespace(
-        env="test",
-        redis_url="redis://example",
-        s3_endpoint="http://example",
-        s3_access_key="key",
-        s3_secret_key="secret",
-        s3_region="us-east-1",
-        s3_use_ssl=False,
-    ))
+    monkeypatch.setattr(system_routes, "get_settings", lambda: _build_settings())
     monkeypatch.setattr(system_routes, "check_database", lambda: True)
     monkeypatch.setattr(system_routes.redis, "from_url", lambda url: _HealthyRedis())
     monkeypatch.setattr(system_routes.boto3, "client", lambda *args, **kwargs: _HealthyS3Client())

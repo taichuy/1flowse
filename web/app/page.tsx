@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CallbackWaitingAutomationPanel } from "@/components/callback-waiting-automation-panel";
 import { CredentialStorePanel } from "@/components/credential-store-panel";
 import { PluginRegistryPanel } from "@/components/plugin-registry-panel";
 import { SandboxReadinessPanel } from "@/components/sandbox-readiness-panel";
@@ -93,6 +94,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         {overview.services.map((service) => (
           <StatusCard key={service.name} service={service} />
         ))}
+      </section>
+
+      <section className="diagnostics-layout">
+        <CallbackWaitingAutomationPanel
+          automation={overview.callback_waiting_automation}
+        />
       </section>
 
       <section className="diagnostics-layout">
