@@ -25,6 +25,7 @@ from app.services.workflow_skill_references import (
     collect_invalid_workflow_skill_references,
 )
 from app.services.workflow_tool_execution_validation import (
+    collect_invalid_workflow_node_execution_references,
     collect_invalid_workflow_tool_execution_references,
 )
 from app.services.workflow_variable_validation import collect_invalid_workflow_variables
@@ -471,6 +472,25 @@ def validate_persistable_workflow_definition(
                     field=issue.field,
                 )
                 for issue in invalid_tool_execution_references
+            ],
+        )
+
+    invalid_node_execution_references = collect_invalid_workflow_node_execution_references(
+        validated_definition,
+    )
+    if invalid_node_execution_references:
+        raise WorkflowDefinitionValidationError(
+            "Workflow definition requests node execution capabilities that are not currently "
+            "available: "
+            + "; ".join(issue.message for issue in invalid_node_execution_references),
+            issues=[
+                WorkflowDefinitionValidationIssue(
+                    category="node_execution",
+                    message=issue.message,
+                    path=issue.path,
+                    field=issue.field,
+                )
+                for issue in invalid_node_execution_references
             ],
         )
 

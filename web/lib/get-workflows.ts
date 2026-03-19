@@ -67,6 +67,7 @@ export type WorkflowDefinitionPreflightIssue = {
   category:
     | "schema"
     | "node_support"
+    | "node_execution"
     | "tool_reference"
     | "tool_execution"
     | "publish_version"

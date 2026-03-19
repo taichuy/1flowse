@@ -145,6 +145,51 @@ def _bound_tool_definition(
     }
 
 
+def _condition_definition(*, runtime_policy: dict | None = None) -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "branch",
+                "type": "condition",
+                "name": "Branch",
+                "config": {"selected": "true"},
+                "runtimePolicy": runtime_policy,
+            },
+            {
+                "id": "true_path",
+                "type": "tool",
+                "name": "True Path",
+                "config": {"mock_output": {"answer": "yes"}},
+            },
+            {
+                "id": "false_path",
+                "type": "tool",
+                "name": "False Path",
+                "config": {"mock_output": {"answer": "no"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {
+                "id": "e2",
+                "sourceNodeId": "branch",
+                "targetNodeId": "true_path",
+                "condition": "true",
+            },
+            {
+                "id": "e3",
+                "sourceNodeId": "branch",
+                "targetNodeId": "false_path",
+                "condition": "false",
+            },
+            {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
+            {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+        ],
+    }
+
+
 def _skill_bound_agent_definition(
     skill_id: str,
     *,
@@ -2146,6 +2191,37 @@ def test_validate_workflow_definition_preflight_returns_normalized_definition(
     assert body["issues"] == []
 
 
+def test_validate_workflow_definition_preflight_rejects_unsupported_condition_execution_class(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Condition Execution Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={
+            "definition": _condition_definition(
+                runtime_policy={"execution": {"class": "microvm"}}
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "node execution capabilities" in detail["message"]
+    assert any(
+        issue["category"] == "node_execution"
+        and issue["path"] == "nodes.1.runtimePolicy.execution"
+        and issue["field"] == "execution"
+        and "strong-isolation execution class 'microvm'" in issue["message"]
+        for issue in detail["issues"]
+    )
+
+
 def test_get_workflow_detail_surfaces_definition_issues_for_persisted_tool_runner_gap(
     client: TestClient,
     sqlite_session,
@@ -2217,6 +2293,41 @@ def test_get_workflow_detail_surfaces_definition_issues_for_persisted_tool_runne
         and issue.get("path") == "nodes.1.runtimePolicy.execution"
         and issue.get("field") == "execution"
         and "sandbox-backed tool execution" in issue.get("message", "")
+        for issue in body["definition_issues"]
+    )
+
+
+def test_get_workflow_detail_surfaces_definition_issues_for_persisted_node_execution_drift(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Condition Execution Drift Workflow",
+            "definition": _condition_definition(),
+        },
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    workflow = sqlite_session.get(Workflow, workflow_id)
+    assert workflow is not None
+    workflow.definition = _condition_definition(
+        runtime_policy={"execution": {"class": "subprocess"}}
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.get(f"/api/workflows/{workflow_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert any(
+        issue.get("category") == "node_execution"
+        and issue.get("path") == "nodes.1.runtimePolicy.execution"
+        and issue.get("field") == "execution"
+        and "execution class 'subprocess'" in issue.get("message", "")
         for issue in body["definition_issues"]
     )
 

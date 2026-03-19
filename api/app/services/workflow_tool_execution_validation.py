@@ -110,6 +110,82 @@ def collect_invalid_workflow_tool_execution_references(
     return deduped_issues
 
 
+def collect_invalid_workflow_node_execution_references(
+    definition: dict[str, Any] | None,
+) -> list[WorkflowToolExecutionValidationIssue]:
+    if not isinstance(definition, dict):
+        return []
+
+    nodes = definition.get("nodes")
+    if not isinstance(nodes, list):
+        return []
+
+    issues: list[WorkflowToolExecutionValidationIssue] = []
+    for node_index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            continue
+
+        node_type = str(node.get("type") or "")
+        if node_type in {"tool", "sandbox_code"}:
+            continue
+
+        runtime_policy = node.get("runtimePolicy")
+        requested_execution_class = _extract_explicit_execution_class(
+            runtime_policy.get("execution") if isinstance(runtime_policy, dict) else None
+        )
+        if requested_execution_class is None or requested_execution_class == "inline":
+            continue
+
+        node_id = str(node.get("id") or "unknown-node")
+        node_name = str(node.get("name") or node_id)
+        node_label = f"{node_id}:{node_name}" if node_name != node_id else node_id
+        path = f"nodes.{node_index}.runtimePolicy.execution"
+
+        if requested_execution_class == "subprocess":
+            issues.append(
+                WorkflowToolExecutionValidationIssue(
+                    message=(
+                        f"Node '{node_label}' requests execution class 'subprocess', but "
+                        f"node type '{node_type}' does not implement a dedicated subprocess "
+                        "execution adapter yet. Keep it on 'inline' until a compatible "
+                        "adapter is available."
+                    ),
+                    path=path,
+                    field="execution",
+                )
+            )
+            continue
+
+        if requested_execution_class in {"sandbox", "microvm"}:
+            issues.append(
+                WorkflowToolExecutionValidationIssue(
+                    message=(
+                        f"Node '{node_label}' requests strong-isolation execution class "
+                        f"'{requested_execution_class}', but node type '{node_type}' does not "
+                        "implement a compatible execution adapter yet. Strong-isolation paths "
+                        "must fail closed until a compatible execution adapter is available."
+                    ),
+                    path=path,
+                    field="execution",
+                )
+            )
+            continue
+
+        issues.append(
+            WorkflowToolExecutionValidationIssue(
+                message=(
+                    f"Node '{node_label}' requests unsupported execution class "
+                    f"'{requested_execution_class}'. Keep it on 'inline' until a compatible "
+                    "execution adapter is available."
+                ),
+                path=path,
+                field="execution",
+            )
+        )
+
+    return issues
+
+
 def _collect_tool_node_execution_issues(
     *,
     node: dict[str, Any],

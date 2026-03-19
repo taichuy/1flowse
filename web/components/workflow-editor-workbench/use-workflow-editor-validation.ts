@@ -34,6 +34,7 @@ import {
 const PREFLIGHT_CATEGORY_LABELS: Record<string, string> = {
   schema: "contract/schema",
   node_support: "node support",
+  node_execution: "node execution",
   tool_reference: "tool reference",
   tool_execution: "execution capability",
   publish_identity: "publish identity",
@@ -220,6 +221,10 @@ export function useWorkflowEditorValidation({
     () => serverValidationIssues.some((issue) => issue.category === "tool_execution"),
     [serverValidationIssues]
   );
+  const hasServerNodeExecutionIssues = useMemo(
+    () => serverValidationIssues.some((issue) => issue.category === "node_execution"),
+    [serverValidationIssues]
+  );
   const validationNavigatorItems = useMemo<WorkflowValidationNavigatorItem[]>(() => {
     const localIssues: WorkflowDefinitionPreflightIssue[] = [
       ...contractValidationIssues.map((issue) => ({
@@ -292,13 +297,14 @@ export function useWorkflowEditorValidation({
           ? `当前 workflow definition 还有 variables 待修正问题：${variableValidationSummary}${variableValidationSummary.endsWith("。") ? "" : "。"}请先修正变量名，再继续保存。`
           : null,
         serverValidationSummary
-          ? `当前 persisted workflow 已出现服务器侧 definition drift：${serverValidationSummary}${serverValidationSummary.endsWith("。") ? "" : "。"}${hasServerToolExecutionIssues && sandboxReadinessPreflightHint ? ` ${sandboxReadinessPreflightHint}` : ""}请先对齐当前工具目录、skill 引用或 sandbox readiness，再继续保存。`
+          ? `当前 persisted workflow 已出现服务器侧 definition drift：${serverValidationSummary}${serverValidationSummary.endsWith("。") ? "" : "。"}${hasServerToolExecutionIssues && sandboxReadinessPreflightHint ? ` ${sandboxReadinessPreflightHint}` : ""}${hasServerNodeExecutionIssues ? " 请先把节点 execution class 调回当前实现支持范围，再继续保存。" : "请先对齐当前工具目录、skill 引用或 sandbox readiness，再继续保存。"}`
           : null
       ]
         .filter(Boolean)
         .join(" "),
     [
       contractValidationSummary,
+      hasServerNodeExecutionIssues,
       hasServerToolExecutionIssues,
       publishIdentityValidationSummary,
       publishVersionValidationSummary,
