@@ -95,6 +95,7 @@ class PluginExecutionDispatchPlanner:
             blocked_reason = None
             sandbox_backend_id = None
             sandbox_backend_executor_ref = None
+            sandbox_runner_kind = None
             if requested_execution_class != effective_execution_class:
                 if self._requires_fail_closed(
                     requested_execution_class=requested_execution_class,
@@ -108,6 +109,8 @@ class PluginExecutionDispatchPlanner:
                     )
                 else:
                     fallback_reason = "native_tool_execution_class_not_supported"
+            if is_strong_tool_execution_class(effective_execution_class):
+                sandbox_runner_kind = "native-tool"
             if blocked_reason is None and is_strong_tool_execution_class(
                 effective_execution_class
             ):
@@ -175,6 +178,7 @@ class PluginExecutionDispatchPlanner:
                 ),
                 sandbox_backend_id=sandbox_backend_id,
                 sandbox_backend_executor_ref=sandbox_backend_executor_ref,
+                sandbox_runner_kind=sandbox_runner_kind,
                 fallback_reason=fallback_reason,
                 blocked_reason=blocked_reason,
             )
@@ -195,6 +199,7 @@ class PluginExecutionDispatchPlanner:
         blocked_reason = None
         sandbox_backend_id = None
         sandbox_backend_executor_ref = None
+        sandbox_runner_kind = None
         if requested_execution_class != effective_execution_class:
             if self._requires_fail_closed(
                 requested_execution_class=requested_execution_class,
@@ -207,6 +212,8 @@ class PluginExecutionDispatchPlanner:
                 )
             else:
                 fallback_reason = "compat_adapter_execution_class_not_supported"
+        if is_strong_tool_execution_class(effective_execution_class):
+            sandbox_runner_kind = "compat-adapter"
         if blocked_reason is None and is_strong_tool_execution_class(
             effective_execution_class
         ):
@@ -270,6 +277,7 @@ class PluginExecutionDispatchPlanner:
             ),
             sandbox_backend_id=sandbox_backend_id,
             sandbox_backend_executor_ref=sandbox_backend_executor_ref,
+            sandbox_runner_kind=sandbox_runner_kind,
             fallback_reason=fallback_reason,
             blocked_reason=blocked_reason,
         )

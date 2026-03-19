@@ -124,6 +124,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                     "executor_ref": "tool:compat-adapter:dify-default",
                     "sandbox_backend_id": "sandbox-default",
                     "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+                    "sandbox_runner_kind": "compat-adapter",
                     "fallback_reason": None,
                     "blocked_reason": None,
                 },
@@ -333,6 +334,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         node["tool_calls"][0]["execution_sandbox_backend_executor_ref"]
         == "sandbox-backend:sandbox-default"
     )
+    assert node["tool_calls"][0]["execution_sandbox_runner_kind"] == "compat-adapter"
     assert node["tool_calls"][0]["execution_blocking_reason"] is None
     assert node["tool_calls"][0]["execution_fallback_reason"] is None
     assert (

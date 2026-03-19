@@ -37,6 +37,9 @@ function buildToolExecutionBadges(toolCall: ToolCallItem): string[] {
   if (toolCall.effective_execution_class) {
     badges.push(`effective ${toolCall.effective_execution_class}`);
   }
+  if (toolCall.execution_sandbox_runner_kind) {
+    badges.push(`runner ${toolCall.execution_sandbox_runner_kind}`);
+  }
   if (toolCall.execution_sandbox_backend_id) {
     badges.push(`backend ${toolCall.execution_sandbox_backend_id}`);
   }

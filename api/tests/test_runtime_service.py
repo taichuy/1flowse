@@ -329,6 +329,7 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         "executor_ref": "tool:native-sandbox",
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_runner_kind": "native-tool",
         "fallback_reason": None,
         "blocked_reason": None,
     }
@@ -368,6 +369,101 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         "executor_ref": "tool:native-sandbox",
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_runner_kind": "native-tool",
+    }
+
+
+def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
+    sqlite_session: Session,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Risk Search",
+            ecosystem="native",
+            input_schema={
+                "type": "object",
+                "properties": {"trigger": {"type": "object"}},
+                "required": ["trigger"],
+                "additionalProperties": False,
+            },
+            supported_execution_classes=("inline", "sandbox"),
+        )
+    )
+
+    workflow = Workflow(
+        id="wf-tool-strong-isolation-normalized-runner",
+        name="Tool Strong Isolation Normalized Runner Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "tool",
+                    "type": "tool",
+                    "name": "Tool",
+                    "config": {
+                        "tool": {
+                            "toolId": "native.risk-search",
+                            "ecosystem": "native",
+                        }
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "profile": "risk-reviewed",
+                            "timeoutMs": 3000,
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _SandboxBackendClientNormalizedToolResultStub()
+    artifacts = RuntimeService(
+        plugin_call_proxy=PluginCallProxy(
+            registry,
+            sandbox_backend_client=sandbox_backend_client,
+        ),
+        sandbox_backend_client=sandbox_backend_client,
+    ).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "runner"},
+    )
+
+    assert artifacts.run.status == "succeeded"
+    tool_call = artifacts.tool_calls[0]
+    assert tool_call.raw_artifact_id == "tool-result-normalized"
+
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    assert tool_run.output_payload == {
+        "documents": ["RUNNER"],
+        "requested": "sandbox",
+    }
+    assert list(tool_run.artifact_refs or []) == ["artifact://tool-result-normalized"]
+
+    completed_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == tool_run.id and event.event_type == "tool.completed"
+    )
+    assert completed_event.payload == {
+        "node_id": "tool",
+        "tool_id": "native.risk-search",
+        "summary": "sandbox runner normalized result",
+        "raw_ref": "artifact://tool-result-normalized",
+        "content_type": "json",
     }
 
 
@@ -597,6 +693,30 @@ class _SandboxBackendClientStub(SandboxBackendClient):
                 "durationMs": 19,
             },
             stdout="",
+            stderr="",
+        )
+
+
+class _SandboxBackendClientNormalizedToolResultStub(_SandboxBackendClientStub):
+    def execute_tool(self, request: SandboxToolExecutionRequest) -> SandboxExecutionResponse:
+        self.tool_requests.append(request)
+        return SandboxExecutionResponse(
+            backend_id="sandbox-default",
+            executor_ref="sandbox-backend:sandbox-default:tool-runner",
+            effective_execution_class=request.execution_class,
+            result={
+                "status": "success",
+                "structured": {
+                    "documents": [request.inputs["trigger"]["topic"].upper()],
+                    "requested": request.execution_class,
+                },
+                "contentType": "json",
+                "summary": "sandbox runner normalized result",
+                "rawRef": "artifact://tool-result-normalized",
+                "durationMs": 19,
+                "meta": {"runner": "sandbox-tool-runner"},
+            },
+            stdout="sandbox stdout",
             stderr="",
         )
 

@@ -33,6 +33,7 @@ export type ToolCallItem = {
   execution_executor_ref?: string | null;
   execution_sandbox_backend_id?: string | null;
   execution_sandbox_backend_executor_ref?: string | null;
+  execution_sandbox_runner_kind?: string | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   response_summary?: string | null;
@@ -204,6 +205,7 @@ export type RunExecutionNodeItem = {
   execution_executor_ref?: string | null;
   execution_sandbox_backend_id?: string | null;
   execution_sandbox_backend_executor_ref?: string | null;
+  execution_sandbox_runner_kind?: string | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   retry_count: number;

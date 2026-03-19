@@ -303,20 +303,69 @@ class PluginCallProxy:
                 str(body.get("error") or "Sandbox-backed tool execution failed.")
             )
 
+        if "output" in body:
+            output = body.get("output")
+        elif isinstance(body.get("structured"), dict):
+            output = body.get("structured")
+        else:
+            output = {}
+        if not isinstance(output, dict):
+            raise PluginInvocationError(
+                "Sandbox-backed tool execution returned a non-object output payload."
+            )
+
         logs = list(body.get("logs") or [])
         if sandbox_response.stdout.strip():
             logs.append(sandbox_response.stdout)
         if sandbox_response.stderr.strip():
             logs.append(sandbox_response.stderr)
 
+        meta = dict(body.get("meta") or {})
+        artifact_refs = PluginCallProxy._normalize_artifact_refs(
+            body.get("artifact_refs") or body.get("artifactRefs")
+        )
+        if artifact_refs:
+            meta.setdefault("artifact_refs", artifact_refs)
+        runner_trace = body.get("execution_trace") or body.get("executionTrace")
+        if isinstance(runner_trace, dict):
+            meta.setdefault("sandbox_runner_trace", dict(runner_trace))
+
         return PluginCallResponse(
             status=status,
-            output=body.get("output") or {},
+            output=dict(output),
             logs=logs,
             duration_ms=int(
                 body.get("durationMs") or int((time.perf_counter() - started_at) * 1000)
             ),
+            content_type=PluginCallProxy._normalize_optional_string(
+                body.get("content_type") or body.get("contentType")
+            ),
+            summary=PluginCallProxy._normalize_optional_string(body.get("summary")),
+            raw_ref=PluginCallProxy._normalize_optional_string(
+                body.get("raw_ref") or body.get("rawRef")
+            ),
+            meta=meta,
         )
+
+    @staticmethod
+    def _normalize_optional_string(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @staticmethod
+    def _normalize_artifact_refs(value: object) -> list[str]:
+        normalized: list[str] = []
+        if not isinstance(value, list):
+            return normalized
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            candidate = item.strip()
+            if candidate:
+                normalized.append(candidate)
+        return normalized
 
 
 @lru_cache(maxsize=1)

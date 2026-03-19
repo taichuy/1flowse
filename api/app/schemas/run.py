@@ -180,6 +180,7 @@ class ToolCallItem(BaseModel):
     execution_executor_ref: str | None = None
     execution_sandbox_backend_id: str | None = None
     execution_sandbox_backend_executor_ref: str | None = None
+    execution_sandbox_runner_kind: str | None = None
     execution_blocking_reason: str | None = None
     execution_fallback_reason: str | None = None
     response_summary: str | None = None
@@ -240,6 +241,7 @@ class RunDetailExecutionFocusNode(BaseModel):
     execution_executor_ref: str | None = None
     execution_sandbox_backend_id: str | None = None
     execution_sandbox_backend_executor_ref: str | None = None
+    execution_sandbox_runner_kind: str | None = None
     execution_blocking_reason: str | None = None
     execution_fallback_reason: str | None = None
 

@@ -186,6 +186,7 @@ def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
         execution_sandbox_backend_executor_ref=execution_trace.get(
             "sandbox_backend_executor_ref"
         ),
+        execution_sandbox_runner_kind=execution_trace.get("sandbox_runner_kind"),
         execution_blocking_reason=execution_trace.get("blocked_reason"),
         execution_fallback_reason=execution_trace.get("fallback_reason"),
         response_summary=tool_call.response_summary,

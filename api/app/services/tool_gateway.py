@@ -14,7 +14,12 @@ from app.models.plugin import PluginToolRecord
 from app.models.run import NodeRun, ToolCallRecord
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.credential_store import CredentialStore, CredentialStoreError
-from app.services.plugin_runtime import PluginCallProxy, PluginCallRequest, PluginInvocationError
+from app.services.plugin_runtime import (
+    PluginCallProxy,
+    PluginCallRequest,
+    PluginCallResponse,
+    PluginInvocationError,
+)
 from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_types import ToolExecutionResult, WorkflowExecutionError
 from app.services.sensitive_access_control import SensitiveAccessControlService
@@ -160,13 +165,14 @@ class ToolGateway:
                     execution=request.execution,
                 )
             )
+            response_payload = self._payload_from_plugin_response(response)
             result = self._normalize_result(
                 db,
                 run_id=run_id,
                 node_run_id=node_run.id,
                 tool_id=tool_id,
                 tool_name=tool_name,
-                payload=response.output,
+                payload=response_payload,
                 latency_ms=response.duration_ms
                 or int((time.perf_counter() - started_at) * 1000),
                 artifact_metadata=execution_trace,
@@ -393,6 +399,32 @@ class ToolGateway:
                 "truncated": False,
             },
         )
+
+    def _payload_from_plugin_response(
+        self,
+        response: PluginCallResponse,
+    ) -> dict[str, Any]:
+        if (
+            response.raw_ref is None
+            and response.summary is None
+            and response.content_type is None
+            and not response.meta
+        ):
+            return dict(response.output or {})
+
+        meta = dict(response.meta or {})
+        if response.logs:
+            meta.setdefault("runner_logs", list(response.logs))
+        return {
+            "status": response.status,
+            "content_type": response.content_type
+            or self._artifact_store.infer_content_type(response.output),
+            "summary": response.summary
+            or self._artifact_store.summarize(response.output),
+            "raw_ref": response.raw_ref,
+            "structured": dict(response.output or {}),
+            "meta": meta,
+        }
 
     def _build_sensitive_access_waiting_result(
         self,

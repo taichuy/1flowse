@@ -175,11 +175,12 @@ class PluginExecutionDispatchPlan:
     effective_execution: dict[str, Any] = field(default_factory=dict)
     sandbox_backend_id: str | None = None
     sandbox_backend_executor_ref: str | None = None
+    sandbox_runner_kind: str | None = None
     fallback_reason: str | None = None
     blocked_reason: str | None = None
 
     def as_trace_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "requested_execution_class": self.requested_execution_class,
             "effective_execution_class": self.effective_execution_class,
             "execution_source": self.execution_source,
@@ -197,6 +198,9 @@ class PluginExecutionDispatchPlan:
             "fallback_reason": self.fallback_reason,
             "blocked_reason": self.blocked_reason,
         }
+        if self.sandbox_runner_kind:
+            payload["sandbox_runner_kind"] = self.sandbox_runner_kind
+        return payload
 
 
 @dataclass(frozen=True)
@@ -205,6 +209,10 @@ class PluginCallResponse:
     output: dict[str, Any]
     logs: list[str] = field(default_factory=list)
     duration_ms: int = 0
+    content_type: str | None = None
+    summary: str | None = None
+    raw_ref: str | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 NativeToolInvoker = Callable[[PluginCallRequest], PluginCallResponse | dict[str, Any]]

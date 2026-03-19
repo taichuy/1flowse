@@ -47,6 +47,10 @@ def _build_base_payload(
     if isinstance(sandbox_backend_executor_ref, str) and sandbox_backend_executor_ref.strip():
         payload["sandbox_backend_executor_ref"] = sandbox_backend_executor_ref
 
+    sandbox_runner_kind = trace_payload.get("sandbox_runner_kind")
+    if isinstance(sandbox_runner_kind, str) and sandbox_runner_kind.strip():
+        payload["sandbox_runner_kind"] = sandbox_runner_kind
+
     return payload
 
 

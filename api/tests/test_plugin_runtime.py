@@ -381,6 +381,7 @@ def test_plugin_call_proxy_fail_closes_explicit_strong_isolation_for_compat_adap
         "executor_ref": "tool:compat-adapter:dify-default",
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_runner_kind": "compat-adapter",
         "fallback_reason": None,
         "blocked_reason": (
             "Tool 'compat:dify:plugin:demo/search' requests execution class 'microvm'. "
@@ -468,6 +469,7 @@ def test_plugin_call_proxy_fail_closes_backend_extension_request_without_backend
     assert payload["requested_filesystem_policy"] == "ephemeral"
     assert payload["requested_backend_extensions"] == {"mountPreset": "analytics"}
     assert payload["executor_ref"] == "tool:compat-adapter:dify-default"
+    assert payload["sandbox_runner_kind"] == "compat-adapter"
     assert payload["fallback_reason"] is None
     assert payload["blocked_reason"] is not None
     assert "no compatible sandbox backend is currently available" in str(
@@ -939,6 +941,7 @@ def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_native_too
         "executor_ref": "tool:native-sandbox",
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_runner_kind": "native-tool",
         "fallback_reason": None,
         "blocked_reason": (
             "Tool 'native.search' requests execution class 'sandbox'. "
@@ -1103,6 +1106,99 @@ def test_plugin_call_proxy_executes_native_tool_via_sandbox_runner() -> None:
     assert response.logs == ["native sandbox tool runner invoked"]
 
 
+def test_plugin_call_proxy_preserves_normalized_sandbox_tool_payload() -> None:
+    registry = PluginRegistry()
+
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.search",
+            name="Native Search",
+            ecosystem="native",
+            input_schema={
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            supported_execution_classes=("inline", "sandbox"),
+        )
+    )
+
+    def sandbox_handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content.decode("utf-8"))
+        assert payload["command"] == ["sevenflows-tool-runner", "native-tool"]
+        return httpx.Response(
+            200,
+            json={
+                "ok": True,
+                "executorRef": "sandbox-backend:sandbox-default:tool-runner",
+                "effectiveExecutionClass": "sandbox",
+                "stdout": "runner stdout",
+                "result": {
+                    "status": "success",
+                    "structured": {"documents": ["doc-1"]},
+                    "contentType": "json",
+                    "summary": "Native runner returned one document.",
+                    "rawRef": "artifact://tool-result-123",
+                    "logs": ["normalized sandbox tool runner invoked"],
+                    "durationMs": 21,
+                    "artifactRefs": [
+                        "artifact://tool-result-123",
+                        "artifact://tool-trace-456",
+                    ],
+                    "executionTrace": {"phase": "tool_runner"},
+                    "meta": {"runner": "sandbox-tool-runner"},
+                },
+            },
+        )
+
+    proxy = PluginCallProxy(
+        registry,
+        sandbox_backend_client=_sandbox_backend_client(
+            execution_classes=("sandbox",),
+            profiles=("risk-reviewed",),
+            supports_tool_execution=True,
+            client_factory=lambda timeout_ms: httpx.Client(
+                transport=httpx.MockTransport(sandbox_handler),
+                timeout=timeout_ms / 1000,
+            ),
+        ),
+    )
+
+    response = proxy.invoke(
+        PluginCallRequest(
+            tool_id="native.search",
+            ecosystem="native",
+            inputs={"query": "sevenflows"},
+            trace_id="trace-native-sandbox-normalized",
+            execution={
+                "class": "sandbox",
+                "source": "tool_call",
+                "profile": "risk-reviewed",
+                "timeoutMs": 3000,
+            },
+        )
+    )
+
+    assert response.status == "success"
+    assert response.output == {"documents": ["doc-1"]}
+    assert response.logs == [
+        "normalized sandbox tool runner invoked",
+        "runner stdout",
+    ]
+    assert response.content_type == "json"
+    assert response.summary == "Native runner returned one document."
+    assert response.raw_ref == "artifact://tool-result-123"
+    assert response.meta == {
+        "runner": "sandbox-tool-runner",
+        "artifact_refs": [
+            "artifact://tool-result-123",
+            "artifact://tool-trace-456",
+        ],
+        "sandbox_runner_trace": {"phase": "tool_runner"},
+    }
+
+
 def test_plugin_call_proxy_fail_closes_native_builtin_package_request() -> None:
     registry = PluginRegistry()
     registry.register_tool(
@@ -1144,6 +1240,7 @@ def test_plugin_call_proxy_fail_closes_native_builtin_package_request() -> None:
     assert payload["requested_dependency_mode"] == "builtin"
     assert payload["requested_builtin_package_set"] == "py-data-basic"
     assert payload["executor_ref"] == "tool:native-sandbox"
+    assert payload["sandbox_runner_kind"] == "native-tool"
     assert payload["fallback_reason"] is None
     assert payload["blocked_reason"] is not None
     assert "no compatible sandbox backend is currently available" in str(
@@ -1208,6 +1305,7 @@ def test_plugin_call_proxy_surfaces_backend_readiness_for_native_strong_isolatio
     assert payload["requested_execution_class"] == "sandbox"
     assert payload["effective_execution_class"] == "sandbox"
     assert payload["executor_ref"] == "tool:native-sandbox"
+    assert payload["sandbox_runner_kind"] == "native-tool"
     assert payload["blocked_reason"] is not None
     assert "no compatible sandbox backend is currently available" in str(
         payload["blocked_reason"]
@@ -1281,6 +1379,7 @@ def test_plugin_call_proxy_fail_closes_default_strong_isolation_for_native_tool(
         "executor_ref": "tool:native-sandbox",
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_runner_kind": "native-tool",
         "fallback_reason": None,
         "blocked_reason": (
             "Tool 'native.risk-search' requests execution class 'sandbox'. "
@@ -1353,6 +1452,7 @@ def test_plugin_call_proxy_surfaces_backend_readiness_for_compat_strong_isolatio
     assert payload["requested_execution_class"] == "microvm"
     assert payload["effective_execution_class"] == "microvm"
     assert payload["executor_ref"] == "tool:compat-adapter:dify-microvm"
+    assert payload["sandbox_runner_kind"] == "compat-adapter"
     assert payload["blocked_reason"] is not None
     assert "no compatible sandbox backend is currently available" in str(
         payload["blocked_reason"]
@@ -1449,6 +1549,7 @@ def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_compat_ada
         "executor_ref": "tool:compat-adapter:dify-microvm",
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_runner_kind": "compat-adapter",
         "fallback_reason": None,
         "blocked_reason": (
             "Tool 'compat:dify:plugin:demo/search' requests execution class 'microvm'. "
