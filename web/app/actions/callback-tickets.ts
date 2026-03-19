@@ -13,7 +13,9 @@ import {
 import { revalidateOperatorFollowUpPaths } from "./operator-follow-up-revalidation";
 import {
   fetchRunSnapshot,
+  normalizeOperatorRunFollowUp,
   normalizeOperatorRunSnapshot,
+  type OperatorRunFollowUpBody,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
 import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
@@ -38,12 +40,7 @@ type CleanupRunCallbackTicketsResponseBody = {
     summary?: string | null;
   } | null;
   run_snapshot?: OperatorRunSnapshotBody | null;
-  run_follow_up?: {
-    explanation?: {
-      primary_signal?: string | null;
-      follow_up?: string | null;
-    } | null;
-  } | null;
+  run_follow_up?: OperatorRunFollowUpBody | null;
 };
 
 export async function cleanupRunCallbackTickets(
@@ -132,6 +129,7 @@ export async function cleanupRunCallbackTickets(
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       blockerDeltaSummary,
       runSnapshot,
       scopeKey

@@ -3,12 +3,14 @@ import Link from "next/link";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import {
   buildExecutionFocusExplainableNode,
   buildOperatorInlineActionFeedbackModel,
   type OperatorInlineActionResultState
 } from "@/lib/operator-inline-action-feedback";
+import { buildOperatorRunSampleCards } from "@/lib/operator-run-sample-cards";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 
 type InlineOperatorActionFeedbackProps = {
@@ -29,9 +31,15 @@ export function InlineOperatorActionFeedback({
     message,
     ...structuredResult
   });
+  const runFollowUp = structuredResult.runFollowUp ?? null;
   const runSnapshot = structuredResult.runSnapshot;
   const hasCallbackWaitingSummary = hasCallbackWaitingSummaryFacts(runSnapshot);
   const callbackWaitingFocusNode = buildExecutionFocusExplainableNode(runSnapshot);
+  const sampledRunCards = buildOperatorRunSampleCards(
+    (runFollowUp?.sampledRuns ?? []).filter(
+      (sample) => sample.snapshot && (!runId || sample.runId !== runId || !runSnapshot)
+    )
+  );
 
   if (!message && !model.hasStructuredContent) {
     return null;
@@ -111,6 +119,28 @@ export function InlineOperatorActionFeedback({
         </div>
       ) : null}
 
+      {runFollowUp && runFollowUp.affectedRunCount > 0 ? (
+        <div className="tool-badge-row">
+          <span className="event-chip">affected runs {runFollowUp.affectedRunCount}</span>
+          <span className="event-chip">sampled {runFollowUp.sampledRunCount}</span>
+          {runFollowUp.waitingRunCount > 0 ? (
+            <span className="event-chip">still waiting {runFollowUp.waitingRunCount}</span>
+          ) : null}
+          {runFollowUp.runningRunCount > 0 ? (
+            <span className="event-chip">running {runFollowUp.runningRunCount}</span>
+          ) : null}
+          {runFollowUp.succeededRunCount > 0 ? (
+            <span className="event-chip">succeeded {runFollowUp.succeededRunCount}</span>
+          ) : null}
+          {runFollowUp.failedRunCount > 0 ? (
+            <span className="event-chip">failed {runFollowUp.failedRunCount}</span>
+          ) : null}
+          {runFollowUp.unknownRunCount > 0 ? (
+            <span className="event-chip">unknown {runFollowUp.unknownRunCount}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       {hasCallbackWaitingSummary ? (
         <CallbackWaitingSummaryCard
           callbackWaitingExplanation={runSnapshot?.callbackWaitingExplanation ?? null}
@@ -149,6 +179,19 @@ export function InlineOperatorActionFeedback({
           />
         </>
       )}
+
+      {sampledRunCards.length > 0 ? (
+        <div className="binding-section">
+          <p className="section-copy entry-copy">
+            当前 action result 也会直接展开受影响 sampled run 的 compact snapshot，避免还要跳回
+            run detail 才确认 waiting / scheduled resume 是否已经变化。
+          </p>
+          <OperatorRunSampleCardList
+            cards={sampledRunCards}
+            skillTraceDescription="当前 operator 结果会继续复用 sampled run focus node 的 compact skill trace，方便确认等待链路里实际加载了哪些参考资料。"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

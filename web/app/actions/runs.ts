@@ -13,7 +13,9 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import { revalidateOperatorFollowUpPaths } from "./operator-follow-up-revalidation";
 import {
   fetchRunSnapshot,
+  normalizeOperatorRunFollowUp,
   normalizeOperatorRunSnapshot,
+  type OperatorRunFollowUpBody,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
 import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
@@ -73,12 +75,7 @@ export async function resumeRun(
             follow_up?: string | null;
           } | null;
           run_snapshot?: OperatorRunSnapshotBody | null;
-          run_follow_up?: {
-            explanation?: {
-              primary_signal?: string | null;
-              follow_up?: string | null;
-            } | null;
-          } | null;
+          run_follow_up?: OperatorRunFollowUpBody | null;
           callback_blocker_delta?: {
             summary?: string | null;
           } | null;
@@ -135,6 +132,7 @@ export async function resumeRun(
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       blockerDeltaSummary,
       runSnapshot:
         runSnapshot ?? {

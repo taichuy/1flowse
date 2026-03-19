@@ -27,7 +27,9 @@ import {
 import {
   fetchRunSnapshot,
   fetchRunSnapshots,
+  normalizeOperatorRunFollowUp,
   normalizeOperatorRunSnapshot,
+  type OperatorRunFollowUpBody,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
 import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
@@ -89,21 +91,6 @@ type NotificationRetryResponseBody = {
   };
   run_snapshot?: OperatorRunSnapshotBody | null;
   run_follow_up?: OperatorRunFollowUpBody | null;
-};
-
-type OperatorRunFollowUpBody = {
-  affected_run_count?: number;
-  sampled_run_count?: number;
-  waiting_run_count?: number;
-  running_run_count?: number;
-  succeeded_run_count?: number;
-  failed_run_count?: number;
-  unknown_run_count?: number;
-  explanation?: OutcomeExplanationBody | null;
-  sampled_runs?: Array<{
-    run_id: string;
-    snapshot?: OperatorRunSnapshotBody | null;
-  }>;
 };
 
 type ApprovalTicketBulkDecisionResponseBody = {
@@ -331,6 +318,7 @@ export async function decideSensitiveAccessApprovalTicket(
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       blockerDeltaSummary,
       runSnapshot,
       ticketId
@@ -429,6 +417,7 @@ export async function retrySensitiveAccessNotificationDispatch(
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       blockerDeltaSummary,
       runSnapshot,
       dispatchId,

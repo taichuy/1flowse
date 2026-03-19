@@ -1,0 +1,134 @@
+import React from "react";
+import Link from "next/link";
+
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import type { OperatorRunSampleCard } from "@/lib/operator-run-sample-cards";
+
+type OperatorRunSampleCardListProps = {
+  cards: OperatorRunSampleCard[];
+  skillTraceDescription: string;
+};
+
+export function OperatorRunSampleCardList({
+  cards,
+  skillTraceDescription
+}: OperatorRunSampleCardListProps) {
+  if (cards.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="publish-cache-list">
+      {cards.map((sample) => (
+        <div className="payload-card compact-card" key={sample.runId}>
+          <div className="payload-card-header">
+            <span className="status-meta">Run {sample.shortRunId}</span>
+            <Link
+              className="event-chip inbox-filter-link"
+              href={`/runs/${encodeURIComponent(sample.runId)}`}
+            >
+              open run
+            </Link>
+          </div>
+
+          {sample.summary ? <p className="binding-meta">{sample.summary}</p> : null}
+
+          {sample.runStatus ||
+          sample.currentNodeId ||
+          sample.focusNodeLabel ||
+          sample.waitingReason ? (
+            <dl className="compact-meta-list">
+              <div>
+                <dt>Run status</dt>
+                <dd>{sample.runStatus ?? "n/a"}</dd>
+              </div>
+              <div>
+                <dt>Current node</dt>
+                <dd>{sample.currentNodeId ?? "n/a"}</dd>
+              </div>
+              <div>
+                <dt>Focus node</dt>
+                <dd>{sample.focusNodeLabel ?? "n/a"}</dd>
+              </div>
+              <div>
+                <dt>Waiting reason</dt>
+                <dd>{sample.waitingReason ?? "n/a"}</dd>
+              </div>
+            </dl>
+          ) : null}
+
+          <CallbackWaitingSummaryCard
+            callbackWaitingExplanation={sample.callbackWaitingExplanation}
+            lifecycle={sample.callbackWaitingLifecycle}
+            focusNodeEvidence={sample.callbackWaitingFocusNodeEvidence}
+            focusSkillReferenceCount={sample.skillReferenceCount}
+            focusSkillReferenceLoads={sample.focusSkillReferenceLoads}
+            focusSkillReferenceNodeId={sample.focusNodeId}
+            focusSkillReferenceNodeName={sample.focusNodeLabel}
+            nodeRunId={sample.focusNodeRunId}
+            runId={sample.runId}
+            scheduledResumeDelaySeconds={sample.scheduledResumeDelaySeconds}
+            scheduledResumeDueAt={sample.scheduledResumeDueAt}
+            scheduledResumeRequeuedAt={sample.scheduledResumeRequeuedAt}
+            scheduledResumeRequeueSource={sample.scheduledResumeRequeueSource}
+            scheduledResumeScheduledAt={sample.scheduledResumeScheduledAt}
+            scheduledResumeSource={sample.scheduledResumeSource}
+            scheduledWaitingStatus={sample.scheduledWaitingStatus}
+            showInlineActions={false}
+            waitingReason={sample.waitingReason}
+          />
+
+          {sample.artifactCount > 0 ||
+          sample.artifactRefCount > 0 ||
+          sample.toolCallCount > 0 ||
+          sample.rawRefCount > 0 ||
+          sample.skillReferenceCount > 0 ? (
+            <div className="tool-badge-row">
+              {sample.artifactCount > 0 ? (
+                <span className="event-chip">artifacts {sample.artifactCount}</span>
+              ) : null}
+              {sample.artifactRefCount > 0 ? (
+                <span className="event-chip">artifact refs {sample.artifactRefCount}</span>
+              ) : null}
+              {sample.toolCallCount > 0 ? (
+                <span className="event-chip">tool calls {sample.toolCallCount}</span>
+              ) : null}
+              {sample.rawRefCount > 0 ? (
+                <span className="event-chip">raw refs {sample.rawRefCount}</span>
+              ) : null}
+              {sample.skillReferenceCount > 0 ? (
+                <span className="event-chip">skill refs {sample.skillReferenceCount}</span>
+              ) : null}
+              {sample.skillReferencePhaseSummary ? (
+                <span className="event-chip">phases {sample.skillReferencePhaseSummary}</span>
+              ) : null}
+              {sample.skillReferenceSourceSummary ? (
+                <span className="event-chip">sources {sample.skillReferenceSourceSummary}</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!sample.hasCallbackWaitingSummary ? (
+            <>
+              <OperatorFocusEvidenceCard
+                artifactCount={sample.artifactCount}
+                artifactRefCount={sample.artifactRefCount}
+                artifactSummary={sample.focusArtifactSummary}
+                artifacts={sample.focusArtifacts}
+                toolCallCount={sample.toolCallCount}
+                toolCallSummaries={sample.focusToolCallSummaries}
+              />
+              <SkillReferenceLoadList
+                skillReferenceLoads={sample.focusSkillReferenceLoads}
+                title="Focused skill trace"
+                description={skillTraceDescription}
+              />
+            </>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}

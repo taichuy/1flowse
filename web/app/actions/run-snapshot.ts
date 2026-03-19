@@ -155,6 +155,35 @@ export type OperatorRunSnapshotBody = {
   } | null;
 };
 
+export type OperatorRunFollowUpBody = {
+  affected_run_count?: number;
+  sampled_run_count?: number;
+  waiting_run_count?: number;
+  running_run_count?: number;
+  succeeded_run_count?: number;
+  failed_run_count?: number;
+  unknown_run_count?: number;
+  explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+  sampled_runs?: Array<{
+    run_id: string;
+    snapshot?: OperatorRunSnapshotBody | null;
+  }>;
+};
+
+export type OperatorRunFollowUpSummary = {
+  affectedRunCount: number;
+  sampledRunCount: number;
+  waitingRunCount: number;
+  runningRunCount: number;
+  succeededRunCount: number;
+  failedRunCount: number;
+  unknownRunCount: number;
+  sampledRuns: RunSnapshotWithId[];
+};
+
 type RunDetailResponseBody = {
   status?: string;
   workflow_id?: string | null;
@@ -621,6 +650,30 @@ export function normalizeOperatorRunSnapshot(
     executionFocusArtifacts: normalizeFocusArtifacts(snapshot.execution_focus_artifacts),
     executionFocusToolCalls: normalizeFocusToolCalls(snapshot.execution_focus_tool_calls),
     executionFocusSkillTrace: normalizeFocusSkillTrace(snapshot.execution_focus_skill_trace)
+  };
+}
+
+export function normalizeOperatorRunFollowUp(
+  summary?: OperatorRunFollowUpBody | null
+): OperatorRunFollowUpSummary | null {
+  if (!summary) {
+    return null;
+  }
+
+  return {
+    affectedRunCount: summary.affected_run_count ?? 0,
+    sampledRunCount: summary.sampled_run_count ?? 0,
+    waitingRunCount: summary.waiting_run_count ?? 0,
+    runningRunCount: summary.running_run_count ?? 0,
+    succeededRunCount: summary.succeeded_run_count ?? 0,
+    failedRunCount: summary.failed_run_count ?? 0,
+    unknownRunCount: summary.unknown_run_count ?? 0,
+    sampledRuns: (summary.sampled_runs ?? [])
+      .filter((item) => typeof item?.run_id === "string" && item.run_id.trim())
+      .map((item) => ({
+        runId: item.run_id,
+        snapshot: normalizeOperatorRunSnapshot(item.snapshot)
+      }))
   };
 }
 

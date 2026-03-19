@@ -16,6 +16,46 @@ vi.mock("@/app/actions/operator-follow-up-revalidation", () => ({
 
 vi.mock("@/app/actions/run-snapshot", () => ({
   fetchRunSnapshot: vi.fn(),
+  normalizeOperatorRunFollowUp: vi.fn((summary?: {
+    affected_run_count?: number;
+    sampled_run_count?: number;
+    waiting_run_count?: number;
+    running_run_count?: number;
+    succeeded_run_count?: number;
+    failed_run_count?: number;
+    unknown_run_count?: number;
+    sampled_runs?: Array<{
+      run_id: string;
+      snapshot?: {
+        workflow_id?: string | null;
+        status?: string | null;
+        current_node_id?: string | null;
+        waiting_reason?: string | null;
+      } | null;
+    }>;
+  } | null) =>
+    summary
+      ? {
+          affectedRunCount: summary.affected_run_count ?? 0,
+          sampledRunCount: summary.sampled_run_count ?? 0,
+          waitingRunCount: summary.waiting_run_count ?? 0,
+          runningRunCount: summary.running_run_count ?? 0,
+          succeededRunCount: summary.succeeded_run_count ?? 0,
+          failedRunCount: summary.failed_run_count ?? 0,
+          unknownRunCount: summary.unknown_run_count ?? 0,
+          sampledRuns: (summary.sampled_runs ?? []).map((item) => ({
+            runId: item.run_id,
+            snapshot: item.snapshot
+              ? {
+                  workflowId: item.snapshot.workflow_id ?? null,
+                  status: item.snapshot.status ?? null,
+                  currentNodeId: item.snapshot.current_node_id ?? null,
+                  waitingReason: item.snapshot.waiting_reason ?? null
+                }
+              : null
+          }))
+        }
+      : null),
   normalizeOperatorRunSnapshot: vi.fn((snapshot?: {
     workflow_id?: string | null;
     status?: string | null;
@@ -94,10 +134,28 @@ describe("run actions", () => {
           summary: "阻塞变化：external callback blocker 已清除。"
         },
         run_follow_up: {
+          affected_run_count: 1,
+          sampled_run_count: 1,
+          waiting_run_count: 1,
+          running_run_count: 0,
+          succeeded_run_count: 0,
+          failed_run_count: 0,
+          unknown_run_count: 0,
           explanation: {
             primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
             follow_up: "样本 run 已切到 approval pending，下一步应先处理审批再观察 resume。"
-          }
+          },
+          sampled_runs: [
+            {
+              run_id: "run-1",
+              snapshot: {
+                workflow_id: "wf-1",
+                status: "waiting",
+                current_node_id: "approval_gate",
+                waiting_reason: "waiting approval"
+              }
+            }
+          ]
         }
       })
     );
@@ -121,6 +179,26 @@ describe("run actions", () => {
     expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
     expect(result.message).toContain("样本 run 已切到 approval pending，下一步应先处理审批再观察 resume。");
     expect(result.message).not.toContain("当前 run 状态：running。");
+    expect(result.runFollowUp).toEqual({
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      sampledRuns: [
+        {
+          runId: "run-1",
+          snapshot: {
+            workflowId: "wf-1",
+            status: "waiting",
+            currentNodeId: "approval_gate",
+            waitingReason: "waiting approval"
+          }
+        }
+      ]
+    });
     expect(fetchRunSnapshot).not.toHaveBeenCalled();
     expect(revalidateOperatorFollowUpPaths).toHaveBeenCalledWith({
       runIds: ["run-1"],

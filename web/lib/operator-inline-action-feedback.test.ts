@@ -323,4 +323,74 @@ describe("operator inline action feedback", () => {
     expect(html).toContain("scheduler_waiting_resume_monitor");
     expect(html).toContain("Watch the requeued resume");
   });
+
+  it("inline operator feedback 会展开额外 sampled run 的 compact follow-up 卡片", () => {
+    const html = renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        title: "Cleanup 结果",
+        message: "cleanup 已完成。",
+        runId: "run-cleanup",
+        outcomeExplanation: {
+          primary_signal: "cleanup 已处理过期 ticket。"
+        },
+        runSnapshot: {
+          status: "running",
+          currentNodeId: "approval_gate",
+          executionFocusNodeName: "Approval Gate"
+        },
+        runFollowUpExplanation: {
+          primary_signal: "本次影响 2 个 run；整体状态分布：running 1、waiting 1。已回读 2 个样本。",
+          follow_up: "另一个样本 run 仍在等待 approval。"
+        },
+        runFollowUp: {
+          affectedRunCount: 2,
+          sampledRunCount: 2,
+          waitingRunCount: 1,
+          runningRunCount: 1,
+          succeededRunCount: 0,
+          failedRunCount: 0,
+          unknownRunCount: 0,
+          sampledRuns: [
+            {
+              runId: "run-cleanup",
+              snapshot: {
+                status: "running",
+                currentNodeId: "approval_gate"
+              }
+            },
+            {
+              runId: "run-related",
+              snapshot: {
+                status: "waiting",
+                currentNodeId: "approval_gate",
+                waitingReason: "waiting approval",
+                executionFocusNodeId: "approval_gate",
+                executionFocusNodeRunId: "node-run-related",
+                executionFocusNodeName: "Approval Gate",
+                callbackWaitingExplanation: {
+                  primary_signal: "当前关联 run 仍在等待 approval。",
+                  follow_up: "优先处理审批，再观察 scheduler 是否继续恢复。"
+                },
+                scheduledResumeDelaySeconds: 45,
+                scheduledResumeSource: "waiting_resume_monitor",
+                scheduledWaitingStatus: "waiting_callback",
+                scheduledResumeScheduledAt: "2026-03-20T11:00:00Z",
+                scheduledResumeDueAt: "2026-03-20T11:00:45Z",
+                scheduledResumeRequeuedAt: "2026-03-20T11:01:30Z",
+                scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor"
+              }
+            }
+          ]
+        }
+      })
+    );
+
+    expect(html).toContain("affected runs 2");
+    expect(html).toContain("still waiting 1");
+    expect(html).toContain("/runs/run-related");
+    expect(html).toContain("当前关联 run 仍在等待 approval");
+    expect(html).toContain("scheduled resume requeued");
+    expect(html).toContain("scheduler_waiting_resume_monitor");
+  });
 });

@@ -1,4 +1,4 @@
-import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import type { OperatorRunFollowUpSummary, RunSnapshot } from "@/app/actions/run-snapshot";
 import type {
   RunArtifactItem,
   RunExecutionNodeItem,
@@ -21,6 +21,7 @@ export type SignalFollowUpExplanation = {
 export type OperatorInlineActionResultState = {
   outcomeExplanation?: SignalFollowUpExplanation | null;
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
+  runFollowUp?: OperatorRunFollowUpSummary | null;
   blockerDeltaSummary?: string | null;
   runSnapshot?: RunSnapshot | null;
 };
@@ -227,6 +228,7 @@ export function buildOperatorInlineActionFeedbackModel(
     : [];
   const focusArtifacts = buildExecutionFocusArtifactSamples(input.runSnapshot);
   const focusSkillReferenceLoads = input.runSnapshot?.executionFocusSkillTrace?.loads ?? [];
+  const sampledRunCount = input.runFollowUp?.sampledRuns.length ?? 0;
   const headline =
     outcomePrimarySignal ??
     runFollowUpPrimarySignal ??
@@ -251,6 +253,7 @@ export function buildOperatorInlineActionFeedbackModel(
         toolCallCount > 0 ||
         rawRefCount > 0 ||
         skillReferenceCount > 0 ||
+        sampledRunCount > 0 ||
         focusArtifactSummary ||
         focusToolCallSummaries.length > 0 ||
         focusArtifacts.length > 0 ||

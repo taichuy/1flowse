@@ -25,6 +25,41 @@ vi.mock("@/app/actions/operator-follow-up-revalidation", () => ({
 vi.mock("@/app/actions/run-snapshot", () => ({
   fetchRunSnapshot: vi.fn(),
   fetchRunSnapshots: vi.fn(),
+  normalizeOperatorRunFollowUp: vi.fn((summary?: {
+    affected_run_count?: number;
+    sampled_run_count?: number;
+    waiting_run_count?: number;
+    running_run_count?: number;
+    succeeded_run_count?: number;
+    failed_run_count?: number;
+    unknown_run_count?: number;
+    sampled_runs?: Array<{
+      run_id: string;
+      snapshot?: Record<string, unknown> | null;
+    }>;
+  } | null) =>
+    summary
+      ? {
+          affectedRunCount: summary.affected_run_count ?? 0,
+          sampledRunCount: summary.sampled_run_count ?? 0,
+          waitingRunCount: summary.waiting_run_count ?? 0,
+          runningRunCount: summary.running_run_count ?? 0,
+          succeededRunCount: summary.succeeded_run_count ?? 0,
+          failedRunCount: summary.failed_run_count ?? 0,
+          unknownRunCount: summary.unknown_run_count ?? 0,
+          sampledRuns: (summary.sampled_runs ?? []).map((item) => ({
+            runId: item.run_id,
+            snapshot: item.snapshot
+              ? {
+                  workflowId: item.snapshot.workflow_id ?? null,
+                  status: item.snapshot.status ?? null,
+                  currentNodeId: item.snapshot.current_node_id ?? null,
+                  waitingReason: item.snapshot.waiting_reason ?? null
+                }
+              : null
+          }))
+        }
+      : null),
   normalizeOperatorRunSnapshot: vi.fn((snapshot?: Record<string, unknown> | null) =>
     snapshot
       ? {
