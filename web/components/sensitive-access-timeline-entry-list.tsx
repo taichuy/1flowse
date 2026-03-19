@@ -1,11 +1,14 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
+import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
 import {
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
@@ -114,6 +117,18 @@ function resolveRunId(
   defaultRunId?: string | null
 ): string | null {
   return entry.request.run_id ?? entry.approval_ticket?.run_id ?? defaultRunId ?? null;
+}
+
+function shouldSurfaceCallbackWaitingSummary(entry: SensitiveAccessTimelineEntry) {
+  if (entry.request.decision === "require_approval") {
+    return true;
+  }
+
+  if (entry.approval_ticket?.status === "expired") {
+    return true;
+  }
+
+  return pickCallbackWaitingInlineSensitiveAccessEntry([entry]) !== null;
 }
 
 function renderFilterStrip<T extends string>({
@@ -285,6 +300,8 @@ export function SensitiveAccessTimelineEntryList({
         {filteredEntries.map((entry) => {
           const runId = resolveRunId(entry, defaultRunId);
           const inboxSliceHref = buildSensitiveAccessTimelineInboxHref(entry, defaultRunId);
+          const shouldRenderCallbackWaitingSummary = shouldSurfaceCallbackWaitingSummary(entry);
+          const nodeRunId = entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null;
 
           return (
             <article className="event-row compact-card" key={entry.request.id}>
@@ -348,6 +365,18 @@ export function SensitiveAccessTimelineEntryList({
                 <p className="binding-meta">{entry.outcome_explanation.follow_up}</p>
               ) : null}
 
+              {shouldRenderCallbackWaitingSummary ? (
+                <CallbackWaitingSummaryCard
+                  callbackWaitingExplanation={entry.outcome_explanation ?? null}
+                  className="payload-card compact-card"
+                  inboxHref={inboxSliceHref}
+                  nodeRunId={nodeRunId}
+                  runId={runId}
+                  sensitiveAccessEntries={[entry]}
+                  showInlineActions={false}
+                />
+              ) : null}
+
               <dl className="compact-meta-list">
                 <div>
                   <dt>Requested</dt>
@@ -407,7 +436,7 @@ export function SensitiveAccessTimelineEntryList({
 
               <SensitiveAccessInlineActions
                 compact
-                nodeRunId={entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null}
+                nodeRunId={nodeRunId}
                 notifications={entry.notifications}
                 runId={runId}
                 ticket={entry.approval_ticket}
