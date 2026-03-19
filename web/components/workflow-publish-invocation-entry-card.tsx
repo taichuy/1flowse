@@ -16,8 +16,11 @@ import {
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
   formatPublishedRunStatusLabel,
+  listPublishedInvocationRunFollowUpSampleViews,
   listPublishedInvocationSensitiveAccessChips,
-  listPublishedInvocationSensitiveAccessRows
+  listPublishedInvocationSensitiveAccessRows,
+  resolvePublishedInvocationCallbackWaitingExplanation,
+  resolvePublishedInvocationExecutionFocusExplanation
 } from "@/lib/published-invocation-presenters";
 import { formatMetricSummary } from "@/lib/run-execution-focus-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
@@ -81,7 +84,10 @@ export function WorkflowPublishInvocationEntryCard({
     scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
     scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
   });
-  const waitingExplanation = waitingLifecycle?.callback_waiting_explanation;
+  const waitingExplanation = resolvePublishedInvocationCallbackWaitingExplanation(item);
+  const executionFocusExplanation = resolvePublishedInvocationExecutionFocusExplanation(item);
+  const executionFocusPrimarySignal = executionFocusExplanation?.primary_signal?.trim() || null;
+  const executionFocusFollowUp = executionFocusExplanation?.follow_up?.trim() || null;
   const waitingOverviewHeadline = formatPublishedInvocationWaitingHeadline({
     explanation: waitingExplanation,
     fallbackHeadline: waitingHeadline,
@@ -120,6 +126,8 @@ export function WorkflowPublishInvocationEntryCard({
         unknown: runFollowUp.unknown_run_count
       })
     : null;
+  const runFollowUpSample = listPublishedInvocationRunFollowUpSampleViews(runFollowUp)[0] ?? null;
+  const runFollowUpSamplePrimarySignal = runFollowUpSample?.explanation?.primary_signal?.trim() || null;
 
   return (
     <article className="payload-card compact-card">
@@ -213,15 +221,34 @@ export function WorkflowPublishInvocationEntryCard({
               <dt>Status summary</dt>
               <dd>{runFollowUpStatusSummary ?? "n/a"}</dd>
             </div>
+            <div>
+              <dt>Sample focus</dt>
+              <dd>
+                {runFollowUpSample ? (
+                  <Link className="inline-link" href={`/runs/${encodeURIComponent(runFollowUpSample.run_id)}`}>
+                    {runFollowUpSample.run_id}
+                  </Link>
+                ) : (
+                  "n/a"
+                )}
+              </dd>
+            </div>
           </dl>
+          {runFollowUpSamplePrimarySignal ? (
+            <p className="binding-meta">{runFollowUpSamplePrimarySignal}</p>
+          ) : null}
         </div>
       ) : null}
       {item.run_status === "waiting" ? (
-        <p className="section-copy entry-copy">
-          该请求已成功接入 durable runtime，当前仍处于 waiting；可直接打开 run detail 继续追踪
-          {item.run_current_node_id ? `，当前节点 ${item.run_current_node_id}` : ""}
-          {item.run_waiting_reason ? `，等待原因 ${item.run_waiting_reason}` : ""}。
-        </p>
+        <>
+          <p className="section-copy entry-copy">
+            {executionFocusPrimarySignal ??
+              `该请求已成功接入 durable runtime，当前仍处于 waiting；可直接打开 run detail 继续追踪${
+                item.run_current_node_id ? `，当前节点 ${item.run_current_node_id}` : ""
+              }${item.run_waiting_reason ? `，等待原因 ${item.run_waiting_reason}` : ""}。`}
+          </p>
+          {executionFocusFollowUp ? <p className="binding-meta">{executionFocusFollowUp}</p> : null}
+        </>
       ) : null}
       {waitingLifecycle ? (
         <div className="publish-meta-grid">

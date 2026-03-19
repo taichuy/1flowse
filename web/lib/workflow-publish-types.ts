@@ -92,6 +92,8 @@ export type PublishedEndpointInvocationItem = {
     scheduled_resume_requeue_source?: string | null;
   } | null;
   run_follow_up?: OperatorRunFollowUpSummary | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
   reason_code?: string | null;
   error_message?: string | null;
   request_preview: {
@@ -257,6 +259,7 @@ export type OperatorRunFollowUpSnapshot = {
   execution_focus_node_id?: string | null;
   execution_focus_node_run_id?: string | null;
   execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
 };
 
 export type OperatorRunFollowUpSnapshotSample = {

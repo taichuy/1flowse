@@ -1541,6 +1541,19 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     assert "run run-publish-detail：当前 run 状态：waiting。" in activity_body["items"][0][
         "run_follow_up"
     ]["explanation"]["follow_up"]
+    assert activity_body["items"][0]["execution_focus_explanation"] == {
+        "primary_signal": "等待原因：callback pending",
+        "follow_up": (
+            "下一步：优先确认 callback ticket 是否已回调；"
+            "若尚未回调，继续沿 ticket / inbox 事实链跟进。"
+        ),
+    }
+    assert activity_body["items"][0]["callback_waiting_explanation"] == {
+        "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+        "follow_up": (
+            "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+        ),
+    }
 
     detail_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}"

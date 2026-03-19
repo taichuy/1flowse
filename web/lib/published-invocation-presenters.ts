@@ -6,6 +6,7 @@ import type {
   RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 type PublishedInvocationWaitingOverview = {
@@ -23,6 +24,19 @@ type PublishedInvocationWaitingOverview = {
 type PublishedInvocationSensitiveAccessSummary = NonNullable<
   NonNullable<PublishedEndpointInvocationItem["run_waiting_lifecycle"]>["sensitive_access_summary"]
 >;
+
+type PublishedInvocationRunFollowUpSummary = NonNullable<PublishedEndpointInvocationItem["run_follow_up"]>;
+type PublishedInvocationRunFollowUpSample =
+  PublishedInvocationRunFollowUpSummary["sampled_runs"][number];
+
+export type PublishedInvocationRunFollowUpSampleView = {
+  run_id: string;
+  status: string | null;
+  current_node_id: string | null;
+  waiting_reason: string | null;
+  explanation_source: "callback_waiting" | "execution_focus" | null;
+  explanation: RunExecutionFocusExplanation | null;
+};
 
 export const PUBLISHED_INVOCATION_REASON_CODES = [
   "api_key_invalid",
@@ -136,11 +150,9 @@ function getFacetCount(
 ) {
   return facets?.find((item) => item.value === value)?.count ?? 0;
 }
-
 function formatCountLabel(count: number, label: string) {
   return `${count} ${label}${count === 1 ? "" : "s"}`;
 }
-
 function joinFragments(fragments: string[]) {
   if (fragments.length === 0) {
     return null;
@@ -157,6 +169,102 @@ function joinFragments(fragments: string[]) {
   return `${fragments.slice(0, -1).join(", ")}, and ${fragments[fragments.length - 1]}`;
 }
 
+function normalizeExplanation(
+  explanation?: RunExecutionFocusExplanation | null
+): RunExecutionFocusExplanation | null {
+  const primarySignal = explanation?.primary_signal?.trim() || null;
+  const followUp = explanation?.follow_up?.trim() || null;
+  if (!primarySignal && !followUp) {
+    return null;
+  }
+
+  return {
+    primary_signal: primarySignal,
+    follow_up: followUp
+  };
+}
+
+export function resolvePublishedInvocationExecutionFocusExplanation(
+  item: PublishedEndpointInvocationItem
+): RunExecutionFocusExplanation | null {
+  return (
+    normalizeExplanation(item.execution_focus_explanation) ??
+    normalizeExplanation(item.run_follow_up?.sampled_runs[0]?.snapshot?.execution_focus_explanation)
+  );
+}
+
+export function resolvePublishedInvocationCallbackWaitingExplanation(
+  item: PublishedEndpointInvocationItem
+): RunExecutionFocusExplanation | null {
+  return (
+    normalizeExplanation(item.callback_waiting_explanation) ??
+    normalizeExplanation(item.run_waiting_lifecycle?.callback_waiting_explanation) ??
+    normalizeExplanation(item.run_follow_up?.sampled_runs[0]?.snapshot?.callback_waiting_explanation)
+  );
+}
+
+export function resolvePublishedInvocationRunFollowUpSampleExplanation(
+  sample?: PublishedInvocationRunFollowUpSample | null
+): PublishedInvocationRunFollowUpSampleView["explanation"] {
+  return (
+    normalizeExplanation(sample?.snapshot?.callback_waiting_explanation) ??
+    normalizeExplanation(sample?.snapshot?.execution_focus_explanation)
+  );
+}
+
+export function resolvePublishedInvocationRunFollowUpSampleExplanationSource(
+  sample?: PublishedInvocationRunFollowUpSample | null
+): PublishedInvocationRunFollowUpSampleView["explanation_source"] {
+  if (normalizeExplanation(sample?.snapshot?.callback_waiting_explanation)) {
+    return "callback_waiting";
+  }
+  if (normalizeExplanation(sample?.snapshot?.execution_focus_explanation)) {
+    return "execution_focus";
+  }
+  return null;
+}
+
+export function listPublishedInvocationRunFollowUpSampleViews(
+  runFollowUp?: PublishedInvocationRunFollowUpSummary | null
+): PublishedInvocationRunFollowUpSampleView[] {
+  return (runFollowUp?.sampled_runs ?? []).map((sample) => ({
+    run_id: sample.run_id,
+    status: sample.snapshot?.status?.trim() || null,
+    current_node_id: sample.snapshot?.current_node_id?.trim() || null,
+    waiting_reason: sample.snapshot?.waiting_reason?.trim() || null,
+    explanation_source: resolvePublishedInvocationRunFollowUpSampleExplanationSource(sample),
+    explanation: resolvePublishedInvocationRunFollowUpSampleExplanation(sample)
+  }));
+}
+
+export function listPublishedInvocationRunFollowUpSampleSummaries(
+  runFollowUp?: PublishedInvocationRunFollowUpSummary | null
+): string[] {
+  return (runFollowUp?.sampled_runs ?? []).map((sample) => {
+    const snapshotSummary = formatRunSnapshotSummary({
+      status: sample.snapshot?.status ?? null,
+      currentNodeId: sample.snapshot?.current_node_id ?? null,
+      waitingReason: sample.snapshot?.waiting_reason ?? null,
+      executionFocusNodeId: sample.snapshot?.execution_focus_node_id ?? null,
+      executionFocusExplanation: sample.snapshot?.execution_focus_explanation
+        ? {
+            primary_signal: sample.snapshot.execution_focus_explanation.primary_signal ?? null,
+            follow_up: sample.snapshot.execution_focus_explanation.follow_up ?? null
+          }
+        : null,
+      callbackWaitingExplanation: sample.snapshot?.callback_waiting_explanation
+        ? {
+            primary_signal: sample.snapshot.callback_waiting_explanation.primary_signal ?? null,
+            follow_up: sample.snapshot.callback_waiting_explanation.follow_up ?? null
+          }
+        : null
+    });
+    const shortRunId = sample.run_id.slice(0, 8);
+    return snapshotSummary
+      ? `run ${shortRunId}：${snapshotSummary}`
+      : `run ${shortRunId}：暂未读取到最新快照。`;
+  });
+}
 export function listPublishedInvocationSensitiveAccessChips(
   summary?: PublishedInvocationSensitiveAccessSummary | null
 ) {
@@ -464,7 +572,6 @@ export function buildPublishedInvocationInboxHref({
     approvalTicketId: latestApprovalEntry?.approval_ticket?.id ?? null
   });
 }
-
 export function buildBlockingPublishedInvocationInboxHref({
   runId,
   blockingNodeRunId,

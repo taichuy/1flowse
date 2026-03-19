@@ -10,7 +10,7 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSensitiveAccessSummary,
     PublishedEndpointInvocationWaitingLifecycle,
 )
-from app.schemas.operator_follow_up import OperatorRunFollowUpSummary
+from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
 from app.services.published_invocations import classify_invocation_reason
 from app.services.run_view_serializers import (
     serialize_callback_waiting_lifecycle_summary,
@@ -44,6 +44,17 @@ def _is_terminated_callback_waiting_node(node_run: NodeRun) -> bool:
     return bool(lifecycle is not None and lifecycle.terminated)
 
 
+def _resolve_run_follow_up_snapshot(
+    run_follow_up: OperatorRunFollowUpSummary | None,
+) -> OperatorRunSnapshot | None:
+    if run_follow_up is None:
+        return None
+    for sample in run_follow_up.sampled_runs:
+        if sample.snapshot is not None:
+            return sample.snapshot
+    return None
+
+
 def serialize_published_invocation_item(
     record,
     *,
@@ -74,6 +85,7 @@ def serialize_published_invocation_item(
         if run_follow_up_lookup and record.run_id
         else None
     )
+    run_follow_up_snapshot = _resolve_run_follow_up_snapshot(run_follow_up)
     return PublishedEndpointInvocationItem(
         id=record.id,
         workflow_id=record.workflow_id,
@@ -97,6 +109,20 @@ def serialize_published_invocation_item(
         run_waiting_reason=waiting_reason,
         run_waiting_lifecycle=waiting_lifecycle,
         run_follow_up=run_follow_up,
+        execution_focus_explanation=(
+            run_follow_up_snapshot.execution_focus_explanation
+            if run_follow_up_snapshot is not None
+            else None
+        ),
+        callback_waiting_explanation=(
+            waiting_lifecycle.callback_waiting_explanation
+            if waiting_lifecycle is not None
+            else (
+                run_follow_up_snapshot.callback_waiting_explanation
+                if run_follow_up_snapshot is not None
+                else None
+            )
+        ),
         reason_code=classify_invocation_reason(
             status=record.status,
             error_message=record.error_message,
