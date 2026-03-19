@@ -303,6 +303,61 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).not.toContain("Sensitive access:");
   });
 
+  it("在有 defaultRunId 时仍优先使用 sampled run 生成 run 与 inbox 链接", () => {
+    const baseEntry = buildTimelineEntry();
+    const markup = renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          buildTimelineEntry({
+            request: {
+              ...baseEntry.request,
+              run_id: null,
+              node_run_id: null
+            },
+            approval_ticket: {
+              ...baseEntry.approval_ticket!,
+              run_id: null,
+              node_run_id: null
+            },
+            notifications: [],
+            outcome_explanation: null,
+            run_snapshot: null,
+            run_follow_up: {
+              affected_run_count: 1,
+              sampled_run_count: 1,
+              waiting_run_count: 1,
+              running_run_count: 0,
+              succeeded_run_count: 0,
+              failed_run_count: 0,
+              unknown_run_count: 0,
+              sampled_runs: [
+                {
+                  run_id: "run-sampled-preferred",
+                  snapshot: {
+                    status: "waiting",
+                    workflowId: "workflow-1",
+                    currentNodeId: "tool_wait",
+                    waitingReason: "approval pending",
+                    executionFocusNodeId: "tool_wait",
+                    executionFocusNodeRunId: "node-run-sampled-preferred",
+                    executionFocusNodeName: "Tool Wait"
+                  }
+                }
+              ],
+              explanation: null
+            }
+          })
+        ],
+        emptyCopy: "empty",
+        defaultRunId: "run-context-should-not-win"
+      })
+    );
+
+    expect(markup).toContain('/runs/run-sampled-preferred');
+    expect(markup).toContain('run_id=run-sampled-preferred');
+    expect(markup).not.toContain('run-context-should-not-win');
+  });
+
   it("不会为已经完成且无需 follow-up 的 entry 重复渲染 callback waiting 摘要", () => {
     const baseEntry = buildTimelineEntry();
     const markup = renderToStaticMarkup(

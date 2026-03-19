@@ -14,6 +14,7 @@ import {
 } from "@/lib/operator-inline-action-feedback";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import type { ExecutionFocusToolCallSummary } from "@/lib/run-execution-focus-presenters";
+import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 type PublishedInvocationWaitingOverview = {
@@ -705,8 +706,12 @@ export function buildPublishedInvocationInboxHref({
     return null;
   }
 
+  const resolvedRunId = latestApprovalEntry
+    ? resolveSensitiveAccessTimelineEntryRunId(latestApprovalEntry, invocation.run_id ?? null)
+    : invocation.run_id ?? null;
+
   return buildSensitiveAccessInboxHref({
-    runId: invocation.run_id ?? latestApprovalEntry?.request.run_id ?? null,
+    runId: resolvedRunId,
     nodeRunId:
       invocation.run_waiting_lifecycle?.node_run_id ??
       latestApprovalEntry?.request.node_run_id ??
@@ -733,8 +738,12 @@ export function buildBlockingPublishedInvocationInboxHref({
     return null;
   }
 
+  const resolvedRunId = latestBlockingEntry
+    ? resolveSensitiveAccessTimelineEntryRunId(latestBlockingEntry, runId ?? null)
+    : runId ?? null;
+
   return buildSensitiveAccessInboxHref({
-    runId: runId ?? latestBlockingEntry?.request.run_id ?? latestBlockingEntry?.approval_ticket?.run_id ?? null,
+    runId: resolvedRunId,
     nodeRunId:
       blockingNodeRunId ??
       latestBlockingEntry?.request.node_run_id ??

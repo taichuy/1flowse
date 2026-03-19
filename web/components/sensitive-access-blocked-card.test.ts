@@ -74,12 +74,50 @@ describe("SensitiveAccessBlockedCard", () => {
         }
       },
       run_follow_up: {
+        affectedRunCount: 1,
+        sampledRunCount: 1,
+        waitingRunCount: 1,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 0,
+        unknownRunCount: 0,
         explanation: {
           primary_signal: "本次影响 1 个 run；已回读 1 个样本。",
           follow_up: "run run-1：当前 run 状态：waiting。"
         },
-        affected_run_count: 1,
-        sampled_run_count: 1
+        sampledRuns: [
+          {
+            runId: "run-1",
+            snapshot: {
+              status: "waiting",
+              currentNodeId: "agent_review",
+              waitingReason: "approval pending",
+              executionFocusNodeId: "agent_review",
+              executionFocusNodeRunId: "node-run-1",
+              executionFocusNodeName: "Agent Review",
+              callbackWaitingExplanation: {
+                primary_signal: "当前 sampled run 仍在等待审批。",
+                follow_up: "优先完成审批后再继续观察恢复。"
+              },
+              executionFocusArtifactCount: 1,
+              executionFocusArtifactRefCount: 1,
+              executionFocusToolCallCount: 1,
+              executionFocusRawRefCount: 1,
+              executionFocusArtifactRefs: ["artifact://approval-1"],
+              executionFocusToolCalls: [
+                {
+                  id: "tool-call-1",
+                  tool_id: "approval.tool",
+                  tool_name: "Approval Tool",
+                  phase: "waiting_approval",
+                  status: "waiting",
+                  response_summary: "审批阻断前已保留最近一次工具调用摘要。",
+                  raw_ref: "raw://approval-tool-1"
+                }
+              ]
+            }
+          }
+        ]
       }
     };
 
@@ -97,6 +135,85 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).toContain("waiting");
     expect(html).toContain("Focus node");
     expect(html).toContain("Agent Review");
+    expect(html).toContain("sampled 1");
+    expect(html).toContain("still waiting 1");
     expect(html).toContain("/runs/run-1");
+  });
+
+  it("falls back to sampled run context when request and ticket run_id are missing", () => {
+    const payload: SensitiveAccessBlockingPayload = {
+      detail: "Published invocation export requires approval before the payload can be downloaded.",
+      resource: {
+        id: "resource-2",
+        label: "Invocation Export",
+        description: "Sensitive published invocation export",
+        sensitivity_level: "L3",
+        source: "workspace_resource",
+        metadata: {
+          run_ids: ["run-sampled-1"]
+        }
+      },
+      access_request: {
+        id: "request-2",
+        run_id: null,
+        node_run_id: null,
+        requester_type: "human",
+        requester_id: "ops-reviewer",
+        resource_id: "resource-2",
+        action_type: "read",
+        decision: "require_approval"
+      },
+      approval_ticket: {
+        id: "ticket-2",
+        access_request_id: "request-2",
+        run_id: null,
+        node_run_id: "node-run-sampled",
+        status: "pending",
+        waiting_status: "waiting",
+        approved_by: null
+      },
+      notifications: [],
+      outcome_explanation: {
+        primary_signal: "当前阻断来自 metadata-only run_ids 的敏感访问审批。",
+        follow_up: "下一步：先处理审批票据，再回看 sampled run 的 waiting 事实。"
+      },
+      run_snapshot: null,
+      run_follow_up: {
+        affectedRunCount: 1,
+        sampledRunCount: 1,
+        waitingRunCount: 1,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 0,
+        unknownRunCount: 0,
+        explanation: {
+          primary_signal: "本次影响 1 个 run；已回读 1 个样本。",
+          follow_up: "run run-sampled-1：当前 run 状态：waiting。"
+        },
+        sampledRuns: [
+          {
+            runId: "run-sampled-1",
+            snapshot: {
+              status: "waiting",
+              currentNodeId: "export_wait",
+              waitingReason: "approval pending",
+              executionFocusNodeId: "export_wait",
+              executionFocusNodeRunId: "node-run-sampled",
+              executionFocusNodeName: "Export Wait"
+            }
+          }
+        ]
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBlockedCard, {
+        title: "Sensitive access blocked",
+        payload
+      })
+    );
+
+    expect(html).toContain("/runs/run-sampled-1");
+    expect(html).toContain("run_id=run-sampled-1");
   });
 });

@@ -5,7 +5,10 @@ import Link from "next/link";
 
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
-import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import {
+  resolveSensitiveAccessBlockingRunId,
+  type SensitiveAccessBlockingPayload
+} from "@/lib/sensitive-access";
 import {
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
@@ -36,7 +39,7 @@ export function SensitiveAccessBlockedCard({
   clearHref = null,
   summary
 }: SensitiveAccessBlockedCardProps) {
-  const runId = payload.access_request.run_id ?? payload.approval_ticket?.run_id ?? null;
+  const runId = resolveSensitiveAccessBlockingRunId(payload);
   const inboxHref = buildSensitiveAccessInboxHref({
     runId,
     nodeRunId: payload.access_request.node_run_id ?? payload.approval_ticket?.node_run_id ?? null,
@@ -46,10 +49,11 @@ export function SensitiveAccessBlockedCard({
     approvalTicketId: payload.approval_ticket?.id ?? null
   });
   const hasStructuredFollowUp = Boolean(
-    payload.outcome_explanation?.primary_signal?.trim() ||
+      payload.outcome_explanation?.primary_signal?.trim() ||
       payload.outcome_explanation?.follow_up?.trim() ||
       payload.run_follow_up?.explanation?.primary_signal?.trim() ||
       payload.run_follow_up?.explanation?.follow_up?.trim() ||
+      (payload.run_follow_up?.sampledRuns.length ?? 0) > 0 ||
       payload.run_snapshot
   );
 
@@ -150,6 +154,7 @@ export function SensitiveAccessBlockedCard({
           message=""
           outcomeExplanation={payload.outcome_explanation ?? null}
           runFollowUpExplanation={payload.run_follow_up?.explanation ?? null}
+          runFollowUp={payload.run_follow_up ?? null}
           runId={runId}
           runSnapshot={payload.run_snapshot ?? null}
           status="success"

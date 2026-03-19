@@ -11,6 +11,7 @@ import {
   hasScheduledResume,
   pickTopBlockerNodes
 } from "@/lib/run-execution-blockers";
+import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
   formatExecutionFocusFollowUp,
@@ -19,14 +20,16 @@ import {
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 
-function buildNodeInboxHref(node: RunExecutionNodeItem): string | null {
+function buildNodeInboxHref(node: RunExecutionNodeItem, defaultRunId?: string | null): string | null {
   const latestApprovalEntry = node.sensitive_access_entries.find((entry) => entry.approval_ticket);
   if (!latestApprovalEntry && node.callback_tickets.length === 0) {
     return null;
   }
 
   return buildSensitiveAccessInboxHref({
-    runId: latestApprovalEntry?.request.run_id ?? latestApprovalEntry?.approval_ticket?.run_id ?? null,
+    runId: latestApprovalEntry
+      ? resolveSensitiveAccessTimelineEntryRunId(latestApprovalEntry, defaultRunId)
+      : defaultRunId ?? null,
     nodeRunId: node.node_run_id,
     status: latestApprovalEntry?.approval_ticket?.status ?? null,
     waitingStatus: latestApprovalEntry?.approval_ticket?.waiting_status ?? null,
@@ -93,7 +96,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               callbackWaitingExplanation={focusNode.callback_waiting_explanation}
               className="callback-waiting-summary-card"
               focusNodeEvidence={focusNode}
-              inboxHref={buildNodeInboxHref(focusNode)}
+              inboxHref={buildNodeInboxHref(focusNode, executionView.run_id)}
               lifecycle={focusNode.callback_waiting_lifecycle}
               nodeRunId={focusNode.node_run_id}
               runId={executionView.run_id}
@@ -121,7 +124,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
           const pendingApprovals = countPendingApprovals(node);
           const pendingTickets = countPendingTickets(node);
           const lifecycle = node.callback_waiting_lifecycle;
-          const inboxHref = buildNodeInboxHref(node);
+          const inboxHref = buildNodeInboxHref(node, executionView.run_id);
           const primarySignal =
             node.execution_focus_explanation?.primary_signal ??
             formatExecutionFocusPrimarySignal(node);

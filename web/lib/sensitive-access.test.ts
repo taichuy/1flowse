@@ -6,7 +6,46 @@ import {
   type SensitiveAccessBlockingPayload
 } from "@/lib/sensitive-access";
 
-function buildBlockingPayload(): SensitiveAccessBlockingPayload {
+type RawBlockingPayload = Omit<
+  SensitiveAccessBlockingPayload,
+  "run_snapshot" | "run_follow_up"
+> & {
+  run_snapshot: {
+    status: string;
+    workflow_id: string;
+    current_node_id: string;
+    waiting_reason: string;
+    execution_focus_node_id: string;
+    execution_focus_node_run_id: string;
+    execution_focus_node_name: string;
+  };
+  run_follow_up: {
+    explanation: {
+      primary_signal: string;
+      follow_up: string;
+    };
+    affected_run_count: number;
+    sampled_run_count: number;
+    waiting_run_count: number;
+    running_run_count: number;
+    succeeded_run_count: number;
+    failed_run_count: number;
+    unknown_run_count: number;
+    sampled_runs: Array<{
+      run_id: string;
+      snapshot: {
+        status: string;
+        current_node_id: string;
+        waiting_reason: string;
+        execution_focus_node_id: string;
+        execution_focus_node_run_id: string;
+        execution_focus_node_name: string;
+      };
+    }>;
+  };
+};
+
+function buildBlockingPayload(): RawBlockingPayload {
   return {
     detail: "Run trace export requires approval before the payload can be exported.",
     resource: {
@@ -53,9 +92,12 @@ function buildBlockingPayload(): SensitiveAccessBlockingPayload {
     },
     run_snapshot: {
       status: "waiting",
-      workflowId: "workflow-1",
-      currentNodeId: "mock_tool",
-      waitingReason: "waiting approval"
+      workflow_id: "workflow-1",
+      current_node_id: "mock_tool",
+      waiting_reason: "waiting approval",
+      execution_focus_node_id: "mock_tool",
+      execution_focus_node_run_id: "node-run-1",
+      execution_focus_node_name: "Mock Tool"
     },
     run_follow_up: {
       explanation: {
@@ -63,7 +105,25 @@ function buildBlockingPayload(): SensitiveAccessBlockingPayload {
         follow_up: "run run-1：当前 run 状态：waiting。"
       },
       affected_run_count: 1,
-      sampled_run_count: 1
+      sampled_run_count: 1,
+      waiting_run_count: 1,
+      running_run_count: 0,
+      succeeded_run_count: 0,
+      failed_run_count: 0,
+      unknown_run_count: 0,
+      sampled_runs: [
+        {
+          run_id: "run-1",
+          snapshot: {
+            status: "waiting",
+            current_node_id: "mock_tool",
+            waiting_reason: "waiting approval",
+            execution_focus_node_id: "mock_tool",
+            execution_focus_node_run_id: "node-run-1",
+            execution_focus_node_name: "Mock Tool"
+          }
+        }
+      ]
     }
   };
 }
@@ -84,7 +144,12 @@ describe("parseSensitiveAccessBlockingResponse", () => {
 
     expect(parsed?.payload.outcome_explanation?.primary_signal).toContain("敏感访问审批票据");
     expect(parsed?.payload.run_snapshot?.status).toBe("waiting");
+    expect(parsed?.payload.run_snapshot?.currentNodeId).toBe("mock_tool");
     expect(parsed?.payload.run_follow_up?.explanation?.primary_signal).toContain("影响 1 个 run");
+    expect(parsed?.payload.run_follow_up?.sampledRuns[0]?.runId).toBe("run-1");
+    expect(parsed?.payload.run_follow_up?.sampledRuns[0]?.snapshot?.currentNodeId).toBe(
+      "mock_tool"
+    );
   });
 
   it("parses denied 403 payloads through the guarded response helper", async () => {
@@ -103,6 +168,7 @@ describe("parseSensitiveAccessBlockingResponse", () => {
     }
     expect(parsed.statusCode).toBe(403);
     expect(parsed.payload.outcome_explanation?.follow_up).toContain("优先处理审批票据");
-    expect(parsed.payload.run_follow_up?.affected_run_count).toBe(1);
+    expect(parsed.payload.run_follow_up?.affectedRunCount).toBe(1);
+    expect(parsed.payload.run_follow_up?.sampledRunCount).toBe(1);
   });
 });

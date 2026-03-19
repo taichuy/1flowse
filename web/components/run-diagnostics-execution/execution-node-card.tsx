@@ -26,6 +26,7 @@ import {
   formatExecutionFocusPrimarySignal
 } from "@/lib/run-execution-focus-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 
 function formatExecutionBackendExtensions(
   value: RunExecutionNodeItem["execution_backend_extensions"]
@@ -100,7 +101,9 @@ export function ExecutionNodeCard({
   const inboxHref =
     node.sensitive_access_entries.length > 0 || node.callback_tickets.length > 0
       ? buildSensitiveAccessInboxHref({
-          runId: latestApprovalEntry?.request.run_id ?? latestApprovalEntry?.approval_ticket?.run_id ?? null,
+          runId: latestApprovalEntry
+            ? resolveSensitiveAccessTimelineEntryRunId(latestApprovalEntry, runId)
+            : runId,
           nodeRunId: node.node_run_id,
           status: latestApprovalEntry?.approval_ticket?.status ?? null,
           waitingStatus: latestApprovalEntry?.approval_ticket?.waiting_status ?? null,
