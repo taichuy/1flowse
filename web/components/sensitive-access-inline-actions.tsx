@@ -14,6 +14,7 @@ import {
   getApprovalExpectationCopy,
   getNotificationRetryExpectationCopy
 } from "@/lib/operator-action-result-presenters";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 
 export const DEFAULT_INLINE_OPERATOR_ID = "studio-operator";
 
@@ -157,7 +158,16 @@ export function SensitiveAccessInlineActions({
           </div>
           <p className="empty-state compact">{getApprovalExpectationCopy()}</p>
           {decisionState.message && decisionState.ticketId === ticket?.id ? (
-            <p className={`sync-message ${decisionState.status}`}>{decisionState.message}</p>
+            <InlineOperatorActionFeedback
+              message={decisionState.message}
+              outcomeExplanation={decisionState.outcomeExplanation}
+              runFollowUpExplanation={decisionState.runFollowUpExplanation}
+              blockerDeltaSummary={decisionState.blockerDeltaSummary}
+              runId={runId}
+              runSnapshot={decisionState.runSnapshot}
+              status={decisionState.status}
+              title="审批结果"
+            />
           ) : null}
         </form>
       ) : null}
@@ -199,7 +209,16 @@ export function SensitiveAccessInlineActions({
           ) : null}
           <p className="empty-state compact">{getNotificationRetryExpectationCopy()}</p>
           {retryState.message && retryState.dispatchId === retriableNotification.id ? (
-            <p className={`sync-message ${retryState.status}`}>{retryState.message}</p>
+            <InlineOperatorActionFeedback
+              message={retryState.message}
+              outcomeExplanation={retryState.outcomeExplanation}
+              runFollowUpExplanation={retryState.runFollowUpExplanation}
+              blockerDeltaSummary={retryState.blockerDeltaSummary}
+              runId={runId}
+              runSnapshot={retryState.runSnapshot}
+              status={retryState.status}
+              title="通知重试结果"
+            />
           ) : null}
         </form>
       ) : null}

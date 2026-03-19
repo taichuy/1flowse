@@ -120,6 +120,20 @@ describe("sensitive access actions", () => {
       status: "success",
       ticketId: "ticket-1"
     });
+    expect(result.outcomeExplanation).toEqual({
+      primary_signal: "审批已通过。",
+      follow_up: "后端已把 waiting blocker 重新交回 runtime。"
+    });
+    expect(result.runFollowUpExplanation).toEqual({
+      primary_signal: "本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。",
+      follow_up: "run run-1：当前 run 状态：running。 当前节点：review。 重点信号：runtime 已继续推进。"
+    });
+    expect(result.blockerDeltaSummary).toBe("阻塞变化：已解除 approval pending。");
+    expect(result.runSnapshot).toMatchObject({
+      workflowId: "wf-1",
+      status: "running",
+      currentNodeId: "review"
+    });
     expect(result.message).toContain("审批已通过。");
     expect(result.message).toContain("后端已把 waiting blocker 重新交回 runtime。");
     expect(result.message).toContain("阻塞变化：已解除 approval pending。");
@@ -292,6 +306,20 @@ describe("sensitive access actions", () => {
       status: "success",
       dispatchId: "dispatch-1",
       target: "ops@example.com"
+    });
+    expect(result.outcomeExplanation).toEqual({
+      primary_signal: "通知已重新投递。",
+      follow_up: "等待审批人与 callback 后续推进。"
+    });
+    expect(result.runFollowUpExplanation).toEqual({
+      primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+      follow_up: "run run-1：当前 run 状态：waiting。 当前节点：review。 重点信号：仍在等待审批结果。"
+    });
+    expect(result.blockerDeltaSummary).toBe("阻塞变化：仍有 1 个 operator blocker 需要审批。");
+    expect(result.runSnapshot).toMatchObject({
+      workflowId: "wf-1",
+      status: "waiting",
+      currentNodeId: "review"
     });
     expect(result.message).toContain("通知已重新投递。");
     expect(result.message).toContain("等待审批人与 callback 后续推进。");

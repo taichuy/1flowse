@@ -26,14 +26,15 @@ import {
   normalizeOperatorRunSnapshot,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
+import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
 
-export type DecideSensitiveAccessApprovalTicketState = {
+export type DecideSensitiveAccessApprovalTicketState = OperatorInlineActionResultState & {
   status: "idle" | "success" | "error";
   message: string;
   ticketId: string;
 };
 
-export type RetrySensitiveAccessNotificationDispatchState = {
+export type RetrySensitiveAccessNotificationDispatchState = OperatorInlineActionResultState & {
   status: "idle" | "success" | "error";
   message: string;
   dispatchId: string;
@@ -311,6 +312,10 @@ export async function decideSensitiveAccessApprovalTicket(
           runSnapshot
         })
       }),
+      outcomeExplanation: body?.outcome_explanation ?? null,
+      runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      blockerDeltaSummary,
+      runSnapshot,
       ticketId
     };
   } catch {
@@ -392,6 +397,10 @@ export async function retrySensitiveAccessNotificationDispatch(
           runSnapshot
         })
       }),
+      outcomeExplanation: body?.outcome_explanation ?? null,
+      runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      blockerDeltaSummary,
+      runSnapshot,
       dispatchId,
       target: effectiveTarget
     };

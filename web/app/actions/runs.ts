@@ -17,8 +17,9 @@ import {
   normalizeOperatorRunSnapshot,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
+import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
 
-export type ResumeRunState = {
+export type ResumeRunState = OperatorInlineActionResultState & {
   status: "idle" | "success" | "error";
   message: string;
   runId: string;
@@ -150,9 +151,19 @@ export async function resumeRun(
               workflowId: body?.run?.workflow_id ?? null,
               currentNodeId: body?.run?.current_node_id ?? null,
               waitingReason: null
-            }
+          }
         })
       }),
+      outcomeExplanation: body?.outcome_explanation ?? null,
+      runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      blockerDeltaSummary,
+      runSnapshot:
+        runSnapshot ?? {
+          status: body?.run?.status,
+          workflowId: body?.run?.workflow_id ?? null,
+          currentNodeId: body?.run?.current_node_id ?? null,
+          waitingReason: null
+        },
       runId
     };
   } catch {

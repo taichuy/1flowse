@@ -17,8 +17,9 @@ import {
   normalizeOperatorRunSnapshot,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
+import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
 
-export type CleanupRunCallbackTicketsState = {
+export type CleanupRunCallbackTicketsState = OperatorInlineActionResultState & {
   status: "idle" | "success" | "error";
   message: string;
   scopeKey: string;
@@ -108,15 +109,16 @@ export async function cleanupRunCallbackTickets(
       nodeRunId: nodeRunId || null,
       callbackWaitingAutomation: afterAutomation
     });
+    const blockerDeltaSummary = formatCallbackBlockerDeltaSummary({
+      before: beforeBlockers,
+      after: afterBlockers
+    });
 
     return {
       status: "success",
       message: formatOperatorOutcomeExplanationMessage({
         explanation: body?.outcome_explanation,
-        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
-          before: beforeBlockers,
-          after: afterBlockers
-        }),
+        blockerDeltaSummary,
         runFollowUpExplanation: body?.run_follow_up?.explanation,
         runSnapshot,
         fallback: formatCleanupResultMessage({
@@ -124,14 +126,15 @@ export async function cleanupRunCallbackTickets(
           expiredCount,
           scheduledResumeCount,
           terminatedCount,
-          blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
-            before: beforeBlockers,
-            after: afterBlockers
-          }),
+          blockerDeltaSummary,
           runFollowUpExplanation: body?.run_follow_up?.explanation,
           runSnapshot
         })
       }),
+      outcomeExplanation: body?.outcome_explanation ?? null,
+      runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      blockerDeltaSummary,
+      runSnapshot,
       scopeKey
     };
   } catch {

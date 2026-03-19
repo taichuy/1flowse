@@ -12,6 +12,7 @@ import {
   getCleanupExpectationCopy,
   getManualResumeExpectationCopy
 } from "@/lib/operator-action-result-presenters";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 
 type CallbackWaitingInlineActionsProps = {
   runId: string | null;
@@ -69,7 +70,16 @@ export function CallbackWaitingInlineActions({
       </div>
       <p className="empty-state compact">{getManualResumeExpectationCopy()}</p>
       {resumeState.message && resumeState.runId === runId ? (
-        <p className={`sync-message ${resumeState.status}`}>{resumeState.message}</p>
+        <InlineOperatorActionFeedback
+          message={resumeState.message}
+          outcomeExplanation={resumeState.outcomeExplanation}
+          runFollowUpExplanation={resumeState.runFollowUpExplanation}
+          blockerDeltaSummary={resumeState.blockerDeltaSummary}
+          runId={runId}
+          runSnapshot={resumeState.runSnapshot}
+          status={resumeState.status}
+          title="恢复结果"
+        />
       ) : null}
     </form>
   ) : null;
@@ -85,7 +95,16 @@ export function CallbackWaitingInlineActions({
       </div>
       <p className="empty-state compact">{getCleanupExpectationCopy()}</p>
       {cleanupState.message && cleanupState.scopeKey === scopeKey ? (
-        <p className={`sync-message ${cleanupState.status}`}>{cleanupState.message}</p>
+        <InlineOperatorActionFeedback
+          message={cleanupState.message}
+          outcomeExplanation={cleanupState.outcomeExplanation}
+          runFollowUpExplanation={cleanupState.runFollowUpExplanation}
+          blockerDeltaSummary={cleanupState.blockerDeltaSummary}
+          runId={runId}
+          runSnapshot={cleanupState.runSnapshot}
+          status={cleanupState.status}
+          title="Cleanup 结果"
+        />
       ) : null}
     </form>
   );
