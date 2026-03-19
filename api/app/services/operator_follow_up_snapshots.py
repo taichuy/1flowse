@@ -190,6 +190,18 @@ def _serialize_operator_focus_tool_call(
         requested_execution_timeout_ms=tool_call.requested_execution_timeout_ms,
         requested_execution_network_policy=tool_call.requested_execution_network_policy,
         requested_execution_filesystem_policy=tool_call.requested_execution_filesystem_policy,
+        requested_execution_dependency_mode=(
+            tool_call.requested_execution_dependency_mode
+        ),
+        requested_execution_builtin_package_set=(
+            tool_call.requested_execution_builtin_package_set
+        ),
+        requested_execution_dependency_ref=tool_call.requested_execution_dependency_ref,
+        requested_execution_backend_extensions=(
+            dict(tool_call.requested_execution_backend_extensions)
+            if tool_call.requested_execution_backend_extensions
+            else None
+        ),
         effective_execution_class=tool_call.effective_execution_class,
         execution_executor_ref=tool_call.execution_executor_ref,
         execution_sandbox_backend_id=tool_call.execution_sandbox_backend_id,

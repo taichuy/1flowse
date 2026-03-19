@@ -63,6 +63,7 @@ function buildToolExecutionBadges(
     | "phase"
     | "requested_execution_class"
     | "requested_execution_profile"
+    | "requested_execution_dependency_mode"
     | "effective_execution_class"
     | "execution_sandbox_backend_id"
     | "execution_sandbox_runner_kind"
@@ -76,6 +77,9 @@ function buildToolExecutionBadges(
   const phase = trimOrNull(toolCall.phase);
   const requestedExecutionClass = trimOrNull(toolCall.requested_execution_class);
   const requestedExecutionProfile = trimOrNull(toolCall.requested_execution_profile);
+  const requestedExecutionDependencyMode = trimOrNull(
+    toolCall.requested_execution_dependency_mode
+  );
   const effectiveExecutionClass = trimOrNull(toolCall.effective_execution_class);
   const sandboxBackendId = trimOrNull(toolCall.execution_sandbox_backend_id);
   const sandboxRunnerKind = trimOrNull(toolCall.execution_sandbox_runner_kind);
@@ -92,6 +96,9 @@ function buildToolExecutionBadges(
   }
   if (requestedExecutionProfile) {
     badges.push(`profile ${requestedExecutionProfile}`);
+  }
+  if (requestedExecutionDependencyMode) {
+    badges.push(`deps ${requestedExecutionDependencyMode}`);
   }
   if (sandboxBackendId) {
     badges.push(`backend ${sandboxBackendId}`);
@@ -115,6 +122,23 @@ function buildToolExecutionBadges(
   return badges;
 }
 
+function buildBackendExtensionsSummary(value?: Record<string, unknown> | null) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const keys = Object.keys(value).filter((key) => key.trim());
+  if (keys.length === 0) {
+    return null;
+  }
+
+  if (keys.length <= 2) {
+    return `extensions ${keys.join(", ")}`;
+  }
+
+  return `extensions ${keys.slice(0, 2).join(", ")} +${keys.length - 2}`;
+}
+
 function buildToolExecutionTraceSummary(
   toolCall: Pick<
     ToolCallItem,
@@ -122,6 +146,10 @@ function buildToolExecutionTraceSummary(
     | "requested_execution_timeout_ms"
     | "requested_execution_network_policy"
     | "requested_execution_filesystem_policy"
+    | "requested_execution_dependency_mode"
+    | "requested_execution_builtin_package_set"
+    | "requested_execution_dependency_ref"
+    | "requested_execution_backend_extensions"
     | "execution_executor_ref"
     | "execution_sandbox_backend_executor_ref"
   >
@@ -139,6 +167,16 @@ function buildToolExecutionTraceSummary(
     trimOrNull(toolCall.requested_execution_filesystem_policy)
       ? `filesystem ${trimOrNull(toolCall.requested_execution_filesystem_policy)}`
       : null,
+    trimOrNull(toolCall.requested_execution_dependency_mode)
+      ? `deps ${trimOrNull(toolCall.requested_execution_dependency_mode)}`
+      : null,
+    trimOrNull(toolCall.requested_execution_builtin_package_set)
+      ? `builtin ${trimOrNull(toolCall.requested_execution_builtin_package_set)}`
+      : null,
+    trimOrNull(toolCall.requested_execution_dependency_ref)
+      ? `dependency ref ${trimOrNull(toolCall.requested_execution_dependency_ref)}`
+      : null,
+    buildBackendExtensionsSummary(toolCall.requested_execution_backend_extensions),
     trimOrNull(toolCall.execution_executor_ref)
       ? `executor ${trimOrNull(toolCall.execution_executor_ref)}`
       : null,

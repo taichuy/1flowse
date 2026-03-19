@@ -34,6 +34,10 @@ type RunSnapshotInput = {
     tool_name?: string | null;
     phase?: string | null;
     status?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
     effective_execution_class?: string | null;
     execution_sandbox_backend_id?: string | null;
     execution_sandbox_runner_kind?: string | null;

@@ -59,6 +59,12 @@ describe("fetchRunSnapshot", () => {
                 requested_execution_timeout_ms: 3000,
                 requested_execution_network_policy: "isolated",
                 requested_execution_filesystem_policy: "ephemeral",
+                requested_execution_dependency_mode: "builtin",
+                requested_execution_builtin_package_set: "research-default",
+                requested_execution_backend_extensions: {
+                  image: "python:3.12",
+                  mount: "workspace"
+                },
                 effective_execution_class: "microvm",
                 execution_executor_ref: "tool:compat-adapter:dify-default",
                 execution_sandbox_backend_id: "sandbox-default",
@@ -132,6 +138,12 @@ describe("fetchRunSnapshot", () => {
           requested_execution_timeout_ms: 3000,
           requested_execution_network_policy: "isolated",
           requested_execution_filesystem_policy: "ephemeral",
+          requested_execution_dependency_mode: "builtin",
+          requested_execution_builtin_package_set: "research-default",
+          requested_execution_backend_extensions: {
+            image: "python:3.12",
+            mount: "workspace"
+          },
           effective_execution_class: "microvm",
           execution_executor_ref: "tool:compat-adapter:dify-default",
           execution_sandbox_backend_id: "sandbox-default",

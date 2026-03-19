@@ -278,6 +278,12 @@ describe("published invocation presenters", () => {
                 {
                   tool_name: "callback.wait",
                   status: "waiting",
+                  requested_execution_dependency_mode: "dependency_ref",
+                  requested_execution_dependency_ref: "bundle://callback/search-v1",
+                  requested_execution_backend_extensions: {
+                    image: "python:3.12",
+                    mount: "workspace"
+                  },
                   raw_ref: "artifact://wait-raw"
                 }
               ],
@@ -355,8 +361,10 @@ describe("published invocation presenters", () => {
             id: "focus-tool-call-0",
             title: "callback.wait · waiting",
             detail: "原始结果已落到 artifact://wait-raw。",
-            badges: ["phase n/a", "raw payload"],
-            rawRef: "artifact://wait-raw"
+            badges: ["phase n/a", "deps dependency_ref", "raw payload"],
+            rawRef: "artifact://wait-raw",
+            traceSummary:
+              "执行链：deps dependency_ref · dependency ref bundle://callback/search-v1 · extensions image, mount。"
           }
         ],
         focus_artifacts: [

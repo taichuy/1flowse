@@ -181,6 +181,10 @@ class ToolCallItem(BaseModel):
     requested_execution_timeout_ms: int | None = None
     requested_execution_network_policy: str | None = None
     requested_execution_filesystem_policy: str | None = None
+    requested_execution_dependency_mode: str | None = None
+    requested_execution_builtin_package_set: str | None = None
+    requested_execution_dependency_ref: str | None = None
+    requested_execution_backend_extensions: dict | None = None
     effective_execution_class: str | None = None
     execution_executor_ref: str | None = None
     execution_sandbox_backend_id: str | None = None
@@ -244,6 +248,10 @@ class RunDetailExecutionFocusNode(BaseModel):
     requested_execution_timeout_ms: int | None = None
     requested_execution_network_policy: str | None = None
     requested_execution_filesystem_policy: str | None = None
+    requested_execution_dependency_mode: str | None = None
+    requested_execution_builtin_package_set: str | None = None
+    requested_execution_dependency_ref: str | None = None
+    requested_execution_backend_extensions: dict | None = None
     effective_execution_class: str | None = None
     execution_executor_ref: str | None = None
     execution_sandbox_backend_id: str | None = None

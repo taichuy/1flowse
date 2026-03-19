@@ -162,6 +162,7 @@ def serialize_run_artifact(artifact: RunArtifact) -> RunArtifactItem:
 
 def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
     execution_trace = dict(tool_call.execution_trace or {})
+    requested_backend_extensions = execution_trace.get("requested_backend_extensions")
     return ToolCallItem(
         id=tool_call.id,
         run_id=tool_call.run_id,
@@ -179,6 +180,20 @@ def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
         requested_execution_network_policy=execution_trace.get("requested_network_policy"),
         requested_execution_filesystem_policy=execution_trace.get(
             "requested_filesystem_policy"
+        ),
+        requested_execution_dependency_mode=execution_trace.get(
+            "requested_dependency_mode"
+        ),
+        requested_execution_builtin_package_set=execution_trace.get(
+            "requested_builtin_package_set"
+        ),
+        requested_execution_dependency_ref=execution_trace.get(
+            "requested_dependency_ref"
+        ),
+        requested_execution_backend_extensions=(
+            dict(requested_backend_extensions)
+            if isinstance(requested_backend_extensions, dict)
+            else None
         ),
         effective_execution_class=execution_trace.get("effective_execution_class"),
         execution_executor_ref=execution_trace.get("executor_ref"),

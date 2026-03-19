@@ -110,6 +110,17 @@ export function buildExecutionFocusExplainableNode(
     requested_execution_filesystem_policy: normalizeText(
       toolCall?.requested_execution_filesystem_policy
     ),
+    requested_execution_dependency_mode: normalizeText(
+      toolCall?.requested_execution_dependency_mode
+    ),
+    requested_execution_builtin_package_set: normalizeText(
+      toolCall?.requested_execution_builtin_package_set
+    ),
+    requested_execution_dependency_ref: normalizeText(
+      toolCall?.requested_execution_dependency_ref
+    ),
+    requested_execution_backend_extensions:
+      toolCall?.requested_execution_backend_extensions ?? null,
     effective_execution_class: normalizeText(toolCall?.effective_execution_class),
     execution_executor_ref: normalizeText(toolCall?.execution_executor_ref),
     execution_sandbox_backend_id: normalizeText(toolCall?.execution_sandbox_backend_id),

@@ -121,6 +121,12 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                     "requested_execution_timeout_ms": 3000,
                     "requested_network_policy": "isolated",
                     "requested_filesystem_policy": "ephemeral",
+                    "requested_dependency_mode": "dependency_ref",
+                    "requested_dependency_ref": "bundle://callback/search-v1",
+                    "requested_backend_extensions": {
+                        "image": "python:3.12",
+                        "mount": "workspace",
+                    },
                     "executor_ref": "tool:compat-adapter:dify-default",
                     "sandbox_backend_id": "sandbox-default",
                     "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
@@ -334,6 +340,16 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert node["tool_calls"][0]["requested_execution_timeout_ms"] == 3000
     assert node["tool_calls"][0]["requested_execution_network_policy"] == "isolated"
     assert node["tool_calls"][0]["requested_execution_filesystem_policy"] == "ephemeral"
+    assert node["tool_calls"][0]["requested_execution_dependency_mode"] == "dependency_ref"
+    assert (
+        node["tool_calls"][0]["requested_execution_dependency_ref"]
+        == "bundle://callback/search-v1"
+    )
+    assert node["tool_calls"][0]["requested_execution_builtin_package_set"] is None
+    assert node["tool_calls"][0]["requested_execution_backend_extensions"] == {
+        "image": "python:3.12",
+        "mount": "workspace",
+    }
     assert node["tool_calls"][0]["effective_execution_class"] == "sandbox"
     assert node["tool_calls"][0]["execution_executor_ref"] == "tool:compat-adapter:dify-default"
     assert node["tool_calls"][0]["execution_sandbox_backend_id"] == "sandbox-default"
@@ -446,6 +462,13 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
             "requested_execution_timeout_ms": 3000,
             "requested_execution_network_policy": "isolated",
             "requested_execution_filesystem_policy": "ephemeral",
+            "requested_execution_dependency_mode": "dependency_ref",
+            "requested_execution_builtin_package_set": None,
+            "requested_execution_dependency_ref": "bundle://callback/search-v1",
+            "requested_execution_backend_extensions": {
+                "image": "python:3.12",
+                "mount": "workspace",
+            },
             "effective_execution_class": "sandbox",
             "execution_executor_ref": "tool:compat-adapter:dify-default",
             "execution_sandbox_backend_id": "sandbox-default",

@@ -119,6 +119,24 @@ function buildPublishedInvocationRunFollowUpSampleSnapshot(
         ...(toolCall.requested_execution_filesystem_policy != null
           ? { requested_execution_filesystem_policy: toolCall.requested_execution_filesystem_policy }
           : {}),
+        ...(toolCall.requested_execution_dependency_mode != null
+          ? { requested_execution_dependency_mode: toolCall.requested_execution_dependency_mode }
+          : {}),
+        ...(toolCall.requested_execution_builtin_package_set != null
+          ? {
+              requested_execution_builtin_package_set:
+                toolCall.requested_execution_builtin_package_set
+            }
+          : {}),
+        ...(toolCall.requested_execution_dependency_ref != null
+          ? { requested_execution_dependency_ref: toolCall.requested_execution_dependency_ref }
+          : {}),
+        ...(toolCall.requested_execution_backend_extensions != null
+          ? {
+              requested_execution_backend_extensions:
+                toolCall.requested_execution_backend_extensions
+            }
+          : {}),
         effective_execution_class: toolCall.effective_execution_class ?? null,
         ...(toolCall.execution_executor_ref != null
           ? { execution_executor_ref: toolCall.execution_executor_ref }

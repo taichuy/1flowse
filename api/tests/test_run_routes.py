@@ -121,6 +121,12 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
                 "requested_execution_timeout_ms": 5000,
                 "requested_network_policy": "isolated",
                 "requested_filesystem_policy": "ephemeral",
+                "requested_dependency_mode": "builtin",
+                "requested_builtin_package_set": "research-default",
+                "requested_backend_extensions": {
+                    "image": "python:3.12",
+                    "mount": "workspace",
+                },
                 "executor_ref": "tool:compat-adapter:dify-default",
                 "sandbox_backend_id": "sandbox-default",
                 "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
@@ -146,6 +152,13 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
     assert node["requested_execution_timeout_ms"] == 5000
     assert node["requested_execution_network_policy"] == "isolated"
     assert node["requested_execution_filesystem_policy"] == "ephemeral"
+    assert node["requested_execution_dependency_mode"] == "builtin"
+    assert node["requested_execution_builtin_package_set"] == "research-default"
+    assert node["requested_execution_dependency_ref"] is None
+    assert node["requested_execution_backend_extensions"] == {
+        "image": "python:3.12",
+        "mount": "workspace",
+    }
     assert node["effective_execution_class"] == "microvm"
     assert node["execution_executor_ref"] == "tool:compat-adapter:dify-default"
     assert node["execution_sandbox_backend_id"] == "sandbox-default"
@@ -175,6 +188,13 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
     assert focus_node["requested_execution_timeout_ms"] == 5000
     assert focus_node["requested_execution_network_policy"] == "isolated"
     assert focus_node["requested_execution_filesystem_policy"] == "ephemeral"
+    assert focus_node["requested_execution_dependency_mode"] == "builtin"
+    assert focus_node["requested_execution_builtin_package_set"] == "research-default"
+    assert focus_node["requested_execution_dependency_ref"] is None
+    assert focus_node["requested_execution_backend_extensions"] == {
+        "image": "python:3.12",
+        "mount": "workspace",
+    }
     assert focus_node["effective_execution_class"] == "microvm"
     assert focus_node["execution_executor_ref"] == "tool:compat-adapter:dify-default"
     assert focus_node["execution_sandbox_backend_id"] == "sandbox-default"

@@ -42,6 +42,10 @@ export type RunSnapshot = {
     requested_execution_timeout_ms?: number | null;
     requested_execution_network_policy?: string | null;
     requested_execution_filesystem_policy?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
     effective_execution_class?: string | null;
     execution_executor_ref?: string | null;
     execution_sandbox_backend_id?: string | null;
@@ -107,6 +111,10 @@ export type OperatorRunSnapshotBody = {
     requested_execution_timeout_ms?: number | null;
     requested_execution_network_policy?: string | null;
     requested_execution_filesystem_policy?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
     effective_execution_class?: string | null;
     execution_executor_ref?: string | null;
     execution_sandbox_backend_id?: string | null;
@@ -159,6 +167,10 @@ type RunDetailResponseBody = {
       requested_execution_timeout_ms?: number | null;
       requested_execution_network_policy?: string | null;
       requested_execution_filesystem_policy?: string | null;
+      requested_execution_dependency_mode?: string | null;
+      requested_execution_builtin_package_set?: string | null;
+      requested_execution_dependency_ref?: string | null;
+      requested_execution_backend_extensions?: Record<string, unknown> | null;
       effective_execution_class?: string | null;
       execution_executor_ref?: string | null;
       execution_sandbox_backend_id?: string | null;
@@ -214,6 +226,10 @@ type RunExecutionViewResponseBody = {
       requested_execution_timeout_ms?: number | null;
       requested_execution_network_policy?: string | null;
       requested_execution_filesystem_policy?: string | null;
+      requested_execution_dependency_mode?: string | null;
+      requested_execution_builtin_package_set?: string | null;
+      requested_execution_dependency_ref?: string | null;
+      requested_execution_backend_extensions?: Record<string, unknown> | null;
       effective_execution_class?: string | null;
       execution_executor_ref?: string | null;
       execution_sandbox_backend_id?: string | null;
@@ -436,6 +452,10 @@ function normalizeFocusToolCalls(
         requested_execution_timeout_ms?: number | null;
         requested_execution_network_policy?: string | null;
         requested_execution_filesystem_policy?: string | null;
+        requested_execution_dependency_mode?: string | null;
+        requested_execution_builtin_package_set?: string | null;
+        requested_execution_dependency_ref?: string | null;
+        requested_execution_backend_extensions?: Record<string, unknown> | null;
         effective_execution_class?: string | null;
         execution_executor_ref?: string | null;
         execution_sandbox_backend_id?: string | null;
@@ -475,6 +495,18 @@ function normalizeFocusToolCalls(
       : {}),
     ...(item?.requested_execution_filesystem_policy != null
       ? { requested_execution_filesystem_policy: item.requested_execution_filesystem_policy }
+      : {}),
+    ...(item?.requested_execution_dependency_mode != null
+      ? { requested_execution_dependency_mode: item.requested_execution_dependency_mode }
+      : {}),
+    ...(item?.requested_execution_builtin_package_set != null
+      ? { requested_execution_builtin_package_set: item.requested_execution_builtin_package_set }
+      : {}),
+    ...(item?.requested_execution_dependency_ref != null
+      ? { requested_execution_dependency_ref: item.requested_execution_dependency_ref }
+      : {}),
+    ...(item?.requested_execution_backend_extensions != null
+      ? { requested_execution_backend_extensions: item.requested_execution_backend_extensions }
       : {}),
     effective_execution_class: item?.effective_execution_class ?? null,
     ...(item?.execution_executor_ref != null

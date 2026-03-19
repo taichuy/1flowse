@@ -50,6 +50,18 @@ def _serialize_run_detail_execution_focus_node(
         requested_execution_filesystem_policy=(
             focus_node.requested_execution_filesystem_policy
         ),
+        requested_execution_dependency_mode=(
+            focus_node.requested_execution_dependency_mode
+        ),
+        requested_execution_builtin_package_set=(
+            focus_node.requested_execution_builtin_package_set
+        ),
+        requested_execution_dependency_ref=focus_node.requested_execution_dependency_ref,
+        requested_execution_backend_extensions=(
+            dict(focus_node.requested_execution_backend_extensions)
+            if focus_node.requested_execution_backend_extensions
+            else None
+        ),
         effective_execution_class=focus_node.effective_execution_class,
         execution_executor_ref=focus_node.execution_executor_ref,
         execution_sandbox_backend_id=focus_node.execution_sandbox_backend_id,

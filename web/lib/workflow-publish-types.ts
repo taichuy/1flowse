@@ -286,6 +286,10 @@ export type OperatorRunFollowUpSnapshot = {
     requested_execution_timeout_ms?: number | null;
     requested_execution_network_policy?: string | null;
     requested_execution_filesystem_policy?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
     effective_execution_class?: string | null;
     execution_executor_ref?: string | null;
     execution_sandbox_backend_id?: string | null;
