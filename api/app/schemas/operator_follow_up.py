@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -73,6 +74,30 @@ class OperatorRunFocusSkillTrace(BaseModel):
     loads: list[OperatorRunFocusSkillLoadItem] = Field(default_factory=list)
 
 
+class OperatorCallbackWaitingLifecycleSummary(BaseModel):
+    wait_cycle_count: int = 0
+    issued_ticket_count: int = 0
+    expired_ticket_count: int = 0
+    consumed_ticket_count: int = 0
+    canceled_ticket_count: int = 0
+    late_callback_count: int = 0
+    resume_schedule_count: int = 0
+    max_expired_ticket_count: int = 0
+    terminated: bool = False
+    termination_reason: str | None = None
+    terminated_at: datetime | None = None
+    last_ticket_status: str | None = None
+    last_ticket_reason: str | None = None
+    last_ticket_updated_at: datetime | None = None
+    last_late_callback_status: str | None = None
+    last_late_callback_reason: str | None = None
+    last_late_callback_at: datetime | None = None
+    last_resume_delay_seconds: float | None = None
+    last_resume_reason: str | None = None
+    last_resume_source: str | None = None
+    last_resume_backoff_attempt: int = 0
+
+
 class OperatorRunSnapshot(BaseModel):
     workflow_id: str | None = None
     status: str | None = None
@@ -85,6 +110,15 @@ class OperatorRunSnapshot(BaseModel):
     execution_focus_node_type: str | None = None
     execution_focus_explanation: SignalFollowUpExplanation | None = None
     callback_waiting_explanation: SignalFollowUpExplanation | None = None
+    callback_waiting_lifecycle: OperatorCallbackWaitingLifecycleSummary | None = None
+    scheduled_resume_delay_seconds: float | None = None
+    scheduled_resume_reason: str | None = None
+    scheduled_resume_source: str | None = None
+    scheduled_waiting_status: str | None = None
+    scheduled_resume_scheduled_at: datetime | None = None
+    scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
     execution_focus_artifact_count: int = 0
     execution_focus_artifact_ref_count: int = 0
     execution_focus_tool_call_count: int = 0

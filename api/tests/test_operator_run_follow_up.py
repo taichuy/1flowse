@@ -497,6 +497,7 @@ def test_load_operator_run_snapshot_prefers_callback_waiting_explanation(
     sample_workflow,
 ):
     scheduled_at = datetime(2026, 3, 20, 10, 0, tzinfo=UTC)
+    requeued_at = datetime(2026, 3, 20, 10, 1, tzinfo=UTC)
     checkpoint_payload = record_callback_ticket_issued(
         {},
         reason="Waiting for external callback",
@@ -512,13 +513,15 @@ def test_load_operator_run_snapshot_prefers_callback_waiting_explanation(
     checkpoint_payload = {
         **checkpoint_payload,
         "scheduled_resume": build_callback_waiting_scheduled_resume(
-            delay_seconds=30,
-            reason="callback pending",
-            source="callback_ticket_monitor",
-            waiting_status="waiting_callback",
-            backoff_attempt=1,
-            scheduled_at=scheduled_at,
-        ),
+        delay_seconds=30,
+        reason="callback pending",
+        source="callback_ticket_monitor",
+        waiting_status="waiting_callback",
+        backoff_attempt=1,
+        scheduled_at=scheduled_at,
+        requeued_at=requeued_at,
+        requeue_source="scheduler_waiting_resume_monitor",
+    ),
     }
 
     run = Run(
@@ -563,18 +566,35 @@ def test_load_operator_run_snapshot_prefers_callback_waiting_explanation(
     }
     assert snapshot.callback_waiting_explanation is not None
     assert snapshot.callback_waiting_explanation.model_dump() == {
-        "primary_signal": "系统已经安排 30s 后再次尝试恢复 callback waiting。",
+        "primary_signal": (
+            "最近一次到期的 scheduled resume 已被重新入队，waiting 节点正在等待新的恢复尝试。"
+        ),
         "follow_up": (
-            "下一步：先观察自动恢复链路；只有在需要绕过当前 backoff 时，再手动 resume 或 cleanup。"
+            "下一步：先观察 worker 是否消费这次 requeue。最近一次 due_at 为 "
+            "2026-03-20T10:00:30Z。requeue 时间为 2026-03-20T10:01:00Z。"
+            "来源为 scheduler_waiting_resume_monitor。若仍无推进，再考虑手动 resume。"
         ),
     }
+    assert snapshot.scheduled_resume_delay_seconds == 30
+    assert snapshot.scheduled_resume_reason == "callback pending"
+    assert snapshot.scheduled_resume_source == "callback_ticket_monitor"
+    assert snapshot.scheduled_waiting_status == "waiting_callback"
+    assert snapshot.scheduled_resume_scheduled_at == scheduled_at
+    assert snapshot.scheduled_resume_due_at == datetime(2026, 3, 20, 10, 0, 30, tzinfo=UTC)
+    assert snapshot.scheduled_resume_requeued_at == requeued_at
+    assert (
+        snapshot.scheduled_resume_requeue_source
+        == "scheduler_waiting_resume_monitor"
+    )
     assert summary.explanation is not None
     assert summary.explanation.model_dump() == {
         "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
         "follow_up": (
             "run run-follow-up-callback-waiting：当前 run 状态：waiting。 当前节点：mock_tool。 "
-            "重点信号：系统已经安排 30s 后再次尝试恢复 callback waiting。 "
-            "后续动作：下一步：先观察自动恢复链路；"
-            "只有在需要绕过当前 backoff 时，再手动 resume 或 cleanup。"
+            "重点信号：最近一次到期的 scheduled resume 已被重新入队，"
+            "waiting 节点正在等待新的恢复尝试。 "
+            "后续动作：下一步：先观察 worker 是否消费这次 requeue。最近一次 due_at 为 "
+            "2026-03-20T10:00:30Z。requeue 时间为 2026-03-20T10:01:00Z。"
+            "来源为 scheduler_waiting_resume_monitor。若仍无推进，再考虑手动 resume。"
         ),
     }

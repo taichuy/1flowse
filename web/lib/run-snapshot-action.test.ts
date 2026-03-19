@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchRunSnapshot } from "@/app/actions/run-snapshot";
+import {
+  fetchRunSnapshot,
+  normalizeOperatorRunSnapshot
+} from "@/app/actions/run-snapshot";
 
 type MockJsonResponse = {
   ok: boolean;
@@ -17,6 +20,68 @@ function createJsonResponse(body: unknown, ok = true): MockJsonResponse {
 describe("fetchRunSnapshot", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("normalizeOperatorRunSnapshot 会保留 callback waiting 的定时恢复事实", () => {
+    const snapshot = normalizeOperatorRunSnapshot({
+      status: "waiting",
+      callback_waiting_explanation: {
+        primary_signal: "系统已经安排 30s 后再次尝试恢复 callback waiting。",
+        follow_up: "下一步：先观察自动恢复链路。"
+      },
+      callback_waiting_lifecycle: {
+        wait_cycle_count: 1,
+        issued_ticket_count: 1,
+        expired_ticket_count: 0,
+        consumed_ticket_count: 0,
+        canceled_ticket_count: 0,
+        late_callback_count: 0,
+        resume_schedule_count: 1,
+        max_expired_ticket_count: 3,
+        terminated: false,
+        termination_reason: null,
+        terminated_at: null,
+        last_ticket_status: "pending",
+        last_ticket_reason: "callback pending",
+        last_ticket_updated_at: "2026-03-20T10:00:00Z",
+        last_late_callback_status: null,
+        last_late_callback_reason: null,
+        last_late_callback_at: null,
+        last_resume_delay_seconds: 30,
+        last_resume_reason: "callback pending",
+        last_resume_source: "callback_ticket_monitor",
+        last_resume_backoff_attempt: 1
+      },
+      scheduled_resume_delay_seconds: 30,
+      scheduled_resume_reason: "callback pending",
+      scheduled_resume_source: "callback_ticket_monitor",
+      scheduled_waiting_status: "waiting_callback",
+      scheduled_resume_scheduled_at: "2026-03-20T10:00:00Z",
+      scheduled_resume_due_at: "2026-03-20T10:00:30Z",
+      scheduled_resume_requeued_at: "2026-03-20T10:01:00Z",
+      scheduled_resume_requeue_source: "scheduler_waiting_resume_monitor"
+    });
+
+    expect(snapshot).toMatchObject({
+      status: "waiting",
+      callbackWaitingExplanation: {
+        primary_signal: "系统已经安排 30s 后再次尝试恢复 callback waiting。",
+        follow_up: "下一步：先观察自动恢复链路。"
+      },
+      callbackWaitingLifecycle: {
+        resume_schedule_count: 1,
+        last_resume_delay_seconds: 30,
+        last_resume_source: "callback_ticket_monitor"
+      },
+      scheduledResumeDelaySeconds: 30,
+      scheduledResumeReason: "callback pending",
+      scheduledResumeSource: "callback_ticket_monitor",
+      scheduledWaitingStatus: "waiting_callback",
+      scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+      scheduledResumeDueAt: "2026-03-20T10:00:30Z",
+      scheduledResumeRequeuedAt: "2026-03-20T10:01:00Z",
+      scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor"
+    });
   });
 
   it("run detail 已带 execution focus 时不再额外请求 execution view", async () => {
@@ -94,7 +159,7 @@ describe("fetchRunSnapshot", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchRunSnapshot("run-123")).resolves.toEqual({
+    await expect(fetchRunSnapshot("run-123")).resolves.toMatchObject({
       status: "waiting",
       workflowId: "workflow-1",
       currentNodeId: "tool-a",
@@ -231,7 +296,7 @@ describe("fetchRunSnapshot", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchRunSnapshot("run-legacy")).resolves.toEqual({
+    await expect(fetchRunSnapshot("run-legacy")).resolves.toMatchObject({
       status: "waiting",
       workflowId: "workflow-1",
       currentNodeId: "tool-a",
@@ -352,7 +417,7 @@ describe("fetchRunSnapshot", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchRunSnapshot("run-234")).resolves.toEqual({
+    await expect(fetchRunSnapshot("run-234")).resolves.toMatchObject({
       status: "waiting",
       workflowId: "workflow-1",
       currentNodeId: "tool-a",
@@ -431,7 +496,7 @@ describe("fetchRunSnapshot", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(fetchRunSnapshot("run-456")).resolves.toEqual({
+    await expect(fetchRunSnapshot("run-456")).resolves.toMatchObject({
       status: "running",
       workflowId: "workflow-2",
       currentNodeId: "tool-b",

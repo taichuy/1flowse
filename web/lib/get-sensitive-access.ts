@@ -1,5 +1,9 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
-import type { RunExecutionView, SkillReferenceLoadItem } from "@/lib/get-run-views";
+import type {
+  CallbackWaitingLifecycleSummary,
+  RunExecutionView,
+  SkillReferenceLoadItem
+} from "@/lib/get-run-views";
 import {
   buildSensitiveAccessInboxEntryCallbackContext,
   type SensitiveAccessInboxCallbackContext
@@ -84,6 +88,15 @@ export type OperatorRunSnapshotSummary = {
   executionFocusNodeType?: string | null;
   executionFocusExplanation?: SignalFollowUpExplanation | null;
   callbackWaitingExplanation?: SignalFollowUpExplanation | null;
+  callbackWaitingLifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduledResumeDelaySeconds?: number | null;
+  scheduledResumeReason?: string | null;
+  scheduledResumeSource?: string | null;
+  scheduledWaitingStatus?: string | null;
+  scheduledResumeScheduledAt?: string | null;
+  scheduledResumeDueAt?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
   executionFocusArtifactCount?: number;
   executionFocusArtifactRefCount?: number;
   executionFocusToolCallCount?: number;

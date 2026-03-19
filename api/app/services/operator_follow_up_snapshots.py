@@ -354,6 +354,52 @@ def build_operator_run_snapshot(
             if execution_focus_node is not None
             else None
         ),
+        callback_waiting_lifecycle=(
+            execution_focus_node.callback_waiting_lifecycle.model_dump()
+            if execution_focus_node is not None
+            and execution_focus_node.callback_waiting_lifecycle is not None
+            else None
+        ),
+        scheduled_resume_delay_seconds=(
+            execution_focus_node.scheduled_resume_delay_seconds
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_resume_reason=(
+            execution_focus_node.scheduled_resume_reason
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_resume_source=(
+            execution_focus_node.scheduled_resume_source
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_waiting_status=(
+            execution_focus_node.scheduled_waiting_status
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_resume_scheduled_at=(
+            execution_focus_node.scheduled_resume_scheduled_at
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_resume_due_at=(
+            execution_focus_node.scheduled_resume_due_at
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_resume_requeued_at=(
+            execution_focus_node.scheduled_resume_requeued_at
+            if execution_focus_node is not None
+            else None
+        ),
+        scheduled_resume_requeue_source=(
+            execution_focus_node.scheduled_resume_requeue_source
+            if execution_focus_node is not None
+            else None
+        ),
         execution_focus_artifact_count=len(focus_artifacts),
         execution_focus_artifact_ref_count=len(focus_artifact_refs),
         execution_focus_tool_call_count=len(focus_tool_calls),

@@ -1,5 +1,8 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
-import type { SkillReferenceLoadItem } from "@/lib/get-run-views";
+import type {
+  CallbackWaitingLifecycleSummary,
+  SkillReferenceLoadItem
+} from "@/lib/get-run-views";
 
 export type RunSnapshot = {
   status?: string | null;
@@ -19,6 +22,15 @@ export type RunSnapshot = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  callbackWaitingLifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduledResumeDelaySeconds?: number | null;
+  scheduledResumeReason?: string | null;
+  scheduledResumeSource?: string | null;
+  scheduledWaitingStatus?: string | null;
+  scheduledResumeScheduledAt?: string | null;
+  scheduledResumeDueAt?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
   executionFocusArtifactCount?: number;
   executionFocusArtifactRefCount?: number;
   executionFocusToolCallCount?: number;
@@ -88,6 +100,15 @@ export type OperatorRunSnapshotBody = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_reason?: string | null;
+  scheduled_resume_source?: string | null;
+  scheduled_waiting_status?: string | null;
+  scheduled_resume_scheduled_at?: string | null;
+  scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
   execution_focus_artifact_count?: number;
   execution_focus_artifact_ref_count?: number;
   execution_focus_tool_call_count?: number;
@@ -148,6 +169,15 @@ type RunDetailResponseBody = {
       primary_signal?: string | null;
       follow_up?: string | null;
     } | null;
+    callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+    scheduled_resume_delay_seconds?: number | null;
+    scheduled_resume_reason?: string | null;
+    scheduled_resume_source?: string | null;
+    scheduled_waiting_status?: string | null;
+    scheduled_resume_scheduled_at?: string | null;
+    scheduled_resume_due_at?: string | null;
+    scheduled_resume_requeued_at?: string | null;
+    scheduled_resume_requeue_source?: string | null;
     artifact_refs?: string[];
     artifacts?: Array<{
       artifact_kind?: string | null;
@@ -207,6 +237,15 @@ type RunExecutionViewResponseBody = {
       primary_signal?: string | null;
       follow_up?: string | null;
     } | null;
+    callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+    scheduled_resume_delay_seconds?: number | null;
+    scheduled_resume_reason?: string | null;
+    scheduled_resume_source?: string | null;
+    scheduled_waiting_status?: string | null;
+    scheduled_resume_scheduled_at?: string | null;
+    scheduled_resume_due_at?: string | null;
+    scheduled_resume_requeued_at?: string | null;
+    scheduled_resume_requeue_source?: string | null;
     artifact_refs?: string[];
     artifacts?: Array<{
       artifact_kind?: string | null;
@@ -548,6 +587,18 @@ export function normalizeOperatorRunSnapshot(
     callbackWaitingExplanation: normalizeSignalFollowUpExplanation(
       snapshot.callback_waiting_explanation
     ),
+    callbackWaitingLifecycle: snapshot.callback_waiting_lifecycle ?? null,
+    scheduledResumeDelaySeconds:
+      typeof snapshot.scheduled_resume_delay_seconds === "number"
+        ? snapshot.scheduled_resume_delay_seconds
+        : null,
+    scheduledResumeReason: snapshot.scheduled_resume_reason ?? null,
+    scheduledResumeSource: snapshot.scheduled_resume_source ?? null,
+    scheduledWaitingStatus: snapshot.scheduled_waiting_status ?? null,
+    scheduledResumeScheduledAt: snapshot.scheduled_resume_scheduled_at ?? null,
+    scheduledResumeDueAt: snapshot.scheduled_resume_due_at ?? null,
+    scheduledResumeRequeuedAt: snapshot.scheduled_resume_requeued_at ?? null,
+    scheduledResumeRequeueSource: snapshot.scheduled_resume_requeue_source ?? null,
     executionFocusArtifactCount: snapshot.execution_focus_artifact_count ?? 0,
     executionFocusArtifactRefCount: snapshot.execution_focus_artifact_ref_count ?? 0,
     executionFocusToolCallCount: snapshot.execution_focus_tool_call_count ?? 0,
@@ -641,6 +692,42 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
         normalizeSignalFollowUpExplanation(
           executionView?.execution_focus_node?.callback_waiting_explanation
         ),
+      callbackWaitingLifecycle:
+        body?.execution_focus_node?.callback_waiting_lifecycle ??
+        executionView?.execution_focus_node?.callback_waiting_lifecycle ??
+        null,
+      scheduledResumeDelaySeconds:
+        body?.execution_focus_node?.scheduled_resume_delay_seconds ??
+        executionView?.execution_focus_node?.scheduled_resume_delay_seconds ??
+        null,
+      scheduledResumeReason:
+        body?.execution_focus_node?.scheduled_resume_reason ??
+        executionView?.execution_focus_node?.scheduled_resume_reason ??
+        null,
+      scheduledResumeSource:
+        body?.execution_focus_node?.scheduled_resume_source ??
+        executionView?.execution_focus_node?.scheduled_resume_source ??
+        null,
+      scheduledWaitingStatus:
+        body?.execution_focus_node?.scheduled_waiting_status ??
+        executionView?.execution_focus_node?.scheduled_waiting_status ??
+        null,
+      scheduledResumeScheduledAt:
+        body?.execution_focus_node?.scheduled_resume_scheduled_at ??
+        executionView?.execution_focus_node?.scheduled_resume_scheduled_at ??
+        null,
+      scheduledResumeDueAt:
+        body?.execution_focus_node?.scheduled_resume_due_at ??
+        executionView?.execution_focus_node?.scheduled_resume_due_at ??
+        null,
+      scheduledResumeRequeuedAt:
+        body?.execution_focus_node?.scheduled_resume_requeued_at ??
+        executionView?.execution_focus_node?.scheduled_resume_requeued_at ??
+        null,
+      scheduledResumeRequeueSource:
+        body?.execution_focus_node?.scheduled_resume_requeue_source ??
+        executionView?.execution_focus_node?.scheduled_resume_requeue_source ??
+        null,
       executionFocusArtifactCount:
         body?.execution_focus_node?.artifacts?.length ??
         executionView?.execution_focus_node?.artifacts?.length ??

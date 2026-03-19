@@ -117,6 +117,7 @@ export function InlineOperatorActionFeedback({
       {hasCallbackWaitingSummary ? (
         <CallbackWaitingSummaryCard
           callbackWaitingExplanation={runSnapshot?.callbackWaitingExplanation ?? null}
+          lifecycle={runSnapshot?.callbackWaitingLifecycle ?? null}
           focusNodeEvidence={callbackWaitingFocusNode}
           focusSkillReferenceCount={runSnapshot?.executionFocusSkillTrace?.reference_count ?? 0}
           focusSkillReferenceLoads={runSnapshot?.executionFocusSkillTrace?.loads ?? []}
@@ -124,6 +125,13 @@ export function InlineOperatorActionFeedback({
           focusSkillReferenceNodeName={runSnapshot?.executionFocusNodeName ?? null}
           nodeRunId={runSnapshot?.executionFocusNodeRunId ?? null}
           runId={runId}
+          scheduledResumeDelaySeconds={runSnapshot?.scheduledResumeDelaySeconds ?? null}
+          scheduledResumeSource={runSnapshot?.scheduledResumeSource ?? null}
+          scheduledWaitingStatus={runSnapshot?.scheduledWaitingStatus ?? null}
+          scheduledResumeScheduledAt={runSnapshot?.scheduledResumeScheduledAt ?? null}
+          scheduledResumeDueAt={runSnapshot?.scheduledResumeDueAt ?? null}
+          scheduledResumeRequeuedAt={runSnapshot?.scheduledResumeRequeuedAt ?? null}
+          scheduledResumeRequeueSource={runSnapshot?.scheduledResumeRequeueSource ?? null}
           showInlineActions={false}
           waitingReason={runSnapshot?.waitingReason ?? null}
         />

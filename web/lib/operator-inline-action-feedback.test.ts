@@ -227,6 +227,36 @@ describe("operator inline action feedback", () => {
           executionFocusNodeId: "agent_review",
           executionFocusNodeRunId: "node-run-1",
           executionFocusNodeName: "Agent Review",
+          callbackWaitingLifecycle: {
+            wait_cycle_count: 1,
+            issued_ticket_count: 1,
+            expired_ticket_count: 0,
+            consumed_ticket_count: 0,
+            canceled_ticket_count: 0,
+            late_callback_count: 0,
+            resume_schedule_count: 1,
+            max_expired_ticket_count: 3,
+            terminated: false,
+            termination_reason: null,
+            terminated_at: null,
+            last_ticket_status: "pending",
+            last_ticket_reason: "callback pending",
+            last_ticket_updated_at: "2026-03-20T10:00:00Z",
+            last_late_callback_status: null,
+            last_late_callback_reason: null,
+            last_late_callback_at: null,
+            last_resume_delay_seconds: 30,
+            last_resume_reason: "callback pending",
+            last_resume_source: "callback_ticket_monitor",
+            last_resume_backoff_attempt: 1
+          },
+          scheduledResumeDelaySeconds: 30,
+          scheduledResumeSource: "callback_ticket_monitor",
+          scheduledWaitingStatus: "waiting_callback",
+          scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+          scheduledResumeDueAt: "2026-03-20T10:00:30Z",
+          scheduledResumeRequeuedAt: "2026-03-20T10:01:00Z",
+          scheduledResumeRequeueSource: "scheduler_waiting_resume_monitor",
           callbackWaitingExplanation: {
             primary_signal: "当前 run 仍在等待 callback approval。",
             follow_up: "优先检查 approval / notification blocker 是否已经解除。"
@@ -237,6 +267,8 @@ describe("operator inline action feedback", () => {
 
     expect(html).toContain("当前 run 仍在等待 callback approval");
     expect(html).toContain("优先检查 approval / notification blocker 是否已经解除");
+    expect(html).toContain("scheduled resume requeued");
+    expect(html).toContain("scheduler_waiting_resume_monitor");
     expect(html).not.toContain("立即尝试恢复");
     expect(html).not.toContain("处理过期 ticket 并尝试恢复");
   });
