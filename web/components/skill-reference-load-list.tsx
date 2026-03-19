@@ -1,3 +1,5 @@
+import React from "react";
+
 import type { SkillReferenceLoadItem } from "@/lib/get-run-views";
 import { formatJsonPayload } from "@/lib/runtime-presenters";
 

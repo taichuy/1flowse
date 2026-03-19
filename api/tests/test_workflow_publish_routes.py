@@ -1699,6 +1699,7 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "execution_focus_artifact_refs": [],
         "execution_focus_artifacts": [],
         "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
     }
     assert detail_body["run_follow_up"]["explanation"]["primary_signal"] == (
         "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。"
@@ -1728,6 +1729,12 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
             "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
         ),
     }
+    assert detail_body["blocking_sensitive_access_entries"][0]["run_snapshot"] == detail_body[
+        "run_follow_up"
+    ]["sampled_runs"][0]["snapshot"]
+    assert detail_body["blocking_sensitive_access_entries"][0]["run_follow_up"] == detail_body[
+        "run_follow_up"
+    ]
     assert len(detail_body["sensitive_access_entries"]) == 2
     assert detail_body["sensitive_access_entries"][0]["resource"]["label"] == (
         "Published Search Tool"
@@ -1750,6 +1757,12 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
             "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
         ),
     }
+    assert detail_body["sensitive_access_entries"][0]["run_snapshot"] == detail_body[
+        "run_follow_up"
+    ]["sampled_runs"][0]["snapshot"]
+    assert detail_body["sensitive_access_entries"][0]["run_follow_up"] == detail_body[
+        "run_follow_up"
+    ]
     assert detail_body["sensitive_access_entries"][0]["approval_ticket"] == {
         "id": approval_ticket.id,
         "access_request_id": sensitive_request.id,

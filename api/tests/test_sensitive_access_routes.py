@@ -243,6 +243,7 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
         "execution_focus_artifact_refs": [],
         "execution_focus_artifacts": [],
         "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
     }
     assert request_body["run_follow_up"] == {
         "affected_run_count": 1,
@@ -330,6 +331,7 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
         "execution_focus_artifact_refs": [],
         "execution_focus_artifacts": [],
         "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
     }
     assert decision_body["run_follow_up"] is not None
     assert decision_body["run_follow_up"]["affected_run_count"] == 1
@@ -790,6 +792,7 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
                     "execution_focus_artifact_refs": [],
                     "execution_focus_artifacts": [],
                     "execution_focus_tool_calls": [],
+                    "execution_focus_skill_trace": None,
                 },
             }
         ],
@@ -942,6 +945,7 @@ def test_retry_notification_dispatch_creates_new_attempt(
         "execution_focus_artifact_refs": [],
         "execution_focus_artifacts": [],
         "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
     }
     assert retry_body["run_follow_up"] is not None
     assert retry_body["run_follow_up"]["affected_run_count"] == 1
@@ -1164,6 +1168,7 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
                     "execution_focus_artifact_refs": [],
                     "execution_focus_artifacts": [],
                     "execution_focus_tool_calls": [],
+                    "execution_focus_skill_trace": None,
                 },
             }
         ],

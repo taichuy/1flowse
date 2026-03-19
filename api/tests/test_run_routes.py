@@ -808,6 +808,7 @@ def test_resume_run_route_returns_operator_follow_up_summary(
         "execution_focus_artifact_refs": [],
         "execution_focus_artifacts": [],
         "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
     }
     assert body["run_follow_up"]["affected_run_count"] == 1
     assert body["run_follow_up"]["sampled_runs"][0]["snapshot"]["status"] == "waiting"

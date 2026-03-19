@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
@@ -301,6 +302,9 @@ export function SensitiveAccessTimelineEntryList({
           const runId = resolveRunId(entry, defaultRunId);
           const inboxSliceHref = buildSensitiveAccessTimelineInboxHref(entry, defaultRunId);
           const shouldRenderCallbackWaitingSummary = shouldSurfaceCallbackWaitingSummary(entry);
+          const hasStructuredOperatorFeedback = Boolean(
+            entry.run_snapshot || entry.run_follow_up?.explanation
+          );
           const nodeRunId = entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null;
 
           return (
@@ -355,17 +359,31 @@ export function SensitiveAccessTimelineEntryList({
                 </p>
               ) : null}
 
-              {entry.outcome_explanation?.primary_signal ? (
-                <p className="section-copy entry-copy">
-                  {entry.outcome_explanation.primary_signal}
-                </p>
-              ) : null}
+              {hasStructuredOperatorFeedback ? (
+                <InlineOperatorActionFeedback
+                  message=""
+                  outcomeExplanation={entry.outcome_explanation ?? null}
+                  runFollowUpExplanation={entry.run_follow_up?.explanation ?? null}
+                  runId={runId}
+                  runSnapshot={entry.run_snapshot ?? null}
+                  status="success"
+                  title="Operator follow-up"
+                />
+              ) : (
+                <>
+                  {entry.outcome_explanation?.primary_signal ? (
+                    <p className="section-copy entry-copy">
+                      {entry.outcome_explanation.primary_signal}
+                    </p>
+                  ) : null}
 
-              {entry.outcome_explanation?.follow_up ? (
-                <p className="binding-meta">{entry.outcome_explanation.follow_up}</p>
-              ) : null}
+                  {entry.outcome_explanation?.follow_up ? (
+                    <p className="binding-meta">{entry.outcome_explanation.follow_up}</p>
+                  ) : null}
+                </>
+              )}
 
-              {shouldRenderCallbackWaitingSummary ? (
+              {shouldRenderCallbackWaitingSummary && !hasStructuredOperatorFeedback ? (
                 <CallbackWaitingSummaryCard
                   callbackWaitingExplanation={entry.outcome_explanation ?? null}
                   className="payload-card compact-card"

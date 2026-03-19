@@ -185,6 +185,8 @@ class SensitiveAccessTimelineEntryItem(BaseModel):
     approval_ticket: ApprovalTicketItem | None = None
     notifications: list[NotificationDispatchItem] = Field(default_factory=list)
     outcome_explanation: SignalFollowUpExplanation | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
 class SensitiveAccessInboxEntryItem(BaseModel):
@@ -219,8 +221,7 @@ class SensitiveAccessInboxResponse(BaseModel):
 
 
 class SensitiveAccessRequestResponse(SensitiveAccessTimelineEntryItem):
-    run_snapshot: OperatorRunSnapshot | None = None
-    run_follow_up: OperatorRunFollowUpSummary | None = None
+    pass
 
 
 class ApprovalTicketDecisionRequest(BaseModel):

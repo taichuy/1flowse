@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,7 +6,7 @@ import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: { children: unknown; href?: string } & Record<string, unknown>) =>
+  default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
@@ -96,13 +96,108 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).toContain("open inbox slice");
   });
 
+  it("优先渲染后端提供的 operator follow-up 快照，而不是重复展开旧摘要", () => {
+    const markup = renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          buildTimelineEntry({
+            run_snapshot: {
+              status: "waiting",
+              workflowId: "workflow-1",
+              currentNodeId: "tool_wait",
+              waitingReason: "callback pending",
+              executionFocusNodeId: "tool_wait",
+              executionFocusNodeRunId: "node-run-1",
+              executionFocusNodeName: "Tool Wait",
+              executionFocusExplanation: {
+                primary_signal: "等待原因：callback pending",
+                follow_up: "继续检查 callback ticket。"
+              },
+              callbackWaitingExplanation: {
+                primary_signal: "当前仍有 1 条 callback ticket 等待外部回调。",
+                follow_up: "优先确认外部系统是否已经回调。"
+              },
+              executionFocusArtifactCount: 1,
+              executionFocusArtifactRefCount: 1,
+              executionFocusToolCallCount: 1,
+              executionFocusRawRefCount: 1,
+              executionFocusArtifactRefs: ["artifact://focus-1"],
+              executionFocusArtifacts: [
+                {
+                  artifact_kind: "tool_result",
+                  content_type: "application/json",
+                  summary: "等待节点已保留最近一次 tool 输出摘要。",
+                  uri: "artifact://focus-1"
+                }
+              ],
+              executionFocusToolCalls: [
+                {
+                  id: "tool-call-1",
+                  tool_id: "search",
+                  tool_name: "Search Tool",
+                  phase: "waiting_callback",
+                  status: "waiting",
+                  response_summary: "最近一次 tool 调用仍在等待 callback。",
+                  raw_ref: "raw://tool-call-1"
+                }
+              ],
+              executionFocusSkillTrace: {
+                reference_count: 1,
+                phase_counts: { planning: 1 },
+                source_counts: { skill_doc: 1 },
+                loads: [
+                  {
+                    phase: "planning",
+                    references: [
+                      {
+                        skill_id: "skill-1",
+                        skill_name: "Callback Policy",
+                        reference_id: "ref-1",
+                        reference_name: "Waiting Callback",
+                        load_source: "skill_doc",
+                        retrieval_mcp_params: {}
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            run_follow_up: {
+              affected_run_count: 1,
+              sampled_run_count: 1,
+              waiting_run_count: 1,
+              running_run_count: 0,
+              succeeded_run_count: 0,
+              failed_run_count: 0,
+              unknown_run_count: 0,
+              sampled_runs: [],
+              explanation: {
+                primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+                follow_up: "run run-1：当前 run 状态：waiting。"
+              }
+            }
+          })
+        ],
+        emptyCopy: "empty",
+        defaultRunId: "run-1"
+      })
+    );
+
+    expect(markup).toContain("Operator follow-up");
+    expect(markup).toContain("Waiting node focus evidence");
+    expect(markup).toContain("tool calls 1");
+    expect(markup).toContain("Injected references");
+    expect(markup).not.toContain("Sensitive access:");
+  });
+
   it("不会为已经完成且无需 follow-up 的 entry 重复渲染 callback waiting 摘要", () => {
+    const baseEntry = buildTimelineEntry();
     const markup = renderToStaticMarkup(
       createElement(SensitiveAccessTimelineEntryList, {
         entries: [
           buildTimelineEntry({
             request: {
-              ...buildTimelineEntry().request,
+              ...baseEntry.request,
               decision: "allow",
               decision_label: "allow",
               reason_code: "sensitive_access_allowed",
@@ -111,7 +206,7 @@ describe("SensitiveAccessTimelineEntryList", () => {
               decided_at: "2026-03-19T00:10:00Z"
             },
             approval_ticket: {
-              ...buildTimelineEntry().approval_ticket,
+              ...baseEntry.approval_ticket!,
               status: "approved",
               waiting_status: "resumed",
               approved_by: "operator-1",

@@ -166,6 +166,21 @@ export type SensitiveAccessTimelineEntry = {
   approval_ticket?: ApprovalTicketItem | null;
   notifications: NotificationDispatchItem[];
   outcome_explanation?: SignalFollowUpExplanation | null;
+  run_snapshot?: OperatorRunSnapshotSummary | null;
+  run_follow_up?: {
+    affected_run_count: number;
+    sampled_run_count: number;
+    waiting_run_count: number;
+    running_run_count: number;
+    succeeded_run_count: number;
+    failed_run_count: number;
+    unknown_run_count: number;
+    sampled_runs: Array<{
+      run_id: string;
+      snapshot?: OperatorRunSnapshotSummary | null;
+    }>;
+    explanation?: SignalFollowUpExplanation | null;
+  } | null;
 };
 
 export type SensitiveAccessInboxSummary = {

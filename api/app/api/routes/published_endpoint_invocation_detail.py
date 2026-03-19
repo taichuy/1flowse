@@ -68,13 +68,33 @@ def _serialize_blocking_sensitive_access_entries(
     *,
     blocking_node_run_id: str | None,
     sensitive_access_timeline,
+    run_snapshot=None,
+    run_follow_up=None,
 ) -> list:
     if not blocking_node_run_id:
         return []
     return [
-        serialize_sensitive_access_timeline_entry(bundle)
+        serialize_sensitive_access_timeline_entry(
+            bundle,
+            run_snapshot=run_snapshot,
+            run_follow_up=run_follow_up,
+        )
         for bundle in sensitive_access_timeline.by_node_run.get(blocking_node_run_id, [])
     ]
+
+
+def _resolve_run_snapshot_from_follow_up(run_follow_up, *, run_id: str | None):
+    normalized_run_id = str(run_id or "").strip()
+    if run_follow_up is None or not normalized_run_id:
+        return None
+    return next(
+        (
+            item.snapshot
+            for item in run_follow_up.sampled_runs
+            if item.run_id == normalized_run_id
+        ),
+        None,
+    )
 
 
 def _resolve_callback_waiting_explanation(
@@ -261,6 +281,7 @@ def get_published_endpoint_invocation_detail(
     execution_focus_node = None
     execution_focus_explanation = None
     run_follow_up = None
+    timeline_run_snapshot = None
     if record.run_id:
         node_runs = (
             db.scalars(select(NodeRun).where(NodeRun.run_id == record.run_id)).all()
@@ -300,10 +321,6 @@ def get_published_endpoint_invocation_detail(
                 callback_ticket_items=callback_ticket_items,
                 waiting_lifecycle_lookup=waiting_lifecycle_lookup,
             )
-            sensitive_access_entries = [
-                serialize_sensitive_access_timeline_entry(bundle)
-                for bundle in sensitive_access_timeline.bundles
-            ]
             execution_view = run_view_service.get_execution_view(db, record.run_id)
             if execution_view is not None:
                 blocking_node_run_id = (
@@ -324,12 +341,6 @@ def get_published_endpoint_invocation_detail(
                 execution_focus_explanation = build_run_execution_focus_explanation(
                     execution_focus_node
                 )
-            blocking_sensitive_access_entries = (
-                _serialize_blocking_sensitive_access_entries(
-                    blocking_node_run_id=blocking_node_run_id,
-                    sensitive_access_timeline=sensitive_access_timeline,
-                )
-            )
             skill_trace = _build_skill_trace(
                 run=run,
                 node_runs=node_runs,
@@ -341,6 +352,26 @@ def get_published_endpoint_invocation_detail(
                 ),
             )
             run_follow_up = build_operator_run_follow_up_summary(db, [record.run_id])
+            timeline_run_snapshot = _resolve_run_snapshot_from_follow_up(
+                run_follow_up,
+                run_id=record.run_id,
+            )
+            sensitive_access_entries = [
+                serialize_sensitive_access_timeline_entry(
+                    bundle,
+                    run_snapshot=timeline_run_snapshot,
+                    run_follow_up=run_follow_up,
+                )
+                for bundle in sensitive_access_timeline.bundles
+            ]
+            blocking_sensitive_access_entries = (
+                _serialize_blocking_sensitive_access_entries(
+                    blocking_node_run_id=blocking_node_run_id,
+                    sensitive_access_timeline=sensitive_access_timeline,
+                    run_snapshot=timeline_run_snapshot,
+                    run_follow_up=run_follow_up,
+                )
+            )
 
     invocation = serialize_published_invocation_item(
         record,
