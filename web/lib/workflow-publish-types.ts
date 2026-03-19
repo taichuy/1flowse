@@ -263,6 +263,15 @@ export type OperatorRunFollowUpSnapshot = {
   execution_focus_node_run_id?: string | null;
   execution_focus_explanation?: RunExecutionFocusExplanation | null;
   callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_reason?: string | null;
+  scheduled_resume_source?: string | null;
+  scheduled_waiting_status?: string | null;
+  scheduled_resume_scheduled_at?: string | null;
+  scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
   execution_focus_artifact_count?: number;
   execution_focus_artifact_ref_count?: number;
   execution_focus_tool_call_count?: number;

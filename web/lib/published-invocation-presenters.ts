@@ -40,9 +40,11 @@ export type PublishedInvocationRunFollowUpSampleView = {
   status: string | null;
   current_node_id: string | null;
   waiting_reason: string | null;
+  run_snapshot: RunSnapshot;
   explanation_source: "callback_waiting" | "execution_focus" | null;
   explanation: RunExecutionFocusExplanation | null;
   snapshot_summary: string | null;
+  has_callback_waiting_summary: boolean;
   execution_focus_artifact_count: number;
   execution_focus_artifact_ref_count: number;
   execution_focus_tool_call_count: number;
@@ -82,6 +84,18 @@ function buildPublishedInvocationRunFollowUpSampleSnapshot(
             follow_up: sample.snapshot.callback_waiting_explanation.follow_up ?? null
           }
         : null,
+    callbackWaitingLifecycle: sample?.snapshot?.callback_waiting_lifecycle ?? null,
+    scheduledResumeDelaySeconds:
+      typeof sample?.snapshot?.scheduled_resume_delay_seconds === "number"
+        ? sample.snapshot.scheduled_resume_delay_seconds
+        : null,
+    scheduledResumeReason: sample?.snapshot?.scheduled_resume_reason ?? null,
+    scheduledResumeSource: sample?.snapshot?.scheduled_resume_source ?? null,
+    scheduledWaitingStatus: sample?.snapshot?.scheduled_waiting_status ?? null,
+    scheduledResumeScheduledAt: sample?.snapshot?.scheduled_resume_scheduled_at ?? null,
+    scheduledResumeDueAt: sample?.snapshot?.scheduled_resume_due_at ?? null,
+    scheduledResumeRequeuedAt: sample?.snapshot?.scheduled_resume_requeued_at ?? null,
+    scheduledResumeRequeueSource: sample?.snapshot?.scheduled_resume_requeue_source ?? null,
     executionFocusArtifactCount: sample?.snapshot?.execution_focus_artifact_count ?? 0,
     executionFocusArtifactRefCount: sample?.snapshot?.execution_focus_artifact_ref_count ?? 0,
     executionFocusToolCallCount: sample?.snapshot?.execution_focus_tool_call_count ?? 0,
@@ -312,6 +326,22 @@ function normalizeExplanation(
   };
 }
 
+function hasPublishedInvocationRunFollowUpSampleCallbackWaitingFacts(snapshot: RunSnapshot) {
+  return Boolean(
+    snapshot.callbackWaitingExplanation?.primary_signal?.trim() ||
+      snapshot.callbackWaitingExplanation?.follow_up?.trim() ||
+      snapshot.callbackWaitingLifecycle ||
+      snapshot.waitingReason?.trim() ||
+      typeof snapshot.scheduledResumeDelaySeconds === "number" ||
+      snapshot.scheduledResumeSource?.trim() ||
+      snapshot.scheduledWaitingStatus?.trim() ||
+      snapshot.scheduledResumeScheduledAt?.trim() ||
+      snapshot.scheduledResumeDueAt?.trim() ||
+      snapshot.scheduledResumeRequeuedAt?.trim() ||
+      snapshot.scheduledResumeRequeueSource?.trim()
+  );
+}
+
 export function resolvePublishedInvocationExecutionFocusExplanation(
   item: PublishedEndpointInvocationItem
 ): RunExecutionFocusExplanation | null {
@@ -367,9 +397,13 @@ export function listPublishedInvocationRunFollowUpSampleViews(
       status: sample.snapshot?.status?.trim() || null,
       current_node_id: sample.snapshot?.current_node_id?.trim() || null,
       waiting_reason: sample.snapshot?.waiting_reason?.trim() || null,
+      run_snapshot: runSnapshot,
       explanation_source: explanationSource,
       explanation,
       snapshot_summary: snapshotSummary,
+      has_callback_waiting_summary: hasPublishedInvocationRunFollowUpSampleCallbackWaitingFacts(
+        runSnapshot
+      ),
       execution_focus_artifact_count: sample.snapshot?.execution_focus_artifact_count ?? 0,
       execution_focus_artifact_ref_count: sample.snapshot?.execution_focus_artifact_ref_count ?? 0,
       execution_focus_tool_call_count: sample.snapshot?.execution_focus_tool_call_count ?? 0,

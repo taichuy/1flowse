@@ -1,8 +1,11 @@
+import React from "react";
 import Link from "next/link";
 
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
+import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
   formatCallbackLifecycleLabel,
   formatScheduledResumeLabel,
@@ -129,7 +132,12 @@ export function WorkflowPublishInvocationEntryCard({
       })
     : null;
   const runFollowUpSample = listPublishedInvocationRunFollowUpSampleViews(runFollowUp)[0] ?? null;
+  const runFollowUpSampleHasCallbackWaitingSummary =
+    runFollowUpSample?.has_callback_waiting_summary ?? false;
   const runFollowUpSamplePrimarySignal = runFollowUpSample?.explanation?.primary_signal?.trim() || null;
+  const runFollowUpSampleFocusNodeEvidence = runFollowUpSample
+    ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
+    : null;
 
   return (
     <article className="payload-card compact-card">
@@ -236,7 +244,7 @@ export function WorkflowPublishInvocationEntryCard({
               </dd>
             </div>
           </dl>
-          {runFollowUpSamplePrimarySignal ? (
+          {runFollowUpSamplePrimarySignal && !runFollowUpSampleHasCallbackWaitingSummary ? (
             <p className="binding-meta">{runFollowUpSamplePrimarySignal}</p>
           ) : null}
           {runFollowUpSample?.snapshot_summary ? (
@@ -287,20 +295,67 @@ export function WorkflowPublishInvocationEntryCard({
                   ) : null}
                 </div>
               ) : null}
-              <OperatorFocusEvidenceCard
-                title="Sampled run focus evidence"
-                artifactCount={runFollowUpSample.execution_focus_artifact_count}
-                artifactRefCount={runFollowUpSample.execution_focus_artifact_ref_count}
-                artifactSummary={runFollowUpSample.focus_artifact_summary}
-                artifacts={runFollowUpSample.focus_artifacts}
-                toolCallCount={runFollowUpSample.execution_focus_tool_call_count}
-                toolCallSummaries={runFollowUpSample.focus_tool_call_summaries}
-              />
-              <SkillReferenceLoadList
-                skillReferenceLoads={runFollowUpSample.focus_skill_reference_loads}
-                title="Focused skill trace"
-                description="发布活动卡片现在也会复用 compact snapshot 里的 skill trace，方便直接确认 sampled run 的 focus node 注入来源。"
-              />
+              {runFollowUpSampleHasCallbackWaitingSummary ? (
+                <CallbackWaitingSummaryCard
+                  callbackWaitingExplanation={
+                    runFollowUpSample.run_snapshot.callbackWaitingExplanation ?? null
+                  }
+                  lifecycle={runFollowUpSample.run_snapshot.callbackWaitingLifecycle ?? null}
+                  focusNodeEvidence={runFollowUpSampleFocusNodeEvidence}
+                  focusSkillReferenceCount={
+                    runFollowUpSample.run_snapshot.executionFocusSkillTrace?.reference_count ?? 0
+                  }
+                  focusSkillReferenceLoads={
+                    runFollowUpSample.run_snapshot.executionFocusSkillTrace?.loads ?? []
+                  }
+                  focusSkillReferenceNodeId={
+                    runFollowUpSample.run_snapshot.executionFocusNodeId ?? null
+                  }
+                  focusSkillReferenceNodeName={
+                    runFollowUpSample.run_snapshot.executionFocusNodeName ?? null
+                  }
+                  nodeRunId={runFollowUpSample.run_snapshot.executionFocusNodeRunId ?? null}
+                  runId={runFollowUpSample.run_id}
+                  scheduledResumeDelaySeconds={
+                    runFollowUpSample.run_snapshot.scheduledResumeDelaySeconds ?? null
+                  }
+                  scheduledResumeDueAt={runFollowUpSample.run_snapshot.scheduledResumeDueAt ?? null}
+                  scheduledResumeRequeuedAt={
+                    runFollowUpSample.run_snapshot.scheduledResumeRequeuedAt ?? null
+                  }
+                  scheduledResumeRequeueSource={
+                    runFollowUpSample.run_snapshot.scheduledResumeRequeueSource ?? null
+                  }
+                  scheduledResumeScheduledAt={
+                    runFollowUpSample.run_snapshot.scheduledResumeScheduledAt ?? null
+                  }
+                  scheduledResumeSource={
+                    runFollowUpSample.run_snapshot.scheduledResumeSource ?? null
+                  }
+                  scheduledWaitingStatus={
+                    runFollowUpSample.run_snapshot.scheduledWaitingStatus ?? null
+                  }
+                  showInlineActions={false}
+                  waitingReason={runFollowUpSample.run_snapshot.waitingReason ?? null}
+                />
+              ) : (
+                <>
+                  <OperatorFocusEvidenceCard
+                    title="Sampled run focus evidence"
+                    artifactCount={runFollowUpSample.execution_focus_artifact_count}
+                    artifactRefCount={runFollowUpSample.execution_focus_artifact_ref_count}
+                    artifactSummary={runFollowUpSample.focus_artifact_summary}
+                    artifacts={runFollowUpSample.focus_artifacts}
+                    toolCallCount={runFollowUpSample.execution_focus_tool_call_count}
+                    toolCallSummaries={runFollowUpSample.focus_tool_call_summaries}
+                  />
+                  <SkillReferenceLoadList
+                    skillReferenceLoads={runFollowUpSample.focus_skill_reference_loads}
+                    title="Focused skill trace"
+                    description="发布活动卡片现在也会复用 compact snapshot 里的 skill trace，方便直接确认 sampled run 的 focus node 注入来源。"
+                  />
+                </>
+              )}
             </>
           ) : null}
         </div>

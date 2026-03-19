@@ -1,5 +1,7 @@
+import React from "react";
 import Link from "next/link";
 
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { ExecutionNodeCard } from "@/components/run-diagnostics-execution/execution-node-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
@@ -9,6 +11,7 @@ import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
+import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationInboxHref,
@@ -218,6 +221,9 @@ export function WorkflowPublishInvocationDetailPanel({
               {runFollowUpSamples.map((sample) => {
                 const samplePrimarySignal = sample.explanation?.primary_signal?.trim() || null;
                 const sampleFollowUp = sample.explanation?.follow_up?.trim() || null;
+                const sampleFocusNodeEvidence = buildExecutionFocusExplainableNode(
+                  sample.run_snapshot
+                );
                 const sampleReasonLabel =
                   sample.explanation_source === "callback_waiting"
                     ? "callback waiting"
@@ -233,10 +239,17 @@ export function WorkflowPublishInvocationDetailPanel({
                       </Link>
                       <span className="status-meta">{sampleReasonLabel}</span>
                     </div>
-                    <p className="section-copy entry-copy">
-                      {samplePrimarySignal ?? "该 sampled run 已回接 canonical follow-up 快照。"}
-                    </p>
-                    {sampleFollowUp ? <p className="binding-meta">{sampleFollowUp}</p> : null}
+                    {samplePrimarySignal && !sample.has_callback_waiting_summary ? (
+                      <p className="section-copy entry-copy">{samplePrimarySignal}</p>
+                    ) : null}
+                    {sampleFollowUp && !sample.has_callback_waiting_summary ? (
+                      <p className="binding-meta">{sampleFollowUp}</p>
+                    ) : null}
+                    {!samplePrimarySignal && !sample.has_callback_waiting_summary ? (
+                      <p className="section-copy entry-copy">
+                        该 sampled run 已回接 canonical follow-up 快照。
+                      </p>
+                    ) : null}
                     {sample.snapshot_summary ? (
                       <p className="binding-meta">{sample.snapshot_summary}</p>
                     ) : null}
@@ -283,9 +296,48 @@ export function WorkflowPublishInvocationDetailPanel({
                         ) : null}
                       </div>
                     ) : null}
-                    {sample.focus_artifact_summary ||
-                    sample.focus_tool_call_summaries.length > 0 ||
-                    sample.focus_artifacts.length > 0 ? (
+                    {sample.has_callback_waiting_summary ? (
+                      <CallbackWaitingSummaryCard
+                        callbackWaitingExplanation={
+                          sample.run_snapshot.callbackWaitingExplanation ?? null
+                        }
+                        lifecycle={sample.run_snapshot.callbackWaitingLifecycle ?? null}
+                        focusNodeEvidence={sampleFocusNodeEvidence}
+                        focusSkillReferenceCount={
+                          sample.run_snapshot.executionFocusSkillTrace?.reference_count ?? 0
+                        }
+                        focusSkillReferenceLoads={
+                          sample.run_snapshot.executionFocusSkillTrace?.loads ?? []
+                        }
+                        focusSkillReferenceNodeId={sample.run_snapshot.executionFocusNodeId ?? null}
+                        focusSkillReferenceNodeName={
+                          sample.run_snapshot.executionFocusNodeName ?? null
+                        }
+                        nodeRunId={sample.run_snapshot.executionFocusNodeRunId ?? null}
+                        runId={sample.run_id}
+                        scheduledResumeDelaySeconds={
+                          sample.run_snapshot.scheduledResumeDelaySeconds ?? null
+                        }
+                        scheduledResumeDueAt={sample.run_snapshot.scheduledResumeDueAt ?? null}
+                        scheduledResumeRequeuedAt={
+                          sample.run_snapshot.scheduledResumeRequeuedAt ?? null
+                        }
+                        scheduledResumeRequeueSource={
+                          sample.run_snapshot.scheduledResumeRequeueSource ?? null
+                        }
+                        scheduledResumeScheduledAt={
+                          sample.run_snapshot.scheduledResumeScheduledAt ?? null
+                        }
+                        scheduledResumeSource={sample.run_snapshot.scheduledResumeSource ?? null}
+                        scheduledWaitingStatus={sample.run_snapshot.scheduledWaitingStatus ?? null}
+                        showInlineActions={false}
+                        waitingReason={sample.run_snapshot.waitingReason ?? null}
+                      />
+                    ) : null}
+                    {!sample.has_callback_waiting_summary &&
+                    (sample.focus_artifact_summary ||
+                      sample.focus_tool_call_summaries.length > 0 ||
+                      sample.focus_artifacts.length > 0) ? (
                       <OperatorFocusEvidenceCard
                         title="Sampled run focus evidence"
                         artifactCount={sample.execution_focus_artifact_count}
@@ -296,11 +348,13 @@ export function WorkflowPublishInvocationDetailPanel({
                         toolCallSummaries={sample.focus_tool_call_summaries}
                       />
                     ) : null}
-                    <SkillReferenceLoadList
-                      skillReferenceLoads={sample.focus_skill_reference_loads}
-                      title="Focused skill trace"
-                      description="publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。"
-                    />
+                    {!sample.has_callback_waiting_summary ? (
+                      <SkillReferenceLoadList
+                        skillReferenceLoads={sample.focus_skill_reference_loads}
+                        title="Focused skill trace"
+                        description="publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。"
+                      />
+                    ) : null}
                     <dl className="compact-meta-list">
                       <div>
                         <dt>Status</dt>

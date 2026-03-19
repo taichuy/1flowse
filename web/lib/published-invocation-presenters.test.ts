@@ -245,177 +245,244 @@ describe("published invocation presenters", () => {
   });
 
   it("把 canonical follow-up 的 sampled runs 转成 publish 侧可直接展示的样本视图", () => {
-    expect(
-      listPublishedInvocationRunFollowUpSampleViews({
-        affected_run_count: 2,
-        sampled_run_count: 2,
-        waiting_run_count: 1,
-        running_run_count: 1,
-        succeeded_run_count: 0,
-        failed_run_count: 0,
-        unknown_run_count: 0,
-        sampled_runs: [
-          {
-            run_id: "run-1",
-            snapshot: {
-              status: "waiting",
-              current_node_id: "tool_wait",
-              waiting_reason: "callback pending",
-              execution_focus_node_name: "Tool wait",
-              execution_focus_artifact_count: 2,
-              execution_focus_artifact_ref_count: 1,
-              execution_focus_tool_call_count: 1,
-              execution_focus_raw_ref_count: 1,
-              callback_waiting_explanation: {
-                primary_signal: " sample callback blocker ",
-                follow_up: " follow callback chain "
-              },
-              execution_focus_explanation: {
-                primary_signal: "focus fallback",
-                follow_up: "focus follow-up"
-              },
-              execution_focus_tool_calls: [
-                {
-                  tool_name: "callback.wait",
-                  status: "waiting",
-                  requested_execution_dependency_mode: "dependency_ref",
-                  requested_execution_dependency_ref: "bundle://callback/search-v1",
-                  requested_execution_backend_extensions: {
-                    image: "python:3.12",
-                    mount: "workspace"
-                  },
-                  raw_ref: "artifact://wait-raw"
-                }
-              ],
-              execution_focus_skill_trace: {
-                reference_count: 2,
-                phase_counts: {
-                  plan: 1,
-                  execute: 1
+    const views = listPublishedInvocationRunFollowUpSampleViews({
+      affected_run_count: 2,
+      sampled_run_count: 2,
+      waiting_run_count: 1,
+      running_run_count: 1,
+      succeeded_run_count: 0,
+      failed_run_count: 0,
+      unknown_run_count: 0,
+      sampled_runs: [
+        {
+          run_id: "run-1",
+          snapshot: {
+            status: "waiting",
+            current_node_id: "tool_wait",
+            waiting_reason: "callback pending",
+            execution_focus_node_id: "tool_wait",
+            execution_focus_node_run_id: "node-run-tool-wait",
+            execution_focus_node_name: "Tool wait",
+            execution_focus_artifact_count: 2,
+            execution_focus_artifact_ref_count: 1,
+            execution_focus_tool_call_count: 1,
+            execution_focus_raw_ref_count: 1,
+            callback_waiting_explanation: {
+              primary_signal: " sample callback blocker ",
+              follow_up: " follow callback chain "
+            },
+            callback_waiting_lifecycle: {
+              wait_cycle_count: 1,
+              issued_ticket_count: 1,
+              expired_ticket_count: 0,
+              consumed_ticket_count: 0,
+              canceled_ticket_count: 0,
+              late_callback_count: 0,
+              resume_schedule_count: 1,
+              max_expired_ticket_count: 0,
+              terminated: false,
+              last_resume_delay_seconds: 45,
+              last_resume_source: "callback_ticket_monitor",
+              last_resume_backoff_attempt: 0
+            },
+            scheduled_resume_delay_seconds: 45,
+            scheduled_resume_source: "callback_ticket_monitor",
+            scheduled_waiting_status: "waiting_callback",
+            scheduled_resume_scheduled_at: "2026-03-20T10:00:00Z",
+            scheduled_resume_due_at: "2026-03-20T10:00:45Z",
+            scheduled_resume_requeued_at: "2026-03-20T10:01:30Z",
+            scheduled_resume_requeue_source: "waiting_resume_monitor",
+            execution_focus_explanation: {
+              primary_signal: "focus fallback",
+              follow_up: "focus follow-up"
+            },
+            execution_focus_tool_calls: [
+              {
+                tool_name: "callback.wait",
+                status: "waiting",
+                requested_execution_dependency_mode: "dependency_ref",
+                requested_execution_dependency_ref: "bundle://callback/search-v1",
+                requested_execution_backend_extensions: {
+                  image: "python:3.12",
+                  mount: "workspace"
                 },
-                source_counts: {
-                  catalog: 2
-                },
-                loads: [
-                  {
-                    phase: "plan",
-                    references: [
-                      {
-                        skill_id: "skill.callback",
-                        skill_name: "Callback guide",
-                        reference_id: "ref.callback.guide",
-                        reference_name: "Callback handling guide",
-                        load_source: "catalog",
-                        retrieval_mcp_params: {}
-                      }
-                    ]
-                  }
-                ]
+                raw_ref: "artifact://wait-raw"
+              }
+            ],
+            execution_focus_skill_trace: {
+              reference_count: 2,
+              phase_counts: {
+                plan: 1,
+                execute: 1
               },
-              execution_focus_artifacts: [
+              source_counts: {
+                catalog: 2
+              },
+              loads: [
                 {
-                  summary: "callback payload snapshot",
-                  uri: "artifact://wait-artifact"
+                  phase: "plan",
+                  references: [
+                    {
+                      skill_id: "skill.callback",
+                      skill_name: "Callback guide",
+                      reference_id: "ref.callback.guide",
+                      reference_name: "Callback handling guide",
+                      load_source: "catalog",
+                      retrieval_mcp_params: {}
+                    }
+                  ]
                 }
               ]
-            }
-          },
-          {
-            run_id: "run-2",
-            snapshot: {
-              status: "running",
-              current_node_id: "agent_plan",
-              execution_focus_explanation: {
-                primary_signal: " execution focus signal ",
-                follow_up: " execution focus follow-up "
-              }
-            }
-          }
-        ],
-        explanation: null
-      })
-    ).toEqual([
-      {
-        run_id: "run-1",
-        status: "waiting",
-        current_node_id: "tool_wait",
-        waiting_reason: "callback pending",
-        explanation_source: "callback_waiting",
-        explanation: {
-          primary_signal: "sample callback blocker",
-          follow_up: "follow callback chain"
-        },
-        snapshot_summary:
-          "当前 run 状态：waiting。 当前节点：tool_wait。 重点信号：sample callback blocker 后续动作：follow callback chain Tool wait 已关联 2 个 artifact、1 条 artifact ref、1 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。 样本 tool： callback.wait 状态 waiting。 raw_ref artifact://wait-raw。",
-        execution_focus_artifact_count: 2,
-        execution_focus_artifact_ref_count: 1,
-        execution_focus_tool_call_count: 1,
-        execution_focus_raw_ref_count: 1,
-        skill_reference_count: 2,
-        skill_reference_phase_summary: "plan 1, execute 1",
-        skill_reference_source_summary: "catalog 2",
-        focus_artifact_summary:
-          "聚焦节点已沉淀 1 个 artifact（artifact 1）。 至少 1 条 tool call 已把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。",
-        focus_tool_call_summaries: [
-          {
-            id: "focus-tool-call-0",
-            title: "callback.wait · waiting",
-            detail: "原始结果已落到 artifact://wait-raw。",
-            badges: ["phase n/a", "deps dependency_ref", "raw payload"],
-            rawRef: "artifact://wait-raw",
-            traceSummary:
-              "执行链：deps dependency_ref · dependency ref bundle://callback/search-v1 · extensions image, mount。"
-          }
-        ],
-        focus_artifacts: [
-          {
-            key: "artifact://wait-artifact",
-            artifactKind: "artifact",
-            contentType: null,
-            summary: "callback payload snapshot",
-            uri: "artifact://wait-artifact"
-          }
-        ],
-        focus_skill_reference_loads: [
-          {
-            phase: "plan",
-            references: [
+            },
+            execution_focus_artifacts: [
               {
-                skill_id: "skill.callback",
-                skill_name: "Callback guide",
-                reference_id: "ref.callback.guide",
-                reference_name: "Callback handling guide",
-                load_source: "catalog",
-                retrieval_mcp_params: {}
+                summary: "callback payload snapshot",
+                uri: "artifact://wait-artifact"
               }
             ]
           }
-        ]
-      },
-      {
-        run_id: "run-2",
-        status: "running",
-        current_node_id: "agent_plan",
-        waiting_reason: null,
-        explanation_source: "execution_focus",
-        explanation: {
-          primary_signal: "execution focus signal",
-          follow_up: "execution focus follow-up"
         },
-        snapshot_summary:
-          "当前 run 状态：running。 当前节点：agent_plan。 重点信号：execution focus signal 后续动作：execution focus follow-up",
-        execution_focus_artifact_count: 0,
-        execution_focus_artifact_ref_count: 0,
-        execution_focus_tool_call_count: 0,
-        execution_focus_raw_ref_count: 0,
-        skill_reference_count: 0,
-        skill_reference_phase_summary: null,
-        skill_reference_source_summary: null,
-        focus_artifact_summary: null,
-        focus_tool_call_summaries: [],
-        focus_artifacts: [],
-        focus_skill_reference_loads: []
+        {
+          run_id: "run-2",
+          snapshot: {
+            status: "running",
+            current_node_id: "agent_plan",
+            execution_focus_explanation: {
+              primary_signal: " execution focus signal ",
+              follow_up: " execution focus follow-up "
+            }
+          }
+        }
+      ],
+      explanation: null
+    });
+
+    expect(views).toHaveLength(2);
+    expect(views[0]).toMatchObject({
+      run_id: "run-1",
+      status: "waiting",
+      current_node_id: "tool_wait",
+      waiting_reason: "callback pending",
+      explanation_source: "callback_waiting",
+      explanation: {
+        primary_signal: "sample callback blocker",
+        follow_up: "follow callback chain"
+      },
+      snapshot_summary:
+        "当前 run 状态：waiting。 当前节点：tool_wait。 重点信号：sample callback blocker 后续动作：follow callback chain Tool wait 已关联 2 个 artifact、1 条 artifact ref、1 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。 样本 tool： callback.wait 状态 waiting。 raw_ref artifact://wait-raw。",
+      has_callback_waiting_summary: true,
+      execution_focus_artifact_count: 2,
+      execution_focus_artifact_ref_count: 1,
+      execution_focus_tool_call_count: 1,
+      execution_focus_raw_ref_count: 1,
+      skill_reference_count: 2,
+      skill_reference_phase_summary: "plan 1, execute 1",
+      skill_reference_source_summary: "catalog 2",
+      focus_artifact_summary:
+        "聚焦节点已沉淀 1 个 artifact（artifact 1）。 至少 1 条 tool call 已把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。",
+      run_snapshot: {
+        status: "waiting",
+        currentNodeId: "tool_wait",
+        waitingReason: "callback pending",
+        executionFocusNodeId: "tool_wait",
+        executionFocusNodeRunId: "node-run-tool-wait",
+        executionFocusNodeName: "Tool wait",
+        callbackWaitingExplanation: {
+          primary_signal: " sample callback blocker ",
+          follow_up: " follow callback chain "
+        },
+        callbackWaitingLifecycle: {
+          wait_cycle_count: 1,
+          issued_ticket_count: 1,
+          expired_ticket_count: 0,
+          consumed_ticket_count: 0,
+          canceled_ticket_count: 0,
+          late_callback_count: 0,
+          resume_schedule_count: 1,
+          max_expired_ticket_count: 0,
+          terminated: false,
+          last_resume_delay_seconds: 45,
+          last_resume_source: "callback_ticket_monitor",
+          last_resume_backoff_attempt: 0
+        },
+        scheduledResumeDelaySeconds: 45,
+        scheduledResumeSource: "callback_ticket_monitor",
+        scheduledWaitingStatus: "waiting_callback",
+        scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+        scheduledResumeDueAt: "2026-03-20T10:00:45Z",
+        scheduledResumeRequeuedAt: "2026-03-20T10:01:30Z",
+        scheduledResumeRequeueSource: "waiting_resume_monitor"
+      }
+    });
+    expect(views[0].focus_tool_call_summaries).toEqual([
+      {
+        id: "focus-tool-call-0",
+        title: "callback.wait · waiting",
+        detail: "原始结果已落到 artifact://wait-raw。",
+        badges: ["phase n/a", "deps dependency_ref", "raw payload"],
+        rawRef: "artifact://wait-raw",
+        traceSummary:
+          "执行链：deps dependency_ref · dependency ref bundle://callback/search-v1 · extensions image, mount。"
       }
     ]);
+    expect(views[0].focus_artifacts).toEqual([
+      {
+        key: "artifact://wait-artifact",
+        artifactKind: "artifact",
+        contentType: null,
+        summary: "callback payload snapshot",
+        uri: "artifact://wait-artifact"
+      }
+    ]);
+    expect(views[0].focus_skill_reference_loads).toEqual([
+      {
+        phase: "plan",
+        references: [
+          {
+            skill_id: "skill.callback",
+            skill_name: "Callback guide",
+            reference_id: "ref.callback.guide",
+            reference_name: "Callback handling guide",
+            load_source: "catalog",
+            retrieval_mcp_params: {}
+          }
+        ]
+      }
+    ]);
+
+    expect(views[1]).toMatchObject({
+      run_id: "run-2",
+      status: "running",
+      current_node_id: "agent_plan",
+      waiting_reason: null,
+      explanation_source: "execution_focus",
+      explanation: {
+        primary_signal: "execution focus signal",
+        follow_up: "execution focus follow-up"
+      },
+      snapshot_summary:
+        "当前 run 状态：running。 当前节点：agent_plan。 重点信号：execution focus signal 后续动作：execution focus follow-up",
+      has_callback_waiting_summary: false,
+      execution_focus_artifact_count: 0,
+      execution_focus_artifact_ref_count: 0,
+      execution_focus_tool_call_count: 0,
+      execution_focus_raw_ref_count: 0,
+      skill_reference_count: 0,
+      skill_reference_phase_summary: null,
+      skill_reference_source_summary: null,
+      focus_artifact_summary: null,
+      run_snapshot: {
+        status: "running",
+        currentNodeId: "agent_plan",
+        callbackWaitingExplanation: null,
+        callbackWaitingLifecycle: null,
+        scheduledResumeDelaySeconds: null,
+        scheduledResumeDueAt: null,
+        scheduledResumeRequeuedAt: null
+      }
+    });
+    expect(views[1].focus_tool_call_summaries).toEqual([]);
+    expect(views[1].focus_artifacts).toEqual([]);
+    expect(views[1].focus_skill_reference_loads).toEqual([]);
   });
 });
