@@ -105,6 +105,7 @@ class ToolCallRecord(Base):
     phase: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     request_summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    execution_trace: Mapped[dict] = mapped_column(JSON, default=dict)
     response_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_artifact_id: Mapped[str | None] = mapped_column(
         ForeignKey("run_artifacts.id"),

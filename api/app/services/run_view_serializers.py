@@ -161,6 +161,7 @@ def serialize_run_artifact(artifact: RunArtifact) -> RunArtifactItem:
 
 
 def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
+    execution_trace = dict(tool_call.execution_trace or {})
     return ToolCallItem(
         id=tool_call.id,
         run_id=tool_call.run_id,
@@ -170,6 +171,23 @@ def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
         phase=tool_call.phase,
         status=tool_call.status,
         request_summary=tool_call.request_summary,
+        execution_trace=execution_trace or None,
+        requested_execution_class=execution_trace.get("requested_execution_class"),
+        requested_execution_source=execution_trace.get("execution_source"),
+        requested_execution_profile=execution_trace.get("requested_execution_profile"),
+        requested_execution_timeout_ms=execution_trace.get("requested_execution_timeout_ms"),
+        requested_execution_network_policy=execution_trace.get("requested_network_policy"),
+        requested_execution_filesystem_policy=execution_trace.get(
+            "requested_filesystem_policy"
+        ),
+        effective_execution_class=execution_trace.get("effective_execution_class"),
+        execution_executor_ref=execution_trace.get("executor_ref"),
+        execution_sandbox_backend_id=execution_trace.get("sandbox_backend_id"),
+        execution_sandbox_backend_executor_ref=execution_trace.get(
+            "sandbox_backend_executor_ref"
+        ),
+        execution_blocking_reason=execution_trace.get("blocked_reason"),
+        execution_fallback_reason=execution_trace.get("fallback_reason"),
         response_summary=tool_call.response_summary,
         raw_ref=(
             f"artifact://{tool_call.raw_artifact_id}"

@@ -169,6 +169,19 @@ class ToolCallItem(BaseModel):
     phase: str
     status: str
     request_summary: str
+    execution_trace: dict | None = None
+    requested_execution_class: str | None = None
+    requested_execution_source: str | None = None
+    requested_execution_profile: str | None = None
+    requested_execution_timeout_ms: int | None = None
+    requested_execution_network_policy: str | None = None
+    requested_execution_filesystem_policy: str | None = None
+    effective_execution_class: str | None = None
+    execution_executor_ref: str | None = None
+    execution_sandbox_backend_id: str | None = None
+    execution_sandbox_backend_executor_ref: str | None = None
+    execution_blocking_reason: str | None = None
+    execution_fallback_reason: str | None = None
     response_summary: str | None = None
     raw_ref: str | None = None
     latency_ms: int = 0

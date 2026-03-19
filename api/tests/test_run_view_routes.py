@@ -113,6 +113,20 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                 phase="tool_execute",
                 status="waiting",
                 request_summary="Search pending callback.",
+                execution_trace={
+                    "requested_execution_class": "sandbox",
+                    "effective_execution_class": "sandbox",
+                    "execution_source": "runtime_policy",
+                    "requested_execution_profile": "risk-reviewed",
+                    "requested_execution_timeout_ms": 3000,
+                    "requested_network_policy": "isolated",
+                    "requested_filesystem_policy": "ephemeral",
+                    "executor_ref": "tool:compat-adapter:dify-default",
+                    "sandbox_backend_id": "sandbox-default",
+                    "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+                    "fallback_reason": None,
+                    "blocked_reason": None,
+                },
                 response_summary="Waiting for callback payload.",
                 raw_artifact_id="artifact-tool",
                 latency_ms=1200,
@@ -306,6 +320,25 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert len(node["artifacts"]) == 2
     assert len(node["tool_calls"]) == 1
     assert len(node["ai_calls"]) == 2
+    assert node["tool_calls"][0]["requested_execution_class"] == "sandbox"
+    assert node["tool_calls"][0]["requested_execution_source"] == "runtime_policy"
+    assert node["tool_calls"][0]["requested_execution_profile"] == "risk-reviewed"
+    assert node["tool_calls"][0]["requested_execution_timeout_ms"] == 3000
+    assert node["tool_calls"][0]["requested_execution_network_policy"] == "isolated"
+    assert node["tool_calls"][0]["requested_execution_filesystem_policy"] == "ephemeral"
+    assert node["tool_calls"][0]["effective_execution_class"] == "sandbox"
+    assert node["tool_calls"][0]["execution_executor_ref"] == "tool:compat-adapter:dify-default"
+    assert node["tool_calls"][0]["execution_sandbox_backend_id"] == "sandbox-default"
+    assert (
+        node["tool_calls"][0]["execution_sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default"
+    )
+    assert node["tool_calls"][0]["execution_blocking_reason"] is None
+    assert node["tool_calls"][0]["execution_fallback_reason"] is None
+    assert (
+        node["tool_calls"][0]["execution_trace"]["executor_ref"]
+        == "tool:compat-adapter:dify-default"
+    )
     assert len(node["callback_tickets"]) == 1
     assert len(node["sensitive_access_entries"]) == 1
     assert node["callback_tickets"][0]["ticket"] == "ticket-agent"
@@ -329,8 +362,9 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert node["sensitive_access_entries"][0]["outcome_explanation"] == {
         "primary_signal": "敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。",
         "follow_up": (
-            "High-sensitivity access must be reviewed by an operator before the workflow can resume. "
-            "已有 1 条通知送达审批人，可直接在 inbox 里处理。 审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。"
+            "High-sensitivity access must be reviewed by an operator before the workflow can "
+            "resume. 已有 1 条通知送达审批人，可直接在 inbox 里处理。"
+            " 审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。"
         ),
     }
     assert node["sensitive_access_entries"][0]["approval_ticket"]["status"] == "pending"
@@ -726,6 +760,16 @@ def test_get_run_evidence_view_returns_evidence_nodes_only(
                 phase="tool_execute",
                 status="success",
                 request_summary="Search request",
+                execution_trace={
+                    "requested_execution_class": "inline",
+                    "effective_execution_class": "inline",
+                    "execution_source": "default",
+                    "executor_ref": "tool:compat-adapter:dify-default",
+                    "sandbox_backend_id": None,
+                    "sandbox_backend_executor_ref": None,
+                    "fallback_reason": None,
+                    "blocked_reason": None,
+                },
                 response_summary="Structured callback payload",
                 raw_artifact_id="artifact-tool-result",
                 latency_ms=980,

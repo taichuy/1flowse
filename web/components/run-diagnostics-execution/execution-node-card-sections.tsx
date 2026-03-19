@@ -28,6 +28,28 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
   );
 }
 
+function buildToolExecutionBadges(toolCall: ToolCallItem): string[] {
+  const badges: string[] = [];
+
+  if (toolCall.requested_execution_class) {
+    badges.push(`requested ${toolCall.requested_execution_class}`);
+  }
+  if (toolCall.effective_execution_class) {
+    badges.push(`effective ${toolCall.effective_execution_class}`);
+  }
+  if (toolCall.execution_sandbox_backend_id) {
+    badges.push(`backend ${toolCall.execution_sandbox_backend_id}`);
+  }
+  if (toolCall.execution_fallback_reason) {
+    badges.push("fallback");
+  }
+  if (toolCall.execution_blocking_reason) {
+    badges.push("blocked");
+  }
+
+  return badges;
+}
+
 export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallItem[] }) {
   if (toolCalls.length === 0) {
     return null;
@@ -37,24 +59,48 @@ export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallIt
     <section>
       <SectionHeader title="Tool calls" count={toolCalls.length} />
       <div className="event-list">
-        {toolCalls.map((toolCall) => (
-          <article className="event-row compact-card" key={toolCall.id}>
-            <div className="event-meta">
-              <span>{toolCall.tool_name}</span>
-              <span>{toolCall.status}</span>
-            </div>
-            <p className="event-run">
-              {toolCall.phase} · {formatDurationMs(toolCall.latency_ms)} · tool {toolCall.tool_id}
-            </p>
-            <pre>
-              {formatJsonPayload({
-                request_summary: toolCall.request_summary,
-                response_summary: toolCall.response_summary,
-                raw_ref: toolCall.raw_ref
-              })}
-            </pre>
-          </article>
-        ))}
+        {toolCalls.map((toolCall) => {
+          const executionBadges = buildToolExecutionBadges(toolCall);
+
+          return (
+            <article className="event-row compact-card" key={toolCall.id}>
+              <div className="event-meta">
+                <span>{toolCall.tool_name}</span>
+                <span>{toolCall.status}</span>
+              </div>
+              <p className="event-run">
+                {toolCall.phase} · {formatDurationMs(toolCall.latency_ms)} · tool {toolCall.tool_id}
+              </p>
+              {executionBadges.length > 0 ? (
+                <div className="tool-badge-row">
+                  {executionBadges.map((badge) => (
+                    <span className="event-chip" key={`${toolCall.id}:${badge}`}>
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {toolCall.execution_blocking_reason ? (
+                <p className="section-copy entry-copy">
+                  blocked: {toolCall.execution_blocking_reason}
+                </p>
+              ) : null}
+              {toolCall.execution_fallback_reason ? (
+                <p className="section-copy entry-copy">
+                  fallback: {toolCall.execution_fallback_reason}
+                </p>
+              ) : null}
+              <pre>
+                {formatJsonPayload({
+                  request_summary: toolCall.request_summary,
+                  response_summary: toolCall.response_summary,
+                  raw_ref: toolCall.raw_ref,
+                  execution_trace: toolCall.execution_trace
+                })}
+              </pre>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

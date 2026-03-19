@@ -313,6 +313,26 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
     assert sandbox_backend_client.tool_requests[0].runner_kind == "native-tool"
     assert sandbox_backend_client.tool_requests[0].profile == "risk-reviewed"
 
+    tool_call = artifacts.tool_calls[0]
+    assert tool_call.execution_trace == {
+        "requested_execution_class": "sandbox",
+        "effective_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "risk-reviewed",
+        "requested_execution_timeout_ms": 3000,
+        "requested_network_policy": None,
+        "requested_filesystem_policy": None,
+        "requested_dependency_mode": None,
+        "requested_builtin_package_set": None,
+        "requested_dependency_ref": None,
+        "requested_backend_extensions": None,
+        "executor_ref": "tool:native-sandbox",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "fallback_reason": None,
+        "blocked_reason": None,
+    }
+
     tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
     assert tool_run.input_payload["execution"] == {
         "class": "sandbox",

@@ -141,6 +141,7 @@ class ToolGateway:
         execution_trace = self._plugin_call_proxy.describe_execution_dispatch(
             request
         ).as_trace_payload()
+        call_record.execution_trace = dict(execution_trace)
         started_at = time.perf_counter()
         try:
             invocation_credentials = self._credential_store.resolve_masked_runtime_credentials(
