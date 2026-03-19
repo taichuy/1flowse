@@ -311,6 +311,7 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
             "或补齐对应 execution adapter；显式 execution-class 请求不要静默降级。"
         ),
     }
+    assert run_detail_body["execution_focus_skill_trace"] is None
 
 
 def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_nodes(

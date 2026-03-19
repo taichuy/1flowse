@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 
 from app.schemas.explanations import SignalFollowUpExplanation
 from app.schemas.operator_follow_up import (
+    OperatorCallbackWaitingLifecycleSummary,
+    OperatorRunFocusSkillTrace,
     OperatorRunFollowUpSummary,
     OperatorRunSnapshot,
 )
@@ -239,6 +241,7 @@ class RunDetailExecutionFocusNode(BaseModel):
     node_type: str
     status: str
     callback_waiting_explanation: SignalFollowUpExplanation | None = None
+    callback_waiting_lifecycle: OperatorCallbackWaitingLifecycleSummary | None = None
     phase: str | None = None
     execution_class: str | None = None
     execution_source: str | None = None
@@ -259,6 +262,17 @@ class RunDetailExecutionFocusNode(BaseModel):
     execution_sandbox_runner_kind: str | None = None
     execution_blocking_reason: str | None = None
     execution_fallback_reason: str | None = None
+    scheduled_resume_delay_seconds: float | None = None
+    scheduled_resume_reason: str | None = None
+    scheduled_resume_source: str | None = None
+    scheduled_waiting_status: str | None = None
+    scheduled_resume_scheduled_at: datetime | None = None
+    scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
+    artifact_refs: list[str] = Field(default_factory=list)
+    artifacts: list[RunArtifactItem] = Field(default_factory=list)
+    tool_calls: list[ToolCallItem] = Field(default_factory=list)
 
 
 class RunDetail(BaseModel):
@@ -283,6 +297,7 @@ class RunDetail(BaseModel):
     execution_focus_reason: RunDetailExecutionFocusReason | None = None
     execution_focus_node: RunDetailExecutionFocusNode | None = None
     execution_focus_explanation: SignalFollowUpExplanation | None = None
+    execution_focus_skill_trace: OperatorRunFocusSkillTrace | None = None
     node_runs: list[NodeRunItem]
     artifacts: list[RunArtifactItem] = Field(default_factory=list)
     tool_calls: list[ToolCallItem] = Field(default_factory=list)

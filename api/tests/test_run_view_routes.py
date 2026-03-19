@@ -559,6 +559,174 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
             "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
         ),
     }
+    assert run_detail_body["execution_focus_node"]["callback_waiting_lifecycle"] == node[
+        "callback_waiting_lifecycle"
+    ]
+    assert run_detail_body["execution_focus_node"]["scheduled_resume_delay_seconds"] == 0
+    assert (
+        run_detail_body["execution_focus_node"]["scheduled_resume_reason"]
+        == "search callback pending"
+    )
+    assert (
+        run_detail_body["execution_focus_node"]["scheduled_resume_source"]
+        == "callback_ticket_monitor"
+    )
+    assert (
+        run_detail_body["execution_focus_node"]["scheduled_waiting_status"]
+        == "waiting_callback"
+    )
+    assert run_detail_body["execution_focus_node"]["artifact_refs"] == [
+        "artifact://artifact-tool",
+        "artifact://artifact-evidence",
+    ]
+    assert [
+        item["uri"] for item in run_detail_body["execution_focus_node"]["artifacts"]
+    ] == ["artifact://artifact-tool", "artifact://artifact-evidence"]
+    assert run_detail_body["execution_focus_node"]["tool_calls"] == node["tool_calls"]
+    assert run_detail_body["execution_focus_skill_trace"] is None
+
+
+def test_get_run_detail_includes_execution_focus_skill_trace(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    run = Run(
+        id="run-skill-reference-focus-detail",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="running",
+        current_node_id="agent_skill",
+        input_payload={"message": "inspect focus skill trace"},
+        created_at=datetime(2026, 3, 17, 17, 0, tzinfo=UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-skill-focus",
+        run_id=run.id,
+        node_id="agent_skill",
+        node_name="Agent Skill",
+        node_type="llm_agent",
+        status="running",
+        phase="running_main",
+        input_payload={"execution": {"class": "inline"}},
+        created_at=datetime(2026, 3, 17, 17, 0, tzinfo=UTC),
+    )
+    sqlite_session.add_all(
+        [
+            run,
+            node_run,
+            RunEvent(
+                run_id=run.id,
+                node_run_id=node_run.id,
+                event_type="agent.skill.references.loaded",
+                payload={
+                    "node_id": node_run.node_id,
+                    "phase": "main_plan",
+                    "references": [
+                        {
+                            "skill_id": "skill-research-brief",
+                            "skill_name": "Research Brief",
+                            "reference_id": "ref-handoff",
+                            "reference_name": "Operator Handoff",
+                            "load_source": "skill_binding",
+                            "retrieval_http_path": (
+                                "/api/skills/skill-research-brief/references/ref-handoff"
+                                "?workspace_id=default"
+                            ),
+                            "retrieval_mcp_method": "skills.get_reference",
+                            "retrieval_mcp_params": {
+                                "skill_id": "skill-research-brief",
+                                "reference_id": "ref-handoff",
+                                "workspace_id": "default",
+                            },
+                        },
+                        {
+                            "skill_id": "skill-research-brief",
+                            "skill_name": "Research Brief",
+                            "reference_id": "ref-budget",
+                            "reference_name": "Budget Control",
+                            "load_source": "retrieval_query_match",
+                            "fetch_reason": "Matched query terms: budget, guardrails",
+                            "retrieval_http_path": (
+                                "/api/skills/skill-research-brief/references/ref-budget"
+                                "?workspace_id=default"
+                            ),
+                            "retrieval_mcp_method": "skills.get_reference",
+                            "retrieval_mcp_params": {
+                                "skill_id": "skill-research-brief",
+                                "reference_id": "ref-budget",
+                                "workspace_id": "default",
+                            },
+                        },
+                    ],
+                },
+                created_at=datetime(2026, 3, 17, 17, 0, 30, tzinfo=UTC),
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    response = client.get(f"/api/runs/{run.id}", params={"include_events": "false"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["execution_focus_reason"] == "current_node"
+    assert body["execution_focus_node"]["node_run_id"] == node_run.id
+    assert body["execution_focus_skill_trace"] == {
+        "reference_count": 2,
+        "phase_counts": {"main_plan": 2},
+        "source_counts": {
+            "retrieval_query_match": 1,
+            "skill_binding": 1,
+        },
+        "loads": [
+            {
+                "phase": "main_plan",
+                "references": [
+                    {
+                        "skill_id": "skill-research-brief",
+                        "skill_name": "Research Brief",
+                        "reference_id": "ref-handoff",
+                        "reference_name": "Operator Handoff",
+                        "load_source": "skill_binding",
+                        "fetch_reason": None,
+                        "fetch_request_index": None,
+                        "fetch_request_total": None,
+                        "retrieval_http_path": (
+                            "/api/skills/skill-research-brief/"
+                            "references/ref-handoff?workspace_id=default"
+                        ),
+                        "retrieval_mcp_method": "skills.get_reference",
+                        "retrieval_mcp_params": {
+                            "skill_id": "skill-research-brief",
+                            "reference_id": "ref-handoff",
+                            "workspace_id": "default",
+                        },
+                    },
+                    {
+                        "skill_id": "skill-research-brief",
+                        "skill_name": "Research Brief",
+                        "reference_id": "ref-budget",
+                        "reference_name": "Budget Control",
+                        "load_source": "retrieval_query_match",
+                        "fetch_reason": "Matched query terms: budget, guardrails",
+                        "fetch_request_index": None,
+                        "fetch_request_total": None,
+                        "retrieval_http_path": (
+                            "/api/skills/skill-research-brief/"
+                            "references/ref-budget?workspace_id=default"
+                        ),
+                        "retrieval_mcp_method": "skills.get_reference",
+                        "retrieval_mcp_params": {
+                            "skill_id": "skill-research-brief",
+                            "reference_id": "ref-budget",
+                            "workspace_id": "default",
+                        },
+                    },
+                ],
+            }
+        ],
+    }
 
 
 def test_get_run_execution_view_includes_dependency_contract_fields(

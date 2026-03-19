@@ -217,6 +217,12 @@ type RunDetailResponseBody = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  execution_focus_skill_trace?: {
+    reference_count?: number | null;
+    phase_counts?: Record<string, number> | null;
+    source_counts?: Record<string, number> | null;
+    loads?: SkillReferenceLoadItem[] | null;
+  } | null;
   node_runs?: Array<{
     node_id?: string | null;
     status?: string | null;
@@ -428,6 +434,14 @@ function hasRunDetailExecutionFocusEvidence(body: RunDetailResponseBody | null) 
     Object.prototype.hasOwnProperty.call(executionFocusNode, "artifacts") ||
     Object.prototype.hasOwnProperty.call(executionFocusNode, "tool_calls")
   );
+}
+
+function hasRunDetailExecutionFocusSkillTrace(body: RunDetailResponseBody | null) {
+  if (!body || typeof body !== "object") {
+    return false;
+  }
+
+  return Object.prototype.hasOwnProperty.call(body, "execution_focus_skill_trace");
 }
 
 function normalizeSignalFollowUpExplanation(
@@ -648,7 +662,8 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
     const executionView =
       hasRunDetailExecutionFocus(body) &&
       hasRunDetailCallbackWaitingExplanation(body) &&
-      hasRunDetailExecutionFocusEvidence(body)
+      hasRunDetailExecutionFocusEvidence(body) &&
+      hasRunDetailExecutionFocusSkillTrace(body)
         ? null
         : await fetchRunExecutionView(normalizedRunId);
 
@@ -749,7 +764,10 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
       executionFocusArtifacts: bodyArtifacts.length > 0 ? bodyArtifacts : executionViewArtifacts,
       executionFocusToolCalls: bodyToolCalls.length > 0 ? bodyToolCalls : executionViewToolCalls,
       executionFocusSkillTrace: normalizeFocusSkillTrace(
-        executionView?.skill_trace?.scope === "execution_focus_node" ? executionView.skill_trace : null
+        body?.execution_focus_skill_trace ??
+          (executionView?.skill_trace?.scope === "execution_focus_node"
+            ? executionView.skill_trace
+            : null)
       )
     };
   } catch {

@@ -145,6 +145,38 @@ describe("fetchRunSnapshot", () => {
             primary_signal: "执行阻断：当前节点仍在等待审批。",
             follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
           },
+          execution_focus_skill_trace: {
+            reference_count: 1,
+            phase_counts: {
+              main_plan: 1
+            },
+            source_counts: {
+              skill_binding: 1
+            },
+            loads: [
+              {
+                phase: "main_plan",
+                references: [
+                  {
+                    skill_id: "skill-ops-review",
+                    skill_name: "Ops Review",
+                    reference_id: "ref-escalation",
+                    reference_name: "Escalation Checklist",
+                    load_source: "skill_binding",
+                    fetch_reason: null,
+                    fetch_request_index: null,
+                    fetch_request_total: null,
+                    retrieval_http_path: "/api/skills/skill-ops-review/references/ref-escalation",
+                    retrieval_mcp_method: "skills.get_reference",
+                    retrieval_mcp_params: {
+                      skill_id: "skill-ops-review",
+                      reference_id: "ref-escalation"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
           node_runs: [
             {
               node_id: "tool-a",
@@ -221,7 +253,38 @@ describe("fetchRunSnapshot", () => {
           raw_ref: "artifact://artifact-1"
         }
       ],
-      executionFocusSkillTrace: null
+      executionFocusSkillTrace: {
+        reference_count: 1,
+        phase_counts: {
+          main_plan: 1
+        },
+        source_counts: {
+          skill_binding: 1
+        },
+        loads: [
+          {
+            phase: "main_plan",
+            references: [
+              {
+                skill_id: "skill-ops-review",
+                skill_name: "Ops Review",
+                reference_id: "ref-escalation",
+                reference_name: "Escalation Checklist",
+                load_source: "skill_binding",
+                fetch_reason: null,
+                fetch_request_index: null,
+                fetch_request_total: null,
+                retrieval_http_path: "/api/skills/skill-ops-review/references/ref-escalation",
+                retrieval_mcp_method: "skills.get_reference",
+                retrieval_mcp_params: {
+                  skill_id: "skill-ops-review",
+                  reference_id: "ref-escalation"
+                }
+              }
+            ]
+          }
+        ]
+      }
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

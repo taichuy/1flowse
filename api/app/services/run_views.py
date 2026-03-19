@@ -13,6 +13,7 @@ from app.schemas.run_views import (
     RunEvidenceView,
     RunExecutionView,
 )
+from app.services.operator_follow_up_snapshots import build_operator_run_snapshot
 from app.services.run_execution_views import build_run_execution_view, list_callback_tickets
 from app.services.run_view_serializers import (
     serialize_ai_call,
@@ -39,6 +40,11 @@ def _serialize_run_detail_execution_focus_node(
         node_type=focus_node.node_type,
         status=focus_node.status,
         callback_waiting_explanation=focus_node.callback_waiting_explanation,
+        callback_waiting_lifecycle=(
+            focus_node.callback_waiting_lifecycle.model_dump()
+            if focus_node.callback_waiting_lifecycle is not None
+            else None
+        ),
         phase=focus_node.phase,
         execution_class=focus_node.execution_class,
         execution_source=focus_node.execution_source,
@@ -68,8 +74,20 @@ def _serialize_run_detail_execution_focus_node(
         execution_sandbox_backend_executor_ref=(
             focus_node.execution_sandbox_backend_executor_ref
         ),
+        execution_sandbox_runner_kind=focus_node.execution_sandbox_runner_kind,
         execution_blocking_reason=focus_node.execution_blocking_reason,
         execution_fallback_reason=focus_node.execution_fallback_reason,
+        scheduled_resume_delay_seconds=focus_node.scheduled_resume_delay_seconds,
+        scheduled_resume_reason=focus_node.scheduled_resume_reason,
+        scheduled_resume_source=focus_node.scheduled_resume_source,
+        scheduled_waiting_status=focus_node.scheduled_waiting_status,
+        scheduled_resume_scheduled_at=focus_node.scheduled_resume_scheduled_at,
+        scheduled_resume_due_at=focus_node.scheduled_resume_due_at,
+        scheduled_resume_requeued_at=focus_node.scheduled_resume_requeued_at,
+        scheduled_resume_requeue_source=focus_node.scheduled_resume_requeue_source,
+        artifact_refs=list(focus_node.artifact_refs),
+        artifacts=list(focus_node.artifacts),
+        tool_calls=list(focus_node.tool_calls),
     )
 
 
@@ -79,6 +97,11 @@ def serialize_run_detail(
     include_events: bool = True,
     execution_view: RunExecutionView | None = None,
 ) -> RunDetail:
+    operator_snapshot = (
+        build_operator_run_snapshot(artifacts.run, execution_view=execution_view)
+        if execution_view is not None
+        else None
+    )
     event_type_counts = dict(
         sorted(Counter(event.event_type for event in artifacts.events).items())
     )
@@ -112,6 +135,11 @@ def serialize_run_detail(
         execution_focus_node=_serialize_run_detail_execution_focus_node(execution_view),
         execution_focus_explanation=(
             execution_view.execution_focus_explanation if execution_view is not None else None
+        ),
+        execution_focus_skill_trace=(
+            operator_snapshot.execution_focus_skill_trace
+            if operator_snapshot is not None
+            else None
         ),
         node_runs=[
             {
