@@ -2,7 +2,11 @@ import type {
   SensitiveAccessBulkActionResult,
   SignalFollowUpExplanation
 } from "@/lib/get-sensitive-access";
-import { buildOperatorInlineActionFeedbackModel } from "@/lib/operator-inline-action-feedback";
+import {
+  buildOperatorInlineActionFeedbackModel,
+  type OperatorInlineFocusArtifactPreview
+} from "@/lib/operator-inline-action-feedback";
+import type { ExecutionFocusToolCallSummary } from "@/lib/run-execution-focus-presenters";
 
 export type SensitiveAccessBulkNarrativeItem = {
   label: string;
@@ -21,6 +25,9 @@ export type SensitiveAccessBulkRunSampleCard = {
   artifactRefCount: number;
   toolCallCount: number;
   rawRefCount: number;
+  focusArtifactSummary: string | null;
+  focusToolCallSummaries: ExecutionFocusToolCallSummary[];
+  focusArtifacts: OperatorInlineFocusArtifactPreview[];
 };
 
 export function buildSensitiveAccessBulkResultNarrative(
@@ -74,7 +81,10 @@ export function buildSensitiveAccessBulkRunSampleCards(
         artifactCount: model.artifactCount,
         artifactRefCount: model.artifactRefCount,
         toolCallCount: model.toolCallCount,
-        rawRefCount: model.rawRefCount
+        rawRefCount: model.rawRefCount,
+        focusArtifactSummary: model.focusArtifactSummary,
+        focusToolCallSummaries: model.focusToolCallSummaries,
+        focusArtifacts: model.focusArtifacts
       };
     })
     .filter(

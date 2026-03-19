@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { ExecutionNodeCard } from "@/components/run-diagnostics-execution/execution-node-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
@@ -239,32 +240,18 @@ export function WorkflowPublishInvocationDetailPanel({
                     {sample.snapshot_summary ? (
                       <p className="binding-meta">{sample.snapshot_summary}</p>
                     ) : null}
-                    {sample.execution_focus_artifact_count > 0 ||
-                    sample.execution_focus_artifact_ref_count > 0 ||
-                    sample.execution_focus_tool_call_count > 0 ||
-                    sample.execution_focus_raw_ref_count > 0 ? (
-                      <div className="tool-badge-row">
-                        {sample.execution_focus_artifact_count > 0 ? (
-                          <span className="event-chip">
-                            artifacts {sample.execution_focus_artifact_count}
-                          </span>
-                        ) : null}
-                        {sample.execution_focus_artifact_ref_count > 0 ? (
-                          <span className="event-chip">
-                            artifact refs {sample.execution_focus_artifact_ref_count}
-                          </span>
-                        ) : null}
-                        {sample.execution_focus_tool_call_count > 0 ? (
-                          <span className="event-chip">
-                            tool calls {sample.execution_focus_tool_call_count}
-                          </span>
-                        ) : null}
-                        {sample.execution_focus_raw_ref_count > 0 ? (
-                          <span className="event-chip">
-                            raw refs {sample.execution_focus_raw_ref_count}
-                          </span>
-                        ) : null}
-                      </div>
+                    {sample.focus_artifact_summary ||
+                    sample.focus_tool_call_summaries.length > 0 ||
+                    sample.focus_artifacts.length > 0 ? (
+                      <OperatorFocusEvidenceCard
+                        title="Sampled run focus evidence"
+                        artifactCount={sample.execution_focus_artifact_count}
+                        artifactRefCount={sample.execution_focus_artifact_ref_count}
+                        artifactSummary={sample.focus_artifact_summary}
+                        artifacts={sample.focus_artifacts}
+                        toolCallCount={sample.execution_focus_tool_call_count}
+                        toolCallSummaries={sample.focus_tool_call_summaries}
+                      />
                     ) : null}
                     <dl className="compact-meta-list">
                       <div>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import type {
   SensitiveAccessBulkAction,
   SensitiveAccessBulkActionResult
@@ -204,6 +205,14 @@ export function SensitiveAccessBulkGovernanceCard({
                         ) : null}
                       </div>
                     ) : null}
+                    <OperatorFocusEvidenceCard
+                      artifactCount={sample.artifactCount}
+                      artifactRefCount={sample.artifactRefCount}
+                      artifactSummary={sample.focusArtifactSummary}
+                      artifacts={sample.focusArtifacts}
+                      toolCallCount={sample.toolCallCount}
+                      toolCallSummaries={sample.focusToolCallSummaries}
+                    />
                   </div>
                 ))}
               </div>

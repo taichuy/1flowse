@@ -121,7 +121,31 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
             executionFocusArtifactCount: 2,
             executionFocusArtifactRefCount: 1,
             executionFocusToolCallCount: 3,
-            executionFocusRawRefCount: 1
+            executionFocusRawRefCount: 1,
+            executionFocusArtifactRefs: ["artifact://focus-1"],
+            executionFocusArtifacts: [
+              {
+                artifact_kind: "tool_result",
+                content_type: "application/json",
+                summary: "聚焦 tool 已产出结构化摘要。",
+                uri: "artifact://focus-1"
+              }
+            ],
+            executionFocusToolCalls: [
+              {
+                id: "tool-call-1",
+                tool_id: "sandbox.search",
+                tool_name: "Sandbox Search",
+                phase: "execute",
+                status: "completed",
+                effective_execution_class: "sandbox",
+                execution_sandbox_backend_id: "sandbox-default",
+                execution_sandbox_runner_kind: "tool",
+                response_summary: "搜索结果已写入 artifact。",
+                response_content_type: "application/json",
+                raw_ref: "artifact://tool-call-raw"
+              }
+            ]
           }
         }
       ]
@@ -132,7 +156,7 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
         runId: "run-12345678",
         shortRunId: "run-1234",
         summary:
-          "当前 run 状态：running。 当前节点：tool-1。 重点信号：执行阻断已解除。 后续动作：继续观察后续节点。 Sandbox tool 已关联 2 个 artifact、1 条 artifact ref、3 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。",
+          "当前 run 状态：running。 当前节点：tool-1。 重点信号：执行阻断已解除。 后续动作：继续观察后续节点。 Sandbox tool 已关联 2 个 artifact、1 条 artifact ref、3 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。 样本 tool： Sandbox Search 状态 completed。 effective sandbox。 backend sandbox-default。 raw_ref artifact://tool-call-raw。 搜索结果已写入 artifact。",
         runStatus: "running",
         currentNodeId: "tool-1",
         focusNodeLabel: "Sandbox tool",
@@ -140,7 +164,34 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
         artifactCount: 2,
         artifactRefCount: 1,
         toolCallCount: 3,
-        rawRefCount: 1
+        rawRefCount: 1,
+        focusArtifactSummary:
+          "聚焦节点已沉淀 1 个 artifact（tool_result 1）。 run artifact refs 1 条。 至少 1 条 tool call 已把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。",
+        focusToolCallSummaries: [
+          {
+            id: "tool-call-1",
+            title: "Sandbox Search · completed",
+            detail: "搜索结果已写入 artifact。",
+            badges: [
+              "phase execute",
+              "effective sandbox",
+              "backend sandbox-default",
+              "runner tool",
+              "content application/json",
+              "raw payload"
+            ],
+            rawRef: "artifact://tool-call-raw"
+          }
+        ],
+        focusArtifacts: [
+          {
+            key: "artifact://focus-1",
+            artifactKind: "tool_result",
+            contentType: "application/json",
+            summary: "聚焦 tool 已产出结构化摘要。",
+            uri: "artifact://focus-1"
+          }
+        ]
       }
     ]);
   });

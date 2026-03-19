@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import {
   buildOperatorInlineActionFeedbackModel,
   type OperatorInlineActionResultState
@@ -91,6 +92,15 @@ export function InlineOperatorActionFeedback({
           ) : null}
         </div>
       ) : null}
+
+      <OperatorFocusEvidenceCard
+        artifactCount={model.artifactCount}
+        artifactRefCount={model.artifactRefCount}
+        artifactSummary={model.focusArtifactSummary}
+        artifacts={model.focusArtifacts}
+        toolCallCount={model.toolCallCount}
+        toolCallSummaries={model.focusToolCallSummaries}
+      />
     </div>
   );
 }

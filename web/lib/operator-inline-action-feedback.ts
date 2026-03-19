@@ -1,4 +1,10 @@
 import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import type { RunArtifactItem, RunExecutionNodeItem, ToolCallItem } from "@/lib/get-run-views";
+import {
+  formatExecutionFocusArtifactSummary,
+  listExecutionFocusToolCallSummaries,
+  type ExecutionFocusToolCallSummary
+} from "@/lib/run-execution-focus-presenters";
 
 import { formatRunSnapshotSummary } from "./operator-action-result-presenters";
 
@@ -30,11 +36,105 @@ export type OperatorInlineActionFeedbackModel = {
   artifactRefCount: number;
   toolCallCount: number;
   rawRefCount: number;
+  focusArtifactSummary: string | null;
+  focusToolCallSummaries: ExecutionFocusToolCallSummary[];
+  focusArtifacts: OperatorInlineFocusArtifactPreview[];
+};
+
+export type OperatorInlineFocusArtifactPreview = {
+  key: string;
+  artifactKind: string;
+  contentType: string | null;
+  summary: string | null;
+  uri: string | null;
 };
 
 function normalizeText(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function buildExecutionFocusArtifactSamples(
+  runSnapshot?: RunSnapshot | null
+): OperatorInlineFocusArtifactPreview[] {
+  return (runSnapshot?.executionFocusArtifacts ?? []).slice(0, 2).map((artifact, index) => ({
+    key:
+      normalizeText(artifact?.uri) ??
+      normalizeText(artifact?.summary) ??
+      `focus-artifact-${index}`,
+    artifactKind: normalizeText(artifact?.artifact_kind) ?? "artifact",
+    contentType: normalizeText(artifact?.content_type),
+    summary: normalizeText(artifact?.summary),
+    uri: normalizeText(artifact?.uri)
+  }));
+}
+
+function buildExecutionFocusExplainableNode(
+  runSnapshot?: RunSnapshot | null
+): Pick<RunExecutionNodeItem, "tool_calls" | "artifact_refs" | "artifacts"> | null {
+  if (!runSnapshot) {
+    return null;
+  }
+
+  const toolCalls: ToolCallItem[] = (runSnapshot.executionFocusToolCalls ?? []).map((toolCall, index) => ({
+    id: normalizeText(toolCall?.id) ?? `focus-tool-call-${index}`,
+    run_id: "snapshot-run",
+    node_run_id: normalizeText(runSnapshot.executionFocusNodeRunId) ?? "snapshot-node-run",
+    tool_id: normalizeText(toolCall?.tool_id) ?? normalizeText(toolCall?.tool_name) ?? `tool-${index}`,
+    tool_name: normalizeText(toolCall?.tool_name) ?? normalizeText(toolCall?.tool_id) ?? `tool-${index}`,
+    phase: normalizeText(toolCall?.phase) ?? "n/a",
+    status: normalizeText(toolCall?.status) ?? "unknown",
+    request_summary: "",
+    latency_ms: 0,
+    retry_count: 0,
+    created_at: "",
+    requested_execution_class: null,
+    requested_execution_source: null,
+    requested_execution_profile: null,
+    requested_execution_timeout_ms: null,
+    requested_execution_network_policy: null,
+    requested_execution_filesystem_policy: null,
+    effective_execution_class: normalizeText(toolCall?.effective_execution_class),
+    execution_executor_ref: null,
+    execution_sandbox_backend_id: normalizeText(toolCall?.execution_sandbox_backend_id),
+    execution_sandbox_backend_executor_ref: null,
+    execution_sandbox_runner_kind: normalizeText(toolCall?.execution_sandbox_runner_kind),
+    execution_blocking_reason: normalizeText(toolCall?.execution_blocking_reason),
+    execution_fallback_reason: normalizeText(toolCall?.execution_fallback_reason),
+    response_summary: normalizeText(toolCall?.response_summary),
+    response_content_type: normalizeText(toolCall?.response_content_type),
+    response_meta: undefined,
+    raw_ref: normalizeText(toolCall?.raw_ref),
+    error_message: null,
+    finished_at: null
+  }));
+  const artifacts: RunArtifactItem[] = (runSnapshot.executionFocusArtifacts ?? []).map(
+    (artifact, index) => ({
+      id: `focus-artifact-${index}`,
+      run_id: "snapshot-run",
+      node_run_id: normalizeText(runSnapshot.executionFocusNodeRunId),
+      artifact_kind: normalizeText(artifact?.artifact_kind) ?? "artifact",
+      content_type: normalizeText(artifact?.content_type) ?? "unknown",
+      summary: normalizeText(artifact?.summary) ?? "",
+      uri: normalizeText(artifact?.uri) ?? "",
+      metadata_payload: {},
+      created_at: ""
+    })
+  );
+
+  if (
+    toolCalls.length === 0 &&
+    artifacts.length === 0 &&
+    (runSnapshot.executionFocusArtifactRefs?.length ?? 0) === 0
+  ) {
+    return null;
+  }
+
+  return {
+    tool_calls: toolCalls,
+    artifact_refs: runSnapshot.executionFocusArtifactRefs ?? [],
+    artifacts
+  };
 }
 
 export function hasStructuredOperatorInlineActionResult(input: OperatorInlineActionResultState) {
@@ -71,6 +171,14 @@ export function buildOperatorInlineActionFeedbackModel(
     input.runSnapshot?.executionFocusRawRefCount ??
     input.runSnapshot?.executionFocusToolCalls?.filter((item) => normalizeText(item?.raw_ref)).length ??
     0;
+  const focusExplainableNode = buildExecutionFocusExplainableNode(input.runSnapshot);
+  const focusArtifactSummary = focusExplainableNode
+    ? formatExecutionFocusArtifactSummary(focusExplainableNode)
+    : null;
+  const focusToolCallSummaries = focusExplainableNode
+    ? listExecutionFocusToolCallSummaries(focusExplainableNode)
+    : [];
+  const focusArtifacts = buildExecutionFocusArtifactSamples(input.runSnapshot);
   const headline =
     outcomePrimarySignal ??
     runFollowUpPrimarySignal ??
@@ -93,7 +201,10 @@ export function buildOperatorInlineActionFeedbackModel(
         artifactCount > 0 ||
         artifactRefCount > 0 ||
         toolCallCount > 0 ||
-        rawRefCount > 0
+        rawRefCount > 0 ||
+        focusArtifactSummary ||
+        focusToolCallSummaries.length > 0 ||
+        focusArtifacts.length > 0
     ),
     headline,
     outcomeFollowUp,
@@ -116,6 +227,9 @@ export function buildOperatorInlineActionFeedbackModel(
     artifactCount,
     artifactRefCount,
     toolCallCount,
-    rawRefCount
+    rawRefCount,
+    focusArtifactSummary,
+    focusToolCallSummaries,
+    focusArtifacts
   };
 }

@@ -319,7 +319,27 @@ describe("published invocation presenters", () => {
         execution_focus_artifact_count: 2,
         execution_focus_artifact_ref_count: 1,
         execution_focus_tool_call_count: 1,
-        execution_focus_raw_ref_count: 1
+        execution_focus_raw_ref_count: 1,
+        focus_artifact_summary:
+          "聚焦节点已沉淀 1 个 artifact（artifact 1）。 至少 1 条 tool call 已把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。",
+        focus_tool_call_summaries: [
+          {
+            id: "focus-tool-call-0",
+            title: "callback.wait · waiting",
+            detail: "原始结果已落到 artifact://wait-raw。",
+            badges: ["phase n/a", "raw payload"],
+            rawRef: "artifact://wait-raw"
+          }
+        ],
+        focus_artifacts: [
+          {
+            key: "artifact://wait-artifact",
+            artifactKind: "artifact",
+            contentType: null,
+            summary: "callback payload snapshot",
+            uri: "artifact://wait-artifact"
+          }
+        ]
       },
       {
         run_id: "run-2",
@@ -336,7 +356,10 @@ describe("published invocation presenters", () => {
         execution_focus_artifact_count: 0,
         execution_focus_artifact_ref_count: 0,
         execution_focus_tool_call_count: 0,
-        execution_focus_raw_ref_count: 0
+        execution_focus_raw_ref_count: 0,
+        focus_artifact_summary: null,
+        focus_tool_call_summaries: [],
+        focus_artifacts: []
       }
     ]);
   });

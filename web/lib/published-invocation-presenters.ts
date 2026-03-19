@@ -1,3 +1,4 @@
+import type { RunSnapshot } from "@/app/actions/run-snapshot";
 import type {
   PublishedEndpointInvocationFacetItem,
   PublishedEndpointInvocationCallbackTicketItem,
@@ -6,7 +7,12 @@ import type {
   RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import {
+  buildOperatorInlineActionFeedbackModel,
+  type OperatorInlineFocusArtifactPreview
+} from "@/lib/operator-inline-action-feedback";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
+import type { ExecutionFocusToolCallSummary } from "@/lib/run-execution-focus-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 type PublishedInvocationWaitingOverview = {
@@ -41,7 +47,67 @@ export type PublishedInvocationRunFollowUpSampleView = {
   execution_focus_artifact_ref_count: number;
   execution_focus_tool_call_count: number;
   execution_focus_raw_ref_count: number;
+  focus_artifact_summary: string | null;
+  focus_tool_call_summaries: ExecutionFocusToolCallSummary[];
+  focus_artifacts: OperatorInlineFocusArtifactPreview[];
 };
+
+function buildPublishedInvocationRunFollowUpSampleSnapshot(
+  sample?: PublishedInvocationRunFollowUpSample | null,
+  explanationSource?: PublishedInvocationRunFollowUpSampleView["explanation_source"]
+): RunSnapshot {
+  return {
+    status: sample?.snapshot?.status ?? null,
+    currentNodeId: sample?.snapshot?.current_node_id ?? null,
+    waitingReason: sample?.snapshot?.waiting_reason ?? null,
+    executionFocusNodeId: sample?.snapshot?.execution_focus_node_id ?? null,
+    executionFocusNodeRunId: sample?.snapshot?.execution_focus_node_run_id ?? null,
+    executionFocusNodeName: sample?.snapshot?.execution_focus_node_name ?? null,
+    executionFocusNodeType: sample?.snapshot?.execution_focus_node_type ?? null,
+    executionFocusExplanation:
+      explanationSource === "execution_focus" && sample?.snapshot?.execution_focus_explanation
+        ? {
+            primary_signal: sample.snapshot.execution_focus_explanation.primary_signal ?? null,
+            follow_up: sample.snapshot.execution_focus_explanation.follow_up ?? null
+          }
+        : null,
+    callbackWaitingExplanation:
+      explanationSource === "callback_waiting" && sample?.snapshot?.callback_waiting_explanation
+        ? {
+            primary_signal: sample.snapshot.callback_waiting_explanation.primary_signal ?? null,
+            follow_up: sample.snapshot.callback_waiting_explanation.follow_up ?? null
+          }
+        : null,
+    executionFocusArtifactCount: sample?.snapshot?.execution_focus_artifact_count ?? 0,
+    executionFocusArtifactRefCount: sample?.snapshot?.execution_focus_artifact_ref_count ?? 0,
+    executionFocusToolCallCount: sample?.snapshot?.execution_focus_tool_call_count ?? 0,
+    executionFocusRawRefCount: sample?.snapshot?.execution_focus_raw_ref_count ?? 0,
+    executionFocusArtifactRefs: sample?.snapshot?.execution_focus_artifact_refs ?? [],
+    executionFocusArtifacts:
+      sample?.snapshot?.execution_focus_artifacts?.map((artifact) => ({
+        artifact_kind: artifact.artifact_kind ?? null,
+        content_type: artifact.content_type ?? null,
+        summary: artifact.summary ?? null,
+        uri: artifact.uri ?? null
+      })) ?? [],
+    executionFocusToolCalls:
+      sample?.snapshot?.execution_focus_tool_calls?.map((toolCall) => ({
+        id: toolCall.id ?? null,
+        tool_id: toolCall.tool_id ?? null,
+        tool_name: toolCall.tool_name ?? null,
+        phase: toolCall.phase ?? null,
+        status: toolCall.status ?? null,
+        effective_execution_class: toolCall.effective_execution_class ?? null,
+        execution_sandbox_backend_id: toolCall.execution_sandbox_backend_id ?? null,
+        execution_sandbox_runner_kind: toolCall.execution_sandbox_runner_kind ?? null,
+        execution_blocking_reason: toolCall.execution_blocking_reason ?? null,
+        execution_fallback_reason: toolCall.execution_fallback_reason ?? null,
+        response_summary: toolCall.response_summary ?? null,
+        response_content_type: toolCall.response_content_type ?? null,
+        raw_ref: toolCall.raw_ref ?? null
+      })) ?? []
+  };
+}
 
 export const PUBLISHED_INVOCATION_REASON_CODES = [
   "api_key_invalid",
@@ -235,56 +301,9 @@ export function listPublishedInvocationRunFollowUpSampleViews(
   return (runFollowUp?.sampled_runs ?? []).map((sample) => {
     const explanationSource = resolvePublishedInvocationRunFollowUpSampleExplanationSource(sample);
     const explanation = resolvePublishedInvocationRunFollowUpSampleExplanation(sample);
-    const snapshotSummary = formatRunSnapshotSummary({
-      status: sample.snapshot?.status ?? null,
-      currentNodeId: sample.snapshot?.current_node_id ?? null,
-      waitingReason: sample.snapshot?.waiting_reason ?? null,
-      executionFocusNodeId: sample.snapshot?.execution_focus_node_id ?? null,
-      executionFocusNodeName: sample.snapshot?.execution_focus_node_name ?? null,
-      executionFocusNodeType: sample.snapshot?.execution_focus_node_type ?? null,
-      executionFocusExplanation:
-        explanationSource === "execution_focus" && sample.snapshot?.execution_focus_explanation
-        ? {
-            primary_signal: sample.snapshot.execution_focus_explanation.primary_signal ?? null,
-            follow_up: sample.snapshot.execution_focus_explanation.follow_up ?? null
-          }
-        : null,
-      callbackWaitingExplanation:
-        explanationSource === "callback_waiting" && sample.snapshot?.callback_waiting_explanation
-        ? {
-            primary_signal: sample.snapshot.callback_waiting_explanation.primary_signal ?? null,
-            follow_up: sample.snapshot.callback_waiting_explanation.follow_up ?? null
-          }
-        : null,
-      executionFocusArtifactCount: sample.snapshot?.execution_focus_artifact_count ?? 0,
-      executionFocusArtifactRefCount: sample.snapshot?.execution_focus_artifact_ref_count ?? 0,
-      executionFocusToolCallCount: sample.snapshot?.execution_focus_tool_call_count ?? 0,
-      executionFocusRawRefCount: sample.snapshot?.execution_focus_raw_ref_count ?? 0,
-      executionFocusArtifactRefs: sample.snapshot?.execution_focus_artifact_refs ?? [],
-      executionFocusArtifacts:
-        sample.snapshot?.execution_focus_artifacts?.map((artifact) => ({
-          artifact_kind: artifact.artifact_kind ?? null,
-          content_type: artifact.content_type ?? null,
-          summary: artifact.summary ?? null,
-          uri: artifact.uri ?? null
-        })) ?? [],
-      executionFocusToolCalls:
-        sample.snapshot?.execution_focus_tool_calls?.map((toolCall) => ({
-          id: toolCall.id ?? null,
-          tool_id: toolCall.tool_id ?? null,
-          tool_name: toolCall.tool_name ?? null,
-          phase: toolCall.phase ?? null,
-          status: toolCall.status ?? null,
-          effective_execution_class: toolCall.effective_execution_class ?? null,
-          execution_sandbox_backend_id: toolCall.execution_sandbox_backend_id ?? null,
-          execution_sandbox_runner_kind: toolCall.execution_sandbox_runner_kind ?? null,
-          execution_blocking_reason: toolCall.execution_blocking_reason ?? null,
-          execution_fallback_reason: toolCall.execution_fallback_reason ?? null,
-          response_summary: toolCall.response_summary ?? null,
-          response_content_type: toolCall.response_content_type ?? null,
-          raw_ref: toolCall.raw_ref ?? null
-        })) ?? []
-    });
+    const runSnapshot = buildPublishedInvocationRunFollowUpSampleSnapshot(sample, explanationSource);
+    const snapshotSummary = formatRunSnapshotSummary(runSnapshot);
+    const focusEvidenceModel = buildOperatorInlineActionFeedbackModel({ runSnapshot });
 
     return {
       run_id: sample.run_id,
@@ -297,7 +316,10 @@ export function listPublishedInvocationRunFollowUpSampleViews(
       execution_focus_artifact_count: sample.snapshot?.execution_focus_artifact_count ?? 0,
       execution_focus_artifact_ref_count: sample.snapshot?.execution_focus_artifact_ref_count ?? 0,
       execution_focus_tool_call_count: sample.snapshot?.execution_focus_tool_call_count ?? 0,
-      execution_focus_raw_ref_count: sample.snapshot?.execution_focus_raw_ref_count ?? 0
+      execution_focus_raw_ref_count: sample.snapshot?.execution_focus_raw_ref_count ?? 0,
+      focus_artifact_summary: focusEvidenceModel.focusArtifactSummary,
+      focus_tool_call_summaries: focusEvidenceModel.focusToolCallSummaries,
+      focus_artifacts: focusEvidenceModel.focusArtifacts
     };
   });
 }

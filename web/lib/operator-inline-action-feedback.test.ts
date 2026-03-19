@@ -58,4 +58,75 @@ describe("operator inline action feedback", () => {
       })
     ).toBe(false);
   });
+
+  it("把 compact run snapshot 的 tool execution evidence 转成可复用卡片模型", () => {
+    const model = buildOperatorInlineActionFeedbackModel({
+      outcomeExplanation: {
+        primary_signal: "审批已通过，对应 waiting 链路已交回 runtime 恢复。"
+      },
+      runSnapshot: {
+        status: "waiting",
+        currentNodeId: "sandbox_tool",
+        executionFocusNodeName: "Sandbox Tool",
+        executionFocusNodeRunId: "node-run-1",
+        executionFocusArtifactCount: 1,
+        executionFocusArtifactRefCount: 1,
+        executionFocusToolCallCount: 1,
+        executionFocusRawRefCount: 1,
+        executionFocusArtifactRefs: ["artifact://focus-1"],
+        executionFocusArtifacts: [
+          {
+            artifact_kind: "tool_result",
+            content_type: "application/json",
+            summary: "聚焦节点已产出结构化 tool result。",
+            uri: "artifact://focus-1"
+          }
+        ],
+        executionFocusToolCalls: [
+          {
+            id: "tool-call-1",
+            tool_id: "sandbox.search",
+            tool_name: "Sandbox Search",
+            phase: "execute",
+            status: "completed",
+            effective_execution_class: "sandbox",
+            execution_sandbox_backend_id: "sandbox-default",
+            execution_sandbox_runner_kind: "tool",
+            response_summary: "搜索结果已回写 artifact。",
+            response_content_type: "application/json",
+            raw_ref: "artifact://tool-call-raw"
+          }
+        ]
+      }
+    });
+
+    expect(model.focusArtifactSummary).toBe(
+      "聚焦节点已沉淀 1 个 artifact（tool_result 1）。 run artifact refs 1 条。 至少 1 条 tool call 已把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。"
+    );
+    expect(model.focusToolCallSummaries).toEqual([
+      {
+        id: "tool-call-1",
+        title: "Sandbox Search · completed",
+        detail: "搜索结果已回写 artifact。",
+        badges: [
+          "phase execute",
+          "effective sandbox",
+          "backend sandbox-default",
+          "runner tool",
+          "content application/json",
+          "raw payload"
+        ],
+        rawRef: "artifact://tool-call-raw"
+      }
+    ]);
+    expect(model.focusArtifacts).toEqual([
+      {
+        key: "artifact://focus-1",
+        artifactKind: "tool_result",
+        contentType: "application/json",
+        summary: "聚焦节点已产出结构化 tool result。",
+        uri: "artifact://focus-1"
+      }
+    ]);
+  });
 });
