@@ -2,7 +2,6 @@ import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { RunExecutionNodeItem, RunExecutionView } from "@/lib/get-run-views";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
-import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import {
   countPendingApprovals,
   countPendingTickets,
@@ -13,8 +12,7 @@ import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal,
-  formatExecutionFocusReasonLabel,
-  formatMetricSummary
+  formatExecutionFocusReasonLabel
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 
@@ -100,42 +98,10 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               scheduledResumeRequeuedAt={focusNode.scheduled_resume_requeued_at}
               scheduledResumeRequeueSource={focusNode.scheduled_resume_requeue_source}
               sensitiveAccessEntries={focusNode.sensitive_access_entries}
+              focusSkillTrace={skillTrace}
               waitingReason={focusNode.waiting_reason}
             />
           </article>
-          {skillTrace ? (
-            <article className="payload-card compact-card">
-              <div className="payload-card-header">
-                <span className="status-meta">Focused skill trace</span>
-                <span className="event-chip">refs {skillTrace.reference_count}</span>
-              </div>
-              <p className="section-copy entry-copy">
-                {skillTrace.scope === "execution_focus_node"
-                  ? "当前优先展示 execution focus 节点真正加载到 agent phase 的参考资料。"
-                  : "当前节点没有命中独立 skill trace，因此展示整个 run 的注入摘要。"}
-              </p>
-              <div className="tool-badge-row">
-                {formatMetricSummary(skillTrace.phase_counts) ? (
-                  <span className="event-chip">phases {formatMetricSummary(skillTrace.phase_counts)}</span>
-                ) : null}
-                {formatMetricSummary(skillTrace.source_counts) ? (
-                  <span className="event-chip">sources {formatMetricSummary(skillTrace.source_counts)}</span>
-                ) : null}
-              </div>
-              {skillTrace.nodes.map((node) => (
-                <div key={node.node_run_id}>
-                  <p className="section-copy entry-copy">
-                    {node.node_name ?? node.node_id ?? node.node_run_id} · node run {node.node_run_id}
-                  </p>
-                  <SkillReferenceLoadList
-                    skillReferenceLoads={node.loads}
-                    title="Injected references"
-                    description="当前 run overview 和 publish detail 现在都能围绕同一执行聚焦节点解释 agent 注入来源。"
-                  />
-                </div>
-              ))}
-            </article>
-          ) : null}
         </div>
       ) : null}
       {blockerNodes.length > 0 ? (
@@ -192,6 +158,10 @@ export function RunDiagnosticsExecutionOverviewBlockers({
                 scheduledResumeRequeuedAt={node.scheduled_resume_requeued_at}
                 scheduledResumeRequeueSource={node.scheduled_resume_requeue_source}
                 sensitiveAccessEntries={node.sensitive_access_entries}
+                focusSkillReferenceCount={node.skill_reference_load_count}
+                focusSkillReferenceLoads={node.skill_reference_loads}
+                focusSkillReferenceNodeId={node.node_id}
+                focusSkillReferenceNodeName={node.node_name}
                 waitingReason={node.waiting_reason}
               />
             </article>

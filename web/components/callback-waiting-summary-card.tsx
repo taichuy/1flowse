@@ -2,16 +2,20 @@ import Link from "next/link";
 
 import { CallbackWaitingInlineActions } from "@/components/callback-waiting-inline-actions";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem,
   RunExecutionFocusExplanation,
-  RunExecutionNodeItem
+  RunExecutionNodeItem,
+  RunExecutionSkillTrace,
+  SkillReferenceLoadItem
 } from "@/lib/get-run-views";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
+import { buildCallbackWaitingFocusSkillTraceModel } from "@/lib/callback-waiting-focus-skill-trace";
 import {
   formatExecutionFocusArtifactSummary,
   listExecutionFocusArtifactPreviews,
@@ -46,6 +50,11 @@ type CallbackWaitingSummaryCardProps = {
   runId?: string | null;
   nodeRunId?: string | null;
   focusNodeEvidence?: Pick<RunExecutionNodeItem, "artifact_refs" | "artifacts" | "tool_calls"> | null;
+  focusSkillTrace?: RunExecutionSkillTrace | null;
+  focusSkillReferenceLoads?: SkillReferenceLoadItem[];
+  focusSkillReferenceCount?: number | null;
+  focusSkillReferenceNodeId?: string | null;
+  focusSkillReferenceNodeName?: string | null;
   className?: string;
 };
 
@@ -67,6 +76,11 @@ export function CallbackWaitingSummaryCard({
   runId,
   nodeRunId,
   focusNodeEvidence,
+  focusSkillTrace,
+  focusSkillReferenceLoads = [],
+  focusSkillReferenceCount = null,
+  focusSkillReferenceNodeId = null,
+  focusSkillReferenceNodeName = null,
   className = ""
 }: CallbackWaitingSummaryCardProps) {
   const headline =
@@ -182,6 +196,14 @@ export function CallbackWaitingSummaryCard({
   const focusArtifacts = focusNodeEvidence
     ? listExecutionFocusArtifactPreviews(focusNodeEvidence)
     : [];
+  const focusSkillTraceModel = buildCallbackWaitingFocusSkillTraceModel({
+    skillTrace: focusSkillTrace,
+    fallbackNodeRunId: nodeRunId,
+    fallbackNodeId: focusSkillReferenceNodeId,
+    fallbackNodeName: focusSkillReferenceNodeName,
+    fallbackLoads: focusSkillReferenceLoads,
+    fallbackReferenceCount: focusSkillReferenceCount
+  });
   const hasContent =
     headline ||
     blockerRows.length > 0 ||
@@ -245,6 +267,41 @@ export function CallbackWaitingSummaryCard({
           toolCallCount={focusNodeEvidence.tool_calls.length}
           toolCallSummaries={focusToolCallSummaries}
         />
+      ) : null}
+      {focusSkillTraceModel ? (
+        <div className="entry-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">Focused skill trace</span>
+            <span className="event-chip">refs {focusSkillTraceModel.referenceCount}</span>
+          </div>
+          <p className="section-copy entry-copy">
+            {focusSkillTraceModel.source === "execution_focus_node"
+              ? "当前 callback waiting follow-up 已直接消费 execution focus 节点的 skill trace，便于把等待原因与 agent 实际注入来源放到同一条排障链。"
+              : focusSkillTraceModel.source === "run"
+                ? "当前 waiting 节点没有独立 skill trace，因此这里回退展示整个 run 的注入摘要。"
+                : "当前 waiting 节点已经记录了 skill reference loads，因此可以直接在 callback follow-up 中查看该节点的注入来源。"}
+          </p>
+          <div className="tool-badge-row">
+            {focusSkillTraceModel.phaseSummary ? (
+              <span className="event-chip">phases {focusSkillTraceModel.phaseSummary}</span>
+            ) : null}
+            {focusSkillTraceModel.sourceSummary ? (
+              <span className="event-chip">sources {focusSkillTraceModel.sourceSummary}</span>
+            ) : null}
+          </div>
+          {focusSkillTraceModel.nodes.map((node) => (
+            <div key={node.key}>
+              <p className="section-copy entry-copy">
+                {node.label} · node run {node.nodeRunId}
+              </p>
+              <SkillReferenceLoadList
+                skillReferenceLoads={node.loads}
+                title="Injected references"
+                description="当前 callback waiting、operator inbox 和 publish detail 现在围绕同一份 skill trace / load 事实解释 agent 注入来源。"
+              />
+            </div>
+          ))}
+        </div>
       ) : null}
       {recommendedCtaHref ? (
         <div className="event-type-strip">

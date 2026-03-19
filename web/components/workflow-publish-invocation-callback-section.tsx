@@ -116,6 +116,10 @@ export function WorkflowPublishInvocationCallbackSection({
         callbackWaitingAutomation={callbackWaitingAutomation}
         callbackWaitingExplanation={resolvedCallbackWaitingExplanation}
         focusNodeEvidence={executionFocusNode ?? null}
+        focusSkillReferenceCount={executionFocusNode?.skill_reference_load_count ?? null}
+        focusSkillReferenceLoads={executionFocusNode?.skill_reference_loads ?? []}
+        focusSkillReferenceNodeId={executionFocusNode?.node_id ?? null}
+        focusSkillReferenceNodeName={executionFocusNode?.node_name ?? null}
         lifecycle={callbackLifecycle}
         sensitiveAccessEntries={sensitiveAccessEntries}
         waitingReason={waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason}
