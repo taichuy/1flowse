@@ -3,10 +3,10 @@
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import {
   compareToolsByGovernance,
+  getToolExecutionOverrideScope,
   getToolGovernanceSummary
 } from "@/lib/tool-governance";
 import {
-  WORKFLOW_EXECUTION_CLASS_OPTIONS,
   WORKFLOW_EXECUTION_FILESYSTEM_POLICY_OPTIONS,
   WORKFLOW_EXECUTION_NETWORK_POLICY_OPTIONS
 } from "@/lib/workflow-runtime-policy";
@@ -36,6 +36,18 @@ export function LlmAgentToolPolicyForm({
   const governedCallableToolCount = callableTools.filter(
     (tool) => getToolGovernanceSummary(tool).requiresStrongIsolationByDefault
   ).length;
+  const executionOverrideScope = getToolExecutionOverrideScope({
+    tools: callableTools,
+    allowedToolIds,
+    selectedExecutionClass: typeof execution.class === "string" ? execution.class : null
+  });
+  const scopedCallableTools = executionOverrideScope.scopedTools;
+  const executionClassOptions = executionOverrideScope.sharedExecutionClasses;
+  const compatibleExecutionTools = executionOverrideScope.compatibleSelectedTools;
+  const unsupportedExecutionTools = executionOverrideScope.unsupportedSelectedTools;
+  const selectedExecutionClass = typeof execution.class === "string" ? execution.class : "";
+  const hasInvalidSelectedExecutionClass =
+    selectedExecutionClass.trim().length > 0 && unsupportedExecutionTools.length > 0;
 
   const updateToolPolicy = (patch: {
     allowedToolIds?: string[];
@@ -120,6 +132,16 @@ export function LlmAgentToolPolicyForm({
     });
   };
 
+  const scopeExecutionOverrideToCompatibleTools = () => {
+    if (compatibleExecutionTools.length === 0) {
+      return;
+    }
+
+    updateToolPolicy({
+      allowedToolIds: compatibleExecutionTools.map((tool) => tool.id)
+    });
+  };
+
   return (
     <div className="binding-field">
       <span className="binding-label">Tool policy</span>
@@ -159,17 +181,50 @@ export function LlmAgentToolPolicyForm({
           <span className="binding-label">Execution class</span>
           <select
             className="binding-select"
-            value={typeof execution.class === "string" ? execution.class : ""}
+            value={selectedExecutionClass}
             onChange={(event) => updateExecutionField("class", event.target.value || undefined)}
           >
             <option value="">follow tool default</option>
-            {WORKFLOW_EXECUTION_CLASS_OPTIONS.map((option) => (
+            {hasInvalidSelectedExecutionClass ? (
+              <option value={selectedExecutionClass}>{selectedExecutionClass} · incompatible</option>
+            ) : null}
+            {executionClassOptions.map((option) => (
               <option key={`tool-policy-execution-class-${option}`} value={option}>
                 {option}
               </option>
             ))}
           </select>
         </label>
+
+        <small className="section-copy">
+          {describeExecutionOverrideScope({
+            callableToolCount: callableTools.length,
+            scopedToolCount: scopedCallableTools.length,
+            allowedToolCount: allowedToolIds.length,
+            executionClassOptions
+          })}
+        </small>
+        {hasInvalidSelectedExecutionClass ? (
+          <small className="status-meta warning-text">
+            当前 override `{selectedExecutionClass}` 不被 {unsupportedExecutionTools
+              .map((tool) => tool.name || tool.id)
+              .join("、")} 支持；保存前请改为共享 execution class，或清空 override 以沿用工具默认值。
+          </small>
+        ) : null}
+        {hasInvalidSelectedExecutionClass && compatibleExecutionTools.length > 0 ? (
+          <div className="tool-badge-row">
+            <button
+              className="sync-button"
+              type="button"
+              onClick={scopeExecutionOverrideToCompatibleTools}
+            >
+              仅保留兼容工具 ({compatibleExecutionTools.length})
+            </button>
+            <small className="section-copy">
+              会把 allow list 收口到支持 `{selectedExecutionClass}` 的工具，和后端 preflight 的约束保持一致。
+            </small>
+          </div>
+        ) : null}
 
         <label className="binding-field">
           <span className="binding-label">Profile</span>
@@ -358,4 +413,34 @@ function normalizeToolPolicyExecution(execution: Record<string, unknown>) {
   }
 
   return Object.keys(normalizedExecution).length > 0 ? normalizedExecution : undefined;
+}
+
+function describeExecutionOverrideScope({
+  callableToolCount,
+  scopedToolCount,
+  allowedToolCount,
+  executionClassOptions
+}: {
+  callableToolCount: number;
+  scopedToolCount: number;
+  allowedToolCount: number;
+  executionClassOptions: string[];
+}) {
+  if (callableToolCount === 0) {
+    return "当前还没有可调用工具目录项，execution override 先保持 follow tool default 即可。";
+  }
+  if (scopedToolCount === 0) {
+    return "当前 allow list 没有命中可调用工具；execution override 暂时不会收口到有效工具集。";
+  }
+
+  const scopeCopy =
+    allowedToolCount > 0
+      ? `当前 override 会作用于已勾选的 ${scopedToolCount} 个工具。`
+      : `当前 override 会作用于全部 ${scopedToolCount} 个可调用工具。`;
+
+  if (executionClassOptions.length === 0) {
+    return `${scopeCopy} 这些工具之间没有共同支持的 execution class；建议缩小 allowedToolIds，或沿用各工具默认执行级别。`;
+  }
+
+  return `${scopeCopy} 这里只保留它们共同支持的 execution class：${executionClassOptions.join(" / ")}。`;
 }

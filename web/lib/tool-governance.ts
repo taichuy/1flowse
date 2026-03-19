@@ -24,6 +24,13 @@ export type ToolGovernanceSummary = {
   summary: string;
 };
 
+export type ToolExecutionOverrideScope = {
+  scopedTools: PluginToolRegistryItem[];
+  sharedExecutionClasses: string[];
+  compatibleSelectedTools: PluginToolRegistryItem[];
+  unsupportedSelectedTools: PluginToolRegistryItem[];
+};
+
 export function getToolGovernanceSummary(
   tool: PluginToolRegistryItem
 ): ToolGovernanceSummary {
@@ -87,6 +94,45 @@ export function compareToolsByGovernance(
   return (left.name || left.id).localeCompare(right.name || right.id);
 }
 
+export function getToolExecutionOverrideScope({
+  tools,
+  allowedToolIds,
+  selectedExecutionClass
+}: {
+  tools: PluginToolRegistryItem[];
+  allowedToolIds?: string[];
+  selectedExecutionClass?: string | null;
+}): ToolExecutionOverrideScope {
+  const callableTools = tools.filter((tool) => tool.callable);
+  const scopedTools =
+    Array.isArray(allowedToolIds) && allowedToolIds.length > 0
+      ? callableTools.filter((tool) => allowedToolIds.includes(tool.id))
+      : callableTools;
+  const sharedExecutionClasses = listSharedExecutionClasses(scopedTools);
+  const normalizedSelectedExecutionClass = normalizeExecutionClass(selectedExecutionClass);
+  const compatibleSelectedTools = normalizedSelectedExecutionClass
+    ? scopedTools.filter((tool) =>
+        getToolGovernanceSummary(tool).supportedExecutionClasses.includes(
+          normalizedSelectedExecutionClass
+        )
+      )
+    : [];
+
+  return {
+    scopedTools,
+    sharedExecutionClasses,
+    compatibleSelectedTools,
+    unsupportedSelectedTools: normalizedSelectedExecutionClass
+      ? scopedTools.filter(
+          (tool) =>
+            !getToolGovernanceSummary(tool).supportedExecutionClasses.includes(
+              normalizedSelectedExecutionClass
+            )
+        )
+      : []
+  };
+}
+
 function buildToolGovernanceCopy({
   sensitivityLevel,
   defaultExecutionClass,
@@ -114,6 +160,24 @@ function buildToolGovernanceCopy({
     return `未声明默认执行级别；当前最高可用执行边界是 ${strongestExecutionClass}。${supportedCopy}`;
   }
   return supportedCopy;
+}
+
+function listSharedExecutionClasses(tools: PluginToolRegistryItem[]) {
+  if (tools.length === 0) {
+    return [] as string[];
+  }
+
+  const sharedClasses = tools.reduce<Set<string> | null>((shared, tool) => {
+    const toolClasses = new Set(getToolGovernanceSummary(tool).supportedExecutionClasses);
+    if (shared === null) {
+      return toolClasses;
+    }
+    return new Set(Array.from(shared).filter((executionClass) => toolClasses.has(executionClass)));
+  }, null);
+
+  return Array.from(sharedClasses ?? []).sort(
+    (left, right) => executionClassRank(left) - executionClassRank(right)
+  );
 }
 
 function normalizeExecutionClassList(value: unknown, fallback: string[]) {
