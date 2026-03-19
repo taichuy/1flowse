@@ -51,6 +51,52 @@ export type RunSnapshotWithId = {
   snapshot: RunSnapshot | null;
 };
 
+export type OperatorRunSnapshotBody = {
+  workflow_id?: string | null;
+  status?: string | null;
+  current_node_id?: string | null;
+  waiting_reason?: string | null;
+  execution_focus_reason?: string | null;
+  execution_focus_node_id?: string | null;
+  execution_focus_node_run_id?: string | null;
+  execution_focus_node_name?: string | null;
+  execution_focus_node_type?: string | null;
+  execution_focus_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+  callback_waiting_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+  execution_focus_artifact_count?: number;
+  execution_focus_artifact_ref_count?: number;
+  execution_focus_tool_call_count?: number;
+  execution_focus_raw_ref_count?: number;
+  execution_focus_artifact_refs?: string[];
+  execution_focus_artifacts?: Array<{
+    artifact_kind?: string | null;
+    content_type?: string | null;
+    summary?: string | null;
+    uri?: string | null;
+  }>;
+  execution_focus_tool_calls?: Array<{
+    id?: string | null;
+    tool_id?: string | null;
+    tool_name?: string | null;
+    phase?: string | null;
+    status?: string | null;
+    effective_execution_class?: string | null;
+    execution_sandbox_backend_id?: string | null;
+    execution_sandbox_runner_kind?: string | null;
+    execution_blocking_reason?: string | null;
+    execution_fallback_reason?: string | null;
+    response_summary?: string | null;
+    response_content_type?: string | null;
+    raw_ref?: string | null;
+  }>;
+};
+
 type RunDetailResponseBody = {
   status?: string;
   workflow_id?: string | null;
@@ -272,6 +318,39 @@ function normalizeFocusToolCalls(
     response_content_type: item?.response_content_type ?? null,
     raw_ref: item?.raw_ref ?? null
   }));
+}
+
+export function normalizeOperatorRunSnapshot(
+  snapshot?: OperatorRunSnapshotBody | null
+): RunSnapshot | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    status: snapshot.status ?? null,
+    workflowId: snapshot.workflow_id ?? null,
+    currentNodeId: snapshot.current_node_id ?? null,
+    waitingReason: snapshot.waiting_reason ?? null,
+    executionFocusReason: snapshot.execution_focus_reason ?? null,
+    executionFocusNodeId: snapshot.execution_focus_node_id ?? null,
+    executionFocusNodeRunId: snapshot.execution_focus_node_run_id ?? null,
+    executionFocusNodeName: snapshot.execution_focus_node_name ?? null,
+    executionFocusNodeType: snapshot.execution_focus_node_type ?? null,
+    executionFocusExplanation: normalizeSignalFollowUpExplanation(
+      snapshot.execution_focus_explanation
+    ),
+    callbackWaitingExplanation: normalizeSignalFollowUpExplanation(
+      snapshot.callback_waiting_explanation
+    ),
+    executionFocusArtifactCount: snapshot.execution_focus_artifact_count ?? 0,
+    executionFocusArtifactRefCount: snapshot.execution_focus_artifact_ref_count ?? 0,
+    executionFocusToolCallCount: snapshot.execution_focus_tool_call_count ?? 0,
+    executionFocusRawRefCount: snapshot.execution_focus_raw_ref_count ?? 0,
+    executionFocusArtifactRefs: normalizeStringList(snapshot.execution_focus_artifact_refs),
+    executionFocusArtifacts: normalizeFocusArtifacts(snapshot.execution_focus_artifacts),
+    executionFocusToolCalls: normalizeFocusToolCalls(snapshot.execution_focus_tool_calls)
+  };
 }
 
 async function fetchRunExecutionView(

@@ -4,7 +4,10 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.explanations import SignalFollowUpExplanation
-from app.schemas.operator_follow_up import OperatorRunFollowUpSummary
+from app.schemas.operator_follow_up import (
+    OperatorRunFollowUpSummary,
+    OperatorRunSnapshot,
+)
 from app.schemas.sensitive_access import CallbackBlockerDeltaSummary
 
 
@@ -69,6 +72,7 @@ class CallbackTicketCleanupResponse(BaseModel):
     terminated_run_ids: list[str] = Field(default_factory=list)
     items: list[CallbackTicketCleanupItem] = Field(default_factory=list)
     outcome_explanation: SignalFollowUpExplanation | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
@@ -281,6 +285,7 @@ class RunResumeResponse(BaseModel):
     run: RunDetail
     outcome_explanation: SignalFollowUpExplanation | None = None
     callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
 
 

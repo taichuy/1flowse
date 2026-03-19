@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { cleanupRunCallbackTickets } from "@/app/actions/callback-tickets";
 import { revalidateOperatorFollowUpPaths } from "@/app/actions/operator-follow-up-revalidation";
 import { fetchRunSnapshot } from "@/app/actions/run-snapshot";
-import { resumeRun } from "@/app/actions/runs";
 import { getSystemOverview } from "@/lib/get-system-overview";
-import { getRunExecutionView } from "@/lib/get-run-views";
 
 vi.mock("@/lib/api-base-url", () => ({
   getApiBaseUrl: () => "http://api.test"
@@ -36,8 +35,11 @@ vi.mock("@/lib/get-system-overview", () => ({
   getSystemOverview: vi.fn()
 }));
 
-vi.mock("@/lib/get-run-views", () => ({
-  getRunExecutionView: vi.fn()
+vi.mock("@/lib/callback-blocker-follow-up", () => ({
+  fetchCallbackBlockerSnapshot: vi.fn(async () => ({
+    scopeCount: 1
+  })),
+  formatCallbackBlockerDeltaSummary: vi.fn(() => "阻塞变化：scheduled resume 已排队。")
 }));
 
 function jsonResponse(body: unknown, ok = true) {
@@ -49,82 +51,76 @@ function jsonResponse(body: unknown, ok = true) {
   });
 }
 
-describe("run actions", () => {
+describe("callback ticket actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn());
-    vi.mocked(getRunExecutionView).mockResolvedValue(null);
     vi.mocked(getSystemOverview).mockResolvedValue(({
       callback_waiting_automation: {
-        status: "disabled",
+        status: "healthy",
         scheduler_required: true,
-        detail: "mock automation unavailable",
-        scheduler_health_status: "unknown",
-        scheduler_health_detail: "mock scheduler unavailable",
+        detail: "mock automation healthy",
+        scheduler_health_status: "healthy",
+        scheduler_health_detail: "mock scheduler healthy",
         steps: []
       }
     } as unknown) as Awaited<ReturnType<typeof getSystemOverview>>);
   });
 
-  it("手动恢复优先消费后端 run_snapshot 与 run follow-up explanation", async () => {
+  it("callback cleanup 优先消费后端 run_snapshot", async () => {
     vi.mocked(fetchRunSnapshot).mockResolvedValue({
-      workflowId: "wf-1",
+      workflowId: "wf-cleanup",
       status: "waiting",
       currentNodeId: "approval_gate",
-      waitingReason: "waiting approval"
+      waitingReason: "waiting callback"
     });
     vi.mocked(global.fetch).mockResolvedValue(
       jsonResponse({
-        run: {
-          workflow_id: "wf-1",
-          status: "waiting",
-          current_node_id: "approval_gate"
-        },
-        outcome_explanation: {
-          primary_signal: "已发起手动恢复。",
-          follow_up: "runtime 已重新评估当前 waiting 链路。"
-        },
+        matched_count: 1,
+        expired_count: 1,
+        scheduled_resume_count: 1,
+        terminated_count: 0,
+        run_ids: ["run-cleanup"],
         run_snapshot: {
-          workflow_id: "wf-1",
+          workflow_id: "wf-cleanup",
           status: "running",
           current_node_id: "approval_gate",
           waiting_reason: null
         },
-        callback_blocker_delta: {
-          summary: "阻塞变化：external callback blocker 已清除。"
+        outcome_explanation: {
+          primary_signal: "本次 cleanup 已处理 1 条过期 callback ticket，并为 1 个 run 重新安排恢复。",
+          follow_up: "下一步：继续观察 run 是否真正离开 waiting。"
         },
         run_follow_up: {
           explanation: {
-            primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
-            follow_up: "样本 run 已切到 approval pending，下一步应先处理审批再观察 resume。"
+            primary_signal: "本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。",
+            follow_up: "样本 run 已离开 callback waiting。"
           }
         }
       })
     );
 
     const formData = new FormData();
-    formData.set("runId", "run-1");
-    formData.set("nodeRunId", "node-run-1");
+    formData.set("runId", "run-cleanup");
+    formData.set("nodeRunId", "node-run-cleanup");
 
-    const result = await resumeRun(
-      { status: "idle", message: "", runId: "run-1" },
+    const result = await cleanupRunCallbackTickets(
+      { status: "idle", message: "", scopeKey: "run-cleanup:node-run-cleanup" },
       formData
     );
 
     expect(result).toMatchObject({
       status: "success",
-      runId: "run-1"
+      scopeKey: "run-cleanup:node-run-cleanup"
     });
-    expect(result.message).toContain("已发起手动恢复。");
-    expect(result.message).toContain("runtime 已重新评估当前 waiting 链路。");
-    expect(result.message).toContain("阻塞变化：external callback blocker 已清除。");
-    expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
-    expect(result.message).toContain("样本 run 已切到 approval pending，下一步应先处理审批再观察 resume。");
-    expect(result.message).not.toContain("当前 run 状态：running。");
+    expect(result.message).toContain("本次 cleanup 已处理 1 条过期 callback ticket");
+    expect(result.message).toContain("下一步：继续观察 run 是否真正离开 waiting。");
+    expect(result.message).toContain("本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。");
+    expect(result.message).toContain("样本 run 已离开 callback waiting。");
     expect(fetchRunSnapshot).not.toHaveBeenCalled();
     expect(revalidateOperatorFollowUpPaths).toHaveBeenCalledWith({
-      runIds: ["run-1"],
-      workflowIds: ["wf-1"]
+      runIds: ["run-cleanup"],
+      workflowIds: ["wf-cleanup"]
     });
   });
 });

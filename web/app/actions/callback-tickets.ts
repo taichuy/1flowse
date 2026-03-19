@@ -12,7 +12,11 @@ import {
 } from "@/lib/operator-action-result-presenters";
 
 import { revalidateOperatorFollowUpPaths } from "./operator-follow-up-revalidation";
-import { fetchRunSnapshot } from "./run-snapshot";
+import {
+  fetchRunSnapshot,
+  normalizeOperatorRunSnapshot,
+  type OperatorRunSnapshotBody
+} from "./run-snapshot";
 
 export type CleanupRunCallbackTicketsState = {
   status: "idle" | "success" | "error";
@@ -30,6 +34,7 @@ type CleanupRunCallbackTicketsResponseBody = {
     primary_signal?: string | null;
     follow_up?: string | null;
   } | null;
+  run_snapshot?: OperatorRunSnapshotBody | null;
   run_follow_up?: {
     explanation?: {
       primary_signal?: string | null;
@@ -91,7 +96,8 @@ export async function cleanupRunCallbackTickets(
     const scheduledResumeCount = body?.scheduled_resume_count ?? 0;
     const terminatedCount = body?.terminated_count ?? 0;
     const matchedCount = body?.matched_count ?? 0;
-    const runSnapshot = await fetchRunSnapshot(runId);
+    const runSnapshot =
+      normalizeOperatorRunSnapshot(body?.run_snapshot) ?? (await fetchRunSnapshot(runId));
     revalidateOperatorFollowUpPaths({
       runIds: body?.run_ids?.length ? body.run_ids : [runId],
       workflowIds: [runSnapshot?.workflowId]

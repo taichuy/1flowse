@@ -656,6 +656,7 @@ def test_resume_run_route_forwards_source_and_reason(
     resume_body = resume_response.json()
     assert resume_body["run"]["id"] == run_id
     assert resume_body["outcome_explanation"] is not None
+    assert resume_body["run_snapshot"] is not None
     assert resume_body["run_follow_up"] is not None
     assert resume_body["run_follow_up"]["affected_run_count"] == 1
 
@@ -710,6 +711,16 @@ def test_resume_run_route_returns_operator_follow_up_summary(
         run_routes,
         "build_operator_run_follow_up_summary",
         fake_build_operator_run_follow_up_summary,
+    )
+    monkeypatch.setattr(
+        run_routes,
+        "load_operator_run_snapshot",
+        lambda db, target_run_id: OperatorRunSnapshot(
+            workflow_id=sample_workflow.id,
+            status="waiting",
+            current_node_id="mock_tool",
+            waiting_reason="waiting_callback",
+        ),
     )
     captured_snapshots: list[str] = []
 
@@ -777,6 +788,26 @@ def test_resume_run_route_returns_operator_follow_up_summary(
             "阻塞变化：当前仍是 waiting external callback。 "
             "建议动作仍是“Wait for callback result”。"
         ),
+    }
+    assert body["run_snapshot"] == {
+        "workflow_id": sample_workflow.id,
+        "status": "waiting",
+        "current_node_id": "mock_tool",
+        "waiting_reason": "waiting_callback",
+        "execution_focus_reason": None,
+        "execution_focus_node_id": None,
+        "execution_focus_node_run_id": None,
+        "execution_focus_node_name": None,
+        "execution_focus_node_type": None,
+        "execution_focus_explanation": None,
+        "callback_waiting_explanation": None,
+        "execution_focus_artifact_count": 0,
+        "execution_focus_artifact_ref_count": 0,
+        "execution_focus_tool_call_count": 0,
+        "execution_focus_raw_ref_count": 0,
+        "execution_focus_artifact_refs": [],
+        "execution_focus_artifacts": [],
+        "execution_focus_tool_calls": [],
     }
     assert body["run_follow_up"]["affected_run_count"] == 1
     assert body["run_follow_up"]["sampled_runs"][0]["snapshot"]["status"] == "waiting"

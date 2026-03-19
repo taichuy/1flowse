@@ -151,6 +151,8 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
             "若仍停留，优先检查审批、callback 或定时恢复事实链。"
         ),
     }
+    assert body["run_snapshot"]["status"] == "waiting"
+    assert body["run_snapshot"]["waiting_reason"] == "cleanup route pending"
     assert body["run_follow_up"]["affected_run_count"] == 1
     assert body["run_follow_up"]["sampled_run_count"] == 1
     assert body["run_follow_up"]["waiting_run_count"] == 1
@@ -293,6 +295,8 @@ def test_cleanup_stale_run_callback_tickets_route_supports_dry_run(
             "请确认当前 scope 后执行非 dry-run cleanup。"
         ),
     }
+    assert body["run_snapshot"]["status"] == "waiting"
+    assert body["run_snapshot"]["waiting_reason"] == "cleanup route pending"
     assert body["run_follow_up"]["affected_run_count"] == 1
     assert body["run_follow_up"]["sampled_run_count"] == 1
     assert body["run_follow_up"]["waiting_run_count"] == 1

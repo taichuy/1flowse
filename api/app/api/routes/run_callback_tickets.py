@@ -7,7 +7,10 @@ from app.schemas.run import (
     CallbackTicketCleanupRequest,
     CallbackTicketCleanupResponse,
 )
-from app.services.operator_run_follow_up import build_operator_run_follow_up_summary
+from app.services.operator_run_follow_up import (
+    build_operator_run_follow_up_summary,
+    load_operator_run_snapshot,
+)
 from app.services.run_action_explanations import (
     build_callback_cleanup_outcome_explanation,
 )
@@ -24,6 +27,7 @@ def _serialize_cleanup_result(
     result: CallbackTicketCleanupResult,
     *,
     outcome_explanation=None,
+    run_snapshot=None,
     run_follow_up=None,
 ) -> CallbackTicketCleanupResponse:
     return CallbackTicketCleanupResponse(
@@ -56,8 +60,21 @@ def _serialize_cleanup_result(
             for item in result.items
         ],
         outcome_explanation=outcome_explanation,
+        run_snapshot=run_snapshot,
         run_follow_up=run_follow_up,
     )
+
+
+def _resolve_primary_run_id(
+    *,
+    requested_run_id: str | None,
+    affected_run_ids: list[str],
+) -> str | None:
+    if requested_run_id:
+        return requested_run_id
+    if len(affected_run_ids) == 1:
+        return affected_run_ids[0]
+    return None
 
 
 @router.post("/cleanup", response_model=CallbackTicketCleanupResponse)
@@ -82,8 +99,13 @@ def cleanup_stale_run_callback_tickets(
         result,
         run_follow_up,
     )
+    primary_run_id = _resolve_primary_run_id(
+        requested_run_id=payload.run_id,
+        affected_run_ids=result.run_ids,
+    )
     return _serialize_cleanup_result(
         result,
         outcome_explanation=outcome_explanation,
+        run_snapshot=load_operator_run_snapshot(db, primary_run_id),
         run_follow_up=run_follow_up,
     )

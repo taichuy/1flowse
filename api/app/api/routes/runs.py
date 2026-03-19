@@ -24,7 +24,10 @@ from app.services.callback_blocker_deltas import (
     build_callback_blocker_delta_summary,
     capture_callback_blocker_snapshot,
 )
-from app.services.operator_run_follow_up import build_operator_run_follow_up_summary
+from app.services.operator_run_follow_up import (
+    build_operator_run_follow_up_summary,
+    load_operator_run_snapshot,
+)
 from app.services.run_action_explanations import build_manual_resume_outcome_explanation
 from app.services.run_trace_export_access import RunTraceExportAccessService
 from app.services.run_trace_views import (
@@ -138,6 +141,7 @@ def resume_run(
             before=before_blocker,
             after=after_blocker,
         ),
+        run_snapshot=load_operator_run_snapshot(db, artifacts.run.id),
         run_follow_up=run_follow_up,
     )
 

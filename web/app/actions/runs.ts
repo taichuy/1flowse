@@ -12,7 +12,11 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import { getSystemOverview } from "@/lib/get-system-overview";
 
 import { revalidateOperatorFollowUpPaths } from "./operator-follow-up-revalidation";
-import { fetchRunSnapshot } from "./run-snapshot";
+import {
+  fetchRunSnapshot,
+  normalizeOperatorRunSnapshot,
+  type OperatorRunSnapshotBody
+} from "./run-snapshot";
 
 export type ResumeRunState = {
   status: "idle" | "success" | "error";
@@ -82,6 +86,7 @@ export async function resumeRun(
             primary_signal?: string | null;
             follow_up?: string | null;
           } | null;
+          run_snapshot?: OperatorRunSnapshotBody | null;
           run_follow_up?: {
             explanation?: {
               primary_signal?: string | null;
@@ -102,7 +107,8 @@ export async function resumeRun(
       };
     }
 
-    const runSnapshot = await fetchRunSnapshot(runId);
+    const runSnapshot =
+      normalizeOperatorRunSnapshot(body?.run_snapshot) ?? (await fetchRunSnapshot(runId));
     revalidateOperatorFollowUpPaths({
       runIds: [runId],
       workflowIds: [runSnapshot?.workflowId]

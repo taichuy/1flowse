@@ -23,7 +23,23 @@ vi.mock("@/app/actions/operator-follow-up-revalidation", () => ({
 
 vi.mock("@/app/actions/run-snapshot", () => ({
   fetchRunSnapshot: vi.fn(),
-  fetchRunSnapshots: vi.fn()
+  fetchRunSnapshots: vi.fn(),
+  normalizeOperatorRunSnapshot: vi.fn((snapshot?: {
+    workflow_id?: string | null;
+    status?: string | null;
+    current_node_id?: string | null;
+    waiting_reason?: string | null;
+    execution_focus_reason?: string | null;
+  } | null) =>
+    snapshot
+      ? {
+          workflowId: snapshot.workflow_id ?? null,
+          status: snapshot.status ?? null,
+          currentNodeId: snapshot.current_node_id ?? null,
+          waitingReason: snapshot.waiting_reason ?? null,
+          executionFocusReason: snapshot.execution_focus_reason ?? null
+        }
+      : null)
 }));
 
 function jsonResponse(body: unknown, ok = true) {
