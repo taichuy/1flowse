@@ -1,7 +1,9 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type {
@@ -147,7 +149,7 @@ export function SensitiveAccessBulkGovernanceCard({
           {sampledRunCards.length > 0 ? (
             <div className="binding-section">
               <p className="section-copy entry-copy">
-                Sampled run focus evidence 直接复用 runtime 返回的 compact snapshot，方便在批量治理结果里继续定位受影响 run 的当前执行焦点。
+                Sampled run 卡片现在会一起复用 runtime 返回的 compact snapshot，既保留 execution focus evidence，也保留 callback waiting / scheduled resume 的 follow-up 事实，避免批量治理后还要回到 run detail 二次排障。
               </p>
               <div className="publish-cache-list">
                 {sampledRunCards.map((sample) => (
@@ -185,6 +187,26 @@ export function SensitiveAccessBulkGovernanceCard({
                         </div>
                       </dl>
                     ) : null}
+                    <CallbackWaitingSummaryCard
+                      callbackWaitingExplanation={sample.callbackWaitingExplanation}
+                      lifecycle={sample.callbackWaitingLifecycle}
+                      focusNodeEvidence={sample.callbackWaitingFocusNodeEvidence}
+                      focusSkillReferenceCount={sample.skillReferenceCount}
+                      focusSkillReferenceLoads={sample.focusSkillReferenceLoads}
+                      focusSkillReferenceNodeId={sample.focusNodeId}
+                      focusSkillReferenceNodeName={sample.focusNodeLabel}
+                      nodeRunId={sample.focusNodeRunId}
+                      runId={sample.runId}
+                      scheduledResumeDelaySeconds={sample.scheduledResumeDelaySeconds}
+                      scheduledResumeDueAt={sample.scheduledResumeDueAt}
+                      scheduledResumeRequeuedAt={sample.scheduledResumeRequeuedAt}
+                      scheduledResumeRequeueSource={sample.scheduledResumeRequeueSource}
+                      scheduledResumeScheduledAt={sample.scheduledResumeScheduledAt}
+                      scheduledResumeSource={sample.scheduledResumeSource}
+                      scheduledWaitingStatus={sample.scheduledWaitingStatus}
+                      showInlineActions={false}
+                      waitingReason={sample.waitingReason}
+                    />
                     {sample.artifactCount > 0 ||
                     sample.artifactRefCount > 0 ||
                     sample.toolCallCount > 0 ||
@@ -222,19 +244,23 @@ export function SensitiveAccessBulkGovernanceCard({
                         ) : null}
                       </div>
                     ) : null}
-                    <OperatorFocusEvidenceCard
-                      artifactCount={sample.artifactCount}
-                      artifactRefCount={sample.artifactRefCount}
-                      artifactSummary={sample.focusArtifactSummary}
-                      artifacts={sample.focusArtifacts}
-                      toolCallCount={sample.toolCallCount}
-                      toolCallSummaries={sample.focusToolCallSummaries}
-                    />
-                    <SkillReferenceLoadList
-                      skillReferenceLoads={sample.focusSkillReferenceLoads}
-                      title="Focused skill trace"
-                      description="批量治理结果现在也会复用 compact snapshot 里的 skill trace，方便直接确认受影响 run 的 focus node 注入来源。"
-                    />
+                    {!sample.hasCallbackWaitingSummary ? (
+                      <>
+                        <OperatorFocusEvidenceCard
+                          artifactCount={sample.artifactCount}
+                          artifactRefCount={sample.artifactRefCount}
+                          artifactSummary={sample.focusArtifactSummary}
+                          artifacts={sample.focusArtifacts}
+                          toolCallCount={sample.toolCallCount}
+                          toolCallSummaries={sample.focusToolCallSummaries}
+                        />
+                        <SkillReferenceLoadList
+                          skillReferenceLoads={sample.focusSkillReferenceLoads}
+                          title="Focused skill trace"
+                          description="批量治理结果现在也会复用 compact snapshot 里的 skill trace，方便直接确认受影响 run 的 focus node 注入来源。"
+                        />
+                      </>
+                    ) : null}
                   </div>
                 ))}
               </div>

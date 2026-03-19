@@ -1,8 +1,10 @@
 import type {
   SensitiveAccessBulkActionResult,
+  SensitiveAccessBulkRunSample,
   SignalFollowUpExplanation
 } from "@/lib/get-sensitive-access";
 import {
+  buildExecutionFocusExplainableNode,
   buildOperatorInlineActionFeedbackModel,
   type OperatorInlineFocusArtifactPreview
 } from "@/lib/operator-inline-action-feedback";
@@ -10,6 +12,8 @@ import type {
   ExecutionFocusToolCallSummary
 } from "@/lib/run-execution-focus-presenters";
 import type { SkillReferenceLoadItem } from "@/lib/get-run-views";
+
+type SensitiveAccessBulkRunSnapshot = NonNullable<SensitiveAccessBulkRunSample["snapshot"]>;
 
 export type SensitiveAccessBulkNarrativeItem = {
   label: string;
@@ -19,11 +23,24 @@ export type SensitiveAccessBulkNarrativeItem = {
 export type SensitiveAccessBulkRunSampleCard = {
   runId: string;
   shortRunId: string;
+  hasCallbackWaitingSummary: boolean;
   summary: string | null;
   runStatus: string | null;
   currentNodeId: string | null;
+  focusNodeId: string | null;
   focusNodeLabel: string | null;
+  focusNodeRunId: string | null;
   waitingReason: string | null;
+  callbackWaitingExplanation: SensitiveAccessBulkRunSnapshot["callbackWaitingExplanation"] | null;
+  callbackWaitingLifecycle: SensitiveAccessBulkRunSnapshot["callbackWaitingLifecycle"] | null;
+  callbackWaitingFocusNodeEvidence: ReturnType<typeof buildExecutionFocusExplainableNode>;
+  scheduledResumeDelaySeconds: number | null;
+  scheduledResumeSource: string | null;
+  scheduledWaitingStatus: string | null;
+  scheduledResumeScheduledAt: string | null;
+  scheduledResumeDueAt: string | null;
+  scheduledResumeRequeuedAt: string | null;
+  scheduledResumeRequeueSource: string | null;
   artifactCount: number;
   artifactRefCount: number;
   toolCallCount: number;
@@ -74,17 +91,56 @@ export function buildSensitiveAccessBulkRunSampleCards(
 ): SensitiveAccessBulkRunSampleCard[] {
   return (result.sampledRuns ?? [])
     .map((sample) => {
+      const snapshot = sample.snapshot ?? null;
       const model = buildOperatorInlineActionFeedbackModel({
-        runSnapshot: sample.snapshot ?? null
+        runSnapshot: snapshot
       });
+
+      const callbackWaitingExplanation = snapshot?.callbackWaitingExplanation ?? null;
+      const callbackWaitingLifecycle = snapshot?.callbackWaitingLifecycle ?? null;
+      const scheduledResumeDelaySeconds =
+        typeof snapshot?.scheduledResumeDelaySeconds === "number"
+          ? snapshot.scheduledResumeDelaySeconds
+          : null;
+      const scheduledResumeSource = normalizeText(snapshot?.scheduledResumeSource);
+      const scheduledWaitingStatus = normalizeText(snapshot?.scheduledWaitingStatus);
+      const scheduledResumeScheduledAt = normalizeText(snapshot?.scheduledResumeScheduledAt);
+      const scheduledResumeDueAt = normalizeText(snapshot?.scheduledResumeDueAt);
+      const scheduledResumeRequeuedAt = normalizeText(snapshot?.scheduledResumeRequeuedAt);
+      const scheduledResumeRequeueSource = normalizeText(snapshot?.scheduledResumeRequeueSource);
+
       return {
         runId: sample.runId,
         shortRunId: sample.runId.slice(0, 8),
+        hasCallbackWaitingSummary: hasCallbackWaitingFacts({
+          callbackWaitingExplanation,
+          callbackWaitingLifecycle,
+          waitingReason: model.waitingReason,
+          scheduledResumeDelaySeconds,
+          scheduledResumeSource,
+          scheduledWaitingStatus,
+          scheduledResumeScheduledAt,
+          scheduledResumeDueAt,
+          scheduledResumeRequeuedAt,
+          scheduledResumeRequeueSource
+        }),
         summary: model.runSnapshotSummary ?? model.headline,
         runStatus: model.runStatus,
         currentNodeId: model.currentNodeId,
+        focusNodeId: normalizeText(snapshot?.executionFocusNodeId),
         focusNodeLabel: model.focusNodeLabel,
+        focusNodeRunId: normalizeText(snapshot?.executionFocusNodeRunId),
         waitingReason: model.waitingReason,
+        callbackWaitingExplanation,
+        callbackWaitingLifecycle,
+        callbackWaitingFocusNodeEvidence: buildExecutionFocusExplainableNode(snapshot),
+        scheduledResumeDelaySeconds,
+        scheduledResumeSource,
+        scheduledWaitingStatus,
+        scheduledResumeScheduledAt,
+        scheduledResumeDueAt,
+        scheduledResumeRequeuedAt,
+        scheduledResumeRequeueSource,
         artifactCount: model.artifactCount,
         artifactRefCount: model.artifactRefCount,
         toolCallCount: model.toolCallCount,
@@ -111,9 +167,45 @@ export function buildSensitiveAccessBulkRunSampleCards(
             item.toolCallCount > 0 ||
             item.rawRefCount > 0 ||
             item.skillReferenceCount > 0 ||
+            item.hasCallbackWaitingSummary ||
             item.focusSkillReferenceLoads.length > 0
         )
     );
+}
+
+function hasCallbackWaitingFacts(
+  input: Pick<
+    SensitiveAccessBulkRunSampleCard,
+    | "callbackWaitingExplanation"
+    | "callbackWaitingLifecycle"
+    | "waitingReason"
+    | "scheduledResumeDelaySeconds"
+    | "scheduledResumeSource"
+    | "scheduledWaitingStatus"
+    | "scheduledResumeScheduledAt"
+    | "scheduledResumeDueAt"
+    | "scheduledResumeRequeuedAt"
+    | "scheduledResumeRequeueSource"
+  >
+) {
+  return Boolean(
+    input.callbackWaitingExplanation?.primary_signal?.trim() ||
+      input.callbackWaitingExplanation?.follow_up?.trim() ||
+      input.callbackWaitingLifecycle ||
+      input.waitingReason ||
+      typeof input.scheduledResumeDelaySeconds === "number" ||
+      input.scheduledResumeSource ||
+      input.scheduledWaitingStatus ||
+      input.scheduledResumeScheduledAt ||
+      input.scheduledResumeDueAt ||
+      input.scheduledResumeRequeuedAt ||
+      input.scheduledResumeRequeueSource
+  );
+}
+
+function normalizeText(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
 
 function normalizeExplanationText(

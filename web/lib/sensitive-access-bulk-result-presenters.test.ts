@@ -155,12 +155,78 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
       {
         runId: "run-12345678",
         shortRunId: "run-1234",
+        hasCallbackWaitingSummary: false,
         summary:
           "当前 run 状态：running。 当前节点：tool-1。 重点信号：执行阻断已解除。 后续动作：继续观察后续节点。 Sandbox tool 已关联 2 个 artifact、1 条 artifact ref、3 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。 样本 tool： Sandbox Search 状态 completed。 effective sandbox。 backend sandbox-default。 raw_ref artifact://tool-call-raw。 搜索结果已写入 artifact。",
         runStatus: "running",
         currentNodeId: "tool-1",
+        focusNodeId: null,
         focusNodeLabel: "Sandbox tool",
+        focusNodeRunId: null,
         waitingReason: null,
+        callbackWaitingExplanation: null,
+        callbackWaitingLifecycle: null,
+        callbackWaitingFocusNodeEvidence: {
+          artifact_refs: ["artifact://focus-1"],
+          artifacts: [
+            {
+              id: "focus-artifact-0",
+              run_id: "snapshot-run",
+              node_run_id: null,
+              artifact_kind: "tool_result",
+              content_type: "application/json",
+              summary: "聚焦 tool 已产出结构化摘要。",
+              uri: "artifact://focus-1",
+              metadata_payload: {},
+              created_at: ""
+            }
+          ],
+          tool_calls: [
+            {
+              id: "tool-call-1",
+              run_id: "snapshot-run",
+              node_run_id: "snapshot-node-run",
+              tool_id: "sandbox.search",
+              tool_name: "Sandbox Search",
+              phase: "execute",
+              status: "completed",
+              request_summary: "",
+              latency_ms: 0,
+              retry_count: 0,
+              created_at: "",
+              requested_execution_class: null,
+              requested_execution_source: null,
+              requested_execution_profile: null,
+              requested_execution_timeout_ms: null,
+              requested_execution_network_policy: null,
+              requested_execution_filesystem_policy: null,
+              requested_execution_dependency_mode: null,
+              requested_execution_builtin_package_set: null,
+              requested_execution_dependency_ref: null,
+              requested_execution_backend_extensions: null,
+              effective_execution_class: "sandbox",
+              execution_executor_ref: null,
+              execution_sandbox_backend_id: "sandbox-default",
+              execution_sandbox_backend_executor_ref: null,
+              execution_sandbox_runner_kind: "tool",
+              execution_blocking_reason: null,
+              execution_fallback_reason: null,
+              response_summary: "搜索结果已写入 artifact。",
+              response_content_type: "application/json",
+              response_meta: undefined,
+              raw_ref: "artifact://tool-call-raw",
+              error_message: null,
+              finished_at: null
+            }
+          ]
+        },
+        scheduledResumeDelaySeconds: null,
+        scheduledResumeSource: null,
+        scheduledWaitingStatus: null,
+        scheduledResumeScheduledAt: null,
+        scheduledResumeDueAt: null,
+        scheduledResumeRequeuedAt: null,
+        scheduledResumeRequeueSource: null,
         artifactCount: 2,
         artifactRefCount: 1,
         toolCallCount: 3,
@@ -198,6 +264,68 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
         focusSkillReferenceLoads: []
       }
     ]);
+  });
+
+  it("保留只有 callback waiting facts 的 sampled run，供 bulk 结果页渲染 follow-up", () => {
+    const cards = buildSensitiveAccessBulkRunSampleCards({
+      action: "retry",
+      status: "success",
+      message: "fallback",
+      requestedCount: 1,
+      updatedCount: 1,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      sampledRuns: [
+        {
+          runId: "run-waiting-1",
+          snapshot: {
+            callbackWaitingExplanation: {
+              primary_signal: "当前 waiting 节点仍在等待 callback。",
+              follow_up: "优先观察定时恢复是否已重新排队。"
+            },
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback",
+            scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+            scheduledResumeDueAt: "2026-03-20T10:00:45Z",
+            scheduledResumeRequeuedAt: "2026-03-20T10:01:30Z",
+            scheduledResumeRequeueSource: "waiting_resume_monitor"
+          }
+        }
+      ]
+    });
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      runId: "run-waiting-1",
+      shortRunId: "run-wait",
+      hasCallbackWaitingSummary: true,
+      callbackWaitingExplanation: {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: "优先观察定时恢复是否已重新排队。"
+      }
+    });
+    expect(cards[0]).toMatchObject({
+      scheduledResumeDelaySeconds: 45,
+      scheduledResumeSource: "runtime_retry",
+      scheduledWaitingStatus: "waiting_callback",
+      scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+      scheduledResumeDueAt: "2026-03-20T10:00:45Z",
+      scheduledResumeRequeuedAt: "2026-03-20T10:01:30Z",
+      scheduledResumeRequeueSource: "waiting_resume_monitor"
+    });
   });
 
   it("忽略没有任何结构化 focus evidence 的 sampled run", () => {
