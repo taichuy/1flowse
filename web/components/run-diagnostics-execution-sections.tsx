@@ -79,6 +79,7 @@ export function RunDiagnosticsExecutionSections({
                   node={node}
                   runId={executionView.run_id}
                   callbackWaitingAutomation={callbackWaitingAutomation}
+                  skillTrace={executionView.skill_trace ?? null}
                 />
               ))}
             </div>

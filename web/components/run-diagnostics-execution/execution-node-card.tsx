@@ -1,5 +1,6 @@
+import React from "react";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
-import type { RunExecutionNodeItem } from "@/lib/get-run-views";
+import type { RunExecutionNodeItem, RunExecutionSkillTrace } from "@/lib/get-run-views";
 import {
   formatDuration,
   formatDurationMs,
@@ -19,6 +20,7 @@ import {
 } from "@/components/run-diagnostics-execution/execution-node-card-sections";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
+import { pickCallbackWaitingSkillTraceForNode } from "@/lib/callback-waiting-focus-skill-trace";
 import {
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal
@@ -86,11 +88,13 @@ function shouldShowRequestedExecution(node: RunExecutionNodeItem): boolean {
 export function ExecutionNodeCard({
   node,
   runId,
-  callbackWaitingAutomation
+  callbackWaitingAutomation,
+  skillTrace = null
 }: {
   node: RunExecutionNodeItem;
   runId: string;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  skillTrace?: RunExecutionSkillTrace | null;
 }) {
   const latestApprovalEntry = node.sensitive_access_entries.find((entry) => entry.approval_ticket);
   const inboxHref =
@@ -120,6 +124,7 @@ export function ExecutionNodeCard({
   const rawBlockingCopy = node.execution_blocking_reason
     ? `Execution blocked: ${node.execution_blocking_reason}`
     : null;
+  const nodeSkillTrace = pickCallbackWaitingSkillTraceForNode(skillTrace, node.node_run_id);
 
   return (
     <article className="timeline-row">
@@ -240,6 +245,12 @@ export function ExecutionNodeCard({
         callbackWaitingExplanation={node.callback_waiting_explanation}
         callbackTickets={node.callback_tickets}
         callbackWaitingAutomation={callbackWaitingAutomation}
+        focusNodeEvidence={node}
+        focusSkillTrace={nodeSkillTrace}
+        focusSkillReferenceCount={node.skill_reference_load_count}
+        focusSkillReferenceLoads={node.skill_reference_loads}
+        focusSkillReferenceNodeId={node.node_id}
+        focusSkillReferenceNodeName={node.node_name}
         sensitiveAccessEntries={node.sensitive_access_entries}
         waitingReason={node.waiting_reason}
         inboxHref={inboxHref}

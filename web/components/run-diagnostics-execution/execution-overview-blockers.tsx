@@ -1,7 +1,10 @@
+import React from "react";
+
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { RunExecutionNodeItem, RunExecutionView } from "@/lib/get-run-views";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { pickCallbackWaitingSkillTraceForNode } from "@/lib/callback-waiting-focus-skill-trace";
 import {
   countPendingApprovals,
   countPendingTickets,
@@ -41,6 +44,10 @@ export function RunDiagnosticsExecutionOverviewBlockers({
 }) {
   const focusNode = executionView.execution_focus_node ?? null;
   const skillTrace = executionView.skill_trace ?? null;
+  const focusNodeSkillTrace = pickCallbackWaitingSkillTraceForNode(
+    skillTrace,
+    focusNode?.node_run_id
+  );
   const focusNodePrimarySignal =
     executionView.execution_focus_explanation?.primary_signal ??
     (focusNode ? formatExecutionFocusPrimarySignal(focusNode) : null);
@@ -98,7 +105,11 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               scheduledResumeRequeuedAt={focusNode.scheduled_resume_requeued_at}
               scheduledResumeRequeueSource={focusNode.scheduled_resume_requeue_source}
               sensitiveAccessEntries={focusNode.sensitive_access_entries}
-              focusSkillTrace={skillTrace}
+              focusSkillTrace={focusNodeSkillTrace}
+              focusSkillReferenceCount={focusNode.skill_reference_load_count}
+              focusSkillReferenceLoads={focusNode.skill_reference_loads}
+              focusSkillReferenceNodeId={focusNode.node_id}
+              focusSkillReferenceNodeName={focusNode.node_name}
               waitingReason={focusNode.waiting_reason}
             />
           </article>
@@ -117,6 +128,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
           const followUp =
             node.execution_focus_explanation?.follow_up ??
             formatExecutionFocusFollowUp(node);
+          const nodeSkillTrace = pickCallbackWaitingSkillTraceForNode(skillTrace, node.node_run_id);
 
           return (
             <article className="payload-card compact-card" key={node.node_run_id}>
@@ -158,6 +170,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
                 scheduledResumeRequeuedAt={node.scheduled_resume_requeued_at}
                 scheduledResumeRequeueSource={node.scheduled_resume_requeue_source}
                 sensitiveAccessEntries={node.sensitive_access_entries}
+                focusSkillTrace={nodeSkillTrace}
                 focusSkillReferenceCount={node.skill_reference_load_count}
                 focusSkillReferenceLoads={node.skill_reference_loads}
                 focusSkillReferenceNodeId={node.node_id}

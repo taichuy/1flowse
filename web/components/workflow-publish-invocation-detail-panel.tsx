@@ -399,6 +399,7 @@ export function WorkflowPublishInvocationDetailPanel({
             node={executionFocusNode}
             runId={runId}
             callbackWaitingAutomation={callbackWaitingAutomation}
+            skillTrace={skillTrace}
           />
         </div>
       ) : null}

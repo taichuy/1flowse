@@ -75,8 +75,48 @@ function aggregateLoadMetrics(loads: SkillReferenceLoadItem[]) {
 
   return {
     referenceCount,
+    phaseCounts,
+    sourceCounts,
     phaseSummary: formatMetricSummary(phaseCounts),
     sourceSummary: formatMetricSummary(sourceCounts)
+  };
+}
+
+export function pickCallbackWaitingSkillTraceForNode(
+  skillTrace: SharedSkillTrace | null | undefined,
+  nodeRunId?: string | null
+): SharedSkillTrace | null {
+  const resolvedNodeRunId = trimOrNull(nodeRunId);
+  if (!skillTrace || !resolvedNodeRunId) {
+    return null;
+  }
+
+  const nodes = skillTrace.nodes.filter((node) => node.node_run_id === resolvedNodeRunId);
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  const phaseCounts: Record<string, number> = {};
+  const sourceCounts: Record<string, number> = {};
+  let referenceCount = 0;
+
+  for (const node of nodes) {
+    const aggregated = aggregateLoadMetrics(node.loads);
+    for (const [phase, count] of Object.entries(aggregated.phaseCounts)) {
+      phaseCounts[phase] = (phaseCounts[phase] ?? 0) + count;
+    }
+    for (const [source, count] of Object.entries(aggregated.sourceCounts)) {
+      sourceCounts[source] = (sourceCounts[source] ?? 0) + count;
+    }
+    referenceCount += node.reference_count > 0 ? node.reference_count : aggregated.referenceCount;
+  }
+
+  return {
+    scope: skillTrace.scope,
+    reference_count: referenceCount,
+    phase_counts: phaseCounts,
+    source_counts: sourceCounts,
+    nodes
   };
 }
 
