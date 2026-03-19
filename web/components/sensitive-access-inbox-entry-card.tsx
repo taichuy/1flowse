@@ -22,14 +22,17 @@ import {
   pickRetriableNotification
 } from "@/components/sensitive-access-inbox-panel-helpers";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { ArtifactPreviewList } from "@/components/run-diagnostics-execution/shared";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import {
+  formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
   formatExecutionFocusReasonLabel,
   formatExecutionFocusPrimarySignal,
-  formatMetricSummary
+  formatMetricSummary,
+  listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { resolveSensitiveAccessInboxEntryScope } from "@/lib/sensitive-access-inbox-entry-scope";
@@ -186,6 +189,13 @@ export function SensitiveAccessInboxEntryCard({
     ? executionContext.focusExplanation?.follow_up ??
       formatExecutionFocusFollowUp(executionContext.focusNode)
     : null;
+  const focusToolCallSummaries = executionContext
+    ? listExecutionFocusToolCallSummaries(executionContext.focusNode)
+    : [];
+  const focusArtifactSummary = executionContext
+    ? formatExecutionFocusArtifactSummary(executionContext.focusNode)
+    : null;
+  const focusArtifacts = executionContext?.focusNode.artifacts.slice(0, 2) ?? [];
   const focusInboxHref = executionContext
     ? buildSensitiveAccessInboxHref({
         runId: executionContext.runId,
@@ -289,6 +299,65 @@ export function SensitiveAccessInboxEntryCard({
           ) : null}
           {executionFocusFollowUp ? (
             <p className="binding-meta">{executionFocusFollowUp}</p>
+          ) : null}
+          {focusToolCallSummaries.length > 0 || focusArtifactSummary ? (
+            <div className="event-list">
+              <div className="entry-card compact-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">Focused tool execution</span>
+                  {focusToolCallSummaries.length > 0 ? (
+                    <span className="event-chip">tool calls {focusToolCallSummaries.length}</span>
+                  ) : null}
+                  {executionContext.focusNode.artifact_refs.length > 0 ? (
+                    <span className="event-chip">
+                      artifact refs {executionContext.focusNode.artifact_refs.length}
+                    </span>
+                  ) : null}
+                </div>
+                {focusArtifactSummary ? (
+                  <p className="section-copy entry-copy">{focusArtifactSummary}</p>
+                ) : null}
+                {focusToolCallSummaries.length > 0 ? (
+                  <div className="event-list">
+                    {focusToolCallSummaries.map((toolCall) => (
+                      <article className="event-row compact-card" key={toolCall.id}>
+                        <div className="payload-card-header">
+                          <span className="status-meta">{toolCall.title}</span>
+                          {toolCall.rawRef ? <span className="event-chip">raw ref</span> : null}
+                        </div>
+                        {toolCall.badges.length > 0 ? (
+                          <div className="tool-badge-row">
+                            {toolCall.badges.map((badge) => (
+                              <span className="event-chip" key={`${toolCall.id}:${badge}`}>
+                                {badge}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        <p className="section-copy entry-copy">{toolCall.detail}</p>
+                        {toolCall.rawRef ? (
+                          <p className="binding-meta">raw_ref {toolCall.rawRef}</p>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+                {focusArtifacts.length > 0 ? (
+                  <>
+                    <p className="binding-meta">
+                      Focused artifacts（当前卡片仅展示前 {focusArtifacts.length} 条）
+                    </p>
+                    <ArtifactPreviewList artifacts={focusArtifacts} />
+                    {executionContext.focusNode.artifacts.length > focusArtifacts.length ? (
+                      <p className="binding-meta">
+                        其余 {executionContext.focusNode.artifacts.length - focusArtifacts.length} 条 artifact
+                        请跳转 run detail 查看。
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            </div>
           ) : null}
           <div className="tool-badge-row">
             <Link className="event-chip inbox-filter-link" href={`/runs/${executionContext.runId}`}>

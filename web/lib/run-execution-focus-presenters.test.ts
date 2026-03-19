@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { RunExecutionNodeItem } from "@/lib/get-run-views";
 
 import {
+  formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
-  formatExecutionFocusPrimarySignal
+  formatExecutionFocusPrimarySignal,
+  listExecutionFocusToolCallSummaries
 } from "./run-execution-focus-presenters";
 
 function createExecutionNode(
@@ -197,5 +199,119 @@ describe("run execution focus presenters", () => {
       "执行阻断：sandbox backend 能力与当前节点配置不兼容（2 项）。"
     );
     expect(formatExecutionFocusFollowUp(node)).toContain("backend capability");
+  });
+
+  it("把 focus node 的 tool runner 关键事实压成 operator 可读摘要", () => {
+    const node = createExecutionNode({
+      tool_calls: [
+        {
+          id: "tool-call-1",
+          run_id: "run-1",
+          node_run_id: "node-run-1",
+          tool_id: "native.search",
+          tool_name: "Native Search",
+          phase: "waiting_callback",
+          status: "blocked",
+          request_summary: "search knowledge base",
+          execution_trace: null,
+          requested_execution_class: "sandbox",
+          requested_execution_source: "tool_policy",
+          requested_execution_profile: null,
+          requested_execution_timeout_ms: null,
+          requested_execution_network_policy: null,
+          requested_execution_filesystem_policy: null,
+          effective_execution_class: "sandbox",
+          execution_executor_ref: null,
+          execution_sandbox_backend_id: "docker",
+          execution_sandbox_backend_executor_ref: null,
+          execution_sandbox_runner_kind: "container",
+          execution_blocking_reason: "sandbox backend unavailable",
+          execution_fallback_reason: null,
+          response_summary: null,
+          raw_ref: "artifact://tool-call-1/raw",
+          latency_ms: 120,
+          retry_count: 0,
+          error_message: null,
+          created_at: "2026-03-18T10:00:00Z",
+          finished_at: null
+        }
+      ]
+    });
+
+    expect(listExecutionFocusToolCallSummaries(node)).toEqual([
+      {
+        id: "tool-call-1",
+        title: "Native Search · blocked",
+        detail: "执行阻断：sandbox backend unavailable",
+        badges: [
+          "phase waiting_callback",
+          "requested sandbox",
+          "effective sandbox",
+          "backend docker",
+          "runner container",
+          "blocked",
+          "raw payload"
+        ],
+        rawRef: "artifact://tool-call-1/raw"
+      }
+    ]);
+  });
+
+  it("把 artifact refs 和 tool raw refs 汇总成统一说明", () => {
+    const summary = formatExecutionFocusArtifactSummary(
+      createExecutionNode({
+        artifact_refs: ["artifact://node-run-1/decision"],
+        artifacts: [
+          {
+            id: "artifact-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1",
+            artifact_kind: "tool_result",
+            content_type: "application/json",
+            summary: "search result",
+            uri: "artifact://tool-result-1",
+            metadata_payload: {},
+            created_at: "2026-03-18T10:00:00Z"
+          }
+        ],
+        tool_calls: [
+          {
+            id: "tool-call-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1",
+            tool_id: "native.search",
+            tool_name: "Native Search",
+            phase: "completed",
+            status: "succeeded",
+            request_summary: "search knowledge base",
+            execution_trace: null,
+            requested_execution_class: null,
+            requested_execution_source: null,
+            requested_execution_profile: null,
+            requested_execution_timeout_ms: null,
+            requested_execution_network_policy: null,
+            requested_execution_filesystem_policy: null,
+            effective_execution_class: null,
+            execution_executor_ref: null,
+            execution_sandbox_backend_id: null,
+            execution_sandbox_backend_executor_ref: null,
+            execution_sandbox_runner_kind: null,
+            execution_blocking_reason: null,
+            execution_fallback_reason: null,
+            response_summary: "found 2 docs",
+            raw_ref: "artifact://tool-call-1/raw",
+            latency_ms: 120,
+            retry_count: 0,
+            error_message: null,
+            created_at: "2026-03-18T10:00:00Z",
+            finished_at: "2026-03-18T10:00:01Z"
+          }
+        ]
+      })
+    );
+
+    expect(summary).toContain("聚焦节点已沉淀 1 个 artifact（tool_result 1）。");
+    expect(summary).toContain("run artifact refs 1 条。");
+    expect(summary).toContain("至少 1 条 tool call 已把原始结果落到 raw_ref");
   });
 });

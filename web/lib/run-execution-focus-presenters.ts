@@ -1,7 +1,9 @@
 import type {
+  RunArtifactItem,
   RunCallbackTicketItem,
   RunExecutionFocusReason,
-  RunExecutionNodeItem
+  RunExecutionNodeItem,
+  ToolCallItem
 } from "@/lib/get-run-views";
 
 type ExecutionFocusExplainableNode = Pick<
@@ -22,10 +24,167 @@ type ExecutionBlockingInsight = {
   followUp: string;
 };
 
+type ExecutionFocusToolExplainableNode = Pick<
+  RunExecutionNodeItem,
+  "tool_calls" | "artifact_refs" | "artifacts"
+>;
+
+export type ExecutionFocusToolCallSummary = {
+  id: string;
+  title: string;
+  detail: string;
+  badges: string[];
+  rawRef: string | null;
+};
+
+function trimOrNull(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 export function formatMetricSummary(metrics: Record<string, number>) {
   return Object.entries(metrics)
     .map(([key, count]) => `${key} ${count}`)
     .join(" · ");
+}
+
+function buildToolExecutionBadges(
+  toolCall: Pick<
+    ToolCallItem,
+    | "phase"
+    | "requested_execution_class"
+    | "effective_execution_class"
+    | "execution_sandbox_backend_id"
+    | "execution_sandbox_runner_kind"
+    | "execution_blocking_reason"
+    | "execution_fallback_reason"
+    | "raw_ref"
+  >
+) {
+  const badges: string[] = [];
+  const phase = trimOrNull(toolCall.phase);
+  const requestedExecutionClass = trimOrNull(toolCall.requested_execution_class);
+  const effectiveExecutionClass = trimOrNull(toolCall.effective_execution_class);
+  const sandboxBackendId = trimOrNull(toolCall.execution_sandbox_backend_id);
+  const sandboxRunnerKind = trimOrNull(toolCall.execution_sandbox_runner_kind);
+
+  if (phase) {
+    badges.push(`phase ${phase}`);
+  }
+  if (requestedExecutionClass) {
+    badges.push(`requested ${requestedExecutionClass}`);
+  }
+  if (effectiveExecutionClass) {
+    badges.push(`effective ${effectiveExecutionClass}`);
+  }
+  if (sandboxBackendId) {
+    badges.push(`backend ${sandboxBackendId}`);
+  }
+  if (sandboxRunnerKind) {
+    badges.push(`runner ${sandboxRunnerKind}`);
+  }
+  if (trimOrNull(toolCall.execution_blocking_reason)) {
+    badges.push("blocked");
+  }
+  if (trimOrNull(toolCall.execution_fallback_reason)) {
+    badges.push("fallback");
+  }
+  if (trimOrNull(toolCall.raw_ref)) {
+    badges.push("raw payload");
+  }
+
+  return badges;
+}
+
+function buildToolExecutionDetail(
+  toolCall: Pick<
+    ToolCallItem,
+    | "request_summary"
+    | "response_summary"
+    | "execution_blocking_reason"
+    | "execution_fallback_reason"
+    | "raw_ref"
+  >
+) {
+  const blockingReason = trimOrNull(toolCall.execution_blocking_reason);
+  if (blockingReason) {
+    return `执行阻断：${blockingReason}`;
+  }
+
+  const fallbackReason = trimOrNull(toolCall.execution_fallback_reason);
+  if (fallbackReason) {
+    return `执行降级：${fallbackReason}`;
+  }
+
+  const responseSummary = trimOrNull(toolCall.response_summary);
+  if (responseSummary) {
+    return responseSummary;
+  }
+
+  const requestSummary = trimOrNull(toolCall.request_summary);
+  if (requestSummary) {
+    return `请求摘要：${requestSummary}`;
+  }
+
+  const rawRef = trimOrNull(toolCall.raw_ref);
+  if (rawRef) {
+    return `原始结果已落到 ${rawRef}。`;
+  }
+
+  return "当前 tool call 已进入统一 execution 事实链。";
+}
+
+function countArtifactsByKind(artifacts: RunArtifactItem[]) {
+  return artifacts.reduce<Record<string, number>>((summary, artifact) => {
+    const key = trimOrNull(artifact.artifact_kind) ?? "artifact";
+    summary[key] = (summary[key] ?? 0) + 1;
+    return summary;
+  }, {});
+}
+
+export function listExecutionFocusToolCallSummaries(
+  node: ExecutionFocusToolExplainableNode
+): ExecutionFocusToolCallSummary[] {
+  return node.tool_calls.map((toolCall) => ({
+    id: toolCall.id,
+    title: `${trimOrNull(toolCall.tool_name) ?? toolCall.tool_id} · ${toolCall.status}`,
+    detail: buildToolExecutionDetail(toolCall),
+    badges: buildToolExecutionBadges(toolCall),
+    rawRef: trimOrNull(toolCall.raw_ref)
+  }));
+}
+
+export function formatExecutionFocusArtifactSummary(
+  node: ExecutionFocusToolExplainableNode
+): string | null {
+  const artifactCount = node.artifacts.length;
+  const artifactRefCount = node.artifact_refs.length;
+  const rawRefCount = node.tool_calls.filter((toolCall) => trimOrNull(toolCall.raw_ref)).length;
+
+  if (artifactCount === 0 && artifactRefCount === 0 && rawRefCount === 0) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (artifactCount > 0) {
+    const kindSummary = formatMetricSummary(countArtifactsByKind(node.artifacts));
+    parts.push(
+      kindSummary
+        ? `聚焦节点已沉淀 ${artifactCount} 个 artifact（${kindSummary}）。`
+        : `聚焦节点已沉淀 ${artifactCount} 个 artifact。`
+    );
+  }
+  if (artifactRefCount > 0) {
+    parts.push(`run artifact refs ${artifactRefCount} 条。`);
+  }
+  if (rawRefCount > 0) {
+    parts.push(
+      rawRefCount === 1
+        ? "至少 1 条 tool call 已把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。"
+        : `已有 ${rawRefCount} 条 tool call 把原始结果落到 raw_ref，可直接回看 sandbox / tool 输出。`
+    );
+  }
+  return parts.join(" ");
 }
 
 function splitCompatibilityDetails(reason: string): string[] {
