@@ -36,6 +36,11 @@ export type PublishedInvocationRunFollowUpSampleView = {
   waiting_reason: string | null;
   explanation_source: "callback_waiting" | "execution_focus" | null;
   explanation: RunExecutionFocusExplanation | null;
+  snapshot_summary: string | null;
+  execution_focus_artifact_count: number;
+  execution_focus_artifact_ref_count: number;
+  execution_focus_tool_call_count: number;
+  execution_focus_raw_ref_count: number;
 };
 
 export const PUBLISHED_INVOCATION_REASON_CODES = [
@@ -227,41 +232,83 @@ export function resolvePublishedInvocationRunFollowUpSampleExplanationSource(
 export function listPublishedInvocationRunFollowUpSampleViews(
   runFollowUp?: PublishedInvocationRunFollowUpSummary | null
 ): PublishedInvocationRunFollowUpSampleView[] {
-  return (runFollowUp?.sampled_runs ?? []).map((sample) => ({
-    run_id: sample.run_id,
-    status: sample.snapshot?.status?.trim() || null,
-    current_node_id: sample.snapshot?.current_node_id?.trim() || null,
-    waiting_reason: sample.snapshot?.waiting_reason?.trim() || null,
-    explanation_source: resolvePublishedInvocationRunFollowUpSampleExplanationSource(sample),
-    explanation: resolvePublishedInvocationRunFollowUpSampleExplanation(sample)
-  }));
-}
-
-export function listPublishedInvocationRunFollowUpSampleSummaries(
-  runFollowUp?: PublishedInvocationRunFollowUpSummary | null
-): string[] {
   return (runFollowUp?.sampled_runs ?? []).map((sample) => {
+    const explanationSource = resolvePublishedInvocationRunFollowUpSampleExplanationSource(sample);
+    const explanation = resolvePublishedInvocationRunFollowUpSampleExplanation(sample);
     const snapshotSummary = formatRunSnapshotSummary({
       status: sample.snapshot?.status ?? null,
       currentNodeId: sample.snapshot?.current_node_id ?? null,
       waitingReason: sample.snapshot?.waiting_reason ?? null,
       executionFocusNodeId: sample.snapshot?.execution_focus_node_id ?? null,
-      executionFocusExplanation: sample.snapshot?.execution_focus_explanation
+      executionFocusNodeName: sample.snapshot?.execution_focus_node_name ?? null,
+      executionFocusNodeType: sample.snapshot?.execution_focus_node_type ?? null,
+      executionFocusExplanation:
+        explanationSource === "execution_focus" && sample.snapshot?.execution_focus_explanation
         ? {
             primary_signal: sample.snapshot.execution_focus_explanation.primary_signal ?? null,
             follow_up: sample.snapshot.execution_focus_explanation.follow_up ?? null
           }
         : null,
-      callbackWaitingExplanation: sample.snapshot?.callback_waiting_explanation
+      callbackWaitingExplanation:
+        explanationSource === "callback_waiting" && sample.snapshot?.callback_waiting_explanation
         ? {
             primary_signal: sample.snapshot.callback_waiting_explanation.primary_signal ?? null,
             follow_up: sample.snapshot.callback_waiting_explanation.follow_up ?? null
           }
-        : null
+        : null,
+      executionFocusArtifactCount: sample.snapshot?.execution_focus_artifact_count ?? 0,
+      executionFocusArtifactRefCount: sample.snapshot?.execution_focus_artifact_ref_count ?? 0,
+      executionFocusToolCallCount: sample.snapshot?.execution_focus_tool_call_count ?? 0,
+      executionFocusRawRefCount: sample.snapshot?.execution_focus_raw_ref_count ?? 0,
+      executionFocusArtifactRefs: sample.snapshot?.execution_focus_artifact_refs ?? [],
+      executionFocusArtifacts:
+        sample.snapshot?.execution_focus_artifacts?.map((artifact) => ({
+          artifact_kind: artifact.artifact_kind ?? null,
+          content_type: artifact.content_type ?? null,
+          summary: artifact.summary ?? null,
+          uri: artifact.uri ?? null
+        })) ?? [],
+      executionFocusToolCalls:
+        sample.snapshot?.execution_focus_tool_calls?.map((toolCall) => ({
+          id: toolCall.id ?? null,
+          tool_id: toolCall.tool_id ?? null,
+          tool_name: toolCall.tool_name ?? null,
+          phase: toolCall.phase ?? null,
+          status: toolCall.status ?? null,
+          effective_execution_class: toolCall.effective_execution_class ?? null,
+          execution_sandbox_backend_id: toolCall.execution_sandbox_backend_id ?? null,
+          execution_sandbox_runner_kind: toolCall.execution_sandbox_runner_kind ?? null,
+          execution_blocking_reason: toolCall.execution_blocking_reason ?? null,
+          execution_fallback_reason: toolCall.execution_fallback_reason ?? null,
+          response_summary: toolCall.response_summary ?? null,
+          response_content_type: toolCall.response_content_type ?? null,
+          raw_ref: toolCall.raw_ref ?? null
+        })) ?? []
     });
+
+    return {
+      run_id: sample.run_id,
+      status: sample.snapshot?.status?.trim() || null,
+      current_node_id: sample.snapshot?.current_node_id?.trim() || null,
+      waiting_reason: sample.snapshot?.waiting_reason?.trim() || null,
+      explanation_source: explanationSource,
+      explanation,
+      snapshot_summary: snapshotSummary,
+      execution_focus_artifact_count: sample.snapshot?.execution_focus_artifact_count ?? 0,
+      execution_focus_artifact_ref_count: sample.snapshot?.execution_focus_artifact_ref_count ?? 0,
+      execution_focus_tool_call_count: sample.snapshot?.execution_focus_tool_call_count ?? 0,
+      execution_focus_raw_ref_count: sample.snapshot?.execution_focus_raw_ref_count ?? 0
+    };
+  });
+}
+
+export function listPublishedInvocationRunFollowUpSampleSummaries(
+  runFollowUp?: PublishedInvocationRunFollowUpSummary | null
+): string[] {
+  return listPublishedInvocationRunFollowUpSampleViews(runFollowUp).map((sample) => {
     const shortRunId = sample.run_id.slice(0, 8);
-    return snapshotSummary
-      ? `run ${shortRunId}：${snapshotSummary}`
+    return sample.snapshot_summary
+      ? `run ${shortRunId}：${sample.snapshot_summary}`
       : `run ${shortRunId}：暂未读取到最新快照。`;
   });
 }

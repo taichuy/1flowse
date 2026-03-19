@@ -257,9 +257,37 @@ export type OperatorRunFollowUpSnapshot = {
   waiting_reason?: string | null;
   execution_focus_reason?: PublishedEndpointInvocationExecutionFocusReason | null;
   execution_focus_node_id?: string | null;
+  execution_focus_node_name?: string | null;
+  execution_focus_node_type?: string | null;
   execution_focus_node_run_id?: string | null;
   execution_focus_explanation?: RunExecutionFocusExplanation | null;
   callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+  execution_focus_artifact_count?: number;
+  execution_focus_artifact_ref_count?: number;
+  execution_focus_tool_call_count?: number;
+  execution_focus_raw_ref_count?: number;
+  execution_focus_artifact_refs?: string[];
+  execution_focus_artifacts?: Array<{
+    artifact_kind?: string | null;
+    content_type?: string | null;
+    summary?: string | null;
+    uri?: string | null;
+  }>;
+  execution_focus_tool_calls?: Array<{
+    id?: string | null;
+    tool_id?: string | null;
+    tool_name?: string | null;
+    phase?: string | null;
+    status?: string | null;
+    effective_execution_class?: string | null;
+    execution_sandbox_backend_id?: string | null;
+    execution_sandbox_runner_kind?: string | null;
+    execution_blocking_reason?: string | null;
+    execution_fallback_reason?: string | null;
+    response_summary?: string | null;
+    response_content_type?: string | null;
+    raw_ref?: string | null;
+  }>;
 };
 
 export type OperatorRunFollowUpSnapshotSample = {

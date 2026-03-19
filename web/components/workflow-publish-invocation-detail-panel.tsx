@@ -236,6 +236,36 @@ export function WorkflowPublishInvocationDetailPanel({
                       {samplePrimarySignal ?? "该 sampled run 已回接 canonical follow-up 快照。"}
                     </p>
                     {sampleFollowUp ? <p className="binding-meta">{sampleFollowUp}</p> : null}
+                    {sample.snapshot_summary ? (
+                      <p className="binding-meta">{sample.snapshot_summary}</p>
+                    ) : null}
+                    {sample.execution_focus_artifact_count > 0 ||
+                    sample.execution_focus_artifact_ref_count > 0 ||
+                    sample.execution_focus_tool_call_count > 0 ||
+                    sample.execution_focus_raw_ref_count > 0 ? (
+                      <div className="tool-badge-row">
+                        {sample.execution_focus_artifact_count > 0 ? (
+                          <span className="event-chip">
+                            artifacts {sample.execution_focus_artifact_count}
+                          </span>
+                        ) : null}
+                        {sample.execution_focus_artifact_ref_count > 0 ? (
+                          <span className="event-chip">
+                            artifact refs {sample.execution_focus_artifact_ref_count}
+                          </span>
+                        ) : null}
+                        {sample.execution_focus_tool_call_count > 0 ? (
+                          <span className="event-chip">
+                            tool calls {sample.execution_focus_tool_call_count}
+                          </span>
+                        ) : null}
+                        {sample.execution_focus_raw_ref_count > 0 ? (
+                          <span className="event-chip">
+                            raw refs {sample.execution_focus_raw_ref_count}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <dl className="compact-meta-list">
                       <div>
                         <dt>Status</dt>

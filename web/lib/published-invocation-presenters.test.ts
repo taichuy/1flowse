@@ -123,14 +123,29 @@ describe("published invocation presenters", () => {
               callback_waiting_explanation: {
                 primary_signal: "当前仍有 1 条 callback ticket 等待外部回调。",
                 follow_up: "下一步：先等待外部 callback 到达，再观察自动 resume。"
-              }
+              },
+              execution_focus_node_name: "Mock callback tool",
+              execution_focus_artifact_count: 1,
+              execution_focus_artifact_ref_count: 1,
+              execution_focus_tool_call_count: 1,
+              execution_focus_raw_ref_count: 1,
+              execution_focus_tool_calls: [
+                {
+                  tool_name: "callback.fetch",
+                  status: "waiting",
+                  effective_execution_class: "sandbox",
+                  execution_sandbox_backend_id: "backend-wait",
+                  raw_ref: "artifact://callback-raw",
+                  response_summary: "回调原始结果已写入 artifact。"
+                }
+              ]
             }
           }
         ],
         explanation: null
       })
     ).toEqual([
-      "run run-1234：当前 run 状态：waiting。 当前节点：mock_tool。 重点信号：当前仍有 1 条 callback ticket 等待外部回调。 后续动作：下一步：先等待外部 callback 到达，再观察自动 resume。"
+      "run run-1234：当前 run 状态：waiting。 当前节点：mock_tool。 重点信号：当前仍有 1 条 callback ticket 等待外部回调。 后续动作：下一步：先等待外部 callback 到达，再观察自动 resume。 Mock callback tool 已关联 1 个 artifact、1 条 artifact ref、1 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。 样本 tool： callback.fetch 状态 waiting。 effective sandbox。 backend backend-wait。 raw_ref artifact://callback-raw。 回调原始结果已写入 artifact。"
     ]);
   });
   it("优先读取活动列表顶层共享解释，并兼容 sampled run snapshot 回退", () => {
@@ -246,6 +261,11 @@ describe("published invocation presenters", () => {
               status: "waiting",
               current_node_id: "tool_wait",
               waiting_reason: "callback pending",
+              execution_focus_node_name: "Tool wait",
+              execution_focus_artifact_count: 2,
+              execution_focus_artifact_ref_count: 1,
+              execution_focus_tool_call_count: 1,
+              execution_focus_raw_ref_count: 1,
               callback_waiting_explanation: {
                 primary_signal: " sample callback blocker ",
                 follow_up: " follow callback chain "
@@ -253,7 +273,20 @@ describe("published invocation presenters", () => {
               execution_focus_explanation: {
                 primary_signal: "focus fallback",
                 follow_up: "focus follow-up"
-              }
+              },
+              execution_focus_tool_calls: [
+                {
+                  tool_name: "callback.wait",
+                  status: "waiting",
+                  raw_ref: "artifact://wait-raw"
+                }
+              ],
+              execution_focus_artifacts: [
+                {
+                  summary: "callback payload snapshot",
+                  uri: "artifact://wait-artifact"
+                }
+              ]
             }
           },
           {
@@ -280,7 +313,13 @@ describe("published invocation presenters", () => {
         explanation: {
           primary_signal: "sample callback blocker",
           follow_up: "follow callback chain"
-        }
+        },
+        snapshot_summary:
+          "当前 run 状态：waiting。 当前节点：tool_wait。 重点信号：sample callback blocker 后续动作：follow callback chain Tool wait 已关联 2 个 artifact、1 条 artifact ref、1 条 tool call。 其中 1 条 tool call 已落到 raw_ref，可直接回看原始输出。 样本 tool： callback.wait 状态 waiting。 raw_ref artifact://wait-raw。",
+        execution_focus_artifact_count: 2,
+        execution_focus_artifact_ref_count: 1,
+        execution_focus_tool_call_count: 1,
+        execution_focus_raw_ref_count: 1
       },
       {
         run_id: "run-2",
@@ -291,7 +330,13 @@ describe("published invocation presenters", () => {
         explanation: {
           primary_signal: "execution focus signal",
           follow_up: "execution focus follow-up"
-        }
+        },
+        snapshot_summary:
+          "当前 run 状态：running。 当前节点：agent_plan。 重点信号：execution focus signal 后续动作：execution focus follow-up",
+        execution_focus_artifact_count: 0,
+        execution_focus_artifact_ref_count: 0,
+        execution_focus_tool_call_count: 0,
+        execution_focus_raw_ref_count: 0
       }
     ]);
   });

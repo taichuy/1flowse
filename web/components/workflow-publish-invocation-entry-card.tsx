@@ -237,6 +237,37 @@ export function WorkflowPublishInvocationEntryCard({
           {runFollowUpSamplePrimarySignal ? (
             <p className="binding-meta">{runFollowUpSamplePrimarySignal}</p>
           ) : null}
+          {runFollowUpSample?.snapshot_summary ? (
+            <p className="binding-meta">{runFollowUpSample.snapshot_summary}</p>
+          ) : null}
+          {runFollowUpSample &&
+          (runFollowUpSample.execution_focus_artifact_count > 0 ||
+            runFollowUpSample.execution_focus_artifact_ref_count > 0 ||
+            runFollowUpSample.execution_focus_tool_call_count > 0 ||
+            runFollowUpSample.execution_focus_raw_ref_count > 0) ? (
+            <div className="tool-badge-row">
+              {runFollowUpSample.execution_focus_artifact_count > 0 ? (
+                <span className="event-chip">
+                  artifacts {runFollowUpSample.execution_focus_artifact_count}
+                </span>
+              ) : null}
+              {runFollowUpSample.execution_focus_artifact_ref_count > 0 ? (
+                <span className="event-chip">
+                  artifact refs {runFollowUpSample.execution_focus_artifact_ref_count}
+                </span>
+              ) : null}
+              {runFollowUpSample.execution_focus_tool_call_count > 0 ? (
+                <span className="event-chip">
+                  tool calls {runFollowUpSample.execution_focus_tool_call_count}
+                </span>
+              ) : null}
+              {runFollowUpSample.execution_focus_raw_ref_count > 0 ? (
+                <span className="event-chip">
+                  raw refs {runFollowUpSample.execution_focus_raw_ref_count}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {item.run_status === "waiting" ? (
