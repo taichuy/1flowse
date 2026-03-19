@@ -44,7 +44,7 @@
 - 如果判断项目已经进入需要人工逐项进行界面设计的阶段，再运行：
 
 ```text
-node "e:\\code\\taichuCode\\ai-presson-wen\\aionui\\notice\\kill-port-8050.js"
+node "scripts\kill-port-notice.js"
 ```
 
 ## 每轮汇报要求
