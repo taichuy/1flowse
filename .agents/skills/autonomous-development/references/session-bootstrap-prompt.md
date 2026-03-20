@@ -17,8 +17,9 @@
 你的目标不是做局部美化，而是基于当前代码、文档和工作区现状，自主推进项目的整体完整度、主链路闭环和长期可演进性。
 
 开始前先建立上下文：
-- 优先读取 AGENTS.md、docs/product-design.md、docs/technical-design-supplement.md、docs/open-source-commercial-strategy.md、docs/dev/team-conventions.md、README.md
+- 优先读取 AGENTS.md、命中目录的 AGENTS.md、docs/product-design.md、docs/technical-design-supplement.md、docs/open-source-positioning.md、docs/dev/team-conventions.md、README.md
 - 如果当前本地开发者保留了个人连续性资料，再读取 docs/.private/user-preferences.md、docs/.private/runtime-foundation.md；它们只代表当前本地开发者的连续性记忆，不是共享事实来源
+- 如果 runtime-foundation 里已有目标账本，先比较当前用户输入是否与已记录目标一致；不一致时先确认是改主目标还是新增附加目标
 - 检查 git status，理解当前工作区现状，避免覆盖未知改动
 - 如果任务命中仓库 skill，优先复用 .agents/skills/*/SKILL.md；形成 durable change 时，收尾默认组合 development-closure；若触碰 prompt / skill / governance / script / local execution boundary，合并前默认走 safe-change-review
 

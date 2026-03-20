@@ -24,7 +24,7 @@ description: 基于 7Flows 当前仓库结构与产品架构，对 `api/` 下的
 1. 先识别审查范围，确认是路由层、服务层、运行时、数据层还是跨层改动。
 2. 如果涉及工作流语义、插件代理、发布协议、变量传递、调试、缓存或安全，优先阅读：
    - `docs/product-design.md`
-   - `docs/open-source-commercial-strategy.md`
+   - `docs/open-source-positioning.md`
    - `docs/technical-design-supplement.md`
    - `docs/dev/team-conventions.md`
    - `docs/.private/runtime-foundation.md`（如当前本地开发者已维护）

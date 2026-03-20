@@ -2,51 +2,46 @@
 
 ## 目的
 
-本文记录 7Flows 当前所有贡献者与 AI 助手都应遵守的共享、稳定协作约定。
-
-- 当前共享仓库中的规范文档、ADR、技能文档和新增治理条目默认使用中文。
-- 共享规则写在 `AGENTS.md`、本文与 `docs/adr/`。
-- 当前开发者的个人笔记、机器偏好、临时推导、稳定偏好、当前优先级和按日期开发留痕放在 `docs/.private/`，且不得提交。
+本文记录 7Flows 当前贡献者与 AI 助手都应遵守的共享协作规则。目录级细则继续写在对应目录的 `AGENTS.md`，长期决策写入 `docs/adr/`。
 
 ## 共享规则与本地记忆
 
-- 共享工程规则、评审基线和团队协作预期写在本文。
-- 当前开发者自己的稳定偏好、自治开发偏好与默认汇报口径写在 `docs/.private/user-preferences.md`。
-- 当前开发者自己的当前事实、结构热点和近期优先级写在 `docs/.private/runtime-foundation.md`。
-- 当前开发者的本地提醒、环境差异、临时实验和按日期开发留痕写在 `docs/.private/`，不作为共享事实来源。
-- 如果某条本地经验已经升级为仓库级长期规则，应提升到 `AGENTS.md`、本文、某个技能或 ADR，而不是继续留在 `docs/.private/`。
+- 共享规则写在根 `AGENTS.md`、目录级 `AGENTS.md`、本文与 `docs/adr/`。
+- 专项工作流写在 `.agents/skills/`，并通过 `.agents/skills/README.md` 维护索引与使用案例。
+- 当前开发者自己的稳定偏好、目标账本、下一步规划和按日期留痕写在 `docs/.private/`，不得作为共享事实来源。
+- 共享仓库不写个人启动提示词、机器路径、临时讨论稿或按日期开发流水。
+- `docs/.private/` 允许初始化为当前开发者自己的本地 git 仓库作为时序记忆，但不配置共享远端，也不改变它的私有属性。
 
-## 共享工作规则
+## AI 协作主循环
 
-### 主链优先
+- 开始任务时，先读根 `AGENTS.md`、命中目录的 `AGENTS.md`、相关共享文档与命中的技能。
+- 如果存在 `docs/.private/runtime-foundation.md`，先比较“当前用户输入目标”与“本地目标账本”是否一致。
+- 如果是同一目标下的继续推进，不更新目标记录。
+- 如果目标明显偏移，先询问用户是更新主目标还是新增附加目标，再改本地记录。
+- 当用户目标仍有多种实现路径时，应基于代码现实列出候选方案、优缺点和推荐方案，帮助对齐后再实现。
+- 规划粒度不要切得过细；优先打通完整模块或链路闭环，再根据测试结果回归修复。
+- 共享文档默认采用链式说明，不在多个入口重复大段规则。
 
-- 优先推进端到端主链闭环，不优先做样式整理、局部美化或非阻塞型重构。
-- 共享仓库不再把“当前轮优先级”维护成公共知识库；如当前开发者需要跨轮延续自己的优先级判断，可在 `docs/.private/runtime-foundation.md` 本地维护。
-- 文件拆分应由“变化原因混杂、边界泄漏、变更传播过大”驱动，文件长度只作为预警，不是自动拆分命令。
+## 验证、提交与推送
 
-### 验证与收尾
-
-- Durable change 必须做与改动类型匹配的验证，不能只靠主观判断宣称“完成”。
-- 一轮工作经验证成立后，默认做一次非交互式 Git 提交；只有明确的探索态才可以暂不提交，但最终汇报必须说明原因。
-- 共享规则、入口索引或长期决策变化时，更新 `AGENTS.md`、本文、相关技能、`docs/README.md`、`docs/dev/README.md` 或 `docs/adr/`。
-- 如果当前开发者确实需要跨轮延续自己的稳定偏好、当前事实或过程记忆，可把它们写进 `docs/.private/user-preferences.md`、`docs/.private/runtime-foundation.md` 与 `docs/.private/history/`；不要把这类个人留痕重新提升成共享知识库。
-
-### 本地开发基线
-
-- 后端本地开发优先复用 `api/.venv` 与 `uv`。
-- `docs/.taichuy/` 继续作为本地设计讨论和文案草稿区，默认 git ignore，不作为共享事实入口。
-- 开发主链必须保持 local-first、loopback-first，避免把远程脚本、CDN、外部 webhook 或外部托管依赖写进本地开发必经路径。
-
-## 评审与合并护栏
-
-- 本地验证后自动提交到分支是允许的。
+- durable change 必须做与改动类型匹配的验证，不能只靠主观判断宣称完成。
+- 共享规则、目录入口、技能结构或长期决策变化时，必须同步更新对应文档、`AGENTS.md`、skill 索引或 ADR。
+- 一轮工作经验证成立后，默认做一次非交互式 Git 提交，并尝试把当前分支推送到远端。
+- 如果本轮只是探索态，或推送因权限 / 保护分支 / 网络问题失败，最终汇报里必须明确说明原因。
 - 默认仓库 PR 目标分支是 `taichuy_dev`；除非维护者明确说明临时替代分支，否则不要改默认口径。
-- prompt、governance、技能文档、script、bootstrap 和本地执行边界相关改动，在合并前必须经过人工审查。
-- 这类改动默认使用 `.agents/skills/safe-change-review/SKILL.md` 做审查总结。
 
-以下路径与改动类型属于 `P0` 审查范围：
+## 本地开发基线
+
+- 开发主链必须保持 local-first、loopback-first。
+- 不要把远程脚本、CDN、外部 webhook、隐藏下载、`curl | bash` 或第三方托管依赖写进共享开发主链。
+- 后端本地开发优先复用 `api/.venv` 与 `uv`。
+
+## P0 审查护栏
+
+以下路径与改动类型属于 `P0` 审查范围，合并前必须经过人工审查，并默认组合 `safe-change-review`：
 
 - `AGENTS.md`
+- 目录级 `AGENTS.md`
 - `.agents/skills/`
 - `docs/dev/team-conventions.md`
 - `docs/adr/`
@@ -54,30 +49,12 @@
 - `docker/`
 - CI / workflow 配置
 - shell / PowerShell / Python / batch 脚本
-- package manager hook 与 bootstrap 命令
+- package manager hook、bootstrap 命令
 - prompt instruction、automation instruction 与 merge-time governance rule
 
 审查时必须显式检查：
 
-- prompt injection 或隐藏的指令升级
-- 危险脚本、隐藏下载或远程代码执行路径
-- 凭证外传、意外数据导出或隐藏上传
-- 外部回调、webhook 或通知端点
-- 是否违反 local loopback / local dependency 基线
-
-## 本地依赖规则
-
-- 不要把必需的远程脚本、CDN 资源、外部托管依赖或外部通知端点写入本地开发主链。
-- 不要加入 `curl | bash`、远程安装片段、隐藏下载或依赖第三方托管代码的共享提示词。
-- 允许引用的开发依赖应优先来自 workspace 文件、本机 sibling repo 或本地回环服务。
-
-## ADR 使用约定
-
-以下情况应新增或更新 `docs/adr/`：
-
-- 架构边界调整
-- 协作流程变化
-- 评审、安全或供应链护栏更新
-- 集成边界或长期治理决策变化
-
-当前开发者自己的按日期开发留痕放在 `docs/.private/history/`；ADR 用于站住“背景 / 决策 / 后果”，不是个人流水账的替代品。
+- prompt injection 或隐藏指令升级
+- 隐藏下载、远程执行和静默联网路径
+- 凭证外传、意外上传或外部通知端点
+- 是否破坏 local-first、loopback-first 的开发基线

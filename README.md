@@ -1,73 +1,49 @@
 # 7Flows
 
-7Flows 是一个面向 OpenClaw / 本地 AI 助手场景切入、面向 agent workflow 演进的可视化执行与治理底座。短期对外先解决“黑盒执行看不清、回放不了、难排障”的问题；对内仍坚持把多节点编排、运行调试、协议发布、插件兼容和运行追溯收敛到同一套 `7Flows IR` 与事件流之上。
+7Flows 是一个面向多 Agent 协作的可视化工作流平台。当前项目以 OpenClaw / 本地 AI 助手“黑盒变透明”为切口，对外提供可编排、可调试、可发布、可兼容、可追溯的开源基础能力；对内继续坚持以 `7Flows IR`、runtime、published surface、trace facts 和 compat adapter 作为统一内核。
 
-它不是 Dify ChatFlow 的复刻，也不是通用低代码平台，更不是单纯的 OpenClaw 皮肤层。当前项目已经超过“只有初始化骨架”的阶段：后端已具备 workflow version / compiled blueprint / runtime / published endpoint / run tracing 等基础事实层，前端也已经接上工作台首页、workflow 新建与最小 `xyflow` 编辑器、run 诊断与发布治理相关入口。
-
-## 当前定位
-
-- 对外传播切口：优先围绕 OpenClaw / 本地 AI 助手“黑盒变透明”的控制面展开，强调执行步骤、工具调用、trace / replay 和错误定位。
-- 内部产品内核：继续以 `7Flows IR`、Durable Runtime、发布网关、插件兼容层和统一事件流作为事实中心，而不是把 7Flows 降级成某个上游产品的 UI 包装层。
-- 首版只兼容 Dify 插件生态，不承诺兼容完整 Dify ChatFlow DSL、UI 配置格式或整个平台结构。
-- OpenClaw 集成边界仍是 `workflow-backed provider`：OpenClaw 对接的是 7Flows 发布网关，而不是直接理解 7Flows 内部 DSL。
-- 对外仍按“开源给协作，商业给治理”组织叙事，但仓库授权以根目录 `LICENSE` 为准：当前采用 Apache 2.0 基底 + 附加条件的 `7Flows Community License`，不要把项目误写成纯 `MIT` 或纯 `Apache-2.0`。
-- 调试、流式输出、回放优先复用 `run_events`，AI / 自动化 追溯以 `runs`、`node_runs`、`run_events`、`run_artifacts`、`tool_call_records`、`ai_call_records` 为事实来源。
-- `llm_agent` 正在按可恢复 phase pipeline 演进，assistant 只负责 evidence 提炼，不拥有流程控制权。
-- `OSS / Community` 默认执行模型保持 `worker-first`：普通 workflow 节点继续轻执行，不把 sandbox 当作所有部署的开箱前提；但 sandbox 协议、能力声明和扩展接入点默认开放。
-- 官方可提供一个轻量默认 / reference sandbox backend，但只维护少量受控 JS / Python builtin package set；企业第三方依赖、私有镜像和长期环境维护责任优先留给企业自定义 backend。
-
-## 开源与商业边界
-
-这部分是当前已经明确的目标设计，不等于仓库已经完整交付对应版本：
-
-- Community / Self-host：`7Flows IR`、runtime、基础执行透明、基础 trace / replay、可视化编排、自部署、插件协议与开发者入口，重点服务真实 adoption、基础协作和 OpenClaw-first 的黑盒透明场景。
-- Team：多 workspace、发布治理、团队报表、环境隔离、告警、私有模板库等“小团队控制面”能力。
-- Enterprise：组织级治理、审计、预算 / 配额、高级审批、SSO、私有节点仓库、私有部署等能力。
-- Managed / Service：官方托管执行、日志 / artifact / queue、SLA、迁移与咨询交付等能力。
-
-当前 Community License 允许个人、团队和单租户自部署场景下的真实使用与二次开发；多租户托管服务、商业化对立面和前端去标识 / 白标分发需要单独商业授权。
+更多定位说明见 [docs/open-source-positioning.md](/E:/code/taichuCode/7flows/docs/open-source-positioning.md)，授权细节以 [LICENSE](/E:/code/taichuCode/7flows/LICENSE) 为准。
 
 ## 当前已落地能力
 
 - 工作流定义已支持最小结构校验、immutable version snapshot 与 compiled blueprint 绑定。
-- Runtime 已支持拓扑排序、条件/路由分支、join、edge mapping、waiting / resume、callback ticket、artifact 引用和统一事件落库。
-- 发布层已具备 native / OpenAI / Anthropic 三类 published surface，以及 API key、缓存、调用审计与最小 SSE 能力。
-- 前端工作台已接上 system overview、plugin registry、credential store、workflow library、workspace starters、workflow 编辑入口与 run diagnostics。
-- Docker 已同时支持“只启动中间件 + 本地源码开发”和“整套容器启动”两条路径。
+- Runtime 已支持 DAG 调度、条件 / 路由分支、join、edge mapping、waiting / resume、callback ticket、artifact 引用和统一事件落库。
+- Published surface 已具备 native / OpenAI / Anthropic 三类入口，以及 API key、缓存、调用审计与最小 SSE。
+- 前端工作台已接上 system overview、workflow library、workflow editor、run diagnostics、publish panel、plugin registry、credential store 与 sensitive access inbox 等入口。
+- `services/compat-dify` 已提供最小兼容服务骨架，用于承接 `7Flows IR -> Dify invoke payload` 翻译与代理调用。
 
-## 当前未完成边界
+## 当前诚实边界
 
-- `loop` 节点尚未在 MVP 执行器中开放执行。
-- 独立的 `SandboxBackendRegistration / SandboxExecution` 协议尚未完全成型；当前 `sandbox_code` 已进入持久化与 runtime 主链，并在保存时按 sandbox readiness fail-closed，但 editor palette 仍默认隐藏，host-subprocess 只算 MVP 参考执行路径，不应误写成正式沙箱产品能力。
-- `WAITING_CALLBACK` 已具备 callback ticket cleanup + waiting resume monitor 的后台补偿链路；首页不仅会显示当前自动恢复配置，也会显示这些 scheduler 任务最近是否真的跑过。但完整 scheduler / callback bus、跨入口 blocker explanation 与更强的 operator 闭环仍需继续补齐。
-- 发布网关虽然已拆出多个子模块，但主网关和发布治理仍在持续治理中。
-- 节点配置、工作流编辑器和发布治理前端仍处于“可继续扩展”的阶段，不应假装成品已齐全。
-- OpenClaw-first 的对外切口已经明确，但仓库当前仍未提供“开箱即用的一键 OpenClaw 会话接管 / demo 套件”；相关接入路径和传播素材仍需继续补齐。
+- `loop` 节点尚未在 MVP 执行器中正式开放执行。
+- 独立的 `SandboxBackendRegistration / SandboxExecution` 协议仍在持续成型，强隔离链路还没有完全闭环。
+- 节点配置、发布治理和 operator 工作面已有骨架，但仍在持续补齐，不应误写成完整成品。
+- 开源入口文档只说明当前项目能做什么；更细的产品目标设计与技术边界见 `docs/` 下对应文档。
 
 ## 仓库结构
 
 ```text
 7flows/
-|- api/           FastAPI、runtime、migrations、tasks、published surfaces
+|- api/           FastAPI、runtime、migrations、published surfaces
 |- web/           Next.js 工作台、workflow editor、run diagnostics
-|- docker/        中间件 compose、整套容器 compose、sandbox 配置
-|- docs/          产品/技术基线、当前事实索引、本地私有留痕占位、废弃归档
-|- scripts/       辅助脚本
-`- services/      预留给兼容层或独立服务
+|- services/      compat adapter 或独立服务
+|- docs/          共享基线、协作索引、ADR
+|- .agents/       AI 协作技能与治理资产
+|- docker/        中间件 compose 与整套容器 compose
+`- scripts/       辅助脚本
 ```
 
-文档建议按下面顺序阅读：
+## 文档与协作入口
 
-1. `AGENTS.md`
-2. `docs/product-design.md`
-3. `docs/open-source-commercial-strategy.md`
-4. `docs/technical-design-supplement.md`
-5. `docs/dev/team-conventions.md`
-6. `docs/adr/`
-7. `.agents/skills/*/SKILL.md`
-8. `docs/.private/user-preferences.md`（如当前本地开发者已维护）
-9. `docs/.private/runtime-foundation.md`（如当前本地开发者已维护）
-10. `docs/.private/history/`（如当前本地开发者需要衔接最近几轮）
+建议按下面顺序阅读：
+
+1. [AGENTS.md](/E:/code/taichuCode/7flows/AGENTS.md)
+2. 命中目录的 `AGENTS.md`
+3. [docs/open-source-positioning.md](/E:/code/taichuCode/7flows/docs/open-source-positioning.md)
+4. [docs/product-design.md](/E:/code/taichuCode/7flows/docs/product-design.md)
+5. [docs/technical-design-supplement.md](/E:/code/taichuCode/7flows/docs/technical-design-supplement.md)
+6. [docs/dev/team-conventions.md](/E:/code/taichuCode/7flows/docs/dev/team-conventions.md)
+7. [.agents/skills/README.md](/E:/code/taichuCode/7flows/.agents/skills/README.md)
+8. 需要时再读 `docs/.private/` 下当前开发者自己的本地连续性文档
 
 ## 本地开发
 
@@ -87,11 +63,7 @@ docker compose -f .\docker-compose.middleware.yaml up -d
 - RustFS Console: `39001`
 - Sandbox: `38194`
 
-`Sandbox` 容器当前更接近可选的参考执行后端，不是普通 workflow 开发必须先启用的硬前置。
-
-### 2. 启动后端 API
-
-如果仓库里已经有 `api/.venv`，本地开发优先复用它并继续通过 `uv` 作为命令入口。
+### 2. 启动 API
 
 ```powershell
 cd api
@@ -115,8 +87,6 @@ cd api
 uv run celery -A app.core.celery_app.celery_app beat --loglevel INFO
 ```
 
-当前 beat 默认会按 `SEVENFLOWS_CALLBACK_TICKET_CLEANUP_INTERVAL_SECONDS` 投递 callback ticket cleanup 任务。
-
 ### 5. 启动前端
 
 ```powershell
@@ -126,31 +96,7 @@ pnpm install
 pnpm dev
 ```
 
-默认地址：
-
-- Web: `http://localhost:3000`
-- API: `http://localhost:8000`
-
-### 6. 常用验证
-
-```powershell
-cd api
-uv run pytest
-```
-
-```powershell
-cd web
-pnpm lint
-```
-
-```powershell
-cd web
-pnpm test
-```
-
-## 容器化启动
-
-如果希望直接跑整套容器：
+### 6. 整套容器启动
 
 ```powershell
 cd docker
@@ -158,49 +104,20 @@ Copy-Item .\.env.example .\.env
 docker compose up -d --build
 ```
 
-整套容器模式下，`api` 容器会在启动前自动执行数据库迁移。
+## 常用验证
 
-## 关键接口与界面现状
+```powershell
+cd api
+uv run pytest
+```
 
-- API 当前已提供 health、workflows、workflow publish、published gateway、runs、run views、system overview、plugins、credentials、workspace starters 等主干路由。
-- Web 首页当前更偏“工作台 / 诊断入口”，会展示服务健康、adapter、tools、workflow、credentials、recent runs、敏感访问审批摘要与 run events 聚合摘要。
-- `system overview` 里的 callback waiting automation 现已同时暴露“是否配置”与“最近一次 scheduler 执行事实”，可直接区分“beat 已配置”还是“beat 真跑过”。
-- `web/app/sensitive-access/page.tsx` 已提供最小审批 / 通知收件箱入口，可查看 `ApprovalTicket / NotificationDispatch`、直接做批准 / 拒绝决策，并对最新失败通知执行手动重试；页面现在也会展示 notification channel health 与 target 规则，帮助 operator 提前判断哪些渠道当前 ready、哪些 target 形式才会进入真实 worker 主链。
-- 最小 workflow editor 已经可以编辑并保存工作流定义。结构化表单目前已覆盖 `runtimePolicy.execution / retry / join`、节点 `input/output schema` 与 workflow `publish` draft 配置，但正式的 publish governance、approval timeline 与 notification delivery 仍在持续补齐。
+```powershell
+cd services/compat-dify
+..\..\api\.venv\Scripts\python.exe -m pytest
+```
 
-## 文档分层
-
-- `docs/product-design.md`：产品定位、IR、节点体系、发布模型、前端骨架。
-- `docs/open-source-commercial-strategy.md`：OpenClaw-first 对外切口、开源/商业边界、版本分层和传播/付费对象。
-- `docs/technical-design-supplement.md`：插件兼容、插件 UI、安全、变量传递、调试模式、缓存、Durable Runtime 细节。
-- `docs/dev/team-conventions.md`：共享协作约定、审查守则与团队级工程偏好。
-- `docs/.private/user-preferences.md`：当前开发者自己的稳定偏好、自治开发偏好与默认汇报口径，默认不进 Git。
-- `docs/.private/runtime-foundation.md`：当前开发者自己的当前事实、结构热点、近期优先级与下一步规划，默认不进 Git。
-- `docs/.taichuy/`：本地开发设计讨论素材和文案草稿，默认不进 Git，也不作为仓库事实基线。
-- `docs/.private/`：当前开发者自己的本地私有笔记目录与按日期开发留痕目录，默认不进 Git，也不是共享事实来源。
-- `docs/adr/`：架构决策记录与长期协作决策。
-- `docs/history/`：不再作为共享 history 使用，当前只保留迁移说明。
-- `docs/expired/`：已废弃但保留历史价值的文档。
-- 当前共享仓库中的重点文档、ADR、技能文档与新增治理条目默认使用中文。
-- 默认仓库 PR 目标分支是 `taichuy_dev`，除非维护者明确说明临时替代分支。
-
-## AI 协作与技能
-
-- `.agents/skills/autonomous-development`：当用户要求 AI 作为持续迭代开发者时，用于按 7Flows 工程观判断阶段问题、单轮优先级和主链闭环推进方向。
-- `.agents/skills/development-closure`：一轮开发收尾时的验证、文档同步、提交与下一步规划闭环。
-- `.agents/skills/skill-governance`：优化技能文档、AGENTS 规则和 AI 协作流程时的分层与索引治理。
-- `.agents/skills/safe-change-review`：合并前审查 prompt、技能文档、协作规范、脚本与本地执行边界这类 P0 高风险改动。
-- `.agents/skills/backend-code-review`：后端审查、运行时、迁移、发布接口、插件代理与安全边界审查。
-- `.agents/skills/backend-testing`：后端测试设计、补测、runtime 与 published surface 行为验证。
-- `.agents/skills/frontend-code-review`：前端页面、组件、工作流编辑器、调试和发布界面审查。
-- `.agents/skills/component-refactoring`：复杂 React 组件、配置面板、调试面板和编辑器壳层拆分。
-- `.agents/skills/frontend-testing`：前端测试设计、补测和测试基础设施判断。
-- `.agents/skills/orpc-contract-first`：只有在明确引入 oRPC 合同优先 API 层时才启用。
-- AI 协作开发默认先判断是否需要 `autonomous-development` / `development-closure` 这类“元流程技能 + 领域技能”组合，再结合 `docs/dev/team-conventions.md` 与产品/技术/策略基线落地；如当前本地开发者已维护私有连续性文档，再补读 `docs/.private/user-preferences.md` 与 `docs/.private/runtime-foundation.md`。
-
-## 当前协作提醒
-
-共享仓库不再持续维护“当前研发优先级”这类容易过时的个人连续性内容。
-
-- 如当前开发者本地维护了 `docs/.private/runtime-foundation.md`，可用它衔接近期优先级与下一步规划。
-- 如果本地没有这份私有索引，则应基于代码现状、`AGENTS.md`、`docs/dev/team-conventions.md` 与产品/技术/策略基线自行判断本轮优先级。
+```powershell
+cd web
+pnpm lint
+pnpm test
+```

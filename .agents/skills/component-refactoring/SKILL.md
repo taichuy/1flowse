@@ -41,7 +41,7 @@ pnpm exec tsc --noEmit
 ## 推荐工作流
 
 1. 通读目标组件和相邻文件，确认它承担了哪些职责。
-   如果目标组件涉及调试、发布治理、OpenClaw 场景入口或版本边界，还应先补读 `docs/open-source-commercial-strategy.md`。
+   如果目标组件涉及调试、发布治理、OpenClaw 场景入口或版本边界，还应先补读 `docs/open-source-positioning.md`。
 2. 判断优先拆分轴：
    - 视觉区块
    - 状态与副作用

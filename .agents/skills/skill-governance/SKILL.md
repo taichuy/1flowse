@@ -24,9 +24,11 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 - `AGENTS.md`
 - `docs/dev/team-conventions.md`
 - `docs/product-design.md`
-- `docs/open-source-commercial-strategy.md`
+- `docs/open-source-positioning.md`
 - `docs/technical-design-supplement.md`
 - 目标 skill 及其 `references/*`
+- 命中的目录级 `AGENTS.md`
+- `.agents/skills/README.md`
 
 如当前本地开发者保留了个人连续性资料，再补读：
 
@@ -36,6 +38,7 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 ## 规则应该落在哪一层
 
 - 仓库级长期协作规则：`AGENTS.md`
+- 目录级局部规则：命中目录的 `AGENTS.md`
 - 团队级共享协作约定：`docs/dev/team-conventions.md`
 - 当前开发者自己的稳定偏好与自治开发偏好：`docs/.private/user-preferences.md`
 - 当前开发者自己的当前事实与优先级：`docs/.private/runtime-foundation.md`
@@ -77,8 +80,10 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 如果新增、删除、重命名或实质重构 skill，至少检查：
 
 - `AGENTS.md` 的 skill 列表和维护原则
+- 命中的目录级 `AGENTS.md`
 - `README.md` 的 AI 协作与 Skills 说明
 - `docs/README.md` 和 `docs/dev/README.md` 的索引入口
+- `.agents/skills/README.md`
 - 相关交叉引用的其他 skill
 - `docs/.private/runtime-foundation.md` 是否需要同步当前开发者自己的连续性事实
 - `docs/.private/user-preferences.md` 是否需要同步当前开发者自己的稳定自治开发偏好
@@ -95,7 +100,7 @@ description: 用于新增、优化或清理 7Flows 的 `.agents/skills`、AGENTS
 
 ## 常见反模式
 
-- 把共享协作规则只写在 skill 里，不同步到 `AGENTS.md`、`team-conventions.md` 或相关索引入口
+- 把共享协作规则只写在 skill 里，不同步到 `AGENTS.md`、目录级 `AGENTS.md`、`team-conventions.md` 或相关索引入口
 - 把当前开发者自己的连续性记忆误写回共享仓库，而不是留在 `docs/.private/`
 - 直接搬用 Dify、n8n、superpowers 的术语和目录，假装仓库已经有那套基础设施
 - skill 名字在 README 里有，目录里没有；或者目录里有，索引里没人知道
