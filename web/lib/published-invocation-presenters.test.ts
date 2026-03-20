@@ -109,6 +109,9 @@ describe("published invocation presenters", () => {
       emptyState:
         "当前还没有足够的 invocation timeline 数据，后续命中 published endpoint 后这里会显示趋势桶。",
       totalCountLabel: "total",
+      succeededCountLabel: "success",
+      failedCountLabel: "failed",
+      rejectedCountLabel: "rejected",
       apiKeyLabelPrefix: "key"
     });
   });

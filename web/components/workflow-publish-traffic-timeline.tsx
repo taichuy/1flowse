@@ -116,9 +116,15 @@ export function WorkflowPublishTrafficTimeline({
                 </p>
 
                 <div className="tool-badge-row">
-                  <span className="event-chip">success {bucket.succeeded_count}</span>
-                  <span className="event-chip">failed {bucket.failed_count}</span>
-                  <span className="event-chip">rejected {bucket.rejected_count}</span>
+                  <span className="event-chip">
+                    {surfaceCopy.succeededCountLabel} {bucket.succeeded_count}
+                  </span>
+                  <span className="event-chip">
+                    {surfaceCopy.failedCountLabel} {bucket.failed_count}
+                  </span>
+                  <span className="event-chip">
+                    {surfaceCopy.rejectedCountLabel} {bucket.rejected_count}
+                  </span>
                 </div>
 
                 {surfaceLabels.length ? (

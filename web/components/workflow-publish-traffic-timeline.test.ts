@@ -20,7 +20,7 @@ describe("WorkflowPublishTrafficTimeline", () => {
     expect(html).toContain("当前还没有足够的 invocation timeline 数据");
   });
 
-  it("uses shared chip labels for totals and api keys", () => {
+  it("uses shared chip labels for totals, statuses and api keys", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishTrafficTimeline, {
         timeline: [
@@ -51,6 +51,9 @@ describe("WorkflowPublishTrafficTimeline", () => {
     );
 
     expect(html).toContain("total 3");
+    expect(html).toContain("success 2");
+    expect(html).toContain("failed 1");
+    expect(html).toContain("rejected 0");
     expect(html).toContain("key Primary key 2");
   });
 });
