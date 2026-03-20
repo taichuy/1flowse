@@ -1,3 +1,6 @@
+import React from "react";
+
+import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
 import type {
   CallbackWaitingAutomationCheck,
@@ -101,6 +104,12 @@ export function WorkflowPublishPanel({
             <strong>{cacheEnabledCount}</strong>
           </article>
         </div>
+
+        <SandboxReadinessOverviewCard
+          readiness={sandboxReadiness}
+          title="Live sandbox readiness"
+          intro="Publish summary 先直接对齐当前 live sandbox readiness；进入 invocation entry/detail 前，就能先判断强隔离 execution class 是已 ready、正在 degraded，还是仍会 fail-closed。"
+        />
 
         {bindings.length === 0 ? (
           <div className="entry-card">

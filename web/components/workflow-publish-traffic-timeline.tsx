@@ -1,3 +1,5 @@
+import React from "react";
+
 import type { PublishedEndpointInvocationTimeBucketItem } from "@/lib/get-workflow-publish";
 import {
   formatPublishedInvocationCacheStatusLabel,

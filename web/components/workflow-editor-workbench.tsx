@@ -19,6 +19,7 @@ import type {
   WorkflowListItem
 } from "@/lib/get-workflows";
 import type { WorkflowValidationFocusTarget } from "@/lib/workflow-validation-navigation";
+import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
 import { getPaletteNodeCatalog, getPlannedNodeCatalog } from "@/lib/workflow-node-catalog";
 
 import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/workflow-editor-canvas";
@@ -101,6 +102,23 @@ export function WorkflowEditorWorkbench({
     sandboxBackends,
     serverValidationIssues
   });
+  const sandboxReadinessPreflightHint = useMemo(
+    () => formatSandboxReadinessPreflightHint(sandboxReadiness),
+    [sandboxReadiness]
+  );
+  const executionPreflightMessage = useMemo(() => {
+    if (validation.toolExecutionValidationIssues.length > 0) {
+      return [
+        `保存前还有 ${validation.toolExecutionValidationIssues.length} 个 execution capability 问题。`,
+        sandboxReadinessPreflightHint,
+        "先对齐 tool policy、execution class 与 live sandbox readiness，再继续保存。"
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    return sandboxReadinessPreflightHint;
+  }, [sandboxReadinessPreflightHint, validation.toolExecutionValidationIssues.length]);
   const persistence = useWorkflowEditorPersistence({
     workflowId: workflow.id,
     fallbackWorkflowName: workflow.name,
@@ -189,6 +207,8 @@ export function WorkflowEditorWorkbench({
             unsupportedNodes={validation.unsupportedNodes}
             message={message}
             messageTone={messageTone}
+            executionPreflightMessage={executionPreflightMessage}
+            toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
             validationNavigatorItems={validation.validationNavigatorItems}
             runs={runOverlay.availableRuns}
             selectedRunId={runOverlay.selectedRunId}

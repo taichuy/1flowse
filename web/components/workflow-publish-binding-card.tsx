@@ -1,4 +1,7 @@
+import React from "react";
+
 import { updatePublishedEndpointLifecycle } from "@/app/actions/publish";
+import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
 import { WorkflowPublishActivityPanel } from "@/components/workflow-publish-activity-panel";
 import { WorkflowPublishApiKeyManager } from "@/components/workflow-publish-api-key-manager";
@@ -144,6 +147,13 @@ export function WorkflowPublishBindingCard({
           </dl>
         </div>
       </div>
+
+      <SandboxReadinessOverviewCard
+        readiness={sandboxReadiness}
+        title="Strong-isolation publish preflight"
+        intro="这个 binding 与 sampled run 共用同一条 execution class / sandbox capability 链路；先在这里对照 live readiness，再决定是否继续深挖 invocation detail。"
+        hideWhenHealthy={(activity?.total_count ?? 0) === 0}
+      />
 
       <WorkflowPublishActivityPanel
         workflowId={workflow.id}

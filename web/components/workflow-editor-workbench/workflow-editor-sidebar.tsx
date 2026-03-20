@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -11,6 +12,7 @@ import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 
@@ -27,6 +29,8 @@ type WorkflowEditorSidebarProps = {
   unsupportedNodes: UnsupportedWorkflowNodeSummary[];
   message: string | null;
   messageTone: WorkflowEditorMessageTone;
+  executionPreflightMessage: string | null;
+  toolExecutionValidationIssueCount: number;
   validationNavigatorItems: WorkflowValidationNavigatorItem[];
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
@@ -55,6 +59,8 @@ export function WorkflowEditorSidebar({
   unsupportedNodes,
   message,
   messageTone,
+  executionPreflightMessage,
+  toolExecutionValidationIssueCount,
   validationNavigatorItems,
   runs,
   selectedRunId,
@@ -224,6 +230,13 @@ export function WorkflowEditorSidebar({
         <p className={`sync-message ${messageTone}`}>
           {message ?? "选择节点或连线后，这里会显示编辑器反馈。"}
         </p>
+
+        <SandboxReadinessOverviewCard
+          readiness={sandboxReadiness}
+          title="Execution preflight"
+          intro={executionPreflightMessage}
+          hideWhenHealthy={toolExecutionValidationIssueCount === 0}
+        />
 
         {validationNavigatorItems.length > 0 ? (
           <div className="validation-issue-list">
