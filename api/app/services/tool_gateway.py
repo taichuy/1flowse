@@ -165,6 +165,11 @@ class ToolGateway:
                     execution=request.execution,
                 )
             )
+            execution_trace = self._merge_execution_trace_with_response_meta(
+                execution_trace,
+                response.meta,
+            )
+            call_record.execution_trace = dict(execution_trace)
             response_payload = self._payload_from_plugin_response(response)
             result = self._normalize_result(
                 db,
@@ -429,6 +434,37 @@ class ToolGateway:
             "structured": dict(response.output or {}),
             "meta": meta,
         }
+
+    @staticmethod
+    def _merge_execution_trace_with_response_meta(
+        execution_trace: dict[str, Any],
+        response_meta: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        merged = dict(execution_trace)
+        if not isinstance(response_meta, dict):
+            return merged
+
+        effective_execution_class = response_meta.get("effective_execution_class")
+        if (
+            isinstance(effective_execution_class, str)
+            and effective_execution_class.strip()
+        ):
+            merged["effective_execution_class"] = effective_execution_class.strip()
+
+        sandbox_backend_id = response_meta.get("sandbox_backend_id")
+        if isinstance(sandbox_backend_id, str) and sandbox_backend_id.strip():
+            merged["sandbox_backend_id"] = sandbox_backend_id.strip()
+
+        sandbox_backend_executor_ref = response_meta.get("sandbox_backend_executor_ref")
+        if (
+            isinstance(sandbox_backend_executor_ref, str)
+            and sandbox_backend_executor_ref.strip()
+        ):
+            merged["sandbox_backend_executor_ref"] = (
+                sandbox_backend_executor_ref.strip()
+            )
+
+        return merged
 
     def _build_sensitive_access_waiting_result(
         self,

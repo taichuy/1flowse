@@ -489,7 +489,7 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         "requested_backend_extensions": None,
         "executor_ref": "tool:native-sandbox",
         "sandbox_backend_id": "sandbox-default",
-        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default:tool-runner",
         "sandbox_runner_kind": "native-tool",
         "fallback_reason": None,
         "blocked_reason": None,
@@ -529,7 +529,7 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         "requested_backend_extensions": None,
         "executor_ref": "tool:native-sandbox",
         "sandbox_backend_id": "sandbox-default",
-        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default:tool-runner",
         "sandbox_runner_kind": "native-tool",
     }
 
@@ -620,11 +620,14 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
     assert tool_call.response_meta["sandbox_backend_id"] == "sandbox-default"
     assert (
         tool_call.response_meta["sandbox_backend_executor_ref"]
-        == "sandbox-backend:sandbox-default"
+        == "sandbox-backend:sandbox-default:tool-runner"
     )
     assert tool_call.response_meta["sandbox_runner_kind"] == "native-tool"
     assert tool_call.response_meta["tool_call_id"] == tool_call.id
     assert tool_call.response_meta["runner_logs"] == ["sandbox stdout"]
+    assert tool_call.execution_trace["sandbox_backend_executor_ref"] == (
+        "sandbox-backend:sandbox-default:tool-runner"
+    )
 
     tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
     assert tool_run.output_payload == {
@@ -637,6 +640,15 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
         event
         for event in artifacts.events
         if event.node_run_id == tool_run.id and event.event_type == "tool.completed"
+    )
+    dispatched_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == tool_run.id and event.event_type == "tool.execution.dispatched"
+    )
+    assert (
+        dispatched_event.payload["sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default:tool-runner"
     )
     assert completed_event.payload == {
         "node_id": "tool",

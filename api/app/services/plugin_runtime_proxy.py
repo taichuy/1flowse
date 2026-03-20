@@ -321,6 +321,12 @@ class PluginCallProxy:
             logs.append(sandbox_response.stderr)
 
         meta = dict(body.get("meta") or {})
+        meta.setdefault("sandbox_backend_id", sandbox_response.backend_id)
+        meta.setdefault("sandbox_backend_executor_ref", sandbox_response.executor_ref)
+        meta.setdefault(
+            "effective_execution_class",
+            sandbox_response.effective_execution_class,
+        )
         artifact_refs = PluginCallProxy._normalize_artifact_refs(
             body.get("artifact_refs") or body.get("artifactRefs")
         )

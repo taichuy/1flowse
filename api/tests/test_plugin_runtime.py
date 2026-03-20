@@ -1191,6 +1191,9 @@ def test_plugin_call_proxy_preserves_normalized_sandbox_tool_payload() -> None:
     assert response.raw_ref == "artifact://tool-result-123"
     assert response.meta == {
         "runner": "sandbox-tool-runner",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default:tool-runner",
+        "effective_execution_class": "sandbox",
         "artifact_refs": [
             "artifact://tool-result-123",
             "artifact://tool-trace-456",
