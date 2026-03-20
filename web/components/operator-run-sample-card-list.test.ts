@@ -110,6 +110,7 @@ describe("OperatorRunSampleCardList", () => {
     );
 
     expect(html).toContain("Waiting node focus evidence");
+    expect(html).not.toContain("当前 sampled run 仍在等待 callback。");
     expect(html).toContain("effective sandbox");
     expect(html.indexOf("effective sandbox")).toBeLessThan(html.indexOf("Waiting node focus evidence"));
     expect(html).toContain("executor tool:compat-adapter:dify-default");

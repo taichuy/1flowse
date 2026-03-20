@@ -382,6 +382,10 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
     );
 
     expect(html).toContain("callback-waiting-summary-card:node-run-focus");
+    expect(html).not.toContain("Focus node is still blocking the run.");
+    expect(html).not.toContain("Check callback waiting next.");
+    expect(html).not.toContain("当前节点仍在等待 callback。");
+    expect(html).not.toContain("优先观察定时恢复是否已重新排队。");
     expect(html).toContain("trace scope run");
     expect(html).toContain("trace refs 1");
     expect(html).toContain("trace node node-run-focus");

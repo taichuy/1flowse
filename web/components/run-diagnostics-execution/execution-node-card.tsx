@@ -21,6 +21,7 @@ import {
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import { pickCallbackWaitingSkillTraceForNode } from "@/lib/callback-waiting-focus-skill-trace";
+import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal
@@ -124,6 +125,7 @@ export function ExecutionNodeCard({
     formatExecutionFocusPrimarySignal(node);
   const executionFollowUp =
     node.execution_focus_explanation?.follow_up ?? formatExecutionFocusFollowUp(node);
+  const hasCallbackWaitingSummary = hasExecutionNodeCallbackWaitingSummaryFacts(node);
   const rawBlockingCopy = node.execution_blocking_reason
     ? `Execution blocked: ${node.execution_blocking_reason}`
     : null;
@@ -216,13 +218,15 @@ export function ExecutionNodeCard({
         <span className="event-chip">unavailable {node.execution_unavailable_count}</span>
       </div>
 
-      {executionPrimarySignal ? (
+      {executionPrimarySignal && !hasCallbackWaitingSummary ? (
         <p className={node.execution_blocking_reason ? "run-error-message" : "activity-copy"}>
           {executionPrimarySignal}
         </p>
       ) : null}
 
-      {executionFollowUp ? <p className="binding-meta">{executionFollowUp}</p> : null}
+      {executionFollowUp && !hasCallbackWaitingSummary ? (
+        <p className="binding-meta">{executionFollowUp}</p>
+      ) : null}
 
       {node.execution_fallback_reason && !node.execution_blocking_reason ? (
         <p className="activity-copy">Execution fallback: {node.execution_fallback_reason}</p>

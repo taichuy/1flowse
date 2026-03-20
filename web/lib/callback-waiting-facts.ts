@@ -3,6 +3,19 @@ type CallbackWaitingExplanationLike = {
   follow_up?: string | null;
 };
 
+type ExecutionNodeCallbackWaitingSummaryFacts = {
+  callback_waiting_explanation?: CallbackWaitingExplanationLike | null;
+  callback_waiting_lifecycle?: object | null;
+  waiting_reason?: string | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_source?: string | null;
+  scheduled_waiting_status?: string | null;
+  scheduled_resume_scheduled_at?: string | null;
+  scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
+};
+
 export type CallbackWaitingSummaryFacts = {
   callbackWaitingExplanation?: CallbackWaitingExplanationLike | null;
   callbackWaitingLifecycle?: object | null;
@@ -41,4 +54,25 @@ export function hasCallbackWaitingSummaryFacts(
       hasTrimmedText(input.scheduledResumeRequeuedAt) ||
       hasTrimmedText(input.scheduledResumeRequeueSource)
   );
+}
+
+export function hasExecutionNodeCallbackWaitingSummaryFacts(
+  input?: ExecutionNodeCallbackWaitingSummaryFacts | null
+) {
+  if (!input) {
+    return false;
+  }
+
+  return hasCallbackWaitingSummaryFacts({
+    callbackWaitingExplanation: input.callback_waiting_explanation,
+    callbackWaitingLifecycle: input.callback_waiting_lifecycle,
+    waitingReason: input.waiting_reason,
+    scheduledResumeDelaySeconds: input.scheduled_resume_delay_seconds,
+    scheduledResumeSource: input.scheduled_resume_source,
+    scheduledWaitingStatus: input.scheduled_waiting_status,
+    scheduledResumeScheduledAt: input.scheduled_resume_scheduled_at,
+    scheduledResumeDueAt: input.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: input.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: input.scheduled_resume_requeue_source
+  });
 }

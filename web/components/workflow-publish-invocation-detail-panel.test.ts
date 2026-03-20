@@ -312,6 +312,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("detail-snapshot-node");
     expect(html).toContain("detail snapshot waiting reason");
     expect(html).not.toContain("legacy-run-node");
+    expect(html).not.toContain("当前节点：tool_wait。");
     expect(html).toContain("Waiting node focus evidence");
     expect(html).toContain("Callback recovery checklist");
     expect(html).toContain("effective sandbox");
@@ -320,5 +321,125 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("runner container");
     expect(html).not.toContain("Sampled run focus evidence");
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
+  });
+
+  it("hides generic execution focus recommendation when the focused node already exposes callback waiting summary", () => {
+    const detail = buildDetail();
+    detail.execution_focus_reason = "blocking_node_run";
+    detail.execution_focus_explanation = {
+      primary_signal: "顶层 execution focus 仍在等待 callback。",
+      follow_up: "顶层 execution focus 建议先观察重排队。"
+    };
+    detail.execution_focus_node = {
+      node_run_id: "node-run-focus",
+      node_id: "tool_wait",
+      node_name: "Tool wait",
+      node_type: "tool",
+      status: "waiting",
+      phase: "execute",
+      retry_count: 0,
+      input_payload: {},
+      checkpoint_payload: {},
+      working_context: {},
+      evidence_context: null,
+      artifact_refs: [],
+      output_payload: null,
+      error_message: null,
+      waiting_reason: "callback pending",
+      started_at: "2026-03-20T10:00:00Z",
+      phase_started_at: "2026-03-20T10:00:00Z",
+      finished_at: null,
+      execution_class: "sandbox",
+      execution_source: "runtime_policy",
+      execution_profile: null,
+      execution_timeout_ms: null,
+      execution_network_policy: null,
+      execution_filesystem_policy: null,
+      execution_dependency_mode: null,
+      execution_builtin_package_set: null,
+      execution_dependency_ref: null,
+      execution_backend_extensions: null,
+      execution_dispatched_count: 1,
+      execution_fallback_count: 0,
+      execution_blocked_count: 0,
+      execution_unavailable_count: 0,
+      requested_execution_class: null,
+      requested_execution_source: null,
+      requested_execution_profile: null,
+      requested_execution_timeout_ms: null,
+      requested_execution_network_policy: null,
+      requested_execution_filesystem_policy: null,
+      requested_execution_dependency_mode: null,
+      requested_execution_builtin_package_set: null,
+      requested_execution_dependency_ref: null,
+      requested_execution_backend_extensions: null,
+      effective_execution_class: "sandbox",
+      execution_executor_ref: "tool:compat-adapter:dify-default",
+      execution_sandbox_backend_id: "sandbox-default",
+      execution_sandbox_backend_executor_ref: null,
+      execution_sandbox_runner_kind: "container",
+      execution_blocking_reason: null,
+      execution_fallback_reason: null,
+      event_count: 0,
+      event_type_counts: {},
+      last_event_type: null,
+      artifacts: [],
+      tool_calls: [],
+      ai_calls: [],
+      callback_tickets: [],
+      skill_reference_load_count: 0,
+      skill_reference_loads: [],
+      sensitive_access_entries: [],
+      callback_waiting_lifecycle: {
+        wait_cycle_count: 1,
+        issued_ticket_count: 1,
+        expired_ticket_count: 0,
+        consumed_ticket_count: 0,
+        canceled_ticket_count: 0,
+        late_callback_count: 0,
+        resume_schedule_count: 1,
+        max_expired_ticket_count: 0,
+        terminated: false,
+        termination_reason: null,
+        terminated_at: null,
+        last_ticket_status: "pending",
+        last_ticket_reason: "callback pending",
+        last_ticket_updated_at: "2026-03-20T10:00:05Z",
+        last_late_callback_status: null,
+        last_late_callback_reason: null,
+        last_late_callback_at: null,
+        last_resume_delay_seconds: 45,
+        last_resume_reason: "callback pending",
+        last_resume_source: "callback_ticket_monitor",
+        last_resume_backoff_attempt: 0
+      },
+      execution_focus_explanation: null,
+      callback_waiting_explanation: {
+        primary_signal: "focus 节点 callback summary 仍在等待。",
+        follow_up: "focus 节点 callback summary 建议先观察重排队。"
+      },
+      scheduled_resume_delay_seconds: 45,
+      scheduled_resume_reason: "callback pending",
+      scheduled_resume_source: "callback_ticket_monitor",
+      scheduled_waiting_status: "waiting_callback",
+      scheduled_resume_scheduled_at: "2026-03-20T10:00:00Z",
+      scheduled_resume_due_at: "2026-03-20T10:00:45Z",
+      scheduled_resume_requeued_at: "2026-03-20T10:01:30Z",
+      scheduled_resume_requeue_source: "waiting_resume_monitor"
+    } as NonNullable<PublishedEndpointInvocationDetailResponse["execution_focus_node"]>;
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    expect(html).toContain("Execution focus");
+    expect(html).toContain("data-testid=\"execution-node-card\"");
+    expect(html).not.toContain("顶层 execution focus 仍在等待 callback。");
+    expect(html).not.toContain("顶层 execution focus 建议先观察重排队。");
   });
 });

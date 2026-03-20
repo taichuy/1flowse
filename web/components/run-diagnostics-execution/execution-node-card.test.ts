@@ -350,6 +350,8 @@ describe("ExecutionNodeCard", () => {
     expect(html).toContain("skill loads 1");
     expect(html).toContain("skill refs 1");
     expect(html).toContain("skill node callback_node Callback node");
+    expect(html).not.toContain("当前节点仍在等待 callback。");
+    expect(html).not.toContain("优先观察定时恢复是否已重新排队。");
   });
 
   it("filters shared skill trace down to the current execution node", () => {

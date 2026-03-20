@@ -10,6 +10,7 @@ import {
   buildOperatorInlineActionFeedbackModel,
   type OperatorInlineActionResultState
 } from "@/lib/operator-inline-action-feedback";
+import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { buildOperatorRunSampleCards } from "@/lib/operator-run-sample-cards";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { listExecutionFocusRuntimeFactBadges } from "@/lib/run-execution-focus-presenters";
@@ -35,6 +36,10 @@ export function InlineOperatorActionFeedback({
   const runFollowUp = structuredResult.runFollowUp ?? null;
   const runSnapshot = structuredResult.runSnapshot;
   const hasCallbackWaitingSummary = hasCallbackWaitingSummaryFacts(runSnapshot);
+  const callbackWaitingSnapshotSummary = hasCallbackWaitingSummary
+    ? formatRunSnapshotSummary(runSnapshot ?? {})
+    : null;
+  const callbackWaitingFollowUp = runSnapshot?.callbackWaitingExplanation?.follow_up?.trim() || null;
   const callbackWaitingFocusNode = buildExecutionFocusExplainableNode(runSnapshot);
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(callbackWaitingFocusNode);
   const sampledRunCards = buildOperatorRunSampleCards(
@@ -61,14 +66,20 @@ export function InlineOperatorActionFeedback({
           </Link>
         ) : null}
       </div>
-      {model.headline ? <p className="section-copy entry-copy">{model.headline}</p> : null}
+      {model.headline && model.headline !== callbackWaitingSnapshotSummary ? (
+        <p className="section-copy entry-copy">{model.headline}</p>
+      ) : null}
       {model.outcomeFollowUp ? <p className="binding-meta">{model.outcomeFollowUp}</p> : null}
       {model.blockerDeltaSummary ? <p className="binding-meta">{model.blockerDeltaSummary}</p> : null}
       {model.runFollowUpPrimarySignal ? (
         <p className="section-copy entry-copy">{model.runFollowUpPrimarySignal}</p>
       ) : null}
-      {model.runFollowUpFollowUp ? <p className="binding-meta">{model.runFollowUpFollowUp}</p> : null}
-      {model.runSnapshotSummary ? <p className="binding-meta">{model.runSnapshotSummary}</p> : null}
+      {model.runFollowUpFollowUp && model.runFollowUpFollowUp !== callbackWaitingFollowUp ? (
+        <p className="binding-meta">{model.runFollowUpFollowUp}</p>
+      ) : null}
+      {!hasCallbackWaitingSummary && model.runSnapshotSummary ? (
+        <p className="binding-meta">{model.runSnapshotSummary}</p>
+      ) : null}
 
       {model.runStatus || model.currentNodeId || model.focusNodeLabel || model.waitingReason ? (
         <dl className="compact-meta-list">

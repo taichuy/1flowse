@@ -7,7 +7,10 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { pickCallbackWaitingSkillTraceForNode } from "@/lib/callback-waiting-focus-skill-trace";
-import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import {
+  hasCallbackWaitingSummaryFacts,
+  hasExecutionNodeCallbackWaitingSummaryFacts
+} from "@/lib/callback-waiting-facts";
 import {
   countPendingApprovals,
   countPendingTickets,
@@ -149,6 +152,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
     executionView.execution_focus_explanation?.follow_up ??
     (focusNode ? formatExecutionFocusFollowUp(focusNode) : null);
   const focusNodeExecutionFactBadges = listExecutionFocusRuntimeFactBadges(focusNode);
+  const focusNodeHasCallbackWaitingSummary = hasExecutionNodeCallbackWaitingSummaryFacts(focusNode);
   const blockerNodes = pickTopBlockerNodes(executionView).filter(
     (node) => node.node_run_id !== focusNode?.node_run_id
   );
@@ -187,10 +191,12 @@ export function RunDiagnosticsExecutionOverviewBlockers({
                 ))}
               </div>
             ) : null}
-            {focusNodePrimarySignal ? (
+            {focusNodePrimarySignal && !focusNodeHasCallbackWaitingSummary ? (
               <p className="section-copy entry-copy">{focusNodePrimarySignal}</p>
             ) : null}
-            {focusNodeFollowUp ? <p className="binding-meta">{focusNodeFollowUp}</p> : null}
+            {focusNodeFollowUp && !focusNodeHasCallbackWaitingSummary ? (
+              <p className="binding-meta">{focusNodeFollowUp}</p>
+            ) : null}
             {renderNodeFollowUp({
               callbackWaitingAutomation,
               inboxHref: buildNodeInboxHref(focusNode, executionView.run_id),
@@ -215,6 +221,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
             node.execution_focus_explanation?.follow_up ??
             formatExecutionFocusFollowUp(node);
           const executionFactBadges = listExecutionFocusRuntimeFactBadges(node);
+          const hasCallbackWaitingSummary = hasExecutionNodeCallbackWaitingSummaryFacts(node);
 
           return (
             <article className="payload-card compact-card" key={node.node_run_id}>
@@ -245,8 +252,12 @@ export function RunDiagnosticsExecutionOverviewBlockers({
                   ))}
                 </div>
               ) : null}
-              {primarySignal ? <p className="section-copy entry-copy">{primarySignal}</p> : null}
-              {followUp ? <p className="binding-meta">{followUp}</p> : null}
+              {primarySignal && !hasCallbackWaitingSummary ? (
+                <p className="section-copy entry-copy">{primarySignal}</p>
+              ) : null}
+              {followUp && !hasCallbackWaitingSummary ? (
+                <p className="binding-meta">{followUp}</p>
+              ) : null}
               {renderNodeFollowUp({
                 callbackWaitingAutomation,
                 inboxHref,

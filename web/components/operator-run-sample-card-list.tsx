@@ -38,7 +38,9 @@ export function OperatorRunSampleCardList({
             </Link>
           </div>
 
-          {sample.summary ? <p className="binding-meta">{sample.summary}</p> : null}
+          {sample.summary && !sample.hasCallbackWaitingSummary ? (
+            <p className="binding-meta">{sample.summary}</p>
+          ) : null}
 
           {sample.runStatus ||
           sample.currentNodeId ||

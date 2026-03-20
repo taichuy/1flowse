@@ -11,6 +11,7 @@ import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
+import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
   buildBlockingPublishedInvocationInboxHref,
@@ -90,6 +91,8 @@ export function WorkflowPublishInvocationDetailPanel({
   const executionFocusFollowUp =
     detail.execution_focus_explanation?.follow_up ??
     (executionFocusNode ? formatExecutionFocusFollowUp(executionFocusNode) : null);
+  const executionFocusHasCallbackWaitingSummary =
+    hasExecutionNodeCallbackWaitingSummaryFacts(executionFocusNode);
   const runFollowUpPrimarySignal = runFollowUp?.explanation?.primary_signal?.trim() || null;
   const runFollowUpFollowUp = runFollowUp?.explanation?.follow_up?.trim() || null;
   const runFollowUpStatusSummary = runFollowUp
@@ -262,7 +265,7 @@ export function WorkflowPublishInvocationDetailPanel({
                         该 sampled run 已回接 canonical follow-up 快照。
                       </p>
                     ) : null}
-                    {sample.snapshot_summary ? (
+                    {sample.snapshot_summary && !sample.has_callback_waiting_summary ? (
                       <p className="binding-meta">{sample.snapshot_summary}</p>
                     ) : null}
                     {sample.execution_focus_artifact_count > 0 ||
@@ -404,10 +407,10 @@ export function WorkflowPublishInvocationDetailPanel({
           <p className="section-copy entry-copy">
             当前 publish invocation detail 直接复用 run diagnostics 的 execution 事实，优先聚焦当前最相关的 node run。
           </p>
-          {executionFocusPrimarySignal ? (
+          {executionFocusPrimarySignal && !executionFocusHasCallbackWaitingSummary ? (
             <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
           ) : null}
-          {executionFocusFollowUp ? (
+          {executionFocusFollowUp && !executionFocusHasCallbackWaitingSummary ? (
             <p className="binding-meta">{executionFocusFollowUp}</p>
           ) : null}
           <div className="tool-badge-row">
