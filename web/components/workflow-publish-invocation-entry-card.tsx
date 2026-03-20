@@ -286,7 +286,7 @@ export function WorkflowPublishInvocationEntryCard({
       {runFollowUp?.affected_run_count ? (
         <div className="payload-card compact-card">
         <div className="payload-card-header">
-          <span className="status-meta">Canonical follow-up</span>
+          <span className="status-meta">{surfaceCopy.canonicalFollowUpTitle}</span>
         </div>
           <p className="section-copy entry-copy">{canonicalFollowUp.headline}</p>
           {canonicalFollowUp.follow_up ? (
@@ -294,19 +294,19 @@ export function WorkflowPublishInvocationEntryCard({
           ) : null}
           <dl className="compact-meta-list">
             <div>
-              <dt>Affected runs</dt>
+              <dt>{surfaceCopy.canonicalFollowUpAffectedRunsLabel}</dt>
               <dd>{runFollowUp.affected_run_count}</dd>
             </div>
             <div>
-              <dt>Sampled runs</dt>
+              <dt>{surfaceCopy.canonicalFollowUpSampledRunsLabel}</dt>
               <dd>{runFollowUp.sampled_run_count}</dd>
             </div>
             <div>
-              <dt>Status summary</dt>
+              <dt>{surfaceCopy.canonicalFollowUpStatusSummaryLabel}</dt>
               <dd>{runFollowUpStatusSummary ?? "n/a"}</dd>
             </div>
             <div>
-              <dt>Sample focus</dt>
+              <dt>{surfaceCopy.canonicalFollowUpSampleFocusLabel}</dt>
               <dd>
                 {runFollowUpSample ? (
                   <Link className="inline-link" href={`/runs/${encodeURIComponent(runFollowUpSample.run_id)}`}>
@@ -328,7 +328,7 @@ export function WorkflowPublishInvocationEntryCard({
             <SandboxExecutionReadinessCard
               node={readinessNode}
               readiness={sandboxReadiness}
-              title="Live sandbox readiness"
+              title={surfaceCopy.liveSandboxReadinessTitle}
             />
           ) : null}
           {runFollowUpSample ? (
@@ -423,7 +423,7 @@ export function WorkflowPublishInvocationEntryCard({
               ) : (
                 <>
                   <OperatorFocusEvidenceCard
-                    title="Sampled run focus evidence"
+                    title={surfaceCopy.sampledRunFocusEvidenceTitle}
                     artifactCount={runFollowUpSample.execution_focus_artifact_count}
                     artifactRefCount={runFollowUpSample.execution_focus_artifact_ref_count}
                     artifactSummary={runFollowUpSample.focus_artifact_summary}
@@ -433,7 +433,7 @@ export function WorkflowPublishInvocationEntryCard({
                   />
                   <SkillReferenceLoadList
                     skillReferenceLoads={runFollowUpSample.focus_skill_reference_loads}
-                    title="Focused skill trace"
+                    title={surfaceCopy.sampledRunSkillTraceTitle}
                     description={surfaceCopy.sampledRunSkillTraceDescription}
                   />
                 </>
@@ -444,8 +444,8 @@ export function WorkflowPublishInvocationEntryCard({
       ) : null}
       {recommendedNextStep ? (
         <div className="payload-card compact-card">
-          <div className="payload-card-header">
-            <span className="status-meta">Recommended next step</span>
+        <div className="payload-card-header">
+            <span className="status-meta">{surfaceCopy.recommendedNextStepTitle}</span>
             <span className="event-chip">{recommendedNextStep.label}</span>
           </div>
           <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>

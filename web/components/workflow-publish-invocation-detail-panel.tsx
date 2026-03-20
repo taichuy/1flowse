@@ -24,6 +24,7 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationInboxHref,
+  formatPublishedInvocationSampleReasonLabel,
   listPublishedInvocationRunFollowUpSampleViews,
   normalizePublishedInvocationRunSnapshot
 } from "@/lib/published-invocation-presenters";
@@ -149,17 +150,17 @@ export function WorkflowPublishInvocationDetailPanel({
           </p>
         </div>
         <Link className="inline-link secondary" href={clearHref}>
-          关闭详情
+          {detailSurfaceCopy.closeDetailLabel}
         </Link>
       </div>
 
       <div className="publish-meta-grid">
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Run drilldown</span>
+            <span className="status-meta">{detailSurfaceCopy.runDrilldownTitle}</span>
             {run?.id ? (
               <Link className="inline-link" href={`/runs/${encodeURIComponent(run.id)}`}>
-                打开 run
+                {detailSurfaceCopy.openRunLabel}
               </Link>
             ) : null}
           </div>
@@ -197,7 +198,7 @@ export function WorkflowPublishInvocationDetailPanel({
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Cache drilldown</span>
+            <span className="status-meta">{detailSurfaceCopy.cacheDrilldownTitle}</span>
           </div>
           <dl className="compact-meta-list">
             <div>
@@ -230,21 +231,21 @@ export function WorkflowPublishInvocationDetailPanel({
 
       <div className="publish-meta-grid">
         <div>
-          <strong>Request preview</strong>
+          <strong>{detailSurfaceCopy.requestPreviewTitle}</strong>
           <p className="section-copy entry-copy">
             request keys: {formatKeyList(invocation.request_preview.keys ?? [])}
           </p>
           <pre className="trace-preview">{formatJsonPreview(invocation.request_preview)}</pre>
         </div>
         <div>
-          <strong>Response preview</strong>
+          <strong>{detailSurfaceCopy.responsePreviewTitle}</strong>
           <pre className="trace-preview">{formatJsonPreview(invocation.response_preview)}</pre>
         </div>
       </div>
 
       {runFollowUp ? (
         <div>
-          <strong>Canonical follow-up</strong>
+          <strong>{detailSurfaceCopy.canonicalFollowUpTitle}</strong>
           <p className="section-copy entry-copy">{detailSurfaceCopy.canonicalFollowUpDescription}</p>
           <div className="tool-badge-row">
             <span className="event-chip">affected {runFollowUp.affected_run_count}</span>
@@ -272,11 +273,7 @@ export function WorkflowPublishInvocationDetailPanel({
                   sample.run_snapshot
                 );
                 const sampleReasonLabel =
-                  sample.explanation_source === "callback_waiting"
-                    ? "callback waiting"
-                    : sample.explanation_source === "execution_focus"
-                      ? "execution focus"
-                      : "run snapshot";
+                  formatPublishedInvocationSampleReasonLabel(sample.explanation_source);
 
                 return (
                   <div className="payload-card compact-card" key={sample.run_id}>
@@ -302,7 +299,7 @@ export function WorkflowPublishInvocationDetailPanel({
                       <SandboxExecutionReadinessCard
                         node={sampleReadinessNode}
                         readiness={sandboxReadiness}
-                        title="Live sandbox readiness"
+                        title={detailSurfaceCopy.liveSandboxReadinessTitle}
                       />
                     ) : null}
                     {sample.execution_focus_artifact_count > 0 ||
@@ -455,7 +452,7 @@ export function WorkflowPublishInvocationDetailPanel({
 
       {runId && executionFocusNode ? (
         <div>
-          <strong>Execution focus</strong>
+          <strong>{detailSurfaceCopy.executionFocusTitle}</strong>
           <p className="section-copy entry-copy">{executionFocusSurfaceCopy.sectionDescription}</p>
           {executionFocusPrimarySignal && !executionFocusHasCallbackWaitingSummary ? (
             <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
@@ -472,7 +469,7 @@ export function WorkflowPublishInvocationDetailPanel({
           <SandboxExecutionReadinessCard
             node={executionFocusNode}
             readiness={sandboxReadiness}
-            title="Live sandbox readiness"
+            title={detailSurfaceCopy.liveSandboxReadinessTitle}
           />
           <ExecutionNodeCard
             node={executionFocusNode}
@@ -494,7 +491,7 @@ export function WorkflowPublishInvocationDetailPanel({
 
       {skillTrace ? (
         <div>
-          <strong>Skill trace</strong>
+          <strong>{detailSurfaceCopy.skillTraceTitle}</strong>
           <p className="section-copy entry-copy">{detailSurfaceCopy.skillTraceDescription}</p>
           <div className="tool-badge-row">
             <span className="event-chip">refs {skillTrace.reference_count}</span>
@@ -518,7 +515,7 @@ export function WorkflowPublishInvocationDetailPanel({
                 </p>
                 <SkillReferenceLoadList
                   skillReferenceLoads={node.loads}
-                  title="Injected references"
+                  title={detailSurfaceCopy.injectedReferencesTitle}
                   description={detailSurfaceCopy.injectedReferencesDescription}
                 />
               </div>
@@ -529,7 +526,7 @@ export function WorkflowPublishInvocationDetailPanel({
 
       {involvedTools.length > 0 || unresolvedToolIds.length > 0 ? (
         <div>
-          <strong>Tool governance context</strong>
+          <strong>{detailSurfaceCopy.toolGovernanceTitle}</strong>
           <p className="section-copy entry-copy">{detailSurfaceCopy.toolGovernanceDescription}</p>
           {unresolvedToolIds.length ? (
             <div className="tool-badge-row">
@@ -546,7 +543,7 @@ export function WorkflowPublishInvocationDetailPanel({
                 <ToolGovernanceSummary
                   key={`tool-governance-${tool.id}`}
                   tool={tool}
-                  title="Execution and sensitivity"
+                  title={detailSurfaceCopy.toolGovernanceSummaryTitle}
                   subtitle={tool.name}
                   trailingChip={tool.id}
                 />

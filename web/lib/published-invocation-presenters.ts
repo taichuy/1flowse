@@ -84,11 +84,25 @@ export type PublishedInvocationRecommendedNextStep = {
 };
 
 export type PublishedInvocationDetailSurfaceCopy = {
+  closeDetailLabel: string;
+  openRunLabel: string;
+  runDrilldownTitle: string;
+  cacheDrilldownTitle: string;
+  requestPreviewTitle: string;
+  responsePreviewTitle: string;
+  canonicalFollowUpTitle: string;
   canonicalFollowUpDescription: string;
   sampledRunFallback: string;
+  sampledRunSkillTraceTitle: string;
   sampledRunSkillTraceDescription: string;
+  executionFocusTitle: string;
+  liveSandboxReadinessTitle: string;
+  skillTraceTitle: string;
+  injectedReferencesTitle: string;
   skillTraceDescription: string;
   injectedReferencesDescription: string;
+  toolGovernanceTitle: string;
+  toolGovernanceSummaryTitle: string;
   toolGovernanceDescription: string;
   blockingApprovalTimelineDescription: string;
   approvalTimelineDescription: string;
@@ -120,8 +134,17 @@ export type PublishedInvocationUnavailableDetailSurfaceCopy = {
 };
 
 export type PublishedInvocationEntrySurfaceCopy = {
+  canonicalFollowUpTitle: string;
   canonicalFollowUpFallbackHeadline: string;
+  canonicalFollowUpAffectedRunsLabel: string;
+  canonicalFollowUpSampledRunsLabel: string;
+  canonicalFollowUpStatusSummaryLabel: string;
+  canonicalFollowUpSampleFocusLabel: string;
+  liveSandboxReadinessTitle: string;
+  sampledRunFocusEvidenceTitle: string;
+  sampledRunSkillTraceTitle: string;
   sampledRunSkillTraceDescription: string;
+  recommendedNextStepTitle: string;
   callbackLifecycleFallback: string;
   succeededDescription: string;
   detailPanelDescription: string;
@@ -160,16 +183,30 @@ export function buildPublishedInvocationDetailSurfaceCopy({
   });
 
   return {
+    closeDetailLabel: "关闭详情",
+    openRunLabel: "打开 run",
+    runDrilldownTitle: "Run drilldown",
+    cacheDrilldownTitle: "Cache drilldown",
+    requestPreviewTitle: "Request preview",
+    responsePreviewTitle: "Response preview",
+    canonicalFollowUpTitle: "Canonical follow-up",
     canonicalFollowUpDescription:
       "publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。",
     sampledRunFallback: "该 sampled run 已回接 canonical follow-up 快照。",
+    sampledRunSkillTraceTitle: "Focused skill trace",
     sampledRunSkillTraceDescription:
       "publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。",
+    executionFocusTitle: "Execution focus",
+    liveSandboxReadinessTitle: "Live sandbox readiness",
+    skillTraceTitle: "Skill trace",
+    injectedReferencesTitle: "Injected references",
     skillTraceDescription: focusSkillTraceNodeRunId?.trim()
       ? `当前 invocation 已接入 canonical skill trace；当前优先聚焦 execution focus 节点 ${focusSkillTraceNodeRunId.trim()}。`
       : "当前 invocation 已接入 canonical skill trace；发布入口和 run detail 现在共享同一条 trace 事实。",
     injectedReferencesDescription:
       "当前节点真正加载到 agent phase 的 skill references。发布入口和 run detail 现在共享同一条 trace 事实。",
+    toolGovernanceTitle: "Tool governance context",
+    toolGovernanceSummaryTitle: "Execution and sensitivity",
     toolGovernanceDescription:
       "把 callback waiting 关联 tool 的默认执行边界和敏感级别一起带到 publish detail，避免 operator 只看到阻断结果却看不见治理原因。",
     blockingApprovalTimelineDescription: blockingApprovalTimelineCopy.description,
@@ -209,15 +246,38 @@ export function buildPublishedInvocationCallbackDrilldownSurfaceCopy(): Publishe
 
 export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationEntrySurfaceCopy {
   return {
+    canonicalFollowUpTitle: "Canonical follow-up",
     canonicalFollowUpFallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。",
+    canonicalFollowUpAffectedRunsLabel: "Affected runs",
+    canonicalFollowUpSampledRunsLabel: "Sampled runs",
+    canonicalFollowUpStatusSummaryLabel: "Status summary",
+    canonicalFollowUpSampleFocusLabel: "Sample focus",
+    liveSandboxReadinessTitle: "Live sandbox readiness",
+    sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
+    sampledRunSkillTraceTitle: "Focused skill trace",
     sampledRunSkillTraceDescription:
       "发布活动卡片现在也会复用 compact snapshot 里的 skill trace，方便直接确认 sampled run 的 focus node 注入来源。",
+    recommendedNextStepTitle: "Recommended next step",
     callbackLifecycleFallback: "tracked in detail panel",
     succeededDescription:
       "该请求已经走完整条 publish 调用链，run 已结束，可以直接对照 response preview 做回放。",
     detailPanelDescription:
       "详情面板会补 run / callback ticket / callback lifecycle / cache 四类稳定排障入口。"
   };
+}
+
+export function formatPublishedInvocationSampleReasonLabel(
+  source: "callback_waiting" | "execution_focus" | null
+) {
+  if (source === "callback_waiting") {
+    return "callback waiting";
+  }
+
+  if (source === "execution_focus") {
+    return "execution focus";
+  }
+
+  return "run snapshot";
 }
 
 export function buildPublishedInvocationActivityInsightsSurfaceCopy({

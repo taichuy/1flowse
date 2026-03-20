@@ -14,6 +14,7 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationUnavailableDetailSurfaceCopy,
   formatPublishedInvocationFailureReasonLastSeen,
+  formatPublishedInvocationSampleReasonLabel,
   formatPublishedInvocationWaitingRuntimeFallback,
   formatPublishedInvocationWaitingFollowUp,
   formatPublishedInvocationWaitingHeadline,
@@ -35,6 +36,13 @@ describe("published invocation presenters", () => {
         focusSkillTraceNodeRunId: "node-run-focus"
       })
     ).toMatchObject({
+      closeDetailLabel: "关闭详情",
+      openRunLabel: "打开 run",
+      runDrilldownTitle: "Run drilldown",
+      canonicalFollowUpTitle: "Canonical follow-up",
+      liveSandboxReadinessTitle: "Live sandbox readiness",
+      injectedReferencesTitle: "Injected references",
+      toolGovernanceSummaryTitle: "Execution and sensitivity",
       canonicalFollowUpDescription: expect.stringContaining("operator follow-up"),
       blockingApprovalTimelineDescription: expect.stringContaining("node-run-blocked"),
       approvalTimelineDescription: expect.stringContaining("published-surface debugging"),
@@ -74,12 +82,27 @@ describe("published invocation presenters", () => {
 
   it("为 publish entry / detail 提供统一 surface copy", () => {
     expect(buildPublishedInvocationEntrySurfaceCopy()).toEqual({
+      canonicalFollowUpTitle: "Canonical follow-up",
       canonicalFollowUpFallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。",
+      canonicalFollowUpAffectedRunsLabel: "Affected runs",
+      canonicalFollowUpSampledRunsLabel: "Sampled runs",
+      canonicalFollowUpStatusSummaryLabel: "Status summary",
+      canonicalFollowUpSampleFocusLabel: "Sample focus",
+      liveSandboxReadinessTitle: "Live sandbox readiness",
+      sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
+      sampledRunSkillTraceTitle: "Focused skill trace",
       sampledRunSkillTraceDescription: expect.stringContaining("compact snapshot"),
+      recommendedNextStepTitle: "Recommended next step",
       callbackLifecycleFallback: "tracked in detail panel",
       succeededDescription: expect.stringContaining("publish 调用链"),
       detailPanelDescription: expect.stringContaining("callback lifecycle / cache")
     });
+  });
+
+  it("为 sampled run 来源提供统一 surface label", () => {
+    expect(formatPublishedInvocationSampleReasonLabel("callback_waiting")).toBe("callback waiting");
+    expect(formatPublishedInvocationSampleReasonLabel("execution_focus")).toBe("execution focus");
+    expect(formatPublishedInvocationSampleReasonLabel(null)).toBe("run snapshot");
   });
 
   it("为 publish activity insights 提供统一辅助文案", () => {
