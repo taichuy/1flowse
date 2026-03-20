@@ -7,7 +7,9 @@ import { buildSandboxExecutionPolicyPreflightInsight } from "@/lib/sandbox-readi
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import {
   cloneRecord,
+  formatJsonObjectFieldValue,
   parseNumericFieldValue,
+  parseJsonObjectFieldValue,
   toRecord
 } from "@/components/workflow-node-config-form/shared";
 import {
@@ -18,6 +20,7 @@ import {
 } from "@/components/workflow-node-config-form/runtime-policy-helpers";
 import {
   WORKFLOW_EXECUTION_CLASS_OPTIONS,
+  WORKFLOW_EXECUTION_DEPENDENCY_MODE_OPTIONS,
   WORKFLOW_EXECUTION_FILESYSTEM_POLICY_OPTIONS,
   WORKFLOW_EXECUTION_NETWORK_POLICY_OPTIONS
 } from "@/lib/workflow-runtime-policy";
@@ -49,11 +52,35 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
           executionClass: execution.className,
           nodeType,
           profile: execution.profile,
+          dependencyMode: execution.dependencyMode,
+          builtinPackageSet: execution.builtinPackageSet,
+          dependencyRef: execution.dependencyRef,
+          backendExtensions: execution.backendExtensions ?? null,
           networkPolicy: execution.networkPolicy,
           filesystemPolicy: execution.filesystemPolicy
         })
       : null;
   const normalizedHighlightedField = normalizeRuntimeExecutionFieldKey(highlightedFieldPath);
+  const backendExtensionsValue = React.useMemo(
+    () => formatJsonObjectFieldValue(execution.backendExtensions),
+    [execution.backendExtensions]
+  );
+  const [backendExtensionsInput, setBackendExtensionsInput] = React.useState(
+    backendExtensionsValue
+  );
+  const [backendExtensionsError, setBackendExtensionsError] = React.useState<string | null>(null);
+  const showStrongIsolationFields =
+    execution.className === "sandbox" ||
+    execution.className === "microvm" ||
+    Boolean(execution.dependencyMode) ||
+    Boolean(execution.builtinPackageSet) ||
+    Boolean(execution.dependencyRef) ||
+    Boolean(execution.backendExtensions && Object.keys(execution.backendExtensions).length > 0);
+
+  React.useEffect(() => {
+    setBackendExtensionsInput(backendExtensionsValue);
+    setBackendExtensionsError(null);
+  }, [backendExtensionsValue]);
 
   React.useEffect(() => {
     if (!normalizedHighlightedField) {
@@ -62,7 +89,8 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
 
     const target = sectionRef.current?.querySelector<HTMLElement>(
       `[data-validation-field="${normalizedHighlightedField}"] input, ` +
-        `[data-validation-field="${normalizedHighlightedField}"] select`
+        `[data-validation-field="${normalizedHighlightedField}"] select, ` +
+        `[data-validation-field="${normalizedHighlightedField}"] textarea`
     );
 
     target?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -70,8 +98,17 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
   }, [normalizedHighlightedField]);
 
   const updateExecutionField = (
-    field: "class" | "profile" | "timeoutMs" | "networkPolicy" | "filesystemPolicy",
-    value: string | number | undefined
+    field:
+      | "class"
+      | "profile"
+      | "timeoutMs"
+      | "networkPolicy"
+      | "filesystemPolicy"
+      | "dependencyMode"
+      | "builtinPackageSet"
+      | "dependencyRef"
+      | "backendExtensions",
+    value: string | number | Record<string, unknown> | undefined
   ) => {
     const nextPolicy = normalizeRuntimePolicy(runtimePolicy);
     const nextExecution = cloneRecord(toRecord(nextPolicy.execution) ?? {});
@@ -98,6 +135,18 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
     commitRuntimePolicy(nextPolicy, onChange);
   };
 
+  const commitBackendExtensions = () => {
+    const parsed = parseJsonObjectFieldValue(
+      backendExtensionsInput,
+      "Backend extensions"
+    );
+    setBackendExtensionsError(parsed.error);
+    if (parsed.error) {
+      return;
+    }
+    updateExecutionField("backendExtensions", parsed.value);
+  };
+
   return (
     <div className="binding-field compact-stack" ref={sectionRef}>
       <div className="section-heading compact-heading">
@@ -105,7 +154,7 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
           <span className="binding-label">Execution policy</span>
           <small className="section-copy">
             Resolve the effective execution boundary first, then only persist
-            `runtimePolicy.execution` when class/profile/limits differ from the default.
+            `runtimePolicy.execution` when class/profile/capability hints differ from the default.
           </small>
         </div>
         <div className="tool-badge-row">
@@ -197,6 +246,74 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
           ))}
         </select>
       </label>
+
+      {showStrongIsolationFields ? (
+        <>
+          <label className="binding-field" data-validation-field="execution.dependencyMode">
+            <span className="binding-label">Dependency mode</span>
+            <select
+              className="binding-select"
+              value={execution.dependencyMode ?? ""}
+              onChange={(event) =>
+                updateExecutionField("dependencyMode", event.target.value || undefined)
+              }
+            >
+              <option value="">omit dependency hints</option>
+              {WORKFLOW_EXECUTION_DEPENDENCY_MODE_OPTIONS.map((option) => (
+                <option key={`${nodeId}-execution-dependency-mode-${option}`} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {execution.dependencyMode === "builtin" ? (
+            <label className="binding-field" data-validation-field="execution.builtinPackageSet">
+              <span className="binding-label">Builtin package set</span>
+              <input
+                className="trace-text-input"
+                value={execution.builtinPackageSet}
+                onChange={(event) =>
+                  updateExecutionField("builtinPackageSet", event.target.value)
+                }
+                placeholder="py-data-basic"
+              />
+            </label>
+          ) : null}
+
+          {execution.dependencyMode === "dependency_ref" ? (
+            <label className="binding-field" data-validation-field="execution.dependencyRef">
+              <span className="binding-label">Dependency ref</span>
+              <input
+                className="trace-text-input"
+                value={execution.dependencyRef}
+                onChange={(event) => updateExecutionField("dependencyRef", event.target.value)}
+                placeholder="bundle:finance-safe-v1"
+              />
+            </label>
+          ) : null}
+
+          <label className="binding-field" data-validation-field="execution.backendExtensions">
+            <span className="binding-label">Backend extensions JSON</span>
+            <textarea
+              className="trace-text-input"
+              rows={4}
+              value={backendExtensionsInput}
+              onChange={(event) => {
+                setBackendExtensionsInput(event.target.value);
+                if (!event.target.value.trim()) {
+                  setBackendExtensionsError(null);
+                }
+              }}
+              onBlur={commitBackendExtensions}
+              placeholder='{"mountPreset":"analytics"}'
+            />
+          </label>
+          {backendExtensionsError ? (
+            <small className="status-meta warning-text">{backendExtensionsError}</small>
+          ) : null}
+        </>
+      ) : null}
 
       {sandboxExecutionInsight ? (
         <div className="binding-field compact-stack">

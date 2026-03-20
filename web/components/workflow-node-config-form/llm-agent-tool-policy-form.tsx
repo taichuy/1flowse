@@ -4,7 +4,10 @@ import React from "react";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
-import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
+import {
+  buildSandboxExecutionPolicyPreflightInsight,
+  formatSandboxReadinessPreflightHint
+} from "@/lib/sandbox-readiness-presenters";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import {
   compareToolsByGovernance,
@@ -12,13 +15,16 @@ import {
   getToolGovernanceSummary
 } from "@/lib/tool-governance";
 import {
+  WORKFLOW_EXECUTION_DEPENDENCY_MODE_OPTIONS,
   WORKFLOW_EXECUTION_FILESYSTEM_POLICY_OPTIONS,
   WORKFLOW_EXECUTION_NETWORK_POLICY_OPTIONS
 } from "@/lib/workflow-runtime-policy";
 import {
   cloneRecord,
   dedupeStrings,
+  formatJsonObjectFieldValue,
   parseNumericFieldValue,
+  parseJsonObjectFieldValue,
   toRecord,
   toStringArray
 } from "@/components/workflow-node-config-form/shared";
@@ -62,6 +68,53 @@ export function LlmAgentToolPolicyForm({
     selectedExecutionClass.trim().length > 0 && unsupportedExecutionTools.length > 0;
   const sandboxPreflightHint = formatSandboxReadinessPreflightHint(sandboxReadiness);
   const normalizedHighlightedField = normalizeToolPolicyFieldKey(highlightedFieldPath);
+  const backendExtensions =
+    execution.backendExtensions &&
+    typeof execution.backendExtensions === "object" &&
+    !Array.isArray(execution.backendExtensions) &&
+    Object.keys(execution.backendExtensions as Record<string, unknown>).length > 0
+      ? (execution.backendExtensions as Record<string, unknown>)
+      : undefined;
+  const backendExtensionsValue = React.useMemo(
+    () => formatJsonObjectFieldValue(backendExtensions),
+    [backendExtensions]
+  );
+  const [backendExtensionsInput, setBackendExtensionsInput] = React.useState(
+    backendExtensionsValue
+  );
+  const [backendExtensionsError, setBackendExtensionsError] = React.useState<string | null>(null);
+  const showStrongIsolationFields =
+    selectedExecutionClass === "sandbox" ||
+    selectedExecutionClass === "microvm" ||
+    (typeof execution.dependencyMode === "string" && execution.dependencyMode.trim().length > 0) ||
+    (typeof execution.builtinPackageSet === "string" &&
+      execution.builtinPackageSet.trim().length > 0) ||
+    (typeof execution.dependencyRef === "string" && execution.dependencyRef.trim().length > 0) ||
+    Boolean(backendExtensions);
+  const toolExecutionInsight =
+    sandboxReadiness && (selectedExecutionClass === "sandbox" || selectedExecutionClass === "microvm")
+      ? buildSandboxExecutionPolicyPreflightInsight(sandboxReadiness, {
+          executionClass: selectedExecutionClass,
+          nodeType: "tool",
+          profile: typeof execution.profile === "string" ? execution.profile : null,
+          dependencyMode:
+            typeof execution.dependencyMode === "string" ? execution.dependencyMode : null,
+          builtinPackageSet:
+            typeof execution.builtinPackageSet === "string" ? execution.builtinPackageSet : null,
+          dependencyRef:
+            typeof execution.dependencyRef === "string" ? execution.dependencyRef : null,
+          backendExtensions: backendExtensions ?? null,
+          networkPolicy:
+            typeof execution.networkPolicy === "string" ? execution.networkPolicy : null,
+          filesystemPolicy:
+            typeof execution.filesystemPolicy === "string" ? execution.filesystemPolicy : null
+        })
+      : null;
+
+  React.useEffect(() => {
+    setBackendExtensionsInput(backendExtensionsValue);
+    setBackendExtensionsError(null);
+  }, [backendExtensionsValue]);
 
   React.useEffect(() => {
     if (!normalizedHighlightedField) {
@@ -110,8 +163,17 @@ export function LlmAgentToolPolicyForm({
   };
 
   const updateExecutionField = (
-    field: "class" | "profile" | "timeoutMs" | "networkPolicy" | "filesystemPolicy",
-    value: string | number | undefined
+    field:
+      | "class"
+      | "profile"
+      | "timeoutMs"
+      | "networkPolicy"
+      | "filesystemPolicy"
+      | "dependencyMode"
+      | "builtinPackageSet"
+      | "dependencyRef"
+      | "backendExtensions",
+    value: string | number | Record<string, unknown> | undefined
   ) => {
     const nextConfig = cloneRecord(config);
     const nextToolPolicy = cloneRecord(toolPolicy);
@@ -151,6 +213,18 @@ export function LlmAgentToolPolicyForm({
     }
 
     onChange(nextConfig);
+  };
+
+  const commitBackendExtensions = () => {
+    const parsed = parseJsonObjectFieldValue(
+      backendExtensionsInput,
+      "Backend extensions"
+    );
+    setBackendExtensionsError(parsed.error);
+    if (parsed.error) {
+      return;
+    }
+    updateExecutionField("backendExtensions", parsed.value);
   };
 
   const toggleAllowedTool = (toolId: string, checked: boolean) => {
@@ -199,7 +273,7 @@ export function LlmAgentToolPolicyForm({
           <div>
             <span className="binding-label">Tool execution override</span>
             <small className="section-copy">
-              仅在需要把 Agent 可调用工具强制收口到特定 execution class / profile 时填写；留空表示沿用工具默认能力声明。
+              仅在需要把 Agent 可调用工具强制收口到特定 execution class / profile / capability hints 时填写；留空表示沿用工具默认能力声明。
             </small>
           </div>
           {Object.keys(execution).length > 0 ? (
@@ -321,6 +395,93 @@ export function LlmAgentToolPolicyForm({
             ))}
           </select>
         </label>
+
+        {showStrongIsolationFields ? (
+          <>
+            <label className="binding-field" data-validation-field="execution.dependencyMode">
+              <span className="binding-label">Dependency mode</span>
+              <select
+                className="binding-select"
+                value={typeof execution.dependencyMode === "string" ? execution.dependencyMode : ""}
+                onChange={(event) =>
+                  updateExecutionField("dependencyMode", event.target.value || undefined)
+                }
+              >
+                <option value="">follow tool default</option>
+                {WORKFLOW_EXECUTION_DEPENDENCY_MODE_OPTIONS.map((option) => (
+                  <option key={`tool-policy-dependency-mode-${option}`} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {execution.dependencyMode === "builtin" ? (
+              <label className="binding-field" data-validation-field="execution.builtinPackageSet">
+                <span className="binding-label">Builtin package set</span>
+                <input
+                  className="trace-text-input"
+                  value={typeof execution.builtinPackageSet === "string" ? execution.builtinPackageSet : ""}
+                  onChange={(event) =>
+                    updateExecutionField("builtinPackageSet", event.target.value)
+                  }
+                  placeholder="py-data-basic"
+                />
+              </label>
+            ) : null}
+
+            {execution.dependencyMode === "dependency_ref" ? (
+              <label className="binding-field" data-validation-field="execution.dependencyRef">
+                <span className="binding-label">Dependency ref</span>
+                <input
+                  className="trace-text-input"
+                  value={typeof execution.dependencyRef === "string" ? execution.dependencyRef : ""}
+                  onChange={(event) => updateExecutionField("dependencyRef", event.target.value)}
+                  placeholder="bundle:finance-safe-v1"
+                />
+              </label>
+            ) : null}
+
+            <label className="binding-field" data-validation-field="execution.backendExtensions">
+              <span className="binding-label">Backend extensions JSON</span>
+              <textarea
+                className="trace-text-input"
+                rows={4}
+                value={backendExtensionsInput}
+                onChange={(event) => {
+                  setBackendExtensionsInput(event.target.value);
+                  if (!event.target.value.trim()) {
+                    setBackendExtensionsError(null);
+                  }
+                }}
+                onBlur={commitBackendExtensions}
+                placeholder='{"mountPreset":"analytics"}'
+              />
+            </label>
+            {backendExtensionsError ? (
+              <small className="status-meta warning-text">{backendExtensionsError}</small>
+            ) : null}
+          </>
+        ) : null}
+
+        {toolExecutionInsight ? (
+          <div className="binding-field compact-stack">
+            <span className="binding-label">Live sandbox readiness</span>
+            <small className="section-copy">
+              {toolExecutionInsight.headline}
+              {toolExecutionInsight.detail ? ` ${toolExecutionInsight.detail}` : ""}
+            </small>
+            {toolExecutionInsight.chips.length > 0 ? (
+              <div className="tool-badge-row">
+                {toolExecutionInsight.chips.map((chip) => (
+                  <span className="event-chip" key={`tool-policy-readiness-${chip}`}>
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="tool-badge-row">
@@ -340,7 +501,7 @@ export function LlmAgentToolPolicyForm({
           `allowedToolIds` 收窄范围，避免把高敏工具和低隔离目标混在一起。
         </p>
       ) : null}
-      {sandboxPreflightHint && callableTools.length > 0 ? (
+      {sandboxPreflightHint && callableTools.length > 0 && !toolExecutionInsight ? (
         <p className="section-copy">
           当前 tool policy 若继续把 Agent 收口到 strong-isolation execution class，请先对照 live sandbox
           readiness：{sandboxPreflightHint}

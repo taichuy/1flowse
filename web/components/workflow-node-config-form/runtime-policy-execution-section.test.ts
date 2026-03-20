@@ -49,6 +49,11 @@ describe("WorkflowNodeRuntimePolicyExecutionSection", () => {
           execution: {
             class: "sandbox",
             profile: "browser-safe",
+            dependencyMode: "builtin",
+            builtinPackageSet: "py-data-basic",
+            backendExtensions: {
+              mountPreset: "analytics"
+            },
             networkPolicy: "restricted"
           }
         },
@@ -59,8 +64,12 @@ describe("WorkflowNodeRuntimePolicyExecutionSection", () => {
 
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("runtimePolicy.execution 仍有 capability 未对齐");
+    expect(html).toContain("Dependency mode");
+    expect(html).toContain("Builtin package set");
+    expect(html).toContain("Backend extensions JSON");
     expect(html).toContain("profile = browser-safe");
     expect(html).toContain("networkPolicy = restricted");
+    expect(html).toContain("backendExtensions payload");
   });
 
   it("shows field-level remediation for focused runtime execution issues", () => {

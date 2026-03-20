@@ -41,6 +41,39 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
   };
 }
 
+function buildReadySandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 1,
+    healthy_backend_count: 1,
+    degraded_backend_count: 0,
+    offline_backend_count: 0,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: true,
+        backend_ids: ["sandbox-ready"],
+        supported_languages: ["python"],
+        supported_profiles: ["default"],
+        supported_dependency_modes: ["builtin"],
+        supports_tool_execution: true,
+        supports_builtin_package_sets: true,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason: null
+      }
+    ],
+    supported_languages: ["python"],
+    supported_profiles: ["default"],
+    supported_dependency_modes: ["builtin"],
+    supports_tool_execution: true,
+    supports_builtin_package_sets: true,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false
+  };
+}
+
 function buildTool(): PluginToolRegistryItem {
   return {
     id: "tool-1",
@@ -101,5 +134,33 @@ describe("LlmAgentToolPolicyForm", () => {
 
     expect(html).toContain("Node · Agent · Allowed tools");
     expect(html).toContain("把 allow list 收口到与当前 execution override 兼容的工具");
+  });
+
+  it("shows strong-isolation dependency fields and backend extension mismatch insight", () => {
+    const html = renderToStaticMarkup(
+      createElement(LlmAgentToolPolicyForm, {
+        config: {
+          toolPolicy: {
+            execution: {
+              class: "sandbox",
+              dependencyMode: "builtin",
+              builtinPackageSet: "py-data-basic",
+              backendExtensions: {
+                mountPreset: "analytics"
+              }
+            }
+          }
+        },
+        tools: [buildTool()],
+        sandboxReadiness: buildReadySandboxReadiness(),
+        onChange: () => undefined
+      })
+    );
+
+    expect(html).toContain("Dependency mode");
+    expect(html).toContain("Builtin package set");
+    expect(html).toContain("Backend extensions JSON");
+    expect(html).toContain("Live sandbox readiness");
+    expect(html).toContain("backendExtensions payload");
   });
 });

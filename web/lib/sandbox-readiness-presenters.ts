@@ -269,6 +269,10 @@ export function buildSandboxExecutionPolicyPreflightInsight(
     profile?: string | null;
     networkPolicy?: string | null;
     filesystemPolicy?: string | null;
+    dependencyMode?: string | null;
+    builtinPackageSet?: string | null;
+    dependencyRef?: string | null;
+    backendExtensions?: Record<string, unknown> | null;
   }
 ): SandboxExecutionPolicyPreflightInsight | null {
   const executionClass = trimOrNull(options.executionClass);
@@ -318,6 +322,57 @@ export function buildSandboxExecutionPolicyPreflightInsight(
   if (profile && supportedProfiles.length > 0 && !supportedProfiles.includes(profile)) {
     capabilityIssues.push(
       `当前 sandbox readiness 还没有暴露 profile = ${profile}，这份 override 不能稳定落到兼容 backend。`
+    );
+  }
+
+  const dependencyMode = trimOrNull(options.dependencyMode);
+  const supportedDependencyModes =
+    readinessEntry.supported_dependency_modes.length > 0
+      ? readinessEntry.supported_dependency_modes
+      : readiness.supported_dependency_modes;
+  if (
+    dependencyMode &&
+    supportedDependencyModes.length > 0 &&
+    !supportedDependencyModes.includes(dependencyMode)
+  ) {
+    capabilityIssues.push(
+      `当前 sandbox readiness 还没有暴露 dependencyMode = ${dependencyMode}，这份 override 不能稳定落到兼容 backend。`
+    );
+  }
+
+  const builtinPackageSet = trimOrNull(options.builtinPackageSet);
+  if (
+    dependencyMode === "builtin" &&
+    builtinPackageSet &&
+    !(readinessEntry.supports_builtin_package_sets || readiness.supports_builtin_package_sets)
+  ) {
+    capabilityIssues.push(
+      `当前 sandbox readiness 还不支持 builtinPackageSet = ${builtinPackageSet} 的 capability hints。`
+    );
+  }
+
+  const dependencyRef = trimOrNull(options.dependencyRef);
+  if (
+    dependencyMode === "dependency_ref" &&
+    dependencyRef &&
+    supportedDependencyModes.length > 0 &&
+    !supportedDependencyModes.includes("dependency_ref")
+  ) {
+    capabilityIssues.push(
+      `当前 sandbox readiness 还没有暴露 dependencyRef = ${dependencyRef} 所需的 dependency_ref capability。`
+    );
+  }
+
+  const backendExtensions =
+    options.backendExtensions && Object.keys(options.backendExtensions).length > 0
+      ? options.backendExtensions
+      : null;
+  if (
+    backendExtensions &&
+    !(readinessEntry.supports_backend_extensions || readiness.supports_backend_extensions)
+  ) {
+    capabilityIssues.push(
+      "当前 sandbox readiness 还不支持 backendExtensions payload。"
     );
   }
 

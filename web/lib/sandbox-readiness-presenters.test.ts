@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SandboxReadinessCheck } from "./get-system-overview";
 import type { RunExecutionNodeItem } from "./get-run-views";
 import {
+  buildSandboxExecutionPolicyPreflightInsight,
   buildSandboxExecutionReadinessInsight,
   formatSandboxReadinessDetail,
   formatSandboxReadinessHeadline,
@@ -327,5 +328,39 @@ describe("sandbox readiness presenters", () => {
     expect(insight?.headline).toContain("还没有 sandbox-backed tool execution capability");
     expect(insight?.detail).toContain("sandbox ready via sandbox-live");
     expect(insight?.detail).toContain("tool 路径继续请求强隔离时仍应保持 fail-closed");
+  });
+
+  it("对 dependency hints 与 backendExtensions 返回 capability mismatch 提示", () => {
+    const readiness = createReadiness({
+      execution_classes: [
+        {
+          execution_class: "sandbox",
+          available: true,
+          backend_ids: ["sandbox-ready"],
+          supported_languages: ["python"],
+          supported_profiles: ["default"],
+          supported_dependency_modes: ["builtin"],
+          supports_tool_execution: true,
+          supports_builtin_package_sets: true,
+          supports_backend_extensions: false,
+          supports_network_policy: true,
+          supports_filesystem_policy: false,
+          reason: null
+        }
+      ]
+    });
+
+    const insight = buildSandboxExecutionPolicyPreflightInsight(readiness, {
+      executionClass: "sandbox",
+      nodeType: "tool",
+      dependencyMode: "builtin",
+      builtinPackageSet: "py-data-basic",
+      backendExtensions: { mountPreset: "analytics" }
+    });
+
+    expect(insight?.status).toBe("capability_mismatch");
+    expect(insight?.headline).toContain("capability 未对齐");
+    expect(insight?.detail).toContain("sandbox ready via sandbox-ready");
+    expect(insight?.detail).toContain("backendExtensions payload");
   });
 });

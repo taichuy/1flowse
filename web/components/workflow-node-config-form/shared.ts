@@ -323,6 +323,47 @@ export function parseNumericFieldValue(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+export function formatJsonObjectFieldValue(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  return JSON.stringify(value, null, 2);
+}
+
+export function parseJsonObjectFieldValue(
+  value: string,
+  fieldLabel: string
+): { value?: Record<string, unknown>; error: string | null } {
+  const normalized = value.trim();
+  if (!normalized) {
+    return {
+      value: undefined,
+      error: null
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        value: undefined,
+        error: `${fieldLabel} 必须是 JSON object。`
+      };
+    }
+
+    return {
+      value: parsed as Record<string, unknown>,
+      error: null
+    };
+  } catch {
+    return {
+      value: undefined,
+      error: `${fieldLabel} 必须是有效的 JSON object。`
+    };
+  }
+}
+
 export function dedupeStrings(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort();
 }

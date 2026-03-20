@@ -25,6 +25,10 @@ type ExecutionPolicyViewModel = {
   timeoutMs?: number;
   networkPolicy: WorkflowExecutionNetworkPolicy;
   filesystemPolicy: WorkflowExecutionFilesystemPolicy;
+  dependencyMode?: WorkflowExecutionDependencyMode;
+  builtinPackageSet: string;
+  dependencyRef: string;
+  backendExtensions?: Record<string, unknown>;
   explicit: boolean;
 };
 
@@ -46,6 +50,27 @@ export function readExecutionPolicy(
     filesystemPolicy: isExecutionFilesystemPolicy(execution?.filesystemPolicy)
       ? execution.filesystemPolicy
       : "inherit",
+    dependencyMode: isExecutionDependencyMode(execution?.dependencyMode)
+      ? execution.dependencyMode
+      : undefined,
+    builtinPackageSet:
+      isExecutionDependencyMode(execution?.dependencyMode) &&
+      execution.dependencyMode === "builtin" &&
+      typeof execution?.builtinPackageSet === "string"
+        ? execution.builtinPackageSet
+        : "",
+    dependencyRef:
+      isExecutionDependencyMode(execution?.dependencyMode) &&
+      execution.dependencyMode === "dependency_ref" &&
+      typeof execution?.dependencyRef === "string"
+        ? execution.dependencyRef
+        : "",
+    backendExtensions:
+      execution?.backendExtensions &&
+      typeof execution.backendExtensions === "object" &&
+      !Array.isArray(execution.backendExtensions)
+        ? (execution.backendExtensions as Record<string, unknown>)
+        : undefined,
     explicit: Boolean(execution)
   };
 }
