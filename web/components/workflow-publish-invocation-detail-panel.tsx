@@ -14,6 +14,7 @@ import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workfl
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
+  buildPublishedInvocationCanonicalFollowUpCopy,
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationInboxHref,
   listPublishedInvocationRunFollowUpSampleViews,
@@ -93,8 +94,6 @@ export function WorkflowPublishInvocationDetailPanel({
     (executionFocusNode ? formatExecutionFocusFollowUp(executionFocusNode) : null);
   const executionFocusHasCallbackWaitingSummary =
     hasExecutionNodeCallbackWaitingSummaryFacts(executionFocusNode);
-  const runFollowUpPrimarySignal = runFollowUp?.explanation?.primary_signal?.trim() || null;
-  const runFollowUpFollowUp = runFollowUp?.explanation?.follow_up?.trim() || null;
   const runFollowUpStatusSummary = runFollowUp
     ? formatMetricSummary({
         waiting: runFollowUp.waiting_run_count,
@@ -105,6 +104,14 @@ export function WorkflowPublishInvocationDetailPanel({
       })
     : null;
   const runFollowUpSamples = listPublishedInvocationRunFollowUpSampleViews(runFollowUp);
+  const sharedCallbackWaitingExplanations = runFollowUpSamples
+    .filter((sample) => sample.has_callback_waiting_summary)
+    .map((sample) => sample.run_snapshot.callbackWaitingExplanation);
+  const canonicalFollowUp = buildPublishedInvocationCanonicalFollowUpCopy({
+    explanation: runFollowUp?.explanation ?? null,
+    sharedCallbackWaitingExplanations,
+    fallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。"
+  });
 
   return (
     <article className="entry-card compact-card publish-invocation-detail-panel">
@@ -222,11 +229,9 @@ export function WorkflowPublishInvocationDetailPanel({
               <span className="event-chip">status {runFollowUpStatusSummary}</span>
             ) : null}
           </div>
-          {runFollowUpPrimarySignal ? (
-            <p className="section-copy entry-copy">{runFollowUpPrimarySignal}</p>
-          ) : null}
-          {runFollowUpFollowUp ? (
-            <p className="binding-meta">{runFollowUpFollowUp}</p>
+          <p className="section-copy entry-copy">{canonicalFollowUp.headline}</p>
+          {canonicalFollowUp.follow_up ? (
+            <p className="binding-meta">{canonicalFollowUp.follow_up}</p>
           ) : null}
           {runFollowUpSamples.length ? (
             <div className="publish-meta-grid">

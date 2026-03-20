@@ -61,6 +61,12 @@ export type PublishedInvocationRunFollowUpSampleView = {
   focus_skill_reference_loads: NonNullable<RunSnapshot["executionFocusSkillTrace"]>["loads"];
 };
 
+export type PublishedInvocationCanonicalFollowUpCopy = {
+  headline: string;
+  follow_up: string | null;
+  has_shared_callback_waiting_summary: boolean;
+};
+
 function buildPublishedInvocationRunFollowUpSampleSnapshot(
   sample?: PublishedInvocationRunFollowUpSample | null,
   explanationSource?: PublishedInvocationRunFollowUpSampleView["explanation_source"]
@@ -444,6 +450,48 @@ export function resolvePublishedInvocationRunFollowUpSampleView(
   }
 
   return sampleViews[0] ?? null;
+}
+
+export function buildPublishedInvocationCanonicalFollowUpCopy({
+  explanation,
+  sharedCallbackWaitingExplanations,
+  fallbackHeadline
+}: {
+  explanation?: RunExecutionFocusExplanation | null;
+  sharedCallbackWaitingExplanations?: Array<RunExecutionFocusExplanation | null | undefined>;
+  fallbackHeadline: string;
+}): PublishedInvocationCanonicalFollowUpCopy {
+  const normalizedExplanation = normalizeExplanation(explanation);
+  const sharedPrimarySignals = new Set<string>();
+  const sharedFollowUps = new Set<string>();
+
+  for (const sharedExplanation of sharedCallbackWaitingExplanations ?? []) {
+    const normalizedSharedExplanation = normalizeExplanation(sharedExplanation);
+    if (normalizedSharedExplanation?.primary_signal) {
+      sharedPrimarySignals.add(normalizedSharedExplanation.primary_signal);
+    }
+    if (normalizedSharedExplanation?.follow_up) {
+      sharedFollowUps.add(normalizedSharedExplanation.follow_up);
+    }
+  }
+
+  const hasSharedCallbackWaitingSummary =
+    sharedPrimarySignals.size > 0 || sharedFollowUps.size > 0;
+
+  return {
+    headline:
+      normalizedExplanation?.primary_signal &&
+      !sharedPrimarySignals.has(normalizedExplanation.primary_signal)
+        ? normalizedExplanation.primary_signal
+        : fallbackHeadline,
+    follow_up:
+      normalizedExplanation?.follow_up &&
+      !hasSharedCallbackWaitingSummary &&
+      !sharedFollowUps.has(normalizedExplanation.follow_up)
+        ? normalizedExplanation.follow_up
+        : null,
+    has_shared_callback_waiting_summary: hasSharedCallbackWaitingSummary
+  };
 }
 
 export function listPublishedInvocationRunFollowUpSampleSummaries(

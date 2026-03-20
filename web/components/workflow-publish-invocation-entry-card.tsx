@@ -14,6 +14,7 @@ import {
   listCallbackWaitingChips
 } from "@/lib/callback-waiting-presenters";
 import {
+  buildPublishedInvocationCanonicalFollowUpCopy,
   buildPublishedInvocationInboxHref,
   formatPublishedInvocationWaitingFollowUp,
   formatPublishedInvocationWaitingHeadline,
@@ -124,8 +125,6 @@ export function WorkflowPublishInvocationEntryCard({
     sensitiveAccessEntries: []
   });
   const runFollowUp = item.run_follow_up;
-  const runFollowUpPrimarySignal = runFollowUp?.explanation?.primary_signal?.trim() || null;
-  const runFollowUpFollowUp = runFollowUp?.explanation?.follow_up?.trim() || null;
   const runFollowUpStatusSummary = runFollowUp
     ? formatMetricSummary({
         waiting: runFollowUp.waiting_run_count,
@@ -142,18 +141,13 @@ export function WorkflowPublishInvocationEntryCard({
   const sharedCallbackWaitingExplanation = runFollowUpSampleHasCallbackWaitingSummary
     ? runFollowUpSample?.run_snapshot.callbackWaitingExplanation ?? null
     : null;
-  const sharedCallbackWaitingPrimarySignal =
-    sharedCallbackWaitingExplanation?.primary_signal?.trim() || null;
-  const sharedCallbackWaitingFollowUp =
-    sharedCallbackWaitingExplanation?.follow_up?.trim() || null;
-  const canonicalFollowUpHeadline =
-    runFollowUpPrimarySignal && runFollowUpPrimarySignal !== sharedCallbackWaitingPrimarySignal
-      ? runFollowUpPrimarySignal
-      : "当前 invocation 已接入 canonical follow-up 事实链。";
-  const shouldShowCanonicalFollowUp =
-    Boolean(runFollowUpFollowUp) &&
-    !shouldDeferToSharedCallbackWaitingSummary &&
-    runFollowUpFollowUp !== sharedCallbackWaitingFollowUp;
+  const canonicalFollowUp = buildPublishedInvocationCanonicalFollowUpCopy({
+    explanation: runFollowUp?.explanation ?? null,
+    sharedCallbackWaitingExplanations: sharedCallbackWaitingExplanation
+      ? [sharedCallbackWaitingExplanation]
+      : [],
+    fallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。"
+  });
   const runFollowUpSamplePrimarySignal = runFollowUpSample?.explanation?.primary_signal?.trim() || null;
   const runFollowUpSampleFocusNodeEvidence = runFollowUpSample
     ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
@@ -254,12 +248,12 @@ export function WorkflowPublishInvocationEntryCard({
       ) : null}
       {runFollowUp?.affected_run_count ? (
         <div className="payload-card compact-card">
-          <div className="payload-card-header">
-            <span className="status-meta">Canonical follow-up</span>
-          </div>
-          <p className="section-copy entry-copy">{canonicalFollowUpHeadline}</p>
-          {shouldShowCanonicalFollowUp ? (
-            <p className="binding-meta">{runFollowUpFollowUp}</p>
+        <div className="payload-card-header">
+          <span className="status-meta">Canonical follow-up</span>
+        </div>
+          <p className="section-copy entry-copy">{canonicalFollowUp.headline}</p>
+          {canonicalFollowUp.follow_up ? (
+            <p className="binding-meta">{canonicalFollowUp.follow_up}</p>
           ) : null}
           <dl className="compact-meta-list">
             <div>

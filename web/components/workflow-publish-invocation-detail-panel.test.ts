@@ -323,6 +323,23 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
   });
 
+  it("keeps invocation-level summary but defers duplicated callback follow-up to the sampled shared summary", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail: buildDetail(),
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    expect(html).toContain("Canonical follow-up");
+    expect(html).toContain("本次影响 1 个 run；已回读 1 个样本。");
+    expect(html).toContain("当前 waiting 节点仍在等待 callback。");
+    expect(html).toContain("优先观察定时恢复是否已重新排队。");
+    expect(html).not.toContain("run run-callback-1：继续观察 callback waiting。");
+  });
+
   it("hides generic execution focus recommendation when the focused node already exposes callback waiting summary", () => {
     const detail = buildDetail();
     detail.execution_focus_reason = "blocking_node_run";

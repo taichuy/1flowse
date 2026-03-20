@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildPublishedInvocationCanonicalFollowUpCopy,
   formatPublishedInvocationWaitingFollowUp,
   formatPublishedInvocationWaitingHeadline,
   listPublishedInvocationRunFollowUpSampleSummaries,
@@ -13,6 +14,50 @@ import {
 } from "./published-invocation-presenters";
 
 describe("published invocation presenters", () => {
+  it("shared callback waiting summary 存在时隐藏顶层 follow-up，但保留 invocation 级摘要", () => {
+    expect(
+      buildPublishedInvocationCanonicalFollowUpCopy({
+        explanation: {
+          primary_signal: "本次影响 1 个 run；已回读 1 个样本。",
+          follow_up: "run run-callback-1：继续观察 callback waiting。"
+        },
+        sharedCallbackWaitingExplanations: [
+          {
+            primary_signal: "当前 waiting 节点仍在等待 callback。",
+            follow_up: "优先观察定时恢复是否已重新排队。"
+          }
+        ],
+        fallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。"
+      })
+    ).toEqual({
+      headline: "本次影响 1 个 run；已回读 1 个样本。",
+      follow_up: null,
+      has_shared_callback_waiting_summary: true
+    });
+  });
+
+  it("shared callback waiting summary 与顶层 primary signal 重复时回退到 generic headline", () => {
+    expect(
+      buildPublishedInvocationCanonicalFollowUpCopy({
+        explanation: {
+          primary_signal: "当前 waiting 节点仍在等待 callback。",
+          follow_up: "run run-callback-1：继续观察 callback waiting。"
+        },
+        sharedCallbackWaitingExplanations: [
+          {
+            primary_signal: "当前 waiting 节点仍在等待 callback。",
+            follow_up: "优先观察定时恢复是否已重新排队。"
+          }
+        ],
+        fallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。"
+      })
+    ).toEqual({
+      headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+      follow_up: null,
+      has_shared_callback_waiting_summary: true
+    });
+  });
+
   it("把 approval 与 notification blocker 聚合成 chips", () => {
     expect(
       listPublishedInvocationSensitiveAccessChips({
