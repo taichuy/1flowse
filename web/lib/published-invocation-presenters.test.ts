@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildPublishedCacheInventorySurfaceCopy,
   buildPublishedInvocationCanonicalFollowUpCopy,
+  buildPublishedInvocationDetailSurfaceCopy,
   buildPublishedInvocationRecommendedNextStep,
   formatPublishedInvocationWaitingFollowUp,
   formatPublishedInvocationWaitingHeadline,
@@ -16,6 +18,38 @@ import {
 } from "./published-invocation-presenters";
 
 describe("published invocation presenters", () => {
+  it("集中生成 publish invocation detail helper copy", () => {
+    expect(
+      buildPublishedInvocationDetailSurfaceCopy({
+        blockingNodeRunId: "node-run-blocked",
+        focusSkillTraceNodeRunId: "node-run-focus"
+      })
+    ).toMatchObject({
+      canonicalFollowUpDescription: expect.stringContaining("operator follow-up"),
+      blockingApprovalTimelineDescription: expect.stringContaining("node-run-blocked"),
+      skillTraceDescription: expect.stringContaining("node-run-focus")
+    });
+  });
+
+  it("为 cache inventory 提供统一 helper 与 empty copy", () => {
+    expect(
+      buildPublishedCacheInventorySurfaceCopy({
+        enabled: false,
+        state: "empty"
+      })
+    ).toEqual({
+      description: "命中统计回答“被用了多少次”，inventory 回答“当前缓存里还留着什么”。",
+      emptyState: "该 endpoint 没有启用 publish cache，当前不会保留 response cache entry。"
+    });
+
+    expect(
+      buildPublishedCacheInventorySurfaceCopy({
+        enabled: true,
+        state: "unavailable"
+      }).emptyState
+    ).toBe("当前暂时无法拉取 cache inventory，活动 summary 仍可继续使用。");
+  });
+
   it("shared callback waiting summary 存在时隐藏顶层 follow-up，但保留 invocation 级摘要", () => {
     expect(
       buildPublishedInvocationCanonicalFollowUpCopy({

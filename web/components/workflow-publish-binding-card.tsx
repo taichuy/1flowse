@@ -21,6 +21,7 @@ import type {
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import type { WorkflowDetail } from "@/lib/get-workflows";
+import { buildPublishedCacheInventorySurfaceCopy } from "@/lib/published-invocation-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
 
@@ -64,6 +65,15 @@ export function WorkflowPublishBindingCard({
           guardedActionLabel: "cache inventory 查看"
         })
       : null;
+  const cacheInventorySurfaceCopy = buildPublishedCacheInventorySurfaceCopy({
+    enabled: Boolean(cacheSummary?.enabled),
+    state:
+      cacheInventory === null
+        ? "unavailable"
+        : resolvedCacheInventory?.items?.length
+          ? "populated"
+          : "empty"
+  });
   const varyBy =
     cacheSummary && cacheSummary.vary_by.length > 0
       ? cacheSummary.vary_by
@@ -182,9 +192,7 @@ export function WorkflowPublishBindingCard({
 
       <div className="entry-card compact-card">
         <p className="entry-card-title">Cache inventory</p>
-        <p className="section-copy entry-copy">
-          命中统计回答“被用了多少次”，inventory 回答“当前缓存里还留着什么”。
-        </p>
+        <p className="section-copy entry-copy">{cacheInventorySurfaceCopy.description}</p>
         <div className="summary-strip compact-strip">
           <article className="summary-card">
             <span>Enabled</span>
@@ -241,17 +249,11 @@ export function WorkflowPublishBindingCard({
                 ))}
               </div>
             ) : (
-              <p className="empty-state compact">
-                {cacheInventory === null
-                  ? "当前暂时无法拉取 cache inventory，活动 summary 仍可继续使用。"
-                  : "当前还没有活跃缓存条目，首次命中前这里会保持为空。"}
-              </p>
+              <p className="empty-state compact">{cacheInventorySurfaceCopy.emptyState}</p>
             )}
           </>
         ) : (
-          <p className="empty-state compact">
-            该 endpoint 没有启用 publish cache，当前不会保留 response cache entry。
-          </p>
+          <p className="empty-state compact">{cacheInventorySurfaceCopy.emptyState}</p>
         )}
       </div>
 

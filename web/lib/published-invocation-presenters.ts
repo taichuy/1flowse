@@ -75,6 +75,67 @@ export type PublishedInvocationRecommendedNextStep = {
   href_label: string | null;
 };
 
+export type PublishedInvocationDetailSurfaceCopy = {
+  canonicalFollowUpDescription: string;
+  sampledRunFallback: string;
+  sampledRunSkillTraceDescription: string;
+  skillTraceDescription: string;
+  injectedReferencesDescription: string;
+  toolGovernanceDescription: string;
+  blockingApprovalTimelineDescription: string;
+  approvalTimelineDescription: string;
+};
+
+export type PublishedCacheInventorySurfaceCopy = {
+  description: string;
+  emptyState: string;
+};
+
+export function buildPublishedInvocationDetailSurfaceCopy({
+  blockingNodeRunId,
+  focusSkillTraceNodeRunId
+}: {
+  blockingNodeRunId?: string | null;
+  focusSkillTraceNodeRunId?: string | null;
+}): PublishedInvocationDetailSurfaceCopy {
+  return {
+    canonicalFollowUpDescription:
+      "publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。",
+    sampledRunFallback: "该 sampled run 已回接 canonical follow-up 快照。",
+    sampledRunSkillTraceDescription:
+      "publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。",
+    skillTraceDescription: focusSkillTraceNodeRunId?.trim()
+      ? `当前 invocation 已接入 canonical skill trace；当前优先聚焦 execution focus 节点 ${focusSkillTraceNodeRunId.trim()}。`
+      : "当前 invocation 已接入 canonical skill trace；发布入口和 run detail 现在共享同一条 trace 事实。",
+    injectedReferencesDescription:
+      "当前节点真正加载到 agent phase 的 skill references。发布入口和 run detail 现在共享同一条 trace 事实。",
+    toolGovernanceDescription:
+      "把 callback waiting 关联 tool 的默认执行边界和敏感级别一起带到 publish detail，避免 operator 只看到阻断结果却看不见治理原因。",
+    blockingApprovalTimelineDescription:
+      `Focus the approval history for the waiting node run first so operator triage can stay on the blocker instead of scanning the entire run timeline.${blockingNodeRunId?.trim() ? ` Current blocking node run: ${blockingNodeRunId.trim()}.` : ""}`,
+    approvalTimelineDescription:
+      "Sensitive access decisions, approval tickets and notification delivery are grouped here so published-surface debugging no longer has to jump back to the inbox."
+  };
+}
+
+export function buildPublishedCacheInventorySurfaceCopy({
+  enabled,
+  state
+}: {
+  enabled: boolean;
+  state: "unavailable" | "empty" | "populated";
+}): PublishedCacheInventorySurfaceCopy {
+  return {
+    description:
+      "命中统计回答“被用了多少次”，inventory 回答“当前缓存里还留着什么”。",
+    emptyState: !enabled
+      ? "该 endpoint 没有启用 publish cache，当前不会保留 response cache entry。"
+      : state === "unavailable"
+        ? "当前暂时无法拉取 cache inventory，活动 summary 仍可继续使用。"
+        : "当前还没有活跃缓存条目，首次命中前这里会保持为空。"
+  };
+}
+
 export function hasPublishedInvocationBlockingSensitiveAccessSummary(
   summary?: PublishedInvocationSensitiveAccessSummary | null
 ) {

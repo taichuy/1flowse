@@ -18,6 +18,7 @@ import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workfl
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
+  buildPublishedInvocationDetailSurfaceCopy,
   buildPublishedInvocationCanonicalFollowUpCopy,
   buildPublishedInvocationRecommendedNextStep,
   buildBlockingPublishedInvocationInboxHref,
@@ -119,6 +120,11 @@ export function WorkflowPublishInvocationDetailPanel({
     explanation: runFollowUp?.explanation ?? null,
     sharedCallbackWaitingExplanations,
     fallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。"
+  });
+  const detailSurfaceCopy = buildPublishedInvocationDetailSurfaceCopy({
+    blockingNodeRunId,
+    focusSkillTraceNodeRunId:
+      skillTrace?.scope === "execution_focus_node" ? skillTrace.nodes[0]?.node_run_id ?? null : null
   });
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId,
@@ -235,9 +241,7 @@ export function WorkflowPublishInvocationDetailPanel({
       {runFollowUp ? (
         <div>
           <strong>Canonical follow-up</strong>
-          <p className="section-copy entry-copy">
-            publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。
-          </p>
+          <p className="section-copy entry-copy">{detailSurfaceCopy.canonicalFollowUpDescription}</p>
           <div className="tool-badge-row">
             <span className="event-chip">affected {runFollowUp.affected_run_count}</span>
             <span className="event-chip">sampled {runFollowUp.sampled_run_count}</span>
@@ -285,9 +289,7 @@ export function WorkflowPublishInvocationDetailPanel({
                       <p className="binding-meta">{sampleFollowUp}</p>
                     ) : null}
                     {!samplePrimarySignal && !sample.has_callback_waiting_summary ? (
-                      <p className="section-copy entry-copy">
-                        该 sampled run 已回接 canonical follow-up 快照。
-                      </p>
+                      <p className="section-copy entry-copy">{detailSurfaceCopy.sampledRunFallback}</p>
                     ) : null}
                     {sample.snapshot_summary && !sample.has_callback_waiting_summary ? (
                       <p className="binding-meta">{sample.snapshot_summary}</p>
@@ -407,7 +409,7 @@ export function WorkflowPublishInvocationDetailPanel({
                       <SkillReferenceLoadList
                         skillReferenceLoads={sample.focus_skill_reference_loads}
                         title="Focused skill trace"
-                        description="publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。"
+                        description={detailSurfaceCopy.sampledRunSkillTraceDescription}
                       />
                     ) : null}
                     <dl className="compact-meta-list">
@@ -491,12 +493,7 @@ export function WorkflowPublishInvocationDetailPanel({
       {skillTrace ? (
         <div>
           <strong>Skill trace</strong>
-          <p className="section-copy entry-copy">
-            把 publish invocation 背后的 skill reference load 直接带到当前详情页，避免外部调用排障还要跳回 run detail 才能看见 agent 真正注入了哪些参考资料。
-            {skillTrace.scope === "execution_focus_node" && skillTrace.nodes[0]?.node_run_id
-              ? ` 当前优先聚焦 execution focus 节点 ${skillTrace.nodes[0].node_run_id}。`
-              : " 当前展示整个 run 的 skill 注入摘要。"}
-          </p>
+          <p className="section-copy entry-copy">{detailSurfaceCopy.skillTraceDescription}</p>
           <div className="tool-badge-row">
             <span className="event-chip">refs {skillTrace.reference_count}</span>
             {formatMetricSummary(skillTrace.phase_counts) ? (
@@ -520,7 +517,7 @@ export function WorkflowPublishInvocationDetailPanel({
                 <SkillReferenceLoadList
                   skillReferenceLoads={node.loads}
                   title="Injected references"
-                  description="当前节点真正加载到 agent phase 的 skill references。发布入口和 run detail 现在共享同一条 trace 事实。"
+                  description={detailSurfaceCopy.injectedReferencesDescription}
                 />
               </div>
             ))}
@@ -531,9 +528,7 @@ export function WorkflowPublishInvocationDetailPanel({
       {involvedTools.length > 0 || unresolvedToolIds.length > 0 ? (
         <div>
           <strong>Tool governance context</strong>
-          <p className="section-copy entry-copy">
-            把 callback waiting 关联 tool 的默认执行边界和敏感级别一起带到 publish detail，避免 operator 只看到阻断结果却看不见治理原因。
-          </p>
+          <p className="section-copy entry-copy">{detailSurfaceCopy.toolGovernanceDescription}</p>
           {unresolvedToolIds.length ? (
             <div className="tool-badge-row">
               {unresolvedToolIds.map((toolId) => (
@@ -563,11 +558,7 @@ export function WorkflowPublishInvocationDetailPanel({
       blockingSensitiveAccessEntries.length < sensitiveAccessEntries.length ? (
         <div>
           <strong>Blocking approval timeline</strong>
-          <p className="section-copy entry-copy">
-            Focus the approval history for the waiting node run first so operator triage can stay
-            on the blocker instead of scanning the entire run timeline.
-            {blockingNodeRunId ? ` Current blocking node run: ${blockingNodeRunId}.` : ""}
-          </p>
+          <p className="section-copy entry-copy">{detailSurfaceCopy.blockingApprovalTimelineDescription}</p>
           {blockingInboxHref ? (
             <div className="tool-badge-row">
               <Link className="event-chip inbox-filter-link" href={blockingInboxHref}>
@@ -585,10 +576,7 @@ export function WorkflowPublishInvocationDetailPanel({
 
       <div>
         <strong>Approval timeline</strong>
-        <p className="section-copy entry-copy">
-          Sensitive access decisions, approval tickets and notification delivery are grouped here
-          so published-surface debugging no longer has to jump back to the inbox.
-        </p>
+        <p className="section-copy entry-copy">{detailSurfaceCopy.approvalTimelineDescription}</p>
         {approvalInboxHref ? (
           <div className="tool-badge-row">
             <Link className="event-chip inbox-filter-link" href={approvalInboxHref}>

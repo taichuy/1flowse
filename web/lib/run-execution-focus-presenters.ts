@@ -62,9 +62,19 @@ export type ExecutionFocusToolCallSummary = {
   traceSummary?: string | null;
 };
 
+export type ExecutionFocusSurface = "diagnostics" | "overlay";
+
 function trimOrNull(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+export function buildExecutionFocusSurfaceDescription(surface: ExecutionFocusSurface) {
+  if (surface === "overlay") {
+    return "这里直接复用 run detail 的 execution focus，作者在画布里也能先看当前最相关的 blocker / waiting 节点，而不是立刻跳出到完整 diagnostics。";
+  }
+
+  return "run detail 已直接带回后端选择的 canonical execution focus，这里优先展示当前最该看的 blocker / fallback / waiting 节点，再决定是否继续展开 execution view。";
 }
 
 export function formatMetricSummary(metrics: Record<string, number>) {

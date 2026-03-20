@@ -5,6 +5,7 @@ import type { RunTraceQuery } from "@/lib/get-run-trace";
 
 import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
 import { PayloadCard, countErroredNodes } from "@/components/run-diagnostics-panel/shared";
+import { buildExecutionFocusSurfaceDescription } from "@/lib/run-execution-focus-presenters";
 
 type RunDiagnosticsOverviewSectionsProps = {
   run: RunDetail;
@@ -74,7 +75,7 @@ export function RunDiagnosticsOverviewSections({
 
           <RunDetailExecutionFocusCard
             run={run}
-            description="run detail 已直接带回后端选择的 canonical execution focus，这里优先展示当前最该看的 blocker / fallback / waiting 节点，再决定是否继续展开 execution view。"
+            description={buildExecutionFocusSurfaceDescription("diagnostics")}
             sandboxReadiness={sandboxReadiness}
           />
         </article>

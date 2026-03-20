@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { RunExecutionNodeItem } from "@/lib/get-run-views";
 
 import {
+  buildExecutionFocusSurfaceDescription,
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal,
@@ -69,6 +70,13 @@ function createExecutionNode(
 }
 
 describe("run execution focus presenters", () => {
+  it("为 diagnostics 和 overlay 提供统一 surface description", () => {
+    expect(buildExecutionFocusSurfaceDescription("diagnostics")).toContain(
+      "canonical execution focus"
+    );
+    expect(buildExecutionFocusSurfaceDescription("overlay")).toContain("画布里也能先看当前最相关的 blocker");
+  });
+
   it("优先展示 execution blocking reason", () => {
     const signal = formatExecutionFocusPrimarySignal(
       createExecutionNode({
