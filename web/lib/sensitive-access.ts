@@ -257,6 +257,59 @@ export function normalizeSensitiveAccessRunFollowUp(
   return null;
 }
 
+export function resolveSensitiveAccessCanonicalRunSnapshot(input: {
+  requestRunId?: string | null;
+  approvalTicketRunId?: string | null;
+  defaultRunId?: string | null;
+  runSnapshot?: OperatorRunSnapshotSummary | null;
+  runFollowUp?: SensitiveAccessBlockingPayloadBody["run_follow_up"] | SensitiveAccessRunFollowUp | null;
+}): {
+  runId: string | null;
+  runFollowUp: SensitiveAccessRunFollowUp | null;
+  snapshot: OperatorRunSnapshotSummary | null;
+} {
+  const runFollowUp = normalizeSensitiveAccessRunFollowUp(input.runFollowUp);
+  const runId = resolveSensitiveAccessRunId({
+    requestRunId: input.requestRunId,
+    approvalTicketRunId: input.approvalTicketRunId,
+    defaultRunId: input.defaultRunId,
+    sampledRuns: runFollowUp?.sampledRuns
+  });
+  const directSnapshot = normalizeBlockingRunSnapshot(input.runSnapshot);
+  if (directSnapshot) {
+    return {
+      runId,
+      runFollowUp,
+      snapshot: directSnapshot
+    };
+  }
+
+  if (!runFollowUp) {
+    return {
+      runId,
+      runFollowUp: null,
+      snapshot: null
+    };
+  }
+
+  if (runId) {
+    const matchingSnapshot = runFollowUp.sampledRuns.find((sample) => sample.runId === runId)?.snapshot;
+    if (matchingSnapshot) {
+      return {
+        runId,
+        runFollowUp,
+        snapshot: matchingSnapshot
+      };
+    }
+  }
+
+  return {
+    runId,
+    runFollowUp,
+    snapshot: runFollowUp.sampledRuns.find((sample) => sample.snapshot != null)?.snapshot ?? null
+  };
+}
+
 export function resolveSensitiveAccessBlockingRunId(
   payload: SensitiveAccessBlockingPayload
 ): string | null {
@@ -276,6 +329,19 @@ export function resolveSensitiveAccessTimelineEntryRunId(
     approvalTicketRunId: entry.approval_ticket?.run_id,
     defaultRunId,
     sampledRuns: entry.run_follow_up?.sampled_runs
+  });
+}
+
+export function resolveSensitiveAccessTimelineEntryRunContext(
+  entry: SensitiveAccessTimelineEntry,
+  defaultRunId?: string | null
+) {
+  return resolveSensitiveAccessCanonicalRunSnapshot({
+    requestRunId: entry.request.run_id,
+    approvalTicketRunId: entry.approval_ticket?.run_id,
+    defaultRunId,
+    runSnapshot: entry.run_snapshot,
+    runFollowUp: entry.run_follow_up
   });
 }
 

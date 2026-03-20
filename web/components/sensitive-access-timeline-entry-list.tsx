@@ -10,8 +10,7 @@ import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import {
-  normalizeSensitiveAccessRunFollowUp,
-  resolveSensitiveAccessTimelineEntryRunId
+  resolveSensitiveAccessTimelineEntryRunContext
 } from "@/lib/sensitive-access";
 import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
 import {
@@ -115,21 +114,6 @@ function matchesNotificationFilter(
   }
 
   return entry.notifications.some((notification) => notification.status === filterValue);
-}
-
-function resolveFollowUpSnapshot(
-  entry: SensitiveAccessTimelineEntry
-): {
-  snapshot: SensitiveAccessTimelineEntry["run_snapshot"];
-  runFollowUp: ReturnType<typeof normalizeSensitiveAccessRunFollowUp>;
-} {
-  const runFollowUp = normalizeSensitiveAccessRunFollowUp(entry.run_follow_up);
-  const sampledRun = runFollowUp?.sampledRuns.find((sample) => sample.snapshot != null) ?? null;
-
-  return {
-    snapshot: entry.run_snapshot ?? sampledRun?.snapshot ?? null,
-    runFollowUp
-  };
 }
 
 function shouldSurfaceCallbackWaitingSummary(entry: SensitiveAccessTimelineEntry) {
@@ -311,14 +295,14 @@ export function SensitiveAccessTimelineEntryList({
 
       <div className="event-list">
         {filteredEntries.map((entry) => {
-          const followUpSnapshot = resolveFollowUpSnapshot(entry);
-          const runId = resolveSensitiveAccessTimelineEntryRunId(entry, defaultRunId);
+          const runContext = resolveSensitiveAccessTimelineEntryRunContext(entry, defaultRunId);
+          const runId = runContext.runId;
           const inboxSliceHref = buildSensitiveAccessTimelineInboxHref(entry, defaultRunId);
           const shouldRenderCallbackWaitingSummary = shouldSurfaceCallbackWaitingSummary(entry);
           const hasStructuredOperatorFeedback = Boolean(
-            followUpSnapshot.snapshot ||
-              entry.run_follow_up?.explanation ||
-              (followUpSnapshot.runFollowUp?.sampledRuns.length ?? 0) > 0
+            runContext.snapshot ||
+              runContext.runFollowUp?.explanation ||
+              (runContext.runFollowUp?.sampledRuns.length ?? 0) > 0
           );
           const nodeRunId = entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null;
 
@@ -378,10 +362,10 @@ export function SensitiveAccessTimelineEntryList({
                 <InlineOperatorActionFeedback
                   message=""
                   outcomeExplanation={entry.outcome_explanation ?? null}
-                  runFollowUpExplanation={entry.run_follow_up?.explanation ?? null}
-                  runFollowUp={followUpSnapshot.runFollowUp ?? null}
+                  runFollowUpExplanation={runContext.runFollowUp?.explanation ?? null}
+                  runFollowUp={runContext.runFollowUp ?? null}
                   runId={runId}
-                  runSnapshot={followUpSnapshot.snapshot}
+                  runSnapshot={runContext.snapshot}
                   status="success"
                   title="Operator follow-up"
                 />

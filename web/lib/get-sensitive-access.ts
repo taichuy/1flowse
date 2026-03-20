@@ -17,6 +17,7 @@ import {
   buildSensitiveAccessInboxEntryExecutionContext,
   type SensitiveAccessInboxExecutionContext
 } from "@/lib/sensitive-access-inbox-execution-context";
+import { resolveSensitiveAccessCanonicalRunSnapshot } from "@/lib/sensitive-access";
 
 export type SensitiveResourceItem = {
   id: string;
@@ -386,21 +387,20 @@ export async function getSensitiveAccessInboxSnapshot({
       runSnapshot: normalizeOperatorRunSnapshot(entry.run_snapshot) ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(entry.run_follow_up) ?? null
     }))
-    .map((entry) => ({
-      ...entry,
-      callbackWaitingContext: buildSensitiveAccessInboxEntryCallbackContext(
-        entry,
-        entry.runSnapshot ??
-          entry.runFollowUp?.sampledRuns.find((sample) => sample.snapshot != null)?.snapshot ??
-          null
-      ),
-      executionContext: buildSensitiveAccessInboxEntryExecutionContext(
-        entry,
-        entry.runSnapshot ??
-          entry.runFollowUp?.sampledRuns.find((sample) => sample.snapshot != null)?.snapshot ??
-          null
-      )
-    }))
+    .map((entry) => {
+      const runContext = resolveSensitiveAccessCanonicalRunSnapshot({
+        requestRunId: entry.request?.run_id,
+        approvalTicketRunId: entry.ticket.run_id,
+        runSnapshot: entry.runSnapshot,
+        runFollowUp: entry.runFollowUp
+      });
+
+      return {
+        ...entry,
+        callbackWaitingContext: buildSensitiveAccessInboxEntryCallbackContext(entry, runContext.snapshot),
+        executionContext: buildSensitiveAccessInboxEntryExecutionContext(entry, runContext.snapshot)
+      };
+    })
     .sort(
       (left, right) =>
         new Date(right.ticket.created_at).getTime() - new Date(left.ticket.created_at).getTime()

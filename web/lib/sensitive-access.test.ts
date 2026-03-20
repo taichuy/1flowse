@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseSensitiveAccessBlockingResponse,
   parseSensitiveAccessGuardedResponse,
+  resolveSensitiveAccessCanonicalRunSnapshot,
   type SensitiveAccessBlockingPayload
 } from "@/lib/sensitive-access";
 
@@ -170,5 +171,48 @@ describe("parseSensitiveAccessBlockingResponse", () => {
     expect(parsed.payload.outcome_explanation?.follow_up).toContain("优先处理审批票据");
     expect(parsed.payload.run_follow_up?.affectedRunCount).toBe(1);
     expect(parsed.payload.run_follow_up?.sampledRunCount).toBe(1);
+  });
+});
+
+describe("resolveSensitiveAccessCanonicalRunSnapshot", () => {
+  it("matches the current run before falling back to the first sampled snapshot", () => {
+    const resolved = resolveSensitiveAccessCanonicalRunSnapshot({
+      requestRunId: "run-current",
+      runSnapshot: null,
+      runFollowUp: {
+        affectedRunCount: 2,
+        sampledRunCount: 2,
+        waitingRunCount: 1,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 1,
+        unknownRunCount: 0,
+        explanation: {
+          primary_signal: "本次影响 2 个 run；已回读 2 个样本。"
+        },
+        sampledRuns: [
+          {
+            runId: "run-stale",
+            snapshot: {
+              status: "failed",
+              currentNodeId: "stale-node",
+              waitingReason: "stale blocker"
+            }
+          },
+          {
+            runId: "run-current",
+            snapshot: {
+              status: "waiting",
+              currentNodeId: "current-node",
+              waitingReason: "waiting approval"
+            }
+          }
+        ]
+      }
+    });
+
+    expect(resolved.runId).toBe("run-current");
+    expect(resolved.snapshot?.currentNodeId).toBe("current-node");
+    expect(resolved.snapshot?.waitingReason).toBe("waiting approval");
   });
 });
