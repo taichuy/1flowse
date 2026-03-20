@@ -18,6 +18,7 @@ from app.services.run_views import RunViewService
 
 run_view_service = RunViewService()
 
+
 def _normalize_run_ids(run_ids: Iterable[str | None], *, limit: int | None = None) -> list[str]:
     normalized: list[str] = []
     for run_id in run_ids:
@@ -66,6 +67,36 @@ def load_operator_run_snapshot(
         waiting_reason=waiting_reason_lookup.get(run.id),
         execution_view=execution_view_map.get(run.id),
     )
+
+
+def build_operator_run_snapshot_map(
+    db: Session,
+    run_ids: Iterable[str | None],
+) -> dict[str, OperatorRunSnapshot]:
+    normalized_run_ids = _normalize_run_ids(run_ids)
+    if not normalized_run_ids:
+        return {}
+
+    runs = db.query(Run).filter(Run.id.in_(normalized_run_ids)).all()
+    run_lookup = {run.id: run for run in runs}
+    existing_run_ids = list(run_lookup)
+    if not existing_run_ids:
+        return {}
+
+    node_runs = db.query(NodeRun).filter(NodeRun.run_id.in_(existing_run_ids)).all()
+    waiting_reason_lookup = build_waiting_reason_lookup(runs, node_runs)
+    execution_view_map = _load_execution_view_map(db, existing_run_ids)
+
+    snapshot_map: dict[str, OperatorRunSnapshot] = {}
+    for run_id in existing_run_ids:
+        snapshot = build_operator_run_snapshot(
+            run_lookup.get(run_id),
+            waiting_reason=waiting_reason_lookup.get(run_id),
+            execution_view=execution_view_map.get(run_id),
+        )
+        if snapshot is not None:
+            snapshot_map[run_id] = snapshot
+    return snapshot_map
 
 
 def build_operator_run_follow_up_summary(

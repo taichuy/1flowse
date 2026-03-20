@@ -74,6 +74,19 @@ def _resolve_run_follow_up_snapshot(
     return None
 
 
+def _resolve_run_snapshot(
+    *,
+    record_run_id: str | None,
+    run_snapshot_lookup: dict[str, OperatorRunSnapshot] | None,
+    run_follow_up: OperatorRunFollowUpSummary | None,
+) -> OperatorRunSnapshot | None:
+    if run_snapshot_lookup and record_run_id:
+        snapshot = run_snapshot_lookup.get(record_run_id)
+        if snapshot is not None:
+            return snapshot
+    return _resolve_run_follow_up_snapshot(run_follow_up)
+
+
 def serialize_published_invocation_item(
     record,
     *,
@@ -85,6 +98,7 @@ def serialize_published_invocation_item(
         str, PublishedEndpointInvocationWaitingLifecycle | None
     ]
     | None = None,
+    run_snapshot_lookup: dict[str, OperatorRunSnapshot] | None = None,
     run_follow_up_lookup: dict[str, OperatorRunFollowUpSummary] | None = None,
 ) -> PublishedEndpointInvocationItem:
     api_key_metadata = api_key_lookup.get(record.api_key_id) if api_key_lookup else None
@@ -104,7 +118,11 @@ def serialize_published_invocation_item(
         if run_follow_up_lookup and record.run_id
         else None
     )
-    run_follow_up_snapshot = _resolve_run_follow_up_snapshot(run_follow_up)
+    run_snapshot = _resolve_run_snapshot(
+        record_run_id=record.run_id,
+        run_snapshot_lookup=run_snapshot_lookup,
+        run_follow_up=run_follow_up,
+    )
     return PublishedEndpointInvocationItem(
         id=record.id,
         workflow_id=record.workflow_id,
@@ -127,19 +145,19 @@ def serialize_published_invocation_item(
         run_current_node_id=run.current_node_id if run else None,
         run_waiting_reason=waiting_reason,
         run_waiting_lifecycle=waiting_lifecycle,
-        run_snapshot=run_follow_up_snapshot,
+        run_snapshot=run_snapshot,
         run_follow_up=run_follow_up,
         execution_focus_explanation=(
-            run_follow_up_snapshot.execution_focus_explanation
-            if run_follow_up_snapshot is not None
+            run_snapshot.execution_focus_explanation
+            if run_snapshot is not None
             else None
         ),
         callback_waiting_explanation=(
             waiting_lifecycle.callback_waiting_explanation
             if waiting_lifecycle is not None
             else (
-                run_follow_up_snapshot.callback_waiting_explanation
-                if run_follow_up_snapshot is not None
+                run_snapshot.callback_waiting_explanation
+                if run_snapshot is not None
                 else None
             )
         ),

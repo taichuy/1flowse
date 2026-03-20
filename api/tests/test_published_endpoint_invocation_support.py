@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from app.api.routes.published_endpoint_invocation_support import (
     build_waiting_lifecycle_lookup,
+    serialize_published_invocation_item,
 )
 from app.models.run import NodeRun, Run, RunCallbackTicket
 from app.models.sensitive_access import (
@@ -9,6 +11,11 @@ from app.models.sensitive_access import (
     NotificationDispatchRecord,
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
+)
+from app.schemas.operator_follow_up import (
+    OperatorRunFollowUpSummary,
+    OperatorRunSnapshot,
+    OperatorRunSnapshotSample,
 )
 from app.services.sensitive_access_timeline import SensitiveAccessTimelineSnapshot
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
@@ -347,3 +354,89 @@ def test_build_waiting_lifecycle_lookup_prefers_latest_current_waiting_node_run(
     assert waiting_lifecycle is not None
     assert waiting_lifecycle.node_run_id == current_waiting_node_run.id
     assert waiting_lifecycle.waiting_reason == "current callback pending"
+
+
+def test_serialize_published_invocation_item_prefers_run_snapshot_lookup() -> None:
+    now = datetime(2026, 3, 20, 15, 0, tzinfo=UTC)
+    record = SimpleNamespace(
+        id="invocation-1",
+        workflow_id="wf-1",
+        binding_id="binding-1",
+        endpoint_id="endpoint-1",
+        endpoint_alias="demo-endpoint",
+        route_path="/demo",
+        protocol="native",
+        auth_mode="none",
+        request_source="workflow",
+        status="succeeded",
+        cache_status="hit",
+        api_key_id=None,
+        run_id="run-1",
+        run_status="succeeded",
+        error_message=None,
+        request_preview={"question": "hello"},
+        response_preview={"answer": "world"},
+        duration_ms=12,
+        created_at=now,
+        finished_at=now,
+    )
+    canonical_snapshot = OperatorRunSnapshot(
+        workflow_id="wf-1",
+        status="succeeded",
+        current_node_id="output",
+        execution_focus_reason=None,
+        execution_focus_explanation={
+            "primary_signal": "canonical snapshot",
+            "follow_up": "use dedicated run snapshot lookup",
+        },
+        callback_waiting_explanation={
+            "primary_signal": "canonical callback explanation",
+            "follow_up": "use canonical snapshot explanation",
+        },
+    )
+    sampled_snapshot = OperatorRunSnapshot(
+        workflow_id="wf-1-stale",
+        status="waiting",
+        current_node_id="tool_wait",
+        waiting_reason="callback pending",
+        execution_focus_reason="blocking_node_run",
+        execution_focus_explanation={
+            "primary_signal": "sampled snapshot",
+            "follow_up": "this should not win when canonical snapshot is present",
+        },
+        callback_waiting_explanation={
+            "primary_signal": "sampled callback explanation",
+            "follow_up": "this should not win when canonical snapshot is present",
+        },
+    )
+
+    item = serialize_published_invocation_item(
+        record,
+        request_surface="native.workflow",
+        run_snapshot_lookup={record.run_id: canonical_snapshot},
+        run_follow_up_lookup={
+            record.run_id: OperatorRunFollowUpSummary(
+                affected_run_count=1,
+                sampled_run_count=1,
+                succeeded_run_count=1,
+                sampled_runs=[
+                    OperatorRunSnapshotSample(
+                        run_id=record.run_id,
+                        snapshot=sampled_snapshot,
+                    )
+                ],
+            )
+        },
+    )
+
+    assert item.run_snapshot == canonical_snapshot
+    assert item.execution_focus_explanation is not None
+    assert item.execution_focus_explanation.model_dump() == {
+        "primary_signal": "canonical snapshot",
+        "follow_up": "use dedicated run snapshot lookup",
+    }
+    assert item.callback_waiting_explanation is not None
+    assert item.callback_waiting_explanation.model_dump() == {
+        "primary_signal": "canonical callback explanation",
+        "follow_up": "use canonical snapshot explanation",
+    }

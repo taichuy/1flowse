@@ -21,12 +21,12 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSkillTrace,
     PublishedEndpointInvocationSkillTraceNodeItem,
 )
+from app.services.operator_run_follow_up import build_operator_run_follow_up_summary
 from app.services.published_cache import PublishedEndpointCacheService
 from app.services.published_invocation_detail_access import (
     PublishedInvocationDetailAccessService,
 )
 from app.services.published_invocations import PublishedInvocationService
-from app.services.operator_run_follow_up import build_operator_run_follow_up_summary
 from app.services.run_views import RunViewService
 from app.services.sensitive_access_presenters import (
     serialize_sensitive_access_timeline_entry,
@@ -284,6 +284,11 @@ def get_published_endpoint_invocation_detail(
         run_lookup=run_lookup,
         waiting_reason_lookup=waiting_reason_lookup,
         waiting_lifecycle_lookup=waiting_lifecycle_lookup,
+        run_snapshot_lookup=(
+            {record.run_id: timeline_run_snapshot}
+            if record.run_id and timeline_run_snapshot is not None
+            else None
+        ),
         run_follow_up_lookup=(
             {record.run_id: run_follow_up}
             if record.run_id and run_follow_up is not None

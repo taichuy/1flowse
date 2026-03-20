@@ -35,6 +35,10 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSummary,
     PublishedEndpointInvocationTimeBucketItem,
 )
+from app.services.operator_run_follow_up import (
+    build_operator_run_follow_up_summary_map,
+    build_operator_run_snapshot_map,
+)
 from app.services.published_invocation_export_access import (
     PublishedInvocationExportAccessService,
 )
@@ -43,7 +47,6 @@ from app.services.published_invocation_exports import (
     build_published_invocation_export_payload,
     serialize_published_invocation_export_jsonl,
 )
-from app.services.operator_run_follow_up import build_operator_run_follow_up_summary_map
 from app.services.published_invocations import (
     PublishedInvocationService,
 )
@@ -205,6 +208,7 @@ def _build_published_endpoint_invocation_list_response(
     )
     waiting_reason_lookup = {}
     waiting_lifecycle_lookup = {}
+    run_snapshot_lookup = {}
     run_follow_up_lookup = {}
     if run_ids:
         node_runs = db.scalars(select(NodeRun).where(NodeRun.run_id.in_(run_ids))).all()
@@ -221,6 +225,7 @@ def _build_published_endpoint_invocation_list_response(
             callback_tickets,
             sensitive_access_timelines,
         )
+        run_snapshot_lookup = build_operator_run_snapshot_map(db, run_ids)
         run_follow_up_lookup = build_operator_run_follow_up_summary_map(
             db,
             run_ids,
@@ -268,6 +273,7 @@ def _build_published_endpoint_invocation_list_response(
                 run_lookup=run_lookup,
                 waiting_reason_lookup=waiting_reason_lookup,
                 waiting_lifecycle_lookup=waiting_lifecycle_lookup,
+                run_snapshot_lookup=run_snapshot_lookup,
                 run_follow_up_lookup=run_follow_up_lookup,
             )
             for record in records
