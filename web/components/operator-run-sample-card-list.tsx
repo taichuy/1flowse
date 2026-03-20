@@ -21,8 +21,13 @@ export function OperatorRunSampleCardList({
 
   return (
     <div className="publish-cache-list">
-      {cards.map((sample) => (
-        <div className="payload-card compact-card" key={sample.runId}>
+      {cards.map((sample) => {
+        const showHeaderExecutionFacts =
+          sample.executionFactBadges.length > 0 && !sample.hasCallbackWaitingSummary;
+
+        return (
+          <div className="payload-card compact-card" key={sample.runId}>
+
           <div className="payload-card-header">
             <span className="status-meta">Run {sample.shortRunId}</span>
             <Link
@@ -59,7 +64,7 @@ export function OperatorRunSampleCardList({
             </dl>
           ) : null}
 
-          {sample.executionFactBadges.length > 0 ? (
+          {showHeaderExecutionFacts ? (
             <div className="tool-badge-row">
               {sample.executionFactBadges.map((badge) => (
                 <span className="event-chip" key={`${sample.runId}-${badge}`}>
@@ -86,6 +91,7 @@ export function OperatorRunSampleCardList({
             scheduledResumeScheduledAt={sample.scheduledResumeScheduledAt}
             scheduledResumeSource={sample.scheduledResumeSource}
             scheduledWaitingStatus={sample.scheduledWaitingStatus}
+            showFocusExecutionFacts={sample.hasCallbackWaitingSummary}
             showInlineActions={false}
             waitingReason={sample.waitingReason}
           />
@@ -137,8 +143,9 @@ export function OperatorRunSampleCardList({
               />
             </>
           ) : null}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

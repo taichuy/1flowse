@@ -7,6 +7,7 @@ import {
   listPublishedInvocationRunFollowUpSampleViews,
   listPublishedInvocationSensitiveAccessChips,
   listPublishedInvocationSensitiveAccessRows,
+  resolvePublishedInvocationRunFollowUpSampleView,
   resolvePublishedInvocationCallbackWaitingExplanation,
   resolvePublishedInvocationExecutionFocusExplanation
 } from "./published-invocation-presenters";
@@ -361,6 +362,11 @@ describe("published invocation presenters", () => {
       follow_up: "match run id"
     });
     expect(resolvePublishedInvocationCallbackWaitingExplanation(item)).toEqual({
+      primary_signal: "primary callback",
+      follow_up: "match callback by run id"
+    });
+    expect(resolvePublishedInvocationRunFollowUpSampleView(item)?.run_id).toBe("run-primary");
+    expect(resolvePublishedInvocationRunFollowUpSampleView(item)?.explanation).toEqual({
       primary_signal: "primary callback",
       follow_up: "match callback by run id"
     });

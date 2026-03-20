@@ -433,6 +433,19 @@ export function listPublishedInvocationRunFollowUpSampleViews(
   });
 }
 
+export function resolvePublishedInvocationRunFollowUpSampleView(
+  item: PublishedEndpointInvocationItem
+): PublishedInvocationRunFollowUpSampleView | null {
+  const sampleViews = listPublishedInvocationRunFollowUpSampleViews(item.run_follow_up);
+  const normalizedRunId = item.run_id?.trim() || null;
+
+  if (normalizedRunId) {
+    return sampleViews.find((sample) => sample.run_id === normalizedRunId) ?? sampleViews[0] ?? null;
+  }
+
+  return sampleViews[0] ?? null;
+}
+
 export function listPublishedInvocationRunFollowUpSampleSummaries(
   runFollowUp?: PublishedInvocationRunFollowUpSummary | null
 ): string[] {

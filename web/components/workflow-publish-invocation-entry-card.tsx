@@ -21,10 +21,10 @@ import {
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
   formatPublishedRunStatusLabel,
-  listPublishedInvocationRunFollowUpSampleViews,
   listPublishedInvocationSensitiveAccessChips,
   listPublishedInvocationSensitiveAccessRows,
   normalizePublishedInvocationRunSnapshot,
+  resolvePublishedInvocationRunFollowUpSampleView,
   resolvePublishedInvocationCallbackWaitingExplanation,
   resolvePublishedInvocationExecutionFocusExplanation
 } from "@/lib/published-invocation-presenters";
@@ -135,7 +135,7 @@ export function WorkflowPublishInvocationEntryCard({
         unknown: runFollowUp.unknown_run_count
       })
     : null;
-  const runFollowUpSample = listPublishedInvocationRunFollowUpSampleViews(runFollowUp)[0] ?? null;
+  const runFollowUpSample = resolvePublishedInvocationRunFollowUpSampleView(item);
   const runFollowUpSampleHasCallbackWaitingSummary =
     runFollowUpSample?.has_callback_waiting_summary ?? false;
   const runFollowUpSamplePrimarySignal = runFollowUpSample?.explanation?.primary_signal?.trim() || null;
@@ -143,10 +143,16 @@ export function WorkflowPublishInvocationEntryCard({
     ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
     : null;
   const runSnapshot = normalizePublishedInvocationRunSnapshot(item.run_snapshot);
-  const executionFactFocusNodeEvidence = buildExecutionFocusExplainableNode(
-    runSnapshot ?? runFollowUpSample?.run_snapshot ?? null
+  const runSnapshotExecutionFactBadges = listExecutionFocusRuntimeFactBadges(
+    buildExecutionFocusExplainableNode(runSnapshot)
   );
-  const executionFactBadges = listExecutionFocusRuntimeFactBadges(executionFactFocusNodeEvidence);
+  const sampledRunExecutionFactBadges = runFollowUpSampleFocusNodeEvidence
+    ? listExecutionFocusRuntimeFactBadges(runFollowUpSampleFocusNodeEvidence)
+    : [];
+  const executionFactBadges =
+    runSnapshotExecutionFactBadges.length > 0
+      ? runSnapshotExecutionFactBadges
+      : sampledRunExecutionFactBadges;
   const runStatus = runSnapshot?.status ?? item.run_status ?? null;
   const currentNodeId = runSnapshot?.currentNodeId ?? item.run_current_node_id ?? null;
   const waitingReason = runSnapshot?.waitingReason ?? item.run_waiting_reason ?? null;

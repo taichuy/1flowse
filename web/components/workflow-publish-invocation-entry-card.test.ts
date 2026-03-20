@@ -175,4 +175,61 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).not.toContain("Sampled run focus evidence");
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
   });
+
+  it("prefers the current run sample and surfaces its execution badges before evidence", () => {
+    const item = buildInvocationItem();
+    const runFollowUp = item.run_follow_up!;
+    item.run_follow_up = {
+      ...runFollowUp,
+      affected_run_count: 2,
+      sampled_run_count: 2,
+      sampled_runs: [
+        {
+          run_id: "run-stale-1",
+          snapshot: {
+            status: "waiting",
+            current_node_id: "stale-node",
+            waiting_reason: "stale callback pending",
+            execution_focus_node_id: "stale-node",
+            execution_focus_node_run_id: "node-run-stale",
+            execution_focus_node_name: "Stale wait",
+            callback_waiting_explanation: {
+              primary_signal: "stale callback blocker",
+              follow_up: "stale callback follow-up"
+            },
+            execution_focus_tool_calls: [
+              {
+                id: "tool-call-stale",
+                tool_id: "callback.wait.stale",
+                tool_name: "Callback Wait Stale",
+                phase: "execute",
+                status: "waiting",
+                effective_execution_class: "host",
+                execution_executor_ref: "tool:stale-host",
+                execution_sandbox_backend_id: "sandbox-stale",
+                execution_sandbox_runner_kind: "process"
+              }
+            ]
+          }
+        },
+        ...runFollowUp.sampled_runs
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item,
+        detailHref: "/published/invocation-1",
+        detailActive: false
+      })
+    );
+
+    expect(html).toContain("当前 waiting 节点仍在等待 callback");
+    expect(html).not.toContain("stale callback blocker");
+    expect(html).not.toContain("tool:stale-host");
+    expect(html).not.toContain("run-stale-1");
+    expect(html.indexOf("effective sandbox")).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf("Waiting node focus evidence")).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf("effective sandbox")).toBeLessThan(html.indexOf("Waiting node focus evidence"));
+  });
 });
