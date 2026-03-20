@@ -18,6 +18,7 @@ import type {
   NotificationChannelCapabilityItem,
   SensitiveAccessInboxEntry
 } from "@/lib/get-sensitive-access";
+import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
@@ -81,6 +82,18 @@ export function SensitiveAccessInboxEntryCard({
         nodeRunId: executionContext.focusNode.node_run_id
       })
     : null;
+  const shouldDeferToSharedCallbackWaitingSummary = hasCallbackWaitingSummaryFacts({
+    callbackWaitingExplanation: callbackWaitingContext?.callbackWaitingExplanation,
+    callbackWaitingLifecycle: callbackWaitingContext?.lifecycle,
+    waitingReason: callbackWaitingContext?.waitingReason,
+    scheduledResumeDelaySeconds: callbackWaitingContext?.scheduledResumeDelaySeconds,
+    scheduledResumeSource: callbackWaitingContext?.scheduledResumeSource,
+    scheduledWaitingStatus: callbackWaitingContext?.scheduledWaitingStatus,
+    scheduledResumeScheduledAt: callbackWaitingContext?.scheduledResumeScheduledAt,
+    scheduledResumeDueAt: callbackWaitingContext?.scheduledResumeDueAt,
+    scheduledResumeRequeuedAt: callbackWaitingContext?.scheduledResumeRequeuedAt,
+    scheduledResumeRequeueSource: callbackWaitingContext?.scheduledResumeRequeueSource
+  });
   const focusSkillTraceReferenceLoads = executionContext?.skillTrace?.loads ?? [];
   const focusSkillTraceReferenceCount = executionContext?.skillTrace?.reference_count ?? null;
 
@@ -160,7 +173,7 @@ export function SensitiveAccessInboxEntryCard({
           <p className="binding-meta">
             {executionContext.focusNode.node_type} · focus node {executionContext.focusNode.node_id}
           </p>
-          {executionFactBadges.length > 0 ? (
+          {executionFactBadges.length > 0 && !shouldDeferToSharedCallbackWaitingSummary ? (
             <div className="tool-badge-row">
               {executionFactBadges.map((badge) => (
                 <span className="event-chip" key={`${executionContext.runId}-${badge}`}>
@@ -169,20 +182,22 @@ export function SensitiveAccessInboxEntryCard({
               ))}
             </div>
           ) : null}
-          {executionFocusPrimarySignal ? (
+          {executionFocusPrimarySignal && !shouldDeferToSharedCallbackWaitingSummary ? (
             <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
           ) : null}
-          {executionFocusFollowUp ? (
+          {executionFocusFollowUp && !shouldDeferToSharedCallbackWaitingSummary ? (
             <p className="binding-meta">{executionFocusFollowUp}</p>
           ) : null}
-          <OperatorFocusEvidenceCard
-            artifactCount={executionContext.focusNode.artifacts.length}
-            artifactRefCount={executionContext.focusNode.artifact_refs.length}
-            artifactSummary={focusArtifactSummary}
-            artifacts={focusArtifacts}
-            toolCallCount={executionContext.focusNode.tool_calls.length}
-            toolCallSummaries={focusToolCallSummaries}
-          />
+          {!shouldDeferToSharedCallbackWaitingSummary ? (
+            <OperatorFocusEvidenceCard
+              artifactCount={executionContext.focusNode.artifacts.length}
+              artifactRefCount={executionContext.focusNode.artifact_refs.length}
+              artifactSummary={focusArtifactSummary}
+              artifacts={focusArtifacts}
+              toolCallCount={executionContext.focusNode.tool_calls.length}
+              toolCallSummaries={focusToolCallSummaries}
+            />
+          ) : null}
           <div className="tool-badge-row">
             <Link className="event-chip inbox-filter-link" href={`/runs/${executionContext.runId}`}>
               open run
@@ -218,6 +233,7 @@ export function SensitiveAccessInboxEntryCard({
             scheduledResumeRequeuedAt={callbackWaitingContext.scheduledResumeRequeuedAt}
             scheduledResumeRequeueSource={callbackWaitingContext.scheduledResumeRequeueSource}
             sensitiveAccessEntries={callbackWaitingContext.sensitiveAccessEntries}
+            showFocusExecutionFacts={shouldDeferToSharedCallbackWaitingSummary}
             showSensitiveAccessInlineActions={false}
             waitingReason={callbackWaitingContext.waitingReason}
             focusSkillReferenceNodeId={executionContext?.focusNode.node_id ?? null}

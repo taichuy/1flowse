@@ -311,4 +311,47 @@ describe("SensitiveAccessInboxEntryCard", () => {
 
     expect(html).toContain("Callback actions");
   });
+
+  it("defers execution focus recommendation and evidence into the shared callback summary", () => {
+    const entry = buildEntry();
+    entry.callbackWaitingContext = {
+      runId: "run-1",
+      displayNodeRunId: "node-run-1",
+      actionNodeRunId: "node-run-1",
+      callbackTickets: [],
+      sensitiveAccessEntries: [],
+      callbackWaitingExplanation: {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: "优先观察定时恢复是否已重新排队。"
+      },
+      lifecycle: buildCallbackLifecycle({
+        resume_schedule_count: 1,
+        last_resume_delay_seconds: 45,
+        last_resume_source: "callback_ticket_monitor"
+      }),
+      waitingReason: "callback pending",
+      scheduledResumeDelaySeconds: 45,
+      scheduledResumeSource: "callback_ticket_monitor",
+      scheduledWaitingStatus: "waiting_callback",
+      scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+      scheduledResumeDueAt: "2026-03-20T10:00:45Z",
+      scheduledResumeRequeuedAt: "2026-03-20T10:01:30Z",
+      scheduledResumeRequeueSource: "waiting_resume_monitor"
+    };
+
+    const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
+
+    expect(html).toContain("当前 waiting 节点仍在等待 callback。");
+    expect(html).toContain("优先观察定时恢复是否已重新排队。");
+    expect(html).toContain("Recommended next step");
+    expect(html).not.toContain("当前 focus 节点仍需要 operator 审批。");
+    expect(html).not.toContain("优先处理 inbox 当前票据。");
+    expect(html).toContain("Waiting node focus evidence");
+    expect(html.indexOf("Callback waiting follow-up")).toBeLessThan(
+      html.indexOf("Waiting node focus evidence")
+    );
+    expect(html.indexOf("Callback waiting follow-up")).toBeLessThan(
+      html.indexOf("effective sandbox")
+    );
+  });
 });
