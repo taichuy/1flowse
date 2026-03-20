@@ -2,7 +2,11 @@ import type {
   SensitiveAccessBlockingPayload,
   SensitiveAccessBlockingRequest
 } from "@/lib/sensitive-access";
-import type { SensitiveAccessRequestItem } from "@/lib/get-sensitive-access";
+import type {
+  OperatorRunSnapshotSummary,
+  SensitiveAccessRequestItem,
+  SignalFollowUpExplanation
+} from "@/lib/get-sensitive-access";
 
 const DECISION_LABELS: Record<string, string> = {
   allow: "allowed",
@@ -46,6 +50,11 @@ function formatFallbackLabel(value: string | null | undefined): string | null {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function normalizeCopy(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 export function formatSensitiveAccessDecisionLabel(request: RequestLike | BlockingRequestLike): string {
   return (
     request.decision_label ??
@@ -73,4 +82,42 @@ export function getSensitiveAccessBlockedPolicySummary(
   payload: SensitiveAccessBlockingPayload
 ): string | null {
   return getSensitiveAccessPolicySummary(payload.access_request);
+}
+
+export function getSensitiveAccessTimelineCanonicalOutcomeExplanation({
+  outcomeExplanation,
+  runSnapshot,
+  runFollowUpExplanation
+}: {
+  outcomeExplanation?: SignalFollowUpExplanation | null;
+  runSnapshot?: OperatorRunSnapshotSummary | null;
+  runFollowUpExplanation?: SignalFollowUpExplanation | null;
+}): SignalFollowUpExplanation | null {
+  const outcomePrimarySignal = normalizeCopy(outcomeExplanation?.primary_signal);
+  const outcomeFollowUp = normalizeCopy(outcomeExplanation?.follow_up);
+
+  if (!outcomePrimarySignal && !outcomeFollowUp) {
+    return null;
+  }
+
+  const hasCanonicalPrimarySignal = Boolean(
+    runSnapshot || normalizeCopy(runFollowUpExplanation?.primary_signal)
+  );
+  const hasCanonicalFollowUp = Boolean(
+    normalizeCopy(runFollowUpExplanation?.follow_up) ||
+      normalizeCopy(runSnapshot?.callbackWaitingExplanation?.follow_up) ||
+      normalizeCopy(runSnapshot?.executionFocusExplanation?.follow_up)
+  );
+
+  const primarySignal = hasCanonicalPrimarySignal ? null : outcomePrimarySignal;
+  const followUp = hasCanonicalFollowUp ? null : outcomeFollowUp;
+
+  if (!primarySignal && !followUp) {
+    return null;
+  }
+
+  return {
+    primary_signal: primarySignal,
+    follow_up: followUp
+  };
 }

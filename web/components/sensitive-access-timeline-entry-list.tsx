@@ -22,7 +22,8 @@ import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
-  getSensitiveAccessPolicySummary
+  getSensitiveAccessPolicySummary,
+  getSensitiveAccessTimelineCanonicalOutcomeExplanation
 } from "@/lib/sensitive-access-presenters";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 
@@ -303,6 +304,11 @@ export function SensitiveAccessTimelineEntryList({
         {filteredEntries.map((entry) => {
           const runContext = resolveSensitiveAccessTimelineEntryRunContext(entry, defaultRunId);
           const runId = runContext.runId;
+          const canonicalOutcomeExplanation = getSensitiveAccessTimelineCanonicalOutcomeExplanation({
+            outcomeExplanation: entry.outcome_explanation ?? null,
+            runSnapshot: runContext.snapshot,
+            runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null
+          });
           const inboxSliceHref = buildSensitiveAccessTimelineInboxHref(entry, defaultRunId);
           const hasStructuredCallbackWaitingSummary = hasCallbackWaitingSummaryFacts(
             runContext.snapshot
@@ -325,7 +331,9 @@ export function SensitiveAccessTimelineEntryList({
                 action: callbackWaitingRecommendedAction,
                 inboxHref: inboxSliceHref,
                 operatorFollowUp:
-                  entry.outcome_explanation?.follow_up ?? runContext.runFollowUp?.explanation?.follow_up ?? null
+                  runContext.runFollowUp?.explanation?.follow_up ??
+                  canonicalOutcomeExplanation?.follow_up ??
+                  null
               })
             : buildOperatorRecommendedNextStep({
                 execution: {
@@ -333,7 +341,7 @@ export function SensitiveAccessTimelineEntryList({
                     inboxSliceHref ||
                       runId ||
                       runContext.runFollowUp?.explanation?.follow_up ||
-                      entry.outcome_explanation?.follow_up
+                      canonicalOutcomeExplanation?.follow_up
                   ),
                   label: inboxSliceHref ? "approval blocker" : "run detail",
                   detail: runContext.runFollowUp?.explanation?.follow_up ?? null,
@@ -347,7 +355,7 @@ export function SensitiveAccessTimelineEntryList({
                     ? "当前 timeline entry 仍然落在 approval / callback blocker 上；优先切到对应 inbox slice 继续处理。"
                     : "当前 timeline entry 已回接 canonical run snapshot；优先打开 run 确认最新 waiting / focus 状态。"
                 },
-                operatorFollowUp: entry.outcome_explanation?.follow_up ?? null,
+                operatorFollowUp: canonicalOutcomeExplanation?.follow_up ?? null,
                 operatorLabel: "operator follow-up"
               });
           const inboxLinkLabel =
@@ -427,9 +435,7 @@ export function SensitiveAccessTimelineEntryList({
               {hasStructuredOperatorFeedback ? (
                 <InlineOperatorActionFeedback
                   message=""
-                  outcomeExplanation={
-                    shouldRenderCallbackWaitingSummary ? null : entry.outcome_explanation ?? null
-                  }
+                  outcomeExplanation={shouldRenderCallbackWaitingSummary ? null : canonicalOutcomeExplanation}
                   runFollowUpExplanation={runContext.runFollowUp?.explanation ?? null}
                   runFollowUp={runContext.runFollowUp ?? null}
                   runId={runId}
@@ -439,14 +445,14 @@ export function SensitiveAccessTimelineEntryList({
                 />
               ) : (
                 <>
-                  {entry.outcome_explanation?.primary_signal ? (
+                  {canonicalOutcomeExplanation?.primary_signal ? (
                     <p className="section-copy entry-copy">
-                      {entry.outcome_explanation.primary_signal}
+                      {canonicalOutcomeExplanation.primary_signal}
                     </p>
                   ) : null}
 
-                  {entry.outcome_explanation?.follow_up ? (
-                    <p className="binding-meta">{entry.outcome_explanation.follow_up}</p>
+                  {canonicalOutcomeExplanation?.follow_up ? (
+                    <p className="binding-meta">{canonicalOutcomeExplanation.follow_up}</p>
                   ) : null}
                 </>
               )}

@@ -187,7 +187,44 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).toContain("Waiting node focus evidence");
     expect(markup).toContain("tool calls 1");
     expect(markup).toContain("Injected references");
+    expect(markup).not.toContain("敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。");
+    expect(markup).not.toContain(
+      "最近 1 条通知投递失败，请优先重试通知或更换目标。 审批完成后再继续回看 run / inbox slice。"
+    );
     expect(markup).not.toContain("Sensitive access:");
+  });
+
+  it("在只有 canonical run snapshot 时仍保留不重复的 outcome follow-up", () => {
+    const baseEntry = buildTimelineEntry();
+    const markup = renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          buildTimelineEntry({
+            outcome_explanation: {
+              primary_signal: "旧的审批摘要不应继续盖过 canonical snapshot。",
+              follow_up: "补充 follow-up：如无自动恢复，可联系值班 operator 检查 waiting inbox。"
+            },
+            run_snapshot: {
+              status: "waiting",
+              workflowId: "workflow-1",
+              currentNodeId: "tool_wait",
+              waitingReason: "approval pending",
+              executionFocusNodeId: "tool_wait",
+              executionFocusNodeRunId: "node-run-1",
+              executionFocusNodeName: "Tool Wait"
+            },
+            run_follow_up: null,
+            notifications: []
+          })
+        ],
+        emptyCopy: "empty",
+        defaultRunId: baseEntry.request.run_id
+      })
+    );
+
+    expect(markup).toContain("Operator follow-up");
+    expect(markup).toContain("补充 follow-up：如无自动恢复，可联系值班 operator 检查 waiting inbox。");
+    expect(markup).not.toContain("旧的审批摘要不应继续盖过 canonical snapshot。");
   });
 
   it("在 entry 自身没有 run_snapshot 时回退到 sampled run snapshot", () => {
@@ -300,6 +337,7 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).toContain("scheduled resume requeued");
     expect(markup).toContain("requeued by waiting_resume_monitor");
     expect(markup).toContain("tool calls 1");
+    expect(markup).not.toContain("敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。");
     expect(markup).not.toContain("Sensitive access:");
   });
 
