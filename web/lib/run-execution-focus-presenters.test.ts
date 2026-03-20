@@ -4,6 +4,7 @@ import type { RunExecutionNodeItem } from "@/lib/get-run-views";
 
 import {
   buildExecutionNodeDiagnosticsSurfaceCopy,
+  buildExecutionFocusDiagnosticsBlockerMetaCopy,
   buildExecutionFocusDiagnosticsBlockerSurfaceCopy,
   buildExecutionFocusSectionSurfaceCopy,
   buildExecutionFocusSurfaceDescription,
@@ -99,6 +100,74 @@ describe("run execution focus presenters", () => {
       sectionDescription: expect.stringContaining("canonical execution focus"),
       focusNodeDescription: expect.stringContaining("后端选出的 canonical execution focus"),
       focusedSkillTraceDescription: expect.stringContaining("Priority blocker 卡片")
+    });
+  });
+
+  it("为 diagnostics blocker 卡片提供共享计数摘要", () => {
+    expect(
+      buildExecutionFocusDiagnosticsBlockerMetaCopy(
+        createExecutionNode({
+          callback_tickets: [
+            {
+              ticket: "callback-1",
+              run_id: "run-1",
+              node_run_id: "node-run-1",
+              tool_call_id: null,
+              tool_id: null,
+              tool_call_index: 0,
+              waiting_status: "waiting",
+              status: "pending",
+              reason: null,
+              callback_payload: null,
+              created_at: "2026-03-18T10:00:00Z",
+              expires_at: null,
+              consumed_at: null,
+              canceled_at: null,
+              expired_at: null
+            }
+          ],
+          sensitive_access_entries: [
+            {
+              request: {
+                id: "request-1",
+                run_id: "run-1",
+                node_run_id: "node-run-1",
+                requester_type: "tool",
+                requester_id: "native.search",
+                resource_id: "resource-1",
+                action_type: "invoke",
+                created_at: "2026-03-18T10:00:00Z"
+              },
+              resource: {
+                id: "resource-1",
+                label: "Callback capability",
+                description: "External callback channel",
+                sensitivity_level: "L2",
+                source: "local_capability",
+                metadata: {},
+                created_at: "2026-03-18T09:00:00Z",
+                updated_at: "2026-03-18T09:00:00Z"
+              },
+              approval_ticket: {
+                id: "ticket-1",
+                access_request_id: "request-1",
+                run_id: "run-1",
+                node_run_id: "node-run-1",
+                status: "pending",
+                waiting_status: "waiting",
+                approved_by: null,
+                decided_at: null,
+                expires_at: "2026-03-18T10:05:00Z",
+                created_at: "2026-03-18T10:00:00Z"
+              },
+              notifications: []
+            }
+          ],
+          scheduled_resume_delay_seconds: 30
+        })
+      )
+    ).toEqual({
+      summary: "approvals 1 · callback tickets 1 · pending tickets 1 · last resume 30s"
     });
   });
 

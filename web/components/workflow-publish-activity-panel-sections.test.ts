@@ -406,4 +406,35 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("当前信号：审批票据仍在等待处理。");
     expect(html).not.toContain("Invocation detail access blocked");
   });
+
+  it("uses shared unavailable surface copy for missing invocation detail", () => {
+    const invocationAudit = {
+      ...buildInvocationAudit(),
+      items: [{ id: "invocation-1" } as never]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit,
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: null,
+        callbackWaitingAutomation: {
+          status: "disabled",
+          scheduler_required: false,
+          detail: "disabled in test",
+          scheduler_health_status: "idle",
+          scheduler_health_detail: "not configured",
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: "/workflows/workflow-1?publish_invocation=invocation-1"
+      })
+    );
+
+    expect(html).toContain("Invocation detail unavailable");
+    expect(html).toContain("当前未能拉取该 invocation 的详情 payload。");
+    expect(html).toContain("审计列表仍可继续使用；如果问题可复现，优先回到 run detail 或稍后重试该详情入口。");
+  });
 });

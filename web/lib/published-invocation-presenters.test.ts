@@ -5,7 +5,10 @@ import {
   buildPublishedInvocationCallbackDrilldownSurfaceCopy,
   buildPublishedInvocationCanonicalFollowUpCopy,
   buildPublishedInvocationDetailSurfaceCopy,
+  buildPublishedInvocationFailureMessageDiagnosis,
+  buildPublishedInvocationFailureReasonInsight,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationUnavailableDetailSurfaceCopy,
   formatPublishedInvocationWaitingFollowUp,
   formatPublishedInvocationWaitingHeadline,
   hasPublishedInvocationBlockingSensitiveAccessSummary,
@@ -60,6 +63,93 @@ describe("published invocation presenters", () => {
       blockersTitle: "Resume blockers",
       blockersEmptyHeadline: "Callback waiting is not active.",
       latestEventsTitle: "Latest callback events"
+    });
+  });
+
+  it("为 publish failure diagnosis 提供共享 helper copy", () => {
+    expect(
+      buildPublishedInvocationFailureReasonInsight({
+        reasonCounts: [{ value: "runtime_failed", count: 2 }],
+        failureReasons: [{ message: "sandbox backend offline during invocation", count: 2, last_invoked_at: null }],
+        sandboxReadiness: {
+          enabled_backend_count: 0,
+          healthy_backend_count: 0,
+          degraded_backend_count: 0,
+          offline_backend_count: 1,
+          execution_classes: [
+            {
+              execution_class: "sandbox",
+              available: false,
+              backend_ids: [],
+              supported_languages: [],
+              supported_profiles: [],
+              supported_dependency_modes: [],
+              supports_tool_execution: false,
+              supports_builtin_package_sets: false,
+              supports_backend_extensions: false,
+              supports_network_policy: false,
+              supports_filesystem_policy: false,
+              reason: "No sandbox backend is currently enabled."
+            }
+          ],
+          supported_languages: [],
+          supported_profiles: [],
+          supported_dependency_modes: [],
+          supports_tool_execution: false,
+          supports_builtin_package_sets: false,
+          supports_backend_extensions: false,
+          supports_network_policy: false,
+          supports_filesystem_policy: false
+        }
+      })
+    ).toContain("结合 live sandbox readiness");
+
+    expect(
+      buildPublishedInvocationFailureMessageDiagnosis({
+        message: "sandbox backend offline during invocation",
+        reasonCounts: [{ value: "runtime_failed", count: 2 }],
+        sandboxReadiness: {
+          enabled_backend_count: 0,
+          healthy_backend_count: 0,
+          degraded_backend_count: 0,
+          offline_backend_count: 1,
+          execution_classes: [
+            {
+              execution_class: "sandbox",
+              available: false,
+              backend_ids: [],
+              supported_languages: [],
+              supported_profiles: [],
+              supported_dependency_modes: [],
+              supports_tool_execution: false,
+              supports_builtin_package_sets: false,
+              supports_backend_extensions: false,
+              supports_network_policy: false,
+              supports_filesystem_policy: false,
+              reason: "No sandbox backend is currently enabled."
+            }
+          ],
+          supported_languages: [],
+          supported_profiles: [],
+          supported_dependency_modes: [],
+          supports_tool_execution: false,
+          supports_builtin_package_sets: false,
+          supports_backend_extensions: false,
+          supports_network_policy: false,
+          supports_filesystem_policy: false
+        }
+      })
+    ).toEqual({
+      headline: "当前 live sandbox readiness 仍在报警。",
+      detail: expect.stringContaining("先确认强隔离 backend / capability 是否仍 blocked")
+    });
+  });
+
+  it("为 invocation detail unavailable 提供共享 surface copy", () => {
+    expect(buildPublishedInvocationUnavailableDetailSurfaceCopy()).toEqual({
+      title: "Invocation detail unavailable",
+      summary: "当前未能拉取该 invocation 的详情 payload。",
+      detail: "审计列表仍可继续使用；如果问题可复现，优先回到 run detail 或稍后重试该详情入口。"
     });
   });
 

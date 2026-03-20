@@ -14,14 +14,13 @@ import {
   hasExecutionNodeCallbackWaitingSummaryFacts
 } from "@/lib/callback-waiting-facts";
 import {
-  countPendingApprovals,
-  countPendingTickets,
   hasScheduledResume,
   pickTopBlockerNodes
 } from "@/lib/run-execution-blockers";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
+  buildExecutionFocusDiagnosticsBlockerMetaCopy,
   buildExecutionFocusDiagnosticsBlockerSurfaceCopy,
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
@@ -217,9 +216,6 @@ export function RunDiagnosticsExecutionOverviewBlockers({
       {blockerNodes.length > 0 ? (
       <div className="publish-cache-list">
         {blockerNodes.map((node) => {
-          const pendingApprovals = countPendingApprovals(node);
-          const pendingTickets = countPendingTickets(node);
-          const lifecycle = node.callback_waiting_lifecycle;
           const inboxHref = buildNodeInboxHref(node, executionView.run_id);
           const primarySignal =
             node.execution_focus_explanation?.primary_signal ??
@@ -229,6 +225,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
             formatExecutionFocusFollowUp(node);
           const executionFactBadges = listExecutionFocusRuntimeFactBadges(node);
           const hasCallbackWaitingSummary = hasExecutionNodeCallbackWaitingSummaryFacts(node);
+          const blockerMetaCopy = buildExecutionFocusDiagnosticsBlockerMetaCopy(node);
 
           return (
             <article className="payload-card compact-card" key={node.node_run_id}>
@@ -240,13 +237,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               <p className="timeline-meta">
                 {node.node_type} · node run {node.node_run_id}
               </p>
-              <p className="binding-meta">
-                approvals {pendingApprovals} · callback tickets {node.callback_tickets.length}
-                {pendingTickets > 0 ? ` · pending tickets ${pendingTickets}` : ""}
-                {typeof lifecycle?.last_resume_delay_seconds === "number"
-                  ? ` · last resume ${lifecycle.last_resume_delay_seconds}s`
-                  : ""}
-              </p>
+              <p className="binding-meta">{blockerMetaCopy.summary}</p>
               {node.started_at ? (
                 <p className="binding-meta">Started {formatTimestamp(node.started_at)}</p>
               ) : null}

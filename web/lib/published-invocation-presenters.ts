@@ -7,6 +7,7 @@ import type {
   OperatorRunFollowUpSnapshot,
   RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
@@ -16,6 +17,11 @@ import {
 import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import type { ExecutionFocusToolCallSummary } from "@/lib/run-execution-focus-presenters";
+import {
+  formatSandboxReadinessDetail,
+  formatSandboxReadinessHeadline,
+  listSandboxBlockedClasses
+} from "@/lib/sandbox-readiness-presenters";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import { buildSensitiveAccessTimelineSurfaceCopy } from "@/lib/sensitive-access-presenters";
@@ -101,6 +107,23 @@ export type PublishedInvocationCallbackDrilldownSurfaceCopy = {
   latestEventsTitle: string;
 };
 
+export type PublishedInvocationFailureMessageDiagnosis = {
+  headline: string;
+  detail: string;
+};
+
+export type PublishedInvocationUnavailableDetailSurfaceCopy = {
+  title: string;
+  summary: string;
+  detail: string;
+};
+
+type PublishedInvocationFailureReasonItem = {
+  message: string;
+  count: number;
+  last_invoked_at?: string | null;
+};
+
 export function buildPublishedInvocationDetailSurfaceCopy({
   blockingNodeRunId,
   focusSkillTraceNodeRunId
@@ -162,6 +185,138 @@ export function buildPublishedInvocationCallbackDrilldownSurfaceCopy(): Publishe
     blockersEmptyHeadline: "Callback waiting is not active.",
     latestEventsTitle: "Latest callback events"
   };
+}
+
+export function buildPublishedInvocationUnavailableDetailSurfaceCopy(): PublishedInvocationUnavailableDetailSurfaceCopy {
+  return {
+    title: "Invocation detail unavailable",
+    summary: "当前未能拉取该 invocation 的详情 payload。",
+    detail: "审计列表仍可继续使用；如果问题可复现，优先回到 run detail 或稍后重试该详情入口。"
+  };
+}
+
+export function buildPublishedInvocationFailureReasonInsight({
+  reasonCounts,
+  failureReasons,
+  sandboxReadiness
+}: {
+  reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  failureReasons?: PublishedInvocationFailureReasonItem[] | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+}): string | null {
+  const runtimeFailedCount = getFacetCount(reasonCounts, "runtime_failed");
+  const rateLimitExceededCount = getFacetCount(reasonCounts, "rate_limit_exceeded");
+  const authRejectedCount =
+    getFacetCount(reasonCounts, "api_key_invalid") + getFacetCount(reasonCounts, "api_key_required");
+
+  if (runtimeFailedCount > 0) {
+    if (sandboxReadiness) {
+      const readinessHeadline = formatSandboxReadinessHeadline(sandboxReadiness);
+      const readinessDetail = formatSandboxReadinessDetail(sandboxReadiness);
+      const hasLiveReadinessPressure =
+        listSandboxBlockedClasses(sandboxReadiness).length > 0 ||
+        sandboxReadiness.offline_backend_count > 0 ||
+        sandboxReadiness.degraded_backend_count > 0;
+
+      return hasLiveReadinessPressure
+        ? `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；结合 live sandbox readiness：${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""}，要优先判断是不是强隔离 backend / capability 仍 blocked。`
+        : `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；live sandbox readiness 现在没有继续报警，失败更可能来自 run 当时的 backend 健康度、节点配置或协议转换。`;
+    }
+
+    return `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；需要继续结合 run diagnostics 区分执行链路、节点配置和协议转换问题。`;
+  }
+
+  if (rateLimitExceededCount > 0) {
+    return `当前 reason code 里已有 ${rateLimitExceededCount} 条 Rate limit exceeded；优先对照上面的 rate limit window，而不是把拒绝误当成 runtime 故障。`;
+  }
+
+  if (authRejectedCount > 0) {
+    return `当前拒绝更集中在 API key / auth 边界，先检查 key 轮换、binding 暴露方式与调用方鉴权，再回头看执行层。`;
+  }
+
+  const latestFailure = failureReasons?.[0]?.message?.trim();
+  if (latestFailure) {
+    return `最近失败明细集中在：${latestFailure}`;
+  }
+
+  return null;
+}
+
+export function buildPublishedInvocationFailureMessageDiagnosis({
+  message,
+  reasonCounts,
+  sandboxReadiness
+}: {
+  message: string;
+  reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+}): PublishedInvocationFailureMessageDiagnosis | null {
+  const normalizedMessage = message.toLowerCase();
+  const runtimeFailedCount = getFacetCount(reasonCounts, "runtime_failed");
+  const rateLimitExceededCount = getFacetCount(reasonCounts, "rate_limit_exceeded");
+  const authRejectedCount =
+    getFacetCount(reasonCounts, "api_key_invalid") + getFacetCount(reasonCounts, "api_key_required");
+  const mentionsQuota =
+    normalizedMessage.includes("rate limit") ||
+    normalizedMessage.includes("quota") ||
+    normalizedMessage.includes("429");
+  const mentionsAuth =
+    normalizedMessage.includes("api key") ||
+    normalizedMessage.includes("unauthor") ||
+    normalizedMessage.includes("forbidden") ||
+    normalizedMessage.includes("auth");
+  const mentionsSandbox =
+    normalizedMessage.includes("sandbox") ||
+    normalizedMessage.includes("microvm") ||
+    normalizedMessage.includes("execution class") ||
+    normalizedMessage.includes("backend offline") ||
+    normalizedMessage.includes("tool execution");
+
+  if (mentionsSandbox || runtimeFailedCount > 0) {
+    if (!sandboxReadiness) {
+      return {
+        headline: "这条 failure 很可能落在执行链路或强隔离能力上。",
+        detail: "继续结合 invocation detail / run diagnostics 查看 execution focus，区分 live blockage 与历史故障。"
+      };
+    }
+
+    const hasLiveReadinessPressure =
+      listSandboxBlockedClasses(sandboxReadiness).length > 0 ||
+      sandboxReadiness.offline_backend_count > 0 ||
+      sandboxReadiness.degraded_backend_count > 0;
+    const readinessHeadline = formatSandboxReadinessHeadline(sandboxReadiness);
+    const readinessDetail = formatSandboxReadinessDetail(sandboxReadiness);
+
+    return hasLiveReadinessPressure
+      ? {
+          headline: "当前 live sandbox readiness 仍在报警。",
+          detail: `${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""} 这说明这条 failure 不能只按历史 message 处理，先确认强隔离 backend / capability 是否仍 blocked。`
+        }
+      : {
+          headline: "当前 live sandbox readiness 已恢复。",
+          detail:
+            "这更像 run 当时的 backend 健康度、definition capability 不匹配或协议转换历史故障；继续看 invocation detail / run diagnostics 的 execution focus。"
+        };
+  }
+
+  if (mentionsQuota || rateLimitExceededCount > 0) {
+    return {
+      headline: "这条 failure 更像 quota / rate limit 侧信号。",
+      detail:
+        runtimeFailedCount > 0
+          ? "先看上面的 rate limit window，再把 quota hit 与 execution/runtime failed 拆成两条链路排查，避免误把拒绝当成执行链路故障。"
+          : "优先回看上面的 rate limit window，而不是直接把这条 message 当成 runtime 故障。"
+    };
+  }
+
+  if (mentionsAuth || authRejectedCount > 0) {
+    return {
+      headline: "这条 failure 更像鉴权 / API key 边界问题。",
+      detail: "先检查调用方 key 是否过期、binding 暴露方式是否匹配，再决定是否继续深挖执行链路。"
+    };
+  }
+
+  return null;
 }
 
 export function hasPublishedInvocationBlockingSensitiveAccessSummary(

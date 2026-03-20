@@ -77,6 +77,10 @@ export type ExecutionFocusDiagnosticsBlockerSurfaceCopy = {
   focusedSkillTraceDescription: string;
 };
 
+export type ExecutionFocusDiagnosticsBlockerMetaCopy = {
+  summary: string;
+};
+
 export type ExecutionNodeDiagnosticsSurfaceCopy = {
   backendExtensionsDescriptionPrefix: string;
   requestedExecutionDescriptionPrefix: string;
@@ -134,6 +138,25 @@ export function buildExecutionFocusDiagnosticsBlockerSurfaceCopy(): ExecutionFoc
     sectionDescription: surfaceCopy.sectionDescription,
     focusNodeDescription: surfaceCopy.focusNodeDescription,
     focusedSkillTraceDescription: surfaceCopy.focusedSkillTraceDescription
+  };
+}
+
+export function buildExecutionFocusDiagnosticsBlockerMetaCopy(
+  node: ExecutionFocusExplainableNode
+): ExecutionFocusDiagnosticsBlockerMetaCopy {
+  const pendingApprovalCount = countPendingApprovalTickets(node);
+  const pendingCallbackTicketCount = countPendingCallbackTickets(node.callback_tickets);
+  const fragments = [
+    `approvals ${pendingApprovalCount}`,
+    `callback tickets ${node.callback_tickets.length}`,
+    pendingCallbackTicketCount > 0 ? `pending tickets ${pendingCallbackTicketCount}` : null,
+    typeof node.scheduled_resume_delay_seconds === "number"
+      ? `last resume ${node.scheduled_resume_delay_seconds}s`
+      : null
+  ].filter((value): value is string => Boolean(value));
+
+  return {
+    summary: fragments.join(" · ")
   };
 }
 
