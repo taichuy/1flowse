@@ -108,6 +108,29 @@ function buildInvocationAudit(): PublishedEndpointInvocationListResponse {
   };
 }
 
+function buildInvocationAuditWithApiKeyUsage(): PublishedEndpointInvocationListResponse {
+  return {
+    ...buildInvocationAudit(),
+    facets: {
+      ...buildInvocationAudit().facets,
+      api_key_usage: [
+        {
+          api_key_id: "key-1",
+          name: "Primary Key",
+          key_prefix: null,
+          status: "active",
+          invocation_count: 3,
+          succeeded_count: 1,
+          failed_count: 1,
+          rejected_count: 1,
+          last_invoked_at: "2026-03-21T00:16:00Z",
+          last_status: "failed"
+        }
+      ]
+    }
+  };
+}
+
 function buildRateLimitWindowAudit(): PublishedEndpointInvocationListResponse {
   return {
     filters: {
@@ -339,6 +362,36 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("Failure reason");
     expect(html).toContain("当前 live sandbox readiness 仍在报警");
     expect(html).toContain("先确认强隔离 backend / capability 是否仍 blocked");
+  });
+
+  it("uses shared activity details copy for API key usage and failure cards", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit: buildInvocationAuditWithApiKeyUsage(),
+        selectedInvocationId: null,
+        selectedInvocationDetail: null,
+        callbackWaitingAutomation: {
+          status: "disabled",
+          scheduler_required: false,
+          detail: "disabled in test",
+          scheduler_health_status: "idle",
+          scheduler_health_detail: "not configured",
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: null
+      })
+    );
+
+    expect(html).toContain("Primary Key");
+    expect(html).toContain("no-prefix");
+    expect(html).toContain("Calls");
+    expect(html).toContain("Status mix");
+    expect(html).toContain("ok 1 / failed 1 / rejected 1");
+    expect(html).toContain("Failure reason");
+    expect(html).toContain("count 2");
   });
 
   it("bridges selected invocation next step into activity details", () => {

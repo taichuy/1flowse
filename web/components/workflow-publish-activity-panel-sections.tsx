@@ -26,9 +26,9 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRateLimitWindowInsight,
-  buildPublishedInvocationUnavailableDetailSurfaceCopy,
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationWaitingOverview,
+  formatPublishedInvocationApiKeyUsageMix,
   formatPublishedInvocationFailureReasonLastSeen,
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
@@ -360,25 +360,23 @@ export function WorkflowPublishActivityDetails({
             <article className="payload-card compact-card" key={item.api_key_id}>
               <div className="payload-card-header">
                 <span className="status-meta">{item.name ?? item.api_key_id}</span>
-                <span className="event-chip">{item.key_prefix ?? "no-prefix"}</span>
+                <span className="event-chip">{item.key_prefix ?? detailsSurfaceCopy.apiKeyUsageMissingPrefixLabel}</span>
               </div>
               <dl className="compact-meta-list">
                 <div>
-                  <dt>Calls</dt>
+                  <dt>{detailsSurfaceCopy.apiKeyUsageInvocationCountLabel}</dt>
                   <dd>{item.invocation_count}</dd>
                 </div>
                 <div>
-                  <dt>Status mix</dt>
-                  <dd>
-                    ok {item.succeeded_count} / failed {item.failed_count} / rejected {item.rejected_count}
-                  </dd>
+                  <dt>{detailsSurfaceCopy.apiKeyUsageStatusMixLabel}</dt>
+                  <dd>{formatPublishedInvocationApiKeyUsageMix(item)}</dd>
                 </div>
                 <div>
-                  <dt>Status</dt>
+                  <dt>{detailsSurfaceCopy.apiKeyUsageStatusLabel}</dt>
                   <dd>{item.last_status ?? item.status ?? "n/a"}</dd>
                 </div>
                 <div>
-                  <dt>Last used</dt>
+                  <dt>{detailsSurfaceCopy.apiKeyUsageLastUsedLabel}</dt>
                   <dd>{formatTimestamp(item.last_invoked_at)}</dd>
                 </div>
               </dl>
@@ -399,8 +397,10 @@ export function WorkflowPublishActivityDetails({
             return (
               <article className="payload-card compact-card" key={item.message}>
                 <div className="payload-card-header">
-                  <span className="status-meta">Failure reason</span>
-                  <span className="event-chip">count {item.count}</span>
+                  <span className="status-meta">{detailsSurfaceCopy.failureReasonTitle}</span>
+                  <span className="event-chip">
+                    {detailsSurfaceCopy.failureReasonCountLabelPrefix} {item.count}
+                  </span>
                 </div>
                 <p className="binding-meta">{item.message}</p>
                 {diagnosis ? (
@@ -449,15 +449,15 @@ export function WorkflowPublishActivityDetails({
                 callbackWaitingAutomation={callbackWaitingAutomation}
                 sandboxReadiness={sandboxReadiness}
               />
-            ) : selectedInvocationDetail?.kind === "blocked" ? (
+            ) : selectedInvocationDetail?.kind === "blocked" && selectedInvocationBlockedCopy ? (
               <SensitiveAccessBlockedCard
                 clearHref={clearInvocationDetailHref}
                 payload={selectedInvocationDetail.payload}
-                summary={selectedInvocationBlockedCopy?.summary}
-                title={selectedInvocationBlockedCopy?.title ?? "Invocation detail access blocked"}
+                summary={selectedInvocationBlockedCopy.summary}
+                title={selectedInvocationBlockedCopy.title}
               />
             ) : (() => {
-              const unavailableCopy = buildPublishedInvocationUnavailableDetailSurfaceCopy();
+              const unavailableCopy = detailsSurfaceCopy.unavailableDetail;
 
               return (
                 <article className="entry-card compact-card">

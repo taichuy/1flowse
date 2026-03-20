@@ -180,6 +180,14 @@ export type PublishedInvocationActivityInsightsSurfaceCopy = {
 export type PublishedInvocationActivityDetailsSurfaceCopy = {
   selectedInvocationNextStepTitle: string;
   invocationAuditEmptyState: string;
+  apiKeyUsageMissingPrefixLabel: string;
+  apiKeyUsageInvocationCountLabel: string;
+  apiKeyUsageStatusMixLabel: string;
+  apiKeyUsageStatusLabel: string;
+  apiKeyUsageLastUsedLabel: string;
+  failureReasonTitle: string;
+  failureReasonCountLabelPrefix: string;
+  unavailableDetail: PublishedInvocationUnavailableDetailSurfaceCopy;
 };
 
 type PublishedInvocationFailureReasonItem = {
@@ -351,8 +359,28 @@ export function buildPublishedInvocationActivityDetailsSurfaceCopy(): PublishedI
   return {
     selectedInvocationNextStepTitle: "Selected invocation next step",
     invocationAuditEmptyState:
-      "当前还没有 invocation 审计记录。endpoint 发布后，外部入口命中会在这里留下治理事实。"
+      "当前还没有 invocation 审计记录。endpoint 发布后，外部入口命中会在这里留下治理事实。",
+    apiKeyUsageMissingPrefixLabel: "no-prefix",
+    apiKeyUsageInvocationCountLabel: "Calls",
+    apiKeyUsageStatusMixLabel: "Status mix",
+    apiKeyUsageStatusLabel: "Status",
+    apiKeyUsageLastUsedLabel: "Last used",
+    failureReasonTitle: "Failure reason",
+    failureReasonCountLabelPrefix: "count",
+    unavailableDetail: buildPublishedInvocationUnavailableDetailSurfaceCopy()
   };
+}
+
+export function formatPublishedInvocationApiKeyUsageMix({
+  succeeded_count,
+  failed_count,
+  rejected_count
+}: {
+  succeeded_count: number;
+  failed_count: number;
+  rejected_count: number;
+}) {
+  return `ok ${succeeded_count} / failed ${failed_count} / rejected ${rejected_count}`;
 }
 
 export function formatPublishedInvocationFailureReasonLastSeen(lastInvokedAt?: string | null) {

@@ -14,6 +14,7 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
   buildPublishedInvocationUnavailableDetailSurfaceCopy,
+  formatPublishedInvocationApiKeyUsageMix,
   formatPublishedInvocationFailureReasonLastSeen,
   formatPublishedInvocationSampleReasonLabel,
   formatPublishedInvocationWaitingRuntimeFallback,
@@ -163,8 +164,30 @@ describe("published invocation presenters", () => {
     expect(buildPublishedInvocationActivityDetailsSurfaceCopy()).toEqual({
       selectedInvocationNextStepTitle: "Selected invocation next step",
       invocationAuditEmptyState:
-        "当前还没有 invocation 审计记录。endpoint 发布后，外部入口命中会在这里留下治理事实。"
+        "当前还没有 invocation 审计记录。endpoint 发布后，外部入口命中会在这里留下治理事实。",
+      apiKeyUsageMissingPrefixLabel: "no-prefix",
+      apiKeyUsageInvocationCountLabel: "Calls",
+      apiKeyUsageStatusMixLabel: "Status mix",
+      apiKeyUsageStatusLabel: "Status",
+      apiKeyUsageLastUsedLabel: "Last used",
+      failureReasonTitle: "Failure reason",
+      failureReasonCountLabelPrefix: "count",
+      unavailableDetail: {
+        title: "Invocation detail unavailable",
+        summary: "当前未能拉取该 invocation 的详情 payload。",
+        detail: "审计列表仍可继续使用；如果问题可复现，优先回到 run detail 或稍后重试该详情入口。"
+      }
     });
+  });
+
+  it("统一格式化 API key usage 的状态分布摘要", () => {
+    expect(
+      formatPublishedInvocationApiKeyUsageMix({
+        succeeded_count: 2,
+        failed_count: 1,
+        rejected_count: 3
+      })
+    ).toBe("ok 2 / failed 1 / rejected 3");
   });
 
   it("格式化 failure reason 最近出现时间", () => {
