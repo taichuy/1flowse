@@ -172,8 +172,30 @@ export type PublishedInvocationEntrySurfaceCopy = {
 };
 
 export type PublishedInvocationActivityInsightsSurfaceCopy = {
+  lastRunStatusLabel: string;
+  waitingNowLabel: string;
+  trafficMixTitle: string;
+  trafficWorkflowLabel: string;
+  trafficAliasLabel: string;
+  trafficPathLabel: string;
+  trafficCacheSurfaceLabel: string;
+  trafficRunStatesLabel: string;
+  waitingFollowUpTitle: string;
+  activeWaitingLabel: string;
+  callbackWaitsLabel: string;
+  approvalInputWaitsLabel: string;
+  genericWaitsLabel: string;
+  syncWaitingRejectedLabel: string;
+  latestRunStatusLabel: string;
+  rateLimitWindowTitle: string;
+  rateLimitPolicyLabel: string;
+  rateLimitUsedLabel: string;
+  rateLimitRemainingLabel: string;
+  rateLimitPressureLabel: string;
+  rateLimitRejectedLabel: string;
   rateLimitWindowDescription: string;
   rateLimitDisabledEmptyState: string;
+  issueSignalsTitle: string;
   issueSignalsDescription: string;
 };
 
@@ -346,10 +368,32 @@ export function buildPublishedInvocationActivityInsightsSurfaceCopy({
   rateLimitWindowStartedAt?: string | null;
 } = {}): PublishedInvocationActivityInsightsSurfaceCopy {
   return {
+    lastRunStatusLabel: "Last run status",
+    waitingNowLabel: "Waiting now",
+    trafficMixTitle: "Traffic mix",
+    trafficWorkflowLabel: "Workflow",
+    trafficAliasLabel: "Alias",
+    trafficPathLabel: "Path",
+    trafficCacheSurfaceLabel: "Cache surface",
+    trafficRunStatesLabel: "Run states",
+    waitingFollowUpTitle: "Waiting follow-up",
+    activeWaitingLabel: "Active waiting",
+    callbackWaitsLabel: "Callback waits",
+    approvalInputWaitsLabel: "Approval/input waits",
+    genericWaitsLabel: "Generic waits",
+    syncWaitingRejectedLabel: "Sync waiting rejected",
+    latestRunStatusLabel: "Latest run status",
+    rateLimitWindowTitle: "Rate limit window",
+    rateLimitPolicyLabel: "Policy",
+    rateLimitUsedLabel: "Used",
+    rateLimitRemainingLabel: "Remaining",
+    rateLimitPressureLabel: "Pressure",
+    rateLimitRejectedLabel: "Rejected",
     rateLimitWindowDescription: rateLimitWindowStartedAt
       ? `当前窗口从 ${formatTimestamp(rateLimitWindowStartedAt)} 开始统计成功和失败调用，\`rejected\` 仅作为治理信号，不占配额。`
       : "当前窗口按当前筛选时间窗统计成功和失败调用，`rejected` 仅作为治理信号，不占配额。",
     rateLimitDisabledEmptyState: "当前 binding 没有启用 rate limit，开放调用不会按时间窗口限流。",
+    issueSignalsTitle: "Issue signals",
     issueSignalsDescription:
       "将 `rejected / failed` 聚合为稳定原因码，便于区分限流、鉴权和当前同步协议边界。"
   };

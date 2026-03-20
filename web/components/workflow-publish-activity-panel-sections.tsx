@@ -118,11 +118,11 @@ export function WorkflowPublishActivityInsights({
           <strong>{summary?.rejected_count ?? 0}</strong>
         </article>
         <article className="status-card compact-card">
-          <span className="status-label">Last run status</span>
+          <span className="status-label">{insightsSurfaceCopy.lastRunStatusLabel}</span>
           <strong>{summary?.last_run_status ?? "n/a"}</strong>
         </article>
         <article className="status-card compact-card">
-          <span className="status-label">Waiting now</span>
+          <span className="status-label">{insightsSurfaceCopy.waitingNowLabel}</span>
           <strong>{waitingOverview.activeWaitingCount}</strong>
         </article>
       </div>
@@ -130,30 +130,30 @@ export function WorkflowPublishActivityInsights({
       <div className="publish-meta-grid">
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Traffic mix</span>
+            <span className="status-meta">{insightsSurfaceCopy.trafficMixTitle}</span>
           </div>
           <dl className="compact-meta-list">
             <div>
-              <dt>Workflow</dt>
+              <dt>{insightsSurfaceCopy.trafficWorkflowLabel}</dt>
               <dd>{facetCount(requestSourceCounts, "workflow")}</dd>
             </div>
             <div>
-              <dt>Alias</dt>
+              <dt>{insightsSurfaceCopy.trafficAliasLabel}</dt>
               <dd>{facetCount(requestSourceCounts, "alias")}</dd>
             </div>
             <div>
-              <dt>Path</dt>
+              <dt>{insightsSurfaceCopy.trafficPathLabel}</dt>
               <dd>{facetCount(requestSourceCounts, "path")}</dd>
             </div>
             <div>
-              <dt>Cache surface</dt>
+              <dt>{insightsSurfaceCopy.trafficCacheSurfaceLabel}</dt>
               <dd>
                 hit {facetCount(cacheStatusCounts, "hit")} / miss {facetCount(cacheStatusCounts, "miss")} /
                 bypass {facetCount(cacheStatusCounts, "bypass")}
               </dd>
             </div>
             <div>
-              <dt>Run states</dt>
+              <dt>{insightsSurfaceCopy.trafficRunStatesLabel}</dt>
               <dd>
                 {runStatusCounts.length
                   ? runStatusCounts
@@ -176,7 +176,7 @@ export function WorkflowPublishActivityInsights({
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Waiting follow-up</span>
+            <span className="status-meta">{insightsSurfaceCopy.waitingFollowUpTitle}</span>
           </div>
           <p className="section-copy entry-copy">{waitingOverview.headline}</p>
           {waitingOverview.chips.length ? (
@@ -184,27 +184,27 @@ export function WorkflowPublishActivityInsights({
           ) : null}
           <dl className="compact-meta-list">
             <div>
-              <dt>Active waiting</dt>
+              <dt>{insightsSurfaceCopy.activeWaitingLabel}</dt>
               <dd>{waitingOverview.activeWaitingCount}</dd>
             </div>
             <div>
-              <dt>Callback waits</dt>
+              <dt>{insightsSurfaceCopy.callbackWaitsLabel}</dt>
               <dd>{waitingOverview.callbackWaitingCount}</dd>
             </div>
             <div>
-              <dt>Approval/input waits</dt>
+              <dt>{insightsSurfaceCopy.approvalInputWaitsLabel}</dt>
               <dd>{waitingOverview.waitingInputCount}</dd>
             </div>
             <div>
-              <dt>Generic waits</dt>
+              <dt>{insightsSurfaceCopy.genericWaitsLabel}</dt>
               <dd>{waitingOverview.generalWaitingCount}</dd>
             </div>
             <div>
-              <dt>Sync waiting rejected</dt>
+              <dt>{insightsSurfaceCopy.syncWaitingRejectedLabel}</dt>
               <dd>{waitingOverview.syncWaitingRejectedCount}</dd>
             </div>
             <div>
-              <dt>Latest run status</dt>
+              <dt>{insightsSurfaceCopy.latestRunStatusLabel}</dt>
               <dd>{waitingOverview.lastRunStatusLabel ?? "n/a"}</dd>
             </div>
           </dl>
@@ -213,31 +213,31 @@ export function WorkflowPublishActivityInsights({
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Rate limit window</span>
+            <span className="status-meta">{insightsSurfaceCopy.rateLimitWindowTitle}</span>
           </div>
           {rateLimitPolicy ? (
             <>
               <dl className="compact-meta-list">
                 <div>
-                  <dt>Policy</dt>
+                  <dt>{insightsSurfaceCopy.rateLimitPolicyLabel}</dt>
                   <dd>
                     {rateLimitPolicy.requests} / {rateLimitPolicy.windowSeconds}s
                   </dd>
                 </div>
                 <div>
-                  <dt>Used</dt>
+                  <dt>{insightsSurfaceCopy.rateLimitUsedLabel}</dt>
                   <dd>{windowUsed}</dd>
                 </div>
                 <div>
-                  <dt>Remaining</dt>
+                  <dt>{insightsSurfaceCopy.rateLimitRemainingLabel}</dt>
                   <dd>{remainingQuota}</dd>
                 </div>
                 <div>
-                  <dt>Pressure</dt>
+                  <dt>{insightsSurfaceCopy.rateLimitPressureLabel}</dt>
                   <dd>{pressure?.label ?? "0%"}</dd>
                 </div>
                 <div>
-                  <dt>Rejected</dt>
+                  <dt>{insightsSurfaceCopy.rateLimitRejectedLabel}</dt>
                   <dd>{windowRejected}</dd>
                 </div>
               </dl>
@@ -260,7 +260,7 @@ export function WorkflowPublishActivityInsights({
 
       {reasonCounts.length ? (
         <div className="entry-card compact-card">
-          <p className="entry-card-title">Issue signals</p>
+          <p className="entry-card-title">{insightsSurfaceCopy.issueSignalsTitle}</p>
           <p className="section-copy entry-copy">{insightsSurfaceCopy.issueSignalsDescription}</p>
           {failureReasonInsight ? (
             <p className="section-copy entry-copy">{failureReasonInsight}</p>

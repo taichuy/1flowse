@@ -144,8 +144,30 @@ describe("published invocation presenters", () => {
         rateLimitWindowStartedAt: "2026-03-21T00:00:00Z"
       })
     ).toMatchObject({
+      lastRunStatusLabel: "Last run status",
+      waitingNowLabel: "Waiting now",
+      trafficMixTitle: "Traffic mix",
+      trafficWorkflowLabel: "Workflow",
+      trafficAliasLabel: "Alias",
+      trafficPathLabel: "Path",
+      trafficCacheSurfaceLabel: "Cache surface",
+      trafficRunStatesLabel: "Run states",
+      waitingFollowUpTitle: "Waiting follow-up",
+      activeWaitingLabel: "Active waiting",
+      callbackWaitsLabel: "Callback waits",
+      approvalInputWaitsLabel: "Approval/input waits",
+      genericWaitsLabel: "Generic waits",
+      syncWaitingRejectedLabel: "Sync waiting rejected",
+      latestRunStatusLabel: "Latest run status",
+      rateLimitWindowTitle: "Rate limit window",
+      rateLimitPolicyLabel: "Policy",
+      rateLimitUsedLabel: "Used",
+      rateLimitRemainingLabel: "Remaining",
+      rateLimitPressureLabel: "Pressure",
+      rateLimitRejectedLabel: "Rejected",
       rateLimitWindowDescription: expect.stringContaining("当前窗口从"),
       rateLimitDisabledEmptyState: "当前 binding 没有启用 rate limit，开放调用不会按时间窗口限流。",
+      issueSignalsTitle: "Issue signals",
       issueSignalsDescription:
         "将 `rejected / failed` 聚合为稳定原因码，便于区分限流、鉴权和当前同步协议边界。"
     });

@@ -336,6 +336,10 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("quota hit 与执行链路异常拆开排查");
     expect(html).toContain("结合 live sandbox readiness");
     expect(html).toContain("强隔离 execution class 会 fail-closed");
+    expect(html).toContain("Last run status");
+    expect(html).toContain("Waiting follow-up");
+    expect(html).toContain("Rate limit window");
+    expect(html).toContain("Issue signals");
   });
 
   it("shows live diagnosis inside failure reason cards", () => {
