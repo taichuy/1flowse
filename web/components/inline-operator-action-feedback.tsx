@@ -36,6 +36,7 @@ export function InlineOperatorActionFeedback({
   const runFollowUp = structuredResult.runFollowUp ?? null;
   const runSnapshot = structuredResult.runSnapshot;
   const hasCallbackWaitingSummary = hasCallbackWaitingSummaryFacts(runSnapshot);
+  const shouldDeferToSharedCallbackWaitingSummary = hasCallbackWaitingSummary;
   const callbackWaitingSnapshotSummary = hasCallbackWaitingSummary
     ? formatRunSnapshotSummary(runSnapshot ?? {})
     : null;
@@ -130,11 +131,13 @@ export function InlineOperatorActionFeedback({
           {model.skillReferenceSourceSummary ? (
             <span className="event-chip">sources {model.skillReferenceSourceSummary}</span>
           ) : null}
-          {executionFactBadges.map((badge) => (
-            <span className="event-chip" key={`run-snapshot-${badge}`}>
-              {badge}
-            </span>
-          ))}
+          {!shouldDeferToSharedCallbackWaitingSummary
+            ? executionFactBadges.map((badge) => (
+                <span className="event-chip" key={`run-snapshot-${badge}`}>
+                  {badge}
+                </span>
+              ))
+            : null}
         </div>
       ) : null}
 
@@ -178,6 +181,7 @@ export function InlineOperatorActionFeedback({
           scheduledResumeDueAt={runSnapshot?.scheduledResumeDueAt ?? null}
           scheduledResumeRequeuedAt={runSnapshot?.scheduledResumeRequeuedAt ?? null}
           scheduledResumeRequeueSource={runSnapshot?.scheduledResumeRequeueSource ?? null}
+          showFocusExecutionFacts={shouldDeferToSharedCallbackWaitingSummary}
           showInlineActions={false}
           waitingReason={runSnapshot?.waitingReason ?? null}
         />

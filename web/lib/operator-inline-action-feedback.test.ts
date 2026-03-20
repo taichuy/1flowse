@@ -286,6 +286,10 @@ describe("operator inline action feedback", () => {
     expect(html).toContain("executor tool:compat-adapter:dify-default");
     expect(html).toContain("backend sandbox-default");
     expect(html).toContain("runner container");
+    expect(html).toContain("Waiting node focus evidence");
+    expect(html.indexOf("effective sandbox")).toBeGreaterThan(
+      html.indexOf("当前 run 仍在等待 callback approval")
+    );
     expect(html).not.toContain("当前 run 状态：waiting。");
     expect(html).not.toContain("后续动作：优先检查 approval / notification blocker 是否已经解除。");
     expect(html).not.toContain("立即尝试恢复");
