@@ -11,20 +11,6 @@
 - 为自部署、社区协作和本地 AI 助手场景提供稳定的开源入口。
 - 首版兼容重点仍是 Dify 插件生态接入，而不是复刻完整 Dify 平台。
 
-## 当前已落地能力
-
-- 工作流定义已支持最小结构校验、immutable version snapshot 与 compiled blueprint 绑定。
-- Runtime 已支持 DAG 调度、条件 / 路由分支、join、edge mapping、waiting / resume、callback ticket、artifact 引用和统一事件落库。
-- Published surface 已具备 native / OpenAI / Anthropic 三类入口，以及 API key、缓存、调用审计与最小 SSE。
-- 前端工作台已接上 system overview、workflow library、workflow editor、run diagnostics、publish panel、plugin registry、credential store 与 sensitive access inbox 等入口。
-- `services/compat-dify` 已提供最小兼容服务边界，用于承接 `7Flows IR -> Dify invoke payload` 翻译与代理调用。
-
-## 诚实边界
-
-- `loop` 节点尚未在 MVP 执行器中正式开放执行。
-- 独立的 `SandboxBackendRegistration / SandboxExecution` 协议仍在持续成型，强隔离链路还没有完全闭环。
-- 节点配置、发布治理和 operator 工作面已经具备骨架，但仍处于持续补齐阶段，不应假装成品已齐全。
-- 当前对外入口只说明开源项目已经能做什么；授权与使用边界仍以根目录 `LICENSE` 为准。
 
 ## 对文档和协作的要求
 
