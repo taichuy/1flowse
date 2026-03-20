@@ -18,6 +18,7 @@ import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenter
 import type { ExecutionFocusToolCallSummary } from "@/lib/run-execution-focus-presenters";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import { buildSensitiveAccessTimelineSurfaceCopy } from "@/lib/sensitive-access-presenters";
 
 type PublishedInvocationWaitingOverview = {
   activeWaitingCount: number;
@@ -107,6 +108,14 @@ export function buildPublishedInvocationDetailSurfaceCopy({
   blockingNodeRunId?: string | null;
   focusSkillTraceNodeRunId?: string | null;
 }): PublishedInvocationDetailSurfaceCopy {
+  const blockingApprovalTimelineCopy = buildSensitiveAccessTimelineSurfaceCopy({
+    surface: "publish_blocking_invocation",
+    blockingNodeRunId
+  });
+  const approvalTimelineCopy = buildSensitiveAccessTimelineSurfaceCopy({
+    surface: "publish_invocation"
+  });
+
   return {
     canonicalFollowUpDescription:
       "publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。",
@@ -120,10 +129,8 @@ export function buildPublishedInvocationDetailSurfaceCopy({
       "当前节点真正加载到 agent phase 的 skill references。发布入口和 run detail 现在共享同一条 trace 事实。",
     toolGovernanceDescription:
       "把 callback waiting 关联 tool 的默认执行边界和敏感级别一起带到 publish detail，避免 operator 只看到阻断结果却看不见治理原因。",
-    blockingApprovalTimelineDescription:
-      `Focus the approval history for the waiting node run first so operator triage can stay on the blocker instead of scanning the entire run timeline.${blockingNodeRunId?.trim() ? ` Current blocking node run: ${blockingNodeRunId.trim()}.` : ""}`,
-    approvalTimelineDescription:
-      "Sensitive access decisions, approval tickets and notification delivery are grouped here so published-surface debugging no longer has to jump back to the inbox."
+    blockingApprovalTimelineDescription: blockingApprovalTimelineCopy.description,
+    approvalTimelineDescription: approvalTimelineCopy.description
   };
 }
 

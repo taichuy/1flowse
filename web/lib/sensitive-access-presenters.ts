@@ -43,6 +43,15 @@ type BlockingRequestLike = Pick<
   "decision" | "decision_label" | "reason_code" | "reason_label" | "policy_summary"
 >;
 
+export type SensitiveAccessTimelineSurface =
+  | "execution_node"
+  | "publish_invocation"
+  | "publish_blocking_invocation";
+
+export type SensitiveAccessTimelineSurfaceCopy = {
+  description: string;
+};
+
 function formatFallbackLabel(value: string | null | undefined): string | null {
   if (!value?.trim()) {
     return null;
@@ -118,6 +127,33 @@ function buildSensitiveAccessBlockedSurfaceTitle({
   }
 
   return `${surfaceLabel} blocked by sensitive access control`;
+}
+
+export function buildSensitiveAccessTimelineSurfaceCopy({
+  surface,
+  blockingNodeRunId
+}: {
+  surface: SensitiveAccessTimelineSurface;
+  blockingNodeRunId?: string | null;
+}): SensitiveAccessTimelineSurfaceCopy {
+  if (surface === "publish_blocking_invocation") {
+    return {
+      description:
+        `Focus the approval history for the waiting node run first so operator triage can stay on the blocker instead of scanning the entire run timeline.${blockingNodeRunId?.trim() ? ` Current blocking node run: ${blockingNodeRunId.trim()}.` : ""}`
+    };
+  }
+
+  if (surface === "publish_invocation") {
+    return {
+      description:
+        "Sensitive access decisions, approval tickets and notification delivery are grouped here so published-surface debugging no longer has to jump back to the inbox."
+    };
+  }
+
+  return {
+    description:
+      "Approval tickets, notification delivery and policy decisions stay grouped here so operator triage can continue without leaving the execution node."
+  };
 }
 
 export function buildSensitiveAccessBlockedSurfaceCopy({

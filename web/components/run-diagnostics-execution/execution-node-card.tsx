@@ -27,6 +27,9 @@ import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-
 import { pickCallbackWaitingSkillTraceForNode } from "@/lib/callback-waiting-focus-skill-trace";
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
+  buildExecutionNodeDiagnosticsSurfaceCopy,
+  formatExecutionBlockingReasonCopy,
+  formatExecutionFallbackReasonCopy,
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal
 } from "@/lib/run-execution-focus-presenters";
@@ -132,10 +135,9 @@ export function ExecutionNodeCard({
   const executionFollowUp =
     node.execution_focus_explanation?.follow_up ?? formatExecutionFocusFollowUp(node);
   const hasCallbackWaitingSummary = hasExecutionNodeCallbackWaitingSummaryFacts(node);
-  const rawBlockingCopy = node.execution_blocking_reason
-    ? `Execution blocked: ${node.execution_blocking_reason}`
-    : null;
+  const rawBlockingCopy = formatExecutionBlockingReasonCopy(node.execution_blocking_reason);
   const nodeSkillTrace = pickCallbackWaitingSkillTraceForNode(skillTrace, node.node_run_id);
+  const surfaceCopy = buildExecutionNodeDiagnosticsSurfaceCopy();
 
   return (
     <article className="timeline-row">
@@ -204,16 +206,20 @@ export function ExecutionNodeCard({
       </div>
 
       {backendExtensionsPreview ? (
-        <p className="activity-copy">Backend extensions {backendExtensionsPreview}</p>
+        <p className="activity-copy">
+          {surfaceCopy.backendExtensionsDescriptionPrefix} {backendExtensionsPreview}
+        </p>
       ) : null}
 
       {showRequestedExecution && requestedExecutionSummary ? (
-        <p className="activity-copy">Dispatch request {requestedExecutionSummary}</p>
+        <p className="activity-copy">
+          {surfaceCopy.requestedExecutionDescriptionPrefix} {requestedExecutionSummary}
+        </p>
       ) : null}
 
       {showRequestedExecution && requestedBackendExtensionsPreview ? (
         <p className="activity-copy">
-          Dispatch backend extensions {requestedBackendExtensionsPreview}
+          {surfaceCopy.requestedBackendExtensionsDescriptionPrefix} {requestedBackendExtensionsPreview}
         </p>
       ) : null}
 
@@ -235,7 +241,9 @@ export function ExecutionNodeCard({
       ) : null}
 
       {node.execution_fallback_reason && !node.execution_blocking_reason ? (
-        <p className="activity-copy">Execution fallback: {node.execution_fallback_reason}</p>
+        <p className="activity-copy">
+          {formatExecutionFallbackReasonCopy(node.execution_fallback_reason)}
+        </p>
       ) : null}
 
       {rawBlockingCopy && executionPrimarySignal !== `执行阻断：${node.execution_blocking_reason}` ? (

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
-import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
+import {
+  buildSensitiveAccessBlockedSurfaceCopy,
+  buildSensitiveAccessTimelineSurfaceCopy
+} from "@/lib/sensitive-access-presenters";
 
 function buildBlockedPayload(
   overrides?: Partial<SensitiveAccessBlockingPayload>
@@ -49,6 +52,33 @@ function buildBlockedPayload(
 }
 
 describe("sensitive access presenters", () => {
+  it("provides shared timeline copy for execution and publish surfaces", () => {
+    expect(
+      buildSensitiveAccessTimelineSurfaceCopy({
+        surface: "execution_node"
+      })
+    ).toEqual({
+      description: expect.stringContaining("without leaving the execution node")
+    });
+
+    expect(
+      buildSensitiveAccessTimelineSurfaceCopy({
+        surface: "publish_invocation"
+      })
+    ).toEqual({
+      description: expect.stringContaining("published-surface debugging")
+    });
+
+    expect(
+      buildSensitiveAccessTimelineSurfaceCopy({
+        surface: "publish_blocking_invocation",
+        blockingNodeRunId: "node-run-blocked"
+      })
+    ).toEqual({
+      description: expect.stringContaining("node-run-blocked")
+    });
+  });
+
   it("builds approval-blocked export copy from fresh blocking evidence", () => {
     expect(
       buildSensitiveAccessBlockedSurfaceCopy({

@@ -77,6 +77,12 @@ export type ExecutionFocusDiagnosticsBlockerSurfaceCopy = {
   focusedSkillTraceDescription: string;
 };
 
+export type ExecutionNodeDiagnosticsSurfaceCopy = {
+  backendExtensionsDescriptionPrefix: string;
+  requestedExecutionDescriptionPrefix: string;
+  requestedBackendExtensionsDescriptionPrefix: string;
+};
+
 function trimOrNull(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -129,6 +135,24 @@ export function buildExecutionFocusDiagnosticsBlockerSurfaceCopy(): ExecutionFoc
     focusNodeDescription: surfaceCopy.focusNodeDescription,
     focusedSkillTraceDescription: surfaceCopy.focusedSkillTraceDescription
   };
+}
+
+export function buildExecutionNodeDiagnosticsSurfaceCopy(): ExecutionNodeDiagnosticsSurfaceCopy {
+  return {
+    backendExtensionsDescriptionPrefix: "Backend extensions",
+    requestedExecutionDescriptionPrefix: "Dispatch request",
+    requestedBackendExtensionsDescriptionPrefix: "Dispatch backend extensions"
+  };
+}
+
+export function formatExecutionBlockingReasonCopy(reason?: string | null): string | null {
+  const normalized = trimOrNull(reason);
+  return normalized ? `执行阻断：${normalized}` : null;
+}
+
+export function formatExecutionFallbackReasonCopy(reason?: string | null): string | null {
+  const normalized = trimOrNull(reason);
+  return normalized ? `执行降级：${normalized}` : null;
 }
 
 export function formatMetricSummary(metrics: Record<string, number>) {
@@ -550,7 +574,7 @@ function resolveExecutionBlockingInsight(
     }
 
     return {
-      primarySignal: `执行阻断：${reason}`,
+      primarySignal: formatExecutionBlockingReasonCopy(reason) ?? `执行阻断：${reason}`,
       followUp:
         "下一步：优先核对 execution class、sandbox backend readiness 和 tool governance 是否匹配。"
     };
@@ -612,7 +636,8 @@ function resolveExecutionFallbackInsight(
         : "";
 
     return {
-      primarySignal: `执行降级：当前节点因 ${reason} 发生 execution fallback${fallbackCountCopy}。`,
+      primarySignal:
+        `执行降级：当前节点因 ${reason} 发生 execution fallback${fallbackCountCopy}。`,
       followUp:
         "下一步：确认该 fallback 是否符合当前 execution policy；若不符合，应回到 execution capability 与 runtime adapter 事实链继续治理。"
     };

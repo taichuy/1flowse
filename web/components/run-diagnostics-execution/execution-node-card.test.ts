@@ -422,6 +422,44 @@ describe("ExecutionNodeCard", () => {
     expect(html).toContain("runner tool");
   });
 
+  it("reuses shared runtime copy for execution detail summaries", () => {
+    const html = renderToStaticMarkup(
+      createElement(ExecutionNodeCard, {
+        node: {
+          ...buildExecutionNode(),
+          execution_backend_extensions: {
+            concurrency: 2
+          },
+          requested_execution_class: "microvm",
+          requested_execution_source: "workflow_override",
+          requested_execution_profile: "python-safe",
+          requested_execution_backend_extensions: {
+            image: "safe-python"
+          },
+          execution_fallback_reason: "compat_adapter_execution_class_not_supported",
+          callback_waiting_lifecycle: null,
+          callback_waiting_explanation: null,
+          waiting_reason: null,
+          scheduled_resume_delay_seconds: null,
+          scheduled_resume_reason: null,
+          scheduled_resume_source: null,
+          scheduled_waiting_status: null,
+          scheduled_resume_scheduled_at: null,
+          scheduled_resume_due_at: null,
+          scheduled_resume_requeued_at: null,
+          scheduled_resume_requeue_source: null
+        },
+        runId: "run-callback-1",
+        callbackWaitingAutomation: buildCallbackWaitingAutomation()
+      })
+    );
+
+    expect(html).toContain("Backend extensions {&quot;concurrency&quot;:2}");
+    expect(html).toContain("Dispatch request class microvm");
+    expect(html).toContain("Dispatch backend extensions {&quot;image&quot;:&quot;safe-python&quot;}");
+    expect(html).toContain("执行降级：compat_adapter_execution_class_not_supported");
+  });
+
   it("shows live sandbox readiness when a node is blocked on strong isolation", () => {
     const blockedNode = {
       ...buildExecutionNode(),

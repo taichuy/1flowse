@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { RunExecutionNodeItem } from "@/lib/get-run-views";
 
 import {
+  buildExecutionNodeDiagnosticsSurfaceCopy,
   buildExecutionFocusDiagnosticsBlockerSurfaceCopy,
   buildExecutionFocusSectionSurfaceCopy,
   buildExecutionFocusSurfaceDescription,
+  formatExecutionBlockingReasonCopy,
+  formatExecutionFallbackReasonCopy,
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal,
@@ -97,6 +100,23 @@ describe("run execution focus presenters", () => {
       focusNodeDescription: expect.stringContaining("后端选出的 canonical execution focus"),
       focusedSkillTraceDescription: expect.stringContaining("Priority blocker 卡片")
     });
+  });
+
+  it("为 execution node 详情提供共享 runtime copy", () => {
+    expect(buildExecutionNodeDiagnosticsSurfaceCopy()).toEqual({
+      backendExtensionsDescriptionPrefix: "Backend extensions",
+      requestedExecutionDescriptionPrefix: "Dispatch request",
+      requestedBackendExtensionsDescriptionPrefix: "Dispatch backend extensions"
+    });
+  });
+
+  it("统一格式化执行阻断与降级说明", () => {
+    expect(formatExecutionBlockingReasonCopy("sandbox backend unavailable")).toBe(
+      "执行阻断：sandbox backend unavailable"
+    );
+    expect(formatExecutionFallbackReasonCopy("native_tool_execution_class_not_supported")).toBe(
+      "执行降级：native_tool_execution_class_not_supported"
+    );
   });
 
   it("优先展示 execution blocking reason", () => {

@@ -28,6 +28,7 @@ describe("published invocation presenters", () => {
     ).toMatchObject({
       canonicalFollowUpDescription: expect.stringContaining("operator follow-up"),
       blockingApprovalTimelineDescription: expect.stringContaining("node-run-blocked"),
+      approvalTimelineDescription: expect.stringContaining("published-surface debugging"),
       skillTraceDescription: expect.stringContaining("node-run-focus")
     });
   });

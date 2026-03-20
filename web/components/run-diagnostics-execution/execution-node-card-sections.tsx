@@ -10,7 +10,12 @@ import type {
 } from "@/lib/get-run-views";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { listCallbackTicketDetailRows } from "@/lib/callback-waiting-presenters";
+import {
+  formatExecutionBlockingReasonCopy,
+  formatExecutionFallbackReasonCopy
+} from "@/lib/run-execution-focus-presenters";
 import { formatDurationMs, formatJsonPayload } from "@/lib/runtime-presenters";
+import { buildSensitiveAccessTimelineSurfaceCopy } from "@/lib/sensitive-access-presenters";
 
 import { ArtifactPreviewList } from "@/components/run-diagnostics-execution/shared";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
@@ -85,12 +90,12 @@ export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallIt
               ) : null}
               {toolCall.execution_blocking_reason ? (
                 <p className="section-copy entry-copy">
-                  blocked: {toolCall.execution_blocking_reason}
+                  {formatExecutionBlockingReasonCopy(toolCall.execution_blocking_reason)}
                 </p>
               ) : null}
               {toolCall.execution_fallback_reason ? (
                 <p className="section-copy entry-copy">
-                  fallback: {toolCall.execution_fallback_reason}
+                  {formatExecutionFallbackReasonCopy(toolCall.execution_fallback_reason)}
                 </p>
               ) : null}
               <pre>
@@ -227,13 +232,14 @@ export function ExecutionNodeSensitiveAccessSection({
     return null;
   }
 
+  const surfaceCopy = buildSensitiveAccessTimelineSurfaceCopy({
+    surface: "execution_node"
+  });
+
   return (
     <section>
       <SectionHeader title="Sensitive access timeline" count={count} />
-      <p className="section-copy entry-copy">
-        Approval tickets, notification delivery and policy decisions stay grouped here so operator
-        triage can continue without leaving the execution node.
-      </p>
+      <p className="section-copy entry-copy">{surfaceCopy.description}</p>
       {children}
     </section>
   );
