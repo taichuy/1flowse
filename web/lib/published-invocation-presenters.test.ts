@@ -12,6 +12,7 @@ import {
   buildPublishedInvocationFailureReasonInsight,
   buildPublishedInvocationRateLimitWindowInsight,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationTrafficTimelineSurfaceCopy,
   buildPublishedInvocationUnavailableDetailSurfaceCopy,
   formatPublishedInvocationFailureReasonLastSeen,
   formatPublishedInvocationSampleReasonLabel,
@@ -36,10 +37,14 @@ describe("published invocation presenters", () => {
         focusSkillTraceNodeRunId: "node-run-focus"
       })
     ).toMatchObject({
+      detailTitle: "Invocation detail",
       closeDetailLabel: "关闭详情",
       openRunLabel: "打开 run",
       runDrilldownTitle: "Run drilldown",
       canonicalFollowUpTitle: "Canonical follow-up",
+      sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
+      sampledRunSkillTraceTitle: "Focused skill trace",
+      recommendedNextStepTitle: "Recommended next step",
       liveSandboxReadinessTitle: "Live sandbox readiness",
       injectedReferencesTitle: "Injected references",
       toolGovernanceSummaryTitle: "Execution and sensitivity",
@@ -76,7 +81,28 @@ describe("published invocation presenters", () => {
       inboxLinkLabel: "open inbox slice",
       blockersTitle: "Resume blockers",
       blockersEmptyHeadline: "Callback waiting is not active.",
-      latestEventsTitle: "Latest callback events"
+      latestEventsTitle: "Latest callback events",
+      ticketTitle: "Callback ticket",
+      ticketInboxLinkLabel: "open ticket inbox slice",
+      payloadPreviewTitle: "callback payload preview",
+      emptyState: "当前这次 invocation 没有关联 callback ticket。"
+    });
+  });
+
+  it("为 traffic timeline 提供统一标题、说明与空态", () => {
+    expect(
+      buildPublishedInvocationTrafficTimelineSurfaceCopy({
+        timelineGranularity: "hour",
+        timeWindowLabel: "最近 24 小时"
+      })
+    ).toEqual({
+      title: "Traffic timeline",
+      description:
+        "按小时聚合最近调用，补足 publish activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：最近 24 小时。",
+      emptyState:
+        "当前还没有足够的 invocation timeline 数据，后续命中 published endpoint 后这里会显示趋势桶。",
+      totalCountLabel: "total",
+      apiKeyLabelPrefix: "key"
     });
   });
 

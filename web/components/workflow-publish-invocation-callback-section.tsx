@@ -187,13 +187,13 @@ export function WorkflowPublishInvocationCallbackSection({
             return (
               <article className="payload-card compact-card" key={ticket.ticket}>
                 <div className="payload-card-header">
-                  <span className="status-meta">Callback ticket</span>
+                  <span className="status-meta">{surfaceCopy.ticketTitle}</span>
                   <span className="event-chip">{ticket.status}</span>
                 </div>
                 {ticketInboxHref ? (
                   <div className="tool-badge-row">
                     <Link className="event-chip inbox-filter-link" href={ticketInboxHref}>
-                      open ticket inbox slice
+                      {surfaceCopy.ticketInboxLinkLabel}
                     </Link>
                   </div>
                 ) : null}
@@ -207,7 +207,7 @@ export function WorkflowPublishInvocationCallbackSection({
                 </dl>
                 {ticket.callback_payload ? (
                   <>
-                    <p className="section-copy entry-copy">callback payload preview</p>
+                    <p className="section-copy entry-copy">{surfaceCopy.payloadPreviewTitle}</p>
                     <pre className="trace-preview">{formatJsonPreview(ticket.callback_payload)}</pre>
                   </>
                 ) : null}
@@ -216,7 +216,7 @@ export function WorkflowPublishInvocationCallbackSection({
           })}
         </div>
       ) : (
-        <p className="empty-state compact">当前这次 invocation 没有关联 callback ticket。</p>
+        <p className="empty-state compact">{surfaceCopy.emptyState}</p>
       )}
     </section>
   );

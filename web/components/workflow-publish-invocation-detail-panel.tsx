@@ -144,7 +144,7 @@ export function WorkflowPublishInvocationDetailPanel({
     <article className="entry-card compact-card publish-invocation-detail-panel">
       <div className="payload-card-header">
         <div>
-          <p className="entry-card-title">Invocation detail</p>
+          <p className="entry-card-title">{detailSurfaceCopy.detailTitle}</p>
           <p className="binding-meta">
             {invocation.id} · {formatTimestamp(invocation.created_at)} · {formatDurationMs(invocation.duration_ms)}
           </p>
@@ -397,7 +397,7 @@ export function WorkflowPublishInvocationDetailPanel({
                       sample.focus_tool_call_summaries.length > 0 ||
                       sample.focus_artifacts.length > 0) ? (
                       <OperatorFocusEvidenceCard
-                        title="Sampled run focus evidence"
+                        title={detailSurfaceCopy.sampledRunFocusEvidenceTitle}
                         artifactCount={sample.execution_focus_artifact_count}
                         artifactRefCount={sample.execution_focus_artifact_ref_count}
                         artifactSummary={sample.focus_artifact_summary}
@@ -409,7 +409,7 @@ export function WorkflowPublishInvocationDetailPanel({
                     {!sample.has_callback_waiting_summary ? (
                       <SkillReferenceLoadList
                         skillReferenceLoads={sample.focus_skill_reference_loads}
-                        title="Focused skill trace"
+                        title={detailSurfaceCopy.sampledRunSkillTraceTitle}
                         description={detailSurfaceCopy.sampledRunSkillTraceDescription}
                       />
                     ) : null}
@@ -438,7 +438,7 @@ export function WorkflowPublishInvocationDetailPanel({
       {recommendedNextStep ? (
         <div className="entry-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Recommended next step</span>
+            <span className="status-meta">{detailSurfaceCopy.recommendedNextStepTitle}</span>
             <span className="event-chip">{recommendedNextStep.label}</span>
             {recommendedNextStep.href && recommendedNextStep.href_label ? (
               <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>

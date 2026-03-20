@@ -84,6 +84,7 @@ export type PublishedInvocationRecommendedNextStep = {
 };
 
 export type PublishedInvocationDetailSurfaceCopy = {
+  detailTitle: string;
   closeDetailLabel: string;
   openRunLabel: string;
   runDrilldownTitle: string;
@@ -93,8 +94,10 @@ export type PublishedInvocationDetailSurfaceCopy = {
   canonicalFollowUpTitle: string;
   canonicalFollowUpDescription: string;
   sampledRunFallback: string;
+  sampledRunFocusEvidenceTitle: string;
   sampledRunSkillTraceTitle: string;
   sampledRunSkillTraceDescription: string;
+  recommendedNextStepTitle: string;
   executionFocusTitle: string;
   liveSandboxReadinessTitle: string;
   skillTraceTitle: string;
@@ -120,6 +123,18 @@ export type PublishedInvocationCallbackDrilldownSurfaceCopy = {
   blockersTitle: string;
   blockersEmptyHeadline: string;
   latestEventsTitle: string;
+  ticketTitle: string;
+  ticketInboxLinkLabel: string;
+  payloadPreviewTitle: string;
+  emptyState: string;
+};
+
+export type PublishedInvocationTrafficTimelineSurfaceCopy = {
+  title: string;
+  description: string;
+  emptyState: string;
+  totalCountLabel: string;
+  apiKeyLabelPrefix: string;
 };
 
 export type PublishedInvocationFailureMessageDiagnosis = {
@@ -183,6 +198,7 @@ export function buildPublishedInvocationDetailSurfaceCopy({
   });
 
   return {
+    detailTitle: "Invocation detail",
     closeDetailLabel: "关闭详情",
     openRunLabel: "打开 run",
     runDrilldownTitle: "Run drilldown",
@@ -193,9 +209,11 @@ export function buildPublishedInvocationDetailSurfaceCopy({
     canonicalFollowUpDescription:
       "publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。",
     sampledRunFallback: "该 sampled run 已回接 canonical follow-up 快照。",
+    sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
     sampledRunSkillTraceTitle: "Focused skill trace",
     sampledRunSkillTraceDescription:
       "publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。",
+    recommendedNextStepTitle: "Recommended next step",
     executionFocusTitle: "Execution focus",
     liveSandboxReadinessTitle: "Live sandbox readiness",
     skillTraceTitle: "Skill trace",
@@ -240,7 +258,29 @@ export function buildPublishedInvocationCallbackDrilldownSurfaceCopy(): Publishe
     inboxLinkLabel: "open inbox slice",
     blockersTitle: "Resume blockers",
     blockersEmptyHeadline: "Callback waiting is not active.",
-    latestEventsTitle: "Latest callback events"
+    latestEventsTitle: "Latest callback events",
+    ticketTitle: "Callback ticket",
+    ticketInboxLinkLabel: "open ticket inbox slice",
+    payloadPreviewTitle: "callback payload preview",
+    emptyState: "当前这次 invocation 没有关联 callback ticket。"
+  };
+}
+
+export function buildPublishedInvocationTrafficTimelineSurfaceCopy({
+  timelineGranularity,
+  timeWindowLabel
+}: {
+  timelineGranularity: "hour" | "day";
+  timeWindowLabel: string;
+}): PublishedInvocationTrafficTimelineSurfaceCopy {
+  return {
+    title: "Traffic timeline",
+    description:
+      `按${timelineGranularity === "hour" ? "小时" : "天"}聚合最近调用，补足 publish activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：${timeWindowLabel}。`,
+    emptyState:
+      "当前还没有足够的 invocation timeline 数据，后续命中 published endpoint 后这里会显示趋势桶。",
+    totalCountLabel: "total",
+    apiKeyLabelPrefix: "key"
   };
 }
 

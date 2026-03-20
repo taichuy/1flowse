@@ -2,6 +2,7 @@ import React from "react";
 
 import type { PublishedEndpointInvocationTimeBucketItem } from "@/lib/get-workflow-publish";
 import {
+  buildPublishedInvocationTrafficTimelineSurfaceCopy,
   formatPublishedInvocationCacheStatusLabel,
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
@@ -53,6 +54,10 @@ export function WorkflowPublishTrafficTimeline({
   timelineGranularity,
   timeWindowLabel
 }: WorkflowPublishTrafficTimelineProps) {
+  const surfaceCopy = buildPublishedInvocationTrafficTimelineSurfaceCopy({
+    timelineGranularity,
+    timeWindowLabel
+  });
   const timelineMaxCount = timeline.reduce(
     (max, bucket) => Math.max(max, bucket.total_count),
     0
@@ -60,12 +65,8 @@ export function WorkflowPublishTrafficTimeline({
 
   return (
     <div className="entry-card compact-card">
-      <p className="entry-card-title">Traffic timeline</p>
-      <p className="section-copy entry-copy">
-        按 {timelineGranularity === "hour" ? "小时" : "天"} 聚合最近调用，补足 publish
-        activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：
-        {timeWindowLabel}。
-      </p>
+      <p className="entry-card-title">{surfaceCopy.title}</p>
+      <p className="section-copy entry-copy">{surfaceCopy.description}</p>
 
       {timeline.length ? (
         <div className="publish-timeline">
@@ -98,7 +99,9 @@ export function WorkflowPublishTrafficTimeline({
                   <span className="status-meta">
                     {formatTimelineBucketLabel(bucket.bucket_start, timelineGranularity)}
                   </span>
-                  <span className="event-chip">total {bucket.total_count}</span>
+                  <span className="event-chip">
+                    {surfaceCopy.totalCountLabel} {bucket.total_count}
+                  </span>
                 </div>
 
                 <div className="publish-timeline-bar" aria-hidden="true">
@@ -162,7 +165,7 @@ export function WorkflowPublishTrafficTimeline({
                   <div className="tool-badge-row">
                     {apiKeyLabels.map((label) => (
                       <span className="event-chip" key={label}>
-                        key {label}
+                        {surfaceCopy.apiKeyLabelPrefix} {label}
                       </span>
                     ))}
                   </div>
@@ -172,9 +175,7 @@ export function WorkflowPublishTrafficTimeline({
           })}
         </div>
       ) : (
-        <p className="empty-state compact">
-          当前还没有足够的 invocation timeline 数据，后续命中 published endpoint 后这里会显示趋势桶。
-        </p>
+        <p className="empty-state compact">{surfaceCopy.emptyState}</p>
       )}
     </div>
   );
