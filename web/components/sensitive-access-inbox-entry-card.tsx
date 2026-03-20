@@ -115,9 +115,9 @@ export function SensitiveAccessInboxEntryCard({
         {request && formatSensitiveAccessReasonLabel(request) ? (
           <span className="event-chip">reason {formatSensitiveAccessReasonLabel(request)}</span>
         ) : null}
-        {entry.ticket.run_id ? (
-          <Link className="event-chip inbox-filter-link" href={`/runs/${entry.ticket.run_id}`}>
-            run {entry.ticket.run_id.slice(0, 8)}
+        {scope.runId ? (
+          <Link className="event-chip inbox-filter-link" href={`/runs/${scope.runId}`}>
+            run {scope.runId.slice(0, 8)}
           </Link>
         ) : null}
         <span className="event-chip">created {formatTimestamp(entry.ticket.created_at)}</span>

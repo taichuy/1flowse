@@ -145,4 +145,17 @@ describe("SensitiveAccessInboxEntryCard", () => {
     expect(html).toContain("runner container");
     expect(html).toContain("/runs/run-1");
   });
+
+  it("falls back to canonical scope when the ticket run_id is missing", () => {
+    const entry = buildEntry();
+    entry.ticket.run_id = null;
+    entry.request!.run_id = null;
+    entry.executionContext!.runId = "1234567890-current-run";
+    entry.executionContext!.focusNode.tool_calls[0]!.run_id = "1234567890-current-run";
+
+    const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
+
+    expect(html).toContain("href=\"/runs/1234567890-current-run\"");
+    expect(html).toContain("run 12345678");
+  });
 });
