@@ -1,5 +1,8 @@
 ﻿"use client";
 
+import React from "react";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { buildSandboxExecutionPolicyPreflightInsight } from "@/lib/sandbox-readiness-presenters";
 import {
   cloneRecord,
   parseNumericFieldValue,
@@ -22,15 +25,27 @@ type WorkflowNodeRuntimePolicyExecutionSectionProps = {
   nodeType: string;
   runtimePolicy: Record<string, unknown>;
   onChange: (nextRuntimePolicy: Record<string, unknown> | undefined) => void;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function WorkflowNodeRuntimePolicyExecutionSection({
   nodeId,
   nodeType,
   runtimePolicy,
-  onChange
+  onChange,
+  sandboxReadiness = null
 }: WorkflowNodeRuntimePolicyExecutionSectionProps) {
   const execution = readExecutionPolicy(runtimePolicy, nodeType);
+  const sandboxExecutionInsight =
+    sandboxReadiness && (execution.className === "sandbox" || execution.className === "microvm")
+      ? buildSandboxExecutionPolicyPreflightInsight(sandboxReadiness, {
+          executionClass: execution.className,
+          nodeType,
+          profile: execution.profile,
+          networkPolicy: execution.networkPolicy,
+          filesystemPolicy: execution.filesystemPolicy
+        })
+      : null;
 
   const updateExecutionField = (
     field: "class" | "profile" | "timeoutMs" | "networkPolicy" | "filesystemPolicy",
@@ -153,6 +168,25 @@ export function WorkflowNodeRuntimePolicyExecutionSection({
           ))}
         </select>
       </label>
+
+      {sandboxExecutionInsight ? (
+        <div className="binding-field compact-stack">
+          <span className="binding-label">Live sandbox readiness</span>
+          <small className="section-copy">
+            {sandboxExecutionInsight.headline}
+            {sandboxExecutionInsight.detail ? ` ${sandboxExecutionInsight.detail}` : ""}
+          </small>
+          {sandboxExecutionInsight.chips.length > 0 ? (
+            <div className="tool-badge-row">
+              {sandboxExecutionInsight.chips.map((chip) => (
+                <span className="event-chip" key={`${nodeId}-execution-readiness-${chip}`}>
+                  {chip}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

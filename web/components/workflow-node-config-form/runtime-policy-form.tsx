@@ -2,6 +2,7 @@
 
 import type { Edge, Node } from "@xyflow/react";
 
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type {
   WorkflowCanvasEdgeData,
   WorkflowCanvasNodeData
@@ -25,6 +26,7 @@ type WorkflowNodeRuntimePolicyFormProps = {
   edges: Array<Edge<WorkflowCanvasEdgeData>>;
   onChange: (nextRuntimePolicy: Record<string, unknown> | undefined) => void;
   highlighted?: boolean;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 const JOIN_MODES = ["any", "all"] as const;
@@ -36,7 +38,8 @@ export function WorkflowNodeRuntimePolicyForm({
   nodes,
   edges,
   onChange,
-  highlighted = false
+  highlighted = false,
+  sandboxReadiness = null
 }: WorkflowNodeRuntimePolicyFormProps) {
   const runtimePolicy = cloneRecord(node.data.runtimePolicy ?? {});
   const retry = readRetryPolicy(runtimePolicy);
@@ -132,6 +135,7 @@ export function WorkflowNodeRuntimePolicyForm({
         nodeType={node.data.nodeType}
         runtimePolicy={runtimePolicy}
         onChange={onChange}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <div className="binding-field compact-stack">

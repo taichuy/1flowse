@@ -57,6 +57,14 @@ export type SandboxExecutionReadinessInsight = {
   chips: string[];
 };
 
+export type SandboxExecutionPolicyPreflightInsight = {
+  executionClass: string;
+  status: "blocked" | "capability_mismatch" | "ready";
+  headline: string;
+  detail: string | null;
+  chips: string[];
+};
+
 function trimOrNull(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -248,6 +256,134 @@ export function buildSandboxExecutionReadinessInsight(
     executionClass: targetExecutionClass,
     status: "ready",
     headline: `当前 live sandbox readiness 显示 ${targetExecutionClass} 已 ready。`,
+    detail,
+    chips: capabilityChips
+  };
+}
+
+export function buildSandboxExecutionPolicyPreflightInsight(
+  readiness: SandboxReadinessCheck,
+  options: {
+    executionClass?: string | null;
+    nodeType?: string | null;
+    profile?: string | null;
+    networkPolicy?: string | null;
+    filesystemPolicy?: string | null;
+  }
+): SandboxExecutionPolicyPreflightInsight | null {
+  const executionClass = trimOrNull(options.executionClass);
+  if (!executionClass) {
+    return null;
+  }
+
+  const readinessEntry = readiness.execution_classes.find(
+    (entry) => entry.execution_class === executionClass
+  );
+  if (!readinessEntry) {
+    return null;
+  }
+
+  const capabilityChips = buildSandboxExecutionClassCapabilityChips(readinessEntry);
+  const availableClasses = listSandboxAvailableClasses(readiness).filter(
+    (entry) => entry !== executionClass
+  );
+
+  if (!readinessEntry.available) {
+    const detail = [
+      trimOrNull(readinessEntry.reason) ??
+        `当前还没有兼容 execution class '${executionClass}' 的 sandbox backend。`,
+      availableClasses.length > 0
+        ? `当前仍可复用的 execution class：${availableClasses.join(" / ")}。`
+        : null,
+      "继续显式写入这份 runtimePolicy.execution 时，强隔离路径仍会 fail-closed。"
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join(" ");
+
+    return {
+      executionClass,
+      status: "blocked",
+      headline: `当前 live sandbox readiness 显示 ${executionClass} 仍 blocked。`,
+      detail,
+      chips: capabilityChips
+    };
+  }
+
+  const capabilityIssues: string[] = [];
+  const profile = trimOrNull(options.profile);
+  const supportedProfiles =
+    readinessEntry.supported_profiles.length > 0
+      ? readinessEntry.supported_profiles
+      : readiness.supported_profiles;
+  if (profile && supportedProfiles.length > 0 && !supportedProfiles.includes(profile)) {
+    capabilityIssues.push(
+      `当前 sandbox readiness 还没有暴露 profile = ${profile}，这份 override 不能稳定落到兼容 backend。`
+    );
+  }
+
+  const networkPolicy = trimOrNull(options.networkPolicy);
+  if (
+    networkPolicy &&
+    networkPolicy !== "inherit" &&
+    !(readinessEntry.supports_network_policy || readiness.supports_network_policy)
+  ) {
+    capabilityIssues.push(
+      `当前 sandbox readiness 还不支持 networkPolicy = ${networkPolicy} 的 capability hints。`
+    );
+  }
+
+  const filesystemPolicy = trimOrNull(options.filesystemPolicy);
+  if (
+    filesystemPolicy &&
+    filesystemPolicy !== "inherit" &&
+    !(readinessEntry.supports_filesystem_policy || readiness.supports_filesystem_policy)
+  ) {
+    capabilityIssues.push(
+      `当前 sandbox readiness 还不支持 filesystemPolicy = ${filesystemPolicy} 的 capability hints。`
+    );
+  }
+
+  if (
+    options.nodeType === "tool" &&
+    !(readinessEntry.supports_tool_execution || readiness.supports_tool_execution)
+  ) {
+    capabilityIssues.push(
+      `当前 ${executionClass} 虽然 ready，但还没有 sandbox-backed tool execution capability；tool 节点仍应继续 fail-closed。`
+    );
+  }
+
+  if (capabilityIssues.length > 0) {
+    const detail = [
+      readinessEntry.backend_ids.length > 0
+        ? `当前 ${executionClass} ready via ${readinessEntry.backend_ids.join(", ")}。`
+        : null,
+      capabilityIssues.join(" ")
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join(" ");
+
+    return {
+      executionClass,
+      status: "capability_mismatch",
+      headline: `当前 live sandbox readiness 显示 ${executionClass} 已 ready，但这份 runtimePolicy.execution 仍有 capability 未对齐。`,
+      detail,
+      chips: capabilityChips
+    };
+  }
+
+  const detail = [
+    readinessEntry.backend_ids.length > 0
+      ? `当前 ${executionClass} ready via ${readinessEntry.backend_ids.join(", ")}。`
+      : null,
+    "这让作者可以直接按 live sandbox capability 校准当前 override，而不是只停留在 JSON 字段层。"
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join(" ");
+
+  return {
+    executionClass,
+    status: "ready",
+    headline: `当前 live sandbox readiness 显示 ${executionClass} 已 ready。`,
     detail,
     chips: capabilityChips
   };

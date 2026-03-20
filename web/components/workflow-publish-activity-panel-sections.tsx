@@ -22,6 +22,11 @@ import {
   formatRateLimitPressure
 } from "@/lib/published-invocation-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
+import {
+  formatSandboxReadinessDetail,
+  formatSandboxReadinessHeadline,
+  listSandboxBlockedClasses
+} from "@/lib/sandbox-readiness-presenters";
 
 import { facetCount, formatTimeWindowLabel } from "@/components/workflow-publish-activity-panel-helpers";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
@@ -30,6 +35,7 @@ type WorkflowPublishActivityInsightsProps = {
   binding: WorkflowPublishActivityPanelProps["binding"];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
   activeTimeWindow: WorkflowPublishActivityPanelProps["activeInvocationFilter"] extends infer T
     ? T extends { timeWindow: infer U }
       ? U | null
@@ -37,10 +43,90 @@ type WorkflowPublishActivityInsightsProps = {
     : never;
 };
 
+function buildRateLimitWindowInsight({
+  pressure,
+  remainingQuota,
+  windowRejected,
+  failedCount,
+  activeTimeWindow
+}: {
+  pressure: ReturnType<typeof formatRateLimitPressure> | null;
+  remainingQuota: number | null;
+  windowRejected: number;
+  failedCount: number;
+  activeTimeWindow: WorkflowPublishActivityInsightsProps["activeTimeWindow"];
+}) {
+  if (!pressure || remainingQuota === null) {
+    return null;
+  }
+
+  if (windowRejected > 0) {
+    return `当前窗口已经出现 ${windowRejected} 次限流拒绝；如果失败面板同时看到 runtime failed，先把 quota hit 与执行链路异常拆开排查。`;
+  }
+
+  if (pressure.percentage >= 80) {
+    return `当前 ${formatTimeWindowLabel(activeTimeWindow ?? "all")} 切片里已用掉 ${pressure.label} 配额，只剩 ${remainingQuota} 次；继续放量前先观察是否开始转成 rate_limit_exceeded。`;
+  }
+
+  if (failedCount > 0) {
+    return `当前窗口还剩 ${remainingQuota} 次配额，说明这段时间里的 failed 更可能来自运行时、鉴权或协议边界，而不是 rate limit 本身。`;
+  }
+
+  return `当前窗口还剩 ${remainingQuota} 次配额，rate limit 现在还不是这条 binding 的主阻塞面。`;
+}
+
+function buildFailureReasonInsight({
+  reasonCounts,
+  failureReasons,
+  sandboxReadiness
+}: {
+  reasonCounts: NonNullable<PublishedEndpointInvocationListResponse>["facets"]["reason_counts"];
+  failureReasons: NonNullable<PublishedEndpointInvocationListResponse>["facets"]["recent_failure_reasons"];
+  sandboxReadiness?: SandboxReadinessCheck | null;
+}) {
+  const runtimeFailedCount = facetCount(reasonCounts, "runtime_failed");
+  const rateLimitExceededCount = facetCount(reasonCounts, "rate_limit_exceeded");
+  const authRejectedCount =
+    facetCount(reasonCounts, "api_key_invalid") + facetCount(reasonCounts, "api_key_required");
+
+  if (runtimeFailedCount > 0) {
+    if (sandboxReadiness) {
+      const readinessHeadline = formatSandboxReadinessHeadline(sandboxReadiness);
+      const readinessDetail = formatSandboxReadinessDetail(sandboxReadiness);
+      const hasLiveReadinessPressure =
+        listSandboxBlockedClasses(sandboxReadiness).length > 0 ||
+        sandboxReadiness.offline_backend_count > 0 ||
+        sandboxReadiness.degraded_backend_count > 0;
+
+      return hasLiveReadinessPressure
+        ? `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；结合 live sandbox readiness：${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""}，要优先判断是不是强隔离 backend / capability 仍 blocked。`
+        : `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；live sandbox readiness 现在没有继续报警，失败更可能来自 run 当时的 backend 健康度、节点配置或协议转换。`;
+    }
+
+    return `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；需要继续结合 run diagnostics 区分执行链路、节点配置和协议转换问题。`;
+  }
+
+  if (rateLimitExceededCount > 0) {
+    return `当前 reason code 里已有 ${rateLimitExceededCount} 条 Rate limit exceeded；优先对照上面的 rate limit window，而不是把拒绝误当成 runtime 故障。`;
+  }
+
+  if (authRejectedCount > 0) {
+    return `当前拒绝更集中在 API key / auth 边界，先检查 key 轮换、binding 暴露方式与调用方鉴权，再回头看执行层。`;
+  }
+
+  const latestFailure = failureReasons[0]?.message?.trim();
+  if (latestFailure) {
+    return `最近失败明细集中在：${latestFailure}`;
+  }
+
+  return null;
+}
+
 export function WorkflowPublishActivityInsights({
   binding,
   invocationAudit,
   rateLimitWindowAudit,
+  sandboxReadiness,
   activeTimeWindow
 }: WorkflowPublishActivityInsightsProps) {
   const summary = invocationAudit?.summary;
@@ -63,6 +149,18 @@ export function WorkflowPublishActivityInsights({
   const windowRejected = rateLimitWindowAudit?.summary.rejected_count ?? 0;
   const remainingQuota = rateLimitPolicy ? Math.max(rateLimitPolicy.requests - windowUsed, 0) : null;
   const pressure = rateLimitPolicy ? formatRateLimitPressure(rateLimitPolicy.requests, windowUsed) : null;
+  const rateLimitWindowInsight = buildRateLimitWindowInsight({
+    pressure,
+    remainingQuota,
+    windowRejected,
+    failedCount: summary?.failed_count ?? 0,
+    activeTimeWindow
+  });
+  const failureReasonInsight = buildFailureReasonInsight({
+    reasonCounts,
+    failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
+    sandboxReadiness
+  });
 
   return (
     <>
@@ -211,6 +309,9 @@ export function WorkflowPublishActivityInsights({
                 当前窗口从 {formatTimestamp(rateLimitWindowAudit?.filters.created_from ?? null)} 开始统计成功和失败调用，
                 `rejected` 仅作为治理信号，不占配额。
               </p>
+              {rateLimitWindowInsight ? (
+                <p className="section-copy entry-copy">{rateLimitWindowInsight}</p>
+              ) : null}
             </>
           ) : (
             <p className="empty-state compact">当前 binding 没有启用 rate limit，开放调用不会按时间窗口限流。</p>
@@ -230,6 +331,9 @@ export function WorkflowPublishActivityInsights({
           <p className="section-copy entry-copy">
             将 `rejected / failed` 聚合为稳定原因码，便于区分限流、鉴权和当前同步协议边界。
           </p>
+          {failureReasonInsight ? (
+            <p className="section-copy entry-copy">{failureReasonInsight}</p>
+          ) : null}
           <div className="tool-badge-row">
             {reasonCounts.map((item) => (
               <span className="event-chip" key={item.value}>

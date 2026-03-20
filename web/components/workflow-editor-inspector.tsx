@@ -148,6 +148,7 @@ export function WorkflowEditorInspector({
               edges={edges}
               onChange={onNodeRuntimePolicyUpdate}
               highlighted={highlightedNodeSection === "runtime"}
+              sandboxReadiness={sandboxReadiness}
             />
 
             <label className="binding-field">
