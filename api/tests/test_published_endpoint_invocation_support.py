@@ -243,3 +243,107 @@ def test_build_waiting_lifecycle_lookup_includes_blocking_sensitive_access_summa
     assert waiting_lifecycle.sensitive_access_summary.approval_ticket_count == 1
     assert waiting_lifecycle.sensitive_access_summary.pending_approval_count == 1
     assert waiting_lifecycle.sensitive_access_summary.failed_notification_count == 1
+
+
+def test_build_waiting_lifecycle_lookup_prefers_latest_current_waiting_node_run() -> None:
+    now = datetime(2026, 3, 20, 11, 0, tzinfo=UTC)
+    run = Run(
+        id="run-current-node-waiting",
+        workflow_id="wf-current-node-waiting",
+        workflow_version="0.1.0",
+        status="waiting_callback",
+        input_payload={"question": "hello"},
+        checkpoint_payload={"waiting_node_run_id": "node-run-current-new"},
+        current_node_id="tool_wait",
+        error_message=None,
+        started_at=now,
+        finished_at=None,
+        created_at=now,
+    )
+    current_terminated_node_run = NodeRun(
+        id="node-run-current-old",
+        run_id=run.id,
+        node_id="tool_wait",
+        node_name="Tool Wait",
+        node_type="tool",
+        status="failed",
+        phase="failed",
+        retry_count=0,
+        input_payload={},
+        output_payload=None,
+        checkpoint_payload={
+            "callback_waiting_lifecycle": {
+                "terminated": True,
+                "termination_reason": "callback_waiting_max_expired_tickets_reached",
+            }
+        },
+        working_context={},
+        evidence_context=None,
+        artifact_refs=[],
+        error_message="old callback waiting terminated",
+        waiting_reason="old callback pending",
+        started_at=now,
+        phase_started_at=now,
+        finished_at=now,
+        created_at=now,
+    )
+    competing_waiting_node_run = NodeRun(
+        id="node-run-other-waiting",
+        run_id=run.id,
+        node_id="other_wait",
+        node_name="Other Wait",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        retry_count=0,
+        input_payload={},
+        output_payload=None,
+        checkpoint_payload={},
+        working_context={},
+        evidence_context=None,
+        artifact_refs=[],
+        error_message=None,
+        waiting_reason="other callback pending",
+        started_at=now,
+        phase_started_at=now,
+        finished_at=None,
+        created_at=now,
+    )
+    current_waiting_node_run = NodeRun(
+        id="node-run-current-new",
+        run_id=run.id,
+        node_id="tool_wait",
+        node_name="Tool Wait",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        retry_count=1,
+        input_payload={},
+        output_payload=None,
+        checkpoint_payload={},
+        working_context={},
+        evidence_context=None,
+        artifact_refs=[],
+        error_message=None,
+        waiting_reason="current callback pending",
+        started_at=now,
+        phase_started_at=datetime(2026, 3, 20, 11, 5, tzinfo=UTC),
+        finished_at=None,
+        created_at=datetime(2026, 3, 20, 11, 5, tzinfo=UTC),
+    )
+
+    waiting_reason_lookup, waiting_lifecycle_lookup = build_waiting_lifecycle_lookup(
+        {run.id: run},
+        [
+            current_terminated_node_run,
+            competing_waiting_node_run,
+            current_waiting_node_run,
+        ],
+        [],
+    )
+
+    waiting_lifecycle = waiting_lifecycle_lookup[run.id]
+    assert waiting_reason_lookup[run.id] == "current callback pending"
+    assert waiting_lifecycle is not None
+    assert waiting_lifecycle.node_run_id == current_waiting_node_run.id
+    assert waiting_lifecycle.waiting_reason == "current callback pending"

@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import UTC, datetime
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
 from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
@@ -42,6 +43,24 @@ def _is_active_waiting_node(node_run: NodeRun) -> bool:
 def _is_terminated_callback_waiting_node(node_run: NodeRun) -> bool:
     lifecycle = _resolve_callback_waiting_lifecycle(node_run)
     return bool(lifecycle is not None and lifecycle.terminated)
+
+
+def _node_run_recency_key(node_run: NodeRun) -> tuple[datetime, int, str]:
+    return (
+        node_run.finished_at
+        or node_run.phase_started_at
+        or node_run.started_at
+        or node_run.created_at
+        or datetime.min.replace(tzinfo=UTC),
+        node_run.retry_count,
+        node_run.id,
+    )
+
+
+def _pick_latest_node_run(node_runs: list[NodeRun]) -> NodeRun | None:
+    if not node_runs:
+        return None
+    return max(node_runs, key=_node_run_recency_key)
 
 
 def _resolve_run_follow_up_snapshot(
@@ -139,23 +158,23 @@ def serialize_published_invocation_item(
 
 
 def resolve_waiting_node_run(run: Run, node_runs: list[NodeRun]) -> NodeRun | None:
-    current_node_run = next(
-        (node_run for node_run in node_runs if node_run.node_id == run.current_node_id),
-        None,
-    )
-    if current_node_run is not None and _is_active_waiting_node(current_node_run):
+    current_waiting_node_runs = [
+        node_run
+        for node_run in node_runs
+        if node_run.node_id == run.current_node_id and _is_active_waiting_node(node_run)
+    ]
+    current_node_run = _pick_latest_node_run(current_waiting_node_runs)
+    if current_node_run is not None:
         return current_node_run
 
-    waiting_node_run = next(
-        (node_run for node_run in node_runs if _is_active_waiting_node(node_run)),
-        None,
+    waiting_node_run = _pick_latest_node_run(
+        [node_run for node_run in node_runs if _is_active_waiting_node(node_run)]
     )
     if waiting_node_run is not None:
         return waiting_node_run
 
-    return next(
-        (node_run for node_run in node_runs if _is_terminated_callback_waiting_node(node_run)),
-        None,
+    return _pick_latest_node_run(
+        [node_run for node_run in node_runs if _is_terminated_callback_waiting_node(node_run)]
     )
 
 
