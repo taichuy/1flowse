@@ -1,6 +1,7 @@
 from collections import Counter
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
 from app.schemas.run_views import RunCallbackTicketItem
 from app.schemas.workflow_publish import (
     PublishedEndpointCacheInventoryItem,
@@ -10,14 +11,13 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSensitiveAccessSummary,
     PublishedEndpointInvocationWaitingLifecycle,
 )
-from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
+from app.services.callback_waiting_explanations import (
+    build_callback_waiting_explanation,
+)
 from app.services.published_invocations import classify_invocation_reason
 from app.services.run_view_serializers import (
     serialize_callback_waiting_lifecycle_summary,
     serialize_callback_waiting_scheduled_resume,
-)
-from app.services.callback_waiting_explanations import (
-    build_callback_waiting_explanation,
 )
 from app.services.sensitive_access_timeline import SensitiveAccessTimelineSnapshot
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
@@ -108,6 +108,7 @@ def serialize_published_invocation_item(
         run_current_node_id=run.current_node_id if run else None,
         run_waiting_reason=waiting_reason,
         run_waiting_lifecycle=waiting_lifecycle,
+        run_snapshot=run_follow_up_snapshot,
         run_follow_up=run_follow_up,
         execution_focus_explanation=(
             run_follow_up_snapshot.execution_focus_explanation

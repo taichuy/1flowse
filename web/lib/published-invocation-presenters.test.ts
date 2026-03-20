@@ -216,6 +216,12 @@ describe("published invocation presenters", () => {
         cache_status: "bypass",
         request_preview: {},
         created_at: "2026-03-19T00:00:00Z",
+        run_snapshot: {
+          callback_waiting_explanation: {
+            primary_signal: "top-level snapshot callback",
+            follow_up: " snapshot callback follow-up "
+          }
+        },
         run_follow_up: {
           affected_run_count: 1,
           sampled_run_count: 1,
@@ -239,8 +245,57 @@ describe("published invocation presenters", () => {
         }
       })
     ).toEqual({
-      primary_signal: "sample snapshot callback",
-      follow_up: "sample snapshot callback follow-up"
+      primary_signal: "top-level snapshot callback",
+      follow_up: "snapshot callback follow-up"
+    });
+
+    expect(
+      resolvePublishedInvocationExecutionFocusExplanation({
+        id: "invocation-3",
+        workflow_id: "wf-1",
+        binding_id: "binding-1",
+        endpoint_id: "endpoint-1",
+        endpoint_alias: "alias-1",
+        route_path: "/published/test",
+        protocol: "openai",
+        auth_mode: "api_key",
+        request_source: "workflow",
+        request_surface: "native.workflow",
+        status: "succeeded",
+        cache_status: "bypass",
+        request_preview: {},
+        created_at: "2026-03-19T00:00:00Z",
+        run_snapshot: {
+          execution_focus_explanation: {
+            primary_signal: " snapshot focus signal ",
+            follow_up: " snapshot focus follow-up "
+          }
+        },
+        run_follow_up: {
+          affected_run_count: 1,
+          sampled_run_count: 1,
+          waiting_run_count: 1,
+          running_run_count: 0,
+          succeeded_run_count: 0,
+          failed_run_count: 0,
+          unknown_run_count: 0,
+          sampled_runs: [
+            {
+              run_id: "run-3",
+              snapshot: {
+                execution_focus_explanation: {
+                  primary_signal: "sample snapshot focus",
+                  follow_up: "sample snapshot follow-up"
+                }
+              }
+            }
+          ],
+          explanation: null
+        }
+      })
+    ).toEqual({
+      primary_signal: "snapshot focus signal",
+      follow_up: "snapshot focus follow-up"
     });
   });
 
@@ -388,8 +443,8 @@ describe("published invocation presenters", () => {
         executionFocusNodeRunId: "node-run-tool-wait",
         executionFocusNodeName: "Tool wait",
         callbackWaitingExplanation: {
-          primary_signal: " sample callback blocker ",
-          follow_up: " follow callback chain "
+          primary_signal: "sample callback blocker",
+          follow_up: "follow callback chain"
         },
         callbackWaitingLifecycle: {
           wait_cycle_count: 1,

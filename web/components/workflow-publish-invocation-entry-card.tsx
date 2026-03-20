@@ -24,6 +24,7 @@ import {
   listPublishedInvocationRunFollowUpSampleViews,
   listPublishedInvocationSensitiveAccessChips,
   listPublishedInvocationSensitiveAccessRows,
+  normalizePublishedInvocationRunSnapshot,
   resolvePublishedInvocationCallbackWaitingExplanation,
   resolvePublishedInvocationExecutionFocusExplanation
 } from "@/lib/published-invocation-presenters";
@@ -138,6 +139,10 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpSampleFocusNodeEvidence = runFollowUpSample
     ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
     : null;
+  const runSnapshot = normalizePublishedInvocationRunSnapshot(item.run_snapshot);
+  const runStatus = runSnapshot?.status ?? item.run_status ?? null;
+  const currentNodeId = runSnapshot?.currentNodeId ?? item.run_current_node_id ?? null;
+  const waitingReason = runSnapshot?.waitingReason ?? item.run_waiting_reason ?? null;
 
   return (
     <article className="payload-card compact-card">
@@ -186,15 +191,15 @@ export function WorkflowPublishInvocationEntryCard({
         </div>
         <div>
           <dt>Run status</dt>
-          <dd>{formatPublishedRunStatusLabel(item.run_status)}</dd>
+          <dd>{formatPublishedRunStatusLabel(runStatus)}</dd>
         </div>
         <div>
           <dt>Current node</dt>
-          <dd>{item.run_current_node_id ?? "n/a"}</dd>
+          <dd>{currentNodeId ?? "n/a"}</dd>
         </div>
         <div>
           <dt>Waiting reason</dt>
-          <dd>{item.run_waiting_reason ?? "n/a"}</dd>
+          <dd>{waitingReason ?? "n/a"}</dd>
         </div>
         <div>
           <dt>Callback tickets</dt>
@@ -360,13 +365,13 @@ export function WorkflowPublishInvocationEntryCard({
           ) : null}
         </div>
       ) : null}
-      {item.run_status === "waiting" ? (
+      {runStatus === "waiting" ? (
         <>
           <p className="section-copy entry-copy">
             {executionFocusPrimarySignal ??
               `该请求已成功接入 durable runtime，当前仍处于 waiting；可直接打开 run detail 继续追踪${
-                item.run_current_node_id ? `，当前节点 ${item.run_current_node_id}` : ""
-              }${item.run_waiting_reason ? `，等待原因 ${item.run_waiting_reason}` : ""}。`}
+                currentNodeId ? `，当前节点 ${currentNodeId}` : ""
+              }${waitingReason ? `，等待原因 ${waitingReason}` : ""}。`}
           </p>
           {executionFocusFollowUp ? <p className="binding-meta">{executionFocusFollowUp}</p> : null}
         </>

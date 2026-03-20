@@ -15,7 +15,8 @@ import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action
 import {
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationInboxHref,
-  listPublishedInvocationRunFollowUpSampleViews
+  listPublishedInvocationRunFollowUpSampleViews,
+  normalizePublishedInvocationRunSnapshot
 } from "@/lib/published-invocation-presenters";
 import {
   formatExecutionFocusFollowUp,
@@ -56,7 +57,14 @@ export function WorkflowPublishInvocationDetailPanel({
     cache
   } = detail;
   const waitingLifecycle = invocation.run_waiting_lifecycle;
+  const runSnapshot = normalizePublishedInvocationRunSnapshot(
+    detail.run_snapshot ?? invocation.run_snapshot ?? null
+  );
   const runId = run?.id ?? invocation.run_id ?? null;
+  const runStatus = runSnapshot?.status ?? run?.status ?? invocation.run_status ?? null;
+  const currentNodeId =
+    runSnapshot?.currentNodeId ?? run?.current_node_id ?? invocation.run_current_node_id ?? null;
+  const waitingReason = runSnapshot?.waitingReason ?? invocation.run_waiting_reason ?? null;
   const blockingInboxHref = buildBlockingPublishedInvocationInboxHref({
     runId,
     blockingNodeRunId,
@@ -125,15 +133,15 @@ export function WorkflowPublishInvocationDetailPanel({
             </div>
             <div>
               <dt>Status</dt>
-              <dd>{run?.status ?? invocation.run_status ?? "n/a"}</dd>
+              <dd>{runStatus ?? "n/a"}</dd>
             </div>
             <div>
               <dt>Current node</dt>
-              <dd>{run?.current_node_id ?? invocation.run_current_node_id ?? "n/a"}</dd>
+              <dd>{currentNodeId ?? "n/a"}</dd>
             </div>
             <div>
               <dt>Waiting reason</dt>
-              <dd>{invocation.run_waiting_reason ?? "n/a"}</dd>
+              <dd>{waitingReason ?? "n/a"}</dd>
             </div>
             <div>
               <dt>Waiting node run</dt>

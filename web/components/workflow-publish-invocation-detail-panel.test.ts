@@ -59,9 +59,9 @@ function buildDetail(): PublishedEndpointInvocationDetailResponse {
       api_key_name: null,
       api_key_prefix: null,
       run_id: "run-callback-1",
-      run_status: "waiting",
-      run_current_node_id: "tool_wait",
-      run_waiting_reason: "callback pending",
+      run_status: "running",
+      run_current_node_id: "legacy-invocation-node",
+      run_waiting_reason: "legacy invocation waiting reason",
       run_waiting_lifecycle: null,
       run_follow_up: {
         affected_run_count: 1,
@@ -160,9 +160,18 @@ function buildDetail(): PublishedEndpointInvocationDetailResponse {
     },
     run: {
       id: "run-callback-1",
-      status: "waiting",
-      current_node_id: "tool_wait",
+      status: "running",
+      current_node_id: "legacy-run-node",
       created_at: "2026-03-20T10:00:00Z"
+    },
+    run_snapshot: {
+      status: "waiting",
+      current_node_id: "detail-snapshot-node",
+      waiting_reason: "detail snapshot waiting reason",
+      callback_waiting_explanation: {
+        primary_signal: "详情顶层快照确认当前仍在等待 callback。",
+        follow_up: "先看 waiting reason，再结合 callback summary。"
+      }
     },
     run_follow_up: {
       affected_run_count: 1,
@@ -298,6 +307,9 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("优先观察定时恢复是否已重新排队");
     expect(html).toContain("scheduled resume requeued");
     expect(html).toContain("requeued by waiting_resume_monitor");
+    expect(html).toContain("detail-snapshot-node");
+    expect(html).toContain("detail snapshot waiting reason");
+    expect(html).not.toContain("legacy-run-node");
     expect(html).toContain("Waiting node focus evidence");
     expect(html).toContain("Callback recovery checklist");
     expect(html).not.toContain("Sampled run focus evidence");

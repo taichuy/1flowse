@@ -39,10 +39,19 @@ function buildInvocationItem(): PublishedEndpointInvocationListResponse["items"]
     api_key_name: null,
     api_key_prefix: null,
     run_id: "run-callback-1",
-    run_status: "waiting",
-    run_current_node_id: "tool_wait",
-    run_waiting_reason: "callback pending",
+    run_status: "running",
+    run_current_node_id: "legacy-node",
+    run_waiting_reason: "legacy waiting reason",
     run_waiting_lifecycle: null,
+    run_snapshot: {
+      status: "waiting",
+      current_node_id: "snapshot-node",
+      waiting_reason: "snapshot waiting reason",
+      callback_waiting_explanation: {
+        primary_signal: "顶层快照说明该 invocation 仍在等待 callback。",
+        follow_up: "优先看 snapshot waiting reason 与 callback lifecycle。"
+      }
+    },
     run_follow_up: {
       affected_run_count: 1,
       sampled_run_count: 1,
@@ -152,6 +161,9 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).toContain("优先观察定时恢复是否已重新排队");
     expect(html).toContain("scheduled resume requeued");
     expect(html).toContain("requeued by waiting_resume_monitor");
+    expect(html).toContain("snapshot-node");
+    expect(html).toContain("snapshot waiting reason");
+    expect(html).not.toContain("legacy-node");
     expect(html).toContain("Waiting node focus evidence");
     expect(html).toContain("Callback recovery checklist");
     expect(html).not.toContain("Sampled run focus evidence");

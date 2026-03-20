@@ -92,6 +92,7 @@ export type PublishedEndpointInvocationItem = {
     scheduled_resume_requeued_at?: string | null;
     scheduled_resume_requeue_source?: string | null;
   } | null;
+  run_snapshot?: OperatorRunFollowUpSnapshot | null;
   run_follow_up?: OperatorRunFollowUpSummary | null;
   execution_focus_explanation?: RunExecutionFocusExplanation | null;
   callback_waiting_explanation?: RunExecutionFocusExplanation | null;
@@ -338,6 +339,7 @@ export type OperatorRunFollowUpSummary = {
 export type PublishedEndpointInvocationDetailResponse = {
   invocation: PublishedEndpointInvocationItem;
   run?: PublishedEndpointInvocationRunReference | null;
+  run_snapshot?: OperatorRunFollowUpSnapshot | null;
   run_follow_up?: OperatorRunFollowUpSummary | null;
   callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
   blocking_node_run_id?: string | null;

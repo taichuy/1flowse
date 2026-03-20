@@ -310,6 +310,12 @@ def test_list_published_endpoint_invocations_supports_filters_and_api_key_audit(
         },
     ]
     assert all_activity["items"][0]["reason_code"] == "api_key_invalid"
+    succeeded_item = next(
+        item for item in all_activity["items"] if item["run_id"] is not None
+    )
+    assert succeeded_item["run_snapshot"]["workflow_id"] == workflow_id
+    assert succeeded_item["run_snapshot"]["status"] == "succeeded"
+    assert succeeded_item["run_snapshot"]["execution_focus_reason"] is None
 
     filtered_activity_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
@@ -727,6 +733,8 @@ def test_export_published_endpoint_invocations_supports_json_and_jsonl(
     assert export_json_body["summary"]["total_count"] == 1
     assert len(export_json_body["items"]) == 1
     assert export_json_body["items"][0]["request_source"] == "alias"
+    assert export_json_body["items"][0]["run_snapshot"]["status"] == "succeeded"
+    assert export_json_body["items"][0]["run_snapshot"]["execution_focus_reason"] is None
 
     export_jsonl_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/export",
@@ -746,6 +754,8 @@ def test_export_published_endpoint_invocations_supports_json_and_jsonl(
     assert meta_record["filters"]["request_source"] == "path"
     assert invocation_record["record_type"] == "invocation"
     assert invocation_record["request_source"] == "path"
+    assert invocation_record["run_snapshot"]["status"] == "succeeded"
+    assert invocation_record["run_snapshot"]["execution_focus_reason"] is None
 
 
 def test_export_published_endpoint_invocations_requires_approval_for_sensitive_runs(

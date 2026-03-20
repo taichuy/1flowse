@@ -616,6 +616,9 @@ def test_get_published_invocation_detail_surfaces_execution_fallback_explanation
         ),
     }
     assert detail_body["callback_waiting_explanation"] is None
+    assert detail_body["run_snapshot"] is not None
+    assert detail_body["run_snapshot"]["workflow_id"] == workflow_id
+    assert detail_body["run_snapshot"]["status"] == "succeeded"
     assert detail_body["run_follow_up"]["affected_run_count"] == 1
     assert detail_body["run_follow_up"]["sampled_run_count"] == 1
     assert detail_body["run_follow_up"]["sampled_runs"][0]["snapshot"][
@@ -745,6 +748,9 @@ def test_get_published_invocation_detail_surfaces_blocking_skill_trace(
             }
         ],
     }
+    assert detail_body["run_snapshot"] is not None
+    assert detail_body["run_snapshot"]["workflow_id"] == workflow_id
+    assert detail_body["run_snapshot"]["execution_focus_node_run_id"] == node_run.id
 
 
 def test_get_published_invocation_detail_scopes_skill_trace_to_current_execution_focus(
@@ -807,6 +813,9 @@ def test_get_published_invocation_detail_scopes_skill_trace_to_current_execution
     assert detail_body["blocking_node_run_id"] is None
     assert detail_body["execution_focus_reason"] == "current_node"
     assert detail_body["execution_focus_node"]["node_run_id"] == node_run.id
+    assert detail_body["run_snapshot"] is not None
+    assert detail_body["run_snapshot"]["execution_focus_reason"] == "current_node"
+    assert detail_body["run_snapshot"]["execution_focus_node_run_id"] == node_run.id
     assert detail_body["skill_trace"] == {
         "scope": "execution_focus_node",
         "reference_count": 1,

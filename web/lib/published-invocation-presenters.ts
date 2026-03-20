@@ -4,6 +4,7 @@ import type {
   PublishedEndpointInvocationCallbackTicketItem,
   PublishedEndpointInvocationItem,
   PublishedEndpointInvocationSummary,
+  OperatorRunFollowUpSnapshot,
   RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
@@ -64,54 +65,55 @@ function buildPublishedInvocationRunFollowUpSampleSnapshot(
   sample?: PublishedInvocationRunFollowUpSample | null,
   explanationSource?: PublishedInvocationRunFollowUpSampleView["explanation_source"]
 ): RunSnapshot {
+  return buildPublishedInvocationRunSnapshot(sample?.snapshot, explanationSource);
+}
+
+function buildPublishedInvocationRunSnapshot(
+  snapshot?: OperatorRunFollowUpSnapshot | null,
+  explanationSource?: PublishedInvocationRunFollowUpSampleView["explanation_source"]
+): RunSnapshot {
   return {
-    status: sample?.snapshot?.status ?? null,
-    currentNodeId: sample?.snapshot?.current_node_id ?? null,
-    waitingReason: sample?.snapshot?.waiting_reason ?? null,
-    executionFocusNodeId: sample?.snapshot?.execution_focus_node_id ?? null,
-    executionFocusNodeRunId: sample?.snapshot?.execution_focus_node_run_id ?? null,
-    executionFocusNodeName: sample?.snapshot?.execution_focus_node_name ?? null,
-    executionFocusNodeType: sample?.snapshot?.execution_focus_node_type ?? null,
+    status: snapshot?.status ?? null,
+    currentNodeId: snapshot?.current_node_id ?? null,
+    waitingReason: snapshot?.waiting_reason ?? null,
+    executionFocusNodeId: snapshot?.execution_focus_node_id ?? null,
+    executionFocusNodeRunId: snapshot?.execution_focus_node_run_id ?? null,
+    executionFocusNodeName: snapshot?.execution_focus_node_name ?? null,
+    executionFocusNodeType: snapshot?.execution_focus_node_type ?? null,
     executionFocusExplanation:
-      explanationSource === "execution_focus" && sample?.snapshot?.execution_focus_explanation
-        ? {
-            primary_signal: sample.snapshot.execution_focus_explanation.primary_signal ?? null,
-            follow_up: sample.snapshot.execution_focus_explanation.follow_up ?? null
-          }
-        : null,
+      explanationSource === "callback_waiting"
+        ? null
+        : normalizeExplanation(snapshot?.execution_focus_explanation),
     callbackWaitingExplanation:
-      explanationSource === "callback_waiting" && sample?.snapshot?.callback_waiting_explanation
-        ? {
-            primary_signal: sample.snapshot.callback_waiting_explanation.primary_signal ?? null,
-            follow_up: sample.snapshot.callback_waiting_explanation.follow_up ?? null
-          }
-        : null,
-    callbackWaitingLifecycle: sample?.snapshot?.callback_waiting_lifecycle ?? null,
+      explanationSource === "execution_focus"
+        ? null
+        : normalizeExplanation(snapshot?.callback_waiting_explanation),
+    callbackWaitingLifecycle: snapshot?.callback_waiting_lifecycle ?? null,
     scheduledResumeDelaySeconds:
-      typeof sample?.snapshot?.scheduled_resume_delay_seconds === "number"
-        ? sample.snapshot.scheduled_resume_delay_seconds
+      typeof snapshot?.scheduled_resume_delay_seconds === "number"
+        ? snapshot.scheduled_resume_delay_seconds
         : null,
-    scheduledResumeReason: sample?.snapshot?.scheduled_resume_reason ?? null,
-    scheduledResumeSource: sample?.snapshot?.scheduled_resume_source ?? null,
-    scheduledWaitingStatus: sample?.snapshot?.scheduled_waiting_status ?? null,
-    scheduledResumeScheduledAt: sample?.snapshot?.scheduled_resume_scheduled_at ?? null,
-    scheduledResumeDueAt: sample?.snapshot?.scheduled_resume_due_at ?? null,
-    scheduledResumeRequeuedAt: sample?.snapshot?.scheduled_resume_requeued_at ?? null,
-    scheduledResumeRequeueSource: sample?.snapshot?.scheduled_resume_requeue_source ?? null,
-    executionFocusArtifactCount: sample?.snapshot?.execution_focus_artifact_count ?? 0,
-    executionFocusArtifactRefCount: sample?.snapshot?.execution_focus_artifact_ref_count ?? 0,
-    executionFocusToolCallCount: sample?.snapshot?.execution_focus_tool_call_count ?? 0,
-    executionFocusRawRefCount: sample?.snapshot?.execution_focus_raw_ref_count ?? 0,
-    executionFocusArtifactRefs: sample?.snapshot?.execution_focus_artifact_refs ?? [],
+    scheduledResumeReason: snapshot?.scheduled_resume_reason ?? null,
+    scheduledResumeSource: snapshot?.scheduled_resume_source ?? null,
+    scheduledWaitingStatus: snapshot?.scheduled_waiting_status ?? null,
+    scheduledResumeScheduledAt: snapshot?.scheduled_resume_scheduled_at ?? null,
+    scheduledResumeDueAt: snapshot?.scheduled_resume_due_at ?? null,
+    scheduledResumeRequeuedAt: snapshot?.scheduled_resume_requeued_at ?? null,
+    scheduledResumeRequeueSource: snapshot?.scheduled_resume_requeue_source ?? null,
+    executionFocusArtifactCount: snapshot?.execution_focus_artifact_count ?? 0,
+    executionFocusArtifactRefCount: snapshot?.execution_focus_artifact_ref_count ?? 0,
+    executionFocusToolCallCount: snapshot?.execution_focus_tool_call_count ?? 0,
+    executionFocusRawRefCount: snapshot?.execution_focus_raw_ref_count ?? 0,
+    executionFocusArtifactRefs: snapshot?.execution_focus_artifact_refs ?? [],
     executionFocusArtifacts:
-      sample?.snapshot?.execution_focus_artifacts?.map((artifact) => ({
+      snapshot?.execution_focus_artifacts?.map((artifact) => ({
         artifact_kind: artifact.artifact_kind ?? null,
         content_type: artifact.content_type ?? null,
         summary: artifact.summary ?? null,
         uri: artifact.uri ?? null
       })) ?? [],
     executionFocusToolCalls:
-      sample?.snapshot?.execution_focus_tool_calls?.map((toolCall) => ({
+      snapshot?.execution_focus_tool_calls?.map((toolCall) => ({
         id: toolCall.id ?? null,
         tool_id: toolCall.tool_id ?? null,
         tool_name: toolCall.tool_name ?? null,
@@ -171,15 +173,25 @@ function buildPublishedInvocationRunFollowUpSampleSnapshot(
         response_content_type: toolCall.response_content_type ?? null,
         raw_ref: toolCall.raw_ref ?? null
       })) ?? [],
-    executionFocusSkillTrace: sample?.snapshot?.execution_focus_skill_trace
+    executionFocusSkillTrace: snapshot?.execution_focus_skill_trace
       ? {
-          reference_count: sample.snapshot.execution_focus_skill_trace.reference_count ?? 0,
-          phase_counts: sample.snapshot.execution_focus_skill_trace.phase_counts ?? {},
-          source_counts: sample.snapshot.execution_focus_skill_trace.source_counts ?? {},
-          loads: sample.snapshot.execution_focus_skill_trace.loads ?? []
+          reference_count: snapshot.execution_focus_skill_trace.reference_count ?? 0,
+          phase_counts: snapshot.execution_focus_skill_trace.phase_counts ?? {},
+          source_counts: snapshot.execution_focus_skill_trace.source_counts ?? {},
+          loads: snapshot.execution_focus_skill_trace.loads ?? []
         }
       : null
   };
+}
+
+export function normalizePublishedInvocationRunSnapshot(
+  snapshot?: OperatorRunFollowUpSnapshot | null
+): RunSnapshot | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  return buildPublishedInvocationRunSnapshot(snapshot);
 }
 
 export const PUBLISHED_INVOCATION_REASON_CODES = [
@@ -333,6 +345,7 @@ export function resolvePublishedInvocationExecutionFocusExplanation(
 ): RunExecutionFocusExplanation | null {
   return (
     normalizeExplanation(item.execution_focus_explanation) ??
+    normalizeExplanation(item.run_snapshot?.execution_focus_explanation) ??
     normalizeExplanation(item.run_follow_up?.sampled_runs[0]?.snapshot?.execution_focus_explanation)
   );
 }
@@ -342,6 +355,7 @@ export function resolvePublishedInvocationCallbackWaitingExplanation(
 ): RunExecutionFocusExplanation | null {
   return (
     normalizeExplanation(item.callback_waiting_explanation) ??
+    normalizeExplanation(item.run_snapshot?.callback_waiting_explanation) ??
     normalizeExplanation(item.run_waiting_lifecycle?.callback_waiting_explanation) ??
     normalizeExplanation(item.run_follow_up?.sampled_runs[0]?.snapshot?.callback_waiting_explanation)
   );
