@@ -9,6 +9,7 @@ import type {
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
 import { resolveDefaultExecutionClass } from "@/lib/workflow-runtime-policy";
 import {
+  buildSandboxReadinessCapabilityIssue,
   buildDefaultExecutionCapabilityIssue,
   buildExecutionCapabilityIssue,
   describeSandboxBackendCompatibility,
@@ -236,10 +237,39 @@ function buildSandboxCodeExecutionIssues({
     dependencyMode === "builtin"
       ? normalizeString(execution?.builtinPackageSet) ?? normalizeString(config.builtinPackageSet)
       : null;
+  const dependencyRef =
+    dependencyMode === "dependency_ref"
+      ? normalizeString(execution?.dependencyRef) ?? normalizeString(config.dependencyRef)
+      : null;
   const backendExtensions =
     toRecord(execution?.backendExtensions) ?? toRecord(config.backendExtensions);
   const networkPolicy = normalizeString(execution?.networkPolicy);
   const filesystemPolicy = normalizeString(execution?.filesystemPolicy);
+  const capabilityIssue = buildSandboxReadinessCapabilityIssue({
+    context,
+    nodeId,
+    nodeName,
+    requestedExecutionClass,
+    executionPayload: {
+      ...(execution ?? {}),
+      ...(profile ? { profile } : {}),
+      ...(dependencyMode ? { dependencyMode } : {}),
+      ...(builtinPackageSet ? { builtinPackageSet } : {}),
+      ...(dependencyRef ? { dependencyRef } : {}),
+      ...(backendExtensions && Object.keys(backendExtensions).length > 0
+        ? { backendExtensions }
+        : {}),
+      ...(networkPolicy ? { networkPolicy } : {}),
+      ...(filesystemPolicy ? { filesystemPolicy } : {})
+    },
+    sandboxReadiness,
+    path: executionPath,
+    field: "execution"
+  });
+  if (capabilityIssue) {
+    return [capabilityIssue];
+  }
+
   const compatibility = describeSandboxBackendCompatibility({
     requestedExecutionClass,
     executionPayload: {
@@ -247,6 +277,7 @@ function buildSandboxCodeExecutionIssues({
       ...(profile ? { profile } : {}),
       ...(dependencyMode ? { dependencyMode } : {}),
       ...(builtinPackageSet ? { builtinPackageSet } : {}),
+      ...(dependencyRef ? { dependencyRef } : {}),
       ...(backendExtensions && Object.keys(backendExtensions).length > 0
         ? { backendExtensions }
         : {}),

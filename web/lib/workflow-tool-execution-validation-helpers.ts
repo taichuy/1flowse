@@ -155,6 +155,150 @@ export function buildExecutionCapabilityIssue({
   return null;
 }
 
+export function buildSandboxReadinessCapabilityIssue({
+  context,
+  nodeId,
+  nodeName,
+  toolId,
+  requestedExecutionClass,
+  executionPayload,
+  sandboxReadiness,
+  path,
+  field
+}: {
+  context: string;
+  nodeId: string;
+  nodeName: string;
+  toolId?: string | null;
+  requestedExecutionClass: string;
+  executionPayload: Record<string, unknown> | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  path: string;
+  field: string;
+}): WorkflowToolExecutionValidationIssue | null {
+  if (
+    (requestedExecutionClass !== "sandbox" && requestedExecutionClass !== "microvm") ||
+    !sandboxReadiness
+  ) {
+    return null;
+  }
+
+  const readiness = sandboxReadiness.execution_classes.find(
+    (item) => item.execution_class === requestedExecutionClass
+  );
+  if (!readiness?.available) {
+    return null;
+  }
+
+  const scopeCopy = toolId
+    ? `，工具 ${toolId} 不能稳定落到兼容后端。`
+    : "，当前节点不能稳定落到兼容后端。";
+  const buildIssue = (
+    message: string,
+    fieldPathSuffix: string,
+    issueField: string
+  ): WorkflowToolExecutionValidationIssue => ({
+    nodeId,
+    nodeName,
+    message,
+    path: `${path}.${fieldPathSuffix}`,
+    field: issueField
+  });
+
+  const profile = normalizeString(executionPayload?.profile);
+  const supportedProfiles =
+    readiness.supported_profiles.length > 0
+      ? readiness.supported_profiles
+      : sandboxReadiness.supported_profiles;
+  if (profile && supportedProfiles.length > 0 && !supportedProfiles.includes(profile)) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 profile = ${profile}，但当前 sandbox readiness 聚合视图还没有暴露该 profile${scopeCopy}`,
+      "profile",
+      "profile"
+    );
+  }
+
+  const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
+  const supportedDependencyModes =
+    readiness.supported_dependency_modes.length > 0
+      ? readiness.supported_dependency_modes
+      : sandboxReadiness.supported_dependency_modes;
+  const dependencyRef = normalizeString(executionPayload?.dependencyRef);
+  if (
+    dependencyMode === "dependency_ref" &&
+    dependencyRef &&
+    supportedDependencyModes.length > 0 &&
+    !supportedDependencyModes.includes("dependency_ref")
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 dependencyRef = ${dependencyRef}，但当前 sandbox readiness 聚合视图还没有暴露该 dependency_ref capability${scopeCopy}`,
+      "dependencyRef",
+      "dependencyRef"
+    );
+  }
+
+  if (
+    dependencyMode &&
+    supportedDependencyModes.length > 0 &&
+    !supportedDependencyModes.includes(dependencyMode)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还不支持 dependencyMode = ${dependencyMode}${scopeCopy}`,
+      "dependencyMode",
+      "dependencyMode"
+    );
+  }
+
+  if (
+    dependencyMode === "builtin" &&
+    normalizeString(executionPayload?.builtinPackageSet) &&
+    !(readiness.supports_builtin_package_sets ?? sandboxReadiness.supports_builtin_package_sets)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 builtinPackageSet，但当前 sandbox readiness 聚合视图还不支持 builtin package set hints${scopeCopy}`,
+      "builtinPackageSet",
+      "builtinPackageSet"
+    );
+  }
+
+  if (
+    toRecord(executionPayload?.backendExtensions) &&
+    !(readiness.supports_backend_extensions ?? sandboxReadiness.supports_backend_extensions)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 backendExtensions，但当前 sandbox readiness 聚合视图还不支持 backendExtensions payload${scopeCopy}`,
+      "backendExtensions",
+      "backendExtensions"
+    );
+  }
+
+  const networkPolicy = normalizeString(executionPayload?.networkPolicy);
+  if (
+    networkPolicy &&
+    !(readiness.supports_network_policy ?? sandboxReadiness.supports_network_policy)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 networkPolicy = ${networkPolicy}，但当前 sandbox readiness 聚合视图还不支持 networkPolicy hints${scopeCopy}`,
+      "networkPolicy",
+      "networkPolicy"
+    );
+  }
+
+  const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
+  if (
+    filesystemPolicy &&
+    !(readiness.supports_filesystem_policy ?? sandboxReadiness.supports_filesystem_policy)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 filesystemPolicy = ${filesystemPolicy}，但当前 sandbox readiness 聚合视图还不支持 filesystemPolicy hints${scopeCopy}`,
+      "filesystemPolicy",
+      "filesystemPolicy"
+    );
+  }
+
+  return null;
+}
+
 export function buildDefaultExecutionCapabilityIssue({
   context,
   nodeId,
@@ -319,6 +463,21 @@ function buildSandboxReadinessIssue({
     return null;
   }
 
+  const capabilityIssue = buildSandboxReadinessCapabilityIssue({
+    context,
+    nodeId,
+    nodeName,
+    toolId,
+    requestedExecutionClass,
+    executionPayload,
+    sandboxReadiness,
+    path,
+    field
+  });
+  if (capabilityIssue) {
+    return capabilityIssue;
+  }
+
   const readiness = sandboxReadiness.execution_classes.find(
     (item) => item.execution_class === requestedExecutionClass
   );
@@ -344,100 +503,6 @@ function buildSandboxReadinessIssue({
       field
     };
   }
-
-  if (readiness?.available) {
-    const profile = normalizeString(executionPayload?.profile);
-    const supportedProfiles = readiness.supported_profiles ?? sandboxReadiness.supported_profiles;
-    if (
-      profile &&
-      supportedProfiles.length > 0 &&
-      !supportedProfiles.includes(profile)
-    ) {
-      return {
-        nodeId,
-        nodeName,
-        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 profile = ${profile}，但当前 sandbox readiness 聚合视图还没有暴露该 profile，工具 ${toolId} 不能稳定落到兼容后端。`,
-        path,
-        field
-      };
-    }
-
-    const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
-    const supportedDependencyModes =
-      readiness.supported_dependency_modes ?? sandboxReadiness.supported_dependency_modes;
-    if (
-      dependencyMode &&
-      !supportedDependencyModes.includes(dependencyMode)
-    ) {
-      return {
-        nodeId,
-        nodeName,
-        message: `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还不支持 dependencyMode = ${dependencyMode}，工具 ${toolId} 不能稳定落到对应强隔离后端。`,
-        path,
-        field
-      };
-    }
-
-    if (
-      dependencyMode === "builtin" &&
-      normalizeString(executionPayload?.builtinPackageSet) &&
-      !(readiness.supports_builtin_package_sets ?? sandboxReadiness.supports_builtin_package_sets)
-    ) {
-      return {
-        nodeId,
-        nodeName,
-        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 builtinPackageSet，但当前 sandbox readiness 聚合视图还不支持 builtin package set hints，工具 ${toolId} 不能稳定落到兼容后端。`,
-        path,
-        field
-      };
-    }
-
-    if (
-      toRecord(executionPayload?.backendExtensions) &&
-      !(readiness.supports_backend_extensions ?? sandboxReadiness.supports_backend_extensions)
-    ) {
-      return {
-        nodeId,
-        nodeName,
-        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 backendExtensions，但当前 sandbox readiness 聚合视图还不支持 backendExtensions payload，工具 ${toolId} 不能稳定落到兼容后端。`,
-        path,
-        field
-      };
-    }
-
-    const networkPolicy = normalizeString(executionPayload?.networkPolicy);
-    if (
-      networkPolicy &&
-      !(readiness.supports_network_policy ?? sandboxReadiness.supports_network_policy)
-    ) {
-      return {
-        nodeId,
-        nodeName,
-        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 networkPolicy = ${networkPolicy}，但当前 sandbox readiness 聚合视图还不支持 networkPolicy hints，工具 ${toolId} 不能稳定落到兼容后端。`,
-        path,
-        field
-      };
-    }
-
-    const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
-    if (
-      filesystemPolicy &&
-      !(
-        readiness.supports_filesystem_policy ?? sandboxReadiness.supports_filesystem_policy
-      )
-    ) {
-      return {
-        nodeId,
-        nodeName,
-        message: `${context} 显式请求了 ${requestedExecutionClass} 并附带 filesystemPolicy = ${filesystemPolicy}，但当前 sandbox readiness 聚合视图还不支持 filesystemPolicy hints，工具 ${toolId} 不能稳定落到兼容后端。`,
-        path,
-        field
-      };
-    }
-
-    return null;
-  }
-
   const reason = readiness?.reason?.trim();
   return {
     nodeId,
@@ -554,6 +619,7 @@ export function describeSandboxBackendCompatibility({
   const profile = normalizeString(executionPayload?.profile);
   const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
   const builtinPackageSet = normalizeString(executionPayload?.builtinPackageSet);
+  const dependencyRef = normalizeString(executionPayload?.dependencyRef);
   const backendExtensions = toRecord(executionPayload?.backendExtensions);
   const networkPolicy = normalizeString(executionPayload?.networkPolicy);
   const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
@@ -602,6 +668,14 @@ export function describeSandboxBackendCompatibility({
         !capability.supports_builtin_package_sets
       ) {
         reasons.push(`${backend.id}: does not support builtinPackageSet hints`);
+        continue;
+      }
+      if (
+        dependencyMode === "dependency_ref" &&
+        dependencyRef &&
+        !capability.supported_dependency_modes.includes("dependency_ref")
+      ) {
+        reasons.push(`${backend.id}: does not support dependencyRef = ${dependencyRef}`);
         continue;
       }
     }

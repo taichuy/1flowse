@@ -6,6 +6,7 @@ import type {
 } from "./get-system-overview";
 import type { WorkflowDefinition } from "./workflow-editor";
 import type { WorkflowNodeRuntimePolicy } from "./workflow-runtime-policy";
+import { buildWorkflowValidationNavigatorItems } from "./workflow-validation-navigation";
 import {
   buildWorkflowNodeExecutionValidationIssues,
   buildWorkflowToolExecutionValidationIssues
@@ -320,7 +321,9 @@ describe("workflow tool execution validation", () => {
     );
 
     expect(issues).toHaveLength(1);
-    expect(issues[0]?.message).toContain("没有兼容的 sandbox backend 可用");
+    expect(issues[0]?.path).toBe("nodes.1.runtimePolicy.execution.builtinPackageSet");
+    expect(issues[0]?.field).toBe("builtinPackageSet");
+    expect(issues[0]?.message).toContain("builtin package set hints");
     expect(issues[0]?.message).toContain("Sandbox code 节点 Sandbox (sandbox)");
   });
 
@@ -598,6 +601,209 @@ describe("workflow tool execution validation", () => {
     );
 
     expect(issues).toHaveLength(0);
+  });
+
+  it("对 sandbox_code 的 backendExtensions capability drift 生成字段级 issue 与导航", () => {
+    const definition = createDefinition({
+      runtimePolicy: {
+        execution: {
+          class: "microvm",
+          backendExtensions: {
+            mountPreset: "analytics"
+          }
+        }
+      }
+    });
+
+    const issues = buildWorkflowToolExecutionValidationIssues(definition, [], [], {
+      sandboxReadiness: createSandboxReadiness({
+        execution_classes: [
+          {
+            execution_class: "sandbox",
+            available: true,
+            backend_ids: ["sandbox-default"],
+            supported_languages: ["python"],
+            supported_profiles: ["python-safe"],
+            supported_dependency_modes: ["builtin"],
+            supports_tool_execution: true,
+            supports_builtin_package_sets: true,
+            supports_backend_extensions: false,
+            supports_network_policy: true,
+            supports_filesystem_policy: true,
+            reason: null
+          },
+          {
+            execution_class: "microvm",
+            available: true,
+            backend_ids: ["microvm-ready"],
+            supported_languages: ["python"],
+            supported_profiles: [],
+            supported_dependency_modes: ["builtin"],
+            supports_tool_execution: true,
+            supports_builtin_package_sets: true,
+            supports_backend_extensions: false,
+            supports_network_policy: true,
+            supports_filesystem_policy: true,
+            reason: null
+          }
+        ]
+      })
+    });
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.path).toBe("nodes.1.runtimePolicy.execution.backendExtensions");
+    expect(issues[0]?.field).toBe("backendExtensions");
+    expect(issues[0]?.message).toContain("backendExtensions payload");
+
+    const navigatorItems = buildWorkflowValidationNavigatorItems(
+      definition,
+      issues.map((issue) => ({
+        category: "tool_execution",
+        message: issue.message,
+        path: issue.path,
+        field: issue.field
+      }))
+    );
+
+    expect(navigatorItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "tool_execution",
+          target: expect.objectContaining({
+            scope: "node",
+            nodeId: "sandbox",
+            section: "runtime",
+            fieldPath: "runtimePolicy.execution.backendExtensions"
+          })
+        })
+      ])
+    );
+  });
+
+  it("对 llm_agent 的 dependencyRef capability drift 生成字段级 issue 与导航", () => {
+    const definition: WorkflowDefinition = {
+      nodes: [
+        { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+        {
+          id: "agent",
+          type: "llm_agent",
+          name: "Agent",
+          config: {
+            prompt: "Plan with tools",
+            toolPolicy: {
+              allowedToolIds: ["compat:dify-default:plugin:demo/search"],
+              execution: {
+                class: "microvm",
+                dependencyMode: "dependency_ref",
+                dependencyRef: "bundle:finance-safe-v1"
+              }
+            }
+          }
+        },
+        { id: "output", type: "output", name: "Output", config: {} }
+      ],
+      edges: [
+        { id: "e1", sourceNodeId: "trigger", targetNodeId: "agent" },
+        { id: "e2", sourceNodeId: "agent", targetNodeId: "output" }
+      ],
+      variables: [],
+      publish: []
+    };
+
+    const issues = buildWorkflowToolExecutionValidationIssues(
+      definition,
+      [
+        {
+          id: "compat:dify-default:plugin:demo/search",
+          name: "Demo Search Default",
+          ecosystem: "compat:dify-default",
+          description: "Search via adapter",
+          input_schema: { type: "object" },
+          output_schema: { type: "object" },
+          source: "plugin_registry",
+          callable: true,
+          supported_execution_classes: ["subprocess", "microvm"],
+          default_execution_class: "microvm",
+          sensitivity_level: "L1"
+        }
+      ],
+      [
+        {
+          id: "dify-default-microvm",
+          ecosystem: "compat:dify-default",
+          endpoint: "http://adapter.local/dify-default",
+          enabled: true,
+          healthcheck_path: "/healthz",
+          plugin_kinds: ["tool"],
+          supported_execution_classes: ["subprocess", "microvm"],
+          workspace_ids: [],
+          status: "healthy"
+        }
+      ],
+      {
+        sandboxReadiness: createSandboxReadiness({
+          execution_classes: [
+            {
+              execution_class: "sandbox",
+              available: true,
+              backend_ids: ["sandbox-default"],
+              supported_languages: ["python"],
+              supported_profiles: ["python-safe"],
+              supported_dependency_modes: ["builtin"],
+              supports_tool_execution: true,
+              supports_builtin_package_sets: true,
+              supports_backend_extensions: false,
+              supports_network_policy: true,
+              supports_filesystem_policy: true,
+              reason: null
+            },
+            {
+              execution_class: "microvm",
+              available: true,
+              backend_ids: ["microvm-ready"],
+              supported_languages: ["python"],
+              supported_profiles: [],
+              supported_dependency_modes: ["builtin"],
+              supports_tool_execution: true,
+              supports_builtin_package_sets: true,
+              supports_backend_extensions: false,
+              supports_network_policy: true,
+              supports_filesystem_policy: true,
+              reason: null
+            }
+          ]
+        })
+      }
+    );
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.path).toBe("nodes.1.config.toolPolicy.execution.dependencyRef");
+    expect(issues[0]?.field).toBe("dependencyRef");
+    expect(issues[0]?.message).toContain("dependencyRef = bundle:finance-safe-v1");
+
+    const navigatorItems = buildWorkflowValidationNavigatorItems(
+      definition,
+      issues.map((issue) => ({
+        category: "tool_execution",
+        message: issue.message,
+        path: issue.path,
+        field: issue.field
+      }))
+    );
+
+    expect(navigatorItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "tool_execution",
+          target: expect.objectContaining({
+            scope: "node",
+            nodeId: "agent",
+            section: "config",
+            fieldPath: "config.toolPolicy.execution.dependencyRef"
+          })
+        })
+      ])
+    );
   });
 
   it("当聚合 readiness 可用但没有单个兼容 backend 时给出 fail-closed 细节", () => {
