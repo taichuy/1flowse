@@ -5,14 +5,12 @@ import {
   buildPublishedInvocationTrafficTimelineBucketSurface,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
 } from "@/lib/published-invocation-presenters";
-import { formatTimestamp } from "@/lib/runtime-presenters";
 
 type WorkflowPublishTrafficTimelineProps = {
   timeline: PublishedEndpointInvocationTimeBucketItem[];
   timelineGranularity: "hour" | "day";
   timeWindowLabel: string;
 };
-
 function formatTimelineBucketLabel(
   value: string,
   granularity: "hour" | "day"
@@ -81,7 +79,7 @@ export function WorkflowPublishTrafficTimeline({
                 </div>
 
                 <p className="section-copy entry-copy publish-timeline-copy">
-                  {formatTimestamp(bucket.bucket_start)} - {formatTimestamp(bucket.bucket_end)}
+                  {bucketSurface.timeWindowLabel}
                 </p>
 
                 <div className="tool-badge-row">

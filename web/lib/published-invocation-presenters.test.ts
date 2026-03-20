@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildPublishedInvocationActivityBlockedDetailSurfaceCopy,
   buildPublishedInvocationActivityDetailsSurfaceCopy,
   buildPublishedInvocationActivityInsightsSurfaceCopy,
   buildPublishedInvocationActivityTrafficMixSurface,
@@ -281,7 +282,8 @@ describe("published invocation presenters", () => {
         },
         apiKeyLabelPrefix: "key"
       })
-    ).toEqual({
+    ).toMatchObject({
+      timeWindowLabel: expect.stringContaining("2026"),
       surfaceLabels: ["OpenAI responses 2", "Native workflow route 1"],
       cacheLabels: ["Cache hit 2"],
       runStatusLabels: ["Waiting callback 1"],
@@ -339,9 +341,12 @@ describe("published invocation presenters", () => {
       apiKeyUsageInvocationCountLabel: "Calls",
       apiKeyUsageStatusMixLabel: "Status mix",
       apiKeyUsageStatusLabel: "Status",
+      apiKeyUsageStatusEmptyLabel: "n/a",
       apiKeyUsageLastUsedLabel: "Last used",
       failureReasonTitle: "Failure reason",
       failureReasonCountLabelPrefix: "count",
+      blockedDetailSurfaceLabel: "Invocation detail",
+      blockedDetailGuardedActionLabel: "详情查看",
       unavailableDetail: {
         title: "Invocation detail unavailable",
         summary: "当前未能拉取该 invocation 的详情 payload。",
@@ -358,6 +363,56 @@ describe("published invocation presenters", () => {
         rejected_count: 3
       })
     ).toBe("ok 2 / failed 1 / rejected 3");
+  });
+
+  it("为 publish activity blocked detail 复用共享敏感访问 copy", () => {
+    expect(
+      buildPublishedInvocationActivityBlockedDetailSurfaceCopy({
+        detail: "Invocation detail is guarded by sensitive access control.",
+        resource: {
+          id: "resource-1",
+          label: "Invocation detail",
+          description: "Protected invocation detail payload",
+          sensitivity_level: "L3",
+          source: "workspace_resource",
+          metadata: {}
+        },
+        access_request: {
+          id: "request-1",
+          run_id: "run-1",
+          node_run_id: "node-run-1",
+          requester_type: "human",
+          requester_id: "ops-reviewer",
+          resource_id: "resource-1",
+          action_type: "read",
+          purpose_text: "review invocation detail",
+          decision: "require_approval",
+          decision_label: null,
+          reason_code: "approval_required_high_sensitive_access",
+          reason_label: null,
+          policy_summary: "high-sensitivity access requires approval"
+        },
+        approval_ticket: {
+          id: "ticket-1",
+          access_request_id: "request-1",
+          run_id: "run-1",
+          node_run_id: "node-run-1",
+          status: "pending",
+          waiting_status: "waiting",
+          approved_by: null
+        },
+        notifications: [],
+        run_snapshot: null,
+        run_follow_up: null,
+        outcome_explanation: {
+          primary_signal: "审批票据仍在等待处理。",
+          follow_up: null
+        }
+      })
+    ).toMatchObject({
+      title: "Invocation detail waiting on approval",
+      summary: expect.stringContaining("详情查看不会绕过审批、通知与 run follow-up 事实链")
+    });
   });
 
   it("格式化 failure reason 最近出现时间", () => {

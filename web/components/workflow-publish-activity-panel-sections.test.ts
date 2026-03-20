@@ -157,6 +157,29 @@ function buildInvocationAuditWithApiKeyUsage(): PublishedEndpointInvocationListR
   };
 }
 
+function buildInvocationAuditWithApiKeyUsageFallbackStatus(): PublishedEndpointInvocationListResponse {
+  return {
+    ...buildInvocationAudit(),
+    facets: {
+      ...buildInvocationAudit().facets,
+      api_key_usage: [
+        {
+          api_key_id: "key-2",
+          name: null,
+          key_prefix: null,
+          status: null,
+          invocation_count: 1,
+          succeeded_count: 0,
+          failed_count: 0,
+          rejected_count: 0,
+          last_invoked_at: "2026-03-21T00:16:00Z",
+          last_status: null
+        }
+      ]
+    }
+  };
+}
+
 function buildRateLimitWindowAudit(): PublishedEndpointInvocationListResponse {
   return {
     filters: {
@@ -496,6 +519,31 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("approval blocker");
     expect(html).toContain("open blocker inbox slice");
     expect(html).toContain("优先处理 blocker inbox，再观察 waiting 节点是否恢复。");
+  });
+
+  it("uses shared API key status fallback copy inside activity details", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit: buildInvocationAuditWithApiKeyUsageFallbackStatus(),
+        selectedInvocationId: null,
+        selectedInvocationDetail: null,
+        callbackWaitingAutomation: {
+          status: "disabled",
+          scheduler_required: false,
+          detail: "disabled in test",
+          scheduler_health_status: "idle",
+          scheduler_health_detail: "not configured",
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: null
+      })
+    );
+
+    expect(html).toContain("Status");
+    expect(html).toContain("n/a");
   });
 
   it("uses shared blocked surface copy for invocation detail access", () => {

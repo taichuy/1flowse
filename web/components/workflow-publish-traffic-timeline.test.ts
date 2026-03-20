@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
+import { formatTimestamp } from "@/lib/runtime-presenters";
 
 describe("WorkflowPublishTrafficTimeline", () => {
   it("uses shared timeline surface copy", () => {
@@ -63,5 +64,8 @@ describe("WorkflowPublishTrafficTimeline", () => {
     expect(html).toContain("Waiting callback 1");
     expect(html).toContain("Runtime failed 1");
     expect(html).toContain("key Primary key 2");
+    expect(html).toContain(
+      `${formatTimestamp("2026-03-20T00:00:00Z")} - ${formatTimestamp("2026-03-20T01:00:00Z")}`
+    );
   });
 });

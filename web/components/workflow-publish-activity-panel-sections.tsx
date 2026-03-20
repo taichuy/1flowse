@@ -15,8 +15,8 @@ import type {
   PublishedEndpointInvocationListResponse
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
-import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
 import {
+  buildPublishedInvocationActivityBlockedDetailSurfaceCopy,
   buildPublishedInvocationActivityDetailsSurfaceCopy,
   buildPublishedInvocationActivityInsightsSurfaceCopy,
   buildPublishedInvocationActivityTrafficMixSurface,
@@ -350,11 +350,7 @@ export function WorkflowPublishActivityDetails({
       : null;
   const selectedInvocationBlockedCopy =
     selectedInvocationDetail?.kind === "blocked"
-      ? buildSensitiveAccessBlockedSurfaceCopy({
-          surfaceLabel: "Invocation detail",
-          payload: selectedInvocationDetail.payload,
-          guardedActionLabel: "详情查看"
-        })
+      ? buildPublishedInvocationActivityBlockedDetailSurfaceCopy(selectedInvocationDetail.payload)
       : null;
 
   return (
@@ -378,7 +374,11 @@ export function WorkflowPublishActivityDetails({
                 </div>
                 <div>
                   <dt>{detailsSurfaceCopy.apiKeyUsageStatusLabel}</dt>
-                  <dd>{item.last_status ?? item.status ?? "n/a"}</dd>
+                  <dd>
+                    {item.last_status ??
+                      item.status ??
+                      detailsSurfaceCopy.apiKeyUsageStatusEmptyLabel}
+                  </dd>
                 </div>
                 <div>
                   <dt>{detailsSurfaceCopy.apiKeyUsageLastUsedLabel}</dt>

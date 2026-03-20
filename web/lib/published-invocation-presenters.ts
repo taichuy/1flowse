@@ -10,6 +10,7 @@ import type {
 } from "@/lib/get-workflow-publish";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   buildOperatorInlineActionFeedbackModel,
@@ -26,7 +27,10 @@ import {
 } from "@/lib/sandbox-readiness-presenters";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
-import { buildSensitiveAccessTimelineSurfaceCopy } from "@/lib/sensitive-access-presenters";
+import {
+  buildSensitiveAccessBlockedSurfaceCopy,
+  buildSensitiveAccessTimelineSurfaceCopy
+} from "@/lib/sensitive-access-presenters";
 
 type PublishedInvocationWaitingOverview = {
   activeWaitingCount: number;
@@ -148,6 +152,7 @@ export type PublishedInvocationTrafficTimelineSurfaceCopy = {
 };
 
 export type PublishedInvocationTrafficTimelineBucketSurface = {
+  timeWindowLabel: string;
   surfaceLabels: string[];
   cacheLabels: string[];
   runStatusLabels: string[];
@@ -234,9 +239,12 @@ export type PublishedInvocationActivityDetailsSurfaceCopy = {
   apiKeyUsageInvocationCountLabel: string;
   apiKeyUsageStatusMixLabel: string;
   apiKeyUsageStatusLabel: string;
+  apiKeyUsageStatusEmptyLabel: string;
   apiKeyUsageLastUsedLabel: string;
   failureReasonTitle: string;
   failureReasonCountLabelPrefix: string;
+  blockedDetailSurfaceLabel: string;
+  blockedDetailGuardedActionLabel: string;
   unavailableDetail: PublishedInvocationUnavailableDetailSurfaceCopy;
 };
 
@@ -367,6 +375,7 @@ export function buildPublishedInvocationTrafficTimelineBucketSurface({
   facetLimit?: number;
 }): PublishedInvocationTrafficTimelineBucketSurface {
   return {
+    timeWindowLabel: `${formatTimestamp(bucket.bucket_start)} - ${formatTimestamp(bucket.bucket_end)}`,
     surfaceLabels: listPublishedInvocationFacetCountLabels(
       bucket.request_surface_counts,
       formatPublishedInvocationSurfaceLabel,
@@ -512,11 +521,26 @@ export function buildPublishedInvocationActivityDetailsSurfaceCopy(): PublishedI
     apiKeyUsageInvocationCountLabel: "Calls",
     apiKeyUsageStatusMixLabel: "Status mix",
     apiKeyUsageStatusLabel: "Status",
+    apiKeyUsageStatusEmptyLabel: "n/a",
     apiKeyUsageLastUsedLabel: "Last used",
     failureReasonTitle: "Failure reason",
     failureReasonCountLabelPrefix: "count",
+    blockedDetailSurfaceLabel: "Invocation detail",
+    blockedDetailGuardedActionLabel: "详情查看",
     unavailableDetail: buildPublishedInvocationUnavailableDetailSurfaceCopy()
   };
+}
+
+export function buildPublishedInvocationActivityBlockedDetailSurfaceCopy(
+  payload: SensitiveAccessBlockingPayload
+) {
+  const detailsSurfaceCopy = buildPublishedInvocationActivityDetailsSurfaceCopy();
+
+  return buildSensitiveAccessBlockedSurfaceCopy({
+    surfaceLabel: detailsSurfaceCopy.blockedDetailSurfaceLabel,
+    payload,
+    guardedActionLabel: detailsSurfaceCopy.blockedDetailGuardedActionLabel
+  });
 }
 
 export function formatPublishedInvocationApiKeyUsageMix({
