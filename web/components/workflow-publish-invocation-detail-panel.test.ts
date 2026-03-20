@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowPublishInvocationDetailPanel } from "@/components/workflow-publish-invocation-detail-panel";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -285,6 +288,39 @@ function buildDetail(): PublishedEndpointInvocationDetailResponse {
   };
 }
 
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 1,
+    healthy_backend_count: 1,
+    degraded_backend_count: 0,
+    offline_backend_count: 0,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: true,
+        backend_ids: ["sandbox-default"],
+        supported_languages: ["python"],
+        supported_profiles: ["default"],
+        supported_dependency_modes: ["builtin"],
+        supports_tool_execution: true,
+        supports_builtin_package_sets: true,
+        supports_backend_extensions: false,
+        supports_network_policy: true,
+        supports_filesystem_policy: true,
+        reason: null
+      }
+    ],
+    supported_languages: ["python"],
+    supported_profiles: ["default"],
+    supported_dependency_modes: ["builtin"],
+    supports_tool_execution: true,
+    supports_builtin_package_sets: true,
+    supports_backend_extensions: false,
+    supports_network_policy: true,
+    supports_filesystem_policy: true
+  };
+}
+
 const callbackWaitingAutomation: CallbackWaitingAutomationCheck = {
   status: "healthy",
   scheduler_required: true,
@@ -458,5 +494,78 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("data-testid=\"execution-node-card\"");
     expect(html).not.toContain("顶层 execution focus 仍在等待 callback。");
     expect(html).not.toContain("顶层 execution focus 建议先观察重排队。");
+  });
+
+  it("shows live sandbox readiness for blocked execution focus nodes", () => {
+    const detail = buildDetail();
+    detail.execution_focus_reason = "blocked_execution";
+    detail.execution_focus_node = {
+      node_run_id: "node-run-focus",
+      node_id: "tool_wait",
+      node_name: "Tool wait",
+      node_type: "tool",
+      status: "blocked",
+      phase: "execute",
+      retry_count: 0,
+      artifact_refs: [],
+      error_message: null,
+      waiting_reason: "callback pending",
+      started_at: "2026-03-20T10:00:00Z",
+      finished_at: null,
+      execution_class: "sandbox",
+      execution_source: "runtime_policy",
+      execution_profile: null,
+      execution_timeout_ms: null,
+      execution_network_policy: null,
+      execution_filesystem_policy: null,
+      execution_dependency_mode: null,
+      execution_builtin_package_set: null,
+      execution_dependency_ref: null,
+      execution_backend_extensions: null,
+      execution_dispatched_count: 1,
+      execution_fallback_count: 0,
+      execution_blocked_count: 1,
+      execution_unavailable_count: 0,
+      requested_execution_class: "sandbox",
+      requested_execution_source: "runtime_policy",
+      requested_execution_profile: null,
+      requested_execution_timeout_ms: null,
+      requested_execution_network_policy: null,
+      requested_execution_filesystem_policy: null,
+      requested_execution_dependency_mode: null,
+      requested_execution_builtin_package_set: null,
+      requested_execution_dependency_ref: null,
+      requested_execution_backend_extensions: null,
+      execution_blocking_reason: "No compatible sandbox backend is available.",
+      effective_execution_class: "inline",
+      execution_sandbox_backend_id: "sandbox-stale",
+      execution_executor_ref: "tool:compat-adapter:dify-default",
+      execution_sandbox_backend_executor_ref: null,
+      execution_sandbox_runner_kind: "container",
+      execution_fallback_reason: null,
+      event_count: 0,
+      event_type_counts: {},
+      last_event_type: null,
+      artifacts: [],
+      tool_calls: [],
+      ai_calls: [],
+      callback_tickets: [],
+      skill_reference_load_count: 0,
+      skill_reference_loads: [],
+      sensitive_access_entries: []
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation,
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("当前 live sandbox readiness 显示 sandbox 已 ready。");
+    expect(html).toContain("历史 run 记录的 backend 是 sandbox-stale");
   });
 });

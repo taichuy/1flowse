@@ -196,6 +196,7 @@ export function WorkflowEditorWorkbench({
             trace={runOverlay.selectedRunTrace}
             traceError={runOverlay.runOverlayError}
             selectedNodeId={graph.selectedNodeId}
+            sandboxReadiness={sandboxReadiness}
             isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
             isRefreshingRuns={runOverlay.isRefreshingRuns}
             onWorkflowNameChange={graph.setWorkflowName}

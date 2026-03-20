@@ -1,4 +1,7 @@
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type {
   PluginToolRegistryItem,
 } from "@/lib/get-plugin-registry";
@@ -32,6 +35,7 @@ export type WorkflowPublishActivityPanelProps = {
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export const TIME_WINDOW_OPTIONS = [

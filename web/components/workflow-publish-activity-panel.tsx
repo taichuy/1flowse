@@ -60,7 +60,8 @@ export function WorkflowPublishActivityPanel({
   clearInvocationDetailHref,
   rateLimitWindowAudit,
   activeInvocationFilter,
-  callbackWaitingAutomation
+  callbackWaitingAutomation,
+  sandboxReadiness
 }: WorkflowPublishActivityPanelProps) {
   const activeFilterChips = buildActiveFilterChips(activeInvocationFilter, apiKeys);
   const runStatusOptions = buildRunStatusOptions(invocationAudit?.facets.run_status_counts);
@@ -113,6 +114,7 @@ export function WorkflowPublishActivityPanel({
         selectedInvocationId={selectedInvocationId}
         selectedInvocationDetail={selectedInvocationDetail}
         callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
         buildInvocationDetailHref={(invocationId) =>
           selectedInvocationId === invocationId && selectedInvocationDetailHref
             ? selectedInvocationDetailHref

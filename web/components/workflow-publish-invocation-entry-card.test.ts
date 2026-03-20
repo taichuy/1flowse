@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowPublishInvocationEntryCard } from "@/components/workflow-publish-invocation-entry-card";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
 
 vi.mock("next/link", () => ({
@@ -149,6 +150,39 @@ function buildInvocationItem(): PublishedEndpointInvocationListResponse["items"]
   };
 }
 
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 1,
+    healthy_backend_count: 1,
+    degraded_backend_count: 0,
+    offline_backend_count: 0,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: true,
+        backend_ids: ["sandbox-default"],
+        supported_languages: ["python"],
+        supported_profiles: ["default"],
+        supported_dependency_modes: ["builtin"],
+        supports_tool_execution: true,
+        supports_builtin_package_sets: true,
+        supports_backend_extensions: false,
+        supports_network_policy: true,
+        supports_filesystem_policy: true,
+        reason: null
+      }
+    ],
+    supported_languages: ["python"],
+    supported_profiles: ["default"],
+    supported_dependency_modes: ["builtin"],
+    supports_tool_execution: true,
+    supports_builtin_package_sets: true,
+    supports_backend_extensions: false,
+    supports_network_policy: true,
+    supports_filesystem_policy: true
+  };
+}
+
 describe("WorkflowPublishInvocationEntryCard", () => {
   it("renders callback sampled run cards through shared callback waiting follow-up", () => {
     const html = renderToStaticMarkup(
@@ -261,5 +295,67 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).not.toContain("优先看 snapshot waiting reason 与 callback lifecycle。");
     expect(html).not.toContain("当前 run 状态：waiting。");
     expect(html).not.toContain("run run-callback-1：继续观察 callback waiting。");
+  });
+
+  it("shows live sandbox readiness when the sampled run carries a blocked strong-isolation snapshot", () => {
+    const item = buildInvocationItem();
+    item.run_follow_up = {
+      affected_run_count: 1,
+      sampled_run_count: 1,
+      waiting_run_count: 0,
+      running_run_count: 0,
+      succeeded_run_count: 0,
+      failed_run_count: 1,
+      unknown_run_count: 0,
+      explanation: {
+        primary_signal: "sampled run blocked by sandbox availability",
+        follow_up: "check sandbox readiness"
+      },
+      sampled_runs: [
+        {
+          run_id: "run-callback-1",
+          snapshot: {
+            status: "failed",
+            current_node_id: "tool_wait",
+            waiting_reason: null,
+            execution_focus_node_id: "tool_wait",
+            execution_focus_node_run_id: "node-run-tool-wait",
+            execution_focus_node_name: "Tool wait",
+            execution_focus_node_type: "tool",
+            execution_focus_explanation: {
+              primary_signal: "strong isolation failed on historical run",
+              follow_up: "compare with live readiness"
+            },
+            execution_focus_tool_calls: [
+              {
+                id: "tool-call-1",
+                tool_id: "callback.wait",
+                tool_name: "Callback Wait",
+                phase: "execute",
+                status: "failed",
+                requested_execution_class: "sandbox",
+                effective_execution_class: "inline",
+                execution_executor_ref: "tool:compat-adapter:dify-default",
+                execution_sandbox_backend_id: "sandbox-stale",
+                execution_sandbox_runner_kind: "container",
+                execution_blocking_reason: "No compatible sandbox backend is available."
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item,
+        detailHref: "/published/invocation-1",
+        detailActive: false,
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("当前 live sandbox readiness 显示 sandbox 已 ready。");
+    expect(html).toContain("历史 run 记录的 backend 是 sandbox-stale");
   });
 });

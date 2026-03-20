@@ -4,11 +4,15 @@ import Link from "next/link";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { ExecutionNodeCard } from "@/components/run-diagnostics-execution/execution-node-card";
+import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-publish-invocation-callback-section";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
@@ -28,12 +32,14 @@ import {
   listExecutionFocusRuntimeFactBadges
 } from "@/lib/run-execution-focus-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
+import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 
 type WorkflowPublishInvocationDetailPanelProps = {
   detail: PublishedEndpointInvocationDetailResponse;
   clearHref: string;
   tools: PluginToolRegistryItem[];
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 function formatJsonPreview(value: unknown): string {
@@ -43,7 +49,8 @@ export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref,
   tools,
-  callbackWaitingAutomation
+  callbackWaitingAutomation,
+  sandboxReadiness
 }: WorkflowPublishInvocationDetailPanelProps) {
   const {
     invocation,
@@ -244,6 +251,9 @@ export function WorkflowPublishInvocationDetailPanel({
                 const sampleExecutionFactBadges = listExecutionFocusRuntimeFactBadges(
                   sampleFocusNodeEvidence
                 );
+                const sampleReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(
+                  sample.run_snapshot
+                );
                 const sampleReasonLabel =
                   sample.explanation_source === "callback_waiting"
                     ? "callback waiting"
@@ -272,6 +282,13 @@ export function WorkflowPublishInvocationDetailPanel({
                     ) : null}
                     {sample.snapshot_summary && !sample.has_callback_waiting_summary ? (
                       <p className="binding-meta">{sample.snapshot_summary}</p>
+                    ) : null}
+                    {sampleReadinessNode ? (
+                      <SandboxExecutionReadinessCard
+                        node={sampleReadinessNode}
+                        readiness={sandboxReadiness}
+                        title="Live sandbox readiness"
+                      />
                     ) : null}
                     {sample.execution_focus_artifact_count > 0 ||
                     sample.execution_focus_artifact_ref_count > 0 ||
@@ -424,6 +441,11 @@ export function WorkflowPublishInvocationDetailPanel({
             </span>
             <span className="event-chip">node run {executionFocusNode.node_run_id}</span>
           </div>
+          <SandboxExecutionReadinessCard
+            node={executionFocusNode}
+            readiness={sandboxReadiness}
+            title="Live sandbox readiness"
+          />
           <ExecutionNodeCard
             node={executionFocusNode}
             runId={runId}

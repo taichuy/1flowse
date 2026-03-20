@@ -1,10 +1,12 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 
 import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
 import type { RunDetail } from "@/lib/get-run-detail";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import {
   DEFAULT_RUN_TRACE_LIMIT,
   type RunTrace
@@ -23,6 +25,7 @@ type WorkflowRunOverlayPanelProps = {
   trace: RunTrace | null;
   traceError?: string | null;
   selectedNodeId?: string | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
   isLoading: boolean;
   isRefreshingRuns: boolean;
   onSelectRunId: (runId: string) => void;
@@ -36,6 +39,7 @@ export function WorkflowRunOverlayPanel({
   trace,
   traceError,
   selectedNodeId,
+  sandboxReadiness,
   isLoading,
   isRefreshingRuns,
   onSelectRunId,
@@ -154,6 +158,7 @@ export function WorkflowRunOverlayPanel({
                 className="runtime-overlay-focus-card"
                 description="这里直接复用 run detail 的 execution focus，作者在画布里也能先看当前最相关的 blocker / waiting 节点，而不是立刻跳出到完整 diagnostics。"
                 run={run}
+                sandboxReadiness={sandboxReadiness}
                 title="Execution focus"
               />
 

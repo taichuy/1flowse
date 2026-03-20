@@ -2,6 +2,7 @@ import type {
   SandboxExecutionClassReadinessCheck,
   SandboxReadinessCheck
 } from "./get-system-overview";
+import type { RunSnapshot } from "@/app/actions/run-snapshot";
 import type { RunExecutionNodeItem } from "./get-run-views";
 
 type SandboxReadinessExecutionNode = {
@@ -14,6 +15,39 @@ type SandboxReadinessExecutionNode = {
   execution_blocked_count?: number;
   execution_unavailable_count?: number;
 };
+
+export function buildSandboxReadinessNodeFromRunSnapshot(
+  runSnapshot?: RunSnapshot | null
+): SandboxReadinessExecutionNode | null {
+  if (!runSnapshot) {
+    return null;
+  }
+
+  const toolCalls = runSnapshot.executionFocusToolCalls ?? [];
+  const representativeToolCall =
+    toolCalls.find((toolCall) => trimOrNull(toolCall?.execution_blocking_reason)) ?? toolCalls[0] ?? null;
+  const nodeType = trimOrNull(runSnapshot.executionFocusNodeType) ??
+    (toolCalls.length > 0 ? "tool" : null);
+
+  if (!nodeType || !representativeToolCall) {
+    return null;
+  }
+
+  const blockedCount = toolCalls.filter((toolCall) => trimOrNull(toolCall?.execution_blocking_reason)).length;
+
+  return {
+    node_type: nodeType,
+    execution_class:
+      trimOrNull(representativeToolCall.requested_execution_class) ??
+      trimOrNull(representativeToolCall.effective_execution_class),
+    requested_execution_class: trimOrNull(representativeToolCall.requested_execution_class),
+    effective_execution_class: trimOrNull(representativeToolCall.effective_execution_class),
+    execution_blocking_reason: trimOrNull(representativeToolCall.execution_blocking_reason),
+    execution_sandbox_backend_id: trimOrNull(representativeToolCall.execution_sandbox_backend_id),
+    execution_blocked_count: blockedCount,
+    execution_unavailable_count: 0
+  };
+}
 
 export type SandboxExecutionReadinessInsight = {
   executionClass: string;

@@ -1,5 +1,8 @@
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type {
   PublishedEndpointApiKeyItem,
@@ -30,6 +33,7 @@ type WorkflowPublishPanelProps = {
   >;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function WorkflowPublishPanel({
@@ -43,7 +47,8 @@ export function WorkflowPublishPanel({
   selectedInvocationId,
   rateLimitWindowAuditsByBinding,
   activeInvocationFilter,
-  callbackWaitingAutomation
+  callbackWaitingAutomation,
+  sandboxReadiness
 }: WorkflowPublishPanelProps) {
   const publishedCount = bindings.filter(
     (binding) => binding.lifecycle_status === "published"
@@ -121,6 +126,7 @@ export function WorkflowPublishPanel({
                 selectedInvocationDetail={invocationDetailsByBinding[binding.id] ?? null}
                 rateLimitWindowAudit={rateLimitWindowAuditsByBinding[binding.id] ?? null}
                 callbackWaitingAutomation={callbackWaitingAutomation}
+                sandboxReadiness={sandboxReadiness}
                 activeInvocationFilter={
                   activeInvocationFilter.bindingId === binding.id
                     ? activeInvocationFilter

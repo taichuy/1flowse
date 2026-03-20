@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
@@ -33,6 +35,7 @@ import {
   formatMetricSummary,
   listExecutionFocusRuntimeFactBadges
 } from "@/lib/run-execution-focus-presenters";
+import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import { formatDurationMs, formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 
 type PublishedInvocationItem = PublishedEndpointInvocationListResponse["items"][number];
@@ -41,6 +44,7 @@ type WorkflowPublishInvocationEntryCardProps = {
   item: PublishedInvocationItem;
   detailHref: string;
   detailActive: boolean;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 function formatMetricCounts(metrics: Record<string, number> | null | undefined): string {
@@ -68,7 +72,8 @@ function hasInvocationDrilldown(item: PublishedInvocationItem): boolean {
 export function WorkflowPublishInvocationEntryCard({
   item,
   detailHref,
-  detailActive
+  detailActive,
+  sandboxReadiness
 }: WorkflowPublishInvocationEntryCardProps) {
   const waitingLifecycle = item.run_waiting_lifecycle;
   const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
@@ -153,6 +158,11 @@ export function WorkflowPublishInvocationEntryCard({
     ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
     : null;
   const runSnapshot = normalizePublishedInvocationRunSnapshot(item.run_snapshot);
+  const runSnapshotReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshot);
+  const runFollowUpSampleReadinessNode = runFollowUpSample
+    ? buildSandboxReadinessNodeFromRunSnapshot(runFollowUpSample.run_snapshot)
+    : null;
+  const readinessNode = runFollowUpSampleReadinessNode ?? runSnapshotReadinessNode;
   const runSnapshotExecutionFactBadges = listExecutionFocusRuntimeFactBadges(
     buildExecutionFocusExplainableNode(runSnapshot)
   );
@@ -286,6 +296,13 @@ export function WorkflowPublishInvocationEntryCard({
           ) : null}
           {runFollowUpSample?.snapshot_summary && !shouldDeferToSharedCallbackWaitingSummary ? (
             <p className="binding-meta">{runFollowUpSample.snapshot_summary}</p>
+          ) : null}
+          {readinessNode ? (
+            <SandboxExecutionReadinessCard
+              node={readinessNode}
+              readiness={sandboxReadiness}
+              title="Live sandbox readiness"
+            />
           ) : null}
           {runFollowUpSample ? (
             <>
