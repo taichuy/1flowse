@@ -630,4 +630,49 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("Approval timeline");
     expect(html).toContain("当前这次 invocation 没有关联 sensitive access timeline。");
   });
+
+  it("uses shared skill trace and missing-tool labels in publish detail", () => {
+    const detail = buildDetail();
+
+    detail.skill_trace = {
+      scope: "execution_focus_node",
+      reference_count: 2,
+      phase_counts: {
+        plan: 1,
+        execute: 1
+      },
+      source_counts: {
+        explicit: 2
+      },
+      nodes: [
+        {
+          node_run_id: "node-run-skill",
+          node_id: "node-skill",
+          node_name: "Skill node",
+          reference_count: 2,
+          loads: []
+        }
+      ]
+    };
+    detail.callback_tickets = [
+      {
+        tool_id: "tool-missing"
+      } as PublishedEndpointInvocationDetailResponse["callback_tickets"][number]
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    expect(html).toContain("refs 2");
+    expect(html).toContain("phases plan 1 · execute 1");
+    expect(html).toContain("sources explicit 2");
+    expect(html).toContain("node run node-run-skill · node node-skill");
+    expect(html).toContain("missing catalog entry tool-missing");
+  });
 });

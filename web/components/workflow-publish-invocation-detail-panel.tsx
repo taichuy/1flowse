@@ -21,9 +21,12 @@ import {
   buildPublishedInvocationDetailSurfaceCopy,
   buildPublishedInvocationCanonicalFollowUpCopy,
   buildPublishedInvocationEntrySurfaceCopy,
+  buildPublishedInvocationSkillTraceSurface,
   buildPublishedInvocationRecommendedNextStep,
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationInboxHref,
+  formatPublishedInvocationMissingToolCatalogEntry,
+  formatPublishedInvocationNodeRunLabel,
   formatPublishedInvocationRequestKeysSummary,
   formatPublishedInvocationSampleReasonLabel,
   listPublishedInvocationCacheDrilldownRows,
@@ -137,6 +140,7 @@ export function WorkflowPublishInvocationDetailPanel({
     focusSkillTraceNodeRunId:
       skillTrace?.scope === "execution_focus_node" ? skillTrace.nodes[0]?.node_run_id ?? null : null
   });
+  const skillTraceSurface = skillTrace ? buildPublishedInvocationSkillTraceSurface(skillTrace) : null;
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId,
     canonicalFollowUp,
@@ -421,7 +425,9 @@ export function WorkflowPublishInvocationDetailPanel({
             <span className="event-chip">
               {formatExecutionFocusReasonLabel(executionFocusReason)}
             </span>
-            <span className="event-chip">node run {executionFocusNode.node_run_id}</span>
+            <span className="event-chip">
+              {formatPublishedInvocationNodeRunLabel(executionFocusNode.node_run_id)}
+            </span>
           </div>
           <SandboxExecutionReadinessCard
             node={executionFocusNode}
@@ -446,30 +452,25 @@ export function WorkflowPublishInvocationDetailPanel({
         executionFocusNode={executionFocusNode}
       />
 
-      {skillTrace ? (
+      {skillTrace && skillTraceSurface ? (
         <div>
           <strong>{detailSurfaceCopy.skillTraceTitle}</strong>
           <p className="section-copy entry-copy">{detailSurfaceCopy.skillTraceDescription}</p>
           <div className="tool-badge-row">
-            <span className="event-chip">refs {skillTrace.reference_count}</span>
-            {formatMetricSummary(skillTrace.phase_counts) ? (
-              <span className="event-chip">phases {formatMetricSummary(skillTrace.phase_counts)}</span>
-            ) : null}
-            {formatMetricSummary(skillTrace.source_counts) ? (
-              <span className="event-chip">sources {formatMetricSummary(skillTrace.source_counts)}</span>
-            ) : null}
+            {skillTraceSurface.summaryChips.map((chip) => (
+              <span className="event-chip" key={chip}>
+                {chip}
+              </span>
+            ))}
           </div>
           <div className="publish-cache-list">
-            {skillTrace.nodes.map((node) => (
-              <div className="payload-card compact-card" key={node.node_run_id}>
+            {skillTraceSurface.nodes.map((node) => (
+              <div className="payload-card compact-card" key={node.key}>
                 <div className="payload-card-header">
-                  <span className="status-meta">{node.node_name ?? node.node_id ?? node.node_run_id}</span>
-                  <span className="event-chip">refs {node.reference_count}</span>
+                  <span className="status-meta">{node.title}</span>
+                  <span className="event-chip">{node.countChip}</span>
                 </div>
-                <p className="section-copy entry-copy">
-                  node run {node.node_run_id}
-                  {node.node_id ? ` · node ${node.node_id}` : ""}
-                </p>
+                <p className="section-copy entry-copy">{node.summary}</p>
                 <SkillReferenceLoadList
                   skillReferenceLoads={node.loads}
                   title={detailSurfaceCopy.injectedReferencesTitle}
@@ -489,7 +490,7 @@ export function WorkflowPublishInvocationDetailPanel({
             <div className="tool-badge-row">
               {unresolvedToolIds.map((toolId) => (
                 <span className="event-chip" key={`missing-tool-${toolId}`}>
-                  missing catalog entry {toolId}
+                  {formatPublishedInvocationMissingToolCatalogEntry(toolId)}
                 </span>
               ))}
             </div>

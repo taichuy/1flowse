@@ -468,6 +468,8 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("Run failed");
     expect(html).toContain("Waiting now");
     expect(html).toContain("Cache hit 0 / Cache miss 0 / Cache bypass 0");
+    expect(html).toContain("Runtime failed 2");
+    expect(html).toContain("Rate limit exceeded 1");
     expect(html).toContain("n/a");
   });
 

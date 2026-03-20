@@ -16,6 +16,7 @@ import {
   buildPublishedInvocationFailureReasonInsight,
   buildPublishedInvocationRateLimitWindowInsight,
   buildPublishedInvocationSelectedNextStepSurface,
+  buildPublishedInvocationSkillTraceSurface,
   buildPublishedInvocationTrafficTimelineBucketSurface,
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
@@ -25,6 +26,8 @@ import {
   formatPublishedInvocationOptionalRunStatus,
   formatPublishedInvocationCacheSurfaceMix,
   formatPublishedInvocationFailureReasonLastSeen,
+  formatPublishedInvocationMissingToolCatalogEntry,
+  formatPublishedInvocationNodeRunLabel,
   formatPublishedInvocationRequestKeysSummary,
   formatPublishedInvocationRunStatusMix,
   formatPublishedInvocationSampleReasonLabel,
@@ -41,6 +44,7 @@ import {
   listPublishedInvocationEntryMetaRows,
   listPublishedInvocationEntryWaitingRows,
   listPublishedInvocationFacetCountLabels,
+  listPublishedInvocationIssueSignalChips,
   listPublishedInvocationRateLimitRows,
   listPublishedInvocationRunFollowUpEvidenceChips,
   listPublishedInvocationRunFollowUpSampleMetaRows,
@@ -480,6 +484,54 @@ describe("published invocation presenters", () => {
     expect(buildPublishedInvocationActivityInsightsSurfaceCopy().rateLimitWindowDescription).toContain(
       "当前窗口按当前筛选时间窗统计成功和失败调用"
     );
+  });
+
+  it("为 publish activity issue signals 与 detail skill trace 提供共享视图模型", () => {
+    expect(
+      listPublishedInvocationIssueSignalChips([
+        { value: "runtime_failed", count: 2 },
+        { value: "rate_limit_exceeded", count: 1 }
+      ])
+    ).toEqual(["Runtime failed 2", "Rate limit exceeded 1"]);
+
+    expect(formatPublishedInvocationNodeRunLabel("node-run-1")).toBe("node run node-run-1");
+    expect(formatPublishedInvocationMissingToolCatalogEntry("tool-missing")).toBe(
+      "missing catalog entry tool-missing"
+    );
+
+    expect(
+      buildPublishedInvocationSkillTraceSurface({
+        scope: "execution_focus_node",
+        reference_count: 2,
+        phase_counts: {
+          plan: 1,
+          execute: 1
+        },
+        source_counts: {
+          explicit: 2
+        },
+        nodes: [
+          {
+            node_run_id: "node-run-1",
+            node_id: "node-1",
+            node_name: "Skill node",
+            reference_count: 2,
+            loads: []
+          }
+        ]
+      })
+    ).toEqual({
+      summaryChips: ["refs 2", "phases plan 1 · execute 1", "sources explicit 2"],
+      nodes: [
+        {
+          key: "node-run-1",
+          title: "Skill node",
+          countChip: "refs 2",
+          summary: "node run node-run-1 · node node-1",
+          loads: []
+        }
+      ]
+    });
   });
 
   it("为 publish activity insights 统一拼装 summary / waiting / rate-limit rows", () => {

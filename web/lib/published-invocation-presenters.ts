@@ -21,7 +21,10 @@ import {
 import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
-import type { ExecutionFocusToolCallSummary } from "@/lib/run-execution-focus-presenters";
+import {
+  formatMetricSummary,
+  type ExecutionFocusToolCallSummary
+} from "@/lib/run-execution-focus-presenters";
 import {
   formatSandboxReadinessDetail,
   formatSandboxReadinessHeadline,
@@ -234,6 +237,19 @@ export type PublishedInvocationActivityInsightsSurfaceCopy = {
   rateLimitDisabledEmptyState: string;
   issueSignalsTitle: string;
   issueSignalsDescription: string;
+};
+
+export type PublishedInvocationSkillTraceNodeSurface = {
+  key: string;
+  title: string;
+  countChip: string;
+  summary: string;
+  loads: NonNullable<PublishedEndpointInvocationDetailResponse["skill_trace"]>["nodes"][number]["loads"];
+};
+
+export type PublishedInvocationSkillTraceSurface = {
+  summaryChips: string[];
+  nodes: PublishedInvocationSkillTraceNodeSurface[];
 };
 
 export type PublishedInvocationActivityTrafficMixSurface = {
@@ -558,6 +574,42 @@ export function buildPublishedInvocationActivityTrafficMixSurface({
       requestSurfaceCounts,
       formatPublishedInvocationSurfaceLabel
     )
+  };
+}
+
+export function listPublishedInvocationIssueSignalChips(
+  reasonCounts: PublishedEndpointInvocationFacetItem[]
+): string[] {
+  return reasonCounts.map((item) => `${formatPublishedInvocationReasonLabel(item.value)} ${item.count}`);
+}
+
+export function formatPublishedInvocationNodeRunLabel(nodeRunId: string): string {
+  return `node run ${nodeRunId}`;
+}
+
+export function formatPublishedInvocationMissingToolCatalogEntry(toolId: string): string {
+  return `missing catalog entry ${toolId}`;
+}
+
+export function buildPublishedInvocationSkillTraceSurface(
+  skillTrace: NonNullable<PublishedEndpointInvocationDetailResponse["skill_trace"]>
+): PublishedInvocationSkillTraceSurface {
+  const phaseSummary = formatMetricSummary(skillTrace.phase_counts);
+  const sourceSummary = formatMetricSummary(skillTrace.source_counts);
+
+  return {
+    summaryChips: [
+      `refs ${skillTrace.reference_count}`,
+      ...(phaseSummary ? [`phases ${phaseSummary}`] : []),
+      ...(sourceSummary ? [`sources ${sourceSummary}`] : [])
+    ],
+    nodes: skillTrace.nodes.map((node) => ({
+      key: node.node_run_id,
+      title: node.node_name ?? node.node_id ?? node.node_run_id,
+      countChip: `refs ${node.reference_count}`,
+      summary: `${formatPublishedInvocationNodeRunLabel(node.node_run_id)}${node.node_id ? ` · node ${node.node_id}` : ""}`,
+      loads: node.loads
+    }))
   };
 }
 

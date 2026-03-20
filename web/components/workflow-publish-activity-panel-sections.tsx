@@ -31,9 +31,9 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationSelectedNextStepSurface,
   buildPublishedInvocationWaitingOverview,
-  formatPublishedInvocationReasonLabel,
   formatRateLimitPressure,
   listPublishedInvocationActivitySummaryRows,
+  listPublishedInvocationIssueSignalChips,
   listPublishedInvocationActivityWaitingRows,
   listPublishedInvocationRateLimitRows,
   listPublishedInvocationRunFollowUpSampleViews
@@ -124,6 +124,7 @@ export function WorkflowPublishActivityInsights({
     failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
     sandboxReadiness
   });
+  const issueSignalChips = listPublishedInvocationIssueSignalChips(reasonCounts);
 
   return (
     <>
@@ -232,9 +233,9 @@ export function WorkflowPublishActivityInsights({
             <p className="section-copy entry-copy">{failureReasonInsight}</p>
           ) : null}
           <div className="tool-badge-row">
-            {reasonCounts.map((item) => (
-              <span className="event-chip" key={item.value}>
-                {formatPublishedInvocationReasonLabel(item.value)} {item.count}
+            {issueSignalChips.map((chip) => (
+              <span className="event-chip" key={chip}>
+                {chip}
               </span>
             ))}
           </div>
