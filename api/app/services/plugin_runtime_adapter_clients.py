@@ -14,6 +14,22 @@ from app.services.plugin_runtime_types import (
 )
 
 
+def _canonicalize_adapter_status(value: object) -> str:
+    if not isinstance(value, str):
+        return "up"
+
+    normalized = value.strip().lower()
+    if normalized in {"up", "ok", "healthy", "ready"}:
+        return "up"
+    if normalized in {"degraded", "warn", "warning", "partial"}:
+        return "degraded"
+    if normalized in {"disabled", "off"}:
+        return "disabled"
+    if normalized in {"down", "offline", "error", "failed", "unhealthy"}:
+        return "down"
+    return "up"
+
+
 class CompatibilityAdapterHealthChecker:
     def __init__(
         self,
@@ -49,12 +65,31 @@ class CompatibilityAdapterHealthChecker:
                 detail=str(exc),
             )
 
+        health_payload: dict[str, Any] = {}
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+
+        if isinstance(payload, dict):
+            health_payload = payload
+
         return CompatibilityAdapterHealth(
             id=adapter.id,
             ecosystem=adapter.ecosystem,
             endpoint=adapter.endpoint,
             enabled=True,
-            status="up",
+            status=_canonicalize_adapter_status(health_payload.get("status")),
+            detail=(
+                health_payload.get("detail")
+                if isinstance(health_payload.get("detail"), str)
+                else None
+            ),
+            mode=(
+                health_payload.get("mode")
+                if isinstance(health_payload.get("mode"), str)
+                else None
+            ),
         )
 
     def probe_all(self, registry: PluginRegistry) -> list[CompatibilityAdapterHealth]:

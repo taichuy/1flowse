@@ -5,14 +5,14 @@ from app.config import Settings, get_settings
 from app.main import create_app
 
 
-def test_healthz_reports_stub_identity() -> None:
+def test_healthz_reports_adapter_identity_and_mode() -> None:
     client = TestClient(create_app())
 
     response = client.get("/healthz")
 
     assert response.status_code == 200
     assert response.json() == {
-        "status": "ok",
+        "status": "up",
         "adapter_id": "dify-default",
         "ecosystem": "compat:dify",
         "mode": "translate",

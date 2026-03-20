@@ -45,6 +45,7 @@ def _serialize_adapter(adapter_id: str) -> PluginAdapterRegistrationItem:
         supported_execution_classes=list(adapter.supported_execution_classes),
         status=health.status,
         detail=health.detail,
+        mode=health.mode,
     )
 
 

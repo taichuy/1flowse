@@ -144,6 +144,7 @@ class CompatibilityAdapterHealth:
     enabled: bool
     status: str
     detail: str | None = None
+    mode: str | None = None
 
 
 @dataclass(frozen=True)

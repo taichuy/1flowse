@@ -1,3 +1,5 @@
+import React from "react";
+
 import { syncAdapterTools } from "@/app/actions/workflow";
 import { AdapterSyncForm } from "@/components/adapter-sync-form";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
@@ -47,11 +49,11 @@ export function PluginRegistryPanel({
                 </div>
                 <p className="adapter-endpoint">{adapter.endpoint}</p>
                 <p className="adapter-copy">
-                  {adapter.detail ??
-                    "目录同步会调用 adapter 的 /tools，并把返回结果写入 API 持久化目录。"}
+                  {adapter.detail ?? describeAdapterMode(adapter.mode)}
                 </p>
                 <div className="adapter-meta-row">
                   <span className="event-chip">{adapter.ecosystem}</span>
+                  {adapter.mode ? <span className="event-chip">mode={adapter.mode}</span> : null}
                   <span className="event-chip">
                     {adapter.enabled ? "enabled" : "disabled"}
                   </span>
@@ -212,4 +214,16 @@ function readRuntimeBinding(pluginMeta: PluginToolRegistryItem["plugin_meta"]) {
     provider: provider || "-",
     tool_name: tool_name || "-"
   };
+}
+
+function describeAdapterMode(mode: PluginAdapterRegistryItem["mode"]) {
+  if (mode === "proxy") {
+    return "当前 adapter 会把翻译后的 invoke payload 继续代理到 Dify plugin daemon，并把结果聚合回 7Flows tool runtime。";
+  }
+
+  if (mode === "translate") {
+    return "当前 adapter 只做受约束 contract 校验与 payload 翻译；目录同步会调用 adapter 的 /tools，并把结果写入 API 持久化目录。";
+  }
+
+  return "目录同步会调用 adapter 的 /tools，并把返回结果写入 API 持久化目录。";
 }

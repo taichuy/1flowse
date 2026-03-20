@@ -409,6 +409,13 @@ a {
   color: var(--down);
 }
 
+.health-pill.degraded,
+.health-pill.warning,
+.health-pill.partial {
+  background: rgba(208, 99, 45, 0.12);
+  color: var(--accent);
+}
+
 .health-pill.rejected {
   background: rgba(208, 99, 45, 0.12);
   color: var(--accent);
