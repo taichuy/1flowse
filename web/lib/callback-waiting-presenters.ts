@@ -7,6 +7,10 @@ import type {
   CallbackWaitingAutomationStepCheck
 } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import {
+  buildOperatorRecommendedNextStep,
+  type OperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
   formatSensitiveAccessDecisionLabel,
@@ -112,6 +116,44 @@ export type CallbackWaitingRecommendedAction = {
   detail: string;
   ctaLabel?: string;
 };
+
+const CALLBACK_WAITING_RECOMMENDED_ACTIONS_WITH_INBOX_CTA = new Set<
+  CallbackWaitingRecommendedAction["kind"]
+>(["open_inbox", "inspect_termination", "monitor_callback", "watch_scheduled_resume"]);
+
+export function buildCallbackWaitingRecommendedNextStep({
+  action,
+  inboxHref,
+  operatorFollowUp
+}: {
+  action?: CallbackWaitingRecommendedAction | null;
+  inboxHref?: string | null;
+  operatorFollowUp?: string | null;
+}): OperatorRecommendedNextStep | null {
+  if (!action) {
+    return buildOperatorRecommendedNextStep({
+      operatorFollowUp,
+      operatorLabel: "callback waiting follow-up"
+    });
+  }
+
+  const href = CALLBACK_WAITING_RECOMMENDED_ACTIONS_WITH_INBOX_CTA.has(action.kind)
+    ? inboxHref?.trim() || null
+    : null;
+
+  return buildOperatorRecommendedNextStep({
+    callback: {
+      active: true,
+      label: action.label,
+      detail: null,
+      href,
+      href_label: href ? action.ctaLabel?.trim() || "Open inbox slice" : null,
+      fallback_detail: action.detail
+    },
+    operatorFollowUp,
+    operatorLabel: "callback waiting follow-up"
+  });
+}
 
 export type CallbackWaitingAutomationHealthSnapshot = {
   summary: string;

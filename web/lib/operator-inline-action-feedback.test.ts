@@ -347,6 +347,35 @@ describe("operator inline action feedback", () => {
     expect(html).toContain("Watch the requeued resume");
   });
 
+  it("为非 callback summary 的 operator 结果渲染 shared recommended next step", () => {
+    const html = renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        title: "Cleanup 结果",
+        message: "cleanup 已完成。",
+        runId: "run-cleanup",
+        outcomeExplanation: {
+          primary_signal: "cleanup 已处理过期 ticket。",
+          follow_up: "优先检查剩余 blocker 是否已经解除。"
+        },
+        runSnapshot: {
+          status: "running",
+          currentNodeId: "approval_gate",
+          executionFocusNodeName: "Approval Gate"
+        },
+        runFollowUpExplanation: {
+          primary_signal: "本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。",
+          follow_up: "run run-cleanup：当前 run 已回到 approval_gate，继续观察后续节点。"
+        }
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("run detail");
+    expect(html).toContain("open run");
+    expect(html).toContain("run run-cleanup：当前 run 已回到 approval_gate，继续观察后续节点。");
+  });
+
   it("inline operator feedback 会展开额外 sampled run 的 compact follow-up 卡片", () => {
     const html = renderToStaticMarkup(
       createElement(InlineOperatorActionFeedback, {

@@ -24,6 +24,7 @@ import {
   listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
 import {
+  buildCallbackWaitingRecommendedNextStep,
   formatCallbackLifecycleLabel,
   formatScheduledResumeLabel,
   getCallbackWaitingRecommendedAction,
@@ -175,6 +176,11 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeRequeuedAt,
     scheduledResumeRequeueSource
   });
+  const recommendedNextStep = buildCallbackWaitingRecommendedNextStep({
+    action: recommendedAction,
+    inboxHref,
+    operatorFollowUp: callbackFollowUp
+  });
   const shouldShowSensitiveAccessInlineActions =
     showSensitiveAccessInlineActions ?? showInlineActions;
   const isObserveFirstRecommendedAction =
@@ -221,13 +227,13 @@ export function CallbackWaitingSummaryCard({
       : recommendedAction?.kind === "watch_scheduled_resume"
         ? "系统已安排定时恢复；仅在需要绕过当前 backoff 时，再手动恢复或清理过期 ticket。"
         : null;
-  const recommendedCtaHref =
-    recommendedAction?.kind === "open_inbox" ||
-    recommendedAction?.kind === "inspect_termination" ||
-    recommendedAction?.kind === "monitor_callback" ||
-    recommendedAction?.kind === "watch_scheduled_resume"
-      ? inboxHref
-      : null;
+  const shouldRenderStandaloneCallbackFollowUp =
+    Boolean(callbackFollowUp) && callbackFollowUp !== recommendedNextStep?.detail;
+  const recommendedNextStepHrefLabel = recommendedNextStep?.href_label ?? null;
+  const inboxLinkLabel =
+    recommendedNextStep?.href === inboxHref && recommendedNextStepHrefLabel
+      ? recommendedNextStepHrefLabel
+      : "open inbox slice";
   const focusToolCallSummaries = focusNodeEvidence
     ? listExecutionFocusToolCallSummaries(focusNodeEvidence)
     : [];
@@ -274,7 +280,7 @@ export function CallbackWaitingSummaryCard({
           ))}
           {inboxHref ? (
             <Link className="event-chip inbox-filter-link" href={inboxHref}>
-              open inbox slice
+              {inboxLinkLabel}
             </Link>
           ) : null}
         </div>
@@ -282,7 +288,7 @@ export function CallbackWaitingSummaryCard({
       {!chips.length && inboxHref ? (
         <div className="event-type-strip">
           <Link className="event-chip inbox-filter-link" href={inboxHref}>
-            open inbox slice
+            {inboxLinkLabel}
           </Link>
         </div>
       ) : null}
@@ -301,17 +307,24 @@ export function CallbackWaitingSummaryCard({
           {row.label}: {row.value}
         </p>
       ))}
-      {callbackFollowUp ? <p className="section-copy entry-copy">{callbackFollowUp}</p> : null}
-      {recommendedAction ? (
+      {shouldRenderStandaloneCallbackFollowUp ? (
+        <p className="section-copy entry-copy">{callbackFollowUp}</p>
+      ) : null}
+      {recommendedAction && recommendedNextStep ? (
         <div className="entry-card compact-card">
           <div className="payload-card-header">
             <span className="status-meta">Recommended next step</span>
-            <span className="event-chip">{recommendedAction.label}</span>
+            <span className="event-chip">{recommendedNextStep.label}</span>
             {isObserveFirstRecommendedAction ? (
               <span className="event-chip">manual override optional</span>
             ) : null}
+            {recommendedNextStep.href && recommendedNextStep.href_label ? (
+              <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                {recommendedNextStep.href_label}
+              </Link>
+            ) : null}
           </div>
-          <p className="section-copy entry-copy">{recommendedAction.detail}</p>
+          <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
           {isObserveFirstRecommendedAction && shouldShowCallbackInlineActions ? (
             <p className="binding-meta">
               Callback actions stay available below as optional operator overrides when the current
@@ -373,13 +386,6 @@ export function CallbackWaitingSummaryCard({
               />
             </div>
           ))}
-        </div>
-      ) : null}
-      {recommendedCtaHref ? (
-        <div className="event-type-strip">
-          <Link className="event-chip inbox-filter-link" href={recommendedCtaHref}>
-            {recommendedAction?.ctaLabel ?? "Open inbox slice"}
-          </Link>
         </div>
       ) : null}
       {hasTermination ? (

@@ -210,6 +210,7 @@ describe("CallbackWaitingSummaryCard", () => {
     const html = renderToStaticMarkup(
       createElement(CallbackWaitingSummaryCard, {
         runId: "run-1",
+        inboxHref: "/sensitive-access?run_id=run-1&waiting_status=waiting_callback",
         scheduledResumeDelaySeconds: 45,
         scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
         scheduledResumeDueAt: "2026-03-20T10:00:45Z",
@@ -223,6 +224,7 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(html).toContain("manual override optional");
     expect(html).toContain("watch the worker consume that attempt before forcing another resume");
     expect(html).toContain("Optional callback override");
+    expect(html).toContain("Open waiting inbox");
     expect(html).toContain("data-title=\"Optional callback override\"");
     expect(html).toContain("data-testid=\"callback-waiting-inline-actions\"");
   });

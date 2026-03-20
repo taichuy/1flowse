@@ -10,9 +10,14 @@ import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import {
+  buildCallbackWaitingRecommendedNextStep,
+  getCallbackWaitingRecommendedAction,
+  pickCallbackWaitingInlineSensitiveAccessEntry
+} from "@/lib/callback-waiting-presenters";
+import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import {
   resolveSensitiveAccessTimelineEntryRunContext
 } from "@/lib/sensitive-access";
-import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   formatSensitiveAccessDecisionLabel,
@@ -310,6 +315,47 @@ export function SensitiveAccessTimelineEntryList({
               (runContext.runFollowUp?.sampledRuns.length ?? 0) > 0
           );
           const nodeRunId = entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null;
+          const callbackWaitingRecommendedAction = shouldRenderCallbackWaitingSummary
+            ? getCallbackWaitingRecommendedAction({
+                sensitiveAccessEntries: [entry]
+              })
+            : null;
+          const recommendedNextStep = shouldRenderCallbackWaitingSummary
+            ? buildCallbackWaitingRecommendedNextStep({
+                action: callbackWaitingRecommendedAction,
+                inboxHref: inboxSliceHref,
+                operatorFollowUp:
+                  entry.outcome_explanation?.follow_up ?? runContext.runFollowUp?.explanation?.follow_up ?? null
+              })
+            : buildOperatorRecommendedNextStep({
+                execution: {
+                  active: Boolean(
+                    inboxSliceHref ||
+                      runId ||
+                      runContext.runFollowUp?.explanation?.follow_up ||
+                      entry.outcome_explanation?.follow_up
+                  ),
+                  label: inboxSliceHref ? "approval blocker" : "run detail",
+                  detail: runContext.runFollowUp?.explanation?.follow_up ?? null,
+                  href: inboxSliceHref ?? (runId ? `/runs/${encodeURIComponent(runId)}` : null),
+                  href_label: inboxSliceHref
+                    ? "open approval inbox"
+                    : runId
+                      ? "open run"
+                      : null,
+                  fallback_detail: inboxSliceHref
+                    ? "当前 timeline entry 仍然落在 approval / callback blocker 上；优先切到对应 inbox slice 继续处理。"
+                    : "当前 timeline entry 已回接 canonical run snapshot；优先打开 run 确认最新 waiting / focus 状态。"
+                },
+                operatorFollowUp: entry.outcome_explanation?.follow_up ?? null,
+                operatorLabel: "operator follow-up"
+              });
+          const inboxLinkLabel =
+            recommendedNextStep?.href === inboxSliceHref && recommendedNextStep.href_label
+              ? recommendedNextStep.href_label
+              : "open inbox slice";
+          const shouldRenderStandaloneRecommendedNextStep =
+            !shouldRenderCallbackWaitingSummary && !hasStructuredOperatorFeedback && recommendedNextStep;
 
           return (
             <article className="event-row compact-card" key={entry.request.id}>
@@ -347,7 +393,7 @@ export function SensitiveAccessTimelineEntryList({
                   ) : null}
                   {inboxSliceHref ? (
                     <Link className="event-chip inbox-filter-link" href={inboxSliceHref}>
-                      open inbox slice
+                      {inboxLinkLabel}
                     </Link>
                   ) : null}
                 </div>
@@ -361,6 +407,21 @@ export function SensitiveAccessTimelineEntryList({
                 <p className="section-copy entry-copy">
                   policy: {getSensitiveAccessPolicySummary(entry.request)}
                 </p>
+              ) : null}
+
+              {shouldRenderStandaloneRecommendedNextStep ? (
+                <div className="entry-card compact-card">
+                  <div className="payload-card-header">
+                    <span className="status-meta">Recommended next step</span>
+                    <span className="event-chip">{recommendedNextStep.label}</span>
+                    {recommendedNextStep.href && recommendedNextStep.href_label ? (
+                      <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                        {recommendedNextStep.href_label}
+                      </Link>
+                    ) : null}
+                  </div>
+                  <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+                </div>
               ) : null}
 
               {hasStructuredOperatorFeedback ? (

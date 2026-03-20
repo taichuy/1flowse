@@ -194,4 +194,47 @@ describe("SensitiveAccessTimelineEntryList", () => {
     ).toBe("当前阻断来自敏感访问审批票据。");
     expect(callbackSummaryProps[0]?.showInlineActions).toBe(false);
   });
+
+  it("renders a standalone shared recommended next step when only operator follow-up remains", () => {
+    const entry = buildEntry();
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          {
+            ...entry,
+            request: {
+              ...entry.request,
+              decision: "allow",
+              decision_label: "Allow",
+              reason_code: "sensitive_access_allowed",
+              reason_label: "Allowed",
+              policy_summary: "允许当前读取。",
+              decided_at: "2026-03-21T00:05:00Z"
+            },
+            approval_ticket: {
+              ...entry.approval_ticket!,
+              status: "approved",
+              waiting_status: "resumed",
+              approved_by: "operator-1",
+              decided_at: "2026-03-21T00:05:00Z"
+            },
+            notifications: [],
+            outcome_explanation: {
+              primary_signal: "审批已通过，waiting blocker 已回交 runtime。",
+              follow_up: "优先打开 run 查看恢复后的 focus 节点与最新执行证据。"
+            },
+            run_snapshot: null,
+            run_follow_up: null
+          }
+        ],
+        emptyCopy: "no entries"
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("open approval inbox");
+    expect(html).toContain("优先打开 run 查看恢复后的 focus 节点与最新执行证据。");
+  });
 });

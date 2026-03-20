@@ -13,6 +13,7 @@ import {
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { buildOperatorRunSampleCards } from "@/lib/operator-run-sample-cards";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import { listExecutionFocusRuntimeFactBadges } from "@/lib/run-execution-focus-presenters";
 
 type InlineOperatorActionFeedbackProps = {
@@ -43,6 +44,30 @@ export function InlineOperatorActionFeedback({
   const callbackWaitingFollowUp = runSnapshot?.callbackWaitingExplanation?.follow_up?.trim() || null;
   const callbackWaitingFocusNode = buildExecutionFocusExplainableNode(runSnapshot);
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(callbackWaitingFocusNode);
+  const recommendedNextStep = !hasCallbackWaitingSummary
+    ? buildOperatorRecommendedNextStep({
+        execution: {
+          active: Boolean(
+            runId || model.runFollowUpFollowUp || model.runSnapshotSummary || model.focusNodeLabel
+          ),
+          label: runId ? "run detail" : "execution follow-up",
+          detail: model.runFollowUpFollowUp,
+          href: runId ? `/runs/${encodeURIComponent(runId)}` : null,
+          href_label: runId ? "open run" : null,
+          fallback_detail:
+            model.runSnapshotSummary ??
+            "当前 operator action 已返回新的 run snapshot；优先回到 run detail 确认 waiting、focus node 与最新执行证据。"
+        },
+        operatorFollowUp: model.outcomeFollowUp,
+        operatorLabel: "operator result"
+      })
+    : null;
+  const shouldRenderOutcomeFollowUp =
+    Boolean(model.outcomeFollowUp) && model.outcomeFollowUp !== recommendedNextStep?.detail;
+  const shouldRenderRunFollowUpFollowUp =
+    Boolean(model.runFollowUpFollowUp) &&
+    model.runFollowUpFollowUp !== callbackWaitingFollowUp &&
+    model.runFollowUpFollowUp !== recommendedNextStep?.detail;
   const sampledRunCards = buildOperatorRunSampleCards(
     (runFollowUp?.sampledRuns ?? []).filter(
       (sample) => sample.snapshot && (!runId || sample.runId !== runId || !runSnapshot)
@@ -70,12 +95,26 @@ export function InlineOperatorActionFeedback({
       {model.headline && model.headline !== callbackWaitingSnapshotSummary ? (
         <p className="section-copy entry-copy">{model.headline}</p>
       ) : null}
-      {model.outcomeFollowUp ? <p className="binding-meta">{model.outcomeFollowUp}</p> : null}
+      {recommendedNextStep ? (
+        <div className="entry-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">Recommended next step</span>
+            <span className="event-chip">{recommendedNextStep.label}</span>
+            {recommendedNextStep.href && recommendedNextStep.href_label ? (
+              <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                {recommendedNextStep.href_label}
+              </Link>
+            ) : null}
+          </div>
+          <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+        </div>
+      ) : null}
+      {shouldRenderOutcomeFollowUp ? <p className="binding-meta">{model.outcomeFollowUp}</p> : null}
       {model.blockerDeltaSummary ? <p className="binding-meta">{model.blockerDeltaSummary}</p> : null}
       {model.runFollowUpPrimarySignal ? (
         <p className="section-copy entry-copy">{model.runFollowUpPrimarySignal}</p>
       ) : null}
-      {model.runFollowUpFollowUp && model.runFollowUpFollowUp !== callbackWaitingFollowUp ? (
+      {shouldRenderRunFollowUpFollowUp ? (
         <p className="binding-meta">{model.runFollowUpFollowUp}</p>
       ) : null}
       {!hasCallbackWaitingSummary && model.runSnapshotSummary ? (
