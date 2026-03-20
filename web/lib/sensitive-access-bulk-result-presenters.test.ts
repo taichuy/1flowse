@@ -86,6 +86,60 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
     expect(items).toEqual([]);
   });
 
+  it("sampled run 已有 shared callback summary 时跳过重复的 bulk follow-up 文案", () => {
+    const items = buildSensitiveAccessBulkResultNarrative({
+      action: "retry",
+      status: "success",
+      message: "fallback",
+      outcomeExplanation: {
+        primary_signal: "已提交 1 条重试。",
+        follow_up: "优先观察定时恢复是否已重新排队。"
+      },
+      runFollowUpExplanation: {
+        primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+        follow_up: "优先观察定时恢复是否已重新排队。"
+      },
+      requestedCount: 1,
+      updatedCount: 1,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      sampledRuns: [
+        {
+          runId: "run-waiting-1",
+          snapshot: {
+            callbackWaitingExplanation: {
+              primary_signal: "当前 waiting 节点仍在等待 callback。",
+              follow_up: "优先观察定时恢复是否已重新排队。"
+            },
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          }
+        }
+      ]
+    });
+
+    expect(items).toEqual([
+      { label: "Primary signal", text: "已提交 1 条重试。" },
+      {
+        label: "Run follow-up",
+        text: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。"
+      }
+    ]);
+  });
+
   it("把 sampled run snapshot 转成可渲染的 focus evidence 卡片模型", () => {
     const cards = buildSensitiveAccessBulkRunSampleCards({
       action: "approved",
@@ -164,6 +218,11 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
         focusNodeLabel: "Sandbox tool",
         focusNodeRunId: null,
         waitingReason: null,
+        executionFactBadges: [
+          "effective sandbox",
+          "backend sandbox-default",
+          "runner tool"
+        ],
         callbackWaitingExplanation: null,
         callbackWaitingLifecycle: null,
         callbackWaitingFocusNodeEvidence: {

@@ -131,4 +131,74 @@ describe("SensitiveAccessBulkGovernanceCard", () => {
     expect(html).toContain("Callback recovery checklist");
     expect(html).toContain("/runs/run-waiting-1");
   });
+
+  it("defers duplicated bulk follow-up copy to the shared callback waiting summary", () => {
+    const followUp = "优先观察定时恢复是否已重新排队。";
+    const message = `批量重试已提交；${followUp}`;
+    const lastResult: SensitiveAccessBulkActionResult = {
+      action: "retry",
+      status: "success",
+      message,
+      outcomeExplanation: {
+        primary_signal: "已提交 1 条重试。",
+        follow_up: followUp
+      },
+      runFollowUpExplanation: {
+        primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+        follow_up: followUp
+      },
+      requestedCount: 1,
+      updatedCount: 1,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      sampledRuns: [
+        {
+          runId: "run-waiting-1",
+          snapshot: {
+            callbackWaitingExplanation: {
+              primary_signal: "当前 waiting 节点仍在等待 callback。",
+              follow_up: followUp
+            },
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback",
+            scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+            scheduledResumeDueAt: "2026-03-20T10:00:45Z"
+          }
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBulkGovernanceCard, {
+        inScopeCount: 1,
+        decisionCandidateCount: 0,
+        retryCandidateCount: 1,
+        operatorValue: "ops-reviewer",
+        onOperatorChange: () => {},
+        isMutating: false,
+        lastResult,
+        message,
+        messageTone: "success",
+        onAction: () => {}
+      })
+    );
+
+    expect(html).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
+    expect(html.match(new RegExp(followUp, "g"))?.length ?? 0).toBe(1);
+    expect(html).not.toContain(message);
+    expect(html).not.toContain("Next step");
+  });
 });

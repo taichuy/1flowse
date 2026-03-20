@@ -41,6 +41,10 @@ export function SensitiveAccessBulkGovernanceCard({
 }: SensitiveAccessBulkGovernanceCardProps) {
   const narrativeItems = lastResult ? buildSensitiveAccessBulkResultNarrative(lastResult) : [];
   const sampledRunCards = lastResult ? buildSensitiveAccessBulkRunSampleCards(lastResult) : [];
+  const hasStructuredResultSections = narrativeItems.length > 0 || sampledRunCards.length > 0;
+  const shouldShowMessage =
+    Boolean(message) &&
+    (isMutating || !lastResult || lastResult.status === "error" || !hasStructuredResultSections);
 
   return (
     <div className="binding-card compact-card">
@@ -157,7 +161,7 @@ export function SensitiveAccessBulkGovernanceCard({
         </>
       ) : null}
 
-      {message ? <p className={`sync-message ${messageTone}`}>{message}</p> : null}
+      {shouldShowMessage ? <p className={`sync-message ${messageTone}`}>{message}</p> : null}
 
       <div className="binding-actions">
         {ACTIONS.map((action) => {
