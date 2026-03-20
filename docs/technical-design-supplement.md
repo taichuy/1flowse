@@ -1289,6 +1289,51 @@ type NodeRunPhase =
 - `node_runs.checkpoint_payload`
 - `node_runs.waiting_reason`
 
+### 20.3.1 运行基础事实层共享契约
+
+`runs / node_runs / run_events / run_artifacts` 是 7Flows 运行基础事实层的主干；MCP、发布接口、调试 UI 和 operator 入口都只能消费这条事实层派生出的投影，而不能各自维护第二套状态。
+
+| 事实对象 | 粒度 | 必须承载 | 不应承载 |
+| --- | --- | --- | --- |
+| `runs` | 每个 workflow run 一条主记录 | workflow 级状态、入口来源、绑定版本、当前节点、checkpoint、最终结果摘要 | 节点逐步明细、大体量原始 payload |
+| `node_runs` | 每个节点执行实例一条记录 | 节点状态、phase、waiting reason、execution class、重试、节点输出摘要 | workflow 级最终状态裁决 |
+| `run_events` | append-only 事件流 | timeline、streaming、phase 迁移、关键说明与可观察事件 | 大文件、超长原文、最终结果唯一事实 |
+| `run_artifacts` | 原始结果与引用 | 文件、tool raw output、AI prompt/response 快照、大 JSON / 长文本、evidence 来源引用 | 主状态流转与路由决策 |
+
+补充约束：
+
+- `tool_call_records`、`ai_call_records`、callback ticket、approval ticket 等侧边事实，必须通过 `run_id / node_run_id` 继续挂回这条主事实链。
+- 当多个入口都需要同一组字段时，应新增共享投影或共享 serializer，而不是为某个入口再存一份局部状态。
+- 如果某个字段只存在于 UI 本地 state、发布缓存或单一 adapter 响应里，却无法回溯到事实层，应视为契约漂移。
+
+### 20.3.2 共享投影与消费规则
+
+Runtime Fact Layer 之上允许存在共享读模型，但这些读模型必须保持“派生而非主事实”的身份。当前建议至少维护以下投影：
+
+- `run_snapshot`
+  - 面向跨入口的 compact 状态摘要，服务 run detail、operator 动作结果、published invocation detail 等场景。
+- execution view
+  - 面向 diagnostics / operator 的时间线、focus node、waiting blocker、artifact/tool summary。
+- evidence view
+  - 面向人类与 AI 的高质量摘要、证据引用和 follow-up 解释。
+- `authorized_context`
+  - 面向 MCP 与节点运行时的授权读取投影。
+
+消费规则如下：
+
+- MCP
+  - 只能读取 `authorized_context` 这类授权投影或其引用，不能绕过权限直接扫表，也不能依赖 UI 拼装结果。
+- 发布接口
+  - 同步响应、异步状态、流式事件、published invocation detail 与导出，都必须从事实层或共享投影派生；协议缓存只做加速，不做真相存储。
+- UI
+  - 调试面板、发布治理页、sensitive access inbox、operator result 页面只消费共享投影；前端本地 state 只负责交互态，不负责保存运行真相。
+
+### 20.3.3 演进约束
+
+- 需要新增新的消费入口时，优先判断它应复用现有投影，还是补一层新的共享投影。
+- 不要为“人看”“AI 看”“协议看”分别设计三套事实表；差异应落在投影层与权限层，而不是事实层。
+- 如果某个入口需要额外解释字段，优先把字段补到共享 serializer / projection builder，再由多个入口一起消费。
+
 ### 20.4 Checkpoint / Resume
 
 最小 checkpoint 建议形态：
