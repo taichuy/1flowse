@@ -5,6 +5,7 @@ import type {
   SkillReferenceLoadItem,
   ToolCallItem
 } from "@/lib/get-run-views";
+import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal
@@ -150,13 +151,17 @@ export function buildRunDetailExecutionFocusViewModel(
     skillReferencePhaseCounts: run.execution_focus_skill_trace?.phase_counts ?? {},
     skillReferenceSourceCounts: run.execution_focus_skill_trace?.source_counts ?? {},
     skillReferenceLoads,
-    hasCallbackSummary: Boolean(
-      focusNode.callback_waiting_explanation ||
-        focusNode.callback_waiting_lifecycle ||
-        waitingReason ||
-        typeof focusNode.scheduled_resume_delay_seconds === "number" ||
-        focusNode.scheduled_resume_due_at ||
-        focusNode.scheduled_resume_requeued_at
-    )
+    hasCallbackSummary: hasExecutionNodeCallbackWaitingSummaryFacts({
+      callback_waiting_explanation: focusNode.callback_waiting_explanation ?? null,
+      callback_waiting_lifecycle: focusNode.callback_waiting_lifecycle ?? null,
+      waiting_reason: waitingReason,
+      scheduled_resume_delay_seconds: focusNode.scheduled_resume_delay_seconds ?? null,
+      scheduled_resume_source: trimOrNull(focusNode.scheduled_resume_source),
+      scheduled_waiting_status: trimOrNull(focusNode.scheduled_waiting_status),
+      scheduled_resume_scheduled_at: trimOrNull(focusNode.scheduled_resume_scheduled_at),
+      scheduled_resume_due_at: trimOrNull(focusNode.scheduled_resume_due_at),
+      scheduled_resume_requeued_at: trimOrNull(focusNode.scheduled_resume_requeued_at),
+      scheduled_resume_requeue_source: trimOrNull(focusNode.scheduled_resume_requeue_source)
+    })
   };
 }

@@ -236,4 +236,28 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html.indexOf("Waiting node focus evidence")).toBeGreaterThanOrEqual(0);
     expect(html.indexOf("effective sandbox")).toBeLessThan(html.indexOf("Waiting node focus evidence"));
   });
+
+  it("hides duplicate header snapshot and waiting recommendation when a sampled callback summary is present", () => {
+    const item = buildInvocationItem();
+    item.execution_focus_explanation = {
+      primary_signal: "顶层 execution focus 仍在等待 callback。",
+      follow_up: "顶层 execution focus 建议先观察重排队。"
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item,
+        detailHref: "/published/invocation-1",
+        detailActive: false
+      })
+    );
+
+    expect(html).toContain("当前 waiting 节点仍在等待 callback");
+    expect(html).toContain("Recommended next step");
+    expect(html).not.toContain("顶层 execution focus 仍在等待 callback。");
+    expect(html).not.toContain("顶层 execution focus 建议先观察重排队。");
+    expect(html).not.toContain("顶层快照说明该 invocation 仍在等待 callback。");
+    expect(html).not.toContain("优先看 snapshot waiting reason 与 callback lifecycle。");
+    expect(html).not.toContain("当前 run 状态：waiting。");
+  });
 });

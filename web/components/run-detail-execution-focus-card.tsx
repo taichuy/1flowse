@@ -31,6 +31,7 @@ export function RunDetailExecutionFocusCard({
   if (!focus) {
     return null;
   }
+  const shouldDeferToCallbackWaitingSummary = focus.hasCallbackSummary;
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(focus.evidence);
 
   return (
@@ -45,10 +46,12 @@ export function RunDetailExecutionFocusCard({
         </div>
 
         {description ? <p className="section-copy entry-copy">{description}</p> : null}
-        {focus.primarySignal ? (
+        {focus.primarySignal && !shouldDeferToCallbackWaitingSummary ? (
           <p className="section-copy entry-copy">{focus.primarySignal}</p>
         ) : null}
-        {focus.followUp ? <p className="binding-meta">{focus.followUp}</p> : null}
+        {focus.followUp && !shouldDeferToCallbackWaitingSummary ? (
+          <p className="binding-meta">{focus.followUp}</p>
+        ) : null}
 
         <div className="tool-badge-row">
           <span className="event-chip">{focus.nodeName}</span>
@@ -68,11 +71,13 @@ export function RunDetailExecutionFocusCard({
           {focus.skillReferenceCount > 0 ? (
             <span className="event-chip">skill refs {focus.skillReferenceCount}</span>
           ) : null}
-          {executionFactBadges.map((badge) => (
-            <span className="event-chip" key={`${focus.nodeRunId}-${badge}`}>
-              {badge}
-            </span>
-          ))}
+          {!shouldDeferToCallbackWaitingSummary
+            ? executionFactBadges.map((badge) => (
+                <span className="event-chip" key={`${focus.nodeRunId}-${badge}`}>
+                  {badge}
+                </span>
+              ))
+            : null}
         </div>
 
         <p className="binding-meta">node {focus.nodeId}</p>
@@ -95,6 +100,7 @@ export function RunDetailExecutionFocusCard({
             scheduledResumeScheduledAt={focus.scheduledResumeScheduledAt}
             scheduledResumeSource={focus.scheduledResumeSource}
             scheduledWaitingStatus={focus.scheduledWaitingStatus}
+            showFocusExecutionFacts={shouldDeferToCallbackWaitingSummary}
             showInlineActions={false}
             waitingReason={focus.waitingReason}
           />

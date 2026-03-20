@@ -138,6 +138,7 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpSample = resolvePublishedInvocationRunFollowUpSampleView(item);
   const runFollowUpSampleHasCallbackWaitingSummary =
     runFollowUpSample?.has_callback_waiting_summary ?? false;
+  const shouldDeferToSharedCallbackWaitingSummary = runFollowUpSampleHasCallbackWaitingSummary;
   const runFollowUpSamplePrimarySignal = runFollowUpSample?.explanation?.primary_signal?.trim() || null;
   const runFollowUpSampleFocusNodeEvidence = runFollowUpSample
     ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
@@ -227,7 +228,7 @@ export function WorkflowPublishInvocationEntryCard({
           <dd>{scheduledResumeLabel}</dd>
         </div>
       </dl>
-      {executionFactBadges.length > 0 ? (
+      {executionFactBadges.length > 0 && !shouldDeferToSharedCallbackWaitingSummary ? (
         <div className="tool-badge-row">
           {executionFactBadges.map((badge) => (
             <span className="event-chip" key={`${item.id}-${badge}`}>
@@ -274,7 +275,7 @@ export function WorkflowPublishInvocationEntryCard({
           {runFollowUpSamplePrimarySignal && !runFollowUpSampleHasCallbackWaitingSummary ? (
             <p className="binding-meta">{runFollowUpSamplePrimarySignal}</p>
           ) : null}
-          {runFollowUpSample?.snapshot_summary ? (
+          {runFollowUpSample?.snapshot_summary && !shouldDeferToSharedCallbackWaitingSummary ? (
             <p className="binding-meta">{runFollowUpSample.snapshot_summary}</p>
           ) : null}
           {runFollowUpSample ? (
@@ -362,6 +363,7 @@ export function WorkflowPublishInvocationEntryCard({
                   scheduledWaitingStatus={
                     runFollowUpSample.run_snapshot.scheduledWaitingStatus ?? null
                   }
+                  showFocusExecutionFacts={shouldDeferToSharedCallbackWaitingSummary}
                   showInlineActions={false}
                   waitingReason={runFollowUpSample.run_snapshot.waitingReason ?? null}
                 />
@@ -387,7 +389,7 @@ export function WorkflowPublishInvocationEntryCard({
           ) : null}
         </div>
       ) : null}
-      {runStatus === "waiting" ? (
+      {runStatus === "waiting" && !shouldDeferToSharedCallbackWaitingSummary ? (
         <>
           <p className="section-copy entry-copy">
             {executionFocusPrimarySignal ??
@@ -404,11 +406,14 @@ export function WorkflowPublishInvocationEntryCard({
             <div className="payload-card-header">
               <span className="status-meta">Waiting overview</span>
             </div>
-            <p className="section-copy entry-copy">{waitingOverviewHeadline}</p>
-            {waitingOverviewFollowUp ? (
+            {!shouldDeferToSharedCallbackWaitingSummary ? (
+              <p className="section-copy entry-copy">{waitingOverviewHeadline}</p>
+            ) : null}
+            {!shouldDeferToSharedCallbackWaitingSummary && waitingOverviewFollowUp ? (
               <p className="binding-meta">{waitingOverviewFollowUp}</p>
             ) : null}
-            {waitingChips.length || sensitiveAccessChips.length ? (
+            {!shouldDeferToSharedCallbackWaitingSummary &&
+            (waitingChips.length || sensitiveAccessChips.length) ? (
               <p className="binding-meta">
                 {[...waitingChips, ...sensitiveAccessChips].join(" · ")}
               </p>
@@ -434,18 +439,22 @@ export function WorkflowPublishInvocationEntryCard({
                 <dt>Callback lifecycle</dt>
                 <dd>{callbackLifecycleLabel ?? "tracked in detail panel"}</dd>
               </div>
-              {waitingBlockerRows.map((row) => (
-                <div key={`${item.id}:${row.label}`}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </div>
-              ))}
-              {sensitiveAccessRows.map((row) => (
-                <div key={`${item.id}:sensitive:${row.label}`}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </div>
-              ))}
+              {!shouldDeferToSharedCallbackWaitingSummary
+                ? waitingBlockerRows.map((row) => (
+                    <div key={`${item.id}:${row.label}`}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))
+                : null}
+              {!shouldDeferToSharedCallbackWaitingSummary
+                ? sensitiveAccessRows.map((row) => (
+                    <div key={`${item.id}:sensitive:${row.label}`}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))
+                : null}
             </dl>
           </div>
         </div>

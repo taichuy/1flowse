@@ -152,4 +152,57 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("backend sandbox-default");
     expect(html).toContain("runner container");
   });
+
+  it("defers generic focus recommendation to the shared callback waiting summary", () => {
+    const run = buildRunDetail();
+    run.execution_focus_explanation = {
+      primary_signal: "顶层 execution focus 仍在等待 callback。",
+      follow_up: "顶层 execution focus 建议先观察重排队。"
+    };
+    run.execution_focus_node = {
+      ...run.execution_focus_node!,
+      callback_waiting_explanation: {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: "优先观察定时恢复是否已重新排队。"
+      },
+      callback_waiting_lifecycle: {
+        wait_cycle_count: 1,
+        issued_ticket_count: 1,
+        expired_ticket_count: 0,
+        consumed_ticket_count: 0,
+        canceled_ticket_count: 0,
+        late_callback_count: 0,
+        resume_schedule_count: 1,
+        max_expired_ticket_count: 0,
+        terminated: false,
+        last_resume_delay_seconds: 45,
+        last_resume_source: "callback_ticket_monitor",
+        last_resume_backoff_attempt: 0
+      },
+      scheduled_resume_delay_seconds: 45,
+      scheduled_resume_source: "callback_ticket_monitor",
+      scheduled_waiting_status: "waiting_callback",
+      scheduled_resume_scheduled_at: "2026-03-20T10:00:00Z",
+      scheduled_resume_due_at: "2026-03-20T10:00:45Z",
+      scheduled_resume_requeued_at: "2026-03-20T10:01:30Z",
+      scheduled_resume_requeue_source: "waiting_resume_monitor"
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDetailExecutionFocusCard, {
+        run,
+        title: "Execution focus"
+      })
+    );
+
+    expect(html).toContain("当前 waiting 节点仍在等待 callback。");
+    expect(html).toContain("优先观察定时恢复是否已重新排队。");
+    expect(html).toContain("Recommended next step");
+    expect(html).not.toContain("顶层 execution focus 仍在等待 callback。");
+    expect(html).not.toContain("顶层 execution focus 建议先观察重排队。");
+    expect(html).toContain("effective sandbox");
+    expect(html).toContain("executor tool:compat-adapter:dify-default");
+    expect(html).toContain("backend sandbox-default");
+    expect(html).toContain("runner container");
+  });
 });
