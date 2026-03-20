@@ -178,6 +178,44 @@ describe("run execution focus presenters", () => {
     expect(formatExecutionFocusFollowUp(node)).toContain("调整为 subprocess");
   });
 
+  it("把节点未实现的强隔离执行解释成 node-type 阻断", () => {
+    const node = createExecutionNode({
+      node_type: "condition",
+      execution_blocking_reason:
+        "Node type 'condition' does not implement requested strong-isolation execution class 'microvm'. Strong-isolation paths must fail closed until a compatible execution adapter is available."
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行阻断：当前 condition 节点尚未实现请求的强隔离 execution class。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("补齐对应 execution adapter");
+  });
+
+  it("把节点未实现的 subprocess 执行解释成显式 execution-class 阻断", () => {
+    const node = createExecutionNode({
+      node_type: "trigger",
+      execution_blocking_reason:
+        "Node type 'trigger' does not implement requested execution class 'subprocess'. Explicit execution-class requests must stay blocked until a compatible execution adapter is available."
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行阻断：当前 trigger 节点尚未实现请求的 subprocess execution class。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("调回 inline");
+  });
+
+  it("把 tool runner 强隔离缺口解释成 tool path 阻断", () => {
+    const node = createExecutionNode({
+      execution_blocking_reason:
+        "Tool nodes do not yet implement sandbox-backed tool execution for requested execution class 'microvm'. Current native / compat invokers still run from the host / adapter boundary, so strong-isolation tool paths must fail closed until a sandbox tool runner is available."
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行阻断：当前 tool 路径还不能真实兑现请求的强隔离 execution class。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("sandbox tool runner");
+  });
+
   it("把缺失 sandbox backend 解释成 fail-closed 阻断", () => {
     const node = createExecutionNode({
       execution_blocking_reason:
@@ -200,6 +238,40 @@ describe("run execution focus presenters", () => {
       "执行阻断：sandbox backend 能力与当前节点配置不兼容（2 项）。"
     );
     expect(formatExecutionFocusFollowUp(node)).toContain("backend capability");
+  });
+
+  it("把 execution fallback code 映射成后端一致的人类可读说明", () => {
+    const node = createExecutionNode({
+      execution_fallback_reason: "compat_adapter_execution_class_not_supported"
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行降级：当前 compat adapter 不支持请求的 execution class，已回退到 adapter 支持范围。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("capability 声明");
+  });
+
+  it("在未知 execution fallback reason 上保留次数与治理指引", () => {
+    const node = createExecutionNode({
+      execution_fallback_reason: " custom_backend_temporarily_degraded ",
+      execution_fallback_count: 2
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行降级：当前节点因 custom_backend_temporarily_degraded 发生 execution fallback，累计记录 2 次。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("execution policy");
+  });
+
+  it("在只有 execution fallback count 时展示通用降级说明", () => {
+    const node = createExecutionNode({
+      execution_fallback_count: 1
+    });
+
+    expect(formatExecutionFocusPrimarySignal(node)).toBe(
+      "执行降级：当前节点记录了 1 次 execution fallback。"
+    );
+    expect(formatExecutionFocusFollowUp(node)).toContain("fallback 是否仍可接受");
   });
 
   it("把 focus node 的 tool runner 关键事实压成 operator 可读摘要", () => {

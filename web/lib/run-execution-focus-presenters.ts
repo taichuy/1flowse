@@ -10,8 +10,10 @@ type ExecutionFocusExplainableNode = Pick<
   RunExecutionNodeItem,
   | "execution_blocking_reason"
   | "execution_fallback_reason"
+  | "execution_fallback_count"
   | "execution_blocked_count"
   | "execution_unavailable_count"
+  | "node_type"
   | "waiting_reason"
   | "scheduled_resume_delay_seconds"
   | "scheduled_resume_due_at"
@@ -20,6 +22,11 @@ type ExecutionFocusExplainableNode = Pick<
 >;
 
 type ExecutionBlockingInsight = {
+  primarySignal: string;
+  followUp: string;
+};
+
+type ExecutionFallbackInsight = {
   primarySignal: string;
   followUp: string;
 };
@@ -336,10 +343,34 @@ function resolveExecutionBlockingInsight(
       };
     }
 
+    if (normalized.includes("sandbox-backed tool execution")) {
+      return {
+        primarySignal: "执行阻断：当前 tool 路径还不能真实兑现请求的强隔离 execution class。",
+        followUp:
+          "下一步：先把 tool execution class 调回当前宿主执行支持范围，或后续补齐 sandbox tool runner；在此之前继续保持 fail-closed。"
+      };
+    }
+
+    if (normalized.includes("does not implement requested execution class 'subprocess'")) {
+      return {
+        primarySignal: `执行阻断：当前 ${node.node_type} 节点尚未实现请求的 subprocess execution class。`,
+        followUp:
+          "下一步：先把 execution class 调回 inline，或补齐对应 execution adapter；显式 execution-class 请求不要静默降级。"
+      };
+    }
+
     if (
       normalized.includes("no compatible sandbox backend") ||
       normalized.includes("strong-isolation paths must fail closed")
     ) {
+      if (normalized.includes("does not implement requested strong-isolation execution class")) {
+        return {
+          primarySignal: `执行阻断：当前 ${node.node_type} 节点尚未实现请求的强隔离 execution class。`,
+          followUp:
+            "下一步：先把 execution class 调回当前实现支持范围，或补齐对应 execution adapter；在此之前继续保持 fail-closed。"
+        };
+      }
+
       return {
         primarySignal: "执行阻断：当前节点要求强隔离执行，但没有兼容的 sandbox backend 可用。",
         followUp:
@@ -410,6 +441,60 @@ function resolveExecutionBlockingInsight(
   return null;
 }
 
+function resolveExecutionFallbackInsight(
+  node: ExecutionFocusExplainableNode
+): ExecutionFallbackInsight | null {
+  const reason = node.execution_fallback_reason?.trim();
+  const normalized = reason?.toLowerCase() ?? "";
+
+  if (reason) {
+    if (normalized === "execution_class_not_implemented_for_node_type") {
+      return {
+        primarySignal: "执行降级：当前节点尚未实现请求的 execution class，已临时回退到 inline。",
+        followUp:
+          "下一步：如果这条节点需要受控执行或强隔离，应补齐对应 execution adapter；不要把当前 fallback 当成长期默认。"
+      };
+    }
+
+    if (normalized === "native_tool_execution_class_not_supported") {
+      return {
+        primarySignal: "执行降级：当前 native tool 不支持请求的 execution class，已回退到 tool 默认执行边界。",
+        followUp:
+          "下一步：核对 tool governance 与 supported execution classes；如果确实需要更重隔离，应先补齐该 tool 的执行能力。"
+      };
+    }
+
+    if (normalized === "compat_adapter_execution_class_not_supported") {
+      return {
+        primarySignal: "执行降级：当前 compat adapter 不支持请求的 execution class，已回退到 adapter 支持范围。",
+        followUp:
+          "下一步：核对 compat adapter 的 capability 声明；如果仍要求该 execution class，应先补齐 adapter 支持。"
+      };
+    }
+
+    const fallbackCountCopy =
+      node.execution_fallback_count > 0
+        ? `，累计记录 ${node.execution_fallback_count} 次`
+        : "";
+
+    return {
+      primarySignal: `执行降级：当前节点因 ${reason} 发生 execution fallback${fallbackCountCopy}。`,
+      followUp:
+        "下一步：确认该 fallback 是否符合当前 execution policy；若不符合，应回到 execution capability 与 runtime adapter 事实链继续治理。"
+    };
+  }
+
+  if (node.execution_fallback_count > 0) {
+    return {
+      primarySignal: `执行降级：当前节点记录了 ${node.execution_fallback_count} 次 execution fallback。`,
+      followUp:
+        "下一步：确认 fallback 是否仍可接受；若不可接受，应回到 execution capability 与 runtime adapter 事实链继续治理。"
+    };
+  }
+
+  return null;
+}
+
 export function formatExecutionFocusReasonLabel(
   reason: RunExecutionFocusReason | null | undefined
 ) {
@@ -438,14 +523,15 @@ function countPendingApprovalTickets(node: ExecutionFocusExplainableNode) {
 
 export function formatExecutionFocusPrimarySignal(node: ExecutionFocusExplainableNode): string | null {
   const blockingInsight = resolveExecutionBlockingInsight(node);
+  const fallbackInsight = resolveExecutionFallbackInsight(node);
   if (blockingInsight) {
     return blockingInsight.primarySignal;
   }
   if (node.waiting_reason) {
     return `等待原因：${node.waiting_reason}`;
   }
-  if (node.execution_fallback_reason) {
-    return `执行降级：${node.execution_fallback_reason}`;
+  if (fallbackInsight) {
+    return fallbackInsight.primarySignal;
   }
   if (node.execution_unavailable_count > 0) {
     return `当前节点记录了 ${node.execution_unavailable_count} 次 execution unavailable。`;
@@ -487,8 +573,9 @@ export function formatExecutionFocusFollowUp(node: ExecutionFocusExplainableNode
     return "下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。";
   }
 
-  if (node.execution_fallback_reason) {
-    return "下一步：确认 fallback 是否可接受；若不可接受，再回到原始 execution backend / capability 做治理。";
+  const fallbackInsight = resolveExecutionFallbackInsight(node);
+  if (fallbackInsight) {
+    return fallbackInsight.followUp;
   }
 
   return null;
