@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.run import NodeRun
 from app.services.credential_store import CredentialAccessPendingError
+from app.services.runtime_branch_execution import execute_branch_node
 from app.services.runtime_execution_adapters import NodeExecutionRequest
 from app.services.runtime_execution_policy import execution_policy_from_node_run_input
 from app.services.runtime_types import (
@@ -569,39 +570,4 @@ class RuntimeNodeDispatchSupportMixin:
             return None
 
     def _execute_branch_node(self, node: dict, node_input: dict) -> dict:
-        config = node.get("config", {})
-        selector = config.get("selector")
-        if isinstance(selector, dict):
-            selected, matched_rule, default_used = self._select_branch_from_rules(
-                selector,
-                node_input,
-            )
-            return {
-                "selected": selected,
-                "received": node_input,
-                "selector": {
-                    "matchedRule": matched_rule,
-                    "defaultUsed": default_used,
-                },
-            }
-
-        expression = config.get("expression")
-        if isinstance(expression, str):
-            selected, expression_value, default_used = self._select_branch_from_expression(
-                node,
-                node_input,
-            )
-            return {
-                "selected": selected,
-                "received": node_input,
-                "expression": {
-                    "source": expression,
-                    "value": expression_value,
-                    "defaultUsed": default_used,
-                },
-            }
-
-        return {
-            "selected": config.get("selected", "default"),
-            "received": node_input,
-        }
+        return execute_branch_node(node, node_input)

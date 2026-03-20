@@ -142,6 +142,8 @@ def collect_invalid_workflow_node_execution_references(
         path = f"nodes.{node_index}.runtimePolicy.execution"
 
         if requested_execution_class == "subprocess":
+            if node_type in {"condition", "router"}:
+                continue
             issues.append(
                 WorkflowToolExecutionValidationIssue(
                     message=(

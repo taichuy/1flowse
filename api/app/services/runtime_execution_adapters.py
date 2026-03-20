@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.run import NodeRun
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
+from app.services.runtime_branch_subprocess import HostBranchNodeExecutor
 from app.services.runtime_execution_policy import (
     ResolvedExecutionPolicy,
     resolve_sandbox_code_dependency_contract,
@@ -231,6 +232,43 @@ class SandboxCodeExecutionAdapter:
         return {"value": result}
 
 
+class BranchSubprocessExecutionAdapter:
+    adapter_ref = "runtime:host-subprocess-branch"
+
+    def __init__(self, *, branch_executor: HostBranchNodeExecutor) -> None:
+        self._branch_executor = branch_executor
+
+    def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
+        node_type = str(request.node.get("type") or "unknown")
+        if node_type not in {"condition", "router"}:
+            raise WorkflowExecutionError(
+                "Host subprocess branch adapter only supports condition/router nodes."
+            )
+        if request.execution_policy.execution_class != "subprocess":
+            raise WorkflowExecutionError(
+                "Host subprocess branch adapter only supports explicit subprocess execution."
+            )
+
+        events = [
+            RuntimeEvent(
+                "node.execution.dispatched",
+                {
+                    "node_id": request.node.get("id"),
+                    "node_type": node_type,
+                    "requested_execution_class": request.execution_policy.execution_class,
+                    "effective_execution_class": "subprocess",
+                    "executor_ref": self.adapter_ref,
+                },
+            )
+        ]
+        execution = self._branch_executor.execute(
+            node=request.node,
+            node_input=request.node_input,
+            timeout_ms=request.execution_policy.timeout_ms,
+        )
+        return NodeExecutionResult(output=execution.result, events=events)
+
+
 class RemoteSandboxExecutionAdapter:
     def __init__(
         self,
@@ -354,6 +392,9 @@ class RuntimeExecutionAdapterRegistry:
     ) -> None:
         self._sandbox_backend_client = sandbox_backend_client or get_sandbox_backend_client()
         self._inline_adapter = InlineExecutionAdapter()
+        self._branch_subprocess_adapter = BranchSubprocessExecutionAdapter(
+            branch_executor=HostBranchNodeExecutor()
+        )
         self._sandbox_code_adapter = SandboxCodeExecutionAdapter(
             sandbox_code_executor=sandbox_code_executor or HostSandboxCodeExecutor(),
             artifact_store=artifact_store,
@@ -372,6 +413,14 @@ class RuntimeExecutionAdapterRegistry:
         execution_policy: ResolvedExecutionPolicy,
     ) -> NodeExecutionAvailability:
         node_type = str(node.get("type") or "unknown")
+        if (
+            node_type in {"condition", "router"}
+            and execution_policy.execution_class == "subprocess"
+        ):
+            return NodeExecutionAvailability(
+                available=True,
+                executor_ref=self._branch_subprocess_adapter.adapter_ref,
+            )
         if node_type != "sandbox_code":
             if node_type == "tool" and is_strong_tool_execution_class(
                 execution_policy.execution_class
@@ -513,6 +562,12 @@ class RuntimeExecutionAdapterRegistry:
 
         if node_type == "tool":
             return self._inline_adapter.execute(request)
+
+        if (
+            node_type in {"condition", "router"}
+            and request.execution_policy.execution_class == "subprocess"
+        ):
+            return self._branch_subprocess_adapter.execute(request)
 
         if request.execution_policy.execution_class == "inline":
             return self._inline_adapter.execute(request)

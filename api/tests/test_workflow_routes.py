@@ -2222,6 +2222,33 @@ def test_validate_workflow_definition_preflight_rejects_unsupported_condition_ex
     )
 
 
+def test_validate_workflow_definition_preflight_accepts_condition_subprocess_execution(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Condition Subprocess Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={
+            "definition": _condition_definition(
+                runtime_policy={"execution": {"class": "subprocess"}}
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["issues"] == []
+    assert (
+        body["definition"]["nodes"][1]["runtimePolicy"]["execution"]["class"] == "subprocess"
+    )
+
+
 def test_get_workflow_detail_surfaces_definition_issues_for_persisted_tool_runner_gap(
     client: TestClient,
     sqlite_session,
@@ -2297,7 +2324,7 @@ def test_get_workflow_detail_surfaces_definition_issues_for_persisted_tool_runne
     )
 
 
-def test_get_workflow_detail_surfaces_definition_issues_for_persisted_node_execution_drift(
+def test_get_workflow_detail_accepts_persisted_condition_subprocess_execution(
     client: TestClient,
     sqlite_session,
 ) -> None:
@@ -2323,11 +2350,9 @@ def test_get_workflow_detail_surfaces_definition_issues_for_persisted_node_execu
 
     assert response.status_code == 200
     body = response.json()
-    assert any(
+    assert not any(
         issue.get("category") == "node_execution"
         and issue.get("path") == "nodes.1.runtimePolicy.execution"
-        and issue.get("field") == "execution"
-        and "execution class 'subprocess'" in issue.get("message", "")
         for issue in body["definition_issues"]
     )
 

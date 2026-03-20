@@ -217,12 +217,11 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
                 {
-                    "id": "branch",
-                    "type": "condition",
-                    "name": "Branch",
-                    "config": {"selected": "true"},
+                    "id": "trigger",
+                    "type": "trigger",
+                    "name": "Trigger",
+                    "config": {},
                     "runtimePolicy": {
                         "execution": {"class": "subprocess", "profile": "strict"}
                     },
@@ -230,8 +229,7 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
                 {"id": "output", "type": "output", "name": "Output", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
-                {"id": "e2", "sourceNodeId": "branch", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"},
             ],
         },
     )
@@ -268,10 +266,10 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
     assert body["summary"]["execution_executor_ref_counts"] == {}
     assert body["blocking_node_run_id"] is None
     assert body["execution_focus_reason"] == "blocked_execution"
-    assert body["execution_focus_node"]["node_id"] == "branch"
+    assert body["execution_focus_node"]["node_id"] == "trigger"
     assert body["execution_focus_explanation"] == {
         "primary_signal": (
-            "执行阻断：当前 condition 节点尚未实现请求的 subprocess execution class。"
+            "执行阻断：当前 trigger 节点尚未实现请求的 subprocess execution class。"
         ),
         "follow_up": (
             "下一步：先把 execution class 调回 inline，"
@@ -279,7 +277,7 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
         ),
     }
 
-    node = next(item for item in body["nodes"] if item["node_id"] == "branch")
+    node = next(item for item in body["nodes"] if item["node_id"] == "trigger")
     assert node["execution_class"] == "subprocess"
     assert node["effective_execution_class"] is None
     assert node["execution_executor_ref"] is None
@@ -300,11 +298,11 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
     run_detail_body = run_detail_response.json()
     assert run_detail_body["blocking_node_run_id"] is None
     assert run_detail_body["execution_focus_reason"] == "blocked_execution"
-    assert run_detail_body["execution_focus_node"]["node_id"] == "branch"
-    assert run_detail_body["execution_focus_node"]["node_type"] == "condition"
+    assert run_detail_body["execution_focus_node"]["node_id"] == "trigger"
+    assert run_detail_body["execution_focus_node"]["node_type"] == "trigger"
     assert run_detail_body["execution_focus_explanation"] == {
         "primary_signal": (
-            "执行阻断：当前 condition 节点尚未实现请求的 subprocess execution class。"
+            "执行阻断：当前 trigger 节点尚未实现请求的 subprocess execution class。"
         ),
         "follow_up": (
             "下一步：先把 execution class 调回 inline，"
@@ -312,6 +310,101 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
         ),
     }
     assert run_detail_body["execution_focus_skill_trace"] is None
+
+
+def test_get_run_execution_view_reports_condition_subprocess_execution(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-execution-view-condition-subprocess",
+        name="Execution View Condition Subprocess",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "condition",
+                    "name": "Branch",
+                    "config": {"expression": "trigger_input.priority == 'high'"},
+                    "runtimePolicy": {
+                        "execution": {"class": "subprocess", "profile": "strict"}
+                    },
+                },
+                {
+                    "id": "true_path",
+                    "type": "tool",
+                    "name": "True Path",
+                    "config": {"mock_output": {"answer": "yes"}},
+                },
+                {
+                    "id": "false_path",
+                    "type": "tool",
+                    "name": "False Path",
+                    "config": {"mock_output": {"answer": "no"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "true_path",
+                    "condition": "true",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "false_path",
+                    "condition": "false",
+                },
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-execution-view-condition-subprocess-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=workflow.definition,
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    CompiledBlueprintService().ensure_for_workflow_version(sqlite_session, workflow_version)
+    sqlite_session.commit()
+
+    response = client.post(
+        f"/api/workflows/{workflow.id}/runs",
+        json={"input_payload": {"priority": "high"}},
+    )
+    assert response.status_code == 201
+    run_id = response.json()["id"]
+
+    execution_view_response = client.get(f"/api/runs/{run_id}/execution-view")
+    assert execution_view_response.status_code == 200
+    body = execution_view_response.json()
+    assert body["summary"]["execution_dispatched_node_count"] == 1
+    assert body["summary"]["execution_unavailable_node_count"] == 0
+    assert body["summary"]["execution_requested_class_counts"] == {"subprocess": 1}
+    assert body["summary"]["execution_effective_class_counts"] == {"subprocess": 1}
+    assert body["summary"]["execution_executor_ref_counts"] == {
+        "runtime:host-subprocess-branch": 1
+    }
+
+    node = next(item for item in body["nodes"] if item["node_id"] == "branch")
+    assert node["execution_class"] == "subprocess"
+    assert node["requested_execution_class"] == "subprocess"
+    assert node["effective_execution_class"] == "subprocess"
+    assert node["execution_executor_ref"] == "runtime:host-subprocess-branch"
+    assert node["execution_dispatched_count"] == 1
+    assert node["execution_unavailable_count"] == 0
+    assert node["execution_blocking_reason"] is None
+    assert node["execution_focus_explanation"] is None
 
 
 def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_nodes(

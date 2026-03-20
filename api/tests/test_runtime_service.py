@@ -243,12 +243,11 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
                 {
-                    "id": "branch",
-                    "type": "condition",
-                    "name": "Branch",
-                    "config": {"selected": "true"},
+                    "id": "trigger",
+                    "type": "trigger",
+                    "name": "Trigger",
+                    "config": {},
                     "runtimePolicy": {
                         "execution": {
                             "class": "subprocess",
@@ -259,8 +258,7 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
                 {"id": "output", "type": "output", "name": "Output", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
-                {"id": "e2", "sourceNodeId": "branch", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"},
             ],
         },
     )
@@ -285,7 +283,7 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
 
     branch_run = sqlite_session.scalars(
         select(NodeRun)
-        .where(NodeRun.run_id == run.id, NodeRun.node_id == "branch")
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "trigger")
         .order_by(NodeRun.started_at.desc())
     ).first()
     assert branch_run is not None
@@ -302,12 +300,98 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
     unavailable_event = next(
         event for event in events if event.event_type == "node.execution.unavailable"
     )
-    assert unavailable_event.payload["node_id"] == "branch"
-    assert unavailable_event.payload["node_type"] == "condition"
+    assert unavailable_event.payload["node_id"] == "trigger"
+    assert unavailable_event.payload["node_type"] == "trigger"
     assert unavailable_event.payload["requested_execution_class"] == "subprocess"
     assert "does not implement requested execution class 'subprocess'" in str(
         unavailable_event.payload["reason"]
     )
+
+
+def test_runtime_service_executes_condition_node_via_host_subprocess(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-condition-subprocess",
+        name="Condition Subprocess Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "condition",
+                    "name": "Branch",
+                    "config": {
+                        "expression": "trigger_input.priority == 'high'",
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "subprocess",
+                            "profile": "host-reviewed",
+                        }
+                    },
+                },
+                {
+                    "id": "true_path",
+                    "type": "tool",
+                    "name": "True Path",
+                    "config": {"mock_output": {"answer": "expedite"}},
+                },
+                {
+                    "id": "false_path",
+                    "type": "tool",
+                    "name": "False Path",
+                    "config": {"mock_output": {"answer": "queue"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "true_path",
+                    "condition": "true",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "false_path",
+                    "condition": "false",
+                },
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"priority": "high"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"true_path": {"answer": "expedite"}}
+
+    branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
+    assert branch_run.status == "succeeded"
+    assert branch_run.output_payload["selected"] == "true"
+    assert branch_run.output_payload["expression"]["value"] is True
+
+    branch_events = [
+        event
+        for event in artifacts.events
+        if event.node_run_id == branch_run.id and event.event_type == "node.execution.dispatched"
+    ]
+    assert len(branch_events) == 1
+    assert branch_events[0].payload == {
+        "node_id": "branch",
+        "node_type": "condition",
+        "requested_execution_class": "subprocess",
+        "effective_execution_class": "subprocess",
+        "executor_ref": "runtime:host-subprocess-branch",
+    }
 
 
 def test_runtime_service_executes_native_tool_via_sandbox_runner(
