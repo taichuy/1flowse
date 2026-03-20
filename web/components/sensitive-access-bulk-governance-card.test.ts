@@ -2,7 +2,10 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { SensitiveAccessBulkGovernanceCard } from "@/components/sensitive-access-bulk-governance-card";
+import {
+  getSensitiveAccessBulkActionConfirmationMessage,
+  SensitiveAccessBulkGovernanceCard
+} from "@/components/sensitive-access-bulk-governance-card";
 import type { SensitiveAccessBulkActionResult } from "@/lib/get-sensitive-access";
 
 vi.mock("next/link", () => ({
@@ -11,6 +14,42 @@ vi.mock("next/link", () => ({
 }));
 
 describe("SensitiveAccessBulkGovernanceCard", () => {
+  it("clarifies current scope versus actionable subsets in the bulk summary", () => {
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBulkGovernanceCard, {
+        inScopeCount: 5,
+        decisionCandidateCount: 2,
+        retryCandidateCount: 1,
+        operatorValue: "ops-reviewer",
+        onOperatorChange: () => {},
+        isMutating: false,
+        lastResult: null,
+        message: null,
+        messageTone: "idle",
+        onAction: () => {}
+      })
+    );
+
+    expect(html).toContain("5 in scope");
+    expect(html).toContain("approve/reject pending+waiting 2 / 5");
+    expect(html).toContain("retry latest pending/failed 1 / 5");
+    expect(html).toContain(
+      "当前筛选范围命中 5 条票据；其中 2 条 pending + waiting 票据可执行 approve / reject，1 条最新且仍未投递成功的通知可执行 retry。"
+    );
+  });
+
+  it("uses confirmation copy that distinguishes in-scope entries from actionable entries", () => {
+    expect(getSensitiveAccessBulkActionConfirmationMessage("approved", 2, 5)).toBe(
+      "确认批量批准当前筛选范围内可执行的 2 / 5 条 pending + waiting 票据吗？"
+    );
+    expect(getSensitiveAccessBulkActionConfirmationMessage("rejected", 2, 5)).toBe(
+      "确认批量拒绝当前筛选范围内可执行的 2 / 5 条 pending + waiting 票据吗？"
+    );
+    expect(getSensitiveAccessBulkActionConfirmationMessage("retry", 1, 5)).toBe(
+      "确认批量重试当前筛选范围内可执行的 1 / 5 条最新且仍未投递成功的通知吗？"
+    );
+  });
+
   it("renders callback waiting follow-up from compact sampled run snapshots", () => {
     const lastResult: SensitiveAccessBulkActionResult = {
       action: "retry",

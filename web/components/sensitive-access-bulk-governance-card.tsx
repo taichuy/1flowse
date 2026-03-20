@@ -27,6 +27,11 @@ type SensitiveAccessBulkGovernanceCardProps = {
 
 const ACTIONS: SensitiveAccessBulkAction[] = ["approved", "rejected", "retry"];
 
+type SensitiveAccessBulkScopeSummary = Pick<
+  SensitiveAccessBulkGovernanceCardProps,
+  "inScopeCount" | "decisionCandidateCount" | "retryCandidateCount"
+>;
+
 export function SensitiveAccessBulkGovernanceCard({
   inScopeCount,
   decisionCandidateCount,
@@ -59,9 +64,24 @@ export function SensitiveAccessBulkGovernanceCard({
       </div>
 
       <div className="starter-tag-row">
-        <span className="event-chip">approve/reject {decisionCandidateCount}</span>
-        <span className="event-chip">retry latest {retryCandidateCount}</span>
+        <span className="event-chip">
+          {getSensitiveAccessBulkCandidateCountLabel(
+            "decision",
+            decisionCandidateCount,
+            inScopeCount
+          )}
+        </span>
+        <span className="event-chip">
+          {getSensitiveAccessBulkCandidateCountLabel("retry", retryCandidateCount, inScopeCount)}
+        </span>
       </div>
+      <p className="section-copy entry-copy">
+        {getSensitiveAccessBulkScopeSummary({
+          inScopeCount,
+          decisionCandidateCount,
+          retryCandidateCount
+        })}
+      </p>
 
       <label className="status-meta" htmlFor="bulk-sensitive-access-operator">
         Operator
@@ -206,13 +226,35 @@ export function getSensitiveAccessBulkActionButtonLabel(action: SensitiveAccessB
 
 export function getSensitiveAccessBulkActionConfirmationMessage(
   action: SensitiveAccessBulkAction,
-  count: number
+  count: number,
+  inScopeCount: number
 ) {
   return {
-    approved: `确认批量批准当前筛选结果中的 ${count} 条票据吗？`,
-    rejected: `确认批量拒绝当前筛选结果中的 ${count} 条票据吗？`,
-    retry: `确认批量重试当前筛选结果中的 ${count} 条最新通知吗？`
+    approved: `确认批量批准当前筛选范围内可执行的 ${count} / ${inScopeCount} 条 pending + waiting 票据吗？`,
+    rejected: `确认批量拒绝当前筛选范围内可执行的 ${count} / ${inScopeCount} 条 pending + waiting 票据吗？`,
+    retry:
+      `确认批量重试当前筛选范围内可执行的 ${count} / ${inScopeCount} 条最新且仍未投递成功的通知吗？`
   }[action];
+}
+
+export function getSensitiveAccessBulkCandidateCountLabel(
+  kind: "decision" | "retry",
+  candidateCount: number,
+  inScopeCount: number
+) {
+  if (kind === "decision") {
+    return `approve/reject pending+waiting ${candidateCount} / ${inScopeCount}`;
+  }
+
+  return `retry latest pending/failed ${candidateCount} / ${inScopeCount}`;
+}
+
+export function getSensitiveAccessBulkScopeSummary({
+  inScopeCount,
+  decisionCandidateCount,
+  retryCandidateCount
+}: SensitiveAccessBulkScopeSummary) {
+  return `当前筛选范围命中 ${inScopeCount} 条票据；其中 ${decisionCandidateCount} 条 pending + waiting 票据可执行 approve / reject，${retryCandidateCount} 条最新且仍未投递成功的通知可执行 retry。`;
 }
 
 export function getSensitiveAccessBulkSkipReasonLabel(reason: string) {

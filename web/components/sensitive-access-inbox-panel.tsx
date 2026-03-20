@@ -101,7 +101,11 @@ export function SensitiveAccessInboxPanel({
       return;
     }
 
-    if (!window.confirm(getSensitiveAccessBulkActionConfirmationMessage(action, candidateIds.length))) {
+    if (
+      !window.confirm(
+        getSensitiveAccessBulkActionConfirmationMessage(action, candidateIds.length, entries.length)
+      )
+    ) {
       return;
     }
 
