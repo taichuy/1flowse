@@ -19,6 +19,7 @@ type CallbackWaitingInlineActionsProps = {
   runId: string | null;
   nodeRunId?: string | null;
   compact?: boolean;
+  title?: string;
   allowManualResume?: boolean;
   preferredAction?: "resume" | "cleanup" | null;
   statusHint?: string | null;
@@ -40,6 +41,7 @@ export function CallbackWaitingInlineActions({
   runId,
   nodeRunId = null,
   compact = false,
+  title = "Callback actions",
   allowManualResume = true,
   preferredAction = null,
   statusHint = null
@@ -121,7 +123,7 @@ export function CallbackWaitingInlineActions({
 
   return (
     <div className={compact ? "entry-card compact-card" : undefined}>
-      {compact ? <p className="entry-card-title">Callback actions</p> : null}
+      {compact ? <p className="entry-card-title">{title}</p> : null}
       {statusHint ? <p className="empty-state compact">{statusHint}</p> : null}
       {preferredAction === "resume" ? (
         <p className="empty-state compact">建议先手动恢复；若仍卡住，再处理过期 ticket。</p>

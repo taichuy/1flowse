@@ -163,6 +163,10 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).toContain("优先观察定时恢复是否已重新排队");
     expect(html).toContain("scheduled resume requeued");
     expect(html).toContain("requeued by waiting_resume_monitor");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("Watch the requeued resume");
+    expect(html).toContain("watch the worker consume that attempt before forcing another resume");
+    expect(html).not.toContain("Optional callback override");
     expect(html).toContain("snapshot-node");
     expect(html).toContain("snapshot waiting reason");
     expect(html).toContain("effective sandbox");

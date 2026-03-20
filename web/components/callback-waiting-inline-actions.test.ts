@@ -108,4 +108,17 @@ describe("CallbackWaitingInlineActions", () => {
     expect(inlineFeedbackProps[0]?.runFollowUp).toEqual(resumeRunFollowUp);
     expect(inlineFeedbackProps[1]?.runFollowUp).toEqual(cleanupRunFollowUp);
   });
+
+  it("renders a custom compact title when the caller marks actions as optional overrides", () => {
+    const html = renderToStaticMarkup(
+      createElement(CallbackWaitingInlineActions, {
+        runId: "run-1",
+        compact: true,
+        title: "Optional callback override"
+      })
+    );
+
+    expect(html).toContain("Optional callback override");
+    expect(html).not.toContain("<p class=\"entry-card-title\">Callback actions</p>");
+  });
 });

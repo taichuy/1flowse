@@ -177,6 +177,12 @@ export function CallbackWaitingSummaryCard({
   });
   const shouldShowSensitiveAccessInlineActions =
     showSensitiveAccessInlineActions ?? showInlineActions;
+  const isObserveFirstRecommendedAction =
+    recommendedAction?.kind === "monitor_callback" ||
+    recommendedAction?.kind === "watch_scheduled_resume";
+  const callbackInlineActionTitle = isObserveFirstRecommendedAction
+    ? "Optional callback override"
+    : "Callback actions";
   const shouldHideCallbackInlineActionsByDefault =
     recommendedAction?.kind === "resolve_inline_sensitive_access" ||
     recommendedAction?.kind === "open_inbox";
@@ -296,6 +302,24 @@ export function CallbackWaitingSummaryCard({
         </p>
       ))}
       {callbackFollowUp ? <p className="section-copy entry-copy">{callbackFollowUp}</p> : null}
+      {recommendedAction ? (
+        <div className="entry-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">Recommended next step</span>
+            <span className="event-chip">{recommendedAction.label}</span>
+            {isObserveFirstRecommendedAction ? (
+              <span className="event-chip">manual override optional</span>
+            ) : null}
+          </div>
+          <p className="section-copy entry-copy">{recommendedAction.detail}</p>
+          {isObserveFirstRecommendedAction && shouldShowCallbackInlineActions ? (
+            <p className="binding-meta">
+              Callback actions stay available below as optional operator overrides when the current
+              waiting path needs to be bypassed.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {focusExecutionFactBadges.length ? (
         <div className="tool-badge-row">
           {focusExecutionFactBadges.map((badge) => (
@@ -383,6 +407,7 @@ export function CallbackWaitingSummaryCard({
           nodeRunId={inlineActionNodeRunId}
           preferredAction={preferredInlineAction}
           runId={runId ?? null}
+          title={callbackInlineActionTitle}
           statusHint={inlineStatusHint}
         />
       ) : null}

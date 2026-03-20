@@ -11,7 +11,15 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/components/callback-waiting-inline-actions", () => ({
-  CallbackWaitingInlineActions: () => createElement("div", { "data-testid": "callback-waiting-inline-actions" })
+  CallbackWaitingInlineActions: ({ title }: { title?: string }) =>
+    createElement(
+      "div",
+      {
+        "data-testid": "callback-waiting-inline-actions",
+        "data-title": title ?? ""
+      },
+      title ?? null
+    )
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
@@ -195,6 +203,27 @@ describe("CallbackWaitingSummaryCard", () => {
       })
     );
 
+    expect(html).toContain("data-testid=\"callback-waiting-inline-actions\"");
+  });
+
+  it("surfaces observe-first guidance while keeping optional overrides for requeued resumes", () => {
+    const html = renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        runId: "run-1",
+        scheduledResumeDelaySeconds: 45,
+        scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+        scheduledResumeDueAt: "2026-03-20T10:00:45Z",
+        scheduledResumeRequeuedAt: "2026-03-20T10:01:30Z",
+        scheduledResumeRequeueSource: "waiting_resume_monitor"
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("Watch the requeued resume");
+    expect(html).toContain("manual override optional");
+    expect(html).toContain("watch the worker consume that attempt before forcing another resume");
+    expect(html).toContain("Optional callback override");
+    expect(html).toContain("data-title=\"Optional callback override\"");
     expect(html).toContain("data-testid=\"callback-waiting-inline-actions\"");
   });
 });
