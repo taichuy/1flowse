@@ -169,7 +169,7 @@ export function WorkflowEditorWorkbench({
           toolReferenceValidationIssuesCount={validation.toolReferenceValidationIssues.length}
           nodeExecutionValidationIssuesCount={validation.nodeExecutionValidationIssues.length}
           toolExecutionValidationIssuesCount={validation.toolExecutionValidationIssues.length}
-          publishVersionValidationIssuesCount={validation.publishVersionValidationIssues.length}
+          publishDraftValidationIssuesCount={validation.publishDraftValidationIssues.length}
           persistBlockedMessage={validation.persistBlockedMessage || null}
           isSaving={persistence.isSaving}
           isSavingStarter={persistence.isSavingStarter}

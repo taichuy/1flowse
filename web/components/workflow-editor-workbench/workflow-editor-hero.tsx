@@ -22,7 +22,7 @@ type WorkflowEditorHeroProps = {
   toolReferenceValidationIssuesCount: number;
   nodeExecutionValidationIssuesCount: number;
   toolExecutionValidationIssuesCount: number;
-  publishVersionValidationIssuesCount: number;
+  publishDraftValidationIssuesCount: number;
   persistBlockedMessage: string | null;
   isSaving: boolean;
   isSavingStarter: boolean;
@@ -48,7 +48,7 @@ export function WorkflowEditorHero({
   toolReferenceValidationIssuesCount,
   nodeExecutionValidationIssuesCount,
   toolExecutionValidationIssuesCount,
-  publishVersionValidationIssuesCount,
+  publishDraftValidationIssuesCount,
   persistBlockedMessage,
   isSaving,
   isSavingStarter,
@@ -89,8 +89,8 @@ export function WorkflowEditorHero({
           {toolExecutionValidationIssuesCount > 0 ? (
             <span className="pill">{toolExecutionValidationIssuesCount} execution capability issues</span>
           ) : null}
-          {publishVersionValidationIssuesCount > 0 ? (
-            <span className="pill">{publishVersionValidationIssuesCount} publish version issues</span>
+          {publishDraftValidationIssuesCount > 0 ? (
+            <span className="pill">{publishDraftValidationIssuesCount} publish draft issues</span>
           ) : null}
         </div>
         <div className="hero-actions">
@@ -143,7 +143,7 @@ export function WorkflowEditorHero({
           <p className="panel-text">
             当前保存策略：
             <strong>
-              含 planned / unknown 节点、非法 contract schema、tool catalog 引用漂移、node execution / execution capability 不匹配或 publish version 引用失配时阻断保存与 starter 沉淀
+              含 planned / unknown 节点、非法 contract schema、tool catalog 引用漂移、node execution / execution capability 不匹配或 publish draft 未闭环时阻断保存与 starter 沉淀
             </strong>
           </p>
         ) : null}
