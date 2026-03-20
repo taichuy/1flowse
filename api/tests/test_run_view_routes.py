@@ -583,6 +583,12 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         item["uri"] for item in run_detail_body["execution_focus_node"]["artifacts"]
     ] == ["artifact://artifact-tool", "artifact://artifact-evidence"]
     assert run_detail_body["execution_focus_node"]["tool_calls"] == node["tool_calls"]
+    assert run_detail_body["execution_focus_node"]["callback_tickets"] == node[
+        "callback_tickets"
+    ]
+    assert run_detail_body["execution_focus_node"]["sensitive_access_entries"] == node[
+        "sensitive_access_entries"
+    ]
     assert run_detail_body["execution_focus_skill_trace"] is None
 
 

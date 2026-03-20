@@ -6,11 +6,15 @@ from pydantic import BaseModel, Field
 from app.schemas.explanations import SignalFollowUpExplanation
 from app.schemas.operator_follow_up import (
     OperatorCallbackWaitingLifecycleSummary,
+    OperatorRunCallbackTicketItem,
     OperatorRunFocusSkillTrace,
     OperatorRunFollowUpSummary,
     OperatorRunSnapshot,
 )
-from app.schemas.sensitive_access import CallbackBlockerDeltaSummary
+from app.schemas.sensitive_access import (
+    CallbackBlockerDeltaSummary,
+    SensitiveAccessTimelineEntryItem,
+)
 
 
 class RunCreate(BaseModel):
@@ -273,6 +277,10 @@ class RunDetailExecutionFocusNode(BaseModel):
     artifact_refs: list[str] = Field(default_factory=list)
     artifacts: list[RunArtifactItem] = Field(default_factory=list)
     tool_calls: list[ToolCallItem] = Field(default_factory=list)
+    callback_tickets: list[OperatorRunCallbackTicketItem] = Field(default_factory=list)
+    sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
+        default_factory=list
+    )
 
 
 class RunDetail(BaseModel):

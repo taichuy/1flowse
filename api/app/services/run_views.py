@@ -88,6 +88,10 @@ def _serialize_run_detail_execution_focus_node(
         artifact_refs=list(focus_node.artifact_refs),
         artifacts=list(focus_node.artifacts),
         tool_calls=list(focus_node.tool_calls),
+        callback_tickets=[
+            ticket.model_dump() for ticket in focus_node.callback_tickets
+        ],
+        sensitive_access_entries=list(focus_node.sensitive_access_entries),
     )
 
 

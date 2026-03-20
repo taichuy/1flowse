@@ -74,6 +74,24 @@ class OperatorRunFocusSkillTrace(BaseModel):
     loads: list[OperatorRunFocusSkillLoadItem] = Field(default_factory=list)
 
 
+class OperatorRunCallbackTicketItem(BaseModel):
+    ticket: str
+    run_id: str
+    node_run_id: str
+    tool_call_id: str | None = None
+    tool_id: str | None = None
+    tool_call_index: int = 0
+    waiting_status: str
+    status: str
+    reason: str | None = None
+    callback_payload: dict | None = None
+    created_at: datetime
+    expires_at: datetime | None = None
+    consumed_at: datetime | None = None
+    canceled_at: datetime | None = None
+    expired_at: datetime | None = None
+
+
 class OperatorCallbackWaitingLifecycleSummary(BaseModel):
     wait_cycle_count: int = 0
     issued_ticket_count: int = 0
