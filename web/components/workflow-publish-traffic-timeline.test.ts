@@ -31,10 +31,13 @@ describe("WorkflowPublishTrafficTimeline", () => {
             succeeded_count: 2,
             failed_count: 1,
             rejected_count: 0,
-            request_surface_counts: [],
-            cache_status_counts: [],
-            run_status_counts: [],
-            reason_counts: [],
+            request_surface_counts: [
+              { value: "openai.responses", count: 2 },
+              { value: "native.workflow", count: 1 }
+            ],
+            cache_status_counts: [{ value: "hit", count: 2 }],
+            run_status_counts: [{ value: "waiting_callback", count: 1 }],
+            reason_counts: [{ value: "runtime_failed", count: 1 }],
             api_key_counts: [
               {
                 api_key_id: "key-1",
@@ -54,6 +57,11 @@ describe("WorkflowPublishTrafficTimeline", () => {
     expect(html).toContain("success 2");
     expect(html).toContain("failed 1");
     expect(html).toContain("rejected 0");
+    expect(html).toContain("OpenAI responses 2");
+    expect(html).toContain("Native workflow route 1");
+    expect(html).toContain("Cache hit 2");
+    expect(html).toContain("Waiting callback 1");
+    expect(html).toContain("Runtime failed 1");
     expect(html).toContain("key Primary key 2");
   });
 });

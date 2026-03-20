@@ -2,13 +2,8 @@ import React from "react";
 
 import type { PublishedEndpointInvocationTimeBucketItem } from "@/lib/get-workflow-publish";
 import {
+  buildPublishedInvocationTrafficTimelineBucketSurface,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
-  formatPublishedInvocationCacheStatusLabel,
-  formatPublishedInvocationReasonLabel,
-  formatPublishedInvocationSurfaceLabel,
-  formatPublishedRunStatusLabel,
-  listPublishedInvocationApiKeyCountLabels,
-  listPublishedInvocationFacetCountLabels
 } from "@/lib/published-invocation-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 
@@ -62,29 +57,9 @@ export function WorkflowPublishTrafficTimeline({
               timelineMaxCount > 0
                 ? Math.max((bucket.total_count / timelineMaxCount) * 100, bucket.total_count > 0 ? 12 : 0)
                 : 0;
-            const surfaceLabels = listPublishedInvocationFacetCountLabels(
-              bucket.request_surface_counts,
-              formatPublishedInvocationSurfaceLabel,
-              2
-            );
-            const cacheLabels = listPublishedInvocationFacetCountLabels(
-              bucket.cache_status_counts,
-              formatPublishedInvocationCacheStatusLabel,
-              2
-            );
-            const runStatusLabels = listPublishedInvocationFacetCountLabels(
-              bucket.run_status_counts,
-              formatPublishedRunStatusLabel,
-              2
-            );
-            const reasonLabels = listPublishedInvocationFacetCountLabels(
-              bucket.reason_counts,
-              formatPublishedInvocationReasonLabel,
-              2
-            );
-            const apiKeyLabels = listPublishedInvocationApiKeyCountLabels(bucket.api_key_counts, {
-              limit: 2,
-              prefix: surfaceCopy.apiKeyLabelPrefix
+            const bucketSurface = buildPublishedInvocationTrafficTimelineBucketSurface({
+              bucket,
+              apiKeyLabelPrefix: surfaceCopy.apiKeyLabelPrefix
             });
 
             return (
@@ -121,9 +96,9 @@ export function WorkflowPublishTrafficTimeline({
                   </span>
                 </div>
 
-                {surfaceLabels.length ? (
+                {bucketSurface.surfaceLabels.length ? (
                   <div className="tool-badge-row">
-                    {surfaceLabels.map((label) => (
+                    {bucketSurface.surfaceLabels.map((label) => (
                       <span className="event-chip" key={label}>
                         {label}
                       </span>
@@ -131,9 +106,9 @@ export function WorkflowPublishTrafficTimeline({
                   </div>
                 ) : null}
 
-                {cacheLabels.length ? (
+                {bucketSurface.cacheLabels.length ? (
                   <div className="tool-badge-row">
-                    {cacheLabels.map((label) => (
+                    {bucketSurface.cacheLabels.map((label) => (
                       <span className="event-chip" key={label}>
                         {label}
                       </span>
@@ -141,9 +116,9 @@ export function WorkflowPublishTrafficTimeline({
                   </div>
                 ) : null}
 
-                {runStatusLabels.length ? (
+                {bucketSurface.runStatusLabels.length ? (
                   <div className="tool-badge-row">
-                    {runStatusLabels.map((label) => (
+                    {bucketSurface.runStatusLabels.map((label) => (
                       <span className="event-chip" key={label}>
                         {label}
                       </span>
@@ -151,9 +126,9 @@ export function WorkflowPublishTrafficTimeline({
                   </div>
                 ) : null}
 
-                {reasonLabels.length ? (
+                {bucketSurface.reasonLabels.length ? (
                   <div className="tool-badge-row">
-                    {reasonLabels.map((label) => (
+                    {bucketSurface.reasonLabels.map((label) => (
                       <span className="event-chip" key={label}>
                         {label}
                       </span>
@@ -161,9 +136,9 @@ export function WorkflowPublishTrafficTimeline({
                   </div>
                 ) : null}
 
-                {apiKeyLabels.length ? (
+                {bucketSurface.apiKeyLabels.length ? (
                   <div className="tool-badge-row">
-                    {apiKeyLabels.map((label) => (
+                    {bucketSurface.apiKeyLabels.map((label) => (
                       <span className="event-chip" key={label}>
                         {label}
                       </span>

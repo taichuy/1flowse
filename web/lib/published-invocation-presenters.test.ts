@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPublishedInvocationActivityDetailsSurfaceCopy,
   buildPublishedInvocationActivityInsightsSurfaceCopy,
+  buildPublishedInvocationActivityTrafficMixSurface,
   buildPublishedCacheInventorySurfaceCopy,
   buildPublishedInvocationCallbackDrilldownSurfaceCopy,
   buildPublishedInvocationCanonicalFollowUpCopy,
@@ -11,6 +12,7 @@ import {
   buildPublishedInvocationFailureMessageDiagnosis,
   buildPublishedInvocationFailureReasonInsight,
   buildPublishedInvocationRateLimitWindowInsight,
+  buildPublishedInvocationTrafficTimelineBucketSurface,
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
   buildPublishedInvocationUnavailableDetailSurfaceCopy,
@@ -217,6 +219,75 @@ describe("published invocation presenters", () => {
     ).toBe("Run failed 2 / Waiting callback 1");
 
     expect(formatPublishedInvocationRunStatusMix([], "n/a")).toBe("n/a");
+  });
+
+  it("为 publish activity traffic mix 提供共享 view model", () => {
+    expect(
+      buildPublishedInvocationActivityTrafficMixSurface({
+        requestSourceCounts: [
+          { value: "workflow", count: 3 },
+          { value: "alias", count: 1 },
+          { value: "path", count: 2 }
+        ],
+        requestSurfaceCounts: [
+          { value: "openai.responses", count: 2 },
+          { value: "native.workflow", count: 1 }
+        ],
+        cacheStatusCounts: [
+          { value: "hit", count: 2 },
+          { value: "miss", count: 1 }
+        ],
+        runStatusCounts: [
+          { value: "failed", count: 2 },
+          { value: "waiting_callback", count: 1 }
+        ],
+        runStatesEmptyLabel: "n/a"
+      })
+    ).toEqual({
+      workflowCount: 3,
+      aliasCount: 1,
+      pathCount: 2,
+      cacheSurfaceSummary: "Cache hit 2 / Cache miss 1 / Cache bypass 0",
+      runStatesSummary: "Run failed 2 / Waiting callback 1",
+      requestSurfaceLabels: ["OpenAI responses 2", "Native workflow route 1"]
+    });
+  });
+
+  it("为 traffic timeline bucket 提供共享 facet rows", () => {
+    expect(
+      buildPublishedInvocationTrafficTimelineBucketSurface({
+        bucket: {
+          bucket_start: "2026-03-20T00:00:00Z",
+          bucket_end: "2026-03-20T01:00:00Z",
+          total_count: 4,
+          succeeded_count: 2,
+          failed_count: 1,
+          rejected_count: 1,
+          request_surface_counts: [
+            { value: "openai.responses", count: 2 },
+            { value: "native.workflow", count: 1 }
+          ],
+          cache_status_counts: [{ value: "hit", count: 2 }],
+          run_status_counts: [{ value: "waiting_callback", count: 1 }],
+          reason_counts: [{ value: "runtime_failed", count: 1 }],
+          api_key_counts: [
+            {
+              api_key_id: "key-1",
+              key_prefix: "sk-primary",
+              name: "Primary key",
+              count: 2
+            }
+          ]
+        },
+        apiKeyLabelPrefix: "key"
+      })
+    ).toEqual({
+      surfaceLabels: ["OpenAI responses 2", "Native workflow route 1"],
+      cacheLabels: ["Cache hit 2"],
+      runStatusLabels: ["Waiting callback 1"],
+      reasonLabels: ["Runtime failed 1"],
+      apiKeyLabels: ["key Primary key 2"]
+    });
   });
 
   it("为 publish activity / timeline 提供共享状态与 facet 标签拼装", () => {

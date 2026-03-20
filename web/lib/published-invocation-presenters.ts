@@ -147,6 +147,14 @@ export type PublishedInvocationTrafficTimelineSurfaceCopy = {
   apiKeyLabelPrefix: string;
 };
 
+export type PublishedInvocationTrafficTimelineBucketSurface = {
+  surfaceLabels: string[];
+  cacheLabels: string[];
+  runStatusLabels: string[];
+  reasonLabels: string[];
+  apiKeyLabels: string[];
+};
+
 export type PublishedInvocationFailureMessageDiagnosis = {
   headline: string;
   detail: string;
@@ -208,6 +216,15 @@ export type PublishedInvocationActivityInsightsSurfaceCopy = {
   rateLimitDisabledEmptyState: string;
   issueSignalsTitle: string;
   issueSignalsDescription: string;
+};
+
+export type PublishedInvocationActivityTrafficMixSurface = {
+  workflowCount: number;
+  aliasCount: number;
+  pathCount: number;
+  cacheSurfaceSummary: string;
+  runStatesSummary: string;
+  requestSurfaceLabels: string[];
 };
 
 export type PublishedInvocationActivityDetailsSurfaceCopy = {
@@ -340,6 +357,43 @@ export function buildPublishedInvocationTrafficTimelineSurfaceCopy({
   };
 }
 
+export function buildPublishedInvocationTrafficTimelineBucketSurface({
+  bucket,
+  apiKeyLabelPrefix = "key",
+  facetLimit = 2
+}: {
+  bucket: PublishedEndpointInvocationTimeBucketItem;
+  apiKeyLabelPrefix?: string;
+  facetLimit?: number;
+}): PublishedInvocationTrafficTimelineBucketSurface {
+  return {
+    surfaceLabels: listPublishedInvocationFacetCountLabels(
+      bucket.request_surface_counts,
+      formatPublishedInvocationSurfaceLabel,
+      facetLimit
+    ),
+    cacheLabels: listPublishedInvocationFacetCountLabels(
+      bucket.cache_status_counts,
+      formatPublishedInvocationCacheStatusLabel,
+      facetLimit
+    ),
+    runStatusLabels: listPublishedInvocationFacetCountLabels(
+      bucket.run_status_counts,
+      formatPublishedRunStatusLabel,
+      facetLimit
+    ),
+    reasonLabels: listPublishedInvocationFacetCountLabels(
+      bucket.reason_counts,
+      formatPublishedInvocationReasonLabel,
+      facetLimit
+    ),
+    apiKeyLabels: listPublishedInvocationApiKeyCountLabels(bucket.api_key_counts, {
+      limit: facetLimit,
+      prefix: apiKeyLabelPrefix
+    })
+  };
+}
+
 export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationEntrySurfaceCopy {
   return {
     canonicalFollowUpTitle: "Canonical follow-up",
@@ -417,6 +471,35 @@ export function buildPublishedInvocationActivityInsightsSurfaceCopy({
     issueSignalsTitle: "Issue signals",
     issueSignalsDescription:
       "将 `rejected / failed` 聚合为稳定原因码，便于区分限流、鉴权和当前同步协议边界。"
+  };
+}
+
+export function buildPublishedInvocationActivityTrafficMixSurface({
+  requestSourceCounts,
+  requestSurfaceCounts,
+  cacheStatusCounts,
+  runStatusCounts,
+  runStatesEmptyLabel
+}: {
+  requestSourceCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  requestSurfaceCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  cacheStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  runStatesEmptyLabel: string;
+}): PublishedInvocationActivityTrafficMixSurface {
+  return {
+    workflowCount: getFacetCount(requestSourceCounts, "workflow"),
+    aliasCount: getFacetCount(requestSourceCounts, "alias"),
+    pathCount: getFacetCount(requestSourceCounts, "path"),
+    cacheSurfaceSummary: formatPublishedInvocationCacheSurfaceMix(cacheStatusCounts ?? []),
+    runStatesSummary: formatPublishedInvocationRunStatusMix(
+      runStatusCounts ?? [],
+      runStatesEmptyLabel
+    ),
+    requestSurfaceLabels: listPublishedInvocationFacetCountLabels(
+      requestSurfaceCounts,
+      formatPublishedInvocationSurfaceLabel
+    )
   };
 }
 

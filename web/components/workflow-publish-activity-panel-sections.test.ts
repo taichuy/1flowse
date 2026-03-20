@@ -108,6 +108,32 @@ function buildInvocationAudit(): PublishedEndpointInvocationListResponse {
   };
 }
 
+function buildInvocationAuditWithTrafficMix(): PublishedEndpointInvocationListResponse {
+  return {
+    ...buildInvocationAudit(),
+    facets: {
+      ...buildInvocationAudit().facets,
+      request_source_counts: [
+        { value: "workflow", count: 3 },
+        { value: "alias", count: 1 },
+        { value: "path", count: 2 }
+      ],
+      request_surface_counts: [
+        { value: "openai.responses", count: 2 },
+        { value: "native.workflow", count: 1 }
+      ],
+      cache_status_counts: [
+        { value: "hit", count: 2 },
+        { value: "miss", count: 1 }
+      ],
+      run_status_counts: [
+        { value: "failed", count: 2 },
+        { value: "waiting_callback", count: 1 }
+      ]
+    }
+  };
+}
+
 function buildInvocationAuditWithApiKeyUsage(): PublishedEndpointInvocationListResponse {
   return {
     ...buildInvocationAudit(),
@@ -420,6 +446,26 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("Waiting now");
     expect(html).toContain("Cache hit 0 / Cache miss 0 / Cache bypass 0");
     expect(html).toContain("n/a");
+  });
+
+  it("uses shared traffic mix surface summaries and chips", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityInsights, {
+        binding: {
+          rate_limit_policy: null
+        } as WorkflowPublishActivityPanelProps["binding"],
+        invocationAudit: buildInvocationAuditWithTrafficMix(),
+        rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        sandboxReadiness: buildSandboxReadiness(),
+        activeTimeWindow: "24h"
+      })
+    );
+
+    expect(html).toContain("Traffic mix");
+    expect(html).toContain("Cache hit 2 / Cache miss 1");
+    expect(html).toContain("Run failed 2 / Waiting callback 1");
+    expect(html).toContain("OpenAI responses 2");
+    expect(html).toContain("Native workflow route 1");
   });
 
   it("bridges selected invocation next step into activity details", () => {

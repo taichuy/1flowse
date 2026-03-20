@@ -19,6 +19,7 @@ import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-p
 import {
   buildPublishedInvocationActivityDetailsSurfaceCopy,
   buildPublishedInvocationActivityInsightsSurfaceCopy,
+  buildPublishedInvocationActivityTrafficMixSurface,
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationFailureMessageDiagnosis,
   buildPublishedInvocationFailureReasonInsight,
@@ -29,21 +30,17 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationWaitingOverview,
   formatPublishedInvocationApiKeyUsageMix,
-  formatPublishedInvocationCacheSurfaceMix,
   formatPublishedInvocationFailureReasonLastSeen,
   formatPublishedInvocationOptionalRunStatus,
   formatPublishedInvocationReasonLabel,
-  formatPublishedInvocationRunStatusMix,
-  formatPublishedInvocationSurfaceLabel,
   formatRateLimitPressure,
-  listPublishedInvocationFacetCountLabels,
   listPublishedInvocationRunFollowUpSampleViews
 } from "@/lib/published-invocation-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { formatExecutionFocusFollowUp } from "@/lib/run-execution-focus-presenters";
 
-import { facetCount, formatTimeWindowLabel } from "@/components/workflow-publish-activity-panel-helpers";
+import { formatTimeWindowLabel } from "@/components/workflow-publish-activity-panel-helpers";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
 
 type WorkflowPublishActivityInsightsProps = {
@@ -95,6 +92,13 @@ export function WorkflowPublishActivityInsights({
   const insightsSurfaceCopy = buildPublishedInvocationActivityInsightsSurfaceCopy({
     rateLimitWindowStartedAt: rateLimitWindowAudit?.filters.created_from ?? null
   });
+  const trafficMixSurface = buildPublishedInvocationActivityTrafficMixSurface({
+    requestSourceCounts,
+    requestSurfaceCounts,
+    cacheStatusCounts,
+    runStatusCounts,
+    runStatesEmptyLabel: insightsSurfaceCopy.trafficRunStatesEmptyLabel
+  });
   const failureReasonInsight = buildPublishedInvocationFailureReasonInsight({
     reasonCounts,
     failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
@@ -143,36 +147,28 @@ export function WorkflowPublishActivityInsights({
           <dl className="compact-meta-list">
             <div>
               <dt>{insightsSurfaceCopy.trafficWorkflowLabel}</dt>
-              <dd>{facetCount(requestSourceCounts, "workflow")}</dd>
+              <dd>{trafficMixSurface.workflowCount}</dd>
             </div>
             <div>
               <dt>{insightsSurfaceCopy.trafficAliasLabel}</dt>
-              <dd>{facetCount(requestSourceCounts, "alias")}</dd>
+              <dd>{trafficMixSurface.aliasCount}</dd>
             </div>
             <div>
               <dt>{insightsSurfaceCopy.trafficPathLabel}</dt>
-              <dd>{facetCount(requestSourceCounts, "path")}</dd>
+              <dd>{trafficMixSurface.pathCount}</dd>
             </div>
             <div>
               <dt>{insightsSurfaceCopy.trafficCacheSurfaceLabel}</dt>
-              <dd>{formatPublishedInvocationCacheSurfaceMix(cacheStatusCounts)}</dd>
+              <dd>{trafficMixSurface.cacheSurfaceSummary}</dd>
             </div>
             <div>
               <dt>{insightsSurfaceCopy.trafficRunStatesLabel}</dt>
-              <dd>
-                {formatPublishedInvocationRunStatusMix(
-                  runStatusCounts,
-                  insightsSurfaceCopy.trafficRunStatesEmptyLabel
-                )}
-              </dd>
+              <dd>{trafficMixSurface.runStatesSummary}</dd>
             </div>
           </dl>
-          {requestSurfaceCounts.length ? (
+          {trafficMixSurface.requestSurfaceLabels.length ? (
             <div className="tool-badge-row">
-              {listPublishedInvocationFacetCountLabels(
-                requestSurfaceCounts,
-                formatPublishedInvocationSurfaceLabel
-              ).map((label) => (
+              {trafficMixSurface.requestSurfaceLabels.map((label) => (
                 <span className="event-chip" key={label}>
                   {label}
                 </span>
