@@ -30,7 +30,7 @@ function resolveSensitiveAccessInboxEntryDisplayScope(
       trimOrNull(entry.ticket.run_id) ??
       trimOrNull(entry.request?.run_id),
     nodeRunId:
-      trimOrNull(entry.callbackWaitingContext?.nodeRunId) ??
+      trimOrNull(entry.callbackWaitingContext?.displayNodeRunId) ??
       trimOrNull(entry.executionContext?.focusNode.node_run_id) ??
       trimOrNull(entry.ticket.node_run_id) ??
       trimOrNull(entry.request?.node_run_id) ??

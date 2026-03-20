@@ -65,6 +65,7 @@ type CallbackWaitingSummaryCardProps = {
   inboxHref?: string | null;
   runId?: string | null;
   nodeRunId?: string | null;
+  actionNodeRunId?: string | null;
   focusNodeEvidence?: CallbackWaitingFocusNodeEvidence | null;
   focusSkillTrace?: RunExecutionSkillTrace | null;
   focusSkillReferenceLoads?: SkillReferenceLoadItem[];
@@ -93,6 +94,7 @@ export function CallbackWaitingSummaryCard({
   inboxHref,
   runId,
   nodeRunId,
+  actionNodeRunId = null,
   focusNodeEvidence,
   focusSkillTrace,
   focusSkillReferenceLoads = [],
@@ -132,6 +134,7 @@ export function CallbackWaitingSummaryCard({
   const inlineSensitiveAccessEntry = pickCallbackWaitingInlineSensitiveAccessEntry(
     sensitiveAccessEntries
   );
+  const inlineActionNodeRunId = actionNodeRunId ?? nodeRunId ?? null;
   const operatorStatuses = listCallbackWaitingOperatorStatuses({
     lifecycle,
     callbackTickets,
@@ -353,7 +356,9 @@ export function CallbackWaitingSummaryCard({
       {showInlineActions && inlineSensitiveAccessEntry ? (
         <SensitiveAccessInlineActions
           compact
-          nodeRunId={inlineSensitiveAccessEntry.approval_ticket?.node_run_id ?? nodeRunId ?? null}
+          nodeRunId={
+            inlineSensitiveAccessEntry.approval_ticket?.node_run_id ?? inlineActionNodeRunId
+          }
           notifications={inlineSensitiveAccessEntry.notifications}
           runId={runId ?? null}
           ticket={inlineSensitiveAccessEntry.approval_ticket}
@@ -363,7 +368,7 @@ export function CallbackWaitingSummaryCard({
         <CallbackWaitingInlineActions
           allowManualResume={!hasTermination}
           compact
-          nodeRunId={nodeRunId}
+          nodeRunId={inlineActionNodeRunId}
           preferredAction={preferredInlineAction}
           runId={runId ?? null}
           statusHint={inlineStatusHint}

@@ -70,7 +70,8 @@ describe("resolveSensitiveAccessInboxEntryScope", () => {
       },
       callbackWaitingContext: {
         runId: "run-1",
-        nodeRunId: "node-callback",
+        displayNodeRunId: "node-callback",
+        actionNodeRunId: null,
         callbackTickets: [],
         sensitiveAccessEntries: []
       }
@@ -164,7 +165,8 @@ describe("resolveSensitiveAccessInboxEntryScope", () => {
       },
       callbackWaitingContext: {
         runId: "run-focus",
-        nodeRunId: "node-focus",
+        displayNodeRunId: "node-focus",
+        actionNodeRunId: null,
         callbackTickets: [],
         sensitiveAccessEntries: []
       },

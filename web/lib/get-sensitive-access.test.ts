@@ -262,7 +262,8 @@ describe("getSensitiveAccessInboxSnapshot", () => {
     expect(snapshot.entries[0]?.runSnapshot?.executionFocusNodeRunId).toBe("node-run-1");
     expect(snapshot.entries[0]?.runFollowUp?.sampledRuns[0]?.runId).toBe("run-1");
     expect(snapshot.entries[0]?.executionContext?.focusMatchesEntry).toBe(true);
-    expect(snapshot.entries[0]?.callbackWaitingContext?.nodeRunId).toBe("node-run-1");
+    expect(snapshot.entries[0]?.callbackWaitingContext?.displayNodeRunId).toBe("node-run-1");
+    expect(snapshot.entries[0]?.callbackWaitingContext?.actionNodeRunId).toBe("node-run-1");
     expect(snapshot.channels).toHaveLength(1);
     expect(snapshot.summary.ticket_count).toBe(1);
     expect(snapshot.summary.pending_notification_count).toBe(1);

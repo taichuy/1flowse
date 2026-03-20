@@ -207,7 +207,8 @@ export function SensitiveAccessInboxEntryCard({
             focusSkillReferenceLoads={focusSkillTraceReferenceLoads}
             focusSkillReferenceCount={focusSkillTraceReferenceCount}
             lifecycle={callbackWaitingContext.lifecycle}
-            nodeRunId={callbackWaitingContext.nodeRunId}
+            nodeRunId={callbackWaitingContext.displayNodeRunId}
+            actionNodeRunId={callbackWaitingContext.actionNodeRunId ?? actionScope.nodeRunId}
             runId={callbackWaitingContext.runId}
             scheduledResumeDelaySeconds={callbackWaitingContext.scheduledResumeDelaySeconds}
             scheduledResumeSource={callbackWaitingContext.scheduledResumeSource}

@@ -177,7 +177,8 @@ describe("SensitiveAccessInboxEntryCard", () => {
     };
     entry.callbackWaitingContext = {
       runId: "run-current-scope",
-      nodeRunId: "node-focus-display",
+      displayNodeRunId: "node-focus-display",
+      actionNodeRunId: null,
       callbackTickets: [],
       sensitiveAccessEntries: []
     };
@@ -186,5 +187,45 @@ describe("SensitiveAccessInboxEntryCard", () => {
 
     expect(html).toContain('href="/runs/run-current-scope"');
     expect(html).toContain('name="nodeRunId" value=""');
+    expect(html).not.toContain('name="nodeRunId" value="node-focus-display"');
+  });
+
+  it("routes callback summary inline actions through the entry action node instead of the display focus node", () => {
+    const entry = buildEntry();
+    entry.executionContext = {
+      ...entry.executionContext!,
+      focusMatchesEntry: false,
+      entryNodeRunId: "node-run-entry",
+      focusNode: {
+        ...entry.executionContext!.focusNode,
+        node_run_id: "node-run-display",
+        node_id: "display-node",
+        node_name: "Display Node"
+      }
+    };
+    entry.ticket.node_run_id = "node-run-entry";
+    entry.request!.node_run_id = "node-run-entry";
+    entry.callbackWaitingContext = {
+      runId: "run-1",
+      displayNodeRunId: "node-run-display",
+      actionNodeRunId: "node-run-entry",
+      callbackTickets: [],
+      sensitiveAccessEntries: [
+        {
+          request: entry.request!,
+          resource: entry.resource!,
+          approval_ticket: {
+            ...entry.ticket,
+            node_run_id: null
+          },
+          notifications: []
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
+
+    expect(html).toContain('name="nodeRunId" value="node-run-entry"');
+    expect(html).not.toContain('name="nodeRunId" value="node-run-display"');
   });
 });

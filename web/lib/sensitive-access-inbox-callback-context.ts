@@ -6,7 +6,8 @@ import type {
 
 export type SensitiveAccessInboxCallbackContext = {
   runId: string;
-  nodeRunId: string;
+  displayNodeRunId: string;
+  actionNodeRunId?: string | null;
   waitingReason?: string | null;
   lifecycle?: RunSnapshot["callbackWaitingLifecycle"];
   callbackWaitingExplanation?: RunSnapshot["callbackWaitingExplanation"];
@@ -62,18 +63,20 @@ export function buildSensitiveAccessInboxEntryCallbackContext(
     trimOrNull(entry.ticket.run_id) ??
     trimOrNull(entry.request?.run_id) ??
     trimOrNull(entry.runFollowUp?.sampledRuns[0]?.runId);
-  const nodeRunId =
+  const actionNodeRunId =
+    trimOrNull(entry.ticket.node_run_id) ?? trimOrNull(entry.request?.node_run_id);
+  const displayNodeRunId =
     trimOrNull(runSnapshot?.executionFocusNodeRunId) ??
-    trimOrNull(entry.ticket.node_run_id) ??
-    trimOrNull(entry.request?.node_run_id);
+    actionNodeRunId;
   const inlineSensitiveAccessEntries = buildInlineSensitiveAccessEntries(entry);
-  if (!runId || !nodeRunId || !hasCallbackSignals(runSnapshot)) {
+  if (!runId || !displayNodeRunId || !hasCallbackSignals(runSnapshot)) {
     return null;
   }
 
   return {
     runId,
-    nodeRunId,
+    displayNodeRunId,
+    actionNodeRunId,
     waitingReason: runSnapshot?.waitingReason ?? null,
     lifecycle: runSnapshot?.callbackWaitingLifecycle ?? null,
     callbackWaitingExplanation: runSnapshot?.callbackWaitingExplanation ?? null,

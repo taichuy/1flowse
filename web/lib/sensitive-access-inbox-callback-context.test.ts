@@ -126,7 +126,8 @@ describe("sensitive access inbox callback context", () => {
 
     expect(context).not.toBeNull();
     expect(context?.runId).toBe("run-1");
-    expect(context?.nodeRunId).toBe("node-run-1");
+    expect(context?.displayNodeRunId).toBe("node-run-1");
+    expect(context?.actionNodeRunId).toBe("node-run-1");
     expect(context?.waitingReason).toBe("Waiting for callback approval");
     expect(context?.callbackTickets).toEqual([]);
     expect(context?.scheduledResumeSource).toBe("callback_ticket_monitor");
@@ -156,7 +157,8 @@ describe("sensitive access inbox callback context", () => {
       createRunSnapshot()
     );
 
-    expect(context?.nodeRunId).toBe("node-run-1");
+    expect(context?.displayNodeRunId).toBe("node-run-1");
+    expect(context?.actionNodeRunId).toBeNull();
   });
 
   it("当 run_id 缺失时会回退到 run follow-up 样本", () => {
@@ -221,5 +223,20 @@ describe("sensitive access inbox callback context", () => {
     );
 
     expect(context?.runId).toBe("run-current");
+  });
+
+  it("把 callback 展示节点与 entry 动作节点分开保留", () => {
+    const context = buildSensitiveAccessInboxEntryCallbackContext(
+      createInboxEntry(),
+      createRunSnapshot({
+        executionFocusNodeId: "node-focus",
+        executionFocusNodeRunId: "node-run-focus",
+        executionFocusNodeName: "Focus Node"
+      })
+    );
+
+    expect(context).not.toBeNull();
+    expect(context?.displayNodeRunId).toBe("node-run-focus");
+    expect(context?.actionNodeRunId).toBe("node-run-1");
   });
 });
