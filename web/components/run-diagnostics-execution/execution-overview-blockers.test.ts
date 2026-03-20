@@ -390,6 +390,10 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
     expect(html).toContain("trace node node-run-blocker");
     expect(html).toContain("fallback refs 0");
     expect(html).toContain("fallback node Blocker node");
+    expect(html).toContain("effective sandbox");
+    expect(html).toContain("executor tool-runtime");
+    expect(html).toContain("backend sandbox-default");
+    expect(html).toContain("runner tool");
   });
 
   it("surfaces canonical focus evidence for non-callback execution blockers", () => {
@@ -486,5 +490,6 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
     expect(html).toContain("first tool Demo Search · blocked");
     expect(html).toContain("skill-reference-load-list");
     expect(html).toContain("Focused skill trace count 1 first ref Focus checklist");
+    expect(html).toContain("effective inline");
   });
 });

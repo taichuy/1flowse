@@ -22,6 +22,7 @@ import {
   formatExecutionFocusPrimarySignal,
   formatExecutionFocusReasonLabel,
   listExecutionFocusArtifactPreviews,
+  listExecutionFocusRuntimeFactBadges,
   listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
@@ -147,6 +148,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
   const focusNodeFollowUp =
     executionView.execution_focus_explanation?.follow_up ??
     (focusNode ? formatExecutionFocusFollowUp(focusNode) : null);
+  const focusNodeExecutionFactBadges = listExecutionFocusRuntimeFactBadges(focusNode);
   const blockerNodes = pickTopBlockerNodes(executionView).filter(
     (node) => node.node_run_id !== focusNode?.node_run_id
   );
@@ -176,6 +178,15 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               {focusNode.node_type} · node run {focusNode.node_run_id}
             </p>
             <p className="binding-meta">This node is selected from backend execution facts.</p>
+            {focusNodeExecutionFactBadges.length > 0 ? (
+              <div className="tool-badge-row">
+                {focusNodeExecutionFactBadges.map((badge) => (
+                  <span className="event-chip" key={`${focusNode.node_run_id}-${badge}`}>
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {focusNodePrimarySignal ? (
               <p className="section-copy entry-copy">{focusNodePrimarySignal}</p>
             ) : null}
@@ -203,6 +214,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
           const followUp =
             node.execution_focus_explanation?.follow_up ??
             formatExecutionFocusFollowUp(node);
+          const executionFactBadges = listExecutionFocusRuntimeFactBadges(node);
 
           return (
             <article className="payload-card compact-card" key={node.node_run_id}>
@@ -223,6 +235,15 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               </p>
               {node.started_at ? (
                 <p className="binding-meta">Started {formatTimestamp(node.started_at)}</p>
+              ) : null}
+              {executionFactBadges.length > 0 ? (
+                <div className="tool-badge-row">
+                  {executionFactBadges.map((badge) => (
+                    <span className="event-chip" key={`${node.node_run_id}-${badge}`}>
+                      {badge}
+                    </span>
+                  ))}
+                </div>
               ) : null}
               {primarySignal ? <p className="section-copy entry-copy">{primarySignal}</p> : null}
               {followUp ? <p className="binding-meta">{followUp}</p> : null}

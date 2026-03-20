@@ -495,6 +495,25 @@ describe("run execution focus presenters", () => {
     ]);
   });
 
+  it("当 tool calls 还没落地时回退到 node 级 execution facts", () => {
+    const badges = listExecutionFocusRuntimeFactBadges(
+      createExecutionNode({
+        tool_calls: [],
+        effective_execution_class: "sandbox",
+        execution_executor_ref: "tool-runtime",
+        execution_sandbox_backend_id: "sandbox-default",
+        execution_sandbox_runner_kind: "tool"
+      })
+    );
+
+    expect(badges).toEqual([
+      "effective sandbox",
+      "executor tool-runtime",
+      "backend sandbox-default",
+      "runner tool"
+    ]);
+  });
+
   it("把 execution focus artifact 预览压成 callback/operator 可复用的结构", () => {
     const previews = listExecutionFocusArtifactPreviews(
       createExecutionNode({

@@ -161,6 +161,9 @@ export function ExecutionNodeCard({
         {node.execution_sandbox_backend_id ? (
           <span className="event-chip">sandbox {node.execution_sandbox_backend_id}</span>
         ) : null}
+        {node.execution_sandbox_runner_kind ? (
+          <span className="event-chip">runner {node.execution_sandbox_runner_kind}</span>
+        ) : null}
         {node.execution_sandbox_backend_executor_ref ? (
           <span className="event-chip">
             backend-executor {node.execution_sandbox_backend_executor_ref}

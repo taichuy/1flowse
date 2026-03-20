@@ -367,4 +367,19 @@ describe("ExecutionNodeCard", () => {
     expect(html).toContain("trace nodes 1");
     expect(html).toContain("trace node node-run-callback");
   });
+
+  it("surfaces compact runner facts in the node header strip", () => {
+    const html = renderToStaticMarkup(
+      createElement(ExecutionNodeCard, {
+        node: buildExecutionNode(),
+        runId: "run-callback-1",
+        callbackWaitingAutomation: buildCallbackWaitingAutomation()
+      })
+    );
+
+    expect(html).toContain("effective sandbox");
+    expect(html).toContain("executor tool-runtime");
+    expect(html).toContain("sandbox sandbox-default");
+    expect(html).toContain("runner tool");
+  });
 });

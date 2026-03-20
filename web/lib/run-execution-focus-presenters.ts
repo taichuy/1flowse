@@ -36,7 +36,14 @@ type ExecutionFocusToolExplainableNode = Pick<
   "tool_calls" | "artifact_refs" | "artifacts"
 >;
 
-type ExecutionFocusRuntimeFactExplainableNode = Pick<RunExecutionNodeItem, "tool_calls">;
+type ExecutionFocusRuntimeFactExplainableNode = Pick<
+  RunExecutionNodeItem,
+  | "tool_calls"
+  | "effective_execution_class"
+  | "execution_executor_ref"
+  | "execution_sandbox_backend_id"
+  | "execution_sandbox_runner_kind"
+>;
 
 export type ExecutionFocusArtifactPreview = {
   key: string;
@@ -301,23 +308,35 @@ function summarizeExecutionRuntimeFacts(
 export function listExecutionFocusRuntimeFactBadges(
   node: ExecutionFocusRuntimeFactExplainableNode | null | undefined
 ) {
-  if (!node || node.tool_calls.length === 0) {
+  if (!node) {
     return [];
   }
 
   return [
     summarizeExecutionRuntimeFacts(node.tool_calls, "effective", (toolCall) =>
       trimOrNull(toolCall.effective_execution_class)
-    ),
+    ) ??
+      (trimOrNull(node.effective_execution_class)
+        ? `effective ${trimOrNull(node.effective_execution_class)}`
+        : null),
     summarizeExecutionRuntimeFacts(node.tool_calls, "executor", (toolCall) =>
       trimOrNull(toolCall.execution_executor_ref)
-    ),
+    ) ??
+      (trimOrNull(node.execution_executor_ref)
+        ? `executor ${trimOrNull(node.execution_executor_ref)}`
+        : null),
     summarizeExecutionRuntimeFacts(node.tool_calls, "backend", (toolCall) =>
       trimOrNull(toolCall.execution_sandbox_backend_id)
-    ),
+    ) ??
+      (trimOrNull(node.execution_sandbox_backend_id)
+        ? `backend ${trimOrNull(node.execution_sandbox_backend_id)}`
+        : null),
     summarizeExecutionRuntimeFacts(node.tool_calls, "runner", (toolCall) =>
       trimOrNull(toolCall.execution_sandbox_runner_kind)
-    )
+    ) ??
+      (trimOrNull(node.execution_sandbox_runner_kind)
+        ? `runner ${trimOrNull(node.execution_sandbox_runner_kind)}`
+        : null)
   ].filter((item): item is string => Boolean(item));
 }
 
