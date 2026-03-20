@@ -74,6 +74,8 @@ export function SensitiveAccessInboxEntryCard({
         nodeRunId: executionContext.focusNode.node_run_id
       })
     : null;
+  const focusSkillTraceReferenceLoads = executionContext?.skillTrace?.loads ?? [];
+  const focusSkillTraceReferenceCount = executionContext?.skillTrace?.reference_count ?? null;
 
   return (
     <article className="activity-row">
@@ -139,32 +141,17 @@ export function SensitiveAccessInboxEntryCard({
             <span className="event-chip">
               {formatExecutionFocusReasonLabel(executionContext.focusReason)}
             </span>
-            <span className={`event-chip`}>{executionContext.focusNode.status}</span>
             <span className="event-chip">node run {executionContext.focusNode.node_run_id}</span>
-            {executionContext.focusNode.execution_blocked_count > 0 ? (
-              <span className="event-chip">
-                blocked {executionContext.focusNode.execution_blocked_count}
-              </span>
-            ) : null}
-            {executionContext.focusNode.execution_unavailable_count > 0 ? (
-              <span className="event-chip">
-                unavailable {executionContext.focusNode.execution_unavailable_count}
-              </span>
-            ) : null}
           </div>
           <p className="section-copy entry-copy">
             {executionContext.focusMatchesEntry
               ? "当前票据已经命中后端选出的 canonical blocker；优先按本条目上的 approval / callback follow-up 恢复即可。"
-              : executionContext.entryNode
-                ? `当前票据关联节点 ${executionContext.entryNode.node_name}，但当前 run 的 canonical blocker 已切到 ${executionContext.focusNode.node_name}；建议先跳到该 focus 节点统一排障。`
+              : executionContext.entryNodeRunId
+                ? `当前票据关联 node run ${executionContext.entryNodeRunId}，但当前 run 的 canonical blocker 已切到 ${executionContext.focusNode.node_name}；建议先跳到该 focus 节点统一排障。`
                 : `当前票据还没有稳定映射到具体 node run，但当前 run 的 canonical blocker 已定位到 ${executionContext.focusNode.node_name}。`}
           </p>
           <p className="binding-meta">
-            {executionContext.focusNode.node_type} · phase {executionContext.focusNode.phase ?? "n/a"}
-            {` · exec ${executionContext.focusNode.execution_class}`}
-            {executionContext.focusNode.effective_execution_class
-              ? ` · effective ${executionContext.focusNode.effective_execution_class}`
-              : ""}
+            {executionContext.focusNode.node_type} · focus node {executionContext.focusNode.node_id}
           </p>
           {executionFocusPrimarySignal ? (
             <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
@@ -200,7 +187,9 @@ export function SensitiveAccessInboxEntryCard({
             callbackTickets={callbackWaitingContext.callbackTickets}
             callbackWaitingAutomation={callbackWaitingAutomation}
             callbackWaitingExplanation={callbackWaitingContext.callbackWaitingExplanation}
-            focusSkillTrace={executionContext?.skillTrace ?? null}
+            focusNodeEvidence={executionContext?.focusNode ?? null}
+            focusSkillReferenceLoads={focusSkillTraceReferenceLoads}
+            focusSkillReferenceCount={focusSkillTraceReferenceCount}
             lifecycle={callbackWaitingContext.lifecycle}
             nodeRunId={callbackWaitingContext.nodeRunId}
             runId={callbackWaitingContext.runId}
@@ -213,6 +202,8 @@ export function SensitiveAccessInboxEntryCard({
             scheduledResumeRequeueSource={callbackWaitingContext.scheduledResumeRequeueSource}
             sensitiveAccessEntries={callbackWaitingContext.sensitiveAccessEntries}
             waitingReason={callbackWaitingContext.waitingReason}
+            focusSkillReferenceNodeId={executionContext?.focusNode.node_id ?? null}
+            focusSkillReferenceNodeName={executionContext?.focusNode.node_name ?? null}
           />
         </div>
       ) : null}

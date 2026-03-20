@@ -194,6 +194,8 @@ class SensitiveAccessInboxEntryItem(BaseModel):
     request: SensitiveAccessRequestItem | None = None
     resource: SensitiveResourceItem | None = None
     notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
 class SensitiveAccessInboxSummary(BaseModel):

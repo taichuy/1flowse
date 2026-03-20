@@ -26,6 +26,6 @@ export function resolveSensitiveAccessInboxEntryScope(
       trimOrNull(entry.ticket.node_run_id) ??
       trimOrNull(entry.request?.node_run_id) ??
       trimOrNull(entry.callbackWaitingContext?.nodeRunId) ??
-      trimOrNull(entry.executionContext?.entryNode?.node_run_id)
+      trimOrNull(entry.executionContext?.entryNodeRunId)
   };
 }

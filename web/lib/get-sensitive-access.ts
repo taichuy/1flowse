@@ -1,7 +1,12 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import {
+  normalizeOperatorRunFollowUp,
+  normalizeOperatorRunSnapshot,
+  type OperatorRunFollowUpBody,
+  type OperatorRunSnapshotBody
+} from "@/app/actions/run-snapshot";
 import type {
   CallbackWaitingLifecycleSummary,
-  RunExecutionView,
   SkillReferenceLoadItem
 } from "@/lib/get-run-views";
 import {
@@ -181,6 +186,20 @@ export type SensitiveAccessInboxEntry = {
   request: SensitiveAccessRequestItem | null;
   resource: SensitiveResourceItem | null;
   notifications: NotificationDispatchItem[];
+  runSnapshot?: OperatorRunSnapshotSummary | null;
+  runFollowUp?: {
+    affectedRunCount: number;
+    sampledRunCount: number;
+    waitingRunCount: number;
+    runningRunCount: number;
+    succeededRunCount: number;
+    failedRunCount: number;
+    unknownRunCount: number;
+    sampledRuns: Array<{
+      runId: string;
+      snapshot: OperatorRunSnapshotSummary | null;
+    }>;
+  } | null;
   callbackWaitingContext?: SensitiveAccessInboxCallbackContext | null;
   executionContext?: SensitiveAccessInboxExecutionContext | null;
 };
@@ -270,6 +289,8 @@ type SensitiveAccessInboxEntryBody = {
   request?: SensitiveAccessRequestItem | null;
   resource?: SensitiveResourceItem | null;
   notifications: NotificationDispatchItem[];
+  run_snapshot?: OperatorRunSnapshotBody | OperatorRunSnapshotSummary | null;
+  run_follow_up?: OperatorRunFollowUpBody | null;
 };
 
 type SensitiveAccessInboxResponseBody = {
@@ -278,7 +299,6 @@ type SensitiveAccessInboxResponseBody = {
   resources?: SensitiveResourceItem[];
   requests?: SensitiveAccessRequestItem[];
   notifications?: NotificationDispatchItem[];
-  execution_views?: RunExecutionView[];
   summary?: SensitiveAccessInboxSummary | null;
 };
 
@@ -357,26 +377,28 @@ export async function getSensitiveAccessInboxSnapshot({
   const requests = body?.requests ?? [];
   const notifications = body?.notifications ?? [];
   const channels = body?.channels ?? [];
-  const executionViewsByRunId = new Map(
-    (body?.execution_views ?? []).map((item) => [item.run_id, item] as const)
-  );
-
   const entries = (body?.entries ?? [])
     .map((entry) => ({
       ticket: entry.ticket,
       request: entry.request ?? null,
       resource: entry.resource ?? null,
-      notifications: entry.notifications ?? []
+      notifications: entry.notifications ?? [],
+      runSnapshot: normalizeOperatorRunSnapshot(entry.run_snapshot) ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(entry.run_follow_up) ?? null
     }))
     .map((entry) => ({
       ...entry,
       callbackWaitingContext: buildSensitiveAccessInboxEntryCallbackContext(
         entry,
-        executionViewsByRunId.get(entry.ticket.run_id ?? entry.request?.run_id ?? "") ?? null
+        entry.runSnapshot ??
+          entry.runFollowUp?.sampledRuns.find((sample) => sample.snapshot != null)?.snapshot ??
+          null
       ),
       executionContext: buildSensitiveAccessInboxEntryExecutionContext(
         entry,
-        executionViewsByRunId.get(entry.ticket.run_id ?? entry.request?.run_id ?? "") ?? null
+        entry.runSnapshot ??
+          entry.runFollowUp?.sampledRuns.find((sample) => sample.snapshot != null)?.snapshot ??
+          null
       )
     }))
     .sort(

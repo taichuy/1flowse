@@ -44,9 +44,9 @@ from app.services.notification_channel_diagnostics import (
 )
 from app.services.operator_run_follow_up import (
     build_operator_run_follow_up_summary,
+    build_operator_run_follow_up_summary_map,
     load_operator_run_snapshot,
 )
-from app.services.run_views import RunViewService
 from app.services.sensitive_access_action_explanations import (
     build_approval_decision_outcome_explanation,
     build_bulk_approval_decision_outcome_explanation,
@@ -76,8 +76,6 @@ from app.services.sensitive_access_run_resolution import (
 
 router = APIRouter(prefix="/sensitive-access", tags=["sensitive-access"])
 service = SensitiveAccessControlService()
-run_view_service = RunViewService()
-
 
 def _resolve_single_run_follow_up(
     db: Session,
@@ -370,7 +368,21 @@ def _build_sensitive_access_inbox_summary(
     )
 
 
-def _resolve_inbox_execution_view_run_ids(
+def _resolve_inbox_entry_run_id(
+    db: Session,
+    entry: SensitiveAccessInboxEntryItem,
+) -> str | None:
+    return resolve_sensitive_access_run_id(
+        run_id=entry.ticket.run_id or (entry.request.run_id if entry.request else None),
+        node_run_id=entry.ticket.node_run_id
+        or (entry.request.node_run_id if entry.request else None),
+        run_ids_by_node_run_id=load_run_ids_by_node_run_id(
+            db, [entry.ticket.node_run_id or (entry.request.node_run_id if entry.request else None)]
+        ),
+    )
+
+
+def _resolve_inbox_run_ids(
     db: Session,
     entries: list[SensitiveAccessInboxEntryItem],
 ) -> list[str]:
@@ -448,6 +460,7 @@ def get_sensitive_access_inbox(
         notifications_by_ticket_id[item.approval_ticket_id].append(item)
 
     entries: list[SensitiveAccessInboxEntryItem] = []
+    entry_run_ids: dict[str, str] = {}
     for ticket in tickets:
         request = requests_by_id.get(ticket.access_request_id)
         if (decision or requester_type) and request is None:
@@ -457,34 +470,55 @@ def get_sensitive_access_inbox(
         if (notification_status or notification_channel) and not ticket_notifications:
             continue
 
-        entries.append(
-            SensitiveAccessInboxEntryItem(
-                ticket=ticket,
-                request=request,
-                resource=(
-                    resources_by_id.get(request.resource_id)
-                    if request is not None
-                    else None
-                ),
-                notifications=ticket_notifications,
-            )
+        entry = SensitiveAccessInboxEntryItem(
+            ticket=ticket,
+            request=request,
+            resource=(
+                resources_by_id.get(request.resource_id)
+                if request is not None
+                else None
+            ),
+            notifications=ticket_notifications,
         )
+        entries.append(entry)
+        resolved_run_id = _resolve_inbox_entry_run_id(db, entry)
+        if resolved_run_id:
+            entry_run_ids[entry.ticket.id] = resolved_run_id
 
     entries.sort(key=lambda item: item.ticket.created_at, reverse=True)
 
-    execution_views = []
-    for entry_run_id in _resolve_inbox_execution_view_run_ids(db, entries):
-        execution_view = run_view_service.get_execution_view(db, entry_run_id)
-        if execution_view is not None:
-            execution_views.append(execution_view.model_dump(mode="json"))
+    run_follow_up_by_run_id = build_operator_run_follow_up_summary_map(
+        db,
+        _resolve_inbox_run_ids(db, entries),
+        sample_limit=1,
+    )
+    hydrated_entries: list[SensitiveAccessInboxEntryItem] = []
+    for entry in entries:
+        resolved_run_id = entry_run_ids.get(entry.ticket.id)
+        run_follow_up = (
+            run_follow_up_by_run_id.get(resolved_run_id) if resolved_run_id else None
+        )
+        run_snapshot = (
+            run_follow_up.sampled_runs[0].snapshot
+            if run_follow_up is not None and run_follow_up.sampled_runs
+            else None
+        )
+        hydrated_entries.append(
+            entry.model_copy(
+                update={
+                    "run_snapshot": run_snapshot,
+                    "run_follow_up": run_follow_up,
+                }
+            )
+        )
 
     return SensitiveAccessInboxResponse(
-        entries=entries,
+        entries=hydrated_entries,
         channels=channels,
         resources=resources,
         requests=requests,
         notifications=notifications,
-        execution_views=execution_views,
+        execution_views=[],
         summary=_build_sensitive_access_inbox_summary(entries),
     )
 

@@ -1583,7 +1583,7 @@ def test_sensitive_access_listing_filters_support_node_and_ticket_scopes(
 
 
 
-def test_sensitive_access_inbox_returns_filtered_entries_and_execution_views(
+def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
     client: TestClient,
     sqlite_session: Session,
     sample_workflow: Workflow,
@@ -1664,7 +1664,9 @@ def test_sensitive_access_inbox_returns_filtered_entries_and_execution_views(
     assert [item["id"] for item in body["entries"][0]["notifications"]] == [
         request_body["notifications"][0]["id"]
     ]
-    assert [item["run_id"] for item in body["execution_views"]] == [run.id]
+    assert body["entries"][0]["run_snapshot"] == request_body["run_snapshot"]
+    assert body["entries"][0]["run_follow_up"] == request_body["run_follow_up"]
+    assert body["execution_views"] == []
     assert body["summary"] == {
         "ticket_count": 1,
         "pending_ticket_count": 1,

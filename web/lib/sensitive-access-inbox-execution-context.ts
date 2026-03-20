@@ -1,20 +1,44 @@
+import type { RunSnapshot } from "@/app/actions/run-snapshot";
 import type {
-  RunExecutionFocusExplanation,
+  RunArtifactItem,
   RunExecutionFocusReason,
-  RunExecutionNodeItem,
-  RunExecutionSkillTrace,
-  RunExecutionView
+  ToolCallItem
 } from "@/lib/get-run-views";
-import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
+import type {
+  SensitiveAccessInboxEntry,
+  SensitiveAccessTimelineEntry
+} from "@/lib/get-sensitive-access";
+
+type FocusSkillTrace = NonNullable<RunSnapshot["executionFocusSkillTrace"]>;
+
+export type SensitiveAccessInboxExecutionFocusNode = {
+  node_run_id: string;
+  node_id: string;
+  node_name: string;
+  node_type: string;
+  waiting_reason?: string | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_due_at?: string | null;
+  callback_tickets: [];
+  sensitive_access_entries: SensitiveAccessTimelineEntry[];
+  execution_fallback_count: number;
+  execution_blocked_count: number;
+  execution_unavailable_count: number;
+  execution_blocking_reason?: string | null;
+  execution_fallback_reason?: string | null;
+  artifact_refs: string[];
+  artifacts: RunArtifactItem[];
+  tool_calls: ToolCallItem[];
+};
 
 export type SensitiveAccessInboxExecutionContext = {
   runId: string;
-  entryNode: RunExecutionNodeItem | null;
-  focusNode: RunExecutionNodeItem;
+  focusNode: SensitiveAccessInboxExecutionFocusNode;
   focusReason?: RunExecutionFocusReason | null;
-  focusExplanation?: RunExecutionFocusExplanation | null;
+  focusExplanation?: RunSnapshot["executionFocusExplanation"] | null;
   focusMatchesEntry: boolean;
-  skillTrace: RunExecutionSkillTrace | null;
+  entryNodeRunId: string | null;
+  skillTrace: FocusSkillTrace | null;
 };
 
 function trimOrNull(value?: string | null) {
@@ -22,59 +46,148 @@ function trimOrNull(value?: string | null) {
   return normalized ? normalized : null;
 }
 
-function pickExecutionNode(
+function buildInlineSensitiveAccessEntries(
+  entry: SensitiveAccessInboxEntry
+): SensitiveAccessTimelineEntry[] {
+  if (!entry.request || !entry.resource) {
+    return [];
+  }
+
+  return [
+    {
+      request: entry.request,
+      resource: entry.resource,
+      approval_ticket: entry.ticket,
+      notifications: entry.notifications
+    }
+  ];
+}
+
+function buildFocusArtifacts(
+  runId: string,
+  focusNodeRunId: string,
+  runSnapshot: RunSnapshot
+): RunArtifactItem[] {
+  return (runSnapshot.executionFocusArtifacts ?? []).map((artifact, index) => ({
+    id: `inbox-focus-artifact-${index}`,
+    run_id: runId,
+    node_run_id: focusNodeRunId,
+    artifact_kind: artifact.artifact_kind ?? "artifact",
+    content_type: artifact.content_type ?? "application/octet-stream",
+    summary: artifact.summary ?? "",
+    uri: artifact.uri ?? `inbox://focus-artifact/${index}`,
+    metadata_payload: {},
+    created_at: ""
+  }));
+}
+
+function buildFocusToolCalls(
+  runId: string,
+  focusNodeRunId: string,
+  runSnapshot: RunSnapshot
+): ToolCallItem[] {
+  return (runSnapshot.executionFocusToolCalls ?? []).map((toolCall, index) => ({
+    id: toolCall.id ?? `inbox-focus-tool-call-${index}`,
+    run_id: runId,
+    node_run_id: focusNodeRunId,
+    tool_id: toolCall.tool_id ?? "unknown-tool",
+    tool_name: toolCall.tool_name ?? toolCall.tool_id ?? "Unknown Tool",
+    phase: toolCall.phase ?? "tool",
+    status: toolCall.status ?? "unknown",
+    request_summary: "",
+    requested_execution_class: toolCall.requested_execution_class ?? null,
+    requested_execution_source: toolCall.requested_execution_source ?? null,
+    requested_execution_profile: toolCall.requested_execution_profile ?? null,
+    requested_execution_timeout_ms: toolCall.requested_execution_timeout_ms ?? null,
+    requested_execution_network_policy: toolCall.requested_execution_network_policy ?? null,
+    requested_execution_filesystem_policy:
+      toolCall.requested_execution_filesystem_policy ?? null,
+    requested_execution_dependency_mode:
+      toolCall.requested_execution_dependency_mode ?? null,
+    requested_execution_builtin_package_set:
+      toolCall.requested_execution_builtin_package_set ?? null,
+    requested_execution_dependency_ref: toolCall.requested_execution_dependency_ref ?? null,
+    requested_execution_backend_extensions:
+      toolCall.requested_execution_backend_extensions ?? null,
+    effective_execution_class: toolCall.effective_execution_class ?? null,
+    execution_executor_ref: toolCall.execution_executor_ref ?? null,
+    execution_sandbox_backend_id: toolCall.execution_sandbox_backend_id ?? null,
+    execution_sandbox_backend_executor_ref:
+      toolCall.execution_sandbox_backend_executor_ref ?? null,
+    execution_sandbox_runner_kind: toolCall.execution_sandbox_runner_kind ?? null,
+    execution_blocking_reason: toolCall.execution_blocking_reason ?? null,
+    execution_fallback_reason: toolCall.execution_fallback_reason ?? null,
+    response_summary: toolCall.response_summary ?? null,
+    response_content_type: toolCall.response_content_type ?? null,
+    raw_ref: toolCall.raw_ref ?? null,
+    latency_ms: 0,
+    retry_count: 0,
+    created_at: ""
+  }));
+}
+
+function buildFocusNode(
   entry: SensitiveAccessInboxEntry,
-  executionView?: Pick<RunExecutionView, "nodes"> | null
-) {
-  if (!executionView) {
+  runId: string,
+  runSnapshot: RunSnapshot
+): SensitiveAccessInboxExecutionFocusNode | null {
+  const nodeRunId =
+    trimOrNull(runSnapshot.executionFocusNodeRunId) ??
+    trimOrNull(entry.ticket.node_run_id) ??
+    trimOrNull(entry.request?.node_run_id);
+  const nodeId = trimOrNull(runSnapshot.executionFocusNodeId);
+  const nodeName = trimOrNull(runSnapshot.executionFocusNodeName);
+  const nodeType = trimOrNull(runSnapshot.executionFocusNodeType);
+
+  if (!nodeRunId || !nodeId || !nodeName || !nodeType) {
     return null;
   }
 
-  const nodeRunId = trimOrNull(entry.ticket.node_run_id) ?? trimOrNull(entry.request?.node_run_id);
-  if (nodeRunId) {
-    return executionView.nodes.find((node) => node.node_run_id === nodeRunId) ?? null;
-  }
-
-  const ticketId = trimOrNull(entry.ticket.id);
-  const requestId = trimOrNull(entry.request?.id);
-  return (
-    executionView.nodes.find((node) =>
-      node.sensitive_access_entries.some(
-        (item) => item.approval_ticket?.id === ticketId || item.request.id === requestId
-      )
-    ) ?? null
-  );
+  return {
+    node_run_id: nodeRunId,
+    node_id: nodeId,
+    node_name: nodeName,
+    node_type: nodeType,
+    waiting_reason: runSnapshot.waitingReason ?? null,
+    scheduled_resume_delay_seconds: runSnapshot.scheduledResumeDelaySeconds ?? null,
+    scheduled_resume_due_at: runSnapshot.scheduledResumeDueAt ?? null,
+    callback_tickets: [],
+    sensitive_access_entries: buildInlineSensitiveAccessEntries(entry),
+    execution_fallback_count: 0,
+    execution_blocked_count: 0,
+    execution_unavailable_count: 0,
+    execution_blocking_reason: null,
+    execution_fallback_reason: null,
+    artifact_refs: runSnapshot.executionFocusArtifactRefs ?? [],
+    artifacts: buildFocusArtifacts(runId, nodeRunId, runSnapshot),
+    tool_calls: buildFocusToolCalls(runId, nodeRunId, runSnapshot)
+  };
 }
 
 export function buildSensitiveAccessInboxEntryExecutionContext(
   entry: SensitiveAccessInboxEntry,
-  executionView?: Pick<
-    RunExecutionView,
-    | "run_id"
-    | "nodes"
-    | "execution_focus_reason"
-    | "execution_focus_node"
-    | "execution_focus_explanation"
-    | "skill_trace"
-  > | null
+  runSnapshot?: RunSnapshot | null
 ): SensitiveAccessInboxExecutionContext | null {
   const runId =
     trimOrNull(entry.ticket.run_id) ??
     trimOrNull(entry.request?.run_id) ??
-    trimOrNull(executionView?.run_id);
-  const focusNode = executionView?.execution_focus_node ?? null;
-  if (!runId || !focusNode) {
+    trimOrNull(entry.runFollowUp?.sampledRuns[0]?.runId);
+  const focusNode = runSnapshot && runId ? buildFocusNode(entry, runId, runSnapshot) : null;
+  if (!runId || !runSnapshot || !focusNode) {
     return null;
   }
 
-  const entryNode = pickExecutionNode(entry, executionView);
+  const entryNodeRunId =
+    trimOrNull(entry.ticket.node_run_id) ?? trimOrNull(entry.request?.node_run_id);
+
   return {
     runId,
-    entryNode,
     focusNode,
-    focusReason: executionView?.execution_focus_reason ?? null,
-    focusExplanation: executionView?.execution_focus_explanation ?? null,
-    focusMatchesEntry: entryNode?.node_run_id === focusNode.node_run_id,
-    skillTrace: executionView?.skill_trace ?? null
+    focusReason: (runSnapshot.executionFocusReason as RunExecutionFocusReason | null) ?? null,
+    focusExplanation: runSnapshot.executionFocusExplanation ?? null,
+    focusMatchesEntry:
+      entryNodeRunId !== null ? entryNodeRunId === focusNode.node_run_id : false,
+    entryNodeRunId,
+    skillTrace: runSnapshot.executionFocusSkillTrace ?? null
   };
 }
