@@ -51,6 +51,15 @@ export type WorkspaceStarterSourceDiffSummary = {
   changed_count: number;
 };
 
+export type WorkspaceStarterSourceActionDecisionPayload = {
+  recommended_action: "refresh" | "rebase" | "none";
+  status_label: string;
+  summary: string;
+  can_refresh: boolean;
+  can_rebase: boolean;
+  fact_chips: string[];
+};
+
 export type WorkspaceStarterSourceDiff = {
   template_id: string;
   workspace_id: string;
@@ -69,6 +78,7 @@ export type WorkspaceStarterSourceDiff = {
   node_entries: WorkspaceStarterSourceDiffEntry[];
   edge_entries: WorkspaceStarterSourceDiffEntry[];
   sandbox_dependency_entries: WorkspaceStarterSourceDiffEntry[];
+  action_decision: WorkspaceStarterSourceActionDecisionPayload;
 };
 
 export type WorkspaceStarterBulkAction =
@@ -77,6 +87,70 @@ export type WorkspaceStarterBulkAction =
   | "refresh"
   | "rebase"
   | "delete";
+
+export type WorkspaceStarterBulkPreviewReason =
+  | "not_found"
+  | "already_archived"
+  | "not_archived"
+  | "no_source_workflow"
+  | "source_workflow_missing"
+  | "source_workflow_invalid"
+  | "delete_requires_archive"
+  | "already_aligned"
+  | "name_drift_only";
+
+export type WorkspaceStarterBulkPreviewCandidateItem = {
+  template_id: string;
+  name?: string | null;
+  archived: boolean;
+  source_workflow_id?: string | null;
+  source_workflow_version?: string | null;
+  action_decision?: WorkspaceStarterSourceActionDecisionPayload | null;
+  sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
+  sandbox_dependency_nodes: string[];
+};
+
+export type WorkspaceStarterBulkPreviewBlockedItem = {
+  template_id: string;
+  name?: string | null;
+  archived: boolean;
+  reason: WorkspaceStarterBulkPreviewReason;
+  detail: string;
+  source_workflow_id?: string | null;
+  source_workflow_version?: string | null;
+  action_decision?: WorkspaceStarterSourceActionDecisionPayload | null;
+  sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
+  sandbox_dependency_nodes: string[];
+};
+
+export type WorkspaceStarterBulkPreviewReasonSummary = {
+  reason: WorkspaceStarterBulkPreviewReason;
+  count: number;
+  detail: string;
+};
+
+export type WorkspaceStarterBulkActionPreview = {
+  action: WorkspaceStarterBulkAction;
+  candidate_count: number;
+  blocked_count: number;
+  candidate_items: WorkspaceStarterBulkPreviewCandidateItem[];
+  blocked_items: WorkspaceStarterBulkPreviewBlockedItem[];
+  blocked_reason_summary: WorkspaceStarterBulkPreviewReasonSummary[];
+};
+
+export type WorkspaceStarterBulkPreviewSet = {
+  archive: WorkspaceStarterBulkActionPreview;
+  restore: WorkspaceStarterBulkActionPreview;
+  refresh: WorkspaceStarterBulkActionPreview;
+  rebase: WorkspaceStarterBulkActionPreview;
+  delete: WorkspaceStarterBulkActionPreview;
+};
+
+export type WorkspaceStarterBulkPreview = {
+  workspace_id: string;
+  requested_count: number;
+  previews: WorkspaceStarterBulkPreviewSet;
+};
 
 export type WorkspaceStarterBulkSkippedItem = {
   template_id: string;
@@ -389,4 +463,69 @@ export async function bulkUpdateWorkspaceStarters({
   }
 
   return body;
+}
+
+export async function previewWorkspaceStarterBulkActions({
+  workspaceId = "default",
+  templateIds
+}: {
+  workspaceId?: string;
+  templateIds: string[];
+}): Promise<WorkspaceStarterBulkPreview> {
+  const normalizedTemplateIds = Array.from(
+    new Set(templateIds.map((templateId) => templateId.trim()).filter(Boolean))
+  );
+  if (normalizedTemplateIds.length === 0) {
+    return createEmptyWorkspaceStarterBulkPreview(workspaceId);
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/api/workspace-starters/bulk/preview`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      template_ids: normalizedTemplateIds
+    })
+  });
+  const body = (await response.json().catch(() => null)) as
+    | WorkspaceStarterBulkPreview
+    | { detail?: string }
+    | null;
+
+  if (!response.ok || !body || !("previews" in body)) {
+    throw new Error(body && "detail" in body ? body.detail ?? "批量预检失败。" : "批量预检失败。");
+  }
+
+  return body;
+}
+
+function createEmptyWorkspaceStarterBulkPreview(
+  workspaceId: string
+): WorkspaceStarterBulkPreview {
+  return {
+    workspace_id: workspaceId,
+    requested_count: 0,
+    previews: {
+      archive: createEmptyWorkspaceStarterBulkActionPreview("archive"),
+      restore: createEmptyWorkspaceStarterBulkActionPreview("restore"),
+      refresh: createEmptyWorkspaceStarterBulkActionPreview("refresh"),
+      rebase: createEmptyWorkspaceStarterBulkActionPreview("rebase"),
+      delete: createEmptyWorkspaceStarterBulkActionPreview("delete")
+    }
+  };
+}
+
+function createEmptyWorkspaceStarterBulkActionPreview(
+  action: WorkspaceStarterBulkAction
+): WorkspaceStarterBulkActionPreview {
+  return {
+    action,
+    candidate_count: 0,
+    blocked_count: 0,
+    candidate_items: [],
+    blocked_items: [],
+    blocked_reason_summary: []
+  };
 }

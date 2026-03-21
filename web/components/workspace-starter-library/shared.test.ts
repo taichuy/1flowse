@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type {
+  WorkspaceStarterBulkPreview,
   WorkspaceStarterSourceDiff,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
 
 import {
+  buildWorkspaceStarterBulkPreviewFocusTargets,
+  buildWorkspaceStarterBulkPreviewNarrative,
   buildWorkspaceStarterSourceActionDecision,
   buildWorkspaceStarterLibrarySearchParams,
   resolveWorkspaceStarterLibraryViewState
@@ -128,6 +131,197 @@ describe("workspace starter library URL state", () => {
 });
 
 describe("workspace starter source action decision", () => {
+  it("builds backend-driven bulk preview narratives and focus targets", () => {
+    const preview: WorkspaceStarterBulkPreview = {
+      workspace_id: "default",
+      requested_count: 3,
+      previews: {
+        archive: emptyBulkPreviewAction("archive"),
+        restore: emptyBulkPreviewAction("restore"),
+        refresh: {
+          action: "refresh",
+          candidate_count: 1,
+          blocked_count: 2,
+          candidate_items: [
+            {
+              template_id: "starter-active-a",
+              name: "Active starter A",
+              archived: false,
+              source_workflow_id: "wf-a",
+              source_workflow_version: "0.2.0",
+              action_decision: {
+                recommended_action: "refresh",
+                status_label: "建议 refresh",
+                summary: "当前主要是来源快照漂移。",
+                can_refresh: true,
+                can_rebase: true,
+                fact_chips: ["source 0.2.0"]
+              },
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            }
+          ],
+          blocked_items: [
+            {
+              template_id: "starter-active-sandbox",
+              name: "Active sandbox starter",
+              archived: false,
+              reason: "name_drift_only",
+              detail: "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。",
+              source_workflow_id: "wf-c",
+              source_workflow_version: "0.3.0",
+              action_decision: {
+                recommended_action: "rebase",
+                status_label: "建议 rebase",
+                summary: "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。",
+                can_refresh: false,
+                can_rebase: true,
+                fact_chips: ["source 0.3.0", "name drift"]
+              },
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            },
+            {
+              template_id: "starter-archived-sandbox",
+              name: "Archived sandbox starter",
+              archived: true,
+              reason: "already_aligned",
+              detail: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+              source_workflow_id: "wf-b",
+              source_workflow_version: "0.2.0",
+              action_decision: {
+                recommended_action: "none",
+                status_label: "已对齐",
+                summary: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+                can_refresh: false,
+                can_rebase: false,
+                fact_chips: ["source 0.2.0"]
+              },
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            }
+          ],
+          blocked_reason_summary: [
+            {
+              reason: "already_aligned",
+              count: 1,
+              detail: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。"
+            },
+            {
+              reason: "name_drift_only",
+              count: 1,
+              detail: "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。"
+            }
+          ]
+        },
+        rebase: {
+          action: "rebase",
+          candidate_count: 2,
+          blocked_count: 1,
+          candidate_items: [
+            {
+              template_id: "starter-active-a",
+              name: "Active starter A",
+              archived: false,
+              source_workflow_id: "wf-a",
+              source_workflow_version: "0.2.0",
+              action_decision: {
+                recommended_action: "refresh",
+                status_label: "建议 refresh",
+                summary: "当前主要是来源快照漂移。",
+                can_refresh: true,
+                can_rebase: true,
+                fact_chips: ["source 0.2.0"]
+              },
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            },
+            {
+              template_id: "starter-active-sandbox",
+              name: "Active sandbox starter",
+              archived: false,
+              source_workflow_id: "wf-c",
+              source_workflow_version: "0.3.0",
+              action_decision: {
+                recommended_action: "rebase",
+                status_label: "建议 rebase",
+                summary: "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。",
+                can_refresh: false,
+                can_rebase: true,
+                fact_chips: ["source 0.3.0", "name drift"]
+              },
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            }
+          ],
+          blocked_items: [
+            {
+              template_id: "starter-archived-sandbox",
+              name: "Archived sandbox starter",
+              archived: true,
+              reason: "already_aligned",
+              detail: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+              source_workflow_id: "wf-b",
+              source_workflow_version: "0.2.0",
+              action_decision: {
+                recommended_action: "none",
+                status_label: "已对齐",
+                summary: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+                can_refresh: false,
+                can_rebase: false,
+                fact_chips: ["source 0.2.0"]
+              },
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            }
+          ],
+          blocked_reason_summary: [
+            {
+              reason: "already_aligned",
+              count: 1,
+              detail: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。"
+            }
+          ]
+        },
+        delete: emptyBulkPreviewAction("delete")
+      }
+    };
+
+    expect(buildWorkspaceStarterBulkPreviewNarrative(preview)).toEqual([
+      {
+        label: "刷新 preview",
+        text: "候选 1 个；阻塞 2 个（已对齐 1 / 仅名称漂移 1）"
+      },
+      {
+        label: "rebase preview",
+        text: "候选 2 个；阻塞 1 个（已对齐 1）"
+      }
+    ]);
+    expect(buildWorkspaceStarterBulkPreviewFocusTargets(preview, templates)).toEqual([
+      {
+        templateId: "starter-active-a",
+        name: "Active starter A",
+        sourceWorkflowVersion: "0.2.0",
+        statusLabel: "建议 refresh",
+        archived: false
+      },
+      {
+        templateId: "starter-active-sandbox",
+        name: "Active sandbox starter",
+        sourceWorkflowVersion: "0.3.0",
+        statusLabel: "建议 rebase",
+        archived: false
+      },
+      {
+        templateId: "starter-archived-sandbox",
+        name: "Archived sandbox starter",
+        sourceWorkflowVersion: "0.2.0",
+        statusLabel: "已对齐",
+        archived: true
+      }
+    ]);
+  });
+
   it("recommends rebase when workflow name drift is the only remaining change", () => {
     const decision = buildWorkspaceStarterSourceActionDecision({
       template_id: "starter-a",
@@ -144,6 +338,15 @@ describe("workspace starter source action decision", () => {
       node_summary: emptyDiffSummary(),
       edge_summary: emptyDiffSummary(),
       sandbox_dependency_summary: emptyDiffSummary(),
+      action_decision: {
+        recommended_action: "rebase",
+        status_label: "建议 rebase",
+        summary:
+          "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。",
+        can_refresh: false,
+        can_rebase: true,
+        fact_chips: ["template 0.1.0", "source 0.1.0", "name drift", "rebase 1"]
+      },
       node_entries: [],
       edge_entries: [],
       sandbox_dependency_entries: []
@@ -183,6 +386,21 @@ describe("workspace starter source action decision", () => {
         removed_count: 1,
         changed_count: 0
       },
+      action_decision: {
+        recommended_action: "refresh",
+        status_label: "建议 refresh",
+        summary:
+          "当前主要是 sandbox 依赖治理漂移。优先 refresh 同步最新 definition / version，并重点复核 dependencyMode、builtinPackageSet、dependencyRef 与 backendExtensions。",
+        can_refresh: true,
+        can_rebase: true,
+        fact_chips: [
+          "template 0.1.0",
+          "source 0.2.0",
+          "structure drift 1",
+          "sandbox drift 1",
+          "rebase 2"
+        ]
+      },
       node_entries: [],
       edge_entries: [],
       sandbox_dependency_entries: []
@@ -211,6 +429,14 @@ describe("workspace starter source action decision", () => {
       node_summary: emptyDiffSummary(),
       edge_summary: emptyDiffSummary(),
       sandbox_dependency_summary: emptyDiffSummary(),
+      action_decision: {
+        recommended_action: "none",
+        status_label: "已对齐",
+        summary: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+        can_refresh: false,
+        can_rebase: false,
+        fact_chips: ["template 0.2.0", "source 0.2.0"]
+      },
       node_entries: [],
       edge_entries: [],
       sandbox_dependency_entries: []
@@ -229,5 +455,18 @@ function emptyDiffSummary(): WorkspaceStarterSourceDiff["node_summary"] {
     added_count: 0,
     removed_count: 0,
     changed_count: 0
+  };
+}
+
+function emptyBulkPreviewAction(
+  action: "archive" | "restore" | "refresh" | "rebase" | "delete"
+): WorkspaceStarterBulkPreview["previews"]["archive"] {
+  return {
+    action,
+    candidate_count: 0,
+    blocked_count: 0,
+    candidate_items: [],
+    blocked_items: [],
+    blocked_reason_summary: []
   };
 }

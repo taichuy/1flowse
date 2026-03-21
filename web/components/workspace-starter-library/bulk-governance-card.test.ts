@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type {
+  WorkspaceStarterBulkPreview,
   WorkspaceStarterBulkActionResult,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
@@ -10,7 +11,8 @@ import type {
 import { WorkspaceStarterBulkGovernanceCard } from "./bulk-governance-card";
 import {
   buildBulkActionMessage,
-  buildWorkspaceStarterBulkAffectedStarterTargets
+  buildWorkspaceStarterBulkAffectedStarterTargets,
+  buildWorkspaceStarterBulkPreviewFocusTargets
 } from "./shared";
 
 describe("WorkspaceStarterBulkGovernanceCard", () => {
@@ -85,19 +87,108 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
         }
       ]
     };
+    const preview: WorkspaceStarterBulkPreview = {
+      workspace_id: "default",
+      requested_count: 2,
+      previews: {
+        archive: emptyBulkPreviewAction("archive"),
+        restore: emptyBulkPreviewAction("restore"),
+        refresh: {
+          action: "refresh",
+          candidate_count: 1,
+          blocked_count: 1,
+          candidate_items: [
+            {
+              template_id: "starter-sandbox",
+              name: "Sandbox starter",
+              archived: false,
+              source_workflow_id: "wf-demo",
+              source_workflow_version: "0.1.5",
+              action_decision: {
+                recommended_action: "refresh",
+                status_label: "建议 refresh",
+                summary: "当前主要是来源快照漂移。",
+                can_refresh: true,
+                can_rebase: true,
+                fact_chips: ["source 0.1.5"]
+              },
+              sandbox_dependency_changes: {
+                template_count: 1,
+                source_count: 1,
+                added_count: 0,
+                removed_count: 0,
+                changed_count: 1
+              },
+              sandbox_dependency_nodes: ["sandbox"]
+            }
+          ],
+          blocked_items: [
+            {
+              template_id: "starter-manual",
+              name: "Manual starter",
+              archived: false,
+              reason: "no_source_workflow",
+              detail: "Workspace starter has no source workflow.",
+              source_workflow_id: null,
+              source_workflow_version: null,
+              action_decision: null,
+              sandbox_dependency_changes: null,
+              sandbox_dependency_nodes: []
+            }
+          ],
+          blocked_reason_summary: [
+            {
+              reason: "no_source_workflow",
+              count: 1,
+              detail: "Workspace starter has no source workflow."
+            }
+          ]
+        },
+        rebase: {
+          action: "rebase",
+          candidate_count: 1,
+          blocked_count: 0,
+          candidate_items: [
+            {
+              template_id: "starter-sandbox",
+              name: "Sandbox starter",
+              archived: false,
+              source_workflow_id: "wf-demo",
+              source_workflow_version: "0.1.5",
+              action_decision: {
+                recommended_action: "refresh",
+                status_label: "建议 refresh",
+                summary: "当前主要是来源快照漂移。",
+                can_refresh: true,
+                can_rebase: true,
+                fact_chips: ["source 0.1.5"]
+              },
+              sandbox_dependency_changes: {
+                template_count: 1,
+                source_count: 1,
+                added_count: 0,
+                removed_count: 0,
+                changed_count: 1
+              },
+              sandbox_dependency_nodes: ["sandbox"]
+            }
+          ],
+          blocked_items: [],
+          blocked_reason_summary: []
+        },
+        delete: emptyBulkPreviewAction("delete")
+      }
+    };
 
     const html = renderToStaticMarkup(
       createElement(WorkspaceStarterBulkGovernanceCard, {
         inScopeCount: 2,
-        candidateCounts: {
-          archive: 0,
-          restore: 0,
-          refresh: 2,
-          rebase: 1,
-          delete: 0
-        },
+        preview,
+        previewNotice: null,
         isMutating: false,
+        isLoadingPreview: false,
         lastResult,
+        previewFocusTargets: buildWorkspaceStarterBulkPreviewFocusTargets(preview, templates),
         affectedStarterTargets: buildWorkspaceStarterBulkAffectedStarterTargets(lastResult, templates),
         selectedTemplateId: "starter-sandbox",
         onFocusTemplate: () => {},
@@ -106,6 +197,11 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     );
 
     expect(html).toContain("last run: 刷新");
+    expect(html).toContain("刷新 1 · block 1");
+    expect(html).toContain("刷新 preview:");
+    expect(html).toContain("候选 1 个；阻塞 1 个（无来源 1）");
+    expect(html).toContain("Preview focus");
+    expect(html).toContain("Sandbox starter · 建议 refresh · source 0.1.5");
     expect(html).toContain("sandbox drift 1");
     expect(html).toContain("Sandbox drift:");
     expect(html).toContain("本次批量刷新涉及 1 个 starter、1 个 sandbox 依赖漂移节点");
@@ -282,3 +378,16 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     ]);
   });
 });
+
+function emptyBulkPreviewAction(
+  action: "archive" | "restore" | "refresh" | "rebase" | "delete"
+): WorkspaceStarterBulkPreview["previews"]["archive"] {
+  return {
+    action,
+    candidate_count: 0,
+    blocked_count: 0,
+    candidate_items: [],
+    blocked_items: [],
+    blocked_reason_summary: []
+  };
+}

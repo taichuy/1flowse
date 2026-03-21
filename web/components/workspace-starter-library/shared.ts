@@ -4,6 +4,10 @@ import {
 } from "@/lib/workflow-business-tracks";
 import type {
   WorkspaceStarterBulkAction,
+  WorkspaceStarterBulkActionPreview,
+  WorkspaceStarterBulkPreview,
+  WorkspaceStarterBulkPreviewBlockedItem,
+  WorkspaceStarterBulkPreviewCandidateItem,
   WorkspaceStarterBulkActionResult,
   WorkspaceStarterHistoryItem,
   WorkspaceStarterSourceDiff,
@@ -61,6 +65,14 @@ export type WorkspaceStarterBulkAffectedStarterTarget = {
   sourceWorkflowVersion: string | null;
   sandboxNodeSummary: string;
   driftNodeCount: number;
+  archived: boolean;
+};
+
+export type WorkspaceStarterBulkPreviewFocusTarget = {
+  templateId: string;
+  name: string;
+  sourceWorkflowVersion: string | null;
+  statusLabel: string;
   archived: boolean;
 };
 
@@ -250,18 +262,24 @@ export function getWorkspaceStarterBulkActionConfirmationMessage(
   }[action];
 }
 
-const SKIP_REASON_LABELS = {
+const BULK_REASON_LABELS = {
   not_found: "不存在",
   already_archived: "已归档",
   not_archived: "未归档",
   no_source_workflow: "无来源",
   source_workflow_missing: "来源缺失",
   source_workflow_invalid: "来源无效",
-  delete_requires_archive: "需先归档"
+  delete_requires_archive: "需先归档",
+  already_aligned: "已对齐",
+  name_drift_only: "仅名称漂移"
 } as const;
 
 export function getWorkspaceStarterBulkSkipReasonLabel(reason: string) {
-  return SKIP_REASON_LABELS[reason as keyof typeof SKIP_REASON_LABELS] ?? reason;
+  return BULK_REASON_LABELS[reason as keyof typeof BULK_REASON_LABELS] ?? reason;
+}
+
+export function getWorkspaceStarterBulkPreviewReasonLabel(reason: string) {
+  return BULK_REASON_LABELS[reason as keyof typeof BULK_REASON_LABELS] ?? reason;
 }
 
 export function buildBulkActionMessage(
@@ -344,6 +362,90 @@ export function buildWorkspaceStarterBulkResultNarrative(
   return items;
 }
 
+export function buildWorkspaceStarterBulkPreviewNarrative(
+  preview: WorkspaceStarterBulkPreview | null
+): WorkspaceStarterNarrativeItem[] {
+  if (!preview) {
+    return [];
+  }
+
+  return (["archive", "restore", "refresh", "rebase", "delete"] as const)
+    .map((action) => {
+      const actionPreview = preview.previews[action];
+      if (actionPreview.candidate_count === 0 && actionPreview.blocked_count === 0) {
+        return null;
+      }
+
+      const blockedSummary = actionPreview.blocked_reason_summary.length
+        ? `（${actionPreview.blocked_reason_summary
+            .map(
+              (item) =>
+                `${getWorkspaceStarterBulkPreviewReasonLabel(item.reason)} ${item.count}`
+            )
+            .join(" / ")}）`
+        : "";
+
+      return {
+        label: `${getWorkspaceStarterBulkActionLabel(action)} preview`,
+        text:
+          `候选 ${actionPreview.candidate_count} 个；` +
+          (actionPreview.blocked_count > 0
+            ? `阻塞 ${actionPreview.blocked_count} 个${blockedSummary}`
+            : "当前无阻塞项")
+      } satisfies WorkspaceStarterNarrativeItem;
+    })
+    .filter((item): item is WorkspaceStarterNarrativeItem => item !== null);
+}
+
+export function buildWorkspaceStarterBulkPreviewFocusTargets(
+  preview: WorkspaceStarterBulkPreview | null,
+  templates: WorkspaceStarterTemplateItem[]
+): WorkspaceStarterBulkPreviewFocusTarget[] {
+  if (!preview) {
+    return [];
+  }
+
+  const templatesById = new Map(templates.map((template) => [template.id, template] as const));
+  const seenTemplateIds = new Set<string>();
+  const focusTargets: WorkspaceStarterBulkPreviewFocusTarget[] = [];
+
+  for (const action of ["refresh", "rebase"] as const) {
+    const actionPreview = preview.previews[action];
+    const items = [
+      ...actionPreview.candidate_items,
+      ...actionPreview.blocked_items
+    ] satisfies Array<
+      WorkspaceStarterBulkPreviewCandidateItem | WorkspaceStarterBulkPreviewBlockedItem
+    >;
+
+    for (const item of items) {
+      if (seenTemplateIds.has(item.template_id)) {
+        continue;
+      }
+
+      const template = templatesById.get(item.template_id);
+      if (!template) {
+        continue;
+      }
+
+      seenTemplateIds.add(item.template_id);
+      focusTargets.push({
+        templateId: item.template_id,
+        name: item.name?.trim() || template.name,
+        sourceWorkflowVersion: normalizeString(item.source_workflow_version),
+        statusLabel:
+          item.action_decision?.status_label?.trim() ||
+          ("reason" in item
+            ? getWorkspaceStarterBulkPreviewReasonLabel(String(item.reason))
+            : getWorkspaceStarterBulkActionLabel(action)),
+        archived: template.archived
+      });
+    }
+  }
+
+  return focusTargets;
+}
+
 export function buildWorkspaceStarterBulkAffectedStarterTargets(
   result: Pick<WorkspaceStarterBulkActionResult, "sandbox_dependency_items">,
   templates: WorkspaceStarterTemplateItem[]
@@ -379,97 +481,27 @@ export function buildWorkspaceStarterBulkAffectedStarterTargets(
 export function buildWorkspaceStarterSourceActionDecision(
   sourceDiff: WorkspaceStarterSourceDiff | null
 ): WorkspaceStarterSourceActionDecision {
-  if (!sourceDiff) {
+  const actionDecision = normalizeSourceActionDecision(sourceDiff?.action_decision);
+  if (!sourceDiff || !actionDecision) {
     return {
       recommendedAction: "none",
-      statusLabel: "缺少 diff",
-      summary: "当前没有可用于判断 refresh / rebase 的来源 diff。",
+      statusLabel: sourceDiff ? "缺少决策" : "缺少 diff",
+      summary: sourceDiff
+        ? "当前 source diff 尚未返回共享动作决策，请先刷新后端契约。"
+        : "当前没有可用于判断 refresh / rebase 的来源 diff。",
       canRefresh: false,
       canRebase: false,
       factChips: []
     };
   }
 
-  if (!sourceDiff.changed) {
-    return {
-      recommendedAction: "none",
-      statusLabel: "已对齐",
-      summary: "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
-      canRefresh: false,
-      canRebase: false,
-      factChips: buildWorkspaceStarterSourceActionFactChips(sourceDiff)
-    };
-  }
-
-  const structureDriftCount =
-    countSummaryChanges(sourceDiff.node_summary) + countSummaryChanges(sourceDiff.edge_summary);
-  const sandboxDriftCount = countSummaryChanges(sourceDiff.sandbox_dependency_summary);
-  const hasSnapshotDrift =
-    structureDriftCount > 0 ||
-    sandboxDriftCount > 0 ||
-    sourceDiff.rebase_fields.includes("definition") ||
-    sourceDiff.rebase_fields.includes("created_from_workflow_version");
-  const nameDriftOnly = sourceDiff.workflow_name_changed && !hasSnapshotDrift;
-
-  if (nameDriftOnly) {
-    return {
-      recommendedAction: "rebase",
-      statusLabel: "建议 rebase",
-      summary:
-        "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。",
-      canRefresh: false,
-      canRebase: true,
-      factChips: buildWorkspaceStarterSourceActionFactChips(sourceDiff)
-    };
-  }
-
-  if (sourceDiff.workflow_name_changed) {
-    return {
-      recommendedAction: "rebase",
-      statusLabel: "建议 rebase",
-      summary:
-        sandboxDriftCount > 0
-          ? "当前 drift 同时影响 starter 快照、sandbox 依赖治理和默认 workflow 名称。若希望模板命名与来源一起对齐，优先执行 rebase；如果只想先同步 definition / version 并保留当前模板名称，可先 refresh。"
-          : "当前 drift 同时影响 starter 快照和默认 workflow 名称。若希望模板命名与来源一起对齐，优先执行 rebase；如果只想先同步 definition / version 并保留当前模板名称，可先 refresh。",
-      canRefresh: hasSnapshotDrift,
-      canRebase: true,
-      factChips: buildWorkspaceStarterSourceActionFactChips(sourceDiff)
-    };
-  }
-
-  if (sandboxDriftCount > 0) {
-    return {
-      recommendedAction: "refresh",
-      statusLabel: "建议 refresh",
-      summary:
-        structureDriftCount > 0
-          ? "当前 drift 已落在 starter 快照本身，并涉及 sandbox 依赖治理。优先 refresh 同步最新 definition / version；若后续还要让默认 workflow 名称跟随来源，再执行 rebase。"
-          : "当前主要是 sandbox 依赖治理漂移。优先 refresh 同步最新 definition / version，并重点复核 dependencyMode、builtinPackageSet、dependencyRef 与 backendExtensions。",
-      canRefresh: true,
-      canRebase: true,
-      factChips: buildWorkspaceStarterSourceActionFactChips(sourceDiff)
-    };
-  }
-
-  if (hasSnapshotDrift) {
-    return {
-      recommendedAction: "refresh",
-      statusLabel: "建议 refresh",
-      summary:
-        "当前主要是来源快照漂移。优先 refresh 同步最新 definition / version；rebase 只在需要连默认 workflow 名称一起对齐时才有额外价值。",
-      canRefresh: true,
-      canRebase: true,
-      factChips: buildWorkspaceStarterSourceActionFactChips(sourceDiff)
-    };
-  }
-
   return {
-    recommendedAction: "rebase",
-    statusLabel: "建议 rebase",
-    summary: "当前存在来源漂移，建议先检查变更字段；若需要让模板命名跟随来源，请执行 rebase。",
-    canRefresh: false,
-    canRebase: true,
-    factChips: buildWorkspaceStarterSourceActionFactChips(sourceDiff)
+    recommendedAction: actionDecision.recommendedAction,
+    statusLabel: actionDecision.statusLabel,
+    summary: actionDecision.summary,
+    canRefresh: actionDecision.canRefresh,
+    canRebase: actionDecision.canRebase,
+    factChips: actionDecision.factChips
   };
 }
 
@@ -488,11 +520,15 @@ export function buildWorkspaceStarterHistoryMetaChips(
 
   const previousVersion = normalizeString(payload.previous_workflow_version);
   const sourceVersion = normalizeString(payload.source_workflow_version);
+  const actionDecision = normalizeSourceActionDecision(payload.action_decision);
   if (previousVersion) {
     chips.push(`prev ${previousVersion}`);
   }
   if (sourceVersion) {
     chips.push(`source ${sourceVersion}`);
+  }
+  if (actionDecision && actionDecision.recommendedAction !== "none") {
+    chips.push(`建议 ${actionDecision.recommendedAction}`);
   }
 
   if (typeof payload.changed === "boolean") {
@@ -530,6 +566,7 @@ export function buildWorkspaceStarterHistoryNarrative(
   const rebaseFields = normalizeStringArray(payload.rebase_fields);
   const nodeChanges = normalizeSourceDiffSummary(payload.node_changes);
   const edgeChanges = normalizeSourceDiffSummary(payload.edge_changes);
+  const actionDecision = normalizeSourceActionDecision(payload.action_decision);
 
   if (sourceWorkflowId || previousVersion || sourceVersion) {
     const sourceParts = [];
@@ -553,6 +590,13 @@ export function buildWorkspaceStarterHistoryNarrative(
       text: payload.changed
         ? "本次治理已把模板快照应用到最新来源事实。"
         : "本次只完成对齐检查，模板快照已是最新状态。"
+    });
+  }
+
+  if (actionDecision && actionDecision.recommendedAction !== "none") {
+    items.push({
+      label: "Decision",
+      text: `${actionDecision.statusLabel}；${actionDecision.summary}`
     });
   }
 
@@ -628,32 +672,6 @@ function summarizeSourceDiffCounts(summary: WorkspaceStarterSourceDiffSummary) {
   return `新增 ${summary.added_count} / 移除 ${summary.removed_count} / 变更 ${summary.changed_count}`;
 }
 
-function buildWorkspaceStarterSourceActionFactChips(sourceDiff: WorkspaceStarterSourceDiff) {
-  const chips: string[] = [];
-  const structureDriftCount =
-    countSummaryChanges(sourceDiff.node_summary) + countSummaryChanges(sourceDiff.edge_summary);
-  const sandboxDriftCount = countSummaryChanges(sourceDiff.sandbox_dependency_summary);
-
-  if (sourceDiff.template_version) {
-    chips.push(`template ${sourceDiff.template_version}`);
-  }
-  chips.push(`source ${sourceDiff.source_version}`);
-  if (structureDriftCount > 0) {
-    chips.push(`structure drift ${structureDriftCount}`);
-  }
-  if (sandboxDriftCount > 0) {
-    chips.push(`sandbox drift ${sandboxDriftCount}`);
-  }
-  if (sourceDiff.workflow_name_changed) {
-    chips.push("name drift");
-  }
-  if (sourceDiff.rebase_fields.length > 0) {
-    chips.push(`rebase ${sourceDiff.rebase_fields.length}`);
-  }
-
-  return chips;
-}
-
 function countSummaryChanges(summary: WorkspaceStarterSourceDiffSummary | null) {
   if (!summary) {
     return 0;
@@ -705,6 +723,45 @@ function normalizeSourceDiffSummary(value: unknown): WorkspaceStarterSourceDiffS
     removed_count: removedCount,
     changed_count: changedCount
   };
+}
+
+function normalizeSourceActionDecision(
+  value: unknown
+): WorkspaceStarterSourceActionDecision | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const recommendedAction = normalizeRecommendedAction(value.recommended_action);
+  const statusLabel = normalizeString(value.status_label);
+  const summary = normalizeString(value.summary);
+  if (
+    recommendedAction === null ||
+    statusLabel === null ||
+    summary === null ||
+    typeof value.can_refresh !== "boolean" ||
+    typeof value.can_rebase !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    recommendedAction,
+    statusLabel,
+    summary,
+    canRefresh: value.can_refresh,
+    canRebase: value.can_rebase,
+    factChips: normalizeStringArray(value.fact_chips)
+  };
+}
+
+function normalizeRecommendedAction(
+  value: unknown
+): WorkspaceStarterSourceActionDecision["recommendedAction"] | null {
+  if (value === "refresh" || value === "rebase" || value === "none") {
+    return value;
+  }
+  return null;
 }
 
 function normalizeString(value: unknown) {

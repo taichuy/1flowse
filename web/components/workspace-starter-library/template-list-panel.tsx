@@ -3,8 +3,9 @@ import Link from "next/link";
 import {
   WorkspaceStarterBulkGovernanceCard,
 } from "@/components/workspace-starter-library/bulk-governance-card";
-import type { WorkspaceStarterBulkAction } from "@/lib/get-workspace-starters";
 import type {
+  WorkspaceStarterBulkAction,
+  WorkspaceStarterBulkPreview,
   WorkspaceStarterBulkActionResult,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
@@ -16,6 +17,7 @@ import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition
 
 import {
   buildWorkspaceStarterBulkAffectedStarterTargets,
+  buildWorkspaceStarterBulkPreviewFocusTargets,
   formatTimestamp,
   type ArchiveFilter,
   type TrackFilter
@@ -31,8 +33,10 @@ type WorkspaceStarterTemplateListPanelProps = {
   activeTemplateCount: number;
   archivedTemplateCount: number;
   templateToolGovernanceById: Map<string, WorkflowDefinitionToolGovernance>;
-  bulkCandidateCounts: Record<WorkspaceStarterBulkAction, number>;
+  bulkPreview: WorkspaceStarterBulkPreview | null;
+  bulkPreviewNotice: string | null;
   isBulkMutating: boolean;
+  isLoadingBulkPreview: boolean;
   lastBulkResult: WorkspaceStarterBulkActionResult | null;
   onTrackChange: (track: TrackFilter) => void;
   onArchiveFilterChange: (filter: ArchiveFilter) => void;
@@ -52,8 +56,10 @@ export function WorkspaceStarterTemplateListPanel({
   activeTemplateCount,
   archivedTemplateCount,
   templateToolGovernanceById,
-  bulkCandidateCounts,
+  bulkPreview,
+  bulkPreviewNotice,
   isBulkMutating,
+  isLoadingBulkPreview,
   lastBulkResult,
   onTrackChange,
   onArchiveFilterChange,
@@ -65,6 +71,10 @@ export function WorkspaceStarterTemplateListPanel({
   const affectedStarterTargets = lastBulkResult
     ? buildWorkspaceStarterBulkAffectedStarterTargets(lastBulkResult, templates)
     : [];
+  const previewFocusTargets = buildWorkspaceStarterBulkPreviewFocusTargets(
+    bulkPreview,
+    templates
+  );
 
   return (
     <article className="diagnostic-panel">
@@ -152,9 +162,12 @@ export function WorkspaceStarterTemplateListPanel({
 
         <WorkspaceStarterBulkGovernanceCard
           inScopeCount={filteredTemplates.length}
-          candidateCounts={bulkCandidateCounts}
+          preview={bulkPreview}
+          previewNotice={bulkPreviewNotice}
           isMutating={isBulkMutating}
+          isLoadingPreview={isLoadingBulkPreview}
           lastResult={lastBulkResult}
+          previewFocusTargets={previewFocusTargets}
           affectedStarterTargets={affectedStarterTargets}
           selectedTemplateId={selectedTemplateId}
           onFocusTemplate={onFocusTemplate}

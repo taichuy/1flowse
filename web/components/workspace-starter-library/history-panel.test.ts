@@ -22,6 +22,22 @@ describe("WorkspaceStarterHistoryPanel", () => {
           previous_workflow_version: "0.1.4",
           source_workflow_version: "0.1.6",
           changed: true,
+          action_decision: {
+            recommended_action: "rebase",
+            status_label: "建议 rebase",
+            summary:
+              "当前 drift 同时影响 starter 快照、sandbox 依赖治理和默认 workflow 名称。若希望模板命名与来源一起对齐，优先执行 rebase；如果只想先同步 definition / version 并保留当前模板名称，可先 refresh。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: [
+              "template 0.1.4",
+              "source 0.1.6",
+              "structure drift 1",
+              "sandbox drift 1",
+              "name drift",
+              "rebase 2"
+            ]
+          },
           rebase_fields: ["definition", "default_workflow_name"],
           node_changes: {
             template_count: 1,
@@ -58,9 +74,11 @@ describe("WorkspaceStarterHistoryPanel", () => {
 
     expect(html).toContain("批量");
     expect(html).toContain("source 0.1.6");
+    expect(html).toContain("建议 rebase");
     expect(html).toContain("sandbox drift 1");
     expect(html).toContain("Source:");
     expect(html).toContain("版本从 0.1.4 对齐到 0.1.6");
+    expect(html).toContain("Decision:");
     expect(html).toContain("Sandbox drift:");
     expect(html).toContain("涉及节点：sandbox");
     expect(html).toContain("Structure drift:");

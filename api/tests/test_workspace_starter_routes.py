@@ -1325,11 +1325,27 @@ def test_workspace_starter_refresh_updates_snapshot_and_records_history(
     assert history_response.status_code == 200
     history_items = history_response.json()
     assert history_items[0]["action"] == "refreshed"
-    assert history_items[0]["payload"] == {
-        "source_workflow_id": "wf-demo",
-        "previous_workflow_version": "0.1.0",
-        "source_workflow_version": "0.1.1",
-        "changed": True,
+    assert history_items[0]["payload"]["source_workflow_id"] == "wf-demo"
+    assert history_items[0]["payload"]["previous_workflow_version"] == "0.1.0"
+    assert history_items[0]["payload"]["source_workflow_version"] == "0.1.1"
+    assert history_items[0]["payload"]["changed"] is True
+    assert history_items[0]["payload"]["action_decision"] == {
+        "recommended_action": "rebase",
+        "status_label": "建议 rebase",
+        "summary": (
+            "当前 drift 同时影响 starter 快照和默认 workflow 名称。若希望"
+            "模板命名与来源一起对齐，优先执行 rebase；如果只想先同步 "
+            "definition / version 并保留当前模板名称，可先 refresh。"
+        ),
+        "can_refresh": True,
+        "can_rebase": True,
+        "fact_chips": [
+            "template 0.1.0",
+            "source 0.1.1",
+            "structure drift 3",
+            "name drift",
+            "rebase 3",
+        ],
     }
 
 
@@ -1365,6 +1381,9 @@ def test_workspace_starter_refresh_records_sandbox_dependency_drift_in_history(
     assert history_response.status_code == 200
     history_items = history_response.json()
     assert history_items[0]["action"] == "refreshed"
+    assert history_items[0]["payload"]["action_decision"]["recommended_action"] == "rebase"
+    assert history_items[0]["payload"]["action_decision"]["can_refresh"] is True
+    assert history_items[0]["payload"]["action_decision"]["can_rebase"] is True
     assert history_items[0]["payload"]["sandbox_dependency_changes"] == {
         "template_count": 1,
         "source_count": 1,
@@ -1421,6 +1440,9 @@ def test_workspace_starter_source_diff_reports_node_edge_and_name_drift(
     body = response.json()
     assert body["changed"] is True
     assert body["workflow_name_changed"] is True
+    assert body["action_decision"]["recommended_action"] == "rebase"
+    assert body["action_decision"]["can_refresh"] is True
+    assert body["action_decision"]["can_rebase"] is True
     assert body["rebase_fields"] == [
         "definition",
         "created_from_workflow_version",
@@ -1446,6 +1468,59 @@ def test_workspace_starter_source_diff_reports_node_edge_and_name_drift(
         entry for entry in body["edge_entries"] if entry["id"] == "e1"
     )
     assert changed_edge["changed_fields"] == ["targetNodeId"]
+
+
+def test_workspace_starter_source_diff_recommends_rebase_for_name_only_drift(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow,
+) -> None:
+    response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Name Drift Starter",
+            "description": "Template for name-only source drift",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "name drift focus",
+            "recommended_next_step": "name drift next",
+            "tags": ["name-drift"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert response.status_code == 201
+    created = response.json()
+
+    sample_workflow.name = "Demo Workflow v2"
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    response = client.get(f"/api/workspace-starters/{created['id']}/source-diff")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["changed"] is True
+    assert body["workflow_name_changed"] is True
+    assert body["rebase_fields"] == ["default_workflow_name"]
+    assert body["action_decision"] == {
+        "recommended_action": "rebase",
+        "status_label": "建议 rebase",
+        "summary": (
+            "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名"
+            "跟随来源，请执行 rebase。"
+        ),
+        "can_refresh": False,
+        "can_rebase": True,
+        "fact_chips": [
+            "template 0.1.0",
+            "source 0.1.0",
+            "name drift",
+            "rebase 1",
+        ],
+    }
 
 
 def test_workspace_starter_source_diff_surfaces_sandbox_dependency_drift(
@@ -1477,6 +1552,10 @@ def test_workspace_starter_source_diff_surfaces_sandbox_dependency_drift(
 
     assert response.status_code == 200
     body = response.json()
+    assert body["action_decision"]["recommended_action"] == "rebase"
+    assert body["action_decision"]["can_refresh"] is True
+    assert body["action_decision"]["can_rebase"] is True
+    assert "sandbox drift 1" in body["action_decision"]["fact_chips"]
     assert body["sandbox_dependency_summary"] == {
         "template_count": 1,
         "source_count": 1,
@@ -1556,6 +1635,17 @@ def test_workspace_starter_rebase_syncs_source_derived_fields_and_records_histor
     diff_body = diff_response.json()
     assert diff_body["changed"] is False
     assert diff_body["rebase_fields"] == []
+    assert diff_body["action_decision"] == {
+        "recommended_action": "none",
+        "status_label": "已对齐",
+        "summary": "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+        "can_refresh": False,
+        "can_rebase": False,
+        "fact_chips": [
+            "template 0.1.2",
+            "source 0.1.2",
+        ],
+    }
 
     history_response = client.get(f"/api/workspace-starters/{created['id']}/history")
     assert history_response.status_code == 200
@@ -1567,6 +1657,9 @@ def test_workspace_starter_rebase_syncs_source_derived_fields_and_records_histor
         "created_from_workflow_version",
         "default_workflow_name",
     ]
+    assert history_items[0]["payload"]["action_decision"]["recommended_action"] == "rebase"
+    assert history_items[0]["payload"]["action_decision"]["can_refresh"] is True
+    assert history_items[0]["payload"]["action_decision"]["can_rebase"] is True
 
 
 def test_workspace_starter_delete_requires_archive_first(client: TestClient) -> None:
@@ -2019,3 +2112,280 @@ def test_workspace_starter_bulk_rebase_returns_sandbox_dependency_summary(
             "sandbox_dependency_nodes": ["sandbox"],
         }
     ]
+
+
+def test_workspace_starter_bulk_preview_summarizes_refresh_and_rebase_candidates(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow,
+) -> None:
+    refresh_candidate_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Preview Refresh Candidate",
+            "description": "Template for bulk preview refresh candidate",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "bulk preview refresh",
+            "recommended_next_step": "bulk preview refresh next",
+            "tags": ["bulk-preview", "refresh"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert refresh_candidate_response.status_code == 201
+    refresh_candidate = refresh_candidate_response.json()
+
+    sample_workflow.name = "Bulk Preview Workflow v2"
+    sample_workflow.version = "0.2.0"
+    sample_workflow.definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "mock_tool",
+                "type": "tool",
+                "name": "Mock Tool",
+                "config": {"mock_output": {"answer": "done"}},
+            },
+            {
+                "id": "planner",
+                "type": "llm_agent",
+                "name": "Planner",
+                "config": {"prompt": "Plan preview drift"},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
+            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "planner"},
+            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "output"},
+        ],
+    }
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    aligned_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Preview Aligned Starter",
+            "description": "Template already aligned with source workflow",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "bulk preview aligned",
+            "recommended_next_step": "bulk preview aligned next",
+            "tags": ["bulk-preview", "aligned"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert aligned_response.status_code == 201
+    aligned = aligned_response.json()
+
+    name_only_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Preview Name Drift Starter",
+            "description": "Template with name-only drift",
+            "business_track": "应用新建编排",
+            "default_workflow_name": "Demo Workflow",
+            "workflow_focus": "bulk preview name drift",
+            "recommended_next_step": "bulk preview name drift next",
+            "tags": ["bulk-preview", "name-drift"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert name_only_response.status_code == 201
+    name_only = name_only_response.json()
+
+    manual_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Preview Manual Starter",
+            "description": "Manual template without source workflow",
+            "business_track": "API 调用开放",
+            "default_workflow_name": "Manual Workflow",
+            "workflow_focus": "manual preview",
+            "recommended_next_step": "manual preview next",
+            "tags": ["bulk-preview", "manual"],
+            "definition": _valid_definition(),
+        },
+    )
+    assert manual_response.status_code == 201
+    manual = manual_response.json()
+
+    missing_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Preview Missing Source Starter",
+            "description": "Template whose source workflow is missing",
+            "business_track": "编排节点能力",
+            "default_workflow_name": "Missing Workflow",
+            "workflow_focus": "missing source preview",
+            "recommended_next_step": "missing source preview next",
+            "tags": ["bulk-preview", "missing-source"],
+            "definition": _valid_definition(),
+            "created_from_workflow_id": "wf-missing",
+            "created_from_workflow_version": "0.0.9",
+        },
+    )
+    assert missing_response.status_code == 201
+    missing_source = missing_response.json()
+
+    preview_response = client.post(
+        "/api/workspace-starters/bulk/preview",
+        json={
+            "workspace_id": "default",
+            "template_ids": [
+                refresh_candidate["id"],
+                aligned["id"],
+                name_only["id"],
+                manual["id"],
+                missing_source["id"],
+                "missing-template",
+            ],
+        },
+    )
+
+    assert preview_response.status_code == 200
+    body = preview_response.json()
+
+    refresh_preview = body["previews"]["refresh"]
+    assert refresh_preview["candidate_count"] == 1
+    assert refresh_preview["blocked_count"] == 5
+    assert [item["template_id"] for item in refresh_preview["candidate_items"]] == [
+        refresh_candidate["id"]
+    ]
+    assert refresh_preview["candidate_items"][0]["action_decision"]["can_refresh"] is True
+    assert refresh_preview["candidate_items"][0]["action_decision"]["can_rebase"] is True
+    assert refresh_preview["blocked_reason_summary"] == [
+        {
+            "reason": "already_aligned",
+            "count": 1,
+            "detail": "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+        },
+        {
+            "reason": "name_drift_only",
+            "count": 1,
+            "detail": (
+                "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名"
+                "跟随来源，请执行 rebase。"
+            ),
+        },
+        {
+            "reason": "no_source_workflow",
+            "count": 1,
+            "detail": "Workspace starter has no source workflow.",
+        },
+        {
+            "reason": "not_found",
+            "count": 1,
+            "detail": "Workspace starter template not found.",
+        },
+        {
+            "reason": "source_workflow_missing",
+            "count": 1,
+            "detail": "Source workflow not found.",
+        },
+    ]
+
+    rebase_preview = body["previews"]["rebase"]
+    assert rebase_preview["candidate_count"] == 2
+    assert rebase_preview["blocked_count"] == 4
+    assert [item["template_id"] for item in rebase_preview["candidate_items"]] == [
+        refresh_candidate["id"],
+        name_only["id"],
+    ]
+    assert rebase_preview["candidate_items"][1]["action_decision"] == {
+        "recommended_action": "rebase",
+        "status_label": "建议 rebase",
+        "summary": (
+            "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名"
+            "跟随来源，请执行 rebase。"
+        ),
+        "can_refresh": False,
+        "can_rebase": True,
+        "fact_chips": [
+            "template 0.2.0",
+            "source 0.2.0",
+            "name drift",
+            "rebase 1",
+        ],
+    }
+    assert rebase_preview["blocked_reason_summary"] == [
+        {
+            "reason": "already_aligned",
+            "count": 1,
+            "detail": "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+        },
+        {
+            "reason": "no_source_workflow",
+            "count": 1,
+            "detail": "Workspace starter has no source workflow.",
+        },
+        {
+            "reason": "not_found",
+            "count": 1,
+            "detail": "Workspace starter template not found.",
+        },
+        {
+            "reason": "source_workflow_missing",
+            "count": 1,
+            "detail": "Source workflow not found.",
+        },
+    ]
+
+
+def test_workspace_starter_bulk_preview_marks_invalid_source_workflow_as_blocked(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow,
+) -> None:
+    derived = _create_workspace_starter(
+        client,
+        name="Bulk Preview Invalid Source Starter",
+        business_track="编排节点能力",
+        description="Template for invalid source bulk preview",
+    )
+
+    sample_workflow.version = "0.1.4"
+    sample_workflow.definition = _planned_loop_definition()
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    preview_response = client.post(
+        "/api/workspace-starters/bulk/preview",
+        json={
+            "workspace_id": "default",
+            "template_ids": [derived["id"]],
+        },
+    )
+
+    assert preview_response.status_code == 200
+    body = preview_response.json()
+
+    refresh_preview = body["previews"]["refresh"]
+    assert refresh_preview["candidate_count"] == 0
+    assert refresh_preview["blocked_count"] == 1
+    assert refresh_preview["blocked_items"][0]["reason"] == "source_workflow_invalid"
+    assert (
+        "not currently available for persistence"
+        in refresh_preview["blocked_items"][0]["detail"]
+    )
+
+    rebase_preview = body["previews"]["rebase"]
+    assert rebase_preview["candidate_count"] == 0
+    assert rebase_preview["blocked_count"] == 1
+    assert rebase_preview["blocked_items"][0]["reason"] == "source_workflow_invalid"
+    assert (
+        "not currently available for persistence"
+        in rebase_preview["blocked_items"][0]["detail"]
+    )

@@ -4,8 +4,10 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import {
   bulkUpdateWorkspaceStarters,
+  previewWorkspaceStarterBulkActions,
   updateWorkspaceStarterTemplate,
   type WorkspaceStarterBulkAction,
+  type WorkspaceStarterBulkPreview,
   type WorkspaceStarterBulkActionResult,
   WorkspaceStarterValidationError,
   type WorkspaceStarterTemplateItem
@@ -59,6 +61,8 @@ const EMPTY_TEMPLATE_SANDBOX_GOVERNANCE: WorkflowDefinitionSandboxGovernance = {
   nodes: []
 };
 
+const WORKSPACE_STARTER_BULK_MAX_TEMPLATES = 100;
+
 export function useWorkspaceStarterLibraryState(
   initialTemplates: WorkspaceStarterTemplateItem[],
   tools: PluginToolRegistryItem[],
@@ -74,6 +78,8 @@ export function useWorkspaceStarterLibraryState(
       null
     : initialTemplates[0] ?? null;
   const [templates, setTemplates] = useState(initialTemplates);
+  const [bulkPreview, setBulkPreview] = useState<WorkspaceStarterBulkPreview | null>(null);
+  const [bulkPreviewNotice, setBulkPreviewNotice] = useState<string | null>(null);
   const [activeTrack, setActiveTrack] = useState<TrackFilter>(resolvedInitialViewState.activeTrack);
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>(
     resolvedInitialViewState.archiveFilter
@@ -93,6 +99,7 @@ export function useWorkspaceStarterLibraryState(
   const [isBulkMutating, startBulkMutatingTransition] = useTransition();
   const [lastBulkResult, setLastBulkResult] =
     useState<WorkspaceStarterBulkActionResult | null>(null);
+  const [isLoadingBulkPreview, setIsLoadingBulkPreview] = useState(false);
 
   const filteredTemplates = useMemo(() => {
     return filterWorkspaceStarterTemplates(templates, {
@@ -195,25 +202,64 @@ export function useWorkspaceStarterLibraryState(
         : null,
     [selectedTemplate, sourceWorkflow]
   );
+  useEffect(() => {
+    const templateIds = filteredTemplates.map((template) => template.id);
+    if (templateIds.length === 0) {
+      setBulkPreview(null);
+      setBulkPreviewNotice(null);
+      setIsLoadingBulkPreview(false);
+      return;
+    }
+
+    if (templateIds.length > WORKSPACE_STARTER_BULK_MAX_TEMPLATES) {
+      setBulkPreview(null);
+      setBulkPreviewNotice(
+        `当前筛选结果有 ${templateIds.length} 个 starter，超过批量治理上限 ${WORKSPACE_STARTER_BULK_MAX_TEMPLATES}，请继续收窄范围。`
+      );
+      setIsLoadingBulkPreview(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingBulkPreview(true);
+    setBulkPreviewNotice(null);
+
+    void previewWorkspaceStarterBulkActions({ templateIds })
+      .then((preview) => {
+        if (cancelled) {
+          return;
+        }
+
+        setBulkPreview(preview);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setBulkPreview(null);
+        setBulkPreviewNotice(error instanceof Error ? error.message : "批量预检失败。");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingBulkPreview(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredTemplates]);
+
   const bulkActionCandidates = useMemo(
     () => ({
-      archive: filteredTemplates
-        .filter((template) => !template.archived)
-        .map((template) => template.id),
-      restore: filteredTemplates
-        .filter((template) => template.archived)
-        .map((template) => template.id),
-      refresh: filteredTemplates
-        .filter((template) => Boolean(template.created_from_workflow_id))
-        .map((template) => template.id),
-      rebase: filteredTemplates
-        .filter((template) => Boolean(template.created_from_workflow_id))
-        .map((template) => template.id),
-      delete: filteredTemplates
-        .filter((template) => template.archived)
-        .map((template) => template.id)
+      archive: bulkPreview?.previews.archive.candidate_items.map((item) => item.template_id) ?? [],
+      restore: bulkPreview?.previews.restore.candidate_items.map((item) => item.template_id) ?? [],
+      refresh: bulkPreview?.previews.refresh.candidate_items.map((item) => item.template_id) ?? [],
+      rebase: bulkPreview?.previews.rebase.candidate_items.map((item) => item.template_id) ?? [],
+      delete: bulkPreview?.previews.delete.candidate_items.map((item) => item.template_id) ?? []
     }),
-    [filteredTemplates]
+    [bulkPreview]
   );
 
   useEffect(() => {
@@ -451,6 +497,8 @@ export function useWorkspaceStarterLibraryState(
     archiveFilter,
     archivedTemplateCount,
     bulkActionCandidates,
+    bulkPreview,
+    bulkPreviewNotice,
     filteredTemplates,
     formState,
     governedTemplateCount,
@@ -462,6 +510,7 @@ export function useWorkspaceStarterLibraryState(
     hasPendingChanges,
     historyItems,
     isBulkMutating,
+    isLoadingBulkPreview,
     isLoadingHistory,
     isLoadingSourceDiff,
     isLoadingSourceWorkflow,

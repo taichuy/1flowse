@@ -5,6 +5,8 @@ from app.core.database import get_db
 from app.models.workflow import Workflow
 from app.schemas.workspace_starter import (
     WorkflowBusinessTrack,
+    WorkspaceStarterBulkPreview,
+    WorkspaceStarterBulkPreviewRequest,
     WorkspaceStarterBulkActionRequest,
     WorkspaceStarterBulkActionResult,
     WorkspaceStarterHistoryItem,
@@ -17,7 +19,10 @@ from app.services.workflow_definitions import (
     WorkflowDefinitionValidationError,
     WorkflowDefinitionValidationIssue,
 )
-from app.services.workspace_starter_bulk_actions import execute_workspace_starter_bulk_action
+from app.services.workspace_starter_bulk_actions import (
+    execute_workspace_starter_bulk_action,
+    preview_workspace_starter_bulk_actions,
+)
 from app.services.workspace_starter_templates import (
     get_workspace_starter_template_service,
 )
@@ -59,6 +64,14 @@ def bulk_update_workspace_starters(
     db: Session = Depends(get_db),
 ) -> WorkspaceStarterBulkActionResult:
     return execute_workspace_starter_bulk_action(db, payload)
+
+
+@router.post("/bulk/preview", response_model=WorkspaceStarterBulkPreview)
+def preview_bulk_workspace_starters(
+    payload: WorkspaceStarterBulkPreviewRequest,
+    db: Session = Depends(get_db),
+) -> WorkspaceStarterBulkPreview:
+    return preview_workspace_starter_bulk_actions(db, payload)
 
 
 @router.get("", response_model=list[WorkspaceStarterTemplateItem])
@@ -318,6 +331,7 @@ def rebase_workspace_starter(
         "source_workflow_version": source_workflow.version,
         "changed": diff.changed,
         "rebase_fields": diff.rebase_fields,
+        "action_decision": diff.action_decision.model_dump(),
         "node_changes": diff.node_summary.model_dump(),
         "edge_changes": diff.edge_summary.model_dump(),
     }
@@ -383,6 +397,7 @@ def refresh_workspace_starter(
         "previous_workflow_version": previous_version,
         "source_workflow_version": source_workflow.version,
         "changed": changed,
+        "action_decision": diff.action_decision.model_dump(),
     }
     if diff.sandbox_dependency_entries:
         payload["sandbox_dependency_changes"] = (

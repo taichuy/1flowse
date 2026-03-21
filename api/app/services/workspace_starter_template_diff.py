@@ -6,6 +6,7 @@ from typing import Any, Callable
 from app.models.workflow import Workflow
 from app.models.workspace_starter import WorkspaceStarterTemplateRecord
 from app.schemas.workspace_starter import (
+    WorkspaceStarterSourceActionDecision,
     WorkspaceStarterSourceDiff,
     WorkspaceStarterSourceDiffEntry,
     WorkspaceStarterSourceDiffSummary,
@@ -44,6 +45,39 @@ def build_workspace_starter_source_diff(
     if record.default_workflow_name != workflow.name:
         rebase_fields.append("default_workflow_name")
 
+    node_summary = _build_diff_summary(
+        template_items=template_definition.get("nodes"),
+        source_items=source_definition.get("nodes"),
+        entries=node_entries,
+    )
+    edge_summary = _build_diff_summary(
+        template_items=template_definition.get("edges"),
+        source_items=source_definition.get("edges"),
+        entries=edge_entries,
+    )
+    sandbox_dependency_summary = _build_sandbox_dependency_summary(
+        template_items=template_definition.get("nodes"),
+        source_items=source_definition.get("nodes"),
+        entries=sandbox_dependency_entries,
+    )
+    workflow_name_changed = record.default_workflow_name != workflow.name
+    changed = bool(
+        node_entries
+        or edge_entries
+        or sandbox_dependency_entries
+        or rebase_fields
+    )
+    action_decision = _build_source_action_decision(
+        template_version=record.created_from_workflow_version,
+        source_version=workflow.version,
+        workflow_name_changed=workflow_name_changed,
+        changed=changed,
+        rebase_fields=rebase_fields,
+        node_summary=node_summary,
+        edge_summary=edge_summary,
+        sandbox_dependency_summary=sandbox_dependency_summary,
+    )
+
     return WorkspaceStarterSourceDiff(
         template_id=record.id,
         workspace_id=record.workspace_id,
@@ -53,28 +87,175 @@ def build_workspace_starter_source_diff(
         source_version=workflow.version,
         template_default_workflow_name=record.default_workflow_name,
         source_default_workflow_name=workflow.name,
-        workflow_name_changed=record.default_workflow_name != workflow.name,
-        changed=bool(node_entries or edge_entries or sandbox_dependency_entries or rebase_fields),
+        workflow_name_changed=workflow_name_changed,
+        changed=changed,
         rebase_fields=rebase_fields,
-        node_summary=_build_diff_summary(
-            template_items=template_definition.get("nodes"),
-            source_items=source_definition.get("nodes"),
-            entries=node_entries,
-        ),
-        edge_summary=_build_diff_summary(
-            template_items=template_definition.get("edges"),
-            source_items=source_definition.get("edges"),
-            entries=edge_entries,
-        ),
-        sandbox_dependency_summary=_build_sandbox_dependency_summary(
-            template_items=template_definition.get("nodes"),
-            source_items=source_definition.get("nodes"),
-            entries=sandbox_dependency_entries,
-        ),
+        node_summary=node_summary,
+        edge_summary=edge_summary,
+        sandbox_dependency_summary=sandbox_dependency_summary,
         node_entries=node_entries,
         edge_entries=edge_entries,
         sandbox_dependency_entries=sandbox_dependency_entries,
+        action_decision=action_decision,
     )
+
+
+def _build_source_action_decision(
+    *,
+    template_version: str | None,
+    source_version: str,
+    workflow_name_changed: bool,
+    changed: bool,
+    rebase_fields: list[str],
+    node_summary: WorkspaceStarterSourceDiffSummary,
+    edge_summary: WorkspaceStarterSourceDiffSummary,
+    sandbox_dependency_summary: WorkspaceStarterSourceDiffSummary,
+) -> WorkspaceStarterSourceActionDecision:
+    fact_chips = _build_source_action_fact_chips(
+        template_version=template_version,
+        source_version=source_version,
+        workflow_name_changed=workflow_name_changed,
+        rebase_fields=rebase_fields,
+        node_summary=node_summary,
+        edge_summary=edge_summary,
+        sandbox_dependency_summary=sandbox_dependency_summary,
+    )
+
+    if not changed:
+        return WorkspaceStarterSourceActionDecision(
+            recommended_action="none",
+            status_label="已对齐",
+            summary="当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+            can_refresh=False,
+            can_rebase=False,
+            fact_chips=fact_chips,
+        )
+
+    structure_drift_count = _count_summary_changes(node_summary) + _count_summary_changes(
+        edge_summary
+    )
+    sandbox_drift_count = _count_summary_changes(sandbox_dependency_summary)
+    has_snapshot_drift = (
+        structure_drift_count > 0
+        or sandbox_drift_count > 0
+        or "definition" in rebase_fields
+        or "created_from_workflow_version" in rebase_fields
+    )
+    name_drift_only = workflow_name_changed and not has_snapshot_drift
+
+    if name_drift_only:
+        return WorkspaceStarterSourceActionDecision(
+            recommended_action="rebase",
+            status_label="建议 rebase",
+            summary=(
+                "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名"
+                "跟随来源，请执行 rebase。"
+            ),
+            can_refresh=False,
+            can_rebase=True,
+            fact_chips=fact_chips,
+        )
+
+    if workflow_name_changed:
+        return WorkspaceStarterSourceActionDecision(
+            recommended_action="rebase",
+            status_label="建议 rebase",
+            summary=(
+                (
+                    "当前 drift 同时影响 starter 快照、sandbox 依赖治理和默认 workflow 名称。"
+                    "若希望模板命名与来源一起对齐，优先执行 rebase；如果只想先同步 "
+                    "definition / version 并保留当前模板名称，可先 refresh。"
+                )
+                if sandbox_drift_count > 0
+                else (
+                    "当前 drift 同时影响 starter 快照和默认 workflow 名称。若希望"
+                    "模板命名与来源一起对齐，优先执行 rebase；如果只想先同步 "
+                    "definition / version 并保留当前模板名称，可先 refresh。"
+                )
+            ),
+            can_refresh=has_snapshot_drift,
+            can_rebase=True,
+            fact_chips=fact_chips,
+        )
+
+    if sandbox_drift_count > 0:
+        return WorkspaceStarterSourceActionDecision(
+            recommended_action="refresh",
+            status_label="建议 refresh",
+            summary=(
+                (
+                    "当前 drift 已落在 starter 快照本身，并涉及 sandbox 依赖治理。"
+                    "优先 refresh 同步最新 definition / version；若后续还要让默认 "
+                    "workflow 名称跟随来源，再执行 rebase。"
+                )
+                if structure_drift_count > 0
+                else (
+                    "当前主要是 sandbox 依赖治理漂移。优先 refresh 同步最新 "
+                    "definition / version，并重点复核 dependencyMode、"
+                    "builtinPackageSet、dependencyRef 与 backendExtensions。"
+                )
+            ),
+            can_refresh=True,
+            can_rebase=True,
+            fact_chips=fact_chips,
+        )
+
+    if has_snapshot_drift:
+        return WorkspaceStarterSourceActionDecision(
+            recommended_action="refresh",
+            status_label="建议 refresh",
+            summary=(
+                "当前主要是来源快照漂移。优先 refresh 同步最新 definition / version；"
+                "rebase 只在需要连默认 workflow 名称一起对齐时才有额外价值。"
+            ),
+            can_refresh=True,
+            can_rebase=True,
+            fact_chips=fact_chips,
+        )
+
+    return WorkspaceStarterSourceActionDecision(
+        recommended_action="rebase",
+        status_label="建议 rebase",
+        summary="当前存在来源漂移，建议先检查变更字段；若需要让模板命名跟随来源，请执行 rebase。",
+        can_refresh=False,
+        can_rebase=True,
+        fact_chips=fact_chips,
+    )
+
+
+def _build_source_action_fact_chips(
+    *,
+    template_version: str | None,
+    source_version: str,
+    workflow_name_changed: bool,
+    rebase_fields: list[str],
+    node_summary: WorkspaceStarterSourceDiffSummary,
+    edge_summary: WorkspaceStarterSourceDiffSummary,
+    sandbox_dependency_summary: WorkspaceStarterSourceDiffSummary,
+) -> list[str]:
+    chips: list[str] = []
+    structure_drift_count = _count_summary_changes(node_summary) + _count_summary_changes(
+        edge_summary
+    )
+    sandbox_drift_count = _count_summary_changes(sandbox_dependency_summary)
+
+    if template_version:
+        chips.append(f"template {template_version}")
+    chips.append(f"source {source_version}")
+    if structure_drift_count > 0:
+        chips.append(f"structure drift {structure_drift_count}")
+    if sandbox_drift_count > 0:
+        chips.append(f"sandbox drift {sandbox_drift_count}")
+    if workflow_name_changed:
+        chips.append("name drift")
+    if rebase_fields:
+        chips.append(f"rebase {len(rebase_fields)}")
+
+    return chips
+
+
+def _count_summary_changes(summary: WorkspaceStarterSourceDiffSummary) -> int:
+    return summary.added_count + summary.removed_count + summary.changed_count
 
 
 def _build_diff_entries(

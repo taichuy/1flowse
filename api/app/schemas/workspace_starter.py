@@ -35,6 +35,22 @@ WorkspaceStarterBulkSkipReason = Literal[
     "source_workflow_invalid",
     "delete_requires_archive",
 ]
+WorkspaceStarterBulkPreviewReason = Literal[
+    "not_found",
+    "already_archived",
+    "not_archived",
+    "no_source_workflow",
+    "source_workflow_missing",
+    "source_workflow_invalid",
+    "delete_requires_archive",
+    "already_aligned",
+    "name_drift_only",
+]
+WorkspaceStarterSourceRecommendedAction = Literal[
+    "refresh",
+    "rebase",
+    "none",
+]
 
 
 class WorkspaceStarterTemplateBase(BaseModel):
@@ -133,6 +149,15 @@ class WorkspaceStarterSourceDiffSummary(BaseModel):
     changed_count: int
 
 
+class WorkspaceStarterSourceActionDecision(BaseModel):
+    recommended_action: WorkspaceStarterSourceRecommendedAction
+    status_label: str
+    summary: str
+    can_refresh: bool = False
+    can_rebase: bool = False
+    fact_chips: list[str] = Field(default_factory=list)
+
+
 class WorkspaceStarterSourceDiff(BaseModel):
     template_id: str
     workspace_id: str
@@ -153,6 +178,85 @@ class WorkspaceStarterSourceDiff(BaseModel):
     sandbox_dependency_entries: list[WorkspaceStarterSourceDiffEntry] = Field(
         default_factory=list
     )
+    action_decision: WorkspaceStarterSourceActionDecision
+
+
+class WorkspaceStarterBulkPreviewRequest(BaseModel):
+    workspace_id: str = Field(default="default", min_length=1, max_length=64)
+    template_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def normalize_template_ids(self) -> WorkspaceStarterBulkPreviewRequest:
+        normalized_ids: list[str] = []
+        for template_id in self.template_ids:
+            normalized = template_id.strip()
+            if normalized and normalized not in normalized_ids:
+                normalized_ids.append(normalized)
+
+        if not normalized_ids:
+            raise ValueError("At least one template_id must be provided.")
+
+        self.template_ids = normalized_ids
+        return self
+
+
+class WorkspaceStarterBulkPreviewCandidateItem(BaseModel):
+    template_id: str
+    name: str | None = None
+    archived: bool = False
+    source_workflow_id: str | None = None
+    source_workflow_version: str | None = None
+    action_decision: WorkspaceStarterSourceActionDecision | None = None
+    sandbox_dependency_changes: WorkspaceStarterSourceDiffSummary | None = None
+    sandbox_dependency_nodes: list[str] = Field(default_factory=list)
+
+
+class WorkspaceStarterBulkPreviewBlockedItem(BaseModel):
+    template_id: str
+    name: str | None = None
+    archived: bool = False
+    reason: WorkspaceStarterBulkPreviewReason
+    detail: str
+    source_workflow_id: str | None = None
+    source_workflow_version: str | None = None
+    action_decision: WorkspaceStarterSourceActionDecision | None = None
+    sandbox_dependency_changes: WorkspaceStarterSourceDiffSummary | None = None
+    sandbox_dependency_nodes: list[str] = Field(default_factory=list)
+
+
+class WorkspaceStarterBulkPreviewReasonSummary(BaseModel):
+    reason: WorkspaceStarterBulkPreviewReason
+    count: int
+    detail: str
+
+
+class WorkspaceStarterBulkActionPreview(BaseModel):
+    action: WorkspaceStarterBulkAction
+    candidate_count: int
+    blocked_count: int
+    candidate_items: list[WorkspaceStarterBulkPreviewCandidateItem] = Field(
+        default_factory=list
+    )
+    blocked_items: list[WorkspaceStarterBulkPreviewBlockedItem] = Field(
+        default_factory=list
+    )
+    blocked_reason_summary: list[WorkspaceStarterBulkPreviewReasonSummary] = Field(
+        default_factory=list
+    )
+
+
+class WorkspaceStarterBulkPreviewSet(BaseModel):
+    archive: WorkspaceStarterBulkActionPreview
+    restore: WorkspaceStarterBulkActionPreview
+    refresh: WorkspaceStarterBulkActionPreview
+    rebase: WorkspaceStarterBulkActionPreview
+    delete: WorkspaceStarterBulkActionPreview
+
+
+class WorkspaceStarterBulkPreview(BaseModel):
+    workspace_id: str
+    requested_count: int
+    previews: WorkspaceStarterBulkPreviewSet
 
 
 class WorkspaceStarterBulkActionRequest(BaseModel):

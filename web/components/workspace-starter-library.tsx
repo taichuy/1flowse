@@ -27,7 +27,8 @@ export function WorkspaceStarterLibrary({
     activeTrack,
     archiveFilter,
     archivedTemplateCount,
-    bulkActionCandidates,
+    bulkPreview,
+    bulkPreviewNotice,
     filteredTemplates,
     formState,
     focusTemplateFromBulkResult,
@@ -40,6 +41,7 @@ export function WorkspaceStarterLibrary({
     hasPendingChanges,
     historyItems,
     isBulkMutating,
+    isLoadingBulkPreview,
     isLoadingHistory,
     isLoadingSourceDiff,
     isLoadingSourceWorkflow,
@@ -94,14 +96,10 @@ export function WorkspaceStarterLibrary({
           activeTemplateCount={activeTemplateCount}
           archivedTemplateCount={archivedTemplateCount}
           templateToolGovernanceById={templateToolGovernanceById}
-          bulkCandidateCounts={{
-            archive: bulkActionCandidates.archive.length,
-            restore: bulkActionCandidates.restore.length,
-            refresh: bulkActionCandidates.refresh.length,
-            rebase: bulkActionCandidates.rebase.length,
-            delete: bulkActionCandidates.delete.length
-          }}
+          bulkPreview={bulkPreview}
+          bulkPreviewNotice={bulkPreviewNotice}
           isBulkMutating={isBulkMutating}
+          isLoadingBulkPreview={isLoadingBulkPreview}
           lastBulkResult={lastBulkResult}
           onTrackChange={setActiveTrack}
           onArchiveFilterChange={setArchiveFilter}

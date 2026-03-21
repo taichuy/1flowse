@@ -4,11 +4,14 @@ import React from "react";
 
 import type {
   WorkspaceStarterBulkAction,
-  WorkspaceStarterBulkActionResult
+  WorkspaceStarterBulkActionResult,
+  WorkspaceStarterBulkPreview
 } from "@/lib/get-workspace-starters";
 
 import {
   type WorkspaceStarterBulkAffectedStarterTarget,
+  type WorkspaceStarterBulkPreviewFocusTarget,
+  buildWorkspaceStarterBulkPreviewNarrative,
   buildWorkspaceStarterBulkResultNarrative,
   getWorkspaceStarterBulkActionButtonLabel,
   getWorkspaceStarterBulkActionLabel,
@@ -17,9 +20,12 @@ import {
 
 type WorkspaceStarterBulkGovernanceCardProps = {
   inScopeCount: number;
-  candidateCounts: Record<WorkspaceStarterBulkAction, number>;
+  preview: WorkspaceStarterBulkPreview | null;
+  previewNotice: string | null;
   isMutating: boolean;
+  isLoadingPreview: boolean;
   lastResult: WorkspaceStarterBulkActionResult | null;
+  previewFocusTargets: WorkspaceStarterBulkPreviewFocusTarget[];
   affectedStarterTargets: WorkspaceStarterBulkAffectedStarterTarget[];
   selectedTemplateId: string | null;
   onFocusTemplate: (templateId: string) => void;
@@ -36,14 +42,18 @@ const BULK_ACTIONS: WorkspaceStarterBulkAction[] = [
 
 export function WorkspaceStarterBulkGovernanceCard({
   inScopeCount,
-  candidateCounts,
+  preview,
+  previewNotice,
   isMutating,
+  isLoadingPreview,
   lastResult,
+  previewFocusTargets,
   affectedStarterTargets,
   selectedTemplateId,
   onFocusTemplate,
   onAction
 }: WorkspaceStarterBulkGovernanceCardProps) {
+  const previewNarrativeItems = buildWorkspaceStarterBulkPreviewNarrative(preview);
   const narrativeItems = lastResult ? buildWorkspaceStarterBulkResultNarrative(lastResult) : [];
 
   return (
@@ -58,15 +68,64 @@ export function WorkspaceStarterBulkGovernanceCard({
         <span className="health-pill">{inScopeCount} in scope</span>
       </div>
       <div className="starter-tag-row">
-        {BULK_ACTIONS.map((action) => (
-          <span className="event-chip" key={action}>
-            {action} {candidateCounts[action]}
-          </span>
-        ))}
+        {BULK_ACTIONS.map((action) => {
+          const actionPreview = preview?.previews[action] ?? null;
+          const candidateCount = actionPreview?.candidate_count ?? 0;
+          const blockedCount = actionPreview?.blocked_count ?? 0;
+          return (
+            <span className="event-chip" key={action}>
+              {getWorkspaceStarterBulkActionLabel(action)} {candidateCount}
+              {blockedCount > 0 ? ` · block ${blockedCount}` : ""}
+            </span>
+          );
+        })}
       </div>
       <p className="section-copy starter-summary-copy">
         删除仍然遵循“先归档再删除”；rebase 会同步 source-derived 字段，批量操作前请先确认当前筛选范围。
       </p>
+      {isLoadingPreview ? (
+        <p className="section-copy starter-summary-copy">
+          <strong>Preview:</strong> 正在从后端预检当前筛选结果的批量治理候选。
+        </p>
+      ) : null}
+      {previewNotice ? (
+        <p className="section-copy starter-summary-copy">
+          <strong>Preview:</strong> {previewNotice}
+        </p>
+      ) : null}
+      {previewNarrativeItems.map((item) => (
+        <p className="section-copy starter-summary-copy" key={`${item.label}-${item.text}`}>
+          <strong>{item.label}:</strong> {item.text}
+        </p>
+      ))}
+      {previewFocusTargets.length > 0 ? (
+        <div className="binding-section">
+          <p className="binding-meta">Preview focus</p>
+          <p className="section-copy starter-summary-copy">
+            后端 bulk preview 已把 refresh / rebase 的候选和阻塞项统一折叠成共享决策；点击
+            starter 可直接聚焦右侧 source diff / metadata 详情。
+          </p>
+          <div className="starter-tag-row">
+            {previewFocusTargets.map((item) => (
+              <button
+                key={item.templateId}
+                className={`event-chip event-chip-button ${
+                  selectedTemplateId === item.templateId ? "active" : ""
+                }`}
+                type="button"
+                onClick={() => onFocusTemplate(item.templateId)}
+                disabled={isMutating}
+                aria-pressed={selectedTemplateId === item.templateId}
+              >
+                {item.name}
+                {item.statusLabel ? ` · ${item.statusLabel}` : ""}
+                {item.sourceWorkflowVersion ? ` · source ${item.sourceWorkflowVersion}` : ""}
+                {item.archived ? " · archived" : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {lastResult ? (
         <>
           <div className="starter-tag-row">
@@ -137,17 +196,20 @@ export function WorkspaceStarterBulkGovernanceCard({
         </>
       ) : null}
       <div className="binding-actions">
-        {BULK_ACTIONS.map((action) => (
-          <button
-            key={action}
-            className="sync-button secondary"
-            type="button"
-            onClick={() => onAction(action)}
-            disabled={candidateCounts[action] === 0 || isMutating}
-          >
-            {isMutating ? "处理中..." : getWorkspaceStarterBulkActionButtonLabel(action)}
-          </button>
-        ))}
+        {BULK_ACTIONS.map((action) => {
+          const candidateCount = preview?.previews[action].candidate_count ?? 0;
+          return (
+            <button
+              key={action}
+              className="sync-button secondary"
+              type="button"
+              onClick={() => onAction(action)}
+              disabled={candidateCount === 0 || isMutating || isLoadingPreview || Boolean(previewNotice)}
+            >
+              {isMutating ? "处理中..." : getWorkspaceStarterBulkActionButtonLabel(action)}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
