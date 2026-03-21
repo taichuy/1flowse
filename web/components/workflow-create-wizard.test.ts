@@ -246,7 +246,7 @@ describe("WorkflowCreateWizard", () => {
         catalogToolCount: 0,
         workflows: [
           {
-            id: "workflow-latest",
+            id: "  workflow latest/1  ",
             name: "Latest workflow",
             status: "draft",
             version: "0.1.0",
@@ -336,6 +336,6 @@ describe("WorkflowCreateWizard", () => {
     expect(html).toContain(
       '/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
     );
-    expect(html).toContain('href="/workflows/workflow-latest"');
+    expect(html).toContain('href="/workflows/workflow%20latest%2F1"');
   });
 });

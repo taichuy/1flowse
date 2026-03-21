@@ -1,9 +1,17 @@
-import { createElement } from "react";
+import * as React from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+
+Object.assign(globalThis, { React });
+
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
+}));
 
 function buildSandboxReadiness(): SandboxReadinessCheck {
   return {
@@ -40,6 +48,59 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
 }
 
 describe("WorkflowEditorSidebar", () => {
+  it("reuses shared workflow detail hrefs in canvas overview chips", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [
+          {
+            id: "  workflow alpha/beta  ",
+            name: "Governed workflow",
+            status: "draft",
+            version: "0.1.0",
+            node_count: 1,
+            tool_governance: {
+              referenced_tool_ids: [],
+              missing_tool_ids: [],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            }
+          }
+        ],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onWorkflowNameChange: () => undefined,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain('href="/workflows/workflow%20alpha%2Fbeta"');
+  });
+
   it("shows execution preflight readiness before save when strong isolation is blocked", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {

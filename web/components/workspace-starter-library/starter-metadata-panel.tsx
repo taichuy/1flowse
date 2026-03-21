@@ -7,6 +7,7 @@ import {
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 import type {
   WorkspaceStarterFormState,
@@ -224,7 +225,7 @@ export function WorkspaceStarterMetadataPanel({
               {selectedTemplate.created_from_workflow_id ? (
                 <Link
                   className="inline-link secondary"
-                  href={`/workflows/${encodeURIComponent(selectedTemplate.created_from_workflow_id)}`}
+                  href={buildWorkflowDetailHref(selectedTemplate.created_from_workflow_id)}
                 >
                   打开源 workflow
                 </Link>

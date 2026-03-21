@@ -28,6 +28,7 @@ import {
   type WorkflowListItem,
   WorkflowDefinitionValidationError
 } from "@/lib/get-workflows";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 import {
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
@@ -306,7 +307,7 @@ export function WorkflowCreateWizard({
             {workflows[0] ? (
               <Link
                 className="inline-link secondary"
-                href={`/workflows/${encodeURIComponent(workflows[0].id)}`}
+                href={buildWorkflowDetailHref(workflows[0].id)}
               >
                 打开最近 workflow
               </Link>
@@ -605,7 +606,7 @@ export function WorkflowCreateWizard({
                 <WorkflowChipLink
                   key={workflow.id}
                   workflow={workflow}
-                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
+                  href={buildWorkflowDetailHref(workflow.id)}
                 />
               ))}
             </div>

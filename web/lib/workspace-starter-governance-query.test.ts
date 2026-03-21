@@ -40,8 +40,10 @@ describe("workspace-starter-governance-query", () => {
     expect(buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(viewState)).toBe(
       "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );
-    expect(buildWorkflowEditorHrefFromWorkspaceStarterViewState("workflow-1", viewState)).toBe(
-      "/workflows/workflow-1?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    expect(
+      buildWorkflowEditorHrefFromWorkspaceStarterViewState("  workflow alpha/beta  ", viewState)
+    ).toBe(
+      "/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );
   });
 
