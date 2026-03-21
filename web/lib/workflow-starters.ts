@@ -10,6 +10,10 @@ import type {
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
+import {
+  summarizeWorkflowDefinitionSandboxGovernance,
+  type WorkflowDefinitionSandboxGovernance
+} from "@/lib/workflow-definition-sandbox-governance";
 import { summarizeWorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
 export type WorkflowStarterTemplateId = string;
@@ -33,6 +37,7 @@ export type WorkflowStarterTemplate = {
   missingToolIds: string[];
   governedToolCount: number;
   strongIsolationToolCount: number;
+  sandboxGovernance: WorkflowDefinitionSandboxGovernance;
   tags: string[];
   definition: WorkflowDefinition;
 };
@@ -119,6 +124,7 @@ function buildWorkflowStarterTemplate(
   const definition = normalizeWorkflowDefinition(starter.definition);
   const nodeTypes = (definition.nodes ?? []).map((node) => node.type);
   const toolGovernance = summarizeWorkflowDefinitionToolGovernance(definition, tools);
+  const sandboxGovernance = summarizeWorkflowDefinitionSandboxGovernance(definition);
 
   return {
     id: starter.id,
@@ -142,6 +148,7 @@ function buildWorkflowStarterTemplate(
     missingToolIds: toolGovernance.missingToolIds,
     governedToolCount: toolGovernance.governedToolCount,
     strongIsolationToolCount: toolGovernance.strongIsolationToolCount,
+    sandboxGovernance,
     tags: starter.tags,
     definition
   };

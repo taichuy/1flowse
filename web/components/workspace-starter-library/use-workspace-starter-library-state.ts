@@ -11,6 +11,10 @@ import {
   type WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
 import {
+  summarizeWorkflowDefinitionSandboxGovernance,
+  type WorkflowDefinitionSandboxGovernance
+} from "@/lib/workflow-definition-sandbox-governance";
+import {
   summarizeWorkflowDefinitionToolGovernance,
   type WorkflowDefinitionToolGovernance
 } from "@/lib/workflow-definition-tool-governance";
@@ -39,6 +43,19 @@ const EMPTY_TEMPLATE_TOOL_GOVERNANCE: WorkflowDefinitionToolGovernance = {
   missingToolIds: [],
   governedToolCount: 0,
   strongIsolationToolCount: 0
+};
+
+const EMPTY_TEMPLATE_SANDBOX_GOVERNANCE: WorkflowDefinitionSandboxGovernance = {
+  sandboxNodeCount: 0,
+  explicitExecutionCount: 0,
+  executionClasses: [],
+  dependencyModes: [],
+  dependencyModeCounts: {},
+  builtinPackageSets: [],
+  dependencyRefs: [],
+  backendExtensionNodeCount: 0,
+  backendExtensionKeys: [],
+  nodes: []
 };
 
 export function useWorkspaceStarterLibraryState(
@@ -109,6 +126,13 @@ export function useWorkspaceStarterLibraryState(
   const selectedTemplateToolGovernance = selectedTemplate
     ? templateToolGovernanceById.get(selectedTemplate.id) ?? EMPTY_TEMPLATE_TOOL_GOVERNANCE
     : EMPTY_TEMPLATE_TOOL_GOVERNANCE;
+  const selectedTemplateSandboxGovernance = useMemo(
+    () =>
+      selectedTemplate
+        ? summarizeWorkflowDefinitionSandboxGovernance(selectedTemplate.definition)
+        : EMPTY_TEMPLATE_SANDBOX_GOVERNANCE,
+    [selectedTemplate]
+  );
 
   const {
     clearSelectionArtifacts,
@@ -431,6 +455,7 @@ export function useWorkspaceStarterLibraryState(
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    selectedTemplateSandboxGovernance,
     selectedTemplateToolGovernance,
     selectedTrackMeta,
     setActiveTrack,

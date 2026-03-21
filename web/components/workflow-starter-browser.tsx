@@ -94,7 +94,13 @@ export function WorkflowStarterBrowser({
               <span>{starter.governedToolCount} governed tools</span>
               <span>{starter.strongIsolationToolCount} strong isolation</span>
               <span>{starter.source.shortLabel}</span>
-              <span>{starter.tags[0] ?? "starter"}</span>
+              <span>
+                {starter.sandboxGovernance.dependencyModes[0]
+                  ? `deps ${starter.sandboxGovernance.dependencyModes[0]}`
+                  : starter.sandboxGovernance.sandboxNodeCount > 0
+                    ? `${starter.sandboxGovernance.sandboxNodeCount} sandbox`
+                    : starter.tags[0] ?? "starter"}
+              </span>
             </div>
           </button>
         ))}

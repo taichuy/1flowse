@@ -50,6 +50,7 @@ export function WorkspaceStarterLibrary({
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    selectedTemplateSandboxGovernance,
     selectedTemplateToolGovernance,
     selectedTrackMeta,
     setActiveTrack,
@@ -122,6 +123,7 @@ export function WorkspaceStarterLibrary({
 
           <WorkspaceStarterDefinitionSnapshotPanel
             selectedTemplate={selectedTemplate}
+            selectedTemplateSandboxGovernance={selectedTemplateSandboxGovernance}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
             sourceStatus={sourceStatus}
             sourceStatusMessage={sourceStatusMessage}

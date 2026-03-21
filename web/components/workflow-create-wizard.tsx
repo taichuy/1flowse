@@ -9,6 +9,10 @@ import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import {
+  buildWorkflowDefinitionSandboxGovernanceBadges,
+  describeWorkflowDefinitionSandboxDependency
+} from "@/lib/workflow-definition-sandbox-governance";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowLibraryStarterItem,
@@ -73,6 +77,14 @@ export function WorkflowCreateWizard({
   const activeTrackMeta = useMemo(
     () => getWorkflowBusinessTrack(activeTrack),
     [activeTrack]
+  );
+  const selectedStarterSandboxBadges = useMemo(
+    () => buildWorkflowDefinitionSandboxGovernanceBadges(selectedStarter.sandboxGovernance),
+    [selectedStarter.sandboxGovernance]
+  );
+  const selectedStarterSandboxDependencySummary = useMemo(
+    () => describeWorkflowDefinitionSandboxDependency(selectedStarter.sandboxGovernance),
+    [selectedStarter.sandboxGovernance]
   );
   const visibleStarters = useMemo(
     () =>
@@ -308,6 +320,48 @@ export function WorkflowCreateWizard({
                       还有 {selectedStarter.referencedTools.length - 2} 个引用工具会在进入编辑器后继续沿同一治理规则展示。
                     </p>
                   ) : null}
+                </div>
+              ) : null}
+              {selectedStarter.sandboxGovernance.sandboxNodeCount > 0 ? (
+                <div className="binding-form">
+                  <p className="binding-label">Sandbox dependency in this starter</p>
+                  <p className="binding-meta">
+                    创建前先确认 `sandbox_code` 节点已经记录的 execution、dependencyMode 和
+                    backendExtensions 与当前 sandbox readiness 一致，避免进入画布后才发现依赖约束漂移。
+                  </p>
+                  <div className="summary-strip compact-strip">
+                    <div className="summary-card">
+                      <span>Sandbox nodes</span>
+                      <strong>{selectedStarter.sandboxGovernance.sandboxNodeCount}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Execution</span>
+                      <strong>
+                        {selectedStarter.sandboxGovernance.executionClasses.join(" / ") || "-"}
+                      </strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Dependency mode</span>
+                      <strong>
+                        {selectedStarter.sandboxGovernance.dependencyModes.join(" / ") || "未声明"}
+                      </strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Extensions</span>
+                      <strong>{selectedStarter.sandboxGovernance.backendExtensionNodeCount}</strong>
+                    </div>
+                  </div>
+                  <div className="starter-tag-row">
+                    {selectedStarterSandboxBadges.map((badge) => (
+                      <span className="event-chip" key={`${selectedStarter.id}-${badge}`}>
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="binding-meta">
+                    {selectedStarterSandboxDependencySummary ??
+                      "当前 starter 已含 sandbox_code 节点，但还没有显式 dependencyMode；进入画布后优先补齐依赖策略与 runtime policy。"}
+                  </p>
                 </div>
               ) : null}
               {selectedStarter.missingToolIds.length > 0 ? (
