@@ -218,7 +218,7 @@ describe("SensitiveAccessInboxEntryCard", () => {
     const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
 
     expect(html).toContain("href=\"/runs/1234567890-current-run\"");
-    expect(html).toContain("run 12345678");
+    expect(html).toContain("open run 12345678");
   });
 
   it("keeps inline approval actions at run-level when only callback waiting exposes a display node scope", () => {

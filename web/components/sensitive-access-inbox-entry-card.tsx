@@ -21,7 +21,10 @@ import type {
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   buildOperatorFollowUpSurfaceCopy,
-  buildOperatorRecommendedNextStep
+  buildOperatorInboxSliceLinkSurface,
+  buildOperatorRecommendedNextStep,
+  buildOperatorRunDetailLinkSurface,
+  formatOperatorOpenRunLinkLabel
 } from "@/lib/operator-follow-up-presenters";
 import { buildRunDetailHref } from "@/lib/workbench-links";
 import {
@@ -90,6 +93,21 @@ export function SensitiveAccessInboxEntryCard({
         nodeRunId: executionContext.focusNode.node_run_id
       })
     : null;
+  const displayRunLink = buildOperatorRunDetailLinkSurface({
+    runId: displayScope.runId,
+    hrefLabel: displayScope.runId
+      ? formatOperatorOpenRunLinkLabel(displayScope.runId, operatorSurfaceCopy)
+      : null,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const focusRunLink = buildOperatorRunDetailLinkSurface({
+    runId: executionContext?.runId,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const focusInboxLink = buildOperatorInboxSliceLinkSurface({
+    href: focusInboxHref,
+    surfaceCopy: operatorSurfaceCopy
+  });
   const executionSurfaceCopy = executionContext
     ? buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
         focusMatchesEntry: executionContext.focusMatchesEntry,
@@ -159,9 +177,9 @@ export function SensitiveAccessInboxEntryCard({
         {request && formatSensitiveAccessReasonLabel(request) ? (
           <span className="event-chip">reason {formatSensitiveAccessReasonLabel(request)}</span>
         ) : null}
-        {displayScope.runId ? (
-          <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(displayScope.runId)}>
-            run {displayScope.runId.slice(0, 8)}
+        {displayRunLink ? (
+          <Link className="event-chip inbox-filter-link" href={displayRunLink.href}>
+            {displayRunLink.label}
           </Link>
         ) : null}
         <span className="event-chip">created {formatTimestamp(entry.ticket.created_at)}</span>
@@ -236,14 +254,16 @@ export function SensitiveAccessInboxEntryCard({
             />
           ) : null}
           <div className="tool-badge-row">
-            <Link className="event-chip inbox-filter-link" href={focusRunHref ?? buildRunDetailHref(executionContext.runId)}>
-              {operatorSurfaceCopy.openRunLabel}
-            </Link>
-            {focusInboxHref ? (
-              <Link className="event-chip inbox-filter-link" href={focusInboxHref}>
-                {operatorSurfaceCopy.openInboxSliceLabel}
+            {focusRunLink ? (
+              <Link className="event-chip inbox-filter-link" href={focusRunLink.href}>
+                {focusRunLink.label}
               </Link>
-              ) : null}
+            ) : null}
+            {focusInboxLink ? (
+              <Link className="event-chip inbox-filter-link" href={focusInboxLink.href}>
+                {focusInboxLink.label}
+              </Link>
+            ) : null}
           </div>
         </div>
       ) : null}

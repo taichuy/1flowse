@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOperatorInboxSliceLinkSurface,
   buildOperatorInboxSliceCandidate,
   buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRunDetailLinkSurface,
   buildOperatorRunDetailCandidate,
-  buildOperatorRunSnapshotMetaRows
+  buildOperatorRunSnapshotMetaRows,
+  formatOperatorOpenRunLinkLabel
 } from "./operator-follow-up-presenters";
 
 describe("operator follow-up presenters", () => {
@@ -91,6 +94,41 @@ describe("operator follow-up presenters", () => {
       href: "/sensitive-access?run_id=run-1",
       href_label: "open inbox slice",
       fallback_detail: "fallback"
+    });
+  });
+
+  it("为直达 run 链接复用统一 href 与标签 surface", () => {
+    expect(
+      buildOperatorRunDetailLinkSurface({
+        runId: "run-123456789"
+      })
+    ).toEqual({
+      href: "/runs/run-123456789",
+      label: "open run"
+    });
+  });
+
+  it("为短 id run pill 复用 open run {id} 标签 helper", () => {
+    expect(formatOperatorOpenRunLinkLabel("run-123456789")).toBe("open run run-1234");
+    expect(
+      buildOperatorRunDetailLinkSurface({
+        runId: "run-123456789",
+        hrefLabel: formatOperatorOpenRunLinkLabel("run-123456789")
+      })
+    ).toEqual({
+      href: "/runs/run-123456789",
+      label: "open run run-1234"
+    });
+  });
+
+  it("为直达 inbox slice 链接复用统一 href 与标签 surface", () => {
+    expect(
+      buildOperatorInboxSliceLinkSurface({
+        href: "/sensitive-access?run_id=run-1"
+      })
+    ).toEqual({
+      href: "/sensitive-access?run_id=run-1",
+      label: "open inbox slice"
     });
   });
 });

@@ -15,13 +15,13 @@ import { buildOperatorRunSampleCards } from "@/lib/operator-run-sample-cards";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRunDetailLinkSurface,
   buildOperatorRecommendedNextStep,
   buildOperatorRunDetailCandidate,
   buildOperatorRunSnapshotMetaRows,
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
 import { listExecutionFocusRuntimeFactBadges } from "@/lib/run-execution-focus-presenters";
-import { buildRunDetailHref } from "@/lib/workbench-links";
 import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 type InlineOperatorActionFeedbackProps = {
@@ -56,6 +56,7 @@ export function InlineOperatorActionFeedback({
   const callbackWaitingFocusNode = buildExecutionFocusExplainableNode(runSnapshot);
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(callbackWaitingFocusNode);
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
+  const runDetailLink = buildOperatorRunDetailLinkSurface({ runId, surfaceCopy });
   const recommendedNextStep =
     recommendedNextStepOverride ??
     (!hasCallbackWaitingSummary
@@ -106,9 +107,9 @@ export function InlineOperatorActionFeedback({
     <div className="entry-card compact-card">
       <div className="payload-card-header">
         <span className="status-meta">{title}</span>
-        {runId ? (
-          <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(runId)}>
-            {surfaceCopy.openRunLabel}
+        {runDetailLink ? (
+          <Link className="event-chip inbox-filter-link" href={runDetailLink.href}>
+            {runDetailLink.label}
           </Link>
         ) : null}
       </div>

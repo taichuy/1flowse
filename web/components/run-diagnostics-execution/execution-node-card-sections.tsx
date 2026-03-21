@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -10,6 +11,10 @@ import type {
 } from "@/lib/get-run-views";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { listCallbackTicketDetailRows } from "@/lib/callback-waiting-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorInboxSliceLinkSurface
+} from "@/lib/operator-follow-up-presenters";
 import {
   formatExecutionBlockingReasonCopy,
   formatExecutionFallbackReasonCopy
@@ -162,6 +167,8 @@ export function ExecutionNodeCallbackTicketList({
 }: {
   callbackTickets: RunCallbackTicketItem[];
 }) {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
   if (callbackTickets.length === 0) {
     return null;
   }
@@ -172,6 +179,10 @@ export function ExecutionNodeCallbackTicketList({
       <div className="event-list">
         {callbackTickets.map((ticket) => {
           const inboxHref = buildCallbackTicketInboxHref(ticket);
+          const inboxLink = buildOperatorInboxSliceLinkSurface({
+            href: inboxHref,
+            surfaceCopy: operatorSurfaceCopy
+          });
           const detailRows = listCallbackTicketDetailRows(ticket, { mode: "compact" });
           return (
             <article className="event-row compact-card" key={ticket.ticket}>
@@ -182,10 +193,10 @@ export function ExecutionNodeCallbackTicketList({
               <p className="event-run">
                 ticket {ticket.ticket} · tool {ticket.tool_id ?? "n/a"}
               </p>
-              {inboxHref ? (
+              {inboxLink ? (
                 <div className="tool-badge-row">
-                  <Link className="event-chip inbox-filter-link" href={inboxHref}>
-                    open inbox slice
+                  <Link className="event-chip inbox-filter-link" href={inboxLink.href}>
+                    {inboxLink.label}
                   </Link>
                 </div>
               ) : null}

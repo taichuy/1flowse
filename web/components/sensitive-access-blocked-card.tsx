@@ -16,6 +16,10 @@ import {
   getSensitiveAccessCanonicalOutcomeExplanation,
   getSensitiveAccessBlockedPolicySummary
 } from "@/lib/sensitive-access-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorInboxSliceLinkSurface
+} from "@/lib/operator-follow-up-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import { buildRunDetailHref } from "@/lib/workbench-links";
 
@@ -43,6 +47,7 @@ export function SensitiveAccessBlockedCard({
   summary
 }: SensitiveAccessBlockedCardProps) {
   const runId = resolveSensitiveAccessBlockingRunId(payload);
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const inboxHref = buildSensitiveAccessInboxHref({
     runId,
     nodeRunId: payload.access_request.node_run_id ?? payload.approval_ticket?.node_run_id ?? null,
@@ -50,6 +55,10 @@ export function SensitiveAccessBlockedCard({
     waitingStatus: normalizeWaitingStatus(payload.approval_ticket?.waiting_status),
     accessRequestId: payload.access_request.id,
     approvalTicketId: payload.approval_ticket?.id ?? null
+  });
+  const inboxLink = buildOperatorInboxSliceLinkSurface({
+    href: inboxHref,
+    surfaceCopy: operatorSurfaceCopy
   });
   const hasStructuredFollowUp = Boolean(
       payload.outcome_explanation?.primary_signal?.trim() ||
@@ -96,9 +105,11 @@ export function SensitiveAccessBlockedCard({
         <span className="event-chip">{payload.resource.sensitivity_level}</span>
         <span className="event-chip">{payload.access_request.action_type}</span>
         <span className="event-chip">{payload.resource.source}</span>
-        <Link className="event-chip inbox-filter-link" href={inboxHref}>
-          open inbox slice
-        </Link>
+        {inboxLink ? (
+          <Link className="event-chip inbox-filter-link" href={inboxLink.href}>
+            {inboxLink.label}
+          </Link>
+        ) : null}
       </div>
 
       <dl className="compact-meta-list">

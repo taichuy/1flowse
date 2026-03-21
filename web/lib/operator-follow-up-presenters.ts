@@ -7,6 +7,11 @@ export type OperatorRecommendedNextStep = {
   href_label: string | null;
 };
 
+export type OperatorFollowUpLinkSurface = {
+  href: string;
+  label: string;
+};
+
 export type OperatorFollowUpSurfaceCopy = {
   recommendedNextStepTitle: string;
   openInboxSliceLabel: string;
@@ -170,6 +175,64 @@ export function formatOperatorOpenRunLinkLabel(
   return normalizedRunId
     ? `${surfaceCopy.openRunLabel} ${normalizedRunId.slice(0, 8)}`
     : surfaceCopy.openRunLabel;
+}
+
+function resolveLinkSurface(
+  candidate: OperatorRecommendedNextStepCandidate,
+  fallbackLabel: string
+): OperatorFollowUpLinkSurface | null {
+  const href = normalizeHref(candidate.href);
+
+  if (!href) {
+    return null;
+  }
+
+  return {
+    href,
+    label: normalizeFollowUpCopy(candidate.href_label) ?? fallbackLabel
+  };
+}
+
+export function buildOperatorRunDetailLinkSurface({
+  runId,
+  hrefLabel,
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+}: {
+  runId?: string | null;
+  hrefLabel?: string | null;
+  surfaceCopy?: OperatorFollowUpSurfaceCopy;
+}): OperatorFollowUpLinkSurface | null {
+  return resolveLinkSurface(
+    buildOperatorRunDetailCandidate({
+      active: true,
+      runId,
+      fallbackDetail: surfaceCopy.openRunLabel,
+      hrefLabel,
+      surfaceCopy
+    }),
+    hrefLabel?.trim() || surfaceCopy.openRunLabel
+  );
+}
+
+export function buildOperatorInboxSliceLinkSurface({
+  href,
+  hrefLabel,
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+}: {
+  href?: string | null;
+  hrefLabel?: string | null;
+  surfaceCopy?: OperatorFollowUpSurfaceCopy;
+}): OperatorFollowUpLinkSurface | null {
+  return resolveLinkSurface(
+    buildOperatorInboxSliceCandidate({
+      active: true,
+      href,
+      fallbackDetail: surfaceCopy.openInboxSliceLabel,
+      hrefLabel,
+      surfaceCopy
+    }),
+    hrefLabel?.trim() || surfaceCopy.openInboxSliceLabel
+  );
 }
 
 function resolveCandidate(
