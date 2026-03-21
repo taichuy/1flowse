@@ -105,4 +105,31 @@ describe("getWorkflowLibrarySnapshot", () => {
       }
     });
   });
+
+  it("reuses workspace starter governance query params when filtering the snapshot", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        nodes: [],
+        starter_source_lanes: [],
+        node_source_lanes: [],
+        tool_source_lanes: [],
+        tools: [],
+        starters: []
+      })
+    } as Response);
+
+    await getWorkflowLibrarySnapshot({
+      businessTrack: "应用新建编排",
+      search: " governed starter ",
+      sourceGovernanceKind: "drifted",
+      needsFollowUp: true,
+      includeBuiltinStarters: false
+    });
+
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+      "http://api.test/api/workflow-library?workspace_id=default&business_track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&search=governed+starter&source_governance_kind=drifted&needs_follow_up=true&include_builtin_starters=false",
+      { cache: "no-store" }
+    );
+  });
 });

@@ -60,6 +60,8 @@ describe("WorkspaceStarterTemplateListPanel", () => {
         selectedTemplateId: "starter-drifted",
         activeTrack: "all",
         archiveFilter: "all",
+        sourceGovernanceKind: "all",
+        needsFollowUp: false,
         searchQuery: "",
         activeTemplateCount: 1,
         archivedTemplateCount: 0,
@@ -86,6 +88,8 @@ describe("WorkspaceStarterTemplateListPanel", () => {
         },
         onTrackChange: () => {},
         onArchiveFilterChange: () => {},
+        onSourceGovernanceKindChange: () => {},
+        onNeedsFollowUpChange: () => {},
         onSearchQueryChange: () => {},
         onSelectTemplate: () => {},
         onFocusTemplate: () => {},
@@ -99,5 +103,8 @@ describe("WorkspaceStarterTemplateListPanel", () => {
     expect(html).toContain("source 0.3.0");
     expect(html).toContain("Source:</strong> 当前 starter 与来源 workflow 版本不一致。");
     expect(html).toContain("先打开 source diff，再决定 refresh 还是 rebase。");
+    expect(html).toContain("全部治理状态");
+    expect(html).toContain("仅显示需要 follow-up 的 starter");
+    expect(html).toContain("后端 summary 已把当前范围里的 follow-up queue 编成统一清单");
   });
 });

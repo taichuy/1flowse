@@ -6,9 +6,14 @@ import { useRouter } from "next/navigation";
 
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
+import { buildWorkspaceStarterLibrarySearchParams } from "@/components/workspace-starter-library/shared";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
+import {
+  getWorkflowBusinessTrack,
+  WORKFLOW_BUSINESS_TRACKS
+} from "@/lib/workflow-business-tracks";
 import {
   buildWorkflowDefinitionSandboxGovernanceBadges,
   describeWorkflowDefinitionSandboxDependency
@@ -32,6 +37,9 @@ import {
 type WorkflowCreateWizardProps = {
   catalogToolCount: number;
   preferredStarterId?: string;
+  searchQuery?: string;
+  sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
+  needsFollowUp?: boolean;
   workflows: WorkflowListItem[];
   starters: WorkflowLibraryStarterItem[];
   starterSourceLanes: WorkflowLibrarySourceLane[];
@@ -42,6 +50,9 @@ type WorkflowCreateWizardProps = {
 export function WorkflowCreateWizard({
   catalogToolCount,
   preferredStarterId,
+  searchQuery = "",
+  sourceGovernanceKind,
+  needsFollowUp = false,
   workflows,
   starters,
   starterSourceLanes,
@@ -59,19 +70,23 @@ export function WorkflowCreateWizard({
   );
   const defaultStarter =
     starterTemplates.find((starter) => starter.id === preferredStarterId) ??
-    starterTemplates[0];
-  const [activeTrack, setActiveTrack] = useState(defaultStarter.businessTrack);
+    starterTemplates[0] ??
+    null;
+  const [activeTrack, setActiveTrack] = useState(
+    defaultStarter?.businessTrack ?? WORKFLOW_BUSINESS_TRACKS[0].id
+  );
   const [selectedStarterId, setSelectedStarterId] =
-    useState<WorkflowStarterTemplateId>(defaultStarter.id);
-  const [workflowName, setWorkflowName] = useState(defaultStarter.defaultWorkflowName);
+    useState<WorkflowStarterTemplateId | null>(defaultStarter?.id ?? null);
+  const [workflowName, setWorkflowName] = useState(defaultStarter?.defaultWorkflowName ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [isCreating, startCreateTransition] = useTransition();
 
   const selectedStarter = useMemo(
     () =>
-      starterTemplates.find((starter) => starter.id === selectedStarterId) ??
-      defaultStarter,
+      (selectedStarterId
+        ? starterTemplates.find((starter) => starter.id === selectedStarterId)
+        : null) ?? defaultStarter,
     [defaultStarter, selectedStarterId, starterTemplates]
   );
   const activeTrackMeta = useMemo(
@@ -79,20 +94,37 @@ export function WorkflowCreateWizard({
     [activeTrack]
   );
   const selectedStarterSandboxBadges = useMemo(
-    () => buildWorkflowDefinitionSandboxGovernanceBadges(selectedStarter.sandboxGovernance),
-    [selectedStarter.sandboxGovernance]
+    () =>
+      selectedStarter
+        ? buildWorkflowDefinitionSandboxGovernanceBadges(selectedStarter.sandboxGovernance)
+        : [],
+    [selectedStarter]
   );
-  const selectedStarterSourceGovernance = selectedStarter.sourceGovernance;
+  const selectedStarterSourceGovernance = selectedStarter?.sourceGovernance ?? null;
   const selectedStarterSourceChips =
     selectedStarterSourceGovernance?.actionDecision?.fact_chips ?? [];
   const selectedStarterSourcePrimarySignal =
     selectedStarterSourceGovernance?.outcomeExplanation?.primary_signal?.trim() ?? "";
   const selectedStarterSourceFollowUp =
     selectedStarterSourceGovernance?.outcomeExplanation?.follow_up?.trim() ?? "";
-  const selectedStarterManageHref = `/workspace-starters?starter=${encodeURIComponent(selectedStarter.id)}`;
+  const starterGovernanceHref = (() => {
+    const params = buildWorkspaceStarterLibrarySearchParams({
+      activeTrack,
+      archiveFilter: "active",
+      sourceGovernanceKind: sourceGovernanceKind ?? "all",
+      needsFollowUp,
+      searchQuery,
+      selectedTemplateId: selectedStarter?.origin === "workspace" ? selectedStarter.id : null
+    });
+    const query = params.toString();
+    return query ? `/workspace-starters?${query}` : "/workspace-starters";
+  })();
   const selectedStarterSandboxDependencySummary = useMemo(
-    () => describeWorkflowDefinitionSandboxDependency(selectedStarter.sandboxGovernance),
-    [selectedStarter.sandboxGovernance]
+    () =>
+      selectedStarter
+        ? describeWorkflowDefinitionSandboxDependency(selectedStarter.sandboxGovernance)
+        : null,
+    [selectedStarter]
   );
   const visibleStarters = useMemo(
     () =>
@@ -104,17 +136,24 @@ export function WorkflowCreateWizard({
 
   const applyStarterSelection = (
     nextStarterId: WorkflowStarterTemplateId,
-    currentStarterId: WorkflowStarterTemplateId = selectedStarterId
+    currentStarterId: WorkflowStarterTemplateId | null = selectedStarterId
   ) => {
     const currentStarter =
-      starterTemplates.find((starter) => starter.id === currentStarterId) ??
-      defaultStarter;
+      (currentStarterId
+        ? starterTemplates.find((starter) => starter.id === currentStarterId)
+        : null) ?? defaultStarter;
     const nextStarter =
       starterTemplates.find((starter) => starter.id === nextStarterId) ?? defaultStarter;
 
+    if (!nextStarter) {
+      return;
+    }
+
     if (
       !workflowName.trim() ||
-      workflowName.trim() === currentStarter.defaultWorkflowName
+      (currentStarter
+        ? workflowName.trim() === currentStarter.defaultWorkflowName
+        : false)
     ) {
       setWorkflowName(nextStarter.defaultWorkflowName);
     }
@@ -142,6 +181,10 @@ export function WorkflowCreateWizard({
 
   const handleCreateWorkflow = () => {
     startCreateTransition(async () => {
+      if (!selectedStarter) {
+        return;
+      }
+
       const normalizedName = workflowName.trim() || selectedStarter.defaultWorkflowName;
       setMessage("正在创建 workflow 草稿...");
       setMessageTone("idle");
@@ -166,6 +209,51 @@ export function WorkflowCreateWizard({
       }
     });
   };
+
+  const hasScopedWorkspaceStarterFilters = Boolean(
+    searchQuery.trim() || sourceGovernanceKind || needsFollowUp
+  );
+
+  if (!selectedStarter) {
+    return (
+      <main className="editor-shell">
+        <section className="hero creation-hero">
+          <div className="hero-copy">
+            <p className="eyebrow">Starter scope</p>
+            <h1>当前筛选范围里没有可复用的 active workspace starter</h1>
+            <p className="hero-text">
+              这通常说明你是从 workspace starter 治理页带着 follow-up / 搜索条件回来，但当前范围里没有仍可直接创建的 active starter。
+            </p>
+            <div className="hero-actions">
+              <Link className="inline-link" href={starterGovernanceHref}>
+                返回治理页调整范围
+              </Link>
+              <Link className="inline-link secondary" href="/workflows/new">
+                清除筛选并查看全部 starter
+              </Link>
+            </div>
+          </div>
+
+          <div className="hero-panel">
+            <div className="panel-label">Current track</div>
+            <div className="panel-value">{activeTrackMeta.priority}</div>
+            <p className="panel-text">
+              当前业务线：<strong>{activeTrackMeta.id}</strong>
+            </p>
+            <p className="panel-text">
+              搜索：<strong>{searchQuery.trim() || "未设置"}</strong>
+            </p>
+            <p className="panel-text">
+              来源治理：<strong>{sourceGovernanceKind ?? "全部"}</strong>
+            </p>
+            <p className="panel-text">
+              follow-up queue：<strong>{needsFollowUp ? "仅关注热点" : "未启用"}</strong>
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="editor-shell">
@@ -242,11 +330,21 @@ export function WorkflowCreateWizard({
               先按主业务线选入口，再用最小骨架进入编排。后续 workspace 级模板治理，也继续沿着
               这套 starter library 演进。
             </p>
+            {hasScopedWorkspaceStarterFilters ? (
+              <p className="binding-meta">
+                当前 starter 列表正在复用 workspace starter 治理页的 query scope；命中过滤时只展示匹配的 workspace starter，避免 builtin starter 把 follow-up 范围冲淡。
+                {" "}
+                <Link className="inline-link secondary" href={starterGovernanceHref}>
+                  回到治理页
+                </Link>
+                。
+              </p>
+            ) : null}
           </div>
 
           <WorkflowStarterBrowser
             activeTrack={activeTrack}
-            selectedStarterId={selectedStarterId}
+            selectedStarterId={selectedStarter.id}
             starters={visibleStarters}
             tracks={starterTracks}
             sourceLanes={starterSourceLanes}
@@ -355,7 +453,7 @@ export function WorkflowCreateWizard({
                   <p className="binding-meta">
                     需要补 refresh / rebase 或排查来源缺失时，直接去
                     {" "}
-                    <Link className="inline-link secondary" href={selectedStarterManageHref}>
+                    <Link className="inline-link secondary" href={starterGovernanceHref}>
                       管理这个 workspace starter
                     </Link>
                     。

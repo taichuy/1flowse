@@ -379,26 +379,15 @@ export async function getWorkspaceStarterTemplatesWithFilters({
   sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
   needsFollowUp?: boolean;
 } = {}): Promise<WorkspaceStarterTemplateItem[]> {
-  const params = new URLSearchParams();
-  params.set("workspace_id", workspaceId);
-  if (businessTrack) {
-    params.set("business_track", businessTrack);
-  }
-  if (search?.trim()) {
-    params.set("search", search.trim());
-  }
-  if (includeArchived) {
-    params.set("include_archived", "true");
-  }
-  if (archivedOnly) {
-    params.set("archived_only", "true");
-  }
-  if (sourceGovernanceKind) {
-    params.set("source_governance_kind", sourceGovernanceKind);
-  }
-  if (needsFollowUp) {
-    params.set("needs_follow_up", "true");
-  }
+  const params = buildWorkspaceStarterTemplateQueryParams({
+    workspaceId,
+    businessTrack,
+    search,
+    includeArchived,
+    archivedOnly,
+    sourceGovernanceKind,
+    needsFollowUp
+  });
 
   try {
     const response = await fetch(
@@ -435,26 +424,15 @@ export async function getWorkspaceStarterSourceGovernanceScopeSummary({
   sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
   needsFollowUp?: boolean;
 } = {}): Promise<WorkspaceStarterSourceGovernanceScopeSummary | null> {
-  const params = new URLSearchParams();
-  params.set("workspace_id", workspaceId);
-  if (businessTrack) {
-    params.set("business_track", businessTrack);
-  }
-  if (search?.trim()) {
-    params.set("search", search.trim());
-  }
-  if (includeArchived) {
-    params.set("include_archived", "true");
-  }
-  if (archivedOnly) {
-    params.set("archived_only", "true");
-  }
-  if (sourceGovernanceKind) {
-    params.set("source_governance_kind", sourceGovernanceKind);
-  }
-  if (needsFollowUp) {
-    params.set("needs_follow_up", "true");
-  }
+  const params = buildWorkspaceStarterTemplateQueryParams({
+    workspaceId,
+    businessTrack,
+    search,
+    includeArchived,
+    archivedOnly,
+    sourceGovernanceKind,
+    needsFollowUp
+  });
 
   try {
     const response = await fetch(
@@ -511,6 +489,46 @@ export async function getWorkspaceStarterHistory(
   } catch {
     return [];
   }
+}
+
+export function buildWorkspaceStarterTemplateQueryParams({
+  workspaceId = "default",
+  businessTrack,
+  search,
+  includeArchived = false,
+  archivedOnly = false,
+  sourceGovernanceKind,
+  needsFollowUp = false
+}: {
+  workspaceId?: string;
+  businessTrack?: WorkflowBusinessTrack;
+  search?: string;
+  includeArchived?: boolean;
+  archivedOnly?: boolean;
+  sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
+  needsFollowUp?: boolean;
+} = {}) {
+  const params = new URLSearchParams();
+  params.set("workspace_id", workspaceId);
+  if (businessTrack) {
+    params.set("business_track", businessTrack);
+  }
+  if (search?.trim()) {
+    params.set("search", search.trim());
+  }
+  if (includeArchived) {
+    params.set("include_archived", "true");
+  }
+  if (archivedOnly) {
+    params.set("archived_only", "true");
+  }
+  if (sourceGovernanceKind) {
+    params.set("source_governance_kind", sourceGovernanceKind);
+  }
+  if (needsFollowUp) {
+    params.set("needs_follow_up", "true");
+  }
+  return params;
 }
 
 export async function getWorkspaceStarterSourceDiff(

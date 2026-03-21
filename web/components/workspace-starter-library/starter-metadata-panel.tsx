@@ -21,6 +21,7 @@ type WorkspaceStarterMetadataPanelProps = {
   isMutating: boolean;
   message: string | null;
   messageTone: WorkspaceStarterMessageTone;
+  createWorkflowHref: string | null;
   setFormState: Dispatch<SetStateAction<WorkspaceStarterFormState | null>>;
   onSave: () => void;
   onTemplateMutation: (action: "archive" | "restore" | "delete") => void;
@@ -35,6 +36,7 @@ export function WorkspaceStarterMetadataPanel({
   isMutating,
   message,
   messageTone,
+  createWorkflowHref,
   setFormState,
   onSave,
   onTemplateMutation
@@ -203,12 +205,15 @@ export function WorkspaceStarterMetadataPanel({
                   >
                     {isMutating ? "处理中..." : "归档模板"}
                   </button>
-                  <Link
-                    className="inline-link secondary"
-                    href={`/workflows/new?starter=${encodeURIComponent(selectedTemplate.id)}`}
-                  >
-                    带此 starter 回到创建页
-                  </Link>
+                  {createWorkflowHref ? (
+                    <Link className="inline-link secondary" href={createWorkflowHref}>
+                      带此 starter 回到创建页
+                    </Link>
+                  ) : (
+                    <span className="binding-meta">
+                      当前 starter 已归档；恢复后才会重新出现在创建页。
+                    </span>
+                  )}
                 </>
               )}
               {selectedTemplate.created_from_workflow_id ? (

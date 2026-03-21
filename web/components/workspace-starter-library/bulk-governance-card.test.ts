@@ -14,7 +14,8 @@ import {
   buildBulkActionMessage,
   buildWorkspaceStarterBulkAffectedStarterTargets,
   buildWorkspaceStarterBulkPreviewFocusTargets,
-  buildWorkspaceStarterBulkResultFocusTargets
+  buildWorkspaceStarterBulkResultFocusTargets,
+  buildWorkspaceStarterSourceGovernanceFocusTargets
 } from "./shared";
 
 describe("WorkspaceStarterBulkGovernanceCard", () => {
@@ -315,6 +316,10 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
       createElement(WorkspaceStarterBulkGovernanceCard, {
         inScopeCount: 2,
         sourceGovernanceScope,
+        sourceGovernanceFocusTargets: buildWorkspaceStarterSourceGovernanceFocusTargets(
+          sourceGovernanceScope,
+          templates
+        ),
         preview,
         previewNotice: null,
         isMutating: false,
@@ -324,6 +329,7 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
         previewFocusTargets: buildWorkspaceStarterBulkPreviewFocusTargets(preview, templates),
         resultFocusTargets: buildWorkspaceStarterBulkResultFocusTargets(lastResult, templates),
         selectedTemplateId: "starter-sandbox",
+        onSelectQueuedTemplate: () => {},
         onFocusTemplate: () => {},
         onAction: () => {}
       })
@@ -337,6 +343,7 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(html).toContain(
       "当前筛选范围 2 个 starter 中，来源漂移 1 个，无来源 1 个；AI/operator 可以直接按 follow-up queue 继续治理。"
     );
+    expect(html).toContain("后端 summary 已把当前范围里的 follow-up queue 编成统一清单");
     expect(html).toContain("刷新 preview:");
     expect(html).toContain("候选 1 个；阻塞 1 个（无来源 1）");
     expect(html).toContain("Preview focus");

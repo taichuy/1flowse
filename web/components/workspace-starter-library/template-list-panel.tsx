@@ -20,9 +20,11 @@ import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition
 import {
   buildWorkspaceStarterBulkPreviewFocusTargets,
   buildWorkspaceStarterBulkResultFocusTargets,
+  buildWorkspaceStarterSourceGovernanceFocusTargets,
   buildWorkspaceStarterSourceGovernancePresenter,
   formatTimestamp,
   type ArchiveFilter,
+  type SourceGovernanceFilter,
   type TrackFilter
 } from "./shared";
 
@@ -32,6 +34,8 @@ type WorkspaceStarterTemplateListPanelProps = {
   selectedTemplateId: string | null;
   activeTrack: TrackFilter;
   archiveFilter: ArchiveFilter;
+  sourceGovernanceKind: SourceGovernanceFilter;
+  needsFollowUp: boolean;
   searchQuery: string;
   activeTemplateCount: number;
   archivedTemplateCount: number;
@@ -45,6 +49,8 @@ type WorkspaceStarterTemplateListPanelProps = {
   sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummary | null;
   onTrackChange: (track: TrackFilter) => void;
   onArchiveFilterChange: (filter: ArchiveFilter) => void;
+  onSourceGovernanceKindChange: (filter: SourceGovernanceFilter) => void;
+  onNeedsFollowUpChange: (value: boolean) => void;
   onSearchQueryChange: (value: string) => void;
   onSelectTemplate: (templateId: string) => void;
   onFocusTemplate: (templateId: string) => void;
@@ -57,6 +63,8 @@ export function WorkspaceStarterTemplateListPanel({
   selectedTemplateId,
   activeTrack,
   archiveFilter,
+  sourceGovernanceKind,
+  needsFollowUp,
   searchQuery,
   activeTemplateCount,
   archivedTemplateCount,
@@ -70,6 +78,8 @@ export function WorkspaceStarterTemplateListPanel({
   sourceGovernanceScope,
   onTrackChange,
   onArchiveFilterChange,
+  onSourceGovernanceKindChange,
+  onNeedsFollowUpChange,
   onSearchQueryChange,
   onSelectTemplate,
   onFocusTemplate,
@@ -80,6 +90,10 @@ export function WorkspaceStarterTemplateListPanel({
     : [];
   const previewFocusTargets = buildWorkspaceStarterBulkPreviewFocusTargets(
     bulkPreview,
+    templates
+  );
+  const sourceGovernanceFocusTargets = buildWorkspaceStarterSourceGovernanceFocusTargets(
+    sourceGovernanceScope,
     templates
   );
 
@@ -157,6 +171,34 @@ export function WorkspaceStarterTemplateListPanel({
           ))}
         </div>
 
+        <div className="binding-field">
+          <span className="binding-label">Source governance</span>
+          <div className="starter-tag-row" role="tablist" aria-label="Workspace starter source governance">
+            {[
+              { id: "all" as const, label: "全部治理状态" },
+              { id: "drifted" as const, label: "来源漂移" },
+              { id: "missing_source" as const, label: "来源缺失" },
+              { id: "no_source" as const, label: "无来源" },
+              { id: "synced" as const, label: "已对齐" }
+            ].map((item) => (
+              <button
+                key={item.id}
+                className={`event-chip event-chip-button ${
+                  sourceGovernanceKind === item.id ? "active" : ""
+                }`}
+                type="button"
+                aria-pressed={sourceGovernanceKind === item.id}
+                onClick={() => onSourceGovernanceKindChange(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <p className="binding-meta">
+            source_governance_kind 直接映射后端治理契约，让列表筛选、summary 和 deep link 口径一致。
+          </p>
+        </div>
+
         <label className="binding-field">
           <span className="binding-label">Search templates</span>
           <input
@@ -167,9 +209,27 @@ export function WorkspaceStarterTemplateListPanel({
           />
         </label>
 
+        <div className="binding-field">
+          <span className="binding-label">Follow-up queue</span>
+          <div className="starter-tag-row">
+            <button
+              className={`event-chip event-chip-button ${needsFollowUp ? "active" : ""}`}
+              type="button"
+              aria-pressed={needsFollowUp}
+              onClick={() => onNeedsFollowUpChange(!needsFollowUp)}
+            >
+              仅显示需要 follow-up 的 starter
+            </button>
+          </div>
+          <p className="binding-meta">
+            needs_follow_up=true 当前只圈出来源漂移 / 来源缺失，便于 operator 直接处理治理热点。
+          </p>
+        </div>
+
         <WorkspaceStarterBulkGovernanceCard
           inScopeCount={filteredTemplates.length}
           sourceGovernanceScope={sourceGovernanceScope}
+          sourceGovernanceFocusTargets={sourceGovernanceFocusTargets}
           preview={bulkPreview}
           previewNotice={bulkPreviewNotice}
           isMutating={isBulkMutating}
@@ -179,6 +239,7 @@ export function WorkspaceStarterTemplateListPanel({
           previewFocusTargets={previewFocusTargets}
           resultFocusTargets={resultFocusTargets}
           selectedTemplateId={selectedTemplateId}
+          onSelectQueuedTemplate={onSelectTemplate}
           onFocusTemplate={onFocusTemplate}
           onAction={onBulkAction}
         />

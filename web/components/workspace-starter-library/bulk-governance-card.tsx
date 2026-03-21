@@ -12,6 +12,7 @@ import type {
 import {
   type WorkspaceStarterBulkPreviewFocusTarget,
   type WorkspaceStarterBulkResultFocusTarget,
+  type WorkspaceStarterSourceGovernanceFocusTarget,
   buildWorkspaceStarterBulkPreviewNarrative,
   buildWorkspaceStarterBulkResultNarrative,
   getWorkspaceStarterBulkActionButtonLabel,
@@ -22,6 +23,7 @@ import {
 type WorkspaceStarterBulkGovernanceCardProps = {
   inScopeCount: number;
   sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummary | null;
+  sourceGovernanceFocusTargets: WorkspaceStarterSourceGovernanceFocusTarget[];
   preview: WorkspaceStarterBulkPreview | null;
   previewNotice: string | null;
   isMutating: boolean;
@@ -31,6 +33,7 @@ type WorkspaceStarterBulkGovernanceCardProps = {
   previewFocusTargets: WorkspaceStarterBulkPreviewFocusTarget[];
   resultFocusTargets: WorkspaceStarterBulkResultFocusTarget[];
   selectedTemplateId: string | null;
+  onSelectQueuedTemplate: (templateId: string) => void;
   onFocusTemplate: (templateId: string) => void;
   onAction: (action: WorkspaceStarterBulkAction) => void;
 };
@@ -46,6 +49,7 @@ const BULK_ACTIONS: WorkspaceStarterBulkAction[] = [
 export function WorkspaceStarterBulkGovernanceCard({
   inScopeCount,
   sourceGovernanceScope,
+  sourceGovernanceFocusTargets,
   preview,
   previewNotice,
   isMutating,
@@ -55,6 +59,7 @@ export function WorkspaceStarterBulkGovernanceCard({
   previewFocusTargets,
   resultFocusTargets,
   selectedTemplateId,
+  onSelectQueuedTemplate,
   onFocusTemplate,
   onAction
 }: WorkspaceStarterBulkGovernanceCardProps) {
@@ -110,6 +115,32 @@ export function WorkspaceStarterBulkGovernanceCard({
           <p className="section-copy starter-summary-copy">
             <strong>Source governance:</strong> {sourceGovernanceScope.summary}
           </p>
+          {sourceGovernanceFocusTargets.length > 0 ? (
+            <>
+              <p className="section-copy starter-summary-copy">
+                后端 summary 已把当前范围里的 follow-up queue 编成统一清单；点击条目可直接聚焦右侧详情。
+              </p>
+              <div className="starter-tag-row">
+                {sourceGovernanceFocusTargets.map((item) => (
+                  <button
+                    key={item.templateId}
+                    className={`event-chip event-chip-button ${
+                      selectedTemplateId === item.templateId ? "active" : ""
+                    }`}
+                    type="button"
+                    onClick={() => onSelectQueuedTemplate(item.templateId)}
+                    disabled={isMutating}
+                    aria-pressed={selectedTemplateId === item.templateId}
+                  >
+                    {item.name}
+                    {item.statusLabel ? ` · ${item.statusLabel}` : ""}
+                    {item.sourceWorkflowVersion ? ` · source ${item.sourceWorkflowVersion}` : ""}
+                    {item.archived ? " · archived" : ""}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
       {!isLoadingSourceGovernanceScope && !sourceGovernanceScope ? (

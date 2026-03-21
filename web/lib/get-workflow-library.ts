@@ -2,8 +2,10 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type {
   SignalFollowUpExplanation,
+  WorkspaceStarterSourceGovernanceKind,
   WorkspaceStarterSourceActionDecisionPayload
 } from "@/lib/get-workspace-starters";
+import { buildWorkspaceStarterTemplateQueryParams } from "@/lib/get-workspace-starters";
 import type { WorkflowEdgeItem, WorkflowNodeItem } from "@/lib/get-workflows";
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
@@ -108,11 +110,31 @@ const fallbackSnapshot: WorkflowLibrarySnapshot = {
   tools: []
 };
 
-export async function getWorkflowLibrarySnapshot(
-  workspaceId = "default"
-): Promise<WorkflowLibrarySnapshot> {
-  const params = new URLSearchParams();
-  params.set("workspace_id", workspaceId);
+export async function getWorkflowLibrarySnapshot({
+  workspaceId = "default",
+  businessTrack,
+  search,
+  sourceGovernanceKind,
+  needsFollowUp = false,
+  includeBuiltinStarters = true
+}: {
+  workspaceId?: string;
+  businessTrack?: WorkflowBusinessTrack;
+  search?: string;
+  sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
+  needsFollowUp?: boolean;
+  includeBuiltinStarters?: boolean;
+} = {}): Promise<WorkflowLibrarySnapshot> {
+  const params = buildWorkspaceStarterTemplateQueryParams({
+    workspaceId,
+    businessTrack,
+    search,
+    sourceGovernanceKind,
+    needsFollowUp
+  });
+  if (!includeBuiltinStarters) {
+    params.set("include_builtin_starters", "false");
+  }
 
   try {
     const response = await fetch(

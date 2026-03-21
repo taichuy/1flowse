@@ -8,11 +8,14 @@ import type {
 } from "@/lib/get-workspace-starters";
 
 import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState,
   buildWorkspaceStarterBulkPreviewFocusTargets,
   buildWorkspaceStarterBulkPreviewNarrative,
   buildWorkspaceStarterBulkResultFocusTargets,
   buildWorkspaceStarterBulkResultNarrative,
   buildWorkspaceStarterSourceActionDecision,
+  buildWorkspaceStarterSourceGovernanceFocusTargets,
   buildWorkspaceStarterLibrarySearchParams,
   resolveWorkspaceStarterLibraryViewState
 } from "./shared";
@@ -98,6 +101,8 @@ describe("workspace starter library URL state", () => {
     expect(viewState).toEqual({
       activeTrack: "编排节点能力",
       archiveFilter: "archived",
+      sourceGovernanceKind: "all",
+      needsFollowUp: false,
       searchQuery: "sandbox",
       selectedTemplateId: "starter-archived-sandbox"
     });
@@ -116,12 +121,16 @@ describe("workspace starter library URL state", () => {
     expect(viewState.selectedTemplateId).toBe("starter-active-sandbox");
     expect(viewState.activeTrack).toBe("编排节点能力");
     expect(viewState.archiveFilter).toBe("active");
+    expect(viewState.sourceGovernanceKind).toBe("all");
+    expect(viewState.needsFollowUp).toBe(false);
   });
 
   it("serializes only non-default filters while keeping the selected starter", () => {
     const searchParams = buildWorkspaceStarterLibrarySearchParams({
       activeTrack: "编排节点能力",
       archiveFilter: "archived",
+      sourceGovernanceKind: "all",
+      needsFollowUp: false,
       searchQuery: " sandbox ",
       selectedTemplateId: "starter-archived-sandbox"
     });
@@ -130,6 +139,84 @@ describe("workspace starter library URL state", () => {
     expect(searchParams.get("archive")).toBe("archived");
     expect(searchParams.get("q")).toBe("sandbox");
     expect(searchParams.get("starter")).toBe("starter-archived-sandbox");
+    expect(searchParams.get("source_governance_kind")).toBeNull();
+    expect(searchParams.get("needs_follow_up")).toBeNull();
+  });
+
+  it("restores source governance deep link and clears stale focus when the filtered scope is empty", () => {
+    const viewState = resolveWorkspaceStarterLibraryViewState(
+      {
+        source_governance_kind: "missing_source",
+        needs_follow_up: "true",
+        starter: "starter-active-a"
+      },
+      templates
+    );
+
+    expect(viewState).toEqual({
+      activeTrack: "all",
+      archiveFilter: "active",
+      sourceGovernanceKind: "missing_source",
+      needsFollowUp: true,
+      searchQuery: "",
+      selectedTemplateId: null
+    });
+  });
+
+  it("serializes source governance filters into the canonical query params", () => {
+    const searchParams = buildWorkspaceStarterLibrarySearchParams({
+      activeTrack: "all",
+      archiveFilter: "all",
+      sourceGovernanceKind: "drifted",
+      needsFollowUp: true,
+      searchQuery: "",
+      selectedTemplateId: null
+    });
+
+    expect(searchParams.get("archive")).toBe("all");
+    expect(searchParams.get("source_governance_kind")).toBe("drifted");
+    expect(searchParams.get("needs_follow_up")).toBe("true");
+  });
+
+  it("builds create-page query params from the shared governance view state", () => {
+    const searchParams = buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState({
+      activeTrack: "编排节点能力",
+      sourceGovernanceKind: "drifted",
+      needsFollowUp: true,
+      searchQuery: " sandbox ",
+      selectedTemplateId: "starter-active-sandbox"
+    });
+
+    expect(searchParams.get("track")).toBe("编排节点能力");
+    expect(searchParams.get("source_governance_kind")).toBe("drifted");
+    expect(searchParams.get("needs_follow_up")).toBe("true");
+    expect(searchParams.get("q")).toBe("sandbox");
+    expect(searchParams.get("starter")).toBe("starter-active-sandbox");
+    expect(searchParams.get("archive")).toBeNull();
+  });
+
+  it("builds a create-page href without leaking archive-only filters", () => {
+    expect(
+      buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+        activeTrack: "all",
+        sourceGovernanceKind: "all",
+        needsFollowUp: false,
+        searchQuery: "",
+        selectedTemplateId: null
+      })
+    ).toBe("/workflows/new");
+
+    expect(
+      buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+        activeTrack: "应用新建编排",
+        sourceGovernanceKind: "drifted",
+        needsFollowUp: true,
+        searchQuery: " starter ",
+        selectedTemplateId: "starter-active-a"
+      })
+    ).toBe(
+      "/workflows/new?needs_follow_up=true&q=starter&source_governance_kind=drifted&starter=starter-active-a&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
   });
 });
 
@@ -321,6 +408,62 @@ describe("workspace starter source action decision", () => {
         sourceWorkflowVersion: "0.2.0",
         statusLabel: "已对齐",
         archived: true
+      }
+    ]);
+  });
+
+  it("builds source governance follow-up targets from backend summary ids", () => {
+    const targets = buildWorkspaceStarterSourceGovernanceFocusTargets(
+      {
+        workspace_id: "default",
+        total_count: 2,
+        attention_count: 1,
+        counts: {
+          drifted: 1,
+          missing_source: 0,
+          no_source: 1,
+          synced: 0
+        },
+        chips: ["来源漂移 1", "无来源 1"],
+        summary: "当前筛选范围 2 个 starter 中，来源漂移 1 个，无来源 1 个。",
+        follow_up_template_ids: ["starter-active-a", "missing-starter", "starter-active-a"]
+      },
+      [
+        {
+          ...templates[0],
+          source_governance: {
+            kind: "drifted",
+            status_label: "来源漂移",
+            summary: "Starter 与来源 workflow 存在差异。",
+            source_workflow_id: "wf-a",
+            source_workflow_name: "Active workflow",
+            template_version: "0.1.0",
+            source_version: "0.2.0",
+            action_decision: {
+              recommended_action: "refresh",
+              status_label: "建议 refresh",
+              summary: "当前主要是来源快照漂移。",
+              can_refresh: true,
+              can_rebase: true,
+              fact_chips: ["source 0.2.0"]
+            },
+            outcome_explanation: {
+              primary_signal: "当前 starter 与来源 workflow 版本不一致。",
+              follow_up: "先看 source diff，再决定 refresh 还是 rebase。"
+            }
+          }
+        },
+        templates[1]
+      ]
+    );
+
+    expect(targets).toEqual([
+      {
+        templateId: "starter-active-a",
+        name: "Active starter A",
+        sourceWorkflowVersion: "0.2.0",
+        statusLabel: "建议 refresh",
+        archived: false
       }
     ]);
   });

@@ -13,6 +13,8 @@ import type {
   WorkspaceStarterHistoryItem,
   WorkspaceStarterSourceDiff,
   WorkspaceStarterSourceDiffSummary,
+  WorkspaceStarterSourceGovernanceKind,
+  WorkspaceStarterSourceGovernanceScopeSummary as WorkspaceStarterSourceGovernanceScopeSummaryPayload,
   WorkspaceStarterSourceGovernance,
   WorkspaceStarterTemplateItem,
   WorkspaceStarterValidationIssue
@@ -20,10 +22,13 @@ import type {
 
 export type TrackFilter = "all" | WorkflowBusinessTrack;
 export type ArchiveFilter = "active" | "archived" | "all";
+export type SourceGovernanceFilter = "all" | WorkspaceStarterSourceGovernanceKind;
 
 export type WorkspaceStarterLibraryViewState = {
   activeTrack: TrackFilter;
   archiveFilter: ArchiveFilter;
+  sourceGovernanceKind: SourceGovernanceFilter;
+  needsFollowUp: boolean;
   searchQuery: string;
   selectedTemplateId: string | null;
 };
@@ -31,6 +36,8 @@ export type WorkspaceStarterLibraryViewState = {
 export const DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE: WorkspaceStarterLibraryViewState = {
   activeTrack: "all",
   archiveFilter: "active",
+  sourceGovernanceKind: "all",
+  needsFollowUp: false,
   searchQuery: "",
   selectedTemplateId: null
 };
@@ -89,6 +96,14 @@ export type WorkspaceStarterBulkResultFocusTarget = {
   archived: boolean;
 };
 
+export type WorkspaceStarterSourceGovernanceFocusTarget = {
+  templateId: string;
+  name: string;
+  sourceWorkflowVersion: string | null;
+  statusLabel: string;
+  archived: boolean;
+};
+
 export type WorkspaceStarterSourceGovernancePresenter = {
   kind: WorkspaceStarterSourceGovernance["kind"] | "unknown";
   statusLabel: string;
@@ -121,6 +136,19 @@ const WORKSPACE_STARTER_LIBRARY_ARCHIVE_FILTERS = new Set<ArchiveFilter>([
   "all"
 ]);
 
+const WORKSPACE_STARTER_LIBRARY_SOURCE_GOVERNANCE_FILTERS = new Set<SourceGovernanceFilter>([
+  "all",
+  "no_source",
+  "missing_source",
+  "synced",
+  "drifted"
+]);
+
+const WORKSPACE_STARTER_SOURCE_GOVERNANCE_FOLLOW_UP_KINDS = new Set<WorkspaceStarterSourceGovernanceKind>([
+  "drifted",
+  "missing_source"
+]);
+
 const WORKSPACE_STARTER_SOURCE_GOVERNANCE_KIND_LABELS = {
   no_source: "无来源",
   missing_source: "来源缺失",
@@ -131,7 +159,10 @@ const WORKSPACE_STARTER_SOURCE_GOVERNANCE_KIND_LABELS = {
 
 export function filterWorkspaceStarterTemplates(
   templates: WorkspaceStarterTemplateItem[],
-  viewState: Pick<WorkspaceStarterLibraryViewState, "activeTrack" | "archiveFilter" | "searchQuery">
+  viewState: Pick<
+    WorkspaceStarterLibraryViewState,
+    "activeTrack" | "archiveFilter" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery"
+  >
 ) {
   const normalizedSearch = viewState.searchQuery.trim().toLowerCase();
 
@@ -143,6 +174,20 @@ export function filterWorkspaceStarterTemplates(
       return false;
     }
     if (viewState.activeTrack !== "all" && template.business_track !== viewState.activeTrack) {
+      return false;
+    }
+    const governanceKind = getWorkspaceStarterSourceGovernanceKind(template);
+    if (
+      viewState.sourceGovernanceKind !== "all" &&
+      governanceKind !== viewState.sourceGovernanceKind
+    ) {
+      return false;
+    }
+    if (
+      viewState.needsFollowUp &&
+      (governanceKind === "unknown" ||
+        !WORKSPACE_STARTER_SOURCE_GOVERNANCE_FOLLOW_UP_KINDS.has(governanceKind))
+    ) {
       return false;
     }
     if (!normalizedSearch) {
@@ -169,6 +214,8 @@ export function readWorkspaceStarterLibraryViewState(
 ): WorkspaceStarterLibraryViewState {
   const trackValue = firstSearchValue(searchParams, "track");
   const archiveValue = firstSearchValue(searchParams, "archive");
+  const sourceGovernanceValue = firstSearchValue(searchParams, "source_governance_kind");
+  const needsFollowUpValue = firstSearchValue(searchParams, "needs_follow_up");
 
   return {
     activeTrack: WORKSPACE_STARTER_LIBRARY_TRACK_FILTERS.has(trackValue as TrackFilter)
@@ -177,6 +224,15 @@ export function readWorkspaceStarterLibraryViewState(
     archiveFilter: WORKSPACE_STARTER_LIBRARY_ARCHIVE_FILTERS.has(archiveValue as ArchiveFilter)
       ? (archiveValue as ArchiveFilter)
       : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.archiveFilter,
+    sourceGovernanceKind: WORKSPACE_STARTER_LIBRARY_SOURCE_GOVERNANCE_FILTERS.has(
+      sourceGovernanceValue as SourceGovernanceFilter
+    )
+      ? (sourceGovernanceValue as SourceGovernanceFilter)
+      : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind,
+    needsFollowUp:
+      needsFollowUpValue === "true"
+        ? true
+        : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.needsFollowUp,
     searchQuery: firstSearchValue(searchParams, "q") ?? DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.searchQuery,
     selectedTemplateId: firstSearchValue(searchParams, "starter")
   };
@@ -196,7 +252,7 @@ export function resolveWorkspaceStarterLibraryViewState(
     ...viewState,
     selectedTemplateId: hasSelectedTemplate
       ? viewState.selectedTemplateId
-      : filteredTemplates[0]?.id ?? templates[0]?.id ?? null
+      : filteredTemplates[0]?.id ?? null
   };
 }
 
@@ -211,6 +267,15 @@ export function buildWorkspaceStarterLibrarySearchParams(
   if (viewState.archiveFilter !== DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.archiveFilter) {
     searchParams.set("archive", viewState.archiveFilter);
   }
+  if (
+    viewState.sourceGovernanceKind !==
+    DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind
+  ) {
+    searchParams.set("source_governance_kind", viewState.sourceGovernanceKind);
+  }
+  if (viewState.needsFollowUp) {
+    searchParams.set("needs_follow_up", "true");
+  }
 
   const normalizedSearchQuery = viewState.searchQuery.trim();
   if (normalizedSearchQuery) {
@@ -222,6 +287,50 @@ export function buildWorkspaceStarterLibrarySearchParams(
 
   searchParams.sort();
   return searchParams;
+}
+
+export function buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState(
+  viewState: Pick<
+    WorkspaceStarterLibraryViewState,
+    "activeTrack" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery" | "selectedTemplateId"
+  >
+) {
+  const searchParams = new URLSearchParams();
+
+  if (viewState.activeTrack !== DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.activeTrack) {
+    searchParams.set("track", viewState.activeTrack);
+  }
+  if (
+    viewState.sourceGovernanceKind !==
+    DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind
+  ) {
+    searchParams.set("source_governance_kind", viewState.sourceGovernanceKind);
+  }
+  if (viewState.needsFollowUp) {
+    searchParams.set("needs_follow_up", "true");
+  }
+
+  const normalizedSearchQuery = viewState.searchQuery.trim();
+  if (normalizedSearchQuery) {
+    searchParams.set("q", normalizedSearchQuery);
+  }
+  if (viewState.selectedTemplateId) {
+    searchParams.set("starter", viewState.selectedTemplateId);
+  }
+
+  searchParams.sort();
+  return searchParams;
+}
+
+export function buildWorkflowCreateHrefFromWorkspaceStarterViewState(
+  viewState: Pick<
+    WorkspaceStarterLibraryViewState,
+    "activeTrack" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery" | "selectedTemplateId"
+  >
+) {
+  const searchParams = buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState(viewState);
+  const query = searchParams.toString();
+  return query ? `/workflows/new?${query}` : "/workflows/new";
 }
 
 export function buildFormState(
@@ -403,6 +512,41 @@ export function buildWorkspaceStarterSourceGovernancePresenter(
     ),
     needsAttention: governance.kind === "drifted" || governance.kind === "missing_source"
   };
+}
+
+export function buildWorkspaceStarterSourceGovernanceFocusTargets(
+  sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummaryPayload | null,
+  templates: WorkspaceStarterTemplateItem[]
+): WorkspaceStarterSourceGovernanceFocusTarget[] {
+  if (!sourceGovernanceScope || sourceGovernanceScope.follow_up_template_ids.length === 0) {
+    return [];
+  }
+
+  const templatesById = new Map(templates.map((template) => [template.id, template] as const));
+
+  return Array.from(
+    new Set(
+      sourceGovernanceScope.follow_up_template_ids
+        .map((templateId) => templateId.trim())
+        .filter(Boolean)
+    )
+  ).flatMap((templateId) => {
+    const template = templatesById.get(templateId);
+    if (!template) {
+      return [];
+    }
+
+    const governance = buildWorkspaceStarterSourceGovernancePresenter(template);
+    return [
+      {
+        templateId,
+        name: template.name,
+        sourceWorkflowVersion: governance.sourceVersion,
+        statusLabel: governance.actionStatusLabel ?? governance.statusLabel,
+        archived: template.archived
+      }
+    ];
+  });
 }
 
 export function buildWorkspaceStarterSourceGovernanceScopeSummary(
@@ -914,6 +1058,16 @@ function countSummaryChanges(summary: WorkspaceStarterSourceDiffSummary | null) 
   }
 
   return summary.added_count + summary.removed_count + summary.changed_count;
+}
+
+function getWorkspaceStarterSourceGovernanceKind(
+  template: Pick<WorkspaceStarterTemplateItem, "created_from_workflow_id" | "source_governance">
+): WorkspaceStarterSourceGovernanceKind | "unknown" {
+  if (template.source_governance) {
+    return template.source_governance.kind;
+  }
+
+  return template.created_from_workflow_id ? "unknown" : "no_source";
 }
 
 function normalizePayload(value: unknown): Record<string, unknown> | null {

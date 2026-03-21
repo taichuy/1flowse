@@ -34,6 +34,7 @@ import {
   getWorkspaceStarterBulkActionLabel,
   summarizeValidationIssues,
   type ArchiveFilter,
+  type SourceGovernanceFilter,
   type TrackFilter,
   type WorkspaceStarterFormState,
   type WorkspaceStarterLibraryViewState,
@@ -69,15 +70,11 @@ export function useWorkspaceStarterLibraryState(
   tools: PluginToolRegistryItem[],
   initialViewState: WorkspaceStarterLibraryViewState
 ) {
-  const resolvedInitialViewState = {
-    ...initialViewState,
-    selectedTemplateId: initialViewState.selectedTemplateId ?? initialTemplates[0]?.id ?? null
-  } satisfies WorkspaceStarterLibraryViewState;
+  const resolvedInitialViewState = initialViewState satisfies WorkspaceStarterLibraryViewState;
   const initialSelectedTemplate = resolvedInitialViewState.selectedTemplateId
     ? initialTemplates.find((template) => template.id === resolvedInitialViewState.selectedTemplateId) ??
-      initialTemplates[0] ??
       null
-    : initialTemplates[0] ?? null;
+    : null;
   const [templates, setTemplates] = useState(initialTemplates);
   const [bulkPreview, setBulkPreview] = useState<WorkspaceStarterBulkPreview | null>(null);
   const [bulkPreviewNotice, setBulkPreviewNotice] = useState<string | null>(null);
@@ -85,6 +82,10 @@ export function useWorkspaceStarterLibraryState(
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>(
     resolvedInitialViewState.archiveFilter
   );
+  const [sourceGovernanceKind, setSourceGovernanceKind] = useState<SourceGovernanceFilter>(
+    resolvedInitialViewState.sourceGovernanceKind
+  );
+  const [needsFollowUp, setNeedsFollowUp] = useState(resolvedInitialViewState.needsFollowUp);
   const [searchQuery, setSearchQuery] = useState(resolvedInitialViewState.searchQuery);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
     resolvedInitialViewState.selectedTemplateId
@@ -110,9 +111,11 @@ export function useWorkspaceStarterLibraryState(
     return filterWorkspaceStarterTemplates(templates, {
       activeTrack,
       archiveFilter,
+      sourceGovernanceKind,
+      needsFollowUp,
       searchQuery
     });
-  }, [activeTrack, archiveFilter, searchQuery, templates]);
+  }, [activeTrack, archiveFilter, sourceGovernanceKind, needsFollowUp, searchQuery, templates]);
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) ?? null,
@@ -207,7 +210,10 @@ export function useWorkspaceStarterLibraryState(
       businessTrack: activeTrack === "all" ? undefined : activeTrack,
       search: searchQuery,
       includeArchived: archiveFilter === "all",
-      archivedOnly: archiveFilter === "archived"
+      archivedOnly: archiveFilter === "archived",
+      sourceGovernanceKind:
+        sourceGovernanceKind === "all" ? undefined : sourceGovernanceKind,
+      needsFollowUp
     })
       .then((summary) => {
         if (!cancelled) {
@@ -223,7 +229,7 @@ export function useWorkspaceStarterLibraryState(
     return () => {
       cancelled = true;
     };
-  }, [activeTrack, archiveFilter, searchQuery, templates]);
+  }, [activeTrack, archiveFilter, sourceGovernanceKind, needsFollowUp, searchQuery, templates]);
 
   useEffect(() => {
     const templateIds = filteredTemplates.map((template) => template.id);
@@ -286,7 +292,11 @@ export function useWorkspaceStarterLibraryState(
   );
 
   useEffect(() => {
-    if (selectedTemplateId && templates.some((template) => template.id === selectedTemplateId)) {
+    if (selectedTemplateId === null) {
+      return;
+    }
+
+    if (templates.some((template) => template.id === selectedTemplateId)) {
       return;
     }
 
@@ -295,6 +305,9 @@ export function useWorkspaceStarterLibraryState(
 
   useEffect(() => {
     if (!filteredTemplates.length) {
+      if (selectedTemplateId !== null) {
+        setSelectedTemplateId(null);
+      }
       return;
     }
 
@@ -312,6 +325,8 @@ export function useWorkspaceStarterLibraryState(
     const nextSearchParams = buildWorkspaceStarterLibrarySearchParams({
       activeTrack,
       archiveFilter,
+      sourceGovernanceKind,
+      needsFollowUp,
       searchQuery,
       selectedTemplateId
     });
@@ -325,7 +340,7 @@ export function useWorkspaceStarterLibraryState(
 
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
     window.history.replaceState(window.history.state, "", nextUrl);
-  }, [activeTrack, archiveFilter, searchQuery, selectedTemplateId]);
+  }, [activeTrack, archiveFilter, sourceGovernanceKind, needsFollowUp, searchQuery, selectedTemplateId]);
 
   useEffect(() => {
     setFormState(selectedTemplate ? buildFormState(selectedTemplate) : null);
@@ -511,6 +526,8 @@ export function useWorkspaceStarterLibraryState(
     setSearchQuery("");
     setActiveTrack(targetTemplate.business_track);
     setArchiveFilter(targetTemplate.archived ? "archived" : "active");
+    setSourceGovernanceKind("all");
+    setNeedsFollowUp(false);
     setSelectedTemplateId(targetTemplate.id);
   };
 
@@ -545,9 +562,11 @@ export function useWorkspaceStarterLibraryState(
     message,
     messageTone,
     missingToolTemplateCount,
+    needsFollowUp,
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    sourceGovernanceKind,
     sourceGovernanceScope,
     selectedTemplateSandboxGovernance,
     selectedTemplateToolGovernance,
@@ -556,8 +575,10 @@ export function useWorkspaceStarterLibraryState(
     setActiveTrack,
     setArchiveFilter,
     setFormState,
+    setNeedsFollowUp,
     setSearchQuery,
     setSelectedTemplateId,
+    setSourceGovernanceKind,
     sourceDiff,
     sourceGovernance,
     strongIsolationTemplateCount,

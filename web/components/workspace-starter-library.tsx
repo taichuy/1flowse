@@ -7,7 +7,10 @@ import { WorkspaceStarterMetadataPanel } from "@/components/workspace-starter-li
 import { WorkspaceStarterSourceDiffPanel } from "@/components/workspace-starter-library/source-diff-panel";
 import { WorkspaceStarterTemplateListPanel } from "@/components/workspace-starter-library/template-list-panel";
 import { useWorkspaceStarterLibraryState } from "@/components/workspace-starter-library/use-workspace-starter-library-state";
-import type { WorkspaceStarterLibraryViewState } from "@/components/workspace-starter-library/shared";
+import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  type WorkspaceStarterLibraryViewState
+} from "@/components/workspace-starter-library/shared";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 
@@ -53,9 +56,11 @@ export function WorkspaceStarterLibrary({
     message,
     messageTone,
     missingToolTemplateCount,
+    needsFollowUp,
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    sourceGovernanceKind,
     sourceGovernanceScope,
     selectedTemplateSandboxGovernance,
     selectedTemplateToolGovernance,
@@ -63,14 +68,24 @@ export function WorkspaceStarterLibrary({
     setActiveTrack,
     setArchiveFilter,
     setFormState,
+    setNeedsFollowUp,
     setSearchQuery,
     setSelectedTemplateId,
+    setSourceGovernanceKind,
     sourceDiff,
     sourceGovernance,
     strongIsolationTemplateCount,
     templateToolGovernanceById,
     templates
   } = useWorkspaceStarterLibraryState(initialTemplates, tools, initialViewState);
+
+  const createWorkflowHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+    activeTrack,
+    sourceGovernanceKind,
+    needsFollowUp,
+    searchQuery,
+    selectedTemplateId: selectedTemplate?.archived ? null : selectedTemplateId
+  });
 
   return (
     <main className="editor-shell">
@@ -83,6 +98,7 @@ export function WorkspaceStarterLibrary({
         selectedTemplateName={selectedTemplate?.name ?? null}
         strongIsolationTemplateCount={strongIsolationTemplateCount}
         activeTrack={activeTrack}
+        createWorkflowHref={createWorkflowHref}
       />
 
       <section className="governance-layout">
@@ -92,6 +108,8 @@ export function WorkspaceStarterLibrary({
           selectedTemplateId={selectedTemplateId}
           activeTrack={activeTrack}
           archiveFilter={archiveFilter}
+          sourceGovernanceKind={sourceGovernanceKind}
+          needsFollowUp={needsFollowUp}
           searchQuery={searchQuery}
           activeTemplateCount={activeTemplateCount}
           archivedTemplateCount={archivedTemplateCount}
@@ -105,6 +123,8 @@ export function WorkspaceStarterLibrary({
           sourceGovernanceScope={sourceGovernanceScope}
           onTrackChange={setActiveTrack}
           onArchiveFilterChange={setArchiveFilter}
+          onSourceGovernanceKindChange={setSourceGovernanceKind}
+          onNeedsFollowUpChange={setNeedsFollowUp}
           onSearchQueryChange={setSearchQuery}
           onSelectTemplate={setSelectedTemplateId}
           onFocusTemplate={focusTemplateFromBulkResult}
@@ -121,6 +141,7 @@ export function WorkspaceStarterLibrary({
             isMutating={isMutating}
             message={message}
             messageTone={messageTone}
+            createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
             setFormState={setFormState}
             onSave={handleSave}
             onTemplateMutation={handleTemplateMutation}

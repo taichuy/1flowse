@@ -309,3 +309,71 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_source_governance(
     assert orphan_source["source_version"] is None
     assert orphan_source["action_decision"] is None
     assert "来源 workflow 已不可用" in orphan_source["outcome_explanation"]["primary_signal"]
+
+
+def test_workflow_library_snapshot_reuses_workspace_starter_governance_filters(
+    client,
+    sqlite_session,
+    sample_workflow,
+) -> None:
+    governed_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Governed Workspace Starter",
+            "description": "Starter backed by a source workflow.",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "Keep starter governance aligned with the source workflow.",
+            "recommended_next_step": "Review source governance before creating a new draft.",
+            "tags": ["governed", "workspace starter"],
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+            "definition": sample_workflow.definition,
+        },
+    )
+    assert governed_response.status_code == 201
+    governed_starter = governed_response.json()
+
+    manual_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Manual Workspace Starter",
+            "description": "No source workflow attached.",
+            "business_track": "应用新建编排",
+            "default_workflow_name": "Manual Workflow",
+            "workflow_focus": "Manual starter facts.",
+            "recommended_next_step": "Create directly.",
+            "tags": ["manual", "workspace starter"],
+            "definition": sample_workflow.definition,
+        },
+    )
+    assert manual_response.status_code == 201
+
+    sample_workflow.version = "0.2.0"
+    sample_workflow.updated_at = datetime.now(UTC)
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    response = client.get(
+        "/api/workflow-library"
+        "?business_track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+        "&search=Governed"
+        "&source_governance_kind=drifted"
+        "&include_builtin_starters=false"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    workspace_lane = next(
+        lane for lane in body["starter_source_lanes"] if lane["scope"] == "workspace"
+    )
+    builtin_lane = next(
+        lane for lane in body["starter_source_lanes"] if lane["scope"] == "builtin"
+    )
+    assert workspace_lane["count"] == 1
+    assert workspace_lane["short_label"] == "workspace ready"
+    assert builtin_lane["count"] == 0
+    assert [starter["id"] for starter in body["starters"]] == [governed_starter["id"]]
+    assert body["starters"][0]["source_governance"]["kind"] == "drifted"

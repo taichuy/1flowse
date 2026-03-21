@@ -15,6 +15,10 @@ from app.schemas.workflow_library import (
     WorkflowLibraryStarterItem,
     WorkflowNodeCatalogItem,
 )
+from app.schemas.workspace_starter import (
+    WorkflowBusinessTrack,
+    WorkspaceStarterSourceGovernanceKind,
+)
 from app.services.plugin_registry_store import get_plugin_registry_store
 from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_plugin_registry
 from app.services.tool_execution_governance import (
@@ -30,9 +34,6 @@ from app.services.workflow_library_catalog import (
     build_tool_source_lanes,
     build_workspace_starter_source,
 )
-from app.services.workspace_starter_source_governance import (
-    build_workspace_starter_source_governance,
-)
 from app.services.workspace_starter_templates import get_workspace_starter_template_service
 
 
@@ -42,6 +43,11 @@ class WorkflowLibraryService:
         db: Session,
         *,
         workspace_id: str = "default",
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
+        source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
+        needs_follow_up: bool = False,
+        include_builtin_starters: bool = True,
     ) -> WorkflowLibrarySnapshot:
         tools = self.list_tool_items(db, workspace_id=workspace_id)
         tool_source_lanes = self.build_tool_source_lanes(tools)
@@ -50,6 +56,11 @@ class WorkflowLibraryService:
             db,
             workspace_id=workspace_id,
             node_catalog=nodes,
+            business_track=business_track,
+            search=search,
+            source_governance_kind=source_governance_kind,
+            needs_follow_up=needs_follow_up,
+            include_builtin_starters=include_builtin_starters,
         )
         return WorkflowLibrarySnapshot(
             nodes=nodes,
@@ -106,11 +117,24 @@ class WorkflowLibraryService:
         *,
         workspace_id: str,
         node_catalog: list[WorkflowNodeCatalogItem] | None = None,
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
+        source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
+        needs_follow_up: bool = False,
+        include_builtin_starters: bool = True,
     ) -> list[WorkflowLibraryStarterItem]:
         catalog = node_catalog or self.list_node_catalog_items()
+        builtin_starters = build_builtin_starters(catalog) if include_builtin_starters else []
         return [
-            *build_builtin_starters(catalog),
-            *self._build_workspace_starters(db, workspace_id=workspace_id),
+            *builtin_starters,
+            *self._build_workspace_starters(
+                db,
+                workspace_id=workspace_id,
+                business_track=business_track,
+                search=search,
+                source_governance_kind=source_governance_kind,
+                needs_follow_up=needs_follow_up,
+            ),
         ]
 
     def build_starter_source_lanes(
@@ -136,11 +160,30 @@ class WorkflowLibraryService:
         db: Session,
         *,
         workspace_id: str,
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
+        source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
+        needs_follow_up: bool = False,
     ) -> list[WorkflowLibraryStarterItem]:
         service = get_workspace_starter_template_service()
-        records = service.list_templates(db, workspace_id=workspace_id)
+        records = service.list_templates(
+            db,
+            workspace_id=workspace_id,
+            business_track=business_track,
+            search=search,
+        )
         workspace_source = build_workspace_starter_source()
         source_workflows_by_id = self._load_source_workflows(db, records)
+        source_governance_by_template_id = service.build_source_governance_by_template_id(
+            records,
+            source_workflows_by_id,
+        )
+        filtered_records = service.filter_records_by_source_governance(
+            records,
+            source_governance_by_template_id,
+            source_governance_kind=source_governance_kind,
+            needs_follow_up=needs_follow_up,
+        )
         return [
             WorkflowLibraryStarterItem(
                 id=serialized.id,
@@ -161,15 +204,10 @@ class WorkflowLibraryService:
                 archived_at=serialized.archived_at,
                 created_at=serialized.created_at,
                 updated_at=serialized.updated_at,
-                source_governance=build_workspace_starter_source_governance(
-                    record,
-                    source_workflows_by_id.get(record.created_from_workflow_id)
-                    if record.created_from_workflow_id
-                    else None,
-                ),
+                source_governance=source_governance_by_template_id.get(record.id),
             )
             for record, serialized in (
-                (record, service.serialize(record)) for record in records
+                (record, service.serialize(record)) for record in filtered_records
             )
         ]
 

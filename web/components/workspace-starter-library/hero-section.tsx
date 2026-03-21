@@ -13,6 +13,7 @@ type WorkspaceStarterHeroSectionProps = {
   selectedTemplateName: string | null;
   strongIsolationTemplateCount: number;
   activeTrack: TrackFilter;
+  createWorkflowHref: string;
 };
 
 export function WorkspaceStarterHeroSection({
@@ -23,7 +24,8 @@ export function WorkspaceStarterHeroSection({
   missingToolTemplateCount,
   selectedTemplateName,
   strongIsolationTemplateCount,
-  activeTrack
+  activeTrack,
+  createWorkflowHref
 }: WorkspaceStarterHeroSectionProps) {
   return (
     <section className="hero creation-hero">
@@ -43,7 +45,7 @@ export function WorkspaceStarterHeroSection({
           <span className="pill">{missingToolTemplateCount} missing tool starters</span>
         </div>
         <div className="hero-actions">
-          <Link className="inline-link" href="/workflows/new">
+          <Link className="inline-link" href={createWorkflowHref}>
             返回创建页
           </Link>
           <Link className="inline-link secondary" href="/">
