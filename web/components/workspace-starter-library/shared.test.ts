@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import type {
+  WorkspaceStarterSourceDiff,
+  WorkspaceStarterTemplateItem
+} from "@/lib/get-workspace-starters";
 
 import {
+  buildWorkspaceStarterSourceActionDecision,
   buildWorkspaceStarterLibrarySearchParams,
   resolveWorkspaceStarterLibraryViewState
 } from "./shared";
@@ -122,3 +126,108 @@ describe("workspace starter library URL state", () => {
     expect(searchParams.get("starter")).toBe("starter-archived-sandbox");
   });
 });
+
+describe("workspace starter source action decision", () => {
+  it("recommends rebase when workflow name drift is the only remaining change", () => {
+    const decision = buildWorkspaceStarterSourceActionDecision({
+      template_id: "starter-a",
+      workspace_id: "default",
+      source_workflow_id: "wf-a",
+      source_workflow_name: "Sandbox authoring v2",
+      template_version: "0.1.0",
+      source_version: "0.1.0",
+      template_default_workflow_name: "Sandbox authoring",
+      source_default_workflow_name: "Sandbox authoring v2",
+      workflow_name_changed: true,
+      changed: true,
+      rebase_fields: ["default_workflow_name"],
+      node_summary: emptyDiffSummary(),
+      edge_summary: emptyDiffSummary(),
+      sandbox_dependency_summary: emptyDiffSummary(),
+      node_entries: [],
+      edge_entries: [],
+      sandbox_dependency_entries: []
+    });
+
+    expect(decision.recommendedAction).toBe("rebase");
+    expect(decision.canRefresh).toBe(false);
+    expect(decision.canRebase).toBe(true);
+    expect(decision.summary).toContain("refresh 不会改名");
+  });
+
+  it("recommends refresh when snapshot drift does not require renaming", () => {
+    const decision = buildWorkspaceStarterSourceActionDecision({
+      template_id: "starter-a",
+      workspace_id: "default",
+      source_workflow_id: "wf-a",
+      source_workflow_name: "Sandbox authoring",
+      template_version: "0.1.0",
+      source_version: "0.2.0",
+      template_default_workflow_name: "Sandbox authoring",
+      source_default_workflow_name: "Sandbox authoring",
+      workflow_name_changed: false,
+      changed: true,
+      rebase_fields: ["definition", "created_from_workflow_version"],
+      node_summary: {
+        template_count: 1,
+        source_count: 1,
+        added_count: 0,
+        removed_count: 0,
+        changed_count: 1
+      },
+      edge_summary: emptyDiffSummary(),
+      sandbox_dependency_summary: {
+        template_count: 1,
+        source_count: 1,
+        added_count: 0,
+        removed_count: 1,
+        changed_count: 0
+      },
+      node_entries: [],
+      edge_entries: [],
+      sandbox_dependency_entries: []
+    });
+
+    expect(decision.recommendedAction).toBe("refresh");
+    expect(decision.canRefresh).toBe(true);
+    expect(decision.canRebase).toBe(true);
+    expect(decision.summary).toContain("优先 refresh");
+    expect(decision.factChips).toContain("sandbox drift 1");
+  });
+
+  it("marks synced templates as no-op", () => {
+    const decision = buildWorkspaceStarterSourceActionDecision({
+      template_id: "starter-a",
+      workspace_id: "default",
+      source_workflow_id: "wf-a",
+      source_workflow_name: "Sandbox authoring",
+      template_version: "0.2.0",
+      source_version: "0.2.0",
+      template_default_workflow_name: "Sandbox authoring",
+      source_default_workflow_name: "Sandbox authoring",
+      workflow_name_changed: false,
+      changed: false,
+      rebase_fields: [],
+      node_summary: emptyDiffSummary(),
+      edge_summary: emptyDiffSummary(),
+      sandbox_dependency_summary: emptyDiffSummary(),
+      node_entries: [],
+      edge_entries: [],
+      sandbox_dependency_entries: []
+    });
+
+    expect(decision.recommendedAction).toBe("none");
+    expect(decision.statusLabel).toBe("已对齐");
+    expect(decision.summary).toContain("无需 refresh 或 rebase");
+  });
+});
+
+function emptyDiffSummary(): WorkspaceStarterSourceDiff["node_summary"] {
+  return {
+    template_count: 0,
+    source_count: 0,
+    added_count: 0,
+    removed_count: 0,
+    changed_count: 0
+  };
+}

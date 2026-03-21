@@ -1,6 +1,9 @@
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import { WorkspaceStarterSourceCard } from "@/components/workspace-starter-library/source-status-card";
-import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import type {
+  WorkspaceStarterSourceDiff,
+  WorkspaceStarterTemplateItem
+} from "@/lib/get-workspace-starters";
 import {
   buildWorkflowDefinitionSandboxGovernanceBadges,
   describeWorkflowDefinitionSandboxDependency,
@@ -19,8 +22,12 @@ type WorkspaceStarterDefinitionSnapshotPanelProps = {
   sourceStatus: WorkspaceStarterSourceStatus | null;
   sourceStatusMessage: string | null;
   isLoadingSourceWorkflow: boolean;
+  sourceDiff: WorkspaceStarterSourceDiff | null;
+  isLoadingSourceDiff: boolean;
   isRefreshing: boolean;
+  isRebasing: boolean;
   onRefresh: () => void;
+  onRebase: () => void;
 };
 
 export function WorkspaceStarterDefinitionSnapshotPanel({
@@ -30,8 +37,12 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
   sourceStatus,
   sourceStatusMessage,
   isLoadingSourceWorkflow,
+  sourceDiff,
+  isLoadingSourceDiff,
   isRefreshing,
-  onRefresh
+  isRebasing,
+  onRefresh,
+  onRebase
 }: WorkspaceStarterDefinitionSnapshotPanelProps) {
   const sandboxGovernanceBadges = buildWorkflowDefinitionSandboxGovernanceBadges(
     selectedTemplateSandboxGovernance
@@ -101,8 +112,12 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             sourceStatus={sourceStatus}
             sourceStatusMessage={sourceStatusMessage}
             isLoadingSourceWorkflow={isLoadingSourceWorkflow}
+            sourceDiff={sourceDiff}
+            isLoadingSourceDiff={isLoadingSourceDiff}
             isRefreshing={isRefreshing}
+            isRebasing={isRebasing}
             onRefresh={onRefresh}
+            onRebase={onRebase}
           />
 
           <div className="section-heading">

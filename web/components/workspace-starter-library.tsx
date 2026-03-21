@@ -133,8 +133,12 @@ export function WorkspaceStarterLibrary({
             sourceStatus={sourceStatus}
             sourceStatusMessage={sourceStatusMessage}
             isLoadingSourceWorkflow={isLoadingSourceWorkflow}
+            sourceDiff={sourceDiff}
+            isLoadingSourceDiff={isLoadingSourceDiff}
             isRefreshing={isRefreshing}
+            isRebasing={isRebasing}
             onRefresh={handleRefreshFromSource}
+            onRebase={handleRebaseFromSource}
           />
 
           <WorkspaceStarterHistoryPanel
