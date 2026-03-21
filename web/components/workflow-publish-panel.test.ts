@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,6 +6,11 @@ import { WorkflowPublishPanel } from "@/components/workflow-publish-panel";
 import type { CallbackWaitingAutomationCheck, SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
+
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
+}));
 
 vi.mock("@/components/workflow-publish-binding-card", () => ({
   WorkflowPublishBindingCard: ({ binding }: { binding: { id: string } }) =>
@@ -177,5 +182,11 @@ describe("WorkflowPublishPanel", () => {
     expect(html).toContain("backend");
     expect(html).toContain("ready sandbox");
     expect(html).toContain("binding:binding-1");
+    expect(html).toContain("回到 workflow 列表");
+    expect(html).toContain('/workflows');
+    expect(html).toContain('/runs');
+    expect(html).toContain('/sensitive-access');
+    expect(html).toContain("返回系统首页");
+    expect(html).toContain('href="/"');
   });
 });

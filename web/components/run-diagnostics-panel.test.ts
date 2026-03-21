@@ -102,7 +102,12 @@ describe("RunDiagnosticsPanel", () => {
     expect(html).toContain("Node runs");
     expect(html).toContain("Events");
     expect(html).toContain("Errors");
+    expect(html).toContain("回到 workflow 编辑器");
+    expect(html).toContain('/workflows/workflow-1');
+    expect(html).toContain('/runs');
+    expect(html).toContain('/sensitive-access');
     expect(html).toContain("返回系统首页");
+    expect(html).toContain('href="/"');
     expect(html).toContain("打开原始 events API");
   });
 });

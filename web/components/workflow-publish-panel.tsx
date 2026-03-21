@@ -1,6 +1,7 @@
 import React from "react";
 
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
 import type {
   CallbackWaitingAutomationCheck,
@@ -81,6 +82,17 @@ export function WorkflowPublishPanel({
             事实层，不再让开放 API 能力只停留在后端可用、前端不可见。
           </p>
         </div>
+
+        <WorkbenchEntryLinks
+          keys={["workflowLibrary", "runLibrary", "operatorInbox", "home"]}
+          overrides={{
+            workflowLibrary: {
+              label: "回到 workflow 列表"
+            }
+          }}
+          primaryKey="workflowLibrary"
+          variant="inline"
+        />
 
         <div className="summary-strip">
           <article className="summary-card">

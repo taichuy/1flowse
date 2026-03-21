@@ -1,5 +1,4 @@
 import React from "react";
-import Link from "next/link";
 
 import { RunDiagnosticsExecutionSections } from "@/components/run-diagnostics-execution-sections";
 import { RunDiagnosticsOverviewSections } from "@/components/run-diagnostics-panel/overview-sections";
@@ -11,6 +10,7 @@ import {
 } from "@/components/run-diagnostics-panel/shared";
 import { RunDiagnosticsTraceFiltersSection } from "@/components/run-diagnostics-panel/trace-filters-section";
 import { RunDiagnosticsTraceResultsSection } from "@/components/run-diagnostics-panel/trace-results-section";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type {
@@ -73,6 +73,7 @@ export function RunDiagnosticsPanel({
   const activeFilters = summarizeActiveFilters(activeTraceQuery);
   const traceHref = buildPageTraceHref(run.id, activeTraceQuery);
   const eventsApiHref = `${getApiBaseUrl()}/api/runs/${encodeURIComponent(run.id)}/events`;
+  const workflowHref = `/workflows/${encodeURIComponent(run.workflow_id)}`;
   const heroSurfaceCopy = buildRunDiagnosticsHeroSurfaceCopy();
 
   return (
@@ -89,9 +90,20 @@ export function RunDiagnosticsPanel({
             <span className="pill">{run.event_count} events</span>
           </div>
           <div className="hero-actions">
-            <Link className="inline-link" href="/">
-              {heroSurfaceCopy.homeLinkLabel}
-            </Link>
+            <WorkbenchEntryLinks
+              keys={["workflowLibrary", "runLibrary", "operatorInbox", "home"]}
+              overrides={{
+                workflowLibrary: {
+                  href: workflowHref,
+                  label: "回到 workflow 编辑器"
+                },
+                runLibrary: {
+                  label: "回到 run 列表"
+                }
+              }}
+              primaryKey="workflowLibrary"
+              variant="inline"
+            />
             <a className="inline-link" href={eventsApiHref} target="_blank" rel="noreferrer">
               {heroSurfaceCopy.eventsApiLinkLabel}
             </a>
