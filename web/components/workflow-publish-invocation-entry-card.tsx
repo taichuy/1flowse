@@ -8,13 +8,7 @@ import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
-import {
-  formatCallbackLifecycleLabel,
-  formatScheduledResumeLabel,
-  getCallbackWaitingHeadline,
-  listCallbackWaitingBlockerRows,
-  listCallbackWaitingChips
-} from "@/lib/callback-waiting-presenters";
+import { formatScheduledResumeLabel } from "@/lib/callback-waiting-presenters";
 import {
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationCanonicalFollowUpCopy,
@@ -22,18 +16,14 @@ import {
   buildPublishedInvocationEntryInboxLinkSurface,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationWaitingCardSurface,
   listPublishedInvocationEntryMetaRows,
-  listPublishedInvocationEntryWaitingRows,
   listPublishedInvocationRunFollowUpEvidenceChips,
   formatPublishedInvocationWaitingRuntimeFallback,
-  formatPublishedInvocationWaitingFollowUp,
-  formatPublishedInvocationWaitingHeadline,
   formatPublishedInvocationCacheStatusLabel,
   formatPublishedInvocationReasonLabel,
   formatPublishedInvocationSurfaceLabel,
   hasPublishedInvocationBlockingSensitiveAccessSummary,
-  listPublishedInvocationSensitiveAccessChips,
-  listPublishedInvocationSensitiveAccessRows,
   normalizePublishedInvocationRunSnapshot,
   resolvePublishedInvocationRunFollowUpSampleView,
   resolvePublishedInvocationCallbackWaitingExplanation,
@@ -73,7 +63,6 @@ export function WorkflowPublishInvocationEntryCard({
 }: WorkflowPublishInvocationEntryCardProps) {
   const surfaceCopy = buildPublishedInvocationEntrySurfaceCopy();
   const waitingLifecycle = item.run_waiting_lifecycle;
-  const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
   const scheduledResumeLabel =
     formatScheduledResumeLabel({
       scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
@@ -82,45 +71,21 @@ export function WorkflowPublishInvocationEntryCard({
       scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
       scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
     }) ?? "n/a";
-  const callbackLifecycleLabel = formatCallbackLifecycleLabel(callbackLifecycle);
-  const waitingHeadline = getCallbackWaitingHeadline({
-    lifecycle: callbackLifecycle,
-    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
-    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
-    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
-    scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
-    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
-  });
-  const waitingChips = listCallbackWaitingChips({
-    lifecycle: callbackLifecycle,
-    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
-    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
-  });
   const waitingExplanation = resolvePublishedInvocationCallbackWaitingExplanation(item);
   const executionFocusExplanation = resolvePublishedInvocationExecutionFocusExplanation(item);
   const executionFocusPrimarySignal = executionFocusExplanation?.primary_signal?.trim() || null;
   const executionFocusFollowUp = executionFocusExplanation?.follow_up?.trim() || null;
-  const waitingOverviewHeadline = formatPublishedInvocationWaitingHeadline({
-    explanation: waitingExplanation,
-    fallbackHeadline: waitingHeadline,
-    nodeRunId: waitingLifecycle?.node_run_id,
-    nodeStatus: waitingLifecycle?.node_status
+  const waitingCardSurface = buildPublishedInvocationWaitingCardSurface({
+    waitingLifecycle,
+    waitingExplanation,
+    callbackLifecycleFallback: surfaceCopy.callbackLifecycleFallback
   });
-  const waitingOverviewFollowUp = formatPublishedInvocationWaitingFollowUp(waitingExplanation);
-  const sensitiveAccessChips = listPublishedInvocationSensitiveAccessChips(
-    waitingLifecycle?.sensitive_access_summary
-  );
-  const waitingBlockerRows = listCallbackWaitingBlockerRows({
-    lifecycle: callbackLifecycle,
-    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
-    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
-    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
-    scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
-    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at
-  });
-  const sensitiveAccessRows = listPublishedInvocationSensitiveAccessRows(
-    waitingLifecycle?.sensitive_access_summary
-  );
+  const waitingChips = waitingCardSurface?.waitingChips ?? [];
+  const waitingOverviewHeadline = waitingCardSurface?.headline ?? null;
+  const waitingOverviewFollowUp = waitingCardSurface?.followUp ?? null;
+  const sensitiveAccessChips = waitingCardSurface?.sensitiveAccessChips ?? [];
+  const waitingBlockerRows = waitingCardSurface?.blockerRows ?? [];
+  const sensitiveAccessRows = waitingCardSurface?.sensitiveAccessRows ?? [];
   const inboxHref = buildPublishedInvocationInboxHref({
     invocation: item,
     callbackTickets: [],
@@ -201,14 +166,7 @@ export function WorkflowPublishInvocationEntryCard({
     waitingReason,
     scheduledResumeLabel
   });
-  const waitingMetaRows = listPublishedInvocationEntryWaitingRows({
-    nodeRunId: waitingLifecycle?.node_run_id ?? null,
-    nodeStatus: waitingLifecycle?.node_status ?? null,
-    callbackTicketCount: waitingLifecycle?.callback_ticket_count ?? 0,
-    callbackTicketStatusCounts: waitingLifecycle?.callback_ticket_status_counts,
-    callbackLifecycleLabel,
-    callbackLifecycleFallback: surfaceCopy.callbackLifecycleFallback
-  });
+  const waitingMetaRows = waitingCardSurface?.waitingRows ?? [];
   const runFollowUpEvidenceChips = runFollowUpSample
     ? listPublishedInvocationRunFollowUpEvidenceChips(runFollowUpSample)
     : [];

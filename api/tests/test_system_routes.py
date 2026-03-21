@@ -318,6 +318,53 @@ def test_system_overview_includes_plugin_adapter_health(
     assert any(service["name"] == "sandbox-backend:sandbox-default" for service in body["services"])
 
 
+def test_system_overview_treats_degraded_plugin_adapter_as_operable(
+    client,
+    sqlite_session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(system_routes, "get_settings", lambda: _build_settings())
+    monkeypatch.setattr(system_routes, "check_database", lambda: True)
+    monkeypatch.setattr(system_routes.redis, "from_url", lambda url: _HealthyRedis())
+    monkeypatch.setattr(system_routes.boto3, "client", lambda *args, **kwargs: _HealthyS3Client())
+    monkeypatch.setattr(system_routes, "get_plugin_registry", lambda: PluginRegistry())
+    monkeypatch.setattr(system_routes, "get_sandbox_backend_registry", lambda: SandboxBackendRegistry())
+    monkeypatch.setattr(
+        system_routes,
+        "get_compatibility_adapter_health_checker",
+        lambda: _StaticHealthChecker(
+            [
+                CompatibilityAdapterHealth(
+                    id="dify-default",
+                    ecosystem="compat:dify",
+                    endpoint="http://adapter.local",
+                    enabled=True,
+                    status="degraded",
+                    detail="proxy mode is partially available",
+                )
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        system_routes,
+        "get_sandbox_backend_health_checker",
+        lambda: _StaticSandboxHealthChecker([]),
+    )
+
+    response = client.get("/api/system/overview")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert any(
+        service == {
+            "name": "plugin-adapter:dify-default",
+            "status": "up",
+            "detail": "proxy mode is partially available",
+        }
+        for service in body["services"]
+    )
+
+
 def test_system_overview_reports_sandbox_readiness_gap_reason(client, monkeypatch) -> None:
     monkeypatch.setattr(
         system_routes,

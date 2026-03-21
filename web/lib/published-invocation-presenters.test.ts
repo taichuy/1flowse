@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import {
   buildPublishedInvocationActivityBlockedDetailSurfaceCopy,
@@ -8,6 +8,8 @@ import {
   buildPublishedInvocationActivityTrafficMixSurface,
   buildPublishedCacheInventorySurfaceCopy,
   buildPublishedInvocationCallbackDrilldownSurfaceCopy,
+  buildPublishedInvocationCallbackBlockerSurface,
+  buildPublishedInvocationCallbackTicketSurface,
   buildPublishedInvocationCanonicalFollowUpCopy,
   buildPublishedInvocationDetailSurfaceCopy,
   buildPublishedInvocationEntryInboxLinkSurface,
@@ -22,6 +24,7 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
   buildPublishedInvocationUnavailableDetailSurfaceCopy,
+  buildPublishedInvocationWaitingCardSurface,
   formatPublishedInvocationApiKeyUsageMix,
   formatPublishedInvocationMetricCounts,
   formatPublishedInvocationOptionalRunStatus,
@@ -29,6 +32,7 @@ import {
   formatPublishedInvocationFailureReasonLastSeen,
   formatPublishedInvocationMissingToolCatalogEntry,
   formatPublishedInvocationNodeRunLabel,
+  formatPublishedInvocationPayloadPreview,
   formatPublishedInvocationRequestKeysSummary,
   formatPublishedInvocationRunStatusMix,
   formatPublishedInvocationSampleReasonLabel,
@@ -122,6 +126,74 @@ describe("published invocation presenters", () => {
       payloadPreviewTitle: "callback payload preview",
       emptyState: "当前这次 invocation 没有关联 callback ticket。"
     });
+  });
+
+  it("为 callback blocker 与 ticket 提供共享 surface", () => {
+    const callbackInvocation = {
+      id: "invocation-callback-1",
+      run_id: "run-callback-1",
+      run_status: "waiting_callback",
+      run_current_node_id: "tool_wait",
+      run_waiting_reason: "waiting_callback",
+      run_waiting_lifecycle: {
+        node_run_id: "node-run-callback-1",
+        node_status: "waiting_callback",
+        waiting_reason: "waiting_callback",
+        scheduled_resume_delay_seconds: 30,
+        scheduled_resume_source: "runtime",
+        scheduled_waiting_status: "waiting_callback",
+        scheduled_resume_scheduled_at: "2026-03-21T00:00:00Z",
+        scheduled_resume_due_at: "2026-03-21T00:00:30Z",
+        scheduled_resume_requeued_at: null,
+        scheduled_resume_requeue_source: null,
+        callback_ticket_count: 1,
+        callback_ticket_status_counts: { pending: 1 },
+        callback_waiting_lifecycle: {
+          wait_cycle_count: 1,
+          expired_ticket_count: 0,
+          late_callback_count: 0,
+          last_resume_delay_seconds: 30,
+          last_resume_backoff_attempt: 0,
+          max_expired_ticket_count: 0,
+          last_ticket_status: "pending",
+          terminated: false
+        }
+      }
+    } as never;
+    const callbackTickets = [
+      {
+        ticket: "ticket-1",
+        status: "pending",
+        node_run_id: "node-run-callback-1",
+        created_at: "2026-03-21T00:00:00Z",
+        updated_at: "2026-03-21T00:01:00Z",
+        tool_id: "tool.wait",
+        callback_payload: { ok: true }
+      }
+    ] as never;
+
+    const blockerSurface = buildPublishedInvocationCallbackBlockerSurface({
+      invocation: callbackInvocation,
+      callbackTickets,
+      sensitiveAccessEntries: [],
+      callbackWaitingAutomation: null,
+      callbackWaitingExplanation: {
+        primary_signal: "callback pending",
+        follow_up: "inspect callback"
+      }
+    });
+    expect(blockerSurface.headline).toBe("callback pending");
+    expect(blockerSurface.chips).toContain("tickets 1");
+    expect(blockerSurface.blockerRows.length).toBeGreaterThan(0);
+    expect(blockerSurface.eventRows.length).toBeGreaterThan(0);
+
+    const ticketSurface = buildPublishedInvocationCallbackTicketSurface({
+      invocation: callbackInvocation,
+      ticket: callbackTickets[0]
+    });
+    expect(ticketSurface.inboxHref).toContain("node-run-callback-1");
+    expect(ticketSurface.detailRows.length).toBeGreaterThan(0);
+    expect(ticketSurface.payloadPreview).toContain('"ok": true');
   });
 
   it("为 traffic timeline 提供统一标题、说明与空态", () => {
@@ -1701,5 +1773,58 @@ describe("published invocation presenters", () => {
     expect(views[1].focus_tool_call_summaries).toEqual([]);
     expect(views[1].focus_artifacts).toEqual([]);
     expect(views[1].focus_skill_reference_loads).toEqual([]);
+  });
+
+  it("构造 waiting surface 时统一复用 waiting card presenter", () => {
+    const waitingLifecycle = {
+      node_run_id: "node-run-1",
+      node_status: "waiting_callback",
+      callback_ticket_count: 1,
+      callback_ticket_status_counts: { pending: 1 },
+      callback_waiting_lifecycle: {
+        wait_cycle_count: 1,
+        expired_ticket_count: 0,
+        late_callback_count: 0,
+        terminated: false
+      },
+      scheduled_resume_delay_seconds: 30,
+      scheduled_resume_source: "callback_monitor",
+      scheduled_waiting_status: "waiting_callback",
+      sensitive_access_summary: {
+        request_count: 1,
+        approval_ticket_count: 1,
+        pending_approval_count: 1,
+        approved_approval_count: 0,
+        rejected_approval_count: 0,
+        expired_approval_count: 0,
+        pending_notification_count: 0,
+        delivered_notification_count: 0,
+        failed_notification_count: 0
+      }
+    } as never;
+
+    const surface = buildPublishedInvocationWaitingCardSurface({
+      waitingLifecycle,
+      waitingExplanation: {
+        primary_signal: "callback still pending",
+        follow_up: "open inbox to review tickets"
+      },
+      callbackLifecycleFallback: "tracked in detail panel"
+    });
+
+    expect(surface).toMatchObject({
+      headline: "callback still pending",
+      followUp: "open inbox to review tickets"
+    });
+    expect(surface?.waitingRows).toEqual(
+      expect.arrayContaining([
+        { key: "node-run", label: "Node run", value: "node-run-1", href: null }
+      ])
+    );
+  });
+
+  it("统一 payload preview helper", () => {
+    expect(formatPublishedInvocationPayloadPreview({ foo: "bar" })).toBe('{\n  "foo": "bar"\n}');
+    expect(formatPublishedInvocationPayloadPreview(undefined)).toBe("null");
   });
 });

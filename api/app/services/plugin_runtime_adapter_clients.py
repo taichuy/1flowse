@@ -16,7 +16,7 @@ from app.services.plugin_runtime_types import (
 
 def _canonicalize_adapter_status(value: object) -> str:
     if not isinstance(value, str):
-        return "up"
+        return "degraded"
 
     normalized = value.strip().lower()
     if normalized in {"up", "ok", "healthy", "ready"}:
@@ -27,7 +27,7 @@ def _canonicalize_adapter_status(value: object) -> str:
         return "disabled"
     if normalized in {"down", "offline", "error", "failed", "unhealthy"}:
         return "down"
-    return "up"
+    return "degraded"
 
 
 class CompatibilityAdapterHealthChecker:
@@ -74,17 +74,23 @@ class CompatibilityAdapterHealthChecker:
         if isinstance(payload, dict):
             health_payload = payload
 
+        detail = (
+            health_payload.get("detail")
+            if isinstance(health_payload.get("detail"), str)
+            else None
+        )
+        if not health_payload:
+            detail = "Adapter health endpoint returned a non-object JSON payload."
+        elif not isinstance(health_payload.get("status"), str):
+            detail = detail or "Adapter health payload did not include a supported status string."
+
         return CompatibilityAdapterHealth(
             id=adapter.id,
             ecosystem=adapter.ecosystem,
             endpoint=adapter.endpoint,
             enabled=True,
             status=_canonicalize_adapter_status(health_payload.get("status")),
-            detail=(
-                health_payload.get("detail")
-                if isinstance(health_payload.get("detail"), str)
-                else None
-            ),
+            detail=detail,
             mode=(
                 health_payload.get("mode")
                 if isinstance(health_payload.get("mode"), str)

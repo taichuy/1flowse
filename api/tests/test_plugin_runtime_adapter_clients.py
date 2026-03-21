@@ -75,3 +75,36 @@ def test_health_checker_normalizes_ok_status_to_up() -> None:
     assert health.status == "up"
     assert health.mode == "translate"
 
+
+def test_health_checker_marks_missing_status_payload_as_degraded() -> None:
+    adapter = CompatibilityAdapterRegistration(
+        id="dify-default",
+        ecosystem="compat:dify",
+        endpoint="http://adapter.local",
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text=json.dumps(
+                {
+                    "adapter_id": "dify-default",
+                    "ecosystem": "compat:dify",
+                    "mode": "translate",
+                }
+            ),
+            headers={"content-type": "application/json"},
+        )
+
+    checker = CompatibilityAdapterHealthChecker(
+        client_factory=lambda timeout_ms: httpx.Client(
+            transport=httpx.MockTransport(handler),
+            timeout=timeout_ms / 1000,
+        )
+    )
+
+    health = checker.probe(adapter)
+
+    assert health.status == "degraded"
+    assert health.mode == "translate"
+    assert health.detail == "Adapter health payload did not include a supported status string."

@@ -1,16 +1,18 @@
 "use client";
 
+import React from "react";
 import type { Node } from "@xyflow/react";
 
-import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
-import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
-import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
+import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import { AuthorizedContextFields } from "@/components/workflow-node-config-form/authorized-context-fields";
 import { CredentialPicker } from "@/components/workflow-node-config-form/credential-picker";
 import { LlmAgentSkillBindingSection } from "@/components/workflow-node-config-form/llm-agent-skill-binding-section";
 import { LlmAgentSkillSection } from "@/components/workflow-node-config-form/llm-agent-skill-section";
 import { LlmAgentToolPolicyForm } from "@/components/workflow-node-config-form/llm-agent-tool-policy-form";
+import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import {
   cloneRecord,
   dedupeArtifactRefs,
@@ -40,6 +42,16 @@ export function LlmAgentNodeConfigForm({
   focusedValidationItem,
   onChange
 }: LlmAgentNodeConfigFormProps) {
+  const focusedFieldPath = focusedValidationItem?.target.fieldPath ?? null;
+  const skillBindingHighlightedField = normalizeSkillBindingFieldKey(highlightedFieldPath);
+  const contextAccessHighlightedField = normalizeContextAccessFieldKey(highlightedFieldPath);
+  const skillBindingValidationItem = isSkillBindingFieldPath(focusedFieldPath)
+    ? focusedValidationItem
+    : null;
+  const contextAccessValidationItem = isContextAccessFieldPath(focusedFieldPath)
+    ? focusedValidationItem
+    : null;
+
   const config = cloneRecord(node.data.config);
   const model = toRecord(config.model) ?? {};
   const assistant = toRecord(config.assistant) ?? {};
@@ -306,9 +318,17 @@ export function LlmAgentNodeConfigForm({
 
       <LlmAgentSkillSection skillIds={skillIds} onChange={updateSkillIds} />
 
+      {skillBindingValidationItem ? (
+        <WorkflowValidationRemediationCard
+          item={skillBindingValidationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
+
       <LlmAgentSkillBindingSection
         skillBinding={skillBinding}
         skillIds={skillIds}
+        highlightedFieldKey={skillBindingHighlightedField}
         onChange={updateSkillBinding}
       />
 
@@ -386,6 +406,12 @@ export function LlmAgentNodeConfigForm({
         </small>
       </div>
 
+      {contextAccessValidationItem ? (
+        <WorkflowValidationRemediationCard
+          item={contextAccessValidationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
       <AuthorizedContextFields
         nodeId={node.id}
         availableNodes={availableNodes}
@@ -395,7 +421,61 @@ export function LlmAgentNodeConfigForm({
         onToggleReadableArtifact={toggleReadableArtifact}
         readableNodesLabel="Readable upstream context"
         readableNodesHint="LLM Agent 默认不读全部前序节点，仍需显式声明可见来源。"
+        highlightedFieldKey={contextAccessHighlightedField}
       />
     </div>
   );
+}
+
+function isSkillBindingFieldPath(fieldPath: string | null) {
+  if (!fieldPath) {
+    return false;
+  }
+  return fieldPath.startsWith("config.skillBinding.");
+}
+
+function isContextAccessFieldPath(fieldPath: string | null) {
+  if (!fieldPath) {
+    return false;
+  }
+  return (
+    fieldPath === "config.contextAccess" ||
+    fieldPath.startsWith("config.contextAccess.readableNodeIds") ||
+    fieldPath.startsWith("config.contextAccess.readableArtifacts")
+  );
+}
+
+function normalizeSkillBindingFieldKey(fieldPath?: string | null) {
+  if (!fieldPath) {
+    return null;
+  }
+  if (fieldPath === "config.skillBinding") {
+    return "skillBinding.references";
+  }
+  if (fieldPath.startsWith("config.skillBinding.references")) {
+    return "skillBinding.references";
+  }
+  if (fieldPath.startsWith("config.skillBinding.enabledPhases")) {
+    return "skillBinding.enabledPhases";
+  }
+  if (fieldPath.startsWith("config.skillBinding.promptBudgetChars")) {
+    return "skillBinding.promptBudgetChars";
+  }
+  return null;
+}
+
+function normalizeContextAccessFieldKey(fieldPath?: string | null) {
+  if (!fieldPath) {
+    return null;
+  }
+  if (fieldPath.startsWith("config.contextAccess.readableArtifacts")) {
+    return "contextAccess.readableArtifacts";
+  }
+  if (
+    fieldPath === "config.contextAccess" ||
+    fieldPath.startsWith("config.contextAccess.readableNodeIds")
+  ) {
+    return "contextAccess.readableNodeIds";
+  }
+  return null;
 }

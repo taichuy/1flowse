@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   cloneRecord,
@@ -27,6 +27,7 @@ type SkillReferenceBindingDraft = {
 type LlmAgentSkillBindingSectionProps = {
   skillBinding: Record<string, unknown>;
   skillIds: string[];
+  highlightedFieldKey?: string | null;
   onChange: (nextSkillBinding: Record<string, unknown> | undefined) => void;
 };
 
@@ -124,8 +125,10 @@ function parseReferenceBindingLines(rawValue: string): {
 export function LlmAgentSkillBindingSection({
   skillBinding,
   skillIds,
+  highlightedFieldKey = null,
   onChange
 }: LlmAgentSkillBindingSectionProps) {
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const [referenceBindingError, setReferenceBindingError] = useState<string | null>(null);
   const enabledPhases = dedupeStrings(toStringArray(skillBinding.enabledPhases)).filter(
     isSkillBindingPhase
@@ -134,6 +137,25 @@ export function LlmAgentSkillBindingSection({
     typeof skillBinding.promptBudgetChars === "number" ? skillBinding.promptBudgetChars : "";
   const referenceBindings = readReferenceBindings(skillBinding.references);
   const referenceBindingText = serializeReferenceBindings(referenceBindings);
+  const highlightEnabledPhases = highlightedFieldKey === "skillBinding.enabledPhases";
+  const highlightPromptBudget = highlightedFieldKey === "skillBinding.promptBudgetChars";
+  const highlightReferences = highlightedFieldKey === "skillBinding.references";
+
+  useEffect(() => {
+    if (!highlightedFieldKey) {
+      return;
+    }
+    const target = sectionRef.current?.querySelector<HTMLElement>(
+      `[data-validation-field="${highlightedFieldKey}"] textarea, ` +
+        `[data-validation-field="${highlightedFieldKey}"] input`
+    );
+    if (target) {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        target.focus();
+      }
+    }
+  }, [highlightedFieldKey]);
 
   const commitSkillBinding = (patch: {
     enabledPhases?: SkillBindingPhase[];
@@ -193,7 +215,7 @@ export function LlmAgentSkillBindingSection({
   };
 
   return (
-    <div className="binding-field">
+    <div className="binding-field" ref={sectionRef}>
       <span className="binding-label">Skill binding strategy</span>
       <small className="section-copy">
         按 phase 决定哪些 SkillDoc 会注入主 AI，并给正文 + 选定 reference body 一个近似 prompt
@@ -205,7 +227,10 @@ export function LlmAgentSkillBindingSection({
         </small>
       ) : (
         <>
-          <div className="binding-field">
+          <div
+            className={`binding-field ${highlightEnabledPhases ? "validation-focus-ring" : ""}`.trim()}
+            data-validation-field="skillBinding.enabledPhases"
+          >
             <span className="binding-label">Enabled phases</span>
             <div className="tool-badge-row">
               {SKILL_BINDING_PHASE_OPTIONS.map((phase) => (
@@ -221,7 +246,10 @@ export function LlmAgentSkillBindingSection({
             </div>
           </div>
 
-          <label className="binding-field">
+          <label
+            className={`binding-field ${highlightPromptBudget ? "validation-focus-ring" : ""}`.trim()}
+            data-validation-field="skillBinding.promptBudgetChars"
+          >
             <span className="binding-label">Prompt budget (chars)</span>
             <input
               className="trace-text-input"
@@ -238,7 +266,10 @@ export function LlmAgentSkillBindingSection({
             />
           </label>
 
-          <label className="binding-field">
+          <label
+            className={`binding-field ${highlightReferences ? "validation-focus-ring" : ""}`.trim()}
+            data-validation-field="skillBinding.references"
+          >
             <span className="binding-label">Reference bodies</span>
             <textarea
               className="editor-json-area"

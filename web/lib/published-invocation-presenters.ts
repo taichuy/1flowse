@@ -10,10 +10,23 @@ import type {
   OperatorRunFollowUpSnapshot,
   RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
+import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import {
+  CallbackWaitingDetailRow,
+  formatCallbackLifecycleLabel,
+  getCallbackWaitingHeadline,
+  listCallbackTicketDetailRows,
+  listCallbackWaitingBlockerRows,
+  listCallbackWaitingChips,
+  listCallbackWaitingEventRows
+} from "@/lib/callback-waiting-presenters";
 import {
   buildOperatorInlineActionFeedbackModel,
   type OperatorInlineFocusArtifactPreview
@@ -207,6 +220,32 @@ export type PublishedInvocationEntrySurfaceCopy = {
   detailActionActiveLabel: string;
   errorMessagePrefix: string;
   detailPanelDescription: string;
+};
+
+export type PublishedInvocationWaitingCardSurface = {
+  headline: string | null;
+  followUp: string | null;
+  waitingChips: string[];
+  sensitiveAccessChips: string[];
+  waitingRows: PublishedInvocationMetaRow[];
+  blockerRows: CallbackWaitingDetailRow[];
+  sensitiveAccessRows: CallbackWaitingDetailRow[];
+};
+
+export type PublishedInvocationCallbackBlockerSurface = {
+  headline: string | null;
+  followUp: string | null;
+  chips: string[];
+  blockerRows: CallbackWaitingDetailRow[];
+  eventRows: CallbackWaitingDetailRow[];
+};
+
+export type PublishedInvocationCallbackTicketSurface = {
+  ticketId: string;
+  status: string;
+  inboxHref: string | null;
+  detailRows: CallbackWaitingDetailRow[];
+  payloadPreview: string | null;
 };
 
 export type PublishedInvocationActivityInsightsSurfaceCopy = {
@@ -495,6 +534,176 @@ export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationE
   };
 }
 
+export function buildPublishedInvocationWaitingCardSurface({
+  waitingLifecycle,
+  waitingExplanation,
+  callbackLifecycleFallback
+}: {
+  waitingLifecycle?: PublishedEndpointInvocationItem["run_waiting_lifecycle"] | null;
+  waitingExplanation?: RunExecutionFocusExplanation | null;
+  callbackLifecycleFallback: string;
+}): PublishedInvocationWaitingCardSurface | null {
+  if (!waitingLifecycle) {
+    return null;
+  }
+
+  const callbackLifecycle = waitingLifecycle.callback_waiting_lifecycle ?? null;
+  const fallbackHeadline = getCallbackWaitingHeadline({
+    lifecycle: callbackLifecycle,
+    scheduledResumeDelaySeconds: waitingLifecycle.scheduled_resume_delay_seconds,
+    scheduledResumeSource: waitingLifecycle.scheduled_resume_source,
+    scheduledWaitingStatus: waitingLifecycle.scheduled_waiting_status,
+    scheduledResumeScheduledAt: waitingLifecycle.scheduled_resume_scheduled_at,
+    scheduledResumeDueAt: waitingLifecycle.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: waitingLifecycle.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle.scheduled_resume_requeue_source
+  });
+  const waitingRows = listPublishedInvocationEntryWaitingRows({
+    nodeRunId: waitingLifecycle.node_run_id ?? null,
+    nodeStatus: waitingLifecycle.node_status ?? null,
+    callbackTicketCount: waitingLifecycle.callback_ticket_count ?? 0,
+    callbackTicketStatusCounts: waitingLifecycle.callback_ticket_status_counts,
+    callbackLifecycleLabel: formatCallbackLifecycleLabel(callbackLifecycle),
+    callbackLifecycleFallback
+  });
+  const waitingChips = listCallbackWaitingChips({
+    lifecycle: callbackLifecycle,
+    scheduledResumeDelaySeconds: waitingLifecycle.scheduled_resume_delay_seconds,
+    scheduledResumeDueAt: waitingLifecycle.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: waitingLifecycle.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle.scheduled_resume_requeue_source
+  });
+  const blockerRows = listCallbackWaitingBlockerRows({
+    lifecycle: callbackLifecycle,
+    scheduledResumeDelaySeconds: waitingLifecycle.scheduled_resume_delay_seconds,
+    scheduledResumeSource: waitingLifecycle.scheduled_resume_source,
+    scheduledWaitingStatus: waitingLifecycle.scheduled_waiting_status,
+    scheduledResumeScheduledAt: waitingLifecycle.scheduled_resume_scheduled_at,
+    scheduledResumeDueAt: waitingLifecycle.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: waitingLifecycle.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle.scheduled_resume_requeue_source
+  });
+  const sensitiveAccessRows = listPublishedInvocationSensitiveAccessRows(
+    waitingLifecycle.sensitive_access_summary
+  ).map<CallbackWaitingDetailRow>((row) => ({
+    label: row.label,
+    value: row.value
+  }));
+
+  return {
+    headline: formatPublishedInvocationWaitingHeadline({
+      explanation: waitingExplanation,
+      fallbackHeadline,
+      nodeRunId: waitingLifecycle.node_run_id ?? null,
+      nodeStatus: waitingLifecycle.node_status ?? null
+    }),
+    followUp: formatPublishedInvocationWaitingFollowUp(waitingExplanation),
+    waitingChips,
+    sensitiveAccessChips: listPublishedInvocationSensitiveAccessChips(
+      waitingLifecycle.sensitive_access_summary
+    ),
+    waitingRows,
+    blockerRows,
+    sensitiveAccessRows
+  };
+}
+
+export function buildPublishedInvocationCallbackBlockerSurface({
+  invocation,
+  callbackTickets,
+  sensitiveAccessEntries,
+  callbackWaitingAutomation,
+  callbackWaitingExplanation
+}: {
+  invocation: PublishedEndpointInvocationItem;
+  callbackTickets: PublishedEndpointInvocationCallbackTicketItem[];
+  sensitiveAccessEntries: SensitiveAccessTimelineEntry[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  callbackWaitingExplanation?: RunExecutionFocusExplanation | null;
+}): PublishedInvocationCallbackBlockerSurface {
+  const waitingLifecycle = invocation.run_waiting_lifecycle ?? null;
+  const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle ?? null;
+  const fallbackHeadline = getCallbackWaitingHeadline({
+    lifecycle: callbackLifecycle,
+    callbackTickets,
+    sensitiveAccessEntries,
+    callbackWaitingAutomation,
+    scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+    scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
+    scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
+    scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
+    scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at,
+    scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+    scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
+  });
+
+  return {
+    headline: formatPublishedInvocationWaitingHeadline({
+      explanation: callbackWaitingExplanation,
+      fallbackHeadline,
+      nodeRunId: waitingLifecycle?.node_run_id ?? invocation.run_current_node_id ?? null,
+      nodeStatus: waitingLifecycle?.node_status ?? null
+    }),
+    followUp: formatPublishedInvocationWaitingFollowUp(callbackWaitingExplanation),
+    chips: listCallbackWaitingChips({
+      lifecycle: callbackLifecycle,
+      callbackTickets,
+      sensitiveAccessEntries,
+      callbackWaitingAutomation,
+      scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+      scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at,
+      scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+      scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
+    }),
+    blockerRows: listCallbackWaitingBlockerRows(
+      {
+        lifecycle: callbackLifecycle,
+        callbackTickets,
+        sensitiveAccessEntries,
+        callbackWaitingAutomation,
+        scheduledResumeDelaySeconds: waitingLifecycle?.scheduled_resume_delay_seconds,
+        scheduledResumeSource: waitingLifecycle?.scheduled_resume_source,
+        scheduledWaitingStatus: waitingLifecycle?.scheduled_waiting_status,
+        scheduledResumeScheduledAt: waitingLifecycle?.scheduled_resume_scheduled_at,
+        scheduledResumeDueAt: waitingLifecycle?.scheduled_resume_due_at,
+        scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+        scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
+      },
+      { includeRecommendedActionRow: true, includeTerminationRow: true }
+    ),
+    eventRows: listCallbackWaitingEventRows({
+      lifecycle: callbackLifecycle,
+      waitingReason: waitingLifecycle?.waiting_reason ?? invocation.run_waiting_reason,
+      waitingNodeRunId: waitingLifecycle?.node_run_id ?? invocation.run_current_node_id ?? null,
+      scheduledResumeRequeuedAt: waitingLifecycle?.scheduled_resume_requeued_at,
+      scheduledResumeRequeueSource: waitingLifecycle?.scheduled_resume_requeue_source
+    })
+  };
+}
+
+export function buildPublishedInvocationCallbackTicketSurface({
+  invocation,
+  ticket
+}: {
+  invocation: PublishedEndpointInvocationItem;
+  ticket: PublishedEndpointInvocationCallbackTicketItem;
+}): PublishedInvocationCallbackTicketSurface {
+  return {
+    ticketId: ticket.ticket,
+    status: ticket.status,
+    inboxHref: buildCallbackTicketInboxHref(ticket, {
+      runId: invocation.run_id ?? null,
+      nodeRunId: invocation.run_waiting_lifecycle?.node_run_id ?? null
+    }),
+    detailRows: listCallbackTicketDetailRows(ticket, {
+      mode: "detail",
+      includeEmptyLifecycle: true
+    }),
+    payloadPreview: ticket.callback_payload
+      ? formatPublishedInvocationPayloadPreview(ticket.callback_payload)
+      : null
+  };
+}
 export function formatPublishedInvocationSampleReasonLabel(
   source: "callback_waiting" | "execution_focus" | null
 ) {
@@ -761,6 +970,10 @@ export function formatPublishedInvocationRequestKeysSummary(
   requestKeys: string[] | null | undefined
 ): string {
   return `request keys: ${formatKeyList(requestKeys ?? [])}`;
+}
+
+export function formatPublishedInvocationPayloadPreview(value: unknown): string {
+  return JSON.stringify(value ?? null, null, 2);
 }
 
 export function listPublishedInvocationEntryMetaRows({

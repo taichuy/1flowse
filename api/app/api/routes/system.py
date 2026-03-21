@@ -554,7 +554,7 @@ def system_overview(db: Session = Depends(get_db)) -> SystemOverview:
     adapter_services = [
         ServiceCheck(
             name=f"plugin-adapter:{adapter.id}",
-            status="up" if adapter.status == "up" else "down",
+            status="up" if adapter.status in {"up", "degraded"} else "down",
             detail=adapter.detail,
         )
         for adapter in adapter_healths

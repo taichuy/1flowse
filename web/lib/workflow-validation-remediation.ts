@@ -137,6 +137,16 @@ function resolveVariableFieldLabel(fieldPath: string) {
 }
 
 function resolveNodeFieldLabel(fieldPath: string) {
+  if (fieldPath.startsWith("config.skillBinding.references")) {
+    return "Skill references";
+  }
+  if (fieldPath.startsWith("config.contextAccess.readableNodeIds")) {
+    return "Readable upstream nodes";
+  }
+  if (fieldPath.startsWith("config.contextAccess.readableArtifacts")) {
+    return "Readable node artifacts";
+  }
+
   if (fieldPath === "inputSchema" || fieldPath.startsWith("inputSchema.")) {
     return "Input schema";
   }
@@ -210,6 +220,18 @@ function resolveNodeFieldLabel(fieldPath: string) {
       return "Tool adapter";
     case "config.tool.toolId":
       return "Tool id";
+    case "config.skillIds":
+      return "Skill IDs";
+    case "config.skillBinding":
+      return "Skill binding";
+    case "config.skillBinding.enabledPhases":
+      return "Skill binding phases";
+    case "config.skillBinding.promptBudgetChars":
+      return "Skill binding prompt budget";
+    case "config.skillBinding.references":
+      return "Skill references";
+    case "config.contextAccess":
+      return "Readable upstream nodes";
     default:
       return fieldPath || "Node field";
   }
@@ -337,6 +359,38 @@ function resolveNodeSuggestion(item: WorkflowValidationNavigatorItem, fieldPath:
 
   if (fieldPath.endsWith("toolId")) {
     return "把 tool id 改成当前 catalog 里仍存在、可调用且满足治理要求的工具；如果这个工具已经下线，应同步收敛 allow list / mock plan。";
+  }
+
+  if (fieldPath.startsWith("config.skillIds")) {
+    return "把 skillIds 对齐到当前可用的 SkillDoc；如需清理失效 id，可以直接删掉旧行再重新保存。";
+  }
+
+  if (fieldPath.startsWith("config.skillBinding.references")) {
+    return "请用 skillId:referenceId @ phase1,phase2 的格式列出引用，并确保 skillId 已在 skillIds 中、referenceId 仍存在；不需要 phase 时可以省略 @。";
+  }
+
+  if (fieldPath.startsWith("config.skillBinding.enabledPhases")) {
+    return "仅保留 main_plan / assistant_distill / main_finalize 这些有效 phase，其他文本都会被视为无效配置。";
+  }
+
+  if (fieldPath.startsWith("config.skillBinding.promptBudgetChars")) {
+    return "将 prompt budget 调整为正整数，或留空回退到默认预算。";
+  }
+
+  if (fieldPath === "config.skillBinding") {
+    return "先修正 phase、prompt budget 与引用列表，再继续保存，避免 skill binding 主链继续漂移。";
+  }
+
+  if (fieldPath.startsWith("config.contextAccess.readableNodeIds")) {
+    return "只勾选仍存在的上游节点，并同步清理被删除节点的可见性；需要新增可见源时再显式打开。";
+  }
+
+  if (fieldPath.startsWith("config.contextAccess.readableArtifacts")) {
+    return "仅在确实需要读取 text/json/file/tool_result/message 等额外产物时才勾选对应类型，避免无谓的上下文扩散。";
+  }
+
+  if (fieldPath === "config.contextAccess") {
+    return "对 readable nodes 和 artifact grants 逐一核对，确认全部来源都已显式授权后再继续保存。";
   }
 
   return item.category === "tool_execution"

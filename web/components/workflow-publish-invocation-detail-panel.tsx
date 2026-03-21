@@ -23,6 +23,7 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationSkillTraceSurface,
   buildPublishedInvocationRecommendedNextStep,
+  formatPublishedInvocationPayloadPreview,
   buildBlockingPublishedInvocationInboxHref,
   buildPublishedInvocationInboxHref,
   formatPublishedInvocationMissingToolCatalogEntry,
@@ -55,10 +56,6 @@ type WorkflowPublishInvocationDetailPanelProps = {
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
-
-function formatJsonPreview(value: unknown): string {
-  return JSON.stringify(value ?? null, null, 2);
-}
 export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref,
@@ -230,11 +227,15 @@ export function WorkflowPublishInvocationDetailPanel({
           <p className="section-copy entry-copy">
             {formatPublishedInvocationRequestKeysSummary(invocation.request_preview.keys ?? [])}
           </p>
-          <pre className="trace-preview">{formatJsonPreview(invocation.request_preview)}</pre>
+          <pre className="trace-preview">
+            {formatPublishedInvocationPayloadPreview(invocation.request_preview)}
+          </pre>
         </div>
         <div>
           <strong>{detailSurfaceCopy.responsePreviewTitle}</strong>
-          <pre className="trace-preview">{formatJsonPreview(invocation.response_preview)}</pre>
+          <pre className="trace-preview">
+            {formatPublishedInvocationPayloadPreview(invocation.response_preview)}
+          </pre>
         </div>
       </div>
 
