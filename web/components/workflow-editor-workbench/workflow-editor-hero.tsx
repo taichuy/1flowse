@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { WorkflowPersistBlocker } from "./persist-blockers";
 
@@ -106,15 +107,22 @@ export function WorkflowEditorHero({
           ) : null}
         </div>
         <div className="hero-actions">
-          <Link className="inline-link" href="/">
-            返回系统首页
-          </Link>
-          <Link className="inline-link secondary" href={createWorkflowHref}>
-            新建 workflow
-          </Link>
-          <Link className="inline-link secondary" href={workspaceStarterLibraryHref}>
-            管理 workspace starters
-          </Link>
+          <WorkbenchEntryLinks
+            keys={["workflowLibrary", "home", "createWorkflow", "workspaceStarterLibrary"]}
+            overrides={{
+              workflowLibrary: {
+                label: "回到 workflow 列表"
+              },
+              createWorkflow: {
+                href: createWorkflowHref
+              },
+              workspaceStarterLibrary: {
+                href: workspaceStarterLibraryHref
+              }
+            }}
+            primaryKey="workflowLibrary"
+            variant="inline"
+          />
           <button className="sync-button" type="button" onClick={onSave} disabled={isSaving}>
             {isSaving ? "保存中..." : "保存 workflow"}
           </button>

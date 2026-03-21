@@ -5,6 +5,7 @@ import { CredentialStorePanel } from "@/components/credential-store-panel";
 import { PluginRegistryPanel } from "@/components/plugin-registry-panel";
 import { SandboxReadinessPanel } from "@/components/sandbox-readiness-panel";
 import { StatusCard } from "@/components/status-card";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowToolBindingPanel } from "@/components/workflow-tool-binding-panel";
 import { getCredentials } from "@/lib/get-credentials";
@@ -65,6 +66,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </span>
             ))}
           </div>
+          <WorkbenchEntryLinks keys={["workflowLibrary", "runLibrary", "operatorInbox"]} />
         </div>
         <div className="hero-panel">
           <div className="panel-label">Environment</div>
@@ -186,9 +188,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="section-copy entry-copy">
               审批、拒绝和通知状态复盘现在有了统一收件箱，不必再只靠 blocked-card 或后端接口列表排查。
             </p>
-            <Link className="inline-link" href="/sensitive-access?status=pending">
-              打开敏感访问收件箱
-            </Link>
+            <WorkbenchEntryLinks
+              keys={["operatorInbox"]}
+              overrides={{
+                operatorInbox: {
+                  href: "/sensitive-access?status=pending",
+                  label: "打开待处理收件箱"
+                }
+              }}
+              primaryKey="operatorInbox"
+              variant="inline"
+            />
           </div>
         </article>
       </section>
@@ -205,12 +215,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 最小 `xyflow` 编辑器已经接上 workflow definition，可直接进入画布编辑节点、
                 连线和基础 metadata，再保存回后端版本链路。
               </p>
-              <Link className="inline-link" href="/workflows/new">
-                新建 workflow
-              </Link>
-              <Link className="inline-link secondary" href="/workspace-starters">
-                管理 workspace starters
-              </Link>
+              <WorkbenchEntryLinks
+                keys={["workflowLibrary", "createWorkflow", "workspaceStarterLibrary"]}
+                primaryKey="workflowLibrary"
+                variant="inline"
+              />
             </div>
           </div>
 

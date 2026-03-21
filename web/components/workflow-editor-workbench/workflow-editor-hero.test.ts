@@ -101,6 +101,7 @@ describe("WorkflowEditorHero", () => {
     );
 
     expect(html).toContain("当前 editor 继续保留 workspace starter 治理页的 query scope");
+    expect(html).toContain('/workflows');
     expect(html).toContain(
       "/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );

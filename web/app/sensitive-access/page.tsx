@@ -21,6 +21,7 @@ import {
   WAITING_STATUS_OPTIONS
 } from "@/components/sensitive-access-inbox-page-shared";
 import { SensitiveAccessInboxSliceForm } from "@/components/sensitive-access-inbox-slice-form";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import {
   getSensitiveAccessInboxSnapshot,
   type ApprovalTicketItem,
@@ -148,14 +149,14 @@ export default async function SensitiveAccessInboxPage({
             lifecycle 放到同一条 operator 主链里，减少“看得到阻断但处理动作还要四处跳”的排障成本。
           </p>
         </div>
-        <div className="hero-actions">
-          <Link className="ghost-button" href="/runs">
-            查看 run diagnostics
-          </Link>
-          <Link className="ghost-button" href="/workflows">
-            回到 workflows
-          </Link>
-        </div>
+        <WorkbenchEntryLinks
+          keys={["runLibrary", "workflowLibrary", "home"]}
+          overrides={{
+            workflowLibrary: {
+              label: "回到 workflows"
+            }
+          }}
+        />
       </section>
 
       <section className="diagnostics-layout">
