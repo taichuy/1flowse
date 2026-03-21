@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  fetchRunSnapshotWithContext,
+  fetchRunSnapshots,
   fetchRunSnapshot,
   normalizeOperatorRunFollowUp,
   normalizeOperatorRunSnapshot,
@@ -752,6 +754,228 @@ describe("fetchRunSnapshot", () => {
       executionFocusNodeName: "Tool A",
       executionFocusNodeType: "tool"
     });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetchRunSnapshotWithContext 会在 canonical run detail 下继续保留 sampled run 的 callback 与审批上下文", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/runs/run-context")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-ctx",
+          current_node_id: "approval_gate",
+          execution_focus_reason: "waiting_callback",
+          execution_focus_node: {
+            node_id: "approval_gate",
+            node_run_id: "node-run-ctx",
+            node_name: "Approval Gate",
+            node_type: "tool",
+            callback_waiting_explanation: {
+              primary_signal: "当前 run 已有 canonical callback waiting snapshot。",
+              follow_up: "仍需把 operator 带回 inbox slice。"
+            },
+            artifact_refs: [],
+            artifacts: [],
+            tool_calls: []
+          },
+          execution_focus_explanation: {
+            primary_signal: "执行焦点已经稳定定位到 approval_gate。",
+            follow_up: "下一步仍是回 inbox。"
+          },
+          execution_focus_skill_trace: null,
+          node_runs: [
+            {
+              node_id: "approval_gate",
+              waiting_reason: "waiting approval"
+            }
+          ]
+        });
+      }
+
+      if (url.endsWith("/api/runs/run-context/execution-view")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-ctx",
+          run_follow_up: {
+            affected_run_count: 1,
+            sampled_run_count: 1,
+            sampled_runs: [
+              {
+                run_id: "run-context",
+                callback_tickets: [
+                  {
+                    ticket: "callback-ticket-ctx",
+                    run_id: "run-context",
+                    node_run_id: "node-run-ctx",
+                    status: "pending",
+                    waiting_status: "waiting",
+                    tool_call_index: 0,
+                    created_at: "2026-03-20T10:00:00Z"
+                  }
+                ],
+                sensitive_access_entries: [
+                  {
+                    request: {
+                      id: "request-ctx",
+                      run_id: "run-context",
+                      node_run_id: "node-run-ctx"
+                    },
+                    approval_ticket: {
+                      id: "approval-ticket-ctx",
+                      access_request_id: "request-ctx",
+                      run_id: "run-context",
+                      node_run_id: "node-run-ctx",
+                      status: "pending",
+                      waiting_status: "waiting",
+                      created_at: "2026-03-20T10:00:00Z"
+                    },
+                    notifications: []
+                  }
+                ]
+              }
+            ]
+          }
+        });
+      }
+
+      throw new Error(`unexpected fetch url: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchRunSnapshotWithContext("run-context")).resolves.toMatchObject({
+      runId: "run-context",
+      snapshot: {
+        workflowId: "workflow-ctx",
+        currentNodeId: "approval_gate",
+        executionFocusNodeRunId: "node-run-ctx",
+        callbackWaitingExplanation: {
+          primary_signal: "当前 run 已有 canonical callback waiting snapshot。",
+          follow_up: "仍需把 operator 带回 inbox slice。"
+        }
+      },
+      callbackTickets: [
+        {
+          ticket: "callback-ticket-ctx"
+        }
+      ],
+      sensitiveAccessEntries: [
+        {
+          request: {
+            id: "request-ctx"
+          },
+          approval_ticket: {
+            id: "approval-ticket-ctx"
+          }
+        }
+      ]
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("fetchRunSnapshots 不再把 sampled run 的 callback 与审批上下文清空", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/runs/run-batch")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-batch",
+          current_node_id: "approval_gate",
+          execution_focus_reason: "waiting_callback",
+          execution_focus_node: {
+            node_id: "approval_gate",
+            node_run_id: "node-run-batch",
+            node_name: "Approval Gate",
+            node_type: "tool",
+            callback_waiting_explanation: {
+              primary_signal: "当前 run 仍在 waiting callback。",
+              follow_up: "需要继续保留 inbox context。"
+            },
+            artifact_refs: [],
+            artifacts: [],
+            tool_calls: []
+          },
+          execution_focus_explanation: null,
+          execution_focus_skill_trace: null,
+          node_runs: [
+            {
+              node_id: "approval_gate",
+              waiting_reason: "waiting approval"
+            }
+          ]
+        });
+      }
+
+      if (url.endsWith("/api/runs/run-batch/execution-view")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-batch",
+          run_follow_up: {
+            affected_run_count: 1,
+            sampled_run_count: 1,
+            sampled_runs: [
+              {
+                run_id: "run-batch",
+                callback_tickets: [
+                  {
+                    ticket: "callback-ticket-batch",
+                    run_id: "run-batch",
+                    node_run_id: "node-run-batch",
+                    status: "pending",
+                    waiting_status: "waiting",
+                    tool_call_index: 0,
+                    created_at: "2026-03-20T10:00:00Z"
+                  }
+                ],
+                sensitive_access_entries: [
+                  {
+                    request: {
+                      id: "request-batch",
+                      run_id: "run-batch",
+                      node_run_id: "node-run-batch"
+                    },
+                    approval_ticket: {
+                      id: "approval-ticket-batch",
+                      access_request_id: "request-batch",
+                      run_id: "run-batch",
+                      node_run_id: "node-run-batch",
+                      status: "pending",
+                      waiting_status: "waiting",
+                      created_at: "2026-03-20T10:00:00Z"
+                    },
+                    notifications: []
+                  }
+                ]
+              }
+            ]
+          }
+        });
+      }
+
+      throw new Error(`unexpected fetch url: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchRunSnapshots(["run-batch"]))
+      .resolves.toMatchObject([
+        {
+          runId: "run-batch",
+          callbackTickets: [
+            {
+              ticket: "callback-ticket-batch"
+            }
+          ],
+          sensitiveAccessEntries: [
+            {
+              approval_ticket: {
+                id: "approval-ticket-batch"
+              }
+            }
+          ]
+        }
+      ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

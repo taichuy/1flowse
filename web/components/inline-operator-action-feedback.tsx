@@ -5,6 +5,7 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import type { RunCallbackTicketItem } from "@/lib/get-run-views";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
   buildExecutionFocusExplainableNode,
@@ -33,6 +34,7 @@ type InlineOperatorActionFeedbackProps = {
   recommendedNextStep?: OperatorRecommendedNextStep | null;
   callbackWaitingSummaryProps?: {
     inboxHref?: string | null;
+    callbackTickets?: RunCallbackTicketItem[];
     sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
     showSensitiveAccessInlineActions?: boolean;
   };
@@ -225,6 +227,7 @@ export function InlineOperatorActionFeedback({
       {hasCallbackWaitingSummary ? (
         <CallbackWaitingSummaryCard
           callbackWaitingExplanation={runSnapshot?.callbackWaitingExplanation ?? null}
+          callbackTickets={callbackWaitingSummaryProps?.callbackTickets}
           lifecycle={runSnapshot?.callbackWaitingLifecycle ?? null}
           focusNodeEvidence={callbackWaitingFocusNode}
           focusSkillReferenceCount={runSnapshot?.executionFocusSkillTrace?.reference_count ?? 0}

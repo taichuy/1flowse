@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -48,7 +48,7 @@ type WorkflowEditorSidebarProps = {
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
   run: RunDetail | null;
-  runSnapshot: RunSnapshot | null;
+  runSnapshot: RunSnapshotWithId | null;
   trace: RunTrace | null;
   traceError: string | null;
   selectedNodeId: string | null;

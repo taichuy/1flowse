@@ -86,6 +86,15 @@ export type RunSnapshotWithId = {
   sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
 };
 
+function createEmptyRunSnapshotWithId(runId: string): RunSnapshotWithId {
+  return {
+    runId,
+    snapshot: null,
+    callbackTickets: [],
+    sensitiveAccessEntries: []
+  };
+}
+
 export type OperatorRunSnapshotBody = {
   workflow_id?: string | null;
   status?: string | null;
@@ -808,6 +817,76 @@ function normalizeLegacyExecutionViewSnapshot(
   };
 }
 
+function mergeRunSnapshots(
+  runDetailSnapshot: RunSnapshot | null,
+  executionViewSnapshot: RunSnapshot | null
+): RunSnapshot | null {
+  if (!executionViewSnapshot) {
+    return runDetailSnapshot;
+  }
+
+  return {
+    status: runDetailSnapshot?.status ?? executionViewSnapshot.status ?? null,
+    workflowId: runDetailSnapshot?.workflowId ?? executionViewSnapshot.workflowId ?? null,
+    currentNodeId: runDetailSnapshot?.currentNodeId ?? executionViewSnapshot.currentNodeId ?? null,
+    waitingReason: runDetailSnapshot?.waitingReason ?? executionViewSnapshot.waitingReason ?? null,
+    executionFocusReason:
+      executionViewSnapshot.executionFocusReason ?? runDetailSnapshot?.executionFocusReason ?? null,
+    executionFocusNodeId:
+      executionViewSnapshot.executionFocusNodeId ?? runDetailSnapshot?.executionFocusNodeId ?? null,
+    executionFocusNodeRunId:
+      executionViewSnapshot.executionFocusNodeRunId ?? runDetailSnapshot?.executionFocusNodeRunId ?? null,
+    executionFocusNodeName:
+      executionViewSnapshot.executionFocusNodeName ?? runDetailSnapshot?.executionFocusNodeName ?? null,
+    executionFocusNodeType:
+      executionViewSnapshot.executionFocusNodeType ?? runDetailSnapshot?.executionFocusNodeType ?? null,
+    executionFocusExplanation:
+      executionViewSnapshot.executionFocusExplanation ??
+      runDetailSnapshot?.executionFocusExplanation ??
+      null,
+    callbackWaitingExplanation:
+      executionViewSnapshot.callbackWaitingExplanation ??
+      runDetailSnapshot?.callbackWaitingExplanation ??
+      null,
+    callbackWaitingLifecycle:
+      executionViewSnapshot.callbackWaitingLifecycle ??
+      runDetailSnapshot?.callbackWaitingLifecycle ??
+      null,
+    scheduledResumeDelaySeconds:
+      executionViewSnapshot.scheduledResumeDelaySeconds ??
+      runDetailSnapshot?.scheduledResumeDelaySeconds ??
+      null,
+    scheduledResumeReason:
+      executionViewSnapshot.scheduledResumeReason ?? runDetailSnapshot?.scheduledResumeReason ?? null,
+    scheduledResumeSource:
+      executionViewSnapshot.scheduledResumeSource ?? runDetailSnapshot?.scheduledResumeSource ?? null,
+    scheduledWaitingStatus:
+      executionViewSnapshot.scheduledWaitingStatus ?? runDetailSnapshot?.scheduledWaitingStatus ?? null,
+    scheduledResumeScheduledAt:
+      executionViewSnapshot.scheduledResumeScheduledAt ??
+      runDetailSnapshot?.scheduledResumeScheduledAt ??
+      null,
+    scheduledResumeDueAt:
+      executionViewSnapshot.scheduledResumeDueAt ?? runDetailSnapshot?.scheduledResumeDueAt ?? null,
+    scheduledResumeRequeuedAt:
+      executionViewSnapshot.scheduledResumeRequeuedAt ??
+      runDetailSnapshot?.scheduledResumeRequeuedAt ??
+      null,
+    scheduledResumeRequeueSource:
+      executionViewSnapshot.scheduledResumeRequeueSource ??
+      runDetailSnapshot?.scheduledResumeRequeueSource ??
+      null,
+    executionFocusArtifactCount: executionViewSnapshot.executionFocusArtifactCount ?? 0,
+    executionFocusArtifactRefCount: executionViewSnapshot.executionFocusArtifactRefCount ?? 0,
+    executionFocusToolCallCount: executionViewSnapshot.executionFocusToolCallCount ?? 0,
+    executionFocusRawRefCount: executionViewSnapshot.executionFocusRawRefCount ?? 0,
+    executionFocusArtifactRefs: executionViewSnapshot.executionFocusArtifactRefs ?? [],
+    executionFocusArtifacts: executionViewSnapshot.executionFocusArtifacts ?? [],
+    executionFocusToolCalls: executionViewSnapshot.executionFocusToolCalls ?? [],
+    executionFocusSkillTrace: executionViewSnapshot.executionFocusSkillTrace ?? null
+  };
+}
+
 export function resolveCanonicalOperatorRunSnapshot(input: {
   runId?: string | null;
   runSnapshot?: OperatorRunSnapshotBody | null;
@@ -855,6 +934,58 @@ async function fetchRunExecutionView(
   }
 }
 
+async function fetchRunDetailResponse(runId: string): Promise<RunDetailResponseBody | null> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/runs/${encodeURIComponent(runId)}`, {
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json().catch(() => null)) as RunDetailResponseBody | null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchRunSnapshotWithContext(
+  runId: string
+): Promise<RunSnapshotWithId | null> {
+  const normalizedRunId = runId.trim();
+  if (!normalizedRunId) {
+    return null;
+  }
+
+  const body = await fetchRunDetailResponse(normalizedRunId);
+  if (!body) {
+    return null;
+  }
+
+  const runDetailSnapshot = normalizeRunDetailSnapshot(body);
+  const executionView = await fetchRunExecutionView(normalizedRunId);
+  const executionViewSnapshot =
+    resolveCanonicalOperatorRunSnapshot({
+      runId: normalizedRunId,
+      runSnapshot: executionView?.run_snapshot,
+      runFollowUp: executionView?.run_follow_up
+    }) ?? normalizeLegacyExecutionViewSnapshot(executionView);
+  const snapshot = hasCanonicalRunDetailExecutionFocus(body)
+    ? runDetailSnapshot
+    : mergeRunSnapshots(runDetailSnapshot, executionViewSnapshot);
+  const followUpSample =
+    normalizeOperatorRunFollowUp(executionView?.run_follow_up)?.sampledRuns.find(
+      (item) => item.runId === normalizedRunId
+    ) ?? null;
+
+  return {
+    runId: normalizedRunId,
+    snapshot,
+    callbackTickets: followUpSample?.callbackTickets ?? [],
+    sensitiveAccessEntries: followUpSample?.sensitiveAccessEntries ?? []
+  };
+}
+
 export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | null> {
   const normalizedRunId = runId.trim();
   if (!normalizedRunId) {
@@ -862,14 +993,10 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/runs/${encodeURIComponent(normalizedRunId)}`, {
-      cache: "no-store"
-    });
-    if (!response.ok) {
+    const body = await fetchRunDetailResponse(normalizedRunId);
+    if (!body) {
       return null;
     }
-
-    const body = (await response.json().catch(() => null)) as RunDetailResponseBody | null;
     const runDetailSnapshot = normalizeRunDetailSnapshot(body);
     const executionView = hasCanonicalRunDetailExecutionFocus(body)
       ? null
@@ -885,85 +1012,7 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
       return runDetailSnapshot;
     }
 
-    if (executionViewSnapshot) {
-      return {
-        status: runDetailSnapshot?.status ?? executionViewSnapshot.status ?? null,
-        workflowId: runDetailSnapshot?.workflowId ?? executionViewSnapshot.workflowId ?? null,
-        currentNodeId: runDetailSnapshot?.currentNodeId ?? executionViewSnapshot.currentNodeId ?? null,
-        waitingReason:
-          runDetailSnapshot?.waitingReason ?? executionViewSnapshot.waitingReason ?? null,
-        executionFocusReason:
-          executionViewSnapshot.executionFocusReason ?? runDetailSnapshot?.executionFocusReason ?? null,
-        executionFocusNodeId:
-          executionViewSnapshot.executionFocusNodeId ?? runDetailSnapshot?.executionFocusNodeId ?? null,
-        executionFocusNodeRunId:
-          executionViewSnapshot.executionFocusNodeRunId ??
-          runDetailSnapshot?.executionFocusNodeRunId ??
-          null,
-        executionFocusNodeName:
-          executionViewSnapshot.executionFocusNodeName ??
-          runDetailSnapshot?.executionFocusNodeName ??
-          null,
-        executionFocusNodeType:
-          executionViewSnapshot.executionFocusNodeType ??
-          runDetailSnapshot?.executionFocusNodeType ??
-          null,
-        executionFocusExplanation:
-          executionViewSnapshot.executionFocusExplanation ??
-          runDetailSnapshot?.executionFocusExplanation ??
-          null,
-        callbackWaitingExplanation:
-          executionViewSnapshot.callbackWaitingExplanation ??
-          runDetailSnapshot?.callbackWaitingExplanation ??
-          null,
-        callbackWaitingLifecycle:
-          executionViewSnapshot.callbackWaitingLifecycle ??
-          runDetailSnapshot?.callbackWaitingLifecycle ??
-          null,
-        scheduledResumeDelaySeconds:
-          executionViewSnapshot.scheduledResumeDelaySeconds ??
-          runDetailSnapshot?.scheduledResumeDelaySeconds ??
-          null,
-        scheduledResumeReason:
-          executionViewSnapshot.scheduledResumeReason ??
-          runDetailSnapshot?.scheduledResumeReason ??
-          null,
-        scheduledResumeSource:
-          executionViewSnapshot.scheduledResumeSource ??
-          runDetailSnapshot?.scheduledResumeSource ??
-          null,
-        scheduledWaitingStatus:
-          executionViewSnapshot.scheduledWaitingStatus ??
-          runDetailSnapshot?.scheduledWaitingStatus ??
-          null,
-        scheduledResumeScheduledAt:
-          executionViewSnapshot.scheduledResumeScheduledAt ??
-          runDetailSnapshot?.scheduledResumeScheduledAt ??
-          null,
-        scheduledResumeDueAt:
-          executionViewSnapshot.scheduledResumeDueAt ??
-          runDetailSnapshot?.scheduledResumeDueAt ??
-          null,
-        scheduledResumeRequeuedAt:
-          executionViewSnapshot.scheduledResumeRequeuedAt ??
-          runDetailSnapshot?.scheduledResumeRequeuedAt ??
-          null,
-        scheduledResumeRequeueSource:
-          executionViewSnapshot.scheduledResumeRequeueSource ??
-          runDetailSnapshot?.scheduledResumeRequeueSource ??
-          null,
-        executionFocusArtifactCount: executionViewSnapshot.executionFocusArtifactCount ?? 0,
-        executionFocusArtifactRefCount: executionViewSnapshot.executionFocusArtifactRefCount ?? 0,
-        executionFocusToolCallCount: executionViewSnapshot.executionFocusToolCallCount ?? 0,
-        executionFocusRawRefCount: executionViewSnapshot.executionFocusRawRefCount ?? 0,
-        executionFocusArtifactRefs: executionViewSnapshot.executionFocusArtifactRefs ?? [],
-        executionFocusArtifacts: executionViewSnapshot.executionFocusArtifacts ?? [],
-        executionFocusToolCalls: executionViewSnapshot.executionFocusToolCalls ?? [],
-        executionFocusSkillTrace: executionViewSnapshot.executionFocusSkillTrace ?? null
-      };
-    }
-
-    return runDetailSnapshot;
+    return mergeRunSnapshots(runDetailSnapshot, executionViewSnapshot);
   } catch {
     return null;
   }
@@ -979,11 +1028,8 @@ export async function fetchRunSnapshots(
   ) as string[];
 
   return Promise.all(
-    normalizedRunIds.map(async (runId) => ({
-      runId,
-      snapshot: await fetchRunSnapshot(runId),
-      callbackTickets: [],
-      sensitiveAccessEntries: []
-    }))
+    normalizedRunIds.map(
+      async (runId) => (await fetchRunSnapshotWithContext(runId)) ?? createEmptyRunSnapshotWithId(runId)
+    )
   );
 }

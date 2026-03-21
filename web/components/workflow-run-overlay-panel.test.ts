@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import type { RunSnapshot, RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
@@ -151,8 +151,17 @@ function buildRunDetail(): RunDetail {
   };
 }
 
-function buildRunSnapshot(): RunSnapshot {
+function buildRunSnapshotModel(snapshot: RunSnapshot): RunSnapshotWithId {
   return {
+    runId: "run-1",
+    snapshot,
+    callbackTickets: [],
+    sensitiveAccessEntries: []
+  };
+}
+
+function buildRunSnapshot(): RunSnapshotWithId {
+  return buildRunSnapshotModel({
     status: "failed",
     workflowId: "workflow-1",
     currentNodeId: "tool_wait",
@@ -195,7 +204,7 @@ function buildRunSnapshot(): RunSnapshot {
       }
     ],
     executionFocusSkillTrace: null
-  };
+  });
 }
 
 describe("WorkflowRunOverlayPanel", () => {
@@ -248,5 +257,77 @@ describe("WorkflowRunOverlayPanel", () => {
     );
     const props = exportActionSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(props).not.toHaveProperty("blockedSummary");
+  });
+
+  it("preserves callback inbox context when overlay hydration carries callback tickets", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowRunOverlayPanel, {
+        runs: [
+          {
+            id: "run-1",
+            workflow_id: "workflow-1",
+            workflow_version: "v1",
+            status: "waiting",
+            started_at: "2026-03-20T10:00:00Z",
+            finished_at: null,
+            created_at: "2026-03-20T10:00:00Z",
+            node_run_count: 1,
+            event_count: 0,
+            last_event_at: null
+          }
+        ],
+        selectedRunId: "run-1",
+        run: buildRunDetail(),
+        runSnapshot: {
+          runId: "run-1",
+          snapshot: {
+            status: "waiting",
+            workflowId: "workflow-1",
+            currentNodeId: "approval_gate",
+            waitingReason: "waiting callback",
+            executionFocusReason: "waiting_callback",
+            executionFocusNodeId: "approval_gate",
+            executionFocusNodeRunId: "node-run-1",
+            executionFocusNodeName: "Approval Gate",
+            executionFocusNodeType: "tool",
+            callbackWaitingExplanation: {
+              primary_signal: "当前 callback waiting 仍需要 operator 回到 inbox。",
+              follow_up: "先打开 inbox slice，确认 callback ticket 处理进度。"
+            },
+            callbackWaitingLifecycle: null,
+            executionFocusArtifactCount: 0,
+            executionFocusArtifactRefCount: 0,
+            executionFocusToolCallCount: 0,
+            executionFocusRawRefCount: 0,
+            executionFocusArtifactRefs: [],
+            executionFocusArtifacts: [],
+            executionFocusToolCalls: [],
+            executionFocusSkillTrace: null
+          },
+          callbackTickets: [
+            {
+              ticket: "callback-ticket-1",
+              run_id: "run-1",
+              node_run_id: "node-run-1",
+              status: "pending",
+              waiting_status: "waiting",
+              tool_call_index: 0,
+              created_at: "2026-03-20T10:00:00Z"
+            }
+          ],
+          sensitiveAccessEntries: []
+        },
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoading: false,
+        isRefreshingRuns: false,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain("/sensitive-access?run_id=run-1&amp;node_run_id=node-run-1");
   });
 });

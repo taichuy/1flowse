@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 
-import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/get-run-trace";
 import type { WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import { buildOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
+import { buildOperatorRunSampleInboxHref } from "@/lib/operator-run-sample-cards";
 import { buildExecutionFocusSurfaceDescription } from "@/lib/run-execution-focus-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import {
@@ -27,7 +28,7 @@ type WorkflowRunOverlayPanelProps = {
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
   run: RunDetail | null;
-  runSnapshot: RunSnapshot | null;
+  runSnapshot: RunSnapshotWithId | null;
   trace: RunTrace | null;
   traceError?: string | null;
   selectedNodeId?: string | null;
@@ -52,12 +53,21 @@ export function WorkflowRunOverlayPanel({
   onSelectRunId,
   onRefreshRuns
 }: WorkflowRunOverlayPanelProps) {
+  const runSnapshotModel = runSnapshot?.snapshot ?? null;
   const selectedNodeRun =
     selectedNodeId && run
       ? run.node_runs.find((nodeRun) => nodeRun.node_id === selectedNodeId) ?? null
       : null;
   const tracePreview = trace?.events.slice(-6) ?? [];
-  const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshot);
+  const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshotModel);
+  const callbackWaitingSummaryProps = runSnapshot
+    ? {
+        inboxHref: buildOperatorRunSampleInboxHref(runSnapshot),
+        callbackTickets: runSnapshot.callbackTickets ?? [],
+        sensitiveAccessEntries: runSnapshot.sensitiveAccessEntries ?? [],
+        showSensitiveAccessInlineActions: false
+      }
+    : undefined;
   const runDrilldownLink = run
     ? buildOperatorRunDetailLinkSurface({
         runId: run.id,
@@ -169,7 +179,7 @@ export function WorkflowRunOverlayPanel({
                 </div>
               ) : null}
 
-              {runSnapshot ? (
+              {runSnapshotModel ? (
                 <div className="runtime-overlay-focus-card">
                   <p className="section-copy entry-copy">
                     {buildExecutionFocusSurfaceDescription("overlay")}
@@ -178,7 +188,8 @@ export function WorkflowRunOverlayPanel({
                     status="success"
                     message=""
                     runId={run.id}
-                    runSnapshot={runSnapshot}
+                    runSnapshot={runSnapshotModel}
+                    callbackWaitingSummaryProps={callbackWaitingSummaryProps}
                     title="Execution focus"
                   />
                   {sandboxReadinessNode ? (

@@ -56,7 +56,7 @@ function normalizeText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
-function buildOperatorRunSampleInboxHref(sample: RunSnapshotWithId) {
+export function buildOperatorRunSampleInboxHref(sample: RunSnapshotWithId) {
   const sensitiveAccessEntries = sample.sensitiveAccessEntries ?? [];
   const latestApprovalEntry = sensitiveAccessEntries.find((entry) => entry.approval_ticket) ?? null;
   if (latestApprovalEntry) {

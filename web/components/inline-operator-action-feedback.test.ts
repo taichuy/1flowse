@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
+import type { RunCallbackTicketItem } from "@/lib/get-run-views";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 
@@ -110,6 +111,17 @@ describe("InlineOperatorActionFeedback", () => {
 
   it("forwards callback waiting summary context to the shared summary card", () => {
     const inboxHref = "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1";
+    const callbackTickets: RunCallbackTicketItem[] = [
+      {
+        ticket: "callback-ticket-1",
+        run_id: "run-1",
+        node_run_id: "node-run-1",
+        status: "pending",
+        waiting_status: "waiting",
+        tool_call_index: 0,
+        created_at: "2026-03-20T10:00:00Z"
+      }
+    ];
     const html = renderToStaticMarkup(
       createElement(InlineOperatorActionFeedback, {
         status: "success",
@@ -130,6 +142,7 @@ describe("InlineOperatorActionFeedback", () => {
         },
         callbackWaitingSummaryProps: {
           inboxHref,
+          callbackTickets,
           sensitiveAccessEntries: [buildSensitiveAccessEntry()],
           showSensitiveAccessInlineActions: false
         }
@@ -143,6 +156,9 @@ describe("InlineOperatorActionFeedback", () => {
       ((callbackSummaryProps[0]?.sensitiveAccessEntries as SensitiveAccessTimelineEntry[] | undefined) ?? [])[0]
         ?.request.id
     ).toBe("request-1");
+    expect(
+      ((callbackSummaryProps[0]?.callbackTickets as RunCallbackTicketItem[] | undefined) ?? [])[0]?.ticket
+    ).toBe("callback-ticket-1");
     expect(callbackSummaryProps[0]?.showSensitiveAccessInlineActions).toBe(false);
   });
 });
