@@ -111,6 +111,7 @@ export function WorkspaceStarterLibrary({
           sourceGovernanceKind={sourceGovernanceKind}
           needsFollowUp={needsFollowUp}
           searchQuery={searchQuery}
+          createWorkflowHref={createWorkflowHref}
           activeTemplateCount={activeTemplateCount}
           archivedTemplateCount={archivedTemplateCount}
           templateToolGovernanceById={templateToolGovernanceById}

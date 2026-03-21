@@ -1,9 +1,8 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 
-import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { WorkflowPersistBlocker } from "./persist-blockers";
 
@@ -180,15 +179,23 @@ export function WorkflowEditorHero({
           <p className="panel-text">
             当前 editor 继续保留 workspace starter 治理页的 query scope；可以
             {" "}
-            <Link className="inline-link secondary" href={workspaceStarterLibraryHref}>
+            <WorkbenchEntryLink
+              className="inline-link secondary"
+              linkKey="workspaceStarterLibrary"
+              override={{ href: workspaceStarterLibraryHref }}
+            >
               回到治理页
-            </Link>
+            </WorkbenchEntryLink>
             {" "}
             继续 follow-up，或在同一范围内
             {" "}
-            <Link className="inline-link secondary" href={createWorkflowHref}>
+            <WorkbenchEntryLink
+              className="inline-link secondary"
+              linkKey="createWorkflow"
+              override={{ href: createWorkflowHref }}
+            >
               再新建一个 workflow
-            </Link>
+            </WorkbenchEntryLink>
             。
           </p>
         ) : null}

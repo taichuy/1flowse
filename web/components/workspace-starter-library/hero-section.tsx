@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 
 import { getWorkflowBusinessTrack, WORKFLOW_BUSINESS_TRACKS } from "@/lib/workflow-business-tracks";
 
@@ -45,12 +45,17 @@ export function WorkspaceStarterHeroSection({
           <span className="pill">{missingToolTemplateCount} missing tool starters</span>
         </div>
         <div className="hero-actions">
-          <Link className="inline-link" href={createWorkflowHref}>
-            返回创建页
-          </Link>
-          <Link className="inline-link secondary" href="/">
-            返回系统首页
-          </Link>
+          <WorkbenchEntryLinks
+            keys={["createWorkflow", "home"]}
+            overrides={{
+              createWorkflow: {
+                href: createWorkflowHref,
+                label: "返回创建页"
+              }
+            }}
+            primaryKey="createWorkflow"
+            variant="inline"
+          />
         </div>
       </div>
 

@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  WorkbenchEntryLink,
   WorkbenchEntryLinks,
+  resolveWorkbenchEntryLink,
   resolveWorkbenchEntryLinks
 } from "@/components/workbench-entry-links";
 
@@ -57,5 +59,35 @@ describe("workbench entry links", () => {
     expect(html).toContain("打开待处理收件箱");
     expect(html).toContain('/sensitive-access?status=pending');
     expect(html).toContain('/workflows');
+  });
+
+  it("resolves and renders a single inline entry for prose-level follow-up", () => {
+    expect(
+      resolveWorkbenchEntryLink("workspaceStarterLibrary", {
+        href: "/workspace-starters?needs_follow_up=true",
+        label: "回到治理页"
+      })
+    ).toEqual({
+      key: "workspaceStarterLibrary",
+      href: "/workspace-starters?needs_follow_up=true",
+      label: "回到治理页"
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(
+        WorkbenchEntryLink,
+        {
+          linkKey: "createWorkflow",
+          className: "inline-link secondary",
+          override: {
+            href: "/workflows/new?needs_follow_up=true&starter=starter-1"
+          }
+        },
+        "带此 starter 回到创建页"
+      )
+    );
+
+    expect(html).toContain("带此 starter 回到创建页");
+    expect(html).toContain('/workflows/new?needs_follow_up=true&amp;starter=starter-1');
   });
 });

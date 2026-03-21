@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 
+import { WorkbenchEntryLink } from "@/components/workbench-entry-links";
 import {
   WORKFLOW_BUSINESS_TRACKS,
   type WorkflowBusinessTrack
@@ -206,9 +207,13 @@ export function WorkspaceStarterMetadataPanel({
                     {isMutating ? "处理中..." : "归档模板"}
                   </button>
                   {createWorkflowHref ? (
-                    <Link className="inline-link secondary" href={createWorkflowHref}>
+                    <WorkbenchEntryLink
+                      className="inline-link secondary"
+                      linkKey="createWorkflow"
+                      override={{ href: createWorkflowHref }}
+                    >
                       带此 starter 回到创建页
-                    </Link>
+                    </WorkbenchEntryLink>
                   ) : (
                     <span className="binding-meta">
                       当前 starter 已归档；恢复后才会重新出现在创建页。

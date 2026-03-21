@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
@@ -236,12 +237,20 @@ export function WorkflowCreateWizard({
               这通常说明你是从 workspace starter 治理页带着 follow-up / 搜索条件回来，但当前范围里没有仍可直接创建的 active starter。
             </p>
             <div className="hero-actions">
-              <Link className="inline-link" href={starterGovernanceHref}>
-                返回治理页调整范围
-              </Link>
-              <Link className="inline-link secondary" href="/workflows/new">
-                清除筛选并查看全部 starter
-              </Link>
+              <WorkbenchEntryLinks
+                keys={["workspaceStarterLibrary", "createWorkflow"]}
+                overrides={{
+                  workspaceStarterLibrary: {
+                    href: starterGovernanceHref,
+                    label: "返回治理页调整范围"
+                  },
+                  createWorkflow: {
+                    label: "清除筛选并查看全部 starter"
+                  }
+                }}
+                primaryKey="workspaceStarterLibrary"
+                variant="inline"
+              />
             </div>
           </div>
 
@@ -284,12 +293,16 @@ export function WorkflowCreateWizard({
             <span className="pill">{workflows.length} existing workflows</span>
           </div>
           <div className="hero-actions">
-            <Link className="inline-link" href="/">
-              返回系统首页
-            </Link>
-            <Link className="inline-link secondary" href="/workspace-starters">
-              管理 workspace starters
-            </Link>
+            <WorkbenchEntryLinks
+              keys={["home", "workspaceStarterLibrary"]}
+              overrides={{
+                workspaceStarterLibrary: {
+                  href: starterGovernanceHref
+                }
+              }}
+              primaryKey="home"
+              variant="inline"
+            />
             {workflows[0] ? (
               <Link
                 className="inline-link secondary"

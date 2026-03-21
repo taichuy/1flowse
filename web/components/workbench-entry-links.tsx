@@ -35,8 +35,10 @@ type WorkbenchEntryLinkDefinition = {
   label: string;
 };
 
+type WorkbenchEntryLinkOverride = Partial<WorkbenchEntryLinkDefinition>;
+
 type WorkbenchEntryLinkOverrides = Partial<
-  Record<WorkbenchEntryLinkKey, Partial<WorkbenchEntryLinkDefinition>>
+  Record<WorkbenchEntryLinkKey, WorkbenchEntryLinkOverride>
 >;
 
 type WorkbenchEntryLinksProps = {
@@ -46,15 +48,44 @@ type WorkbenchEntryLinksProps = {
   primaryKey?: WorkbenchEntryLinkKey;
 };
 
+type WorkbenchEntryLinkProps = {
+  linkKey: WorkbenchEntryLinkKey;
+  override?: WorkbenchEntryLinkOverride;
+  className?: string;
+  children?: React.ReactNode;
+};
+
+export function resolveWorkbenchEntryLink(
+  key: WorkbenchEntryLinkKey,
+  override: WorkbenchEntryLinkOverride = {}
+) {
+  return {
+    key,
+    href: override.href ?? WORKBENCH_ENTRY_LINK_REGISTRY[key].href,
+    label: override.label ?? WORKBENCH_ENTRY_LINK_REGISTRY[key].label
+  };
+}
+
 export function resolveWorkbenchEntryLinks(
   keys: WorkbenchEntryLinkKey[],
   overrides: WorkbenchEntryLinkOverrides = {}
 ) {
-  return keys.map((key) => ({
-    key,
-    href: overrides[key]?.href ?? WORKBENCH_ENTRY_LINK_REGISTRY[key].href,
-    label: overrides[key]?.label ?? WORKBENCH_ENTRY_LINK_REGISTRY[key].label
-  }));
+  return keys.map((key) => resolveWorkbenchEntryLink(key, overrides[key]));
+}
+
+export function WorkbenchEntryLink({
+  linkKey,
+  override,
+  className = "inline-link",
+  children
+}: WorkbenchEntryLinkProps) {
+  const link = resolveWorkbenchEntryLink(linkKey, override);
+
+  return (
+    <Link className={className} href={link.href}>
+      {children ?? link.label}
+    </Link>
+  );
 }
 
 export function WorkbenchEntryLinks({

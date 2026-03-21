@@ -1,10 +1,18 @@
-import { createElement } from "react";
+import * as React from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 
 import { WorkspaceStarterTemplateListPanel } from "./template-list-panel";
+
+Object.assign(globalThis, { React });
+
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
+}));
 
 describe("WorkspaceStarterTemplateListPanel", () => {
   it("surfaces source governance directly on starter cards", () => {
@@ -63,6 +71,7 @@ describe("WorkspaceStarterTemplateListPanel", () => {
         sourceGovernanceKind: "all",
         needsFollowUp: false,
         searchQuery: "",
+        createWorkflowHref: "/workflows/new",
         activeTemplateCount: 1,
         archivedTemplateCount: 0,
         templateToolGovernanceById: new Map(),
@@ -106,5 +115,45 @@ describe("WorkspaceStarterTemplateListPanel", () => {
     expect(html).toContain("全部治理状态");
     expect(html).toContain("仅显示需要 follow-up 的 starter");
     expect(html).toContain("后端 summary 已把当前范围里的 follow-up queue 编成统一清单");
+  });
+
+  it("reuses the shared create entry contract in the empty state CTA", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceStarterTemplateListPanel, {
+        templates: [],
+        filteredTemplates: [],
+        selectedTemplateId: null,
+        activeTrack: "all",
+        archiveFilter: "active",
+        sourceGovernanceKind: "drifted",
+        needsFollowUp: true,
+        searchQuery: " sandbox ",
+        createWorkflowHref:
+          "/workflows/new?needs_follow_up=true&q=sandbox&source_governance_kind=drifted",
+        activeTemplateCount: 0,
+        archivedTemplateCount: 0,
+        templateToolGovernanceById: new Map(),
+        bulkPreview: null,
+        bulkPreviewNotice: null,
+        isBulkMutating: false,
+        isLoadingBulkPreview: false,
+        isLoadingSourceGovernanceScope: false,
+        lastBulkResult: null,
+        sourceGovernanceScope: null,
+        onTrackChange: () => {},
+        onArchiveFilterChange: () => {},
+        onSourceGovernanceKindChange: () => {},
+        onNeedsFollowUpChange: () => {},
+        onSearchQueryChange: () => {},
+        onSelectTemplate: () => {},
+        onFocusTemplate: () => {},
+        onBulkAction: () => {}
+      })
+    );
+
+    expect(html).toContain("去创建第一个 starter");
+    expect(html).toContain(
+      '/workflows/new?needs_follow_up=true&amp;q=sandbox&amp;source_governance_kind=drifted'
+    );
   });
 });

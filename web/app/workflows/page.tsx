@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { getWorkflows, type WorkflowListItem } from "@/lib/get-workflows";
 import { formatCountMap } from "@/lib/runtime-presenters";
@@ -61,9 +60,9 @@ export default async function WorkflowsPage() {
               <p className="empty-state">
                 当前还没有可编辑的 workflow。现在可以从 workspace starter 或新建向导继续补主链，而不用再回退到 API 层手工创建。
               </p>
-              <Link className="inline-link" href="/workflows/new">
+              <WorkbenchEntryLink className="inline-link" linkKey="createWorkflow">
                 进入新建向导
-              </Link>
+              </WorkbenchEntryLink>
             </div>
           ) : (
             <div className="workflow-chip-row">

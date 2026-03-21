@@ -239,4 +239,103 @@ describe("WorkflowCreateWizard", () => {
       "/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );
   });
+
+  it("reuses the shared workbench entry contract in hero actions", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCreateWizard, {
+        catalogToolCount: 0,
+        workflows: [
+          {
+            id: "workflow-latest",
+            name: "Latest workflow",
+            status: "draft",
+            version: "0.1.0",
+            node_count: 1,
+            tool_governance: {
+              referenced_tool_ids: [],
+              missing_tool_ids: [],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            }
+          }
+        ],
+        searchQuery: " drift ",
+        sourceGovernanceKind: "drifted",
+        needsFollowUp: true,
+        starterSourceLanes: [],
+        nodeCatalog: [
+          {
+            type: "trigger",
+            label: "Trigger",
+            description: "Trigger node",
+            ecosystem: "native",
+            source: {
+              kind: "node",
+              scope: "builtin",
+              status: "available",
+              governance: "repo",
+              ecosystem: "native",
+              label: "Native node catalog",
+              shortLabel: "native nodes",
+              summary: "Native nodes"
+            },
+            capabilityGroup: "entry",
+            businessTrack: "应用新建编排",
+            tags: [],
+            supportStatus: "available",
+            supportSummary: "",
+            bindingRequired: false,
+            bindingSourceLanes: [],
+            palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
+            defaults: { name: "Trigger", config: {} }
+          }
+        ],
+        tools: [],
+        starters: [
+          {
+            id: "workspace-starter-1",
+            origin: "workspace",
+            workspaceId: "default",
+            name: "Governed Workspace Starter",
+            description: "Starter with source governance follow-up.",
+            businessTrack: "应用新建编排",
+            defaultWorkflowName: "Governed Workflow",
+            workflowFocus: "Keep source-aligned starter facts visible before creating.",
+            recommendedNextStep: "Create the draft after reviewing source governance.",
+            tags: ["workspace starter"],
+            definition: {
+              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              edges: [],
+              variables: [],
+              publish: []
+            },
+            source: {
+              kind: "starter",
+              scope: "workspace",
+              status: "available",
+              governance: "workspace",
+              ecosystem: "native",
+              label: "Workspace starters",
+              shortLabel: "workspace ready",
+              summary: "Workspace starter library"
+            },
+            archived: false,
+            sourceGovernance: {
+              kind: "drifted",
+              statusLabel: "建议 refresh",
+              summary: "当前主要是来源快照漂移。优先 refresh 同步最新 definition / version。"
+            }
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain("返回系统首页");
+    expect(html).toContain('href="/"');
+    expect(html).toContain("管理 workspace starters");
+    expect(html).toContain(
+      '/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
+    expect(html).toContain('href="/workflows/workflow-latest"');
+  });
 });

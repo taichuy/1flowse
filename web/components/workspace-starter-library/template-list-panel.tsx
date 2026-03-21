@@ -1,6 +1,6 @@
 import React from "react";
-import Link from "next/link";
 
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import {
   WorkspaceStarterBulkGovernanceCard,
 } from "@/components/workspace-starter-library/bulk-governance-card";
@@ -37,6 +37,7 @@ type WorkspaceStarterTemplateListPanelProps = {
   sourceGovernanceKind: SourceGovernanceFilter;
   needsFollowUp: boolean;
   searchQuery: string;
+  createWorkflowHref: string;
   activeTemplateCount: number;
   archivedTemplateCount: number;
   templateToolGovernanceById: Map<string, WorkflowDefinitionToolGovernance>;
@@ -66,6 +67,7 @@ export function WorkspaceStarterTemplateListPanel({
   sourceGovernanceKind,
   needsFollowUp,
   searchQuery,
+  createWorkflowHref,
   activeTemplateCount,
   archivedTemplateCount,
   templateToolGovernanceById,
@@ -251,9 +253,17 @@ export function WorkspaceStarterTemplateListPanel({
             当前筛选条件下还没有 workspace starter。可以先回到创建页新建 workflow，
             再从 editor 保存一个模板进入治理库。
           </p>
-          <Link className="inline-link" href="/workflows/new">
-            去创建第一个 starter
-          </Link>
+          <WorkbenchEntryLinks
+            keys={["createWorkflow"]}
+            overrides={{
+              createWorkflow: {
+                href: createWorkflowHref,
+                label: "去创建第一个 starter"
+              }
+            }}
+            primaryKey="createWorkflow"
+            variant="inline"
+          />
         </div>
       ) : (
         <div className="starter-grid">
