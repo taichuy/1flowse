@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildAuthorFacingRunDetailLinkSurface,
   buildRunDetailExecutionFocusSurfaceCopy,
   buildRunDiagnosticsOperatorFollowUpSurfaceCopy,
   buildRunLibrarySurfaceCopy,
@@ -13,6 +14,22 @@ import {
 } from "@/lib/workbench-entry-surfaces";
 
 describe("workbench entry surface copy", () => {
+  it("reuses the operator run-detail contract for author-facing run links", () => {
+    expect(buildAuthorFacingRunDetailLinkSurface({ runId: "run-1" })).toEqual({
+      href: "/runs/run-1",
+      label: "查看 run 诊断面板"
+    });
+    expect(
+      buildAuthorFacingRunDetailLinkSurface({
+        runId: "run-1",
+        variant: "latest"
+      })
+    ).toEqual({
+      href: "/runs/run-1",
+      label: "打开最新 run 诊断面板"
+    });
+  });
+
   it("keeps the run library operator follow-up on the shared inbox contract", () => {
     const surfaceCopy = buildRunLibrarySurfaceCopy();
 

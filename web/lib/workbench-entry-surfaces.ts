@@ -1,5 +1,15 @@
-import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
+import {
+  buildRequiredOperatorRunDetailLinkSurface,
+  type OperatorFollowUpLinkSurface
+} from "@/lib/operator-follow-up-presenters";
 import type { WorkbenchEntryLinksConfig } from "@/lib/workbench-entry-links";
+
+export type AuthorFacingRunDetailLinkVariant = "activity" | "latest";
+
+const authorFacingRunDetailLinkLabels: Record<AuthorFacingRunDetailLinkVariant, string> = {
+  activity: "查看 run 诊断面板",
+  latest: "打开最新 run 诊断面板"
+};
 
 export type RunLibrarySurfaceCopy = {
   heroDescription: string;
@@ -102,6 +112,19 @@ export function buildRunLibrarySurfaceCopy(): RunLibrarySurfaceCopy {
       variant: "inline"
     }
   };
+}
+
+export function buildAuthorFacingRunDetailLinkSurface({
+  runId,
+  variant = "activity"
+}: {
+  runId: string;
+  variant?: AuthorFacingRunDetailLinkVariant;
+}): OperatorFollowUpLinkSurface {
+  return buildRequiredOperatorRunDetailLinkSurface({
+    runId,
+    hrefLabel: authorFacingRunDetailLinkLabels[variant]
+  });
 }
 
 export function buildWorkflowLibrarySurfaceCopy(): WorkflowLibrarySurfaceCopy {

@@ -5,13 +5,13 @@ import {
   WorkbenchEntryLink,
   WorkbenchEntryLinks
 } from "@/components/workbench-entry-links";
-import { buildRunLibrarySurfaceCopy } from "@/lib/workbench-entry-surfaces";
+import {
+  buildAuthorFacingRunDetailLinkSurface,
+  buildRunLibrarySurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { formatCountMap, formatTimestamp } from "@/lib/runtime-presenters";
-import {
-  buildRunDetailHref,
-  buildWorkflowDetailHref
-} from "@/lib/workbench-links";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 export const metadata: Metadata = {
   title: "Runs | 7Flows Studio"
@@ -22,6 +22,12 @@ export default async function RunsPage() {
   const recentRuns = overview.runtime_activity.recent_runs;
   const activitySummary = overview.runtime_activity.summary;
   const latestRun = recentRuns[0] ?? null;
+  const latestRunDetailLink = latestRun
+    ? buildAuthorFacingRunDetailLinkSurface({
+        runId: latestRun.id,
+        variant: "latest"
+      })
+    : null;
   const surfaceCopy = buildRunLibrarySurfaceCopy();
 
   return (
@@ -67,33 +73,39 @@ export default async function RunsPage() {
                 <WorkbenchEntryLink className="inline-link" linkKey="workflowLibrary" />
               </div>
             ) : (
-              recentRuns.map((run) => (
-                <article className="activity-row" key={run.id}>
-                  <div className="activity-header">
-                    <div>
-                      <h3>{run.workflow_id}</h3>
-                      <p>
-                        run {run.id} · version {run.workflow_version}
-                      </p>
+              recentRuns.map((run) => {
+                const runDetailLink = buildAuthorFacingRunDetailLinkSurface({
+                  runId: run.id
+                });
+
+                return (
+                  <article className="activity-row" key={run.id}>
+                    <div className="activity-header">
+                      <div>
+                        <h3>{run.workflow_id}</h3>
+                        <p>
+                          run {run.id} · version {run.workflow_version}
+                        </p>
+                      </div>
+                      <span className={`health-pill ${run.status}`}>{run.status}</span>
                     </div>
-                    <span className={`health-pill ${run.status}`}>{run.status}</span>
-                  </div>
-                  <p className="activity-copy">
-                    Created {formatTimestamp(run.created_at)} · events {run.event_count}
-                  </p>
-                  <div className="section-actions">
-                    <Link className="activity-link" href={buildRunDetailHref(run.id)}>
-                      查看 run 诊断面板
-                    </Link>
-                    <Link
-                      className="inline-link secondary"
-                      href={buildWorkflowDetailHref(run.workflow_id)}
-                    >
-                      回到 workflow 编辑器
-                    </Link>
-                  </div>
-                </article>
-              ))
+                    <p className="activity-copy">
+                      Created {formatTimestamp(run.created_at)} · events {run.event_count}
+                    </p>
+                    <div className="section-actions">
+                      <Link className="activity-link" href={runDetailLink.href}>
+                        {runDetailLink.label}
+                      </Link>
+                      <Link
+                        className="inline-link secondary"
+                        href={buildWorkflowDetailHref(run.workflow_id)}
+                      >
+                        回到 workflow 编辑器
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })
             )}
           </div>
         </article>
@@ -125,9 +137,9 @@ export default async function RunsPage() {
             <p className="entry-card-title">{surfaceCopy.operatorEntryTitle}</p>
             <p className="section-copy entry-copy">{surfaceCopy.operatorEntryDescription}</p>
             <WorkbenchEntryLinks {...surfaceCopy.operatorEntryLinks} />
-            {latestRun ? (
-              <Link className="inline-link secondary" href={buildRunDetailHref(latestRun.id)}>
-                打开最新 run 诊断面板
+            {latestRunDetailLink ? (
+              <Link className="inline-link secondary" href={latestRunDetailLink.href}>
+                {latestRunDetailLink.label}
               </Link>
             ) : null}
           </div>

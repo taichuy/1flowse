@@ -20,10 +20,8 @@ import {
   formatCountMap,
   formatTimestamp
 } from "@/lib/runtime-presenters";
-import {
-  buildRunDetailHref,
-  buildWorkflowDetailHref
-} from "@/lib/workbench-links";
+import { buildAuthorFacingRunDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 const highlights = [
   "Dify 风格的本地源码开发路径",
@@ -49,6 +47,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const recentRuns = overview.runtime_activity.recent_runs;
   const activitySummary = overview.runtime_activity.summary;
   const latestRun = recentRuns[0];
+  const latestRunDetailLink = latestRun
+    ? buildAuthorFacingRunDetailLinkSurface({
+        runId: latestRun.id,
+        variant: "latest"
+      })
+    : null;
   const pendingSensitiveEntries = sensitiveAccessInbox.entries
     .filter((entry) => entry.ticket.status === "pending")
     .slice(0, 3);
@@ -284,25 +288,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {recentRuns.length === 0 ? (
               <p className="empty-state">还没有历史 run，可先通过运行接口触发一次工作流执行。</p>
             ) : (
-              recentRuns.map((run) => (
-                <article className="activity-row" key={run.id}>
-                  <div className="activity-header">
-                    <div>
-                      <h3>{run.workflow_id}</h3>
-                      <p>
-                        run {run.id} · version {run.workflow_version}
-                      </p>
+              recentRuns.map((run) => {
+                const runDetailLink = buildAuthorFacingRunDetailLinkSurface({
+                  runId: run.id
+                });
+
+                return (
+                  <article className="activity-row" key={run.id}>
+                    <div className="activity-header">
+                      <div>
+                        <h3>{run.workflow_id}</h3>
+                        <p>
+                          run {run.id} · version {run.workflow_version}
+                        </p>
+                      </div>
+                      <span className={`health-pill ${run.status}`}>{run.status}</span>
                     </div>
-                    <span className={`health-pill ${run.status}`}>{run.status}</span>
-                  </div>
-                  <p className="activity-copy">
-                    Created {formatTimestamp(run.created_at)} · events {run.event_count}
-                  </p>
-                  <Link className="activity-link" href={buildRunDetailHref(run.id)}>
-                    查看 run 诊断面板
-                  </Link>
-                </article>
-              ))
+                    <p className="activity-copy">
+                      Created {formatTimestamp(run.created_at)} · events {run.event_count}
+                    </p>
+                    <Link className="activity-link" href={runDetailLink.href}>
+                      {runDetailLink.label}
+                    </Link>
+                  </article>
+                );
+              })
             )}
           </div>
         </article>
@@ -347,9 +357,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="section-copy entry-copy">
               从最近 run 进入独立诊断页后，可以继续看节点输入输出、错误信息和完整事件 payload。
             </p>
-            {latestRun ? (
-              <Link className="inline-link" href={buildRunDetailHref(latestRun.id)}>
-                打开最新 run 诊断面板
+            {latestRunDetailLink ? (
+              <Link className="inline-link" href={latestRunDetailLink.href}>
+                {latestRunDetailLink.label}
               </Link>
             ) : (
               <p className="empty-state compact">当前还没有可打开的 run 诊断记录。</p>
