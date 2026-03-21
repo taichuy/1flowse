@@ -31,7 +31,10 @@ import {
   buildOperatorInlineActionFeedbackModel,
   type OperatorInlineFocusArtifactPreview
 } from "@/lib/operator-inline-action-feedback";
-import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 import {
@@ -418,6 +421,7 @@ export function buildPublishedInvocationDetailSurfaceCopy({
   blockingNodeRunId?: string | null;
   focusSkillTraceNodeRunId?: string | null;
 } = {}): PublishedInvocationDetailSurfaceCopy {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const blockingApprovalTimelineCopy = buildSensitiveAccessTimelineSurfaceCopy({
     surface: "publish_blocking_invocation",
     blockingNodeRunId
@@ -455,17 +459,17 @@ export function buildPublishedInvocationDetailSurfaceCopy({
     sampledRunReasonExecutionFocusLabel: "execution focus",
     sampledRunReasonFallbackLabel: "run snapshot",
     sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
-    sampledRunSkillTraceTitle: "Focused skill trace",
+    sampledRunSkillTraceTitle: operatorSurfaceCopy.focusedSkillTraceTitle,
     sampledRunSkillTraceDescription:
       "publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。",
     sampledRunStatusLabel: "Status",
     sampledRunCurrentNodeLabel: "Current node",
     sampledRunWaitingReasonLabel: "Waiting reason",
-    recommendedNextStepTitle: "Recommended next step",
+    recommendedNextStepTitle: operatorSurfaceCopy.recommendedNextStepTitle,
     executionFocusTitle: "Execution focus",
     liveSandboxReadinessTitle: "Live sandbox readiness",
     skillTraceTitle: "Skill trace",
-    injectedReferencesTitle: "Injected references",
+    injectedReferencesTitle: operatorSurfaceCopy.injectedReferencesTitle,
     skillTraceDescription: focusSkillTraceNodeRunId?.trim()
       ? `当前 invocation 已接入 canonical skill trace；当前优先聚焦 execution focus 节点 ${focusSkillTraceNodeRunId.trim()}。`
       : "当前 invocation 已接入 canonical skill trace；发布入口和 run detail 现在共享同一条 trace 事实。",
@@ -507,11 +511,12 @@ export function buildPublishedCacheInventorySurfaceCopy({
 }
 
 export function buildPublishedInvocationCallbackDrilldownSurfaceCopy(): PublishedInvocationCallbackDrilldownSurfaceCopy {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   return {
     title: "Callback waiting drilldown",
     description:
       "Callback ticket lifecycle, approval blockers and resume scheduling stay together here so published-surface debugging does not need to jump between run detail, inbox and async tickets.",
-    inboxLinkLabel: "open inbox slice",
+    inboxLinkLabel: operatorSurfaceCopy.openInboxSliceLabel,
     blockersTitle: "Resume blockers",
     blockersEmptyHeadline: "Callback waiting is not active.",
     latestEventsTitle: "Latest callback events",
@@ -582,6 +587,7 @@ export function buildPublishedInvocationTrafficTimelineBucketSurface({
 }
 
 export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationEntrySurfaceCopy {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   return {
     waitingOverviewTitle: "Waiting overview",
     canonicalFollowUpTitle: "Canonical follow-up",
@@ -607,10 +613,10 @@ export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationE
     canonicalFollowUpStatusChipPrefix: "status",
     liveSandboxReadinessTitle: "Live sandbox readiness",
     sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
-    sampledRunSkillTraceTitle: "Focused skill trace",
+    sampledRunSkillTraceTitle: operatorSurfaceCopy.focusedSkillTraceTitle,
     sampledRunSkillTraceDescription:
       "发布活动卡片现在也会复用 compact snapshot 里的 skill trace，方便直接确认 sampled run 的 focus node 注入来源。",
-    recommendedNextStepTitle: "Recommended next step",
+    recommendedNextStepTitle: operatorSurfaceCopy.recommendedNextStepTitle,
     callbackLifecycleFallback: "tracked in detail panel",
     succeededDescription:
       "该请求已经走完整条 publish 调用链，run 已结束，可以直接对照 response preview 做回放。",
@@ -1739,6 +1745,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   blockingInboxHref?: string | null;
   approvalInboxHref?: string | null;
 }): PublishedInvocationRecommendedNextStep | null {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   return buildOperatorRecommendedNextStep({
     callback: {
       active: Boolean(
@@ -1761,7 +1768,7 @@ export function buildPublishedInvocationRecommendedNextStep({
       label: "execution focus",
       detail: executionFocusFollowUp,
       href: runId ? `/runs/${encodeURIComponent(runId)}` : null,
-      href_label: runId ? "open run" : null,
+      href_label: runId ? operatorSurfaceCopy.openRunLabel : null,
       fallback_detail:
         "当前 invocation 已回接 canonical execution focus；优先打开 run 继续检查 focus node、runtime evidence 和 execution fallback / blocking 原因。"
     },

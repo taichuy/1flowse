@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 import {
+  buildSensitiveAccessBlockedRecommendedNextStep,
   buildSensitiveAccessBlockedSurfaceCopy,
   buildSensitiveAccessTimelineSurfaceCopy
 } from "@/lib/sensitive-access-presenters";
@@ -184,6 +186,39 @@ describe("sensitive access presenters", () => {
     ).toEqual({
       title: "Custom blocked title",
       summary: "Custom blocked summary"
+    });
+  });
+
+  it("复用共享 operator CTA labels，避免 sensitive access 入口 copy 再次漂移", () => {
+    const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
+    expect(
+      buildSensitiveAccessTimelineSurfaceCopy({
+        surface: "execution_node"
+      }).inboxLinkLabel
+    ).toBe(operatorSurfaceCopy.openInboxSliceLabel);
+
+    expect(
+      buildSensitiveAccessBlockedRecommendedNextStep({
+        inboxHref: "/sensitive-access/inbox",
+        runId: "run-1",
+        outcomeExplanation: {
+          primary_signal: "审批票据仍在等待处理。",
+          follow_up: "先处理审批票据，再重试导出。"
+        }
+      })
+    ).toMatchObject({
+      href: "/sensitive-access/inbox",
+      href_label: operatorSurfaceCopy.openInboxSliceLabel
+    });
+
+    expect(
+      buildSensitiveAccessBlockedRecommendedNextStep({
+        runId: "run-1"
+      })
+    ).toMatchObject({
+      href: "/runs/run-1",
+      href_label: operatorSurfaceCopy.openRunLabel
     });
   });
 });

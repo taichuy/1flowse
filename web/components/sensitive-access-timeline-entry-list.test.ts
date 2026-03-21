@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 
 const inlineFeedbackProps: Array<Record<string, unknown>> = [];
 const callbackSummaryProps: Array<Record<string, unknown>> = [];
@@ -133,6 +134,8 @@ function buildEntry(): SensitiveAccessTimelineEntry {
 }
 
 describe("SensitiveAccessTimelineEntryList", () => {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
   beforeEach(() => {
     inlineFeedbackProps.length = 0;
     callbackSummaryProps.length = 0;
@@ -232,9 +235,9 @@ describe("SensitiveAccessTimelineEntryList", () => {
       })
     );
 
-    expect(html).toContain("Recommended next step");
+    expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
     expect(html).toContain("approval blocker");
-    expect(html).toContain("open approval inbox");
+    expect(html).toContain(operatorSurfaceCopy.openInboxSliceLabel);
     expect(html).toContain("优先打开 run 查看恢复后的 focus 节点与最新执行证据。");
   });
 });

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SensitiveAccessInboxEntryCard } from "@/components/sensitive-access-inbox-entry-card";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import type { CallbackWaitingLifecycleSummary } from "@/lib/get-run-views";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -154,11 +155,13 @@ function buildCallbackLifecycle(
 }
 
 describe("SensitiveAccessInboxEntryCard", () => {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
   it("surfaces canonical execution runtime facts on the inbox focus card", () => {
     const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry: buildEntry() }));
 
     expect(html).toContain("当前 focus 节点仍需要 operator 审批");
-    expect(html).toContain("Recommended next step");
+    expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
     expect(html).toContain("current approval ticket");
     expect(html).toContain("effective sandbox");
     expect(html).toContain("executor tool:compat-adapter:dify-default");
@@ -182,9 +185,9 @@ describe("SensitiveAccessInboxEntryCard", () => {
 
     const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
 
-    expect(html).toContain("Recommended next step");
+    expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
     expect(html).toContain("focus node");
-    expect(html).toContain("slice to focus node");
+    expect(html).toContain(operatorSurfaceCopy.openInboxSliceLabel);
     expect(html).toContain("node_run_id=node-run-focus");
   });
 
@@ -366,7 +369,7 @@ describe("SensitiveAccessInboxEntryCard", () => {
 
     expect(html).toContain("当前 waiting 节点仍在等待 callback。");
     expect(html).toContain("优先观察定时恢复是否已重新排队。");
-    expect(html).toContain("Recommended next step");
+    expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
     expect(html).not.toContain("当前 focus 节点仍需要 operator 审批。");
     expect(html).not.toContain("优先处理 inbox 当前票据。");
     expect(html).toContain("Waiting node focus evidence");

@@ -7,6 +7,7 @@ import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 import type { RunExecutionNodeItem, RunExecutionSkillTrace, RunExecutionView } from "@/lib/get-run-views";
 
 vi.mock("@/components/callback-waiting-summary-card", () => ({
@@ -410,6 +411,8 @@ function buildExecutionView(): RunExecutionView {
 }
 
 describe("RunDiagnosticsExecutionOverviewBlockers", () => {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
   it("filters shared skill trace for focus and blocker cards", () => {
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsExecutionOverviewBlockers, {
@@ -534,7 +537,9 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
     expect(html).toContain("artifacts 1 artifact refs 1 tool calls 1");
     expect(html).toContain("first tool Demo Search · blocked");
     expect(html).toContain("skill-reference-load-list");
-    expect(html).toContain("Focused skill trace count 1 first ref Focus checklist");
+    expect(html).toContain(
+      `${operatorSurfaceCopy.focusedSkillTraceTitle} count 1 first ref Focus checklist`
+    );
     expect(html).toContain("effective inline");
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");

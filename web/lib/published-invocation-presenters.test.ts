@@ -1,5 +1,7 @@
 ﻿import { describe, expect, it } from "vitest";
 
+import { buildOperatorFollowUpSurfaceCopy } from "./operator-follow-up-presenters";
+
 import {
   buildPublishedInvocationActivityBlockedDetailSurfaceCopy,
   buildPublishedInvocationApiKeyUsageCardSurface,
@@ -273,6 +275,32 @@ describe("published invocation presenters", () => {
       notStartedValueLabel: "not-started",
       emptyCountValueLabel: "0"
     });
+  });
+
+  it("复用共享 operator follow-up surface labels，避免 publish 入口 copy 再次分叉", () => {
+    const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+    const detailSurfaceCopy = buildPublishedInvocationDetailSurfaceCopy();
+    const entrySurfaceCopy = buildPublishedInvocationEntrySurfaceCopy();
+    const callbackDrilldownSurfaceCopy = buildPublishedInvocationCallbackDrilldownSurfaceCopy();
+
+    expect(detailSurfaceCopy.sampledRunSkillTraceTitle).toBe(
+      operatorSurfaceCopy.focusedSkillTraceTitle
+    );
+    expect(detailSurfaceCopy.recommendedNextStepTitle).toBe(
+      operatorSurfaceCopy.recommendedNextStepTitle
+    );
+    expect(detailSurfaceCopy.injectedReferencesTitle).toBe(
+      operatorSurfaceCopy.injectedReferencesTitle
+    );
+    expect(entrySurfaceCopy.sampledRunSkillTraceTitle).toBe(
+      operatorSurfaceCopy.focusedSkillTraceTitle
+    );
+    expect(entrySurfaceCopy.recommendedNextStepTitle).toBe(
+      operatorSurfaceCopy.recommendedNextStepTitle
+    );
+    expect(callbackDrilldownSurfaceCopy.inboxLinkLabel).toBe(
+      operatorSurfaceCopy.openInboxSliceLabel
+    );
   });
 
   it("为 publish activity details 提供共享卡片 surface", () => {

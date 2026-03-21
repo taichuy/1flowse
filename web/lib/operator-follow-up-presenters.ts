@@ -7,6 +7,7 @@ export type OperatorRecommendedNextStep = {
 
 export type OperatorFollowUpSurfaceCopy = {
   recommendedNextStepTitle: string;
+  openInboxSliceLabel: string;
   runTitlePrefix: string;
   openRunLabel: string;
   runStatusLabel: string;
@@ -15,6 +16,7 @@ export type OperatorFollowUpSurfaceCopy = {
   waitingReasonLabel: string;
   unavailableValueLabel: string;
   focusedSkillTraceTitle: string;
+  injectedReferencesTitle: string;
 };
 
 export type OperatorRunSnapshotMetaRow = {
@@ -40,6 +42,7 @@ function normalizeFollowUpCopy(value?: string | null) {
 export function buildOperatorFollowUpSurfaceCopy(): OperatorFollowUpSurfaceCopy {
   return {
     recommendedNextStepTitle: "Recommended next step",
+    openInboxSliceLabel: "open inbox slice",
     runTitlePrefix: "Run",
     openRunLabel: "open run",
     runStatusLabel: "Run status",
@@ -47,7 +50,8 @@ export function buildOperatorFollowUpSurfaceCopy(): OperatorFollowUpSurfaceCopy 
     focusNodeLabel: "Focus node",
     waitingReasonLabel: "Waiting reason",
     unavailableValueLabel: "n/a",
-    focusedSkillTraceTitle: "Focused skill trace"
+    focusedSkillTraceTitle: "Focused skill trace",
+    injectedReferencesTitle: "Injected references"
   };
 }
 

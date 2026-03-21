@@ -19,6 +19,7 @@ import {
 } from "@/lib/run-execution-blockers";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 import {
   buildExecutionFocusDiagnosticsBlockerMetaCopy,
   buildExecutionFocusDiagnosticsBlockerSurfaceCopy,
@@ -74,6 +75,7 @@ function renderNodeFollowUp({
   runId: string;
   skillTrace: RunExecutionView["skill_trace"];
 }) {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const nodeSkillTrace = pickCallbackWaitingSkillTraceForNode(skillTrace, node.node_run_id);
   const skillReferenceLoads = pickNodeSkillReferenceLoads(node, skillTrace);
   const hasCallbackWaitingSummary = hasCallbackWaitingSummaryFacts({
@@ -131,7 +133,7 @@ function renderNodeFollowUp({
       />
       <SkillReferenceLoadList
         skillReferenceLoads={skillReferenceLoads}
-        title="Focused skill trace"
+        title={operatorSurfaceCopy.focusedSkillTraceTitle}
         description={buildExecutionFocusDiagnosticsBlockerSurfaceCopy().focusedSkillTraceDescription}
       />
     </>

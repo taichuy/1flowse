@@ -19,7 +19,10 @@ import type {
   SensitiveAccessInboxEntry
 } from "@/lib/get-sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
-import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import {
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
@@ -57,6 +60,7 @@ export function SensitiveAccessInboxEntryCard({
   const latestNotification = pickLatestNotification(entry);
   const callbackWaitingContext = entry.callbackWaitingContext;
   const executionContext = entry.executionContext;
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const executionFocusPrimarySignal = executionContext
     ? executionContext.focusExplanation?.primary_signal ??
       formatExecutionFocusPrimarySignal(executionContext.focusNode)
@@ -203,7 +207,7 @@ export function SensitiveAccessInboxEntryCard({
           {recommendedNextStep ? (
             <div className="entry-card compact-card">
               <div className="payload-card-header">
-                <span className="status-meta">Recommended next step</span>
+                <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
                 <span className="event-chip">{recommendedNextStep.label}</span>
                 {recommendedNextStep.href && recommendedNextStep.href_label ? (
                   <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
@@ -241,11 +245,11 @@ export function SensitiveAccessInboxEntryCard({
           ) : null}
           <div className="tool-badge-row">
             <Link className="event-chip inbox-filter-link" href={`/runs/${executionContext.runId}`}>
-              open run
+              {operatorSurfaceCopy.openRunLabel}
             </Link>
             {focusInboxHref ? (
               <Link className="event-chip inbox-filter-link" href={focusInboxHref}>
-                slice to focus node
+                {operatorSurfaceCopy.openInboxSliceLabel}
               </Link>
               ) : null}
           </div>

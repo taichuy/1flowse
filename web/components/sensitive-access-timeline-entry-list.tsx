@@ -14,7 +14,10 @@ import {
   getCallbackWaitingRecommendedAction,
   pickCallbackWaitingInlineSensitiveAccessEntry
 } from "@/lib/callback-waiting-presenters";
-import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import {
   resolveSensitiveAccessTimelineEntryRunContext
 } from "@/lib/sensitive-access";
@@ -176,6 +179,7 @@ export function SensitiveAccessTimelineEntryList({
   emptyCopy,
   defaultRunId
 }: SensitiveAccessTimelineEntryListProps) {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilterValue>("all");
   const [ticketFilter, setTicketFilter] = useState<TicketFilterValue>("all");
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilterValue>("all");
@@ -347,9 +351,9 @@ export function SensitiveAccessTimelineEntryList({
                   detail: runContext.runFollowUp?.explanation?.follow_up ?? null,
                   href: inboxSliceHref ?? (runId ? `/runs/${encodeURIComponent(runId)}` : null),
                   href_label: inboxSliceHref
-                    ? "open approval inbox"
+                    ? operatorSurfaceCopy.openInboxSliceLabel
                     : runId
-                      ? "open run"
+                      ? operatorSurfaceCopy.openRunLabel
                       : null,
                   fallback_detail: inboxSliceHref
                     ? "当前 timeline entry 仍然落在 approval / callback blocker 上；优先切到对应 inbox slice 继续处理。"
@@ -361,7 +365,7 @@ export function SensitiveAccessTimelineEntryList({
           const inboxLinkLabel =
             recommendedNextStep?.href === inboxSliceHref && recommendedNextStep.href_label
               ? recommendedNextStep.href_label
-              : "open inbox slice";
+              : operatorSurfaceCopy.openInboxSliceLabel;
           const shouldRenderStandaloneRecommendedNextStep =
             !shouldRenderCallbackWaitingSummary && !hasStructuredOperatorFeedback && recommendedNextStep;
 
@@ -420,7 +424,7 @@ export function SensitiveAccessTimelineEntryList({
               {shouldRenderStandaloneRecommendedNextStep ? (
                 <div className="entry-card compact-card">
                   <div className="payload-card-header">
-                    <span className="status-meta">Recommended next step</span>
+                    <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
                     <span className="event-chip">{recommendedNextStep.label}</span>
                     {recommendedNextStep.href && recommendedNextStep.href_label ? (
                       <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>

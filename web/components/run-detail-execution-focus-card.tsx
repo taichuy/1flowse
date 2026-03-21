@@ -7,7 +7,10 @@ import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-re
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
-import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import { buildRunDetailExecutionFocusViewModel } from "@/lib/run-detail-execution-focus";
 import {
   formatExecutionFocusArtifactSummary,
@@ -37,6 +40,7 @@ export function RunDetailExecutionFocusCard({
   recommendedNextStepHref = null,
   recommendedNextStepHrefLabel = null
 }: RunDetailExecutionFocusCardProps) {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const focus = buildRunDetailExecutionFocusViewModel(run);
   if (!focus) {
     return null;
@@ -75,7 +79,7 @@ export function RunDetailExecutionFocusCard({
         {recommendedNextStep ? (
           <div className="entry-card compact-card">
             <div className="payload-card-header">
-              <span className="status-meta">Recommended next step</span>
+              <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
               <span className="event-chip">{recommendedNextStep.label}</span>
               {recommendedNextStep.href && recommendedNextStep.href_label ? (
                 <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
@@ -162,7 +166,7 @@ export function RunDetailExecutionFocusCard({
             {focus.skillReferenceCount > 0 ? (
               <div className="entry-card compact-card">
                 <div className="payload-card-header">
-                  <span className="status-meta">Focused skill trace</span>
+                  <span className="status-meta">{operatorSurfaceCopy.focusedSkillTraceTitle}</span>
                   <span className="event-chip">refs {focus.skillReferenceCount}</span>
                 </div>
                 <p className="section-copy entry-copy">
@@ -184,7 +188,7 @@ export function RunDetailExecutionFocusCard({
                 <SkillReferenceLoadList
                   description="当前 execution focus 节点已注入的 skill references。"
                   skillReferenceLoads={focus.skillReferenceLoads}
-                  title="Injected references"
+                  title={operatorSurfaceCopy.injectedReferencesTitle}
                 />
               </div>
             ) : null}

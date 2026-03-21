@@ -8,6 +8,7 @@ import type {
   SignalFollowUpExplanation
 } from "@/lib/get-sensitive-access";
 import {
+  buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep,
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
@@ -139,6 +140,7 @@ export function buildSensitiveAccessTimelineSurfaceCopy({
   surface: SensitiveAccessTimelineSurface;
   blockingNodeRunId?: string | null;
 }): SensitiveAccessTimelineSurfaceCopy {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   if (surface === "publish_blocking_invocation") {
     return {
       title: "Blocking approval timeline",
@@ -164,7 +166,7 @@ export function buildSensitiveAccessTimelineSurfaceCopy({
     description:
       "Approval tickets, notification delivery and policy decisions stay grouped here so operator triage can continue without leaving the execution node.",
     emptyState: "当前这个 execution node 没有关联 sensitive access timeline。",
-    inboxLinkLabel: "open inbox slice"
+    inboxLinkLabel: operatorSurfaceCopy.openInboxSliceLabel
   };
 }
 
@@ -296,6 +298,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   runSnapshot?: OperatorRunSnapshotSummary | null;
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
 }): OperatorRecommendedNextStep | null {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const blockerFollowUp =
     normalizeCopy(outcomeExplanation?.follow_up) ??
     normalizeCopy(runSnapshot?.callbackWaitingExplanation?.follow_up) ??
@@ -313,7 +316,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
       label: "approval blocker",
       detail: blockerFollowUp,
       href: inboxHref?.trim() || null,
-      href_label: inboxHref?.trim() ? "open inbox slice" : null,
+      href_label: inboxHref?.trim() ? operatorSurfaceCopy.openInboxSliceLabel : null,
       fallback_detail:
         "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。"
     },
@@ -322,7 +325,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
       label: "run detail",
       detail: executionFollowUp,
       href: runId?.trim() ? `/runs/${encodeURIComponent(runId.trim())}` : null,
-      href_label: runId?.trim() ? "open run" : null,
+      href_label: runId?.trim() ? operatorSurfaceCopy.openRunLabel : null,
       fallback_detail:
         "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。"
     },

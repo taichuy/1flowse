@@ -9,6 +9,7 @@ describe("operator follow-up presenters", () => {
   it("提供共享 operator follow-up surface copy", () => {
     expect(buildOperatorFollowUpSurfaceCopy()).toEqual({
       recommendedNextStepTitle: "Recommended next step",
+      openInboxSliceLabel: "open inbox slice",
       runTitlePrefix: "Run",
       openRunLabel: "open run",
       runStatusLabel: "Run status",
@@ -16,7 +17,8 @@ describe("operator follow-up presenters", () => {
       focusNodeLabel: "Focus node",
       waitingReasonLabel: "Waiting reason",
       unavailableValueLabel: "n/a",
-      focusedSkillTraceTitle: "Focused skill trace"
+      focusedSkillTraceTitle: "Focused skill trace",
+      injectedReferencesTitle: "Injected references"
     });
   });
 

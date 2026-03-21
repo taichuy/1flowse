@@ -142,7 +142,7 @@ export function buildCallbackWaitingSummarySurfaceCopy(): CallbackWaitingSummary
 
   return {
     recommendedNextStepTitle: operatorSurfaceCopy.recommendedNextStepTitle,
-    defaultInboxLinkLabel: "open inbox slice",
+    defaultInboxLinkLabel: operatorSurfaceCopy.openInboxSliceLabel,
     manualOverrideOptionalLabel: "manual override optional",
     optionalOverrideDescription:
       "Callback actions stay available below as optional operator overrides when the current waiting path needs to be bypassed.",
@@ -154,7 +154,7 @@ export function buildCallbackWaitingSummarySurfaceCopy(): CallbackWaitingSummary
       "当前 waiting 节点没有独立 skill trace，因此这里回退展示整个 run 的注入摘要。",
     inlineLoadsSkillTraceDescription:
       "当前 waiting 节点已经记录了 skill reference loads，因此可以直接在 callback follow-up 中查看该节点的注入来源。",
-    injectedReferencesTitle: "Injected references",
+    injectedReferencesTitle: operatorSurfaceCopy.injectedReferencesTitle,
     injectedReferencesDescription:
       "当前 callback waiting、operator inbox 和 publish detail 现在围绕同一份 skill trace / load 事实解释 agent 注入来源。",
     terminatedLabel: "callback waiting terminated"
