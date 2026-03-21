@@ -41,6 +41,7 @@ import {
   formatSensitiveAccessReasonLabel,
   getSensitiveAccessPolicySummary
 } from "@/lib/sensitive-access-presenters";
+import { buildSensitiveAccessInboxEntryExecutionSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 type SensitiveAccessInboxEntryCardProps = {
   entry: SensitiveAccessInboxEntry;
@@ -82,10 +83,20 @@ export function SensitiveAccessInboxEntryCard({
   const executionFactBadges = executionContext
     ? listExecutionFocusRuntimeFactBadges(executionContext.focusNode)
     : [];
+  const focusRunHref = executionContext ? buildRunDetailHref(executionContext.runId) : null;
   const focusInboxHref = executionContext
     ? buildSensitiveAccessInboxHref({
         runId: executionContext.runId,
         nodeRunId: executionContext.focusNode.node_run_id
+      })
+    : null;
+  const executionSurfaceCopy = executionContext
+    ? buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
+        focusMatchesEntry: executionContext.focusMatchesEntry,
+        entryNodeRunId: executionContext.entryNodeRunId,
+        focusNodeName: executionContext.focusNode.node_name,
+        focusInboxHref,
+        runHref: focusRunHref ?? buildRunDetailHref(executionContext.runId)
       })
     : null;
   const shouldDeferToSharedCallbackWaitingSummary = hasCallbackWaitingSummaryFacts({
@@ -102,29 +113,15 @@ export function SensitiveAccessInboxEntryCard({
   });
   const focusSkillTraceReferenceLoads = executionContext?.skillTrace?.loads ?? [];
   const focusSkillTraceReferenceCount = executionContext?.skillTrace?.reference_count ?? null;
-  const recommendedNextStep = !shouldDeferToSharedCallbackWaitingSummary && executionContext
+  const recommendedNextStep = !shouldDeferToSharedCallbackWaitingSummary && executionSurfaceCopy
     ? buildOperatorRecommendedNextStep({
         execution: {
           active: true,
-          label: executionContext.focusMatchesEntry
-            ? "current approval ticket"
-            : focusInboxHref
-              ? "focus node"
-              : "run detail",
+          label: executionSurfaceCopy.recommendedNextStepLabel,
           detail: executionFocusFollowUp,
-          href: executionContext.focusMatchesEntry
-            ? null
-            : focusInboxHref ?? buildRunDetailHref(executionContext.runId),
-          href_label: executionContext.focusMatchesEntry
-            ? null
-            : focusInboxHref
-              ? "slice to focus node"
-              : "open run",
-          fallback_detail: executionContext.focusMatchesEntry
-            ? "当前票据已命中 canonical blocker；优先处理本条审批，再确认 run 是否继续推进。"
-            : focusInboxHref
-              ? `当前 run 的 canonical blocker 已定位到 ${executionContext.focusNode.node_name}；优先切到该 focus node 的 inbox slice 统一排障。`
-              : "当前 run 已回接 canonical execution focus；优先打开 run 继续检查 focus node 和执行证据。"
+          href: executionSurfaceCopy.recommendedNextStepHref,
+          href_label: executionSurfaceCopy.recommendedNextStepHrefLabel,
+          fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
         }
       })
     : null;
@@ -195,13 +192,7 @@ export function SensitiveAccessInboxEntryCard({
             </span>
             <span className="event-chip">node run {executionContext.focusNode.node_run_id}</span>
           </div>
-          <p className="section-copy entry-copy">
-            {executionContext.focusMatchesEntry
-              ? "当前票据已经命中后端选出的 canonical blocker；优先按本条目上的 approval / callback follow-up 恢复即可。"
-              : executionContext.entryNodeRunId
-                ? `当前票据关联 node run ${executionContext.entryNodeRunId}，但当前 run 的 canonical blocker 已切到 ${executionContext.focusNode.node_name}；建议先跳到该 focus 节点统一排障。`
-                : `当前票据还没有稳定映射到具体 node run，但当前 run 的 canonical blocker 已定位到 ${executionContext.focusNode.node_name}。`}
-          </p>
+          <p className="section-copy entry-copy">{executionSurfaceCopy?.focusDescription}</p>
           <p className="binding-meta">
             {executionContext.focusNode.node_type} · focus node {executionContext.focusNode.node_id}
           </p>
@@ -245,7 +236,7 @@ export function SensitiveAccessInboxEntryCard({
             />
           ) : null}
           <div className="tool-badge-row">
-            <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(executionContext.runId)}>
+            <Link className="event-chip inbox-filter-link" href={focusRunHref ?? buildRunDetailHref(executionContext.runId)}>
               {operatorSurfaceCopy.openRunLabel}
             </Link>
             {focusInboxHref ? (

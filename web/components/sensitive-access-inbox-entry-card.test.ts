@@ -6,6 +6,7 @@ import { SensitiveAccessInboxEntryCard } from "@/components/sensitive-access-inb
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import type { CallbackWaitingLifecycleSummary } from "@/lib/get-run-views";
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
+import { buildSensitiveAccessInboxEntryExecutionSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -158,9 +159,17 @@ describe("SensitiveAccessInboxEntryCard", () => {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
 
   it("surfaces canonical execution runtime facts on the inbox focus card", () => {
+    const surfaceCopy = buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
+      focusMatchesEntry: true,
+      entryNodeRunId: "node-run-1",
+      focusNodeName: "Tool Node",
+      focusInboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+      runHref: "/runs/run-1"
+    });
     const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry: buildEntry() }));
 
     expect(html).toContain("当前 focus 节点仍需要 operator 审批");
+    expect(html).toContain(surfaceCopy.focusDescription);
     expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
     expect(html).toContain("current approval ticket");
     expect(html).toContain("effective sandbox");
@@ -182,12 +191,20 @@ describe("SensitiveAccessInboxEntryCard", () => {
         node_name: "Focus Node"
       }
     };
+    const surfaceCopy = buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
+      focusMatchesEntry: false,
+      entryNodeRunId: "node-run-entry",
+      focusNodeName: "Focus Node",
+      focusInboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-focus",
+      runHref: "/runs/run-1"
+    });
 
     const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
 
     expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
-    expect(html).toContain("focus node");
-    expect(html).toContain(operatorSurfaceCopy.openInboxSliceLabel);
+    expect(html).toContain(surfaceCopy.focusDescription);
+    expect(html).toContain(surfaceCopy.recommendedNextStepLabel);
+    expect(html).toContain(surfaceCopy.recommendedNextStepHrefLabel!);
     expect(html).toContain("node_run_id=node-run-focus");
   });
 

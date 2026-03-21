@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 function buildSandboxReadiness(): SandboxReadinessCheck {
   return {
@@ -266,5 +267,54 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");
     expect(html).toContain("Strong-isolation execution must fail closed");
+  });
+
+  it("renders the shared skill trace narrative when focus references are present", () => {
+    const surfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
+    const run = buildRunDetail();
+    run.node_runs[0] = {
+      ...run.node_runs[0]!,
+      waiting_reason: null
+    };
+    run.execution_focus_explanation = {
+      primary_signal: "当前节点正在消费 skill trace。",
+      follow_up: "先核对当前 focus 节点注入了哪些 references。"
+    };
+    run.execution_focus_skill_trace = {
+      reference_count: 1,
+      phase_counts: { execute: 1 },
+      source_counts: { explicit: 1 },
+      loads: [
+        {
+          phase: "execute",
+          references: [
+            {
+              skill_id: "sandbox-code",
+              skill_name: "Sandbox Code",
+              reference_id: "ref-1",
+              reference_name: "Runtime policy",
+              load_source: "explicit",
+              fetch_reason: null,
+              fetch_request_index: null,
+              fetch_request_total: null,
+              retrieval_http_path: null,
+              retrieval_mcp_method: null,
+              retrieval_mcp_params: {}
+            }
+          ]
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDetailExecutionFocusCard, {
+        run,
+        title: "Execution focus"
+      })
+    );
+
+    expect(html).toContain(surfaceCopy.focusedSkillTraceDescription);
+    expect(html).toContain("Focused skill trace");
+    expect(html).toContain("Injected references");
   });
 });

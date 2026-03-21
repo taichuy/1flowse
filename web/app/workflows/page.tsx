@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
+import { buildWorkflowLibrarySurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import { getWorkflows, type WorkflowListItem } from "@/lib/get-workflows";
 import { formatCountMap } from "@/lib/runtime-presenters";
 import { buildWorkflowDetailHref } from "@/lib/workbench-links";
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default async function WorkflowsPage() {
   const workflows = await getWorkflows();
   const summary = buildWorkflowLibrarySummary(workflows);
+  const surfaceCopy = buildWorkflowLibrarySurfaceCopy();
 
   return (
     <main className="page-shell workspace-page">
@@ -20,13 +22,9 @@ export default async function WorkflowsPage() {
         <div>
           <p className="eyebrow">Workflow library</p>
           <h1>作者、operator 与运行入口统一收口</h1>
-          <p className="hero-copy">
-            这里汇总可编辑 workflow、工具治理信号与下一步动作，避免从 sensitive access 或首页回链时落到不存在的 workflows 路由。
-          </p>
+          <p className="hero-copy">{surfaceCopy.heroDescription}</p>
         </div>
-        <WorkbenchEntryLinks
-          keys={["createWorkflow", "workspaceStarterLibrary", "runLibrary", "home"]}
-        />
+        <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
       </section>
 
       <section className="diagnostics-layout">
@@ -36,9 +34,7 @@ export default async function WorkflowsPage() {
               <p className="eyebrow">Editor entry</p>
               <h2>可编辑 workflow 列表</h2>
             </div>
-            <p className="section-copy">
-              列表继续复用 editor chip 语义，优先暴露节点数、工具治理与强隔离信号，让作者与 operator 都能直接进入正确的 workflow 详情。
-            </p>
+            <p className="section-copy">{surfaceCopy.editorListDescription}</p>
           </div>
 
           <div className="summary-strip">
@@ -59,7 +55,7 @@ export default async function WorkflowsPage() {
           {workflows.length === 0 ? (
             <div className="empty-state-block">
               <p className="empty-state">
-                当前还没有可编辑的 workflow。现在可以从 workspace starter 或新建向导继续补主链，而不用再回退到 API 层手工创建。
+                {surfaceCopy.emptyState}
               </p>
               <WorkbenchEntryLink className="inline-link" linkKey="createWorkflow">
                 进入新建向导
@@ -84,9 +80,7 @@ export default async function WorkflowsPage() {
               <p className="eyebrow">Governance</p>
               <h2>工具与隔离信号</h2>
             </div>
-            <p className="section-copy">
-              workflow 列表不再只是跳板；它同时提示当前还有多少 workflow 需要继续处理缺失工具、强隔离或运行 follow-up。
-            </p>
+            <p className="section-copy">{surfaceCopy.governanceDescription}</p>
           </div>
 
           <div className="summary-strip">
@@ -117,23 +111,9 @@ export default async function WorkflowsPage() {
           </div>
 
           <div className="entry-card">
-            <p className="entry-card-title">继续推进主链</p>
-            <p className="section-copy entry-copy">
-              如果还需要补 starter 来源治理或回到 operator 收件箱，可以从这里继续进入 workspace starter library 或 sensitive access inbox。
-            </p>
-            <WorkbenchEntryLinks
-              keys={["workspaceStarterLibrary", "operatorInbox", "runLibrary"]}
-              overrides={{
-                workspaceStarterLibrary: {
-                  label: "打开 workspace starter library"
-                },
-                operatorInbox: {
-                  label: "打开 sensitive access inbox"
-                }
-              }}
-              primaryKey="workspaceStarterLibrary"
-              variant="inline"
-            />
+            <p className="entry-card-title">{surfaceCopy.nextStepTitle}</p>
+            <p className="section-copy entry-copy">{surfaceCopy.nextStepDescription}</p>
+            <WorkbenchEntryLinks {...surfaceCopy.nextStepLinks} />
           </div>
         </article>
       </section>

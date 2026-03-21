@@ -5,6 +5,7 @@ import {
   WorkbenchEntryLink,
   WorkbenchEntryLinks
 } from "@/components/workbench-entry-links";
+import { buildRunLibrarySurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { formatCountMap, formatTimestamp } from "@/lib/runtime-presenters";
 import {
@@ -21,6 +22,7 @@ export default async function RunsPage() {
   const recentRuns = overview.runtime_activity.recent_runs;
   const activitySummary = overview.runtime_activity.summary;
   const latestRun = recentRuns[0] ?? null;
+  const surfaceCopy = buildRunLibrarySurfaceCopy();
 
   return (
     <main className="page-shell workspace-page">
@@ -28,18 +30,9 @@ export default async function RunsPage() {
         <div>
           <p className="eyebrow">Run library</p>
           <h1>运行诊断入口收口到独立列表</h1>
-          <p className="hero-copy">
-            首页和 operator 面板只保留摘要；从这里继续进入独立 run 诊断页、回到 workflow 编辑器，或沿着同一条执行事实继续排障。
-          </p>
+          <p className="hero-copy">{surfaceCopy.heroDescription}</p>
         </div>
-        <WorkbenchEntryLinks
-          keys={["operatorInbox", "workflowLibrary", "home"]}
-          overrides={{
-            operatorInbox: {
-              label: "回到 sensitive access inbox"
-            }
-          }}
-        />
+        <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
       </section>
 
       <section className="diagnostics-layout runtime-layout">
@@ -49,9 +42,7 @@ export default async function RunsPage() {
               <p className="eyebrow">Recent runs</p>
               <h2>统一 run 事实入口</h2>
             </div>
-            <p className="section-copy">
-              这里直接复用 system overview 的最近执行摘要，避免 operator 从阻断收件箱跳出后落到不存在的 runs 路由。
-            </p>
+            <p className="section-copy">{surfaceCopy.recentRunsDescription}</p>
           </div>
 
           <div className="summary-strip">
@@ -72,7 +63,7 @@ export default async function RunsPage() {
           <div className="activity-list">
             {recentRuns.length === 0 ? (
               <div className="empty-state-block">
-                <p className="empty-state">当前还没有历史 run，可先从 workflow 编辑器触发一次执行。</p>
+                <p className="empty-state">{surfaceCopy.emptyState}</p>
                 <WorkbenchEntryLink className="inline-link" linkKey="workflowLibrary" />
               </div>
             ) : (
@@ -131,20 +122,9 @@ export default async function RunsPage() {
           </div>
 
           <div className="entry-card">
-            <p className="entry-card-title">Operator follow-up</p>
-            <p className="section-copy entry-copy">
-              如果当前阻断来自审批、恢复或通知派发，可以从 runs 列表回到 sensitive access inbox 继续处理 operator 动作。
-            </p>
-            <WorkbenchEntryLinks
-              keys={["operatorInbox", "workflowLibrary"]}
-              overrides={{
-                operatorInbox: {
-                  label: "打开 sensitive access inbox"
-                }
-              }}
-              primaryKey="operatorInbox"
-              variant="inline"
-            />
+            <p className="entry-card-title">{surfaceCopy.operatorEntryTitle}</p>
+            <p className="section-copy entry-copy">{surfaceCopy.operatorEntryDescription}</p>
+            <WorkbenchEntryLinks {...surfaceCopy.operatorEntryLinks} />
             {latestRun ? (
               <Link className="inline-link secondary" href={buildRunDetailHref(latestRun.id)}>
                 打开最新 run 诊断面板

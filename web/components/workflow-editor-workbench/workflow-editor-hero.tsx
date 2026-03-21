@@ -3,6 +3,7 @@
 import React from "react";
 
 import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { buildWorkflowEditorHeroSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { WorkflowPersistBlocker } from "./persist-blockers";
 
@@ -68,6 +69,11 @@ export function WorkflowEditorHero({
   onSaveAsWorkspaceStarter
 }: WorkflowEditorHeroProps) {
   const plannedNodeSummary = plannedNodeLabels.join(" / ");
+  const heroSurfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
+    createWorkflowHref,
+    workspaceStarterLibraryHref,
+    plannedNodeSummary
+  });
 
   return (
     <section className="hero editor-hero">
@@ -106,22 +112,7 @@ export function WorkflowEditorHero({
           ) : null}
         </div>
         <div className="hero-actions">
-          <WorkbenchEntryLinks
-            keys={["workflowLibrary", "home", "createWorkflow", "workspaceStarterLibrary"]}
-            overrides={{
-              workflowLibrary: {
-                label: "回到 workflow 列表"
-              },
-              createWorkflow: {
-                href: createWorkflowHref
-              },
-              workspaceStarterLibrary: {
-                href: workspaceStarterLibraryHref
-              }
-            }}
-            primaryKey="workflowLibrary"
-            variant="inline"
-          />
+          <WorkbenchEntryLinks {...heroSurfaceCopy.heroLinks} />
           <button className="sync-button" type="button" onClick={onSave} disabled={isSaving}>
             {isSaving ? "保存中..." : "保存 workflow"}
           </button>
@@ -140,15 +131,11 @@ export function WorkflowEditorHero({
         <div className="panel-label">Editor state</div>
         <div className="panel-value">{isDirty ? "Dirty" : "Synced"}</div>
         <p className="panel-text">
-          当前保存链路：<strong>web canvas -&gt; workflow definition -&gt; API versioning</strong>
+          当前保存链路：<strong>{heroSurfaceCopy.saveChainValue}</strong>
         </p>
         <p className="panel-text">
           当前节点边界：
-          <strong>
-            {plannedNodeSummary
-              ? `${plannedNodeSummary} 仍保持 planned；发布网关 / 调试联动继续推进`
-              : "发布网关 / 调试联动继续推进"}
-          </strong>
+          <strong>{heroSurfaceCopy.plannedNodeBoundaryValue}</strong>
         </p>
         {unsupportedNodes.length > 0 ? (
           <p className="panel-text">
@@ -173,28 +160,28 @@ export function WorkflowEditorHero({
           </>
         ) : null}
         <p className="panel-text">
-          当前治理入口：<strong>editor -&gt; workspace starter library</strong>
+          当前治理入口：<strong>{heroSurfaceCopy.governanceEntryValue}</strong>
         </p>
         {hasScopedWorkspaceStarterFilters ? (
           <p className="panel-text">
-            当前 editor 继续保留 workspace starter 治理页的 query scope；可以
+            {heroSurfaceCopy.scopedGovernancePrefix}
             {" "}
             <WorkbenchEntryLink
               className="inline-link secondary"
               linkKey="workspaceStarterLibrary"
               override={{ href: workspaceStarterLibraryHref }}
             >
-              回到治理页
+              {heroSurfaceCopy.scopedGovernanceBackLinkLabel}
             </WorkbenchEntryLink>
             {" "}
-            继续 follow-up，或在同一范围内
+            {heroSurfaceCopy.scopedGovernanceInfix}
             {" "}
             <WorkbenchEntryLink
               className="inline-link secondary"
               linkKey="createWorkflow"
               override={{ href: createWorkflowHref }}
             >
-              再新建一个 workflow
+              {heroSurfaceCopy.scopedGovernanceCreateWorkflowLabel}
             </WorkbenchEntryLink>
             。
           </p>

@@ -1,0 +1,125 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildRunDetailExecutionFocusSurfaceCopy,
+  buildRunLibrarySurfaceCopy,
+  buildSensitiveAccessInboxEntryExecutionSurfaceCopy,
+  buildSensitiveAccessInboxSurfaceCopy,
+  buildWorkflowEditorHeroSurfaceCopy,
+  buildWorkflowLibrarySurfaceCopy,
+  buildWorkflowPublishPanelSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
+
+describe("workbench entry surface copy", () => {
+  it("keeps the run library operator follow-up on the shared inbox contract", () => {
+    const surfaceCopy = buildRunLibrarySurfaceCopy();
+
+    expect(surfaceCopy.heroLinks).toMatchObject({
+      keys: ["operatorInbox", "workflowLibrary", "home"]
+    });
+    expect(surfaceCopy.heroLinks.overrides?.operatorInbox?.label).toBe(
+      "回到 sensitive access inbox"
+    );
+    expect(surfaceCopy.operatorEntryLinks).toMatchObject({
+      keys: ["operatorInbox", "workflowLibrary"],
+      primaryKey: "operatorInbox",
+      variant: "inline"
+    });
+  });
+
+  it("keeps workflow library follow-up copy and CTA set centralized", () => {
+    const surfaceCopy = buildWorkflowLibrarySurfaceCopy();
+
+    expect(surfaceCopy.heroLinks.keys).toEqual([
+      "createWorkflow",
+      "workspaceStarterLibrary",
+      "runLibrary",
+      "home"
+    ]);
+    expect(surfaceCopy.nextStepTitle).toBe("继续推进主链");
+    expect(surfaceCopy.nextStepLinks.overrides?.workspaceStarterLibrary?.label).toBe(
+      "打开 workspace starter library"
+    );
+    expect(surfaceCopy.nextStepLinks.overrides?.operatorInbox?.label).toBe(
+      "打开 sensitive access inbox"
+    );
+  });
+
+  it("normalizes the sensitive access hero back-link to the shared workflow label", () => {
+    const surfaceCopy = buildSensitiveAccessInboxSurfaceCopy();
+
+    expect(surfaceCopy.heroLinks).toMatchObject({
+      keys: ["runLibrary", "workflowLibrary", "home"]
+    });
+    expect(surfaceCopy.heroLinks.overrides?.workflowLibrary?.label).toBe(
+      "回到 workflow 列表"
+    );
+  });
+
+  it("reuses the shared workflow library CTA contract for publish governance", () => {
+    const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy();
+
+    expect(surfaceCopy.headerLinks).toMatchObject({
+      keys: ["workflowLibrary", "runLibrary", "operatorInbox", "home"],
+      primaryKey: "workflowLibrary",
+      variant: "inline"
+    });
+    expect(surfaceCopy.headerLinks.overrides?.workflowLibrary?.label).toBe(
+      "回到 workflow 列表"
+    );
+    expect(surfaceCopy.emptyStateDescription).toContain("还没有声明 `publish`");
+  });
+
+  it("keeps sensitive access execution-card prose on the shared focus contract", () => {
+    const surfaceCopy = buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
+      focusMatchesEntry: false,
+      entryNodeRunId: "node-run-entry",
+      focusNodeName: "Focus Node",
+      focusInboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-focus",
+      runHref: "/runs/run-1"
+    });
+
+    expect(surfaceCopy.focusDescription).toContain("node run node-run-entry");
+    expect(surfaceCopy.focusDescription).toContain("Focus Node");
+    expect(surfaceCopy.recommendedNextStepLabel).toBe("focus node");
+    expect(surfaceCopy.recommendedNextStepHrefLabel).toBe("slice to focus node");
+    expect(surfaceCopy.recommendedNextStepFallbackDetail).toContain("focus node 的 inbox slice");
+  });
+
+  it("keeps run detail execution focus fallback and skill trace narrative centralized", () => {
+    const surfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
+
+    expect(surfaceCopy.recommendedNextStepFallbackDetail).toContain(
+      "canonical execution focus"
+    );
+    expect(surfaceCopy.focusedSkillTraceDescription).toContain(
+      "execution focus skill trace"
+    );
+  });
+
+  it("keeps workflow editor governance CTA copy in the shared hero contract", () => {
+    const surfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
+      createWorkflowHref:
+        "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted",
+      workspaceStarterLibraryHref:
+        "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted",
+      plannedNodeSummary: "Loop x1"
+    });
+
+    expect(surfaceCopy.heroLinks).toMatchObject({
+      keys: ["workflowLibrary", "home", "createWorkflow", "workspaceStarterLibrary"],
+      primaryKey: "workflowLibrary",
+      variant: "inline"
+    });
+    expect(surfaceCopy.heroLinks.overrides?.workflowLibrary?.label).toBe("回到 workflow 列表");
+    expect(surfaceCopy.heroLinks.overrides?.createWorkflow?.href).toContain("needs_follow_up=true");
+    expect(surfaceCopy.heroLinks.overrides?.workspaceStarterLibrary?.href).toContain(
+      "source_governance_kind=drifted"
+    );
+    expect(surfaceCopy.plannedNodeBoundaryValue).toBe(
+      "Loop x1 仍保持 planned；发布网关 / 调试联动继续推进"
+    );
+    expect(surfaceCopy.scopedGovernanceBackLinkLabel).toBe("回到治理页");
+    expect(surfaceCopy.scopedGovernanceCreateWorkflowLabel).toBe("再新建一个 workflow");
+  });
+});

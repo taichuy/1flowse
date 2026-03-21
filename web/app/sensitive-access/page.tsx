@@ -28,6 +28,7 @@ import {
   type NotificationDispatchItem,
   type SensitiveAccessRequestItem
 } from "@/lib/get-sensitive-access";
+import { buildSensitiveAccessInboxSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
@@ -137,6 +138,7 @@ export default async function SensitiveAccessInboxPage({
     approvalTicketId: filters.approvalTicketId ?? undefined
   });
   const systemOverview = await getSystemOverview();
+  const surfaceCopy = buildSensitiveAccessInboxSurfaceCopy();
 
   return (
     <main className="page-shell workspace-page">
@@ -144,19 +146,9 @@ export default async function SensitiveAccessInboxPage({
         <div>
           <p className="eyebrow">Sensitive access inbox</p>
           <h1>审批、恢复与通知派发统一收口</h1>
-          <p className="hero-copy">
-            把 sensitive access request、approval ticket、notification dispatch 与 callback waiting
-            lifecycle 放到同一条 operator 主链里，减少“看得到阻断但处理动作还要四处跳”的排障成本。
-          </p>
+          <p className="hero-copy">{surfaceCopy.heroDescription}</p>
         </div>
-        <WorkbenchEntryLinks
-          keys={["runLibrary", "workflowLibrary", "home"]}
-          overrides={{
-            workflowLibrary: {
-              label: "回到 workflows"
-            }
-          }}
-        />
+        <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
       </section>
 
       <section className="diagnostics-layout">

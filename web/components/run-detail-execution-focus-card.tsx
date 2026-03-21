@@ -20,6 +20,7 @@ import {
   listExecutionFocusRuntimeFactBadges,
   listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
+import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 type RunDetailExecutionFocusCardProps = {
   run: RunDetail;
@@ -41,6 +42,7 @@ export function RunDetailExecutionFocusCard({
   recommendedNextStepHrefLabel = null
 }: RunDetailExecutionFocusCardProps) {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   const focus = buildRunDetailExecutionFocusViewModel(run);
   if (!focus) {
     return null;
@@ -55,8 +57,7 @@ export function RunDetailExecutionFocusCard({
           detail: focus.followUp,
           href: recommendedNextStepHref,
           href_label: recommendedNextStepHrefLabel,
-          fallback_detail:
-            "当前 run 已回接 canonical execution focus；优先继续检查 focus node、runtime evidence 和 execution fallback / blocking 原因。"
+          fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
         }
       })
     : null;
@@ -170,8 +171,7 @@ export function RunDetailExecutionFocusCard({
                   <span className="event-chip">refs {focus.skillReferenceCount}</span>
                 </div>
                 <p className="section-copy entry-copy">
-                  当前 diagnostics / overlay 已直接消费 run detail 里的 execution focus
-                  skill trace，不必再等 execution view 才知道当前聚焦节点注入了哪些参考资料。
+                  {executionSurfaceCopy.focusedSkillTraceDescription}
                 </p>
                 <div className="tool-badge-row">
                   {formatMetricSummary(focus.skillReferencePhaseCounts) ? (

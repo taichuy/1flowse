@@ -3,6 +3,7 @@ import React from "react";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
+import { buildWorkflowPublishPanelSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
@@ -54,6 +55,7 @@ export function WorkflowPublishPanel({
   callbackWaitingAutomation,
   sandboxReadiness
 }: WorkflowPublishPanelProps) {
+  const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy();
   const publishedCount = bindings.filter(
     (binding) => binding.lifecycle_status === "published"
   ).length;
@@ -77,22 +79,10 @@ export function WorkflowPublishPanel({
             <p className="eyebrow">Publish</p>
             <h2>Endpoint governance</h2>
           </div>
-          <p className="section-copy">
-            工作流页现在直接消费 publish binding、activity、rate-limit window 与 cache inventory
-            事实层，不再让开放 API 能力只停留在后端可用、前端不可见。
-          </p>
+          <p className="section-copy">{surfaceCopy.description}</p>
         </div>
 
-        <WorkbenchEntryLinks
-          keys={["workflowLibrary", "runLibrary", "operatorInbox", "home"]}
-          overrides={{
-            workflowLibrary: {
-              label: "回到 workflow 列表"
-            }
-          }}
-          primaryKey="workflowLibrary"
-          variant="inline"
-        />
+        <WorkbenchEntryLinks {...surfaceCopy.headerLinks} />
 
         <div className="summary-strip">
           <article className="summary-card">
@@ -126,9 +116,7 @@ export function WorkflowPublishPanel({
         {bindings.length === 0 ? (
           <div className="entry-card">
             <p className="entry-card-title">{workflow.name}</p>
-            <p className="section-copy entry-copy">
-              当前 workflow definition 还没有声明 `publish`，因此没有可治理的开放 API endpoint。
-            </p>
+            <p className="section-copy entry-copy">{surfaceCopy.emptyStateDescription}</p>
           </div>
         ) : (
           <div className="publish-card-grid">
