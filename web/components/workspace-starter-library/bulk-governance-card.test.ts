@@ -137,7 +137,14 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
           changed: false,
           rebase_fields: []
         }
-      ]
+      ],
+      outcome_explanation: {
+        primary_signal:
+          "本次批量刷新请求 2 个 starter；实际处理 1 个。 结果回执里还有 1 个跳过项（无来源 1）。 其中 1 个 starter / 1 个 sandbox 依赖漂移节点已沉淀进同一份 result receipt。",
+        follow_up:
+          "先修复来源 workflow 的缺失或无效问题，再重新执行批量刷新。 优先复核 result receipt 中带 sandbox drift 的 starter，确认依赖节点与隔离策略是否仍符合预期。"
+      },
+      follow_up_template_ids: ["starter-manual", "starter-sandbox"]
     };
     const preview: WorkspaceStarterBulkPreview = {
       workspace_id: "default",
@@ -262,6 +269,10 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(html).toContain("Affected starters:");
     expect(html).toContain("Sandbox starter（sandbox）");
     expect(html).toContain("无来源 1");
+    expect(html).toContain("Operator follow-up");
+    expect(html).toContain("Primary signal:");
+    expect(html).toContain("同一份 result receipt 现在会把 operator / AI 复用的 follow-up 解释直接放进后端共享契约");
+    expect(html).toContain("先修复来源 workflow 的缺失或无效问题，再重新执行批量刷新。");
     expect(html).toContain("Result receipt focus");
     expect(html).toContain("Sandbox starter · 已刷新 · 建议 refresh · source 0.1.5 · sandbox · drift 1");
   });

@@ -9,6 +9,7 @@ from app.schemas.workspace_starter import (
     WorkspaceStarterBulkActionPreview,
     WorkspaceStarterBulkActionRequest,
     WorkspaceStarterBulkActionResult,
+    WorkspaceStarterBulkDeletedItem,
     WorkspaceStarterBulkPreview,
     WorkspaceStarterBulkPreviewBlockedItem,
     WorkspaceStarterBulkPreviewCandidateItem,
@@ -16,7 +17,6 @@ from app.schemas.workspace_starter import (
     WorkspaceStarterBulkPreviewReasonSummary,
     WorkspaceStarterBulkPreviewRequest,
     WorkspaceStarterBulkPreviewSet,
-    WorkspaceStarterBulkDeletedItem,
     WorkspaceStarterBulkReceiptItem,
     WorkspaceStarterBulkSandboxDependencyItem,
     WorkspaceStarterBulkSkippedItem,
@@ -26,6 +26,10 @@ from app.schemas.workspace_starter import (
     WorkspaceStarterTemplateItem,
 )
 from app.services.workflow_definitions import WorkflowDefinitionValidationError
+from app.services.workspace_starter_bulk_result_explanations import (
+    build_workspace_starter_bulk_follow_up_template_ids,
+    build_workspace_starter_bulk_outcome_explanation,
+)
 from app.services.workspace_starter_template_validation import (
     validate_workspace_starter_definition,
 )
@@ -50,6 +54,10 @@ class WorkspaceStarterBulkActionAccumulator:
         payload: WorkspaceStarterBulkActionRequest,
     ) -> WorkspaceStarterBulkActionResult:
         processed_count = len(self.updated_items) + len(self.deleted_items)
+        skipped_reason_summary = summarize_bulk_skips(self.skipped_items)
+        sandbox_dependency_changes = summarize_bulk_sandbox_dependency_items(
+            self.sandbox_dependency_items
+        )
         return WorkspaceStarterBulkActionResult(
             workspace_id=payload.workspace_id,
             action=payload.action,
@@ -59,12 +67,23 @@ class WorkspaceStarterBulkActionAccumulator:
             updated_items=self.updated_items,
             deleted_items=self.deleted_items,
             skipped_items=self.skipped_items,
-            skipped_reason_summary=summarize_bulk_skips(self.skipped_items),
-            sandbox_dependency_changes=summarize_bulk_sandbox_dependency_items(
-                self.sandbox_dependency_items
-            ),
+            skipped_reason_summary=skipped_reason_summary,
+            sandbox_dependency_changes=sandbox_dependency_changes,
             sandbox_dependency_items=self.sandbox_dependency_items,
             receipt_items=self.receipt_items,
+            outcome_explanation=build_workspace_starter_bulk_outcome_explanation(
+                action=payload.action,
+                requested_count=len(payload.template_ids),
+                processed_count=processed_count,
+                deleted_count=len(self.deleted_items),
+                skipped_reason_summary=skipped_reason_summary,
+                sandbox_dependency_changes=sandbox_dependency_changes,
+                sandbox_dependency_item_count=len(self.sandbox_dependency_items),
+            ),
+            follow_up_template_ids=build_workspace_starter_bulk_follow_up_template_ids(
+                action=payload.action,
+                receipt_items=self.receipt_items,
+            ),
         )
 
 

@@ -55,6 +55,8 @@ export function WorkspaceStarterBulkGovernanceCard({
 }: WorkspaceStarterBulkGovernanceCardProps) {
   const previewNarrativeItems = buildWorkspaceStarterBulkPreviewNarrative(preview);
   const narrativeItems = lastResult ? buildWorkspaceStarterBulkResultNarrative(lastResult) : [];
+  const outcomePrimarySignal = lastResult?.outcome_explanation?.primary_signal?.trim() || null;
+  const outcomeFollowUp = lastResult?.outcome_explanation?.follow_up?.trim() || null;
 
   return (
     <div className="binding-card compact-card">
@@ -162,6 +164,26 @@ export function WorkspaceStarterBulkGovernanceCard({
               <strong>{item.label}:</strong> {item.text}
             </p>
           ))}
+
+          {outcomePrimarySignal || outcomeFollowUp ? (
+            <div className="binding-section">
+              <p className="binding-meta">Operator follow-up</p>
+              <p className="section-copy starter-summary-copy">
+                同一份 result receipt 现在会把 operator / AI 复用的 follow-up 解释直接放进后端共享契约，
+                不再只依赖页面局部描述。
+              </p>
+              {outcomePrimarySignal ? (
+                <p className="section-copy starter-summary-copy">
+                  <strong>Primary signal:</strong> {outcomePrimarySignal}
+                </p>
+              ) : null}
+              {outcomeFollowUp ? (
+                <p className="section-copy starter-summary-copy">
+                  <strong>Next step:</strong> {outcomeFollowUp}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {resultFocusTargets.length > 0 ? (
             <div className="binding-section">

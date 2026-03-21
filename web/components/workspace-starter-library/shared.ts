@@ -418,13 +418,31 @@ function getWorkspaceStarterBulkResultOutcomeLabel(
 }
 
 export function buildWorkspaceStarterBulkResultFocusTargets(
-  result: Pick<WorkspaceStarterBulkActionResult, "action" | "receipt_items">,
+  result: Pick<
+    WorkspaceStarterBulkActionResult,
+    "action" | "receipt_items" | "follow_up_template_ids"
+  >,
   templates: WorkspaceStarterTemplateItem[]
 ): WorkspaceStarterBulkResultFocusTarget[] {
   const templatesById = new Map(templates.map((template) => [template.id, template] as const));
   const seenTemplateIds = new Set<string>();
+  const prioritizedTemplateIds = Array.from(
+    new Set((result.follow_up_template_ids ?? []).map((templateId) => templateId.trim()).filter(Boolean))
+  );
+  const orderLookup = new Map(
+    prioritizedTemplateIds.map((templateId, index) => [templateId, index] as const)
+  );
 
-  return (result.receipt_items ?? []).flatMap((item) => {
+  const orderedReceiptItems = [...(result.receipt_items ?? [])].sort((left, right) => {
+    const leftOrder = orderLookup.get(left.template_id) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = orderLookup.get(right.template_id) ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    return 0;
+  });
+
+  return orderedReceiptItems.flatMap((item) => {
     if (item.outcome === "deleted" || seenTemplateIds.has(item.template_id)) {
       return [];
     }

@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.explanations import SignalFollowUpExplanation
+
 WorkflowBusinessTrack = Literal[
     "应用新建编排",
     "编排节点能力",
@@ -350,3 +352,5 @@ class WorkspaceStarterBulkActionResult(BaseModel):
         default_factory=list
     )
     receipt_items: list[WorkspaceStarterBulkReceiptItem] = Field(default_factory=list)
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    follow_up_template_ids: list[str] = Field(default_factory=list)

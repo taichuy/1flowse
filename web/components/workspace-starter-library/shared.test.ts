@@ -439,7 +439,14 @@ describe("workspace starter source action decision", () => {
           changed: false,
           rebase_fields: []
         }
-      ]
+      ],
+      outcome_explanation: {
+        primary_signal:
+          "本次批量刷新请求 3 个 starter；实际处理 1 个。 结果回执里还有 2 个跳过项（仅名称漂移 1 / 不存在 1）。 其中 1 个 starter / 1 个 sandbox 依赖漂移节点已沉淀进同一份 result receipt。",
+        follow_up:
+          "优先对标记为“仅名称漂移”的 starter 执行 rebase，让命名与来源 workflow 保持一致。 优先复核 result receipt 中带 sandbox drift 的 starter，确认依赖节点与隔离策略是否仍符合预期。"
+      },
+      follow_up_template_ids: ["starter-active-sandbox", "starter-active-a"]
     };
 
     expect(buildWorkspaceStarterBulkResultNarrative(result)).toEqual([
@@ -458,16 +465,6 @@ describe("workspace starter source action decision", () => {
     ]);
     expect(buildWorkspaceStarterBulkResultFocusTargets(result, templates)).toEqual([
       {
-        templateId: "starter-active-a",
-        name: "Active starter A",
-        sourceWorkflowVersion: "0.2.0",
-        statusLabel: "已刷新 · 建议 refresh",
-        detail: "已把 starter 快照应用到最新来源事实。",
-        sandboxNodeSummary: "sandbox",
-        driftNodeCount: 1,
-        archived: false
-      },
-      {
         templateId: "starter-active-sandbox",
         name: "Active sandbox starter",
         sourceWorkflowVersion: "0.3.0",
@@ -476,6 +473,16 @@ describe("workspace starter source action decision", () => {
           "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名跟随来源，请执行 rebase。",
         sandboxNodeSummary: null,
         driftNodeCount: 0,
+        archived: false
+      },
+      {
+        templateId: "starter-active-a",
+        name: "Active starter A",
+        sourceWorkflowVersion: "0.2.0",
+        statusLabel: "已刷新 · 建议 refresh",
+        detail: "已把 starter 快照应用到最新来源事实。",
+        sandboxNodeSummary: "sandbox",
+        driftNodeCount: 1,
         archived: false
       }
     ]);

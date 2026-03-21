@@ -210,6 +210,11 @@ export type WorkspaceStarterBulkSandboxDependencyItem = {
   sandbox_dependency_nodes: string[];
 };
 
+export type SignalFollowUpExplanation = {
+  primary_signal?: string | null;
+  follow_up?: string | null;
+};
+
 export type WorkspaceStarterBulkActionResult = {
   workspace_id: string;
   action: WorkspaceStarterBulkAction;
@@ -223,6 +228,8 @@ export type WorkspaceStarterBulkActionResult = {
   sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
   sandbox_dependency_items: WorkspaceStarterBulkSandboxDependencyItem[];
   receipt_items: WorkspaceStarterBulkReceiptItem[];
+  outcome_explanation?: SignalFollowUpExplanation | null;
+  follow_up_template_ids: string[];
 };
 
 export type WorkspaceStarterValidationIssue = WorkflowDefinitionPreflightIssue;
@@ -465,7 +472,9 @@ export async function bulkUpdateWorkspaceStarters({
       skipped_reason_summary: [],
       sandbox_dependency_changes: null,
       sandbox_dependency_items: [],
-      receipt_items: []
+      receipt_items: [],
+      outcome_explanation: null,
+      follow_up_template_ids: []
     };
   }
 

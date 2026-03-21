@@ -1771,6 +1771,14 @@ def test_workspace_starter_bulk_delete_requires_archive_and_removes_archived_ite
             "rebase_fields": [],
         },
     ]
+    assert delete_result["outcome_explanation"]["primary_signal"] == (
+        "本次批量删除请求 2 个 starter；实际处理 1 个（其中删除 1 个）。 "
+        "结果回执里还有 1 个跳过项（需先归档 1）。"
+    )
+    assert delete_result["outcome_explanation"]["follow_up"] == (
+        "删除失败的 starter 需要先归档，再重新执行批量删除。"
+    )
+    assert delete_result["follow_up_template_ids"] == [active["id"]]
 
     active_detail = client.get(f"/api/workspace-starters/{active['id']}")
     assert active_detail.status_code == 200
@@ -2143,10 +2151,19 @@ def test_workspace_starter_bulk_refresh_returns_sandbox_dependency_summary(
     assert receipt_item["action_decision"]["can_refresh"] is True
     assert receipt_item["action_decision"]["can_rebase"] is True
     assert "sandbox drift 1" in receipt_item["action_decision"]["fact_chips"]
-    assert receipt_item["sandbox_dependency_changes"] == refresh_result["sandbox_dependency_changes"]
+    assert receipt_item["sandbox_dependency_changes"] == (
+        refresh_result["sandbox_dependency_changes"]
+    )
     assert receipt_item["sandbox_dependency_nodes"] == ["sandbox"]
     assert receipt_item["changed"] is True
     assert receipt_item["rebase_fields"] == []
+    assert "sandbox 依赖漂移节点已沉淀进同一份 result receipt" in refresh_result[
+        "outcome_explanation"
+    ]["primary_signal"]
+    assert "优先复核 result receipt 中带 sandbox drift 的 starter" in refresh_result[
+        "outcome_explanation"
+    ]["follow_up"]
+    assert refresh_result["follow_up_template_ids"] == [derived["id"]]
 
 
 def test_workspace_starter_bulk_rebase_returns_sandbox_dependency_summary(
@@ -2228,6 +2245,13 @@ def test_workspace_starter_bulk_rebase_returns_sandbox_dependency_summary(
         "default_workflow_name",
         "definition",
     ]
+    assert "sandbox 依赖漂移节点已沉淀进同一份 result receipt" in rebase_result[
+        "outcome_explanation"
+    ]["primary_signal"]
+    assert "优先复核 result receipt 中带 sandbox drift 的 starter" in rebase_result[
+        "outcome_explanation"
+    ]["follow_up"]
+    assert rebase_result["follow_up_template_ids"] == [derived["id"]]
 
 
 def test_workspace_starter_bulk_preview_summarizes_refresh_and_rebase_candidates(
@@ -2595,6 +2619,14 @@ def test_workspace_starter_bulk_refresh_reuses_preview_blockers_in_result_receip
     assert refresh_result["receipt_items"][1]["action_decision"]["recommended_action"] == "none"
     assert refresh_result["receipt_items"][2]["reason"] == "name_drift_only"
     assert refresh_result["receipt_items"][2]["action_decision"]["recommended_action"] == "rebase"
+    assert "已对齐 1 / 仅名称漂移 1" in refresh_result["outcome_explanation"]["primary_signal"]
+    assert "优先对标记为“仅名称漂移”的 starter 执行 rebase" in refresh_result[
+        "outcome_explanation"
+    ]["follow_up"]
+    assert refresh_result["follow_up_template_ids"] == [
+        name_only["id"],
+        refresh_candidate["id"],
+    ]
 
 
 def test_workspace_starter_bulk_preview_marks_invalid_source_workflow_as_blocked(
