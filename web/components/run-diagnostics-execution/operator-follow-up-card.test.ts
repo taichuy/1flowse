@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics-execution/operator-follow-up-card";
 import type { RunExecutionView } from "@/lib/get-run-views";
+import { buildRunDiagnosticsOperatorFollowUpSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -242,6 +243,7 @@ function buildExecutionView(): RunExecutionView {
 
 describe("RunDiagnosticsOperatorFollowUpCard", () => {
   it("renders the canonical operator snapshot in diagnostics", () => {
+    const surfaceCopy = buildRunDiagnosticsOperatorFollowUpSurfaceCopy();
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsOperatorFollowUpCard, {
         executionView: buildExecutionView()
@@ -249,6 +251,7 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
     );
 
     expect(html).toContain("Canonical operator follow-up");
+    expect(html).toContain(surfaceCopy.description);
     expect(html).toContain("当前 waiting 节点仍在等待 callback。");
     expect(html).toContain("Run status");
     expect(html).toContain("Sandbox Code (sandbox_code_1)");

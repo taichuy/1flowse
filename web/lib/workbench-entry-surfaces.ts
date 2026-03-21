@@ -39,6 +39,11 @@ export type RunDetailExecutionFocusSurfaceCopy = {
   focusedSkillTraceDescription: string;
 };
 
+export type RunDiagnosticsOperatorFollowUpSurfaceCopy = {
+  description: string;
+  callbackFallbackDetail: string;
+};
+
 export type WorkflowEditorHeroSurfaceCopy = {
   heroLinks: WorkbenchEntryLinksConfig;
   saveChainValue: string;
@@ -54,6 +59,17 @@ export type WorkflowPublishPanelSurfaceCopy = {
   description: string;
   headerLinks: WorkbenchEntryLinksConfig;
   emptyStateDescription: string;
+};
+
+export type WorkflowCreateWizardSurfaceCopy = {
+  heroLinks: WorkbenchEntryLinksConfig;
+  emptyStateDescription: string;
+  emptyStateLinks: WorkbenchEntryLinksConfig;
+  scopedGovernanceDescription: string;
+  scopedGovernanceBackLinkLabel: string;
+  sourceGovernanceDescription: string;
+  sourceGovernanceFollowUpPrefix: string;
+  sourceGovernanceFollowUpLinkLabel: string;
 };
 
 export function buildRunLibrarySurfaceCopy(): RunLibrarySurfaceCopy {
@@ -181,6 +197,15 @@ export function buildRunDetailExecutionFocusSurfaceCopy(): RunDetailExecutionFoc
   };
 }
 
+export function buildRunDiagnosticsOperatorFollowUpSurfaceCopy(): RunDiagnosticsOperatorFollowUpSurfaceCopy {
+  return {
+    description:
+      "这里直接复用后端生成的 canonical operator snapshot，保证 run diagnostics 与 inbox / publish detail 看到的是同一组 execution focus、waiting 和 follow-up 事实。",
+    callbackFallbackDetail:
+      "优先回看当前 run detail 的 waiting / callback 事实，再决定是否介入操作。"
+  };
+}
+
 export function buildWorkflowEditorHeroSurfaceCopy({
   createWorkflowHref,
   workspaceStarterLibraryHref,
@@ -235,5 +260,48 @@ export function buildWorkflowPublishPanelSurfaceCopy(): WorkflowPublishPanelSurf
     },
     emptyStateDescription:
       "当前 workflow definition 还没有声明 `publish`，因此没有可治理的开放 API endpoint。"
+  };
+}
+
+export function buildWorkflowCreateWizardSurfaceCopy({
+  starterGovernanceHref
+}: {
+  starterGovernanceHref: string;
+}): WorkflowCreateWizardSurfaceCopy {
+  return {
+    heroLinks: {
+      keys: ["home", "workspaceStarterLibrary"],
+      overrides: {
+        workspaceStarterLibrary: {
+          href: starterGovernanceHref
+        }
+      },
+      primaryKey: "home",
+      variant: "inline"
+    },
+    emptyStateDescription:
+      "这通常说明你是从 workspace starter 治理页带着 follow-up / 搜索条件回来，但当前范围里没有仍可直接创建的 active starter。",
+    emptyStateLinks: {
+      keys: ["workspaceStarterLibrary", "createWorkflow"],
+      overrides: {
+        workspaceStarterLibrary: {
+          href: starterGovernanceHref,
+          label: "回到治理页"
+        },
+        createWorkflow: {
+          label: "清除筛选并查看全部 starter"
+        }
+      },
+      primaryKey: "workspaceStarterLibrary",
+      variant: "inline"
+    },
+    scopedGovernanceDescription:
+      "当前 starter 列表正在复用 workspace starter 治理页的 query scope；命中过滤时只展示匹配的 workspace starter，避免 builtin starter 把 follow-up 范围冲淡。",
+    scopedGovernanceBackLinkLabel: "回到治理页",
+    sourceGovernanceDescription:
+      "创建页现在直接复用 workspace starter 的来源治理 follow-up，不再要求 operator / AI 先跳回模板库自己拼装“是否漂移、下一步做什么”。",
+    sourceGovernanceFollowUpPrefix:
+      "需要补 refresh / rebase 或排查来源缺失时，直接去",
+    sourceGovernanceFollowUpLinkLabel: "管理这个 workspace starter"
   };
 }

@@ -17,6 +17,10 @@ import {
   listExecutionFocusArtifactPreviews,
   listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
+import {
+  buildRunDetailExecutionFocusSurfaceCopy,
+  buildRunDiagnosticsOperatorFollowUpSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
 
 type RunDiagnosticsOperatorFollowUpCardProps = {
   executionView: RunExecutionView;
@@ -33,6 +37,8 @@ export function RunDiagnosticsOperatorFollowUpCard({
   }
 
   const surfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const diagnosticsSurfaceCopy = buildRunDiagnosticsOperatorFollowUpSurfaceCopy();
+  const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   const focusSurfaceCopy = buildExecutionFocusSectionSurfaceCopy("diagnostics");
   const snapshotMetaRows = buildOperatorRunSnapshotMetaRows({
     runStatus: snapshot?.status ?? executionView.status,
@@ -57,7 +63,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
         null,
       href: buildRunDetailHref(executionView.run_id),
       href_label: surfaceCopy.openRunLabel,
-      fallback_detail: "优先回看当前 run detail 的 waiting / callback 事实，再决定是否介入操作。"
+      fallback_detail: diagnosticsSurfaceCopy.callbackFallbackDetail
     },
     execution: {
       active: hasExecutionFacts(snapshot, executionView),
@@ -68,7 +74,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
         null,
       href: buildRunDetailHref(executionView.run_id),
       href_label: surfaceCopy.openRunLabel,
-      fallback_detail: "先回到当前 run detail，沿 canonical execution focus 继续排查阻断节点。"
+      fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
     },
     operatorFollowUp: followUp?.explanation?.follow_up ?? null,
     operatorLabel: "operator follow-up"
@@ -116,8 +122,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
         </div>
       </div>
       <p className="section-copy entry-copy">
-        这里直接复用后端生成的 canonical operator snapshot，保证 run diagnostics 与
-        inbox / publish detail 看到的是同一组 execution focus、waiting 和 follow-up 事实。
+        {diagnosticsSurfaceCopy.description}
       </p>
       {primarySignal ? <p className="section-copy entry-copy">{primarySignal}</p> : null}
       {snapshotMetaRows.length > 0 ? (

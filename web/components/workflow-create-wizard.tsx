@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
@@ -23,6 +23,7 @@ import type {
   WorkflowLibraryStarterItem,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
+import { buildWorkflowCreateWizardSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import {
   createWorkflow,
   type WorkflowListItem,
@@ -127,6 +128,9 @@ export function WorkflowCreateWizard({
   const starterGovernanceHref = buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
     workspaceStarterGovernanceScope
   );
+  const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
+    starterGovernanceHref
+  });
   const selectedStarterSandboxDependencySummary = useMemo(
     () =>
       selectedStarter
@@ -235,23 +239,10 @@ export function WorkflowCreateWizard({
             <p className="eyebrow">Starter scope</p>
             <h1>当前筛选范围里没有可复用的 active workspace starter</h1>
             <p className="hero-text">
-              这通常说明你是从 workspace starter 治理页带着 follow-up / 搜索条件回来，但当前范围里没有仍可直接创建的 active starter。
+              {surfaceCopy.emptyStateDescription}
             </p>
             <div className="hero-actions">
-              <WorkbenchEntryLinks
-                keys={["workspaceStarterLibrary", "createWorkflow"]}
-                overrides={{
-                  workspaceStarterLibrary: {
-                    href: starterGovernanceHref,
-                    label: "返回治理页调整范围"
-                  },
-                  createWorkflow: {
-                    label: "清除筛选并查看全部 starter"
-                  }
-                }}
-                primaryKey="workspaceStarterLibrary"
-                variant="inline"
-              />
+              <WorkbenchEntryLinks {...surfaceCopy.emptyStateLinks} />
             </div>
           </div>
 
@@ -294,16 +285,7 @@ export function WorkflowCreateWizard({
             <span className="pill">{workflows.length} existing workflows</span>
           </div>
           <div className="hero-actions">
-            <WorkbenchEntryLinks
-              keys={["home", "workspaceStarterLibrary"]}
-              overrides={{
-                workspaceStarterLibrary: {
-                  href: starterGovernanceHref
-                }
-              }}
-              primaryKey="home"
-              variant="inline"
-            />
+            <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
             {workflows[0] ? (
               <Link
                 className="inline-link secondary"
@@ -357,11 +339,15 @@ export function WorkflowCreateWizard({
             </p>
             {hasScopedWorkspaceStarterFilters ? (
               <p className="binding-meta">
-                当前 starter 列表正在复用 workspace starter 治理页的 query scope；命中过滤时只展示匹配的 workspace starter，避免 builtin starter 把 follow-up 范围冲淡。
+                {surfaceCopy.scopedGovernanceDescription}
                 {" "}
-                <Link className="inline-link secondary" href={starterGovernanceHref}>
-                  回到治理页
-                </Link>
+                <WorkbenchEntryLink
+                  className="inline-link secondary"
+                  linkKey="workspaceStarterLibrary"
+                  override={{ href: starterGovernanceHref }}
+                >
+                  {surfaceCopy.scopedGovernanceBackLinkLabel}
+                </WorkbenchEntryLink>
                 。
               </p>
             ) : null}
@@ -435,10 +421,7 @@ export function WorkflowCreateWizard({
               {selectedStarterSourceGovernance ? (
                 <div className="binding-form">
                   <p className="binding-label">Source governance</p>
-                  <p className="binding-meta">
-                    创建页现在直接复用 workspace starter 的来源治理 follow-up，不再要求 operator / AI
-                    先跳回模板库自己拼装“是否漂移、下一步做什么”。
-                  </p>
+                  <p className="binding-meta">{surfaceCopy.sourceGovernanceDescription}</p>
                   <div className="summary-strip compact-strip">
                     <div className="summary-card">
                       <span>Status</span>
@@ -476,11 +459,15 @@ export function WorkflowCreateWizard({
                     </div>
                   ) : null}
                   <p className="binding-meta">
-                    需要补 refresh / rebase 或排查来源缺失时，直接去
+                    {surfaceCopy.sourceGovernanceFollowUpPrefix}
                     {" "}
-                    <Link className="inline-link secondary" href={starterGovernanceHref}>
-                      管理这个 workspace starter
-                    </Link>
+                    <WorkbenchEntryLink
+                      className="inline-link secondary"
+                      linkKey="workspaceStarterLibrary"
+                      override={{ href: starterGovernanceHref }}
+                    >
+                      {surfaceCopy.sourceGovernanceFollowUpLinkLabel}
+                    </WorkbenchEntryLink>
                     。
                   </p>
                 </div>

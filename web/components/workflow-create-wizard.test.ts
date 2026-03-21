@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
+import { buildWorkflowCreateWizardSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 Object.assign(globalThis, { React });
 
@@ -21,6 +22,10 @@ vi.mock("next/navigation", () => ({
 
 describe("WorkflowCreateWizard", () => {
   it("surfaces workspace starter source governance follow-up in the create flow", () => {
+    const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
+      starterGovernanceHref:
+        "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    });
     const html = renderToStaticMarkup(
       createElement(WorkflowCreateWizard, {
         catalogToolCount: 1,
@@ -159,6 +164,10 @@ describe("WorkflowCreateWizard", () => {
   });
 
   it("keeps workspace starter governance filters in the manage link", () => {
+    const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
+      starterGovernanceHref:
+        "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    });
     const html = renderToStaticMarkup(
       createElement(WorkflowCreateWizard, {
         catalogToolCount: 0,
@@ -234,7 +243,9 @@ describe("WorkflowCreateWizard", () => {
       })
     );
 
-    expect(html).toContain("当前 starter 列表正在复用 workspace starter 治理页的 query scope");
+    expect(html).toContain(surfaceCopy.scopedGovernanceDescription);
+    expect(html).toContain(surfaceCopy.sourceGovernanceDescription);
+    expect(html).toContain(surfaceCopy.scopedGovernanceBackLinkLabel);
     expect(html).toContain(
       "/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );

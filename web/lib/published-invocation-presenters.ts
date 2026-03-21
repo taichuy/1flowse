@@ -52,6 +52,7 @@ import {
   buildSensitiveAccessBlockedSurfaceCopy,
   buildSensitiveAccessTimelineSurfaceCopy
 } from "@/lib/sensitive-access-presenters";
+import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type PublishedInvocationWaitingOverview = {
@@ -1747,6 +1748,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   approvalInboxHref?: string | null;
 }): PublishedInvocationRecommendedNextStep | null {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   return buildOperatorRecommendedNextStep({
     callback: {
       active: Boolean(
@@ -1770,8 +1772,7 @@ export function buildPublishedInvocationRecommendedNextStep({
       detail: executionFocusFollowUp,
       href: runId ? buildRunDetailHref(runId) : null,
       href_label: runId ? operatorSurfaceCopy.openRunLabel : null,
-      fallback_detail:
-        "当前 invocation 已回接 canonical execution focus；优先打开 run 继续检查 focus node、runtime evidence 和 execution fallback / blocking 原因。"
+      fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
     },
     operatorFollowUp: canonicalFollowUp?.follow_up ?? null
   });

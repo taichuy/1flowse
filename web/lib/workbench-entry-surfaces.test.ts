@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildRunDetailExecutionFocusSurfaceCopy,
+  buildRunDiagnosticsOperatorFollowUpSurfaceCopy,
   buildRunLibrarySurfaceCopy,
   buildSensitiveAccessInboxEntryExecutionSurfaceCopy,
   buildSensitiveAccessInboxSurfaceCopy,
+  buildWorkflowCreateWizardSurfaceCopy,
   buildWorkflowEditorHeroSurfaceCopy,
   buildWorkflowLibrarySurfaceCopy,
   buildWorkflowPublishPanelSurfaceCopy
@@ -97,6 +99,13 @@ describe("workbench entry surface copy", () => {
     );
   });
 
+  it("keeps diagnostics operator snapshot prose on the shared workbench surface", () => {
+    const surfaceCopy = buildRunDiagnosticsOperatorFollowUpSurfaceCopy();
+
+    expect(surfaceCopy.description).toContain("canonical operator snapshot");
+    expect(surfaceCopy.callbackFallbackDetail).toContain("waiting / callback 事实");
+  });
+
   it("keeps workflow editor governance CTA copy in the shared hero contract", () => {
     const surfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
       createWorkflowHref:
@@ -121,5 +130,25 @@ describe("workbench entry surface copy", () => {
     );
     expect(surfaceCopy.scopedGovernanceBackLinkLabel).toBe("回到治理页");
     expect(surfaceCopy.scopedGovernanceCreateWorkflowLabel).toBe("再新建一个 workflow");
+  });
+
+  it("keeps workflow create wizard governance scope copy in the shared surface contract", () => {
+    const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
+      starterGovernanceHref:
+        "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted"
+    });
+
+    expect(surfaceCopy.heroLinks).toMatchObject({
+      keys: ["home", "workspaceStarterLibrary"],
+      primaryKey: "home",
+      variant: "inline"
+    });
+    expect(surfaceCopy.emptyStateLinks.overrides?.workspaceStarterLibrary?.label).toBe(
+      "回到治理页"
+    );
+    expect(surfaceCopy.scopedGovernanceBackLinkLabel).toBe("回到治理页");
+    expect(surfaceCopy.sourceGovernanceFollowUpLinkLabel).toBe(
+      "管理这个 workspace starter"
+    );
   });
 });

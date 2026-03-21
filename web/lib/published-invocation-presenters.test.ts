@@ -1,6 +1,7 @@
 ﻿import { describe, expect, it } from "vitest";
 
 import { buildOperatorFollowUpSurfaceCopy } from "./operator-follow-up-presenters";
+import { buildRunDetailExecutionFocusSurfaceCopy } from "./workbench-entry-surfaces";
 
 import {
   buildPublishedInvocationActivityBlockedDetailSurfaceCopy,
@@ -1318,6 +1319,28 @@ describe("published invocation presenters", () => {
       label: "execution focus",
       detail: "优先打开 run 继续检查 focus node。",
       href: "/runs/run-focus-1",
+      href_label: "open run"
+    });
+  });
+
+  it("execution focus 没有显式 follow-up 时复用共享 fallback 详情", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-fallback-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: null,
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingFollowUp: null,
+        executionFocusFollowUp: null,
+        blockingInboxHref: null,
+        approvalInboxHref: null
+      })
+    ).toEqual({
+      label: "execution focus",
+      detail: buildRunDetailExecutionFocusSurfaceCopy().recommendedNextStepFallbackDetail,
+      href: "/runs/run-focus-fallback-1",
       href_label: "open run"
     });
   });
