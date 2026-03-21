@@ -140,6 +140,9 @@ function resolveNodeFieldLabel(fieldPath: string) {
   if (fieldPath.startsWith("config.skillBinding.references")) {
     return "Skill references";
   }
+  if (fieldPath.startsWith("config.skillIds")) {
+    return "Skill IDs";
+  }
   if (fieldPath.startsWith("config.contextAccess.readableNodeIds")) {
     return "Readable upstream nodes";
   }

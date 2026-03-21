@@ -43,8 +43,10 @@ export function LlmAgentNodeConfigForm({
   onChange
 }: LlmAgentNodeConfigFormProps) {
   const focusedFieldPath = focusedValidationItem?.target.fieldPath ?? null;
+  const skillIdsHighlightedField = normalizeSkillCatalogFieldKey(highlightedFieldPath);
   const skillBindingHighlightedField = normalizeSkillBindingFieldKey(highlightedFieldPath);
   const contextAccessHighlightedField = normalizeContextAccessFieldKey(highlightedFieldPath);
+  const skillIdsValidationItem = isSkillCatalogFieldPath(focusedFieldPath) ? focusedValidationItem : null;
   const skillBindingValidationItem = isSkillBindingFieldPath(focusedFieldPath)
     ? focusedValidationItem
     : null;
@@ -316,7 +318,12 @@ export function LlmAgentNodeConfigForm({
         />
       </label>
 
-      <LlmAgentSkillSection skillIds={skillIds} onChange={updateSkillIds} />
+      <LlmAgentSkillSection
+        skillIds={skillIds}
+        highlightedFieldKey={skillIdsHighlightedField}
+        focusedValidationItem={skillIdsValidationItem}
+        onChange={updateSkillIds}
+      />
 
       {skillBindingValidationItem ? (
         <WorkflowValidationRemediationCard
@@ -434,6 +441,13 @@ function isSkillBindingFieldPath(fieldPath: string | null) {
   return fieldPath.startsWith("config.skillBinding.");
 }
 
+function isSkillCatalogFieldPath(fieldPath: string | null) {
+  if (!fieldPath) {
+    return false;
+  }
+  return fieldPath.startsWith("config.skillIds");
+}
+
 function isContextAccessFieldPath(fieldPath: string | null) {
   if (!fieldPath) {
     return false;
@@ -460,6 +474,16 @@ function normalizeSkillBindingFieldKey(fieldPath?: string | null) {
   }
   if (fieldPath.startsWith("config.skillBinding.promptBudgetChars")) {
     return "skillBinding.promptBudgetChars";
+  }
+  return null;
+}
+
+function normalizeSkillCatalogFieldKey(fieldPath?: string | null) {
+  if (!fieldPath) {
+    return null;
+  }
+  if (fieldPath.startsWith("config.skillIds")) {
+    return "skillIds";
   }
   return null;
 }
