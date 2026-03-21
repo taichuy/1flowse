@@ -146,6 +146,24 @@ function resolveNodeFieldLabel(fieldPath: string) {
   }
 
   switch (fieldPath) {
+    case "runtimePolicy.retry":
+      return "Retry policy";
+    case "runtimePolicy.retry.maxAttempts":
+      return "Max attempts";
+    case "runtimePolicy.retry.backoffSeconds":
+      return "Backoff seconds";
+    case "runtimePolicy.retry.backoffMultiplier":
+      return "Backoff multiplier";
+    case "runtimePolicy.join":
+      return "Join policy";
+    case "runtimePolicy.join.mode":
+      return "Join mode";
+    case "runtimePolicy.join.requiredNodeIds":
+      return "Required upstream nodes";
+    case "runtimePolicy.join.onUnmet":
+      return "Join on unmet";
+    case "runtimePolicy.join.mergeStrategy":
+      return "Join merge strategy";
     case "runtimePolicy.execution":
       return "Execution policy";
     case "runtimePolicy.execution.class":
@@ -263,6 +281,34 @@ function resolveNodeSuggestion(item: WorkflowValidationNavigatorItem, fieldPath:
     }
 
     return "先把 execution override 调回当前实现支持范围；如果要保留 `sandbox / microvm`，必须先确认 live sandbox readiness 已 ready，且 capability 覆盖当前 profile / network / filesystem 需求。";
+  }
+
+  if (fieldPath.startsWith("runtimePolicy.retry")) {
+    if (fieldPath.endsWith("maxAttempts")) {
+      return "把重试次数改回 `>= 1` 的合法值；如果当前节点不需要额外重试，可清空 override，回退到默认 retry policy。";
+    }
+
+    if (fieldPath.endsWith("backoffSeconds")) {
+      return "把 backoff seconds 调回 `>= 0` 的合法值，避免 runtime 进入负等待或与默认回退策略分叉。";
+    }
+
+    if (fieldPath.endsWith("backoffMultiplier")) {
+      return "把 backoff multiplier 调回 `>= 1` 的合法值，避免失败后的等待时间反向缩短或放大失控。";
+    }
+
+    return "先把 retry policy 改回运行时支持的合法范围；如果当前节点没有特殊重试需求，可直接清空 override，沿用默认值。";
+  }
+
+  if (fieldPath.startsWith("runtimePolicy.join")) {
+    if (fieldPath.endsWith("requiredNodeIds")) {
+      return "把 required upstream nodes 收口到当前真实入边来源；如果本来就要等待全部入边，可直接清空自定义列表。";
+    }
+
+    if (fieldPath.endsWith("mode") || fieldPath.endsWith("onUnmet") || fieldPath.endsWith("mergeStrategy")) {
+      return "把 join 策略改回当前运行时支持的组合；如果节点并不需要等待上游汇合，就清空 join override，避免 definition 和实际调度语义继续漂移。";
+    }
+
+    return "先确认当前节点确实存在上游入边，再决定是否保留 join policy；如果不需要 join gate，就清空这段 override。";
   }
 
   if (fieldPath === "config.toolPolicy.allowedToolIds") {
