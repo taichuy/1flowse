@@ -52,6 +52,7 @@ import {
   buildSensitiveAccessBlockedSurfaceCopy,
   buildSensitiveAccessTimelineSurfaceCopy
 } from "@/lib/sensitive-access-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type PublishedInvocationWaitingOverview = {
   activeWaitingCount: number;
@@ -1151,7 +1152,7 @@ export function listPublishedInvocationEntryMetaRows({
       "run",
       surfaceCopy.runLabel,
       invocation.run_id ?? surfaceCopy.notStartedValueLabel,
-      invocation.run_id ? `/runs/${encodeURIComponent(invocation.run_id)}` : null
+      invocation.run_id ? buildRunDetailHref(invocation.run_id) : null
     ),
     buildPublishedInvocationMetaRow(
       "run-status",
@@ -1250,7 +1251,7 @@ export function listPublishedInvocationDetailRunRows({
       "run",
       surfaceCopy.runLabel,
       runId ?? surfaceCopy.notStartedValueLabel,
-      runId ? `/runs/${encodeURIComponent(runId)}` : null
+      runId ? buildRunDetailHref(runId) : null
     ),
     buildPublishedInvocationMetaRow(
       "status",
@@ -1767,7 +1768,7 @@ export function buildPublishedInvocationRecommendedNextStep({
       active: Boolean((executionFocusFollowUp && executionFocusFollowUp.trim()) || runId),
       label: "execution focus",
       detail: executionFocusFollowUp,
-      href: runId ? `/runs/${encodeURIComponent(runId)}` : null,
+      href: runId ? buildRunDetailHref(runId) : null,
       href_label: runId ? operatorSurfaceCopy.openRunLabel : null,
       fallback_detail:
         "当前 invocation 已回接 canonical execution focus；优先打开 run 继续检查 focus node、runtime evidence 和 execution fallback / blocking 原因。"

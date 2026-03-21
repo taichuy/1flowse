@@ -9,6 +9,7 @@ import {
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRunSnapshotMetaRows
 } from "@/lib/operator-follow-up-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type OperatorRunSampleCardListProps = {
   cards: OperatorRunSampleCard[];
@@ -45,7 +46,7 @@ export function OperatorRunSampleCardList({
             <span className="status-meta">{surfaceCopy.runTitlePrefix} {sample.shortRunId}</span>
             <Link
               className="event-chip inbox-filter-link"
-              href={`/runs/${encodeURIComponent(sample.runId)}`}
+              href={buildRunDetailHref(sample.runId)}
             >
               {surfaceCopy.openRunLabel}
             </Link>

@@ -35,6 +35,7 @@ import {
 } from "@/lib/run-execution-focus-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import { formatDurationMs, formatTimestamp } from "@/lib/runtime-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type PublishedInvocationItem = PublishedEndpointInvocationListResponse["items"][number];
 
@@ -248,7 +249,7 @@ export function WorkflowPublishInvocationEntryCard({
               <dt>{surfaceCopy.canonicalFollowUpSampleFocusLabel}</dt>
               <dd>
                 {runFollowUpSample ? (
-                  <Link className="inline-link" href={`/runs/${encodeURIComponent(runFollowUpSample.run_id)}`}>
+                  <Link className="inline-link" href={buildRunDetailHref(runFollowUpSample.run_id)}>
                     {runFollowUpSample.run_id}
                   </Link>
                 ) : (

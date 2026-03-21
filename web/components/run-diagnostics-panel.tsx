@@ -28,6 +28,7 @@ import {
   formatDuration,
   formatTimestamp
 } from "@/lib/runtime-presenters";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 type RunDiagnosticsPanelProps = {
   run: RunDetail;
@@ -73,7 +74,7 @@ export function RunDiagnosticsPanel({
   const activeFilters = summarizeActiveFilters(activeTraceQuery);
   const traceHref = buildPageTraceHref(run.id, activeTraceQuery);
   const eventsApiHref = `${getApiBaseUrl()}/api/runs/${encodeURIComponent(run.id)}/events`;
-  const workflowHref = `/workflows/${encodeURIComponent(run.workflow_id)}`;
+  const workflowHref = buildWorkflowDetailHref(run.workflow_id);
   const heroSurfaceCopy = buildRunDiagnosticsHeroSurfaceCopy();
 
   return (

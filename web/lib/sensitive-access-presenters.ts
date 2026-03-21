@@ -12,6 +12,7 @@ import {
   buildOperatorRecommendedNextStep,
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 const DECISION_LABELS: Record<string, string> = {
   allow: "allowed",
@@ -324,7 +325,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
       active: Boolean(runId || executionFollowUp),
       label: "run detail",
       detail: executionFollowUp,
-      href: runId?.trim() ? `/runs/${encodeURIComponent(runId.trim())}` : null,
+      href: runId?.trim() ? buildRunDetailHref(runId) : null,
       href_label: runId?.trim() ? operatorSurfaceCopy.openRunLabel : null,
       fallback_detail:
         "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。"

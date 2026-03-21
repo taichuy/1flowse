@@ -21,6 +21,7 @@ import {
   formatDurationMs,
   formatTimestamp
 } from "@/lib/runtime-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type WorkflowRunOverlayPanelProps = {
   runs: WorkflowRunListItem[];
@@ -124,7 +125,7 @@ export function WorkflowRunOverlayPanel({
               </p>
 
               <div className="hero-actions">
-                <Link className="inline-link" href={`/runs/${encodeURIComponent(run.id)}`}>
+                <Link className="inline-link" href={buildRunDetailHref(run.id)}>
                   打开 run diagnostics
                 </Link>
                 <RunTraceExportActions

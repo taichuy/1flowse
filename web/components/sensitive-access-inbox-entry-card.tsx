@@ -23,6 +23,7 @@ import {
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 import {
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
@@ -113,7 +114,7 @@ export function SensitiveAccessInboxEntryCard({
           detail: executionFocusFollowUp,
           href: executionContext.focusMatchesEntry
             ? null
-            : focusInboxHref ?? `/runs/${encodeURIComponent(executionContext.runId)}`,
+            : focusInboxHref ?? buildRunDetailHref(executionContext.runId),
           href_label: executionContext.focusMatchesEntry
             ? null
             : focusInboxHref
@@ -162,7 +163,7 @@ export function SensitiveAccessInboxEntryCard({
           <span className="event-chip">reason {formatSensitiveAccessReasonLabel(request)}</span>
         ) : null}
         {displayScope.runId ? (
-          <Link className="event-chip inbox-filter-link" href={`/runs/${displayScope.runId}`}>
+          <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(displayScope.runId)}>
             run {displayScope.runId.slice(0, 8)}
           </Link>
         ) : null}
@@ -244,7 +245,7 @@ export function SensitiveAccessInboxEntryCard({
             />
           ) : null}
           <div className="tool-badge-row">
-            <Link className="event-chip inbox-filter-link" href={`/runs/${executionContext.runId}`}>
+            <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(executionContext.runId)}>
               {operatorSurfaceCopy.openRunLabel}
             </Link>
             {focusInboxHref ? (

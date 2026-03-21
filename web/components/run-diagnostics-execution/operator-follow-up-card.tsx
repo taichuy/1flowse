@@ -10,6 +10,7 @@ import {
   buildOperatorRunSnapshotMetaRows,
   buildOperatorFollowUpSurfaceCopy
 } from "@/lib/operator-follow-up-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 import {
   buildExecutionFocusSectionSurfaceCopy,
   formatExecutionFocusArtifactSummary,
@@ -54,7 +55,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
         snapshot?.callback_waiting_explanation?.follow_up ??
         executionView.execution_focus_explanation?.follow_up ??
         null,
-      href: `/runs/${encodeURIComponent(executionView.run_id)}`,
+      href: buildRunDetailHref(executionView.run_id),
       href_label: surfaceCopy.openRunLabel,
       fallback_detail: "优先回看当前 run detail 的 waiting / callback 事实，再决定是否介入操作。"
     },
@@ -65,7 +66,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
         snapshot?.execution_focus_explanation?.follow_up ??
         executionView.execution_focus_explanation?.follow_up ??
         null,
-      href: `/runs/${encodeURIComponent(executionView.run_id)}`,
+      href: buildRunDetailHref(executionView.run_id),
       href_label: surfaceCopy.openRunLabel,
       fallback_detail: "先回到当前 run detail，沿 canonical execution focus 继续排查阻断节点。"
     },

@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import {
+  WorkbenchEntryLink,
+  WorkbenchEntryLinks
+} from "@/components/workbench-entry-links";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { formatCountMap, formatTimestamp } from "@/lib/runtime-presenters";
+import {
+  buildRunDetailHref,
+  buildWorkflowDetailHref
+} from "@/lib/workbench-links";
 
 export const metadata: Metadata = {
   title: "Runs | 7Flows Studio"
@@ -66,9 +73,7 @@ export default async function RunsPage() {
             {recentRuns.length === 0 ? (
               <div className="empty-state-block">
                 <p className="empty-state">当前还没有历史 run，可先从 workflow 编辑器触发一次执行。</p>
-                <Link className="inline-link" href="/workflows">
-                  打开 workflow 列表
-                </Link>
+                <WorkbenchEntryLink className="inline-link" linkKey="workflowLibrary" />
               </div>
             ) : (
               recentRuns.map((run) => (
@@ -86,12 +91,12 @@ export default async function RunsPage() {
                     Created {formatTimestamp(run.created_at)} · events {run.event_count}
                   </p>
                   <div className="section-actions">
-                    <Link className="activity-link" href={`/runs/${encodeURIComponent(run.id)}`}>
+                    <Link className="activity-link" href={buildRunDetailHref(run.id)}>
                       查看 run 诊断面板
                     </Link>
                     <Link
                       className="inline-link secondary"
-                      href={`/workflows/${encodeURIComponent(run.workflow_id)}`}
+                      href={buildWorkflowDetailHref(run.workflow_id)}
                     >
                       回到 workflow 编辑器
                     </Link>
@@ -141,7 +146,7 @@ export default async function RunsPage() {
               variant="inline"
             />
             {latestRun ? (
-              <Link className="inline-link secondary" href={`/runs/${encodeURIComponent(latestRun.id)}`}>
+              <Link className="inline-link secondary" href={buildRunDetailHref(latestRun.id)}>
                 打开最新 run 诊断面板
               </Link>
             ) : null}

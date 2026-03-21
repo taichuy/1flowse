@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { formatDurationMs, formatJsonPayload, formatTimestamp } from "@/lib/runtime-presenters";
 import type { RunTrace, RunTraceQuery } from "@/lib/get-run-trace";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 import { buildPageTraceHref } from "@/components/run-diagnostics-panel/shared";
 
@@ -40,7 +41,7 @@ export function RunDiagnosticsTraceResultsSection({
             </div>
             <p className="run-error-message">{traceError}</p>
             <div className="hero-actions">
-              <Link className="inline-link" href={`/runs/${runId}`}>
+              <Link className="inline-link" href={buildRunDetailHref(runId)}>
                 清除过滤并重试
               </Link>
               <a className="activity-link" href={traceHref}>

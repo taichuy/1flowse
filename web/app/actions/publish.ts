@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 export type UpdatePublishedEndpointLifecycleState = {
   status: "idle" | "success" | "error";
@@ -83,7 +84,7 @@ export async function updatePublishedEndpointLifecycle(
       };
     }
 
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
       message: `${body?.endpoint_name ?? bindingId} 已切换为 ${body?.lifecycle_status ?? nextStatus}。`,
@@ -153,7 +154,7 @@ export async function createPublishedEndpointApiKey(
       };
     }
 
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
       message: `${body?.name ?? name} 已创建，请立即保存 secret，本页不会再次展示。`,
@@ -222,7 +223,7 @@ export async function revokePublishedEndpointApiKey(
       };
     }
 
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
       message: `${body?.name ?? keyName ?? keyId} 已撤销。`,

@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
+import {
+  buildRunDetailHref,
+  buildWorkflowDetailHref
+} from "@/lib/workbench-links";
+
 import { fetchRunSnapshots, type RunSnapshotWithId } from "./run-snapshot";
 
 type RevalidateOperatorFollowUpPathsInput = {
@@ -25,11 +30,11 @@ export async function revalidateOperatorFollowUpPaths({
   revalidatePath("/sensitive-access");
 
   for (const runId of normalizeIds(runIds)) {
-    revalidatePath(`/runs/${runId}`);
+    revalidatePath(buildRunDetailHref(runId));
   }
 
   for (const workflowId of normalizeIds(workflowIds)) {
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
   }
 }
 

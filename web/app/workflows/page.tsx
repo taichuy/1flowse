@@ -4,6 +4,7 @@ import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { getWorkflows, type WorkflowListItem } from "@/lib/get-workflows";
 import { formatCountMap } from "@/lib/runtime-presenters";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 export const metadata: Metadata = {
   title: "Workflows | 7Flows Studio"
@@ -70,7 +71,7 @@ export default async function WorkflowsPage() {
                 <WorkflowChipLink
                   key={`workflow-library-${workflow.id}`}
                   workflow={workflow}
-                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
+                  href={buildWorkflowDetailHref(workflow.id)}
                 />
               ))}
             </div>

@@ -5,7 +5,10 @@ import { CredentialStorePanel } from "@/components/credential-store-panel";
 import { PluginRegistryPanel } from "@/components/plugin-registry-panel";
 import { SandboxReadinessPanel } from "@/components/sandbox-readiness-panel";
 import { StatusCard } from "@/components/status-card";
-import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import {
+  WorkbenchEntryLink,
+  WorkbenchEntryLinks
+} from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowToolBindingPanel } from "@/components/workflow-tool-binding-panel";
 import { getCredentials } from "@/lib/get-credentials";
@@ -17,6 +20,10 @@ import {
   formatCountMap,
   formatTimestamp
 } from "@/lib/runtime-presenters";
+import {
+  buildRunDetailHref,
+  buildWorkflowDetailHref
+} from "@/lib/workbench-links";
 
 const highlights = [
   "Dify 风格的本地源码开发路径",
@@ -228,9 +235,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <p className="empty-state">
                 当前还没有可编辑的 workflow。现在可以直接从新建向导创建 starter，而不用再先手动调用 API。
               </p>
-              <Link className="inline-link" href="/workflows/new">
+              <WorkbenchEntryLink className="inline-link" linkKey="createWorkflow">
                 进入新建向导
-              </Link>
+              </WorkbenchEntryLink>
             </div>
           ) : (
             <div className="workflow-chip-row">
@@ -238,7 +245,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <WorkflowChipLink
                   key={`editor-${workflow.id}`}
                   workflow={workflow}
-                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
+                  href={buildWorkflowDetailHref(workflow.id)}
                 />
               ))}
             </div>
@@ -291,7 +298,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <p className="activity-copy">
                     Created {formatTimestamp(run.created_at)} · events {run.event_count}
                   </p>
-                  <Link className="activity-link" href={`/runs/${run.id}`}>
+                  <Link className="activity-link" href={buildRunDetailHref(run.id)}>
                     查看 run 诊断面板
                   </Link>
                 </article>
@@ -341,7 +348,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               从最近 run 进入独立诊断页后，可以继续看节点输入输出、错误信息和完整事件 payload。
             </p>
             {latestRun ? (
-              <Link className="inline-link" href={`/runs/${latestRun.id}`}>
+              <Link className="inline-link" href={buildRunDetailHref(latestRun.id)}>
                 打开最新 run 诊断面板
               </Link>
             ) : (

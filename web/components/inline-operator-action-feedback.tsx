@@ -20,6 +20,7 @@ import {
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
 import { listExecutionFocusRuntimeFactBadges } from "@/lib/run-execution-focus-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type InlineOperatorActionFeedbackProps = {
   status: "idle" | "success" | "error";
@@ -62,7 +63,7 @@ export function InlineOperatorActionFeedback({
             ),
             label: runId ? "run detail" : "execution follow-up",
             detail: model.runFollowUpFollowUp,
-            href: runId ? `/runs/${encodeURIComponent(runId)}` : null,
+            href: runId ? buildRunDetailHref(runId) : null,
             href_label: runId ? surfaceCopy.openRunLabel : null,
             fallback_detail:
               model.runSnapshotSummary ??
@@ -104,7 +105,7 @@ export function InlineOperatorActionFeedback({
       <div className="payload-card-header">
         <span className="status-meta">{title}</span>
         {runId ? (
-          <Link className="event-chip inbox-filter-link" href={`/runs/${encodeURIComponent(runId)}`}>
+          <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(runId)}>
             {surfaceCopy.openRunLabel}
           </Link>
         ) : null}

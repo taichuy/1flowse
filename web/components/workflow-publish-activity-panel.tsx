@@ -11,6 +11,7 @@ import {
   WorkflowPublishActivityDetails,
   WorkflowPublishActivityInsights
 } from "@/components/workflow-publish-activity-panel-sections";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 function buildInvocationDetailHref(
   workflowId: string,
@@ -47,7 +48,7 @@ function buildInvocationDetailHref(
   if (invocationId) {
     searchParams.set("publish_invocation", invocationId);
   }
-  return `/workflows/${encodeURIComponent(workflowId)}?${searchParams.toString()}`;
+  return `${buildWorkflowDetailHref(workflowId)}?${searchParams.toString()}`;
 }
 
 export function WorkflowPublishActivityPanel({

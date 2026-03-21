@@ -17,6 +17,7 @@ import {
   getSensitiveAccessBlockedPolicySummary
 } from "@/lib/sensitive-access-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 function normalizeApprovalStatus(value?: string | null) {
   return value === "pending" || value === "approved" || value === "rejected" || value === "expired"
@@ -119,7 +120,7 @@ export function SensitiveAccessBlockedCard({
           <dt>Run</dt>
           <dd>
             {runId ? (
-              <Link className="inline-link" href={`/runs/${encodeURIComponent(runId)}`}>
+              <Link className="inline-link" href={buildRunDetailHref(runId)}>
                 {runId}
               </Link>
             ) : (

@@ -18,6 +18,7 @@ import {
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 import {
   resolveSensitiveAccessTimelineEntryRunContext
 } from "@/lib/sensitive-access";
@@ -349,7 +350,7 @@ export function SensitiveAccessTimelineEntryList({
                   ),
                   label: inboxSliceHref ? "approval blocker" : "run detail",
                   detail: runContext.runFollowUp?.explanation?.follow_up ?? null,
-                  href: inboxSliceHref ?? (runId ? `/runs/${encodeURIComponent(runId)}` : null),
+                  href: inboxSliceHref ?? (runId ? buildRunDetailHref(runId) : null),
                   href_label: inboxSliceHref
                     ? operatorSurfaceCopy.openInboxSliceLabel
                     : runId
@@ -399,7 +400,7 @@ export function SensitiveAccessTimelineEntryList({
               {runId || inboxSliceHref ? (
                 <div className="tool-badge-row">
                   {runId ? (
-                    <Link className="event-chip inbox-filter-link" href={`/runs/${encodeURIComponent(runId)}`}>
+                    <Link className="event-chip inbox-filter-link" href={buildRunDetailHref(runId)}>
                       open run {runId.slice(0, 8)}
                     </Link>
                   ) : null}
