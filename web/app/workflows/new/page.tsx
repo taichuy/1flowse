@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 
 import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
-import { readWorkspaceStarterLibraryViewState } from "@/components/workspace-starter-library/shared";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
+import {
+  hasScopedWorkspaceStarterGovernanceFilters,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 import { getWorkflows } from "@/lib/get-workflows";
 
 export const metadata: Metadata = {
@@ -16,10 +19,8 @@ type NewWorkflowPageProps = {
 export default async function NewWorkflowPage({ searchParams }: NewWorkflowPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
   const workspaceStarterViewState = readWorkspaceStarterLibraryViewState(resolvedSearchParams);
-  const shouldScopeWorkspaceStarters = Boolean(
-    workspaceStarterViewState.searchQuery.trim() ||
-      workspaceStarterViewState.sourceGovernanceKind !== "all" ||
-      workspaceStarterViewState.needsFollowUp
+  const shouldScopeWorkspaceStarters = hasScopedWorkspaceStarterGovernanceFilters(
+    workspaceStarterViewState
   );
   const [workflowLibrary, workflows] = await Promise.all([
     getWorkflowLibrarySnapshot({

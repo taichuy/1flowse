@@ -30,6 +30,9 @@ type WorkflowEditorHeroProps = {
   persistBlockers: WorkflowPersistBlocker[];
   isSaving: boolean;
   isSavingStarter: boolean;
+  createWorkflowHref?: string;
+  workspaceStarterLibraryHref?: string;
+  hasScopedWorkspaceStarterFilters?: boolean;
   onSave: () => void;
   onSaveAsWorkspaceStarter: () => void;
 };
@@ -58,6 +61,9 @@ export function WorkflowEditorHero({
   persistBlockers,
   isSaving,
   isSavingStarter,
+  createWorkflowHref = "/workflows/new",
+  workspaceStarterLibraryHref = "/workspace-starters",
+  hasScopedWorkspaceStarterFilters = false,
   onSave,
   onSaveAsWorkspaceStarter
 }: WorkflowEditorHeroProps) {
@@ -103,10 +109,10 @@ export function WorkflowEditorHero({
           <Link className="inline-link" href="/">
             返回系统首页
           </Link>
-          <Link className="inline-link secondary" href="/workflows/new">
+          <Link className="inline-link secondary" href={createWorkflowHref}>
             新建 workflow
           </Link>
-          <Link className="inline-link secondary" href="/workspace-starters">
+          <Link className="inline-link secondary" href={workspaceStarterLibraryHref}>
             管理 workspace starters
           </Link>
           <button className="sync-button" type="button" onClick={onSave} disabled={isSaving}>
@@ -162,6 +168,22 @@ export function WorkflowEditorHero({
         <p className="panel-text">
           当前治理入口：<strong>editor -&gt; workspace starter library</strong>
         </p>
+        {hasScopedWorkspaceStarterFilters ? (
+          <p className="panel-text">
+            当前 editor 继续保留 workspace starter 治理页的 query scope；可以
+            {" "}
+            <Link className="inline-link secondary" href={workspaceStarterLibraryHref}>
+              回到治理页
+            </Link>
+            {" "}
+            继续 follow-up，或在同一范围内
+            {" "}
+            <Link className="inline-link secondary" href={createWorkflowHref}>
+              再新建一个 workflow
+            </Link>
+            。
+          </p>
+        ) : null}
         <dl className="signal-list">
           <div>
             <dt>Selected node</dt>

@@ -15,6 +15,12 @@ import {
 } from "@/lib/get-workflow-publish";
 import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
+import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
+  hasScopedWorkspaceStarterGovernanceFilters,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 import type {
   WorkflowPublishInvocationActiveFilter
 } from "@/lib/workflow-publish-governance";
@@ -82,6 +88,20 @@ export default async function WorkflowEditorPage({
   if (!workflow) {
     notFound();
   }
+
+  const workspaceStarterViewState = readWorkspaceStarterLibraryViewState(
+    resolvedSearchParams
+  );
+  const createWorkflowHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState(
+    workspaceStarterViewState
+  );
+  const workspaceStarterLibraryHref =
+    buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+      workspaceStarterViewState
+    );
+  const hasScopedWorkspaceStarterFilters = hasScopedWorkspaceStarterGovernanceFilters(
+    workspaceStarterViewState
+  );
 
   const activeBindingId = firstSearchValue(resolvedSearchParams.publish_binding);
   const requestedStatus = firstSearchValue(resolvedSearchParams.publish_status);
@@ -172,6 +192,9 @@ export default async function WorkflowEditorPage({
         sandboxReadiness={systemOverview.sandbox_readiness}
         sandboxBackends={systemOverview.sandbox_backends}
         recentRuns={recentRuns}
+        createWorkflowHref={createWorkflowHref}
+        workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+        hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
       />
       <WorkflowPublishPanel
         workflow={workflow}

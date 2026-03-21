@@ -49,6 +49,9 @@ type WorkflowEditorWorkbenchProps = {
   sandboxReadiness?: SandboxReadinessCheck | null;
   sandboxBackends?: SandboxBackendCheck[] | null;
   recentRuns: WorkflowRunListItem[];
+  createWorkflowHref?: string;
+  workspaceStarterLibraryHref?: string;
+  hasScopedWorkspaceStarterFilters?: boolean;
 };
 
 export function WorkflowEditorWorkbench({
@@ -61,7 +64,10 @@ export function WorkflowEditorWorkbench({
   adapters,
   sandboxReadiness,
   sandboxBackends,
-  recentRuns
+  recentRuns,
+  createWorkflowHref,
+  workspaceStarterLibraryHref,
+  hasScopedWorkspaceStarterFilters = false
 }: WorkflowEditorWorkbenchProps) {
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
   const plannedNodeLibrary = getPlannedNodeCatalog(nodeCatalog);
@@ -204,6 +210,9 @@ export function WorkflowEditorWorkbench({
           persistBlockers={validation.persistBlockers}
           isSaving={persistence.isSaving}
           isSavingStarter={persistence.isSavingStarter}
+          createWorkflowHref={createWorkflowHref}
+          workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+          hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
           onSave={persistence.handleSave}
           onSaveAsWorkspaceStarter={persistence.handleSaveAsWorkspaceStarter}
         />

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
-import { buildWorkspaceStarterLibrarySearchParams } from "@/components/workspace-starter-library/shared";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
@@ -28,6 +27,12 @@ import {
   type WorkflowListItem,
   WorkflowDefinitionValidationError
 } from "@/lib/get-workflows";
+import {
+  buildWorkflowEditorHrefFromWorkspaceStarterViewState,
+  buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
+  hasScopedWorkspaceStarterGovernanceFilters,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 import {
   buildWorkflowStarterTemplates,
   buildWorkflowStarterTracks,
@@ -107,18 +112,19 @@ export function WorkflowCreateWizard({
     selectedStarterSourceGovernance?.outcomeExplanation?.primary_signal?.trim() ?? "";
   const selectedStarterSourceFollowUp =
     selectedStarterSourceGovernance?.outcomeExplanation?.follow_up?.trim() ?? "";
-  const starterGovernanceHref = (() => {
-    const params = buildWorkspaceStarterLibrarySearchParams({
+  const workspaceStarterGovernanceScope = useMemo<WorkspaceStarterGovernanceQueryScope>(
+    () => ({
       activeTrack,
-      archiveFilter: "active",
       sourceGovernanceKind: sourceGovernanceKind ?? "all",
       needsFollowUp,
       searchQuery,
       selectedTemplateId: selectedStarter?.origin === "workspace" ? selectedStarter.id : null
-    });
-    const query = params.toString();
-    return query ? `/workspace-starters?${query}` : "/workspace-starters";
-  })();
+    }),
+    [activeTrack, needsFollowUp, searchQuery, selectedStarter, sourceGovernanceKind]
+  );
+  const starterGovernanceHref = buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+    workspaceStarterGovernanceScope
+  );
   const selectedStarterSandboxDependencySummary = useMemo(
     () =>
       selectedStarter
@@ -197,7 +203,12 @@ export function WorkflowCreateWizard({
 
         setMessage(`已创建 ${normalizedName}，正在进入编辑器...`);
         setMessageTone("success");
-        router.push(`/workflows/${encodeURIComponent(body.id)}`);
+        router.push(
+          buildWorkflowEditorHrefFromWorkspaceStarterViewState(
+            body.id,
+            workspaceStarterGovernanceScope
+          )
+        );
         router.refresh();
       } catch (error) {
         setMessage(
@@ -210,8 +221,8 @@ export function WorkflowCreateWizard({
     });
   };
 
-  const hasScopedWorkspaceStarterFilters = Boolean(
-    searchQuery.trim() || sourceGovernanceKind || needsFollowUp
+  const hasScopedWorkspaceStarterFilters = hasScopedWorkspaceStarterGovernanceFilters(
+    workspaceStarterGovernanceScope
   );
 
   if (!selectedStarter) {

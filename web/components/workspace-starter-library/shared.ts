@@ -1,7 +1,4 @@
-import {
-  WORKFLOW_BUSINESS_TRACKS,
-  type WorkflowBusinessTrack
-} from "@/lib/workflow-business-tracks";
+import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type {
   WorkspaceStarterBulkAction,
   WorkspaceStarterBulkActionPreview,
@@ -19,28 +16,28 @@ import type {
   WorkspaceStarterTemplateItem,
   WorkspaceStarterValidationIssue
 } from "@/lib/get-workspace-starters";
+import {
+  DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE,
+  readWorkspaceStarterLibraryViewState,
+  type ArchiveFilter,
+  type SourceGovernanceFilter,
+  type TrackFilter,
+  type WorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
-export type TrackFilter = "all" | WorkflowBusinessTrack;
-export type ArchiveFilter = "active" | "archived" | "all";
-export type SourceGovernanceFilter = "all" | WorkspaceStarterSourceGovernanceKind;
-
-export type WorkspaceStarterLibraryViewState = {
-  activeTrack: TrackFilter;
-  archiveFilter: ArchiveFilter;
-  sourceGovernanceKind: SourceGovernanceFilter;
-  needsFollowUp: boolean;
-  searchQuery: string;
-  selectedTemplateId: string | null;
-};
-
-export const DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE: WorkspaceStarterLibraryViewState = {
-  activeTrack: "all",
-  archiveFilter: "active",
-  sourceGovernanceKind: "all",
-  needsFollowUp: false,
-  searchQuery: "",
-  selectedTemplateId: null
-};
+export {
+  DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE,
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState,
+  buildWorkspaceStarterLibrarySearchParams,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
+export type {
+  ArchiveFilter,
+  SourceGovernanceFilter,
+  TrackFilter,
+  WorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 export type WorkspaceStarterFormState = {
   name: string;
@@ -121,29 +118,6 @@ export type WorkspaceStarterSourceGovernanceScopeSummary = {
   attentionCount: number;
 };
 
-type WorkspaceStarterLibrarySearchParamSource =
-  | URLSearchParams
-  | Record<string, string | string[] | undefined>;
-
-const WORKSPACE_STARTER_LIBRARY_TRACK_FILTERS = new Set<TrackFilter>([
-  "all",
-  ...WORKFLOW_BUSINESS_TRACKS.map((track) => track.id)
-]);
-
-const WORKSPACE_STARTER_LIBRARY_ARCHIVE_FILTERS = new Set<ArchiveFilter>([
-  "active",
-  "archived",
-  "all"
-]);
-
-const WORKSPACE_STARTER_LIBRARY_SOURCE_GOVERNANCE_FILTERS = new Set<SourceGovernanceFilter>([
-  "all",
-  "no_source",
-  "missing_source",
-  "synced",
-  "drifted"
-]);
-
 const WORKSPACE_STARTER_SOURCE_GOVERNANCE_FOLLOW_UP_KINDS = new Set<WorkspaceStarterSourceGovernanceKind>([
   "drifted",
   "missing_source"
@@ -209,37 +183,8 @@ export function filterWorkspaceStarterTemplates(
   });
 }
 
-export function readWorkspaceStarterLibraryViewState(
-  searchParams: WorkspaceStarterLibrarySearchParamSource
-): WorkspaceStarterLibraryViewState {
-  const trackValue = firstSearchValue(searchParams, "track");
-  const archiveValue = firstSearchValue(searchParams, "archive");
-  const sourceGovernanceValue = firstSearchValue(searchParams, "source_governance_kind");
-  const needsFollowUpValue = firstSearchValue(searchParams, "needs_follow_up");
-
-  return {
-    activeTrack: WORKSPACE_STARTER_LIBRARY_TRACK_FILTERS.has(trackValue as TrackFilter)
-      ? (trackValue as TrackFilter)
-      : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.activeTrack,
-    archiveFilter: WORKSPACE_STARTER_LIBRARY_ARCHIVE_FILTERS.has(archiveValue as ArchiveFilter)
-      ? (archiveValue as ArchiveFilter)
-      : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.archiveFilter,
-    sourceGovernanceKind: WORKSPACE_STARTER_LIBRARY_SOURCE_GOVERNANCE_FILTERS.has(
-      sourceGovernanceValue as SourceGovernanceFilter
-    )
-      ? (sourceGovernanceValue as SourceGovernanceFilter)
-      : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind,
-    needsFollowUp:
-      needsFollowUpValue === "true"
-        ? true
-        : DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.needsFollowUp,
-    searchQuery: firstSearchValue(searchParams, "q") ?? DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.searchQuery,
-    selectedTemplateId: firstSearchValue(searchParams, "starter")
-  };
-}
-
 export function resolveWorkspaceStarterLibraryViewState(
-  searchParams: WorkspaceStarterLibrarySearchParamSource,
+  searchParams: URLSearchParams | Record<string, string | string[] | undefined>,
   templates: WorkspaceStarterTemplateItem[]
 ): WorkspaceStarterLibraryViewState {
   const viewState = readWorkspaceStarterLibraryViewState(searchParams);
@@ -254,83 +199,6 @@ export function resolveWorkspaceStarterLibraryViewState(
       ? viewState.selectedTemplateId
       : filteredTemplates[0]?.id ?? null
   };
-}
-
-export function buildWorkspaceStarterLibrarySearchParams(
-  viewState: WorkspaceStarterLibraryViewState
-) {
-  const searchParams = new URLSearchParams();
-
-  if (viewState.activeTrack !== DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.activeTrack) {
-    searchParams.set("track", viewState.activeTrack);
-  }
-  if (viewState.archiveFilter !== DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.archiveFilter) {
-    searchParams.set("archive", viewState.archiveFilter);
-  }
-  if (
-    viewState.sourceGovernanceKind !==
-    DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind
-  ) {
-    searchParams.set("source_governance_kind", viewState.sourceGovernanceKind);
-  }
-  if (viewState.needsFollowUp) {
-    searchParams.set("needs_follow_up", "true");
-  }
-
-  const normalizedSearchQuery = viewState.searchQuery.trim();
-  if (normalizedSearchQuery) {
-    searchParams.set("q", normalizedSearchQuery);
-  }
-  if (viewState.selectedTemplateId) {
-    searchParams.set("starter", viewState.selectedTemplateId);
-  }
-
-  searchParams.sort();
-  return searchParams;
-}
-
-export function buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState(
-  viewState: Pick<
-    WorkspaceStarterLibraryViewState,
-    "activeTrack" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery" | "selectedTemplateId"
-  >
-) {
-  const searchParams = new URLSearchParams();
-
-  if (viewState.activeTrack !== DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.activeTrack) {
-    searchParams.set("track", viewState.activeTrack);
-  }
-  if (
-    viewState.sourceGovernanceKind !==
-    DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind
-  ) {
-    searchParams.set("source_governance_kind", viewState.sourceGovernanceKind);
-  }
-  if (viewState.needsFollowUp) {
-    searchParams.set("needs_follow_up", "true");
-  }
-
-  const normalizedSearchQuery = viewState.searchQuery.trim();
-  if (normalizedSearchQuery) {
-    searchParams.set("q", normalizedSearchQuery);
-  }
-  if (viewState.selectedTemplateId) {
-    searchParams.set("starter", viewState.selectedTemplateId);
-  }
-
-  searchParams.sort();
-  return searchParams;
-}
-
-export function buildWorkflowCreateHrefFromWorkspaceStarterViewState(
-  viewState: Pick<
-    WorkspaceStarterLibraryViewState,
-    "activeTrack" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery" | "selectedTemplateId"
-  >
-) {
-  const searchParams = buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState(viewState);
-  const query = searchParams.toString();
-  return query ? `/workflows/new?${query}` : "/workflows/new";
 }
 
 export function buildFormState(
@@ -1072,18 +940,6 @@ function getWorkspaceStarterSourceGovernanceKind(
 
 function normalizePayload(value: unknown): Record<string, unknown> | null {
   return isRecord(value) ? value : null;
-}
-
-function firstSearchValue(
-  source: WorkspaceStarterLibrarySearchParamSource,
-  key: string
-) {
-  if (source instanceof URLSearchParams) {
-    return normalizeString(source.get(key));
-  }
-
-  const value = source[key];
-  return normalizeString(Array.isArray(value) ? value[0] : value);
 }
 
 function normalizeSourceDiffSummary(value: unknown): WorkspaceStarterSourceDiffSummary | null {
