@@ -13,6 +13,7 @@ import {
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   hasScopedWorkspaceStarterGovernanceFilters,
+  pickWorkspaceStarterGovernanceQueryScope,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
 import {
@@ -105,6 +106,9 @@ export default async function WorkflowEditorPage({
         createWorkflowHref={createWorkflowHref}
         workspaceStarterLibraryHref={workspaceStarterLibraryHref}
         hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
+        workspaceStarterGovernanceQueryScope={pickWorkspaceStarterGovernanceQueryScope(
+          workspaceStarterViewState
+        )}
       />
       <WorkflowPublishPanel
         workflow={workflow}

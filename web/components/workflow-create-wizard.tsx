@@ -23,16 +23,14 @@ import type {
   WorkflowLibraryStarterItem,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
-import {
-  buildAuthorFacingWorkflowDetailLinkSurface,
-  buildWorkflowCreateWizardSurfaceCopy
-} from "@/lib/workbench-entry-surfaces";
+import { buildWorkflowCreateWizardSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import {
   createWorkflow,
   type WorkflowListItem,
   WorkflowDefinitionValidationError
 } from "@/lib/get-workflows";
 import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   hasScopedWorkspaceStarterGovernanceFilters,
@@ -149,8 +147,9 @@ export function WorkflowCreateWizard({
     workspaceStarterGovernanceScope
   );
   const recentWorkflowLink = workflows[0]
-    ? buildAuthorFacingWorkflowDetailLinkSurface({
+    ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
         workflowId: workflows[0].id,
+        viewState: workspaceStarterGovernanceScope,
         variant: "recent"
       })
     : null;
@@ -614,8 +613,9 @@ export function WorkflowCreateWizard({
           ) : (
             <div className="workflow-chip-row">
               {workflows.map((workflow) => {
-                const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
-                  workflowId: workflow.id
+                const workflowDetailLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                  workflowId: workflow.id,
+                  viewState: workspaceStarterGovernanceScope
                 });
 
                 return (

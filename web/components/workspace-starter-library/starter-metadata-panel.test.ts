@@ -15,6 +15,8 @@ vi.mock("next/link", () => ({
 
 describe("WorkspaceStarterMetadataPanel", () => {
   it("reuses the shared create entry contract in metadata follow-up actions", () => {
+    const scopedSourceWorkflowHref =
+      '/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92';
     const html = renderToStaticMarkup(
       createElement(WorkspaceStarterMetadataPanel, {
         selectedTemplate: {
@@ -54,6 +56,13 @@ describe("WorkspaceStarterMetadataPanel", () => {
         message: null,
         messageTone: "idle",
         createWorkflowHref: "/workflows/new?needs_follow_up=true&starter=starter-1",
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " drift ",
+          selectedTemplateId: "starter-1"
+        },
         setFormState: vi.fn(),
         onSave: vi.fn(),
         onTemplateMutation: vi.fn()
@@ -63,6 +72,6 @@ describe("WorkspaceStarterMetadataPanel", () => {
     expect(html).toContain("带此 starter 回到创建页");
     expect(html).toContain('/workflows/new?needs_follow_up=true&amp;starter=starter-1');
     expect(html).toContain("打开源 workflow");
-    expect(html).toContain('/workflows/workflow%20alpha%2Fbeta');
+    expect(html).toContain(scopedSourceWorkflowHref);
   });
 });

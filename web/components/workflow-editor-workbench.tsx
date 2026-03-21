@@ -18,6 +18,7 @@ import type {
   WorkflowDetail,
   WorkflowListItem
 } from "@/lib/get-workflows";
+import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
 import { pickWorkflowValidationRemediationItem } from "@/lib/workflow-validation-remediation";
@@ -52,6 +53,7 @@ type WorkflowEditorWorkbenchProps = {
   createWorkflowHref?: string;
   workspaceStarterLibraryHref?: string;
   hasScopedWorkspaceStarterFilters?: boolean;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 };
 
 export function WorkflowEditorWorkbench({
@@ -67,7 +69,8 @@ export function WorkflowEditorWorkbench({
   recentRuns,
   createWorkflowHref,
   workspaceStarterLibraryHref,
-  hasScopedWorkspaceStarterFilters = false
+  hasScopedWorkspaceStarterFilters = false,
+  workspaceStarterGovernanceQueryScope = null
 }: WorkflowEditorWorkbenchProps) {
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
   const plannedNodeLibrary = getPlannedNodeCatalog(nodeCatalog);
@@ -244,6 +247,7 @@ export function WorkflowEditorWorkbench({
             traceError={runOverlay.runOverlayError}
             selectedNodeId={graph.selectedNodeId}
             sandboxReadiness={sandboxReadiness}
+            workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
             isRefreshingRuns={runOverlay.isRefreshingRuns}
             onWorkflowNameChange={graph.setWorkflowName}

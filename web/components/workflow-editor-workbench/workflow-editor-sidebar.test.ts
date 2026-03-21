@@ -88,6 +88,13 @@ describe("WorkflowEditorSidebar", () => {
         traceError: null,
         selectedNodeId: null,
         sandboxReadiness: buildSandboxReadiness(),
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " drift ",
+          selectedTemplateId: "workspace-starter-1"
+        },
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
         onWorkflowNameChange: () => undefined,
@@ -98,7 +105,9 @@ describe("WorkflowEditorSidebar", () => {
       })
     );
 
-    expect(html).toContain('href="/workflows/workflow%20alpha%2Fbeta"');
+    expect(html).toContain(
+      'href="/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"'
+    );
   });
 
   it("shows execution preflight readiness before save when strong isolation is blocked", () => {

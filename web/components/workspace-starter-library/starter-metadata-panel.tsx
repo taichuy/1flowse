@@ -7,6 +7,10 @@ import {
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 import type {
@@ -24,6 +28,7 @@ type WorkspaceStarterMetadataPanelProps = {
   message: string | null;
   messageTone: WorkspaceStarterMessageTone;
   createWorkflowHref: string | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   setFormState: Dispatch<SetStateAction<WorkspaceStarterFormState | null>>;
   onSave: () => void;
   onTemplateMutation: (action: "archive" | "restore" | "delete") => void;
@@ -39,15 +44,22 @@ export function WorkspaceStarterMetadataPanel({
   message,
   messageTone,
   createWorkflowHref,
+  workspaceStarterGovernanceQueryScope = null,
   setFormState,
   onSave,
   onTemplateMutation
 }: WorkspaceStarterMetadataPanelProps) {
   const sourceWorkflowLink = selectedTemplate?.created_from_workflow_id
-    ? buildAuthorFacingWorkflowDetailLinkSurface({
-        workflowId: selectedTemplate.created_from_workflow_id,
-        variant: "source"
-      })
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+          workflowId: selectedTemplate.created_from_workflow_id,
+          viewState: workspaceStarterGovernanceQueryScope,
+          variant: "source"
+        })
+      : buildAuthorFacingWorkflowDetailLinkSurface({
+          workflowId: selectedTemplate.created_from_workflow_id,
+          variant: "source"
+        })
     : null;
 
   return (

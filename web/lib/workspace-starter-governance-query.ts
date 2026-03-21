@@ -3,7 +3,10 @@ import {
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
-import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import {
+  type AuthorFacingWorkflowDetailLinkVariant,
+  buildAuthorFacingWorkflowDetailLinkSurface
+} from "@/lib/workbench-entry-surfaces";
 
 export type TrackFilter = "all" | WorkflowBusinessTrack;
 export type ArchiveFilter = "active" | "archived" | "all";
@@ -171,6 +174,29 @@ export function buildWorkflowEditorHrefFromWorkspaceStarterViewState(
     variant: "editor"
   }).href;
   return query ? `${workflowHref}?${query}` : workflowHref;
+}
+
+export function buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+  workflowId,
+  viewState,
+  variant = "chip"
+}: {
+  workflowId: string;
+  viewState: Pick<
+    WorkspaceStarterLibraryViewState,
+    "activeTrack" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery" | "selectedTemplateId"
+  >;
+  variant?: AuthorFacingWorkflowDetailLinkVariant;
+}) {
+  const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
+    workflowId,
+    variant
+  });
+
+  return {
+    ...workflowDetailLink,
+    href: buildWorkflowEditorHrefFromWorkspaceStarterViewState(workflowId, viewState)
+  };
 }
 
 function buildWorkspaceStarterGovernanceSearchParams(

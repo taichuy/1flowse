@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   hasScopedWorkspaceStarterGovernanceFilters,
@@ -50,6 +51,27 @@ describe("workspace-starter-governance-query", () => {
     expect(buildWorkflowCreateHrefFromWorkspaceStarterViewState(viewState)).toBe(
       "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );
+  });
+
+  it("builds scoped workflow detail link surfaces from the shared contract", () => {
+    const viewState = {
+      activeTrack: "应用新建编排" as const,
+      sourceGovernanceKind: "drifted" as const,
+      needsFollowUp: true,
+      searchQuery: " drift ",
+      selectedTemplateId: "workspace-starter-1"
+    };
+
+    expect(
+      buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+        workflowId: "  workflow alpha/beta  ",
+        viewState,
+        variant: "recent"
+      })
+    ).toEqual({
+      href: "/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+      label: "打开最近 workflow"
+    });
   });
 
   it("keeps all-track governance scopes unspecialized in downstream hrefs", () => {

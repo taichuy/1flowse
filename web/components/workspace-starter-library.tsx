@@ -13,6 +13,7 @@ import {
 } from "@/components/workspace-starter-library/shared";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import { pickWorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 type WorkspaceStarterLibraryProps = {
   initialTemplates: WorkspaceStarterTemplateItem[];
@@ -86,6 +87,13 @@ export function WorkspaceStarterLibrary({
     searchQuery,
     selectedTemplateId: selectedTemplate?.archived ? null : selectedTemplateId
   });
+  const workspaceStarterGovernanceQueryScope = pickWorkspaceStarterGovernanceQueryScope({
+    activeTrack,
+    sourceGovernanceKind,
+    needsFollowUp,
+    searchQuery,
+    selectedTemplateId
+  });
 
   return (
     <main className="editor-shell">
@@ -143,6 +151,7 @@ export function WorkspaceStarterLibrary({
             message={message}
             messageTone={messageTone}
             createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
+            workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             setFormState={setFormState}
             onSave={handleSave}
             onTemplateMutation={handleTemplateMutation}

@@ -12,6 +12,10 @@ import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
@@ -49,6 +53,7 @@ type WorkflowEditorSidebarProps = {
   traceError: string | null;
   selectedNodeId: string | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   isLoadingRunOverlay: boolean;
   isRefreshingRuns: boolean;
   onWorkflowNameChange: (value: string) => void;
@@ -84,6 +89,7 @@ export function WorkflowEditorSidebar({
   traceError,
   selectedNodeId,
   sandboxReadiness,
+  workspaceStarterGovernanceQueryScope = null,
   isLoadingRunOverlay,
   isRefreshingRuns,
   onWorkflowNameChange,
@@ -125,9 +131,14 @@ export function WorkflowEditorSidebar({
 
         <div className="workflow-chip-row compact-stack">
           {workflows.map((item) => {
-            const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
-              workflowId: item.id
-            });
+            const workflowDetailLink = workspaceStarterGovernanceQueryScope
+              ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                  workflowId: item.id,
+                  viewState: workspaceStarterGovernanceQueryScope
+                })
+              : buildAuthorFacingWorkflowDetailLinkSurface({
+                  workflowId: item.id
+                });
 
             return (
               <WorkflowChipLink
