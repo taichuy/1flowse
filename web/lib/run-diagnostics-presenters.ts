@@ -1,7 +1,14 @@
 export type RunDiagnosticsHeroSurfaceCopy = {
+  eyebrowLabel: string;
   description: string;
   homeLinkLabel: string;
   eventsApiLinkLabel: string;
+  statusPanelTitle: string;
+  createdAtLabel: string;
+  durationLabel: string;
+  nodeRunsLabel: string;
+  eventsLabel: string;
+  errorsLabel: string;
 };
 
 export type RunDiagnosticsTraceSurfaceCopy = {
@@ -16,10 +23,17 @@ export type RunDiagnosticsTraceSurfaceCopy = {
 
 export function buildRunDiagnosticsHeroSurfaceCopy(): RunDiagnosticsHeroSurfaceCopy {
   return {
+    eyebrowLabel: "Run Diagnostics",
     description:
       "这页现在直接消费 `run trace`，可以按事件类型、节点、时间窗和 payload key 顺着 `run_events` 排障，同时保留导出与原始事件入口。",
     homeLinkLabel: "返回系统首页",
-    eventsApiLinkLabel: "打开原始 events API"
+    eventsApiLinkLabel: "打开原始 events API",
+    statusPanelTitle: "Run status",
+    createdAtLabel: "创建时间",
+    durationLabel: "执行耗时",
+    nodeRunsLabel: "Node runs",
+    eventsLabel: "Events",
+    errorsLabel: "Errors"
   };
 }
 

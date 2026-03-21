@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 
 import { RunDiagnosticsExecutionSections } from "@/components/run-diagnostics-execution-sections";
@@ -78,7 +79,7 @@ export function RunDiagnosticsPanel({
     <main className="shell">
       <section className="hero diagnostic-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Run Diagnostics</p>
+          <p className="eyebrow">{heroSurfaceCopy.eyebrowLabel}</p>
           <h1>{run.workflow_id}</h1>
           <p className="hero-text">{heroSurfaceCopy.description}</p>
           <div className="pill-row">
@@ -97,25 +98,25 @@ export function RunDiagnosticsPanel({
           </div>
         </div>
         <div className="hero-panel">
-          <div className="panel-label">Run status</div>
+          <div className="panel-label">{heroSurfaceCopy.statusPanelTitle}</div>
           <div className="panel-value">{run.status}</div>
           <p className="panel-text">
-            创建时间：<strong>{formatTimestamp(run.created_at)}</strong>
+            {heroSurfaceCopy.createdAtLabel}：<strong>{formatTimestamp(run.created_at)}</strong>
           </p>
           <p className="panel-text">
-            执行耗时：<strong>{formatDuration(run.started_at, run.finished_at)}</strong>
+            {heroSurfaceCopy.durationLabel}：<strong>{formatDuration(run.started_at, run.finished_at)}</strong>
           </p>
           <dl className="signal-list">
             <div>
-              <dt>Node runs</dt>
+              <dt>{heroSurfaceCopy.nodeRunsLabel}</dt>
               <dd>{run.node_runs.length}</dd>
             </div>
             <div>
-              <dt>Events</dt>
+              <dt>{heroSurfaceCopy.eventsLabel}</dt>
               <dd>{run.event_count}</dd>
             </div>
             <div>
-              <dt>Errors</dt>
+              <dt>{heroSurfaceCopy.errorsLabel}</dt>
               <dd>{countErroredNodes(run)}</dd>
             </div>
           </dl>

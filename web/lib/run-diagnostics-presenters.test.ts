@@ -8,9 +8,16 @@ import {
 describe("run diagnostics presenters", () => {
   it("为 diagnostics hero 提供统一入口说明", () => {
     expect(buildRunDiagnosticsHeroSurfaceCopy()).toEqual({
+      eyebrowLabel: "Run Diagnostics",
       description: expect.stringContaining("直接消费 `run trace`"),
       homeLinkLabel: "返回系统首页",
-      eventsApiLinkLabel: "打开原始 events API"
+      eventsApiLinkLabel: "打开原始 events API",
+      statusPanelTitle: "Run status",
+      createdAtLabel: "创建时间",
+      durationLabel: "执行耗时",
+      nodeRunsLabel: "Node runs",
+      eventsLabel: "Events",
+      errorsLabel: "Errors"
     });
   });
 
