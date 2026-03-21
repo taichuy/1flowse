@@ -36,6 +36,7 @@ import {
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   hasScopedWorkspaceStarterGovernanceFilters,
+  pickWorkspaceStarterGovernanceQueryScope,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
 import {
@@ -46,10 +47,7 @@ import {
 
 type WorkflowCreateWizardProps = {
   catalogToolCount: number;
-  preferredStarterId?: string;
-  searchQuery?: string;
-  sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
-  needsFollowUp?: boolean;
+  governanceQueryScope: WorkspaceStarterGovernanceQueryScope;
   workflows: WorkflowListItem[];
   starters: WorkflowLibraryStarterItem[];
   starterSourceLanes: WorkflowLibrarySourceLane[];
@@ -59,10 +57,7 @@ type WorkflowCreateWizardProps = {
 
 export function WorkflowCreateWizard({
   catalogToolCount,
-  preferredStarterId,
-  searchQuery = "",
-  sourceGovernanceKind,
-  needsFollowUp = false,
+  governanceQueryScope,
   workflows,
   starters,
   starterSourceLanes,
@@ -70,6 +65,13 @@ export function WorkflowCreateWizard({
   tools
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
+  const preferredStarterId = governanceQueryScope.selectedTemplateId ?? undefined;
+  const searchQuery = governanceQueryScope.searchQuery;
+  const sourceGovernanceKind =
+    governanceQueryScope.sourceGovernanceKind === "all"
+      ? undefined
+      : governanceQueryScope.sourceGovernanceKind;
+  const needsFollowUp = governanceQueryScope.needsFollowUp;
   const starterTemplates = useMemo(
     () => buildWorkflowStarterTemplates(starters, nodeCatalog, tools),
     [nodeCatalog, starters, tools]
@@ -83,7 +85,12 @@ export function WorkflowCreateWizard({
     starterTemplates[0] ??
     null;
   const [activeTrack, setActiveTrack] = useState(
-    defaultStarter?.businessTrack ?? WORKFLOW_BUSINESS_TRACKS[0].id
+    governanceQueryScope.activeTrack === "all"
+      ? (defaultStarter?.businessTrack ?? WORKFLOW_BUSINESS_TRACKS[0].id)
+      : governanceQueryScope.activeTrack
+  );
+  const [governanceActiveTrack, setGovernanceActiveTrack] = useState(
+    governanceQueryScope.activeTrack
   );
   const [selectedStarterId, setSelectedStarterId] =
     useState<WorkflowStarterTemplateId | null>(defaultStarter?.id ?? null);
@@ -118,14 +125,25 @@ export function WorkflowCreateWizard({
   const selectedStarterSourceFollowUp =
     selectedStarterSourceGovernance?.outcomeExplanation?.follow_up?.trim() ?? "";
   const workspaceStarterGovernanceScope = useMemo<WorkspaceStarterGovernanceQueryScope>(
-    () => ({
-      activeTrack,
-      sourceGovernanceKind: sourceGovernanceKind ?? "all",
+    () =>
+      pickWorkspaceStarterGovernanceQueryScope({
+        activeTrack: governanceActiveTrack,
+        sourceGovernanceKind: sourceGovernanceKind ?? "all",
+        needsFollowUp,
+        searchQuery,
+        selectedTemplateId:
+          selectedStarter?.origin === "workspace"
+            ? selectedStarter.id
+            : governanceQueryScope.selectedTemplateId
+      }),
+    [
+      governanceActiveTrack,
+      governanceQueryScope.selectedTemplateId,
       needsFollowUp,
       searchQuery,
-      selectedTemplateId: selectedStarter?.origin === "workspace" ? selectedStarter.id : null
-    }),
-    [activeTrack, needsFollowUp, searchQuery, selectedStarter, sourceGovernanceKind]
+      selectedStarter,
+      sourceGovernanceKind
+    ]
   );
   const starterGovernanceHref = buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
     workspaceStarterGovernanceScope
@@ -186,6 +204,7 @@ export function WorkflowCreateWizard({
 
   const handleTrackSelect = (trackId: (typeof starterTracks)[number]["id"]) => {
     setActiveTrack(trackId);
+    setGovernanceActiveTrack(trackId);
 
     const nextVisibleStarters = starterTemplates.filter(
       (starter) => starter.businessTrack === trackId

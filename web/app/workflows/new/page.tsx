@@ -4,6 +4,7 @@ import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import {
   hasScopedWorkspaceStarterGovernanceFilters,
+  pickWorkspaceStarterGovernanceQueryScope,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
 import { getWorkflows } from "@/lib/get-workflows";
@@ -42,26 +43,12 @@ export default async function NewWorkflowPage({ searchParams }: NewWorkflowPageP
   return (
     <WorkflowCreateWizard
       catalogToolCount={workflowLibrary.tools.length}
-      sourceGovernanceKind={
-        workspaceStarterViewState.sourceGovernanceKind === "all"
-          ? undefined
-          : workspaceStarterViewState.sourceGovernanceKind
-      }
-      needsFollowUp={workspaceStarterViewState.needsFollowUp}
-      searchQuery={workspaceStarterViewState.searchQuery}
+      governanceQueryScope={pickWorkspaceStarterGovernanceQueryScope(workspaceStarterViewState)}
       starters={workflowLibrary.starters}
       starterSourceLanes={workflowLibrary.starterSourceLanes}
       nodeCatalog={workflowLibrary.nodes}
       tools={workflowLibrary.tools}
-      preferredStarterId={readQueryValue(resolvedSearchParams.starter)}
       workflows={workflows}
     />
   );
-}
-
-function readQueryValue(value: string | string[] | undefined) {
-  if (typeof value === "string") {
-    return value;
-  }
-  return Array.isArray(value) ? value[0] : undefined;
 }

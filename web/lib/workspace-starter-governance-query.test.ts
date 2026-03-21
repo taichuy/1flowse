@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   hasScopedWorkspaceStarterGovernanceFilters,
+  pickWorkspaceStarterGovernanceQueryScope,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
 
@@ -44,6 +46,26 @@ describe("workspace-starter-governance-query", () => {
       buildWorkflowEditorHrefFromWorkspaceStarterViewState("  workflow alpha/beta  ", viewState)
     ).toBe(
       "/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+    expect(buildWorkflowCreateHrefFromWorkspaceStarterViewState(viewState)).toBe(
+      "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+  });
+
+  it("keeps all-track governance scopes unspecialized in downstream hrefs", () => {
+    const viewState = pickWorkspaceStarterGovernanceQueryScope({
+      activeTrack: "all",
+      sourceGovernanceKind: "drifted",
+      needsFollowUp: true,
+      searchQuery: " drift ",
+      selectedTemplateId: "workspace-starter-1"
+    });
+
+    expect(buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(viewState)).toBe(
+      "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1"
+    );
+    expect(buildWorkflowCreateHrefFromWorkspaceStarterViewState(viewState)).toBe(
+      "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1"
     );
   });
 
