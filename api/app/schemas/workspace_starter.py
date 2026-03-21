@@ -34,6 +34,8 @@ WorkspaceStarterBulkSkipReason = Literal[
     "source_workflow_missing",
     "source_workflow_invalid",
     "delete_requires_archive",
+    "already_aligned",
+    "name_drift_only",
 ]
 WorkspaceStarterBulkPreviewReason = Literal[
     "not_found",
@@ -282,8 +284,14 @@ class WorkspaceStarterBulkActionRequest(BaseModel):
 class WorkspaceStarterBulkSkippedItem(BaseModel):
     template_id: str
     name: str | None = None
+    archived: bool = False
     reason: WorkspaceStarterBulkSkipReason
     detail: str
+    source_workflow_id: str | None = None
+    source_workflow_version: str | None = None
+    action_decision: WorkspaceStarterSourceActionDecision | None = None
+    sandbox_dependency_changes: WorkspaceStarterSourceDiffSummary | None = None
+    sandbox_dependency_nodes: list[str] = Field(default_factory=list)
 
 
 class WorkspaceStarterBulkSkippedSummary(BaseModel):
@@ -295,6 +303,25 @@ class WorkspaceStarterBulkSkippedSummary(BaseModel):
 class WorkspaceStarterBulkDeletedItem(BaseModel):
     template_id: str
     name: str | None = None
+
+
+WorkspaceStarterBulkReceiptOutcome = Literal["updated", "deleted", "skipped"]
+
+
+class WorkspaceStarterBulkReceiptItem(BaseModel):
+    template_id: str
+    name: str | None = None
+    outcome: WorkspaceStarterBulkReceiptOutcome
+    archived: bool = False
+    reason: WorkspaceStarterBulkSkipReason | None = None
+    detail: str | None = None
+    source_workflow_id: str | None = None
+    source_workflow_version: str | None = None
+    action_decision: WorkspaceStarterSourceActionDecision | None = None
+    sandbox_dependency_changes: WorkspaceStarterSourceDiffSummary | None = None
+    sandbox_dependency_nodes: list[str] = Field(default_factory=list)
+    changed: bool | None = None
+    rebase_fields: list[str] = Field(default_factory=list)
 
 
 class WorkspaceStarterBulkSandboxDependencyItem(BaseModel):
@@ -322,3 +349,4 @@ class WorkspaceStarterBulkActionResult(BaseModel):
     sandbox_dependency_items: list[WorkspaceStarterBulkSandboxDependencyItem] = Field(
         default_factory=list
     )
+    receipt_items: list[WorkspaceStarterBulkReceiptItem] = Field(default_factory=list)

@@ -16,8 +16,8 @@ import {
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
 import {
-  buildWorkspaceStarterBulkAffectedStarterTargets,
   buildWorkspaceStarterBulkPreviewFocusTargets,
+  buildWorkspaceStarterBulkResultFocusTargets,
   formatTimestamp,
   type ArchiveFilter,
   type TrackFilter
@@ -68,8 +68,8 @@ export function WorkspaceStarterTemplateListPanel({
   onFocusTemplate,
   onBulkAction
 }: WorkspaceStarterTemplateListPanelProps) {
-  const affectedStarterTargets = lastBulkResult
-    ? buildWorkspaceStarterBulkAffectedStarterTargets(lastBulkResult, templates)
+  const resultFocusTargets = lastBulkResult
+    ? buildWorkspaceStarterBulkResultFocusTargets(lastBulkResult, templates)
     : [];
   const previewFocusTargets = buildWorkspaceStarterBulkPreviewFocusTargets(
     bulkPreview,
@@ -168,7 +168,7 @@ export function WorkspaceStarterTemplateListPanel({
           isLoadingPreview={isLoadingBulkPreview}
           lastResult={lastBulkResult}
           previewFocusTargets={previewFocusTargets}
-          affectedStarterTargets={affectedStarterTargets}
+          resultFocusTargets={resultFocusTargets}
           selectedTemplateId={selectedTemplateId}
           onFocusTemplate={onFocusTemplate}
           onAction={onBulkAction}

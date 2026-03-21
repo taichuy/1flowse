@@ -9,6 +9,7 @@ import type {
   WorkspaceStarterBulkPreviewBlockedItem,
   WorkspaceStarterBulkPreviewCandidateItem,
   WorkspaceStarterBulkActionResult,
+  WorkspaceStarterBulkReceiptItem,
   WorkspaceStarterHistoryItem,
   WorkspaceStarterSourceDiff,
   WorkspaceStarterSourceDiffSummary,
@@ -73,6 +74,17 @@ export type WorkspaceStarterBulkPreviewFocusTarget = {
   name: string;
   sourceWorkflowVersion: string | null;
   statusLabel: string;
+  archived: boolean;
+};
+
+export type WorkspaceStarterBulkResultFocusTarget = {
+  templateId: string;
+  name: string;
+  sourceWorkflowVersion: string | null;
+  statusLabel: string;
+  detail: string | null;
+  sandboxNodeSummary: string | null;
+  driftNodeCount: number;
   archived: boolean;
 };
 
@@ -325,10 +337,30 @@ export function buildBulkActionMessage(
 export function buildWorkspaceStarterBulkResultNarrative(
   result: WorkspaceStarterBulkActionResult
 ): WorkspaceStarterNarrativeItem[] {
+  const deletedCount = result.deleted_items.length;
+  const receiptSummaryParts = [
+    `本次批量${getWorkspaceStarterBulkActionLabel(result.action)}请求 ${result.requested_count} 个 starter。`,
+    result.updated_count > 0
+      ? `实际处理 ${result.updated_count} 个${deletedCount > 0 ? `（其中删除 ${deletedCount} 个）` : ""}。`
+      : `当前没有 starter 被${getWorkspaceStarterBulkActionLabel(result.action)}。`,
+    result.skipped_count > 0
+      ? `跳过 ${result.skipped_count} 个（${result.skipped_reason_summary
+          .map((item) => `${getWorkspaceStarterBulkSkipReasonLabel(item.reason)} ${item.count}`)
+          .join(" / ")}）。`
+      : null
+  ].filter((item): item is string => Boolean(item));
+
   const sandboxSummary = normalizeSourceDiffSummary(result.sandbox_dependency_changes);
   const sandboxNodeCount = countSummaryChanges(sandboxSummary);
+  const items: WorkspaceStarterNarrativeItem[] = [
+    {
+      label: "Result receipt",
+      text: receiptSummaryParts.join(" ")
+    }
+  ];
+
   if (!sandboxSummary || sandboxNodeCount <= 0) {
-    return [];
+    return items;
   }
 
   const templateFacts = (result.sandbox_dependency_items ?? [])
@@ -341,16 +373,13 @@ export function buildWorkspaceStarterBulkResultNarrative(
     })
     .join("；");
 
-  const items: WorkspaceStarterNarrativeItem[] = [
-    {
-      label: "Sandbox drift",
-      text:
-        `本次批量${getWorkspaceStarterBulkActionLabel(result.action)}涉及 ${
-          result.sandbox_dependency_items.length
-        } 个 starter、${sandboxNodeCount} 个 sandbox 依赖漂移节点；` +
-        summarizeSourceDiffCounts(sandboxSummary)
-    }
-  ];
+  items.push({
+    label: "Sandbox drift",
+    text:
+      `本次批量${getWorkspaceStarterBulkActionLabel(result.action)}涉及 ${
+        result.sandbox_dependency_items.length
+      } 个 starter、${sandboxNodeCount} 个 sandbox 依赖漂移节点；` + summarizeSourceDiffCounts(sandboxSummary)
+  });
 
   if (templateFacts) {
     items.push({
@@ -360,6 +389,74 @@ export function buildWorkspaceStarterBulkResultNarrative(
   }
 
   return items;
+}
+
+function getWorkspaceStarterBulkResultOutcomeLabel(
+  action: WorkspaceStarterBulkAction,
+  item: WorkspaceStarterBulkReceiptItem
+) {
+  if (item.outcome === "deleted") {
+    return "已删除";
+  }
+  if (item.outcome === "skipped") {
+    return item.reason ? getWorkspaceStarterBulkSkipReasonLabel(item.reason) : "已跳过";
+  }
+
+  if (action === "archive") {
+    return "已归档";
+  }
+  if (action === "restore") {
+    return "已恢复";
+  }
+  if (action === "refresh") {
+    return item.changed === false ? "已对齐" : "已刷新";
+  }
+  if (action === "rebase") {
+    return item.changed === false ? "已对齐" : "已 rebase";
+  }
+  return "已处理";
+}
+
+export function buildWorkspaceStarterBulkResultFocusTargets(
+  result: Pick<WorkspaceStarterBulkActionResult, "action" | "receipt_items">,
+  templates: WorkspaceStarterTemplateItem[]
+): WorkspaceStarterBulkResultFocusTarget[] {
+  const templatesById = new Map(templates.map((template) => [template.id, template] as const));
+  const seenTemplateIds = new Set<string>();
+
+  return (result.receipt_items ?? []).flatMap((item) => {
+    if (item.outcome === "deleted" || seenTemplateIds.has(item.template_id)) {
+      return [];
+    }
+
+    const template = templatesById.get(item.template_id);
+    if (!template) {
+      return [];
+    }
+
+    seenTemplateIds.add(item.template_id);
+    const sandboxNodes = Array.from(new Set(normalizeStringArray(item.sandbox_dependency_nodes)));
+    const driftNodeCount = countSummaryChanges(
+      normalizeSourceDiffSummary(item.sandbox_dependency_changes)
+    );
+    const outcomeLabel = getWorkspaceStarterBulkResultOutcomeLabel(result.action, item);
+    const decisionLabel = normalizeString(item.action_decision?.status_label);
+    const statusLabel =
+      item.outcome === "updated" && decisionLabel ? `${outcomeLabel} · ${decisionLabel}` : outcomeLabel;
+
+    return [
+      {
+        templateId: item.template_id,
+        name: item.name?.trim() || template.name,
+        sourceWorkflowVersion: normalizeString(item.source_workflow_version),
+        statusLabel,
+        detail: normalizeString(item.detail),
+        sandboxNodeSummary: sandboxNodes.length > 0 ? sandboxNodes.join("、") : null,
+        driftNodeCount,
+        archived: item.archived ?? template.archived
+      }
+    ];
+  });
 }
 
 export function buildWorkspaceStarterBulkPreviewNarrative(

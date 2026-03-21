@@ -9,8 +9,8 @@ import type {
 } from "@/lib/get-workspace-starters";
 
 import {
-  type WorkspaceStarterBulkAffectedStarterTarget,
   type WorkspaceStarterBulkPreviewFocusTarget,
+  type WorkspaceStarterBulkResultFocusTarget,
   buildWorkspaceStarterBulkPreviewNarrative,
   buildWorkspaceStarterBulkResultNarrative,
   getWorkspaceStarterBulkActionButtonLabel,
@@ -26,7 +26,7 @@ type WorkspaceStarterBulkGovernanceCardProps = {
   isLoadingPreview: boolean;
   lastResult: WorkspaceStarterBulkActionResult | null;
   previewFocusTargets: WorkspaceStarterBulkPreviewFocusTarget[];
-  affectedStarterTargets: WorkspaceStarterBulkAffectedStarterTarget[];
+  resultFocusTargets: WorkspaceStarterBulkResultFocusTarget[];
   selectedTemplateId: string | null;
   onFocusTemplate: (templateId: string) => void;
   onAction: (action: WorkspaceStarterBulkAction) => void;
@@ -48,7 +48,7 @@ export function WorkspaceStarterBulkGovernanceCard({
   isLoadingPreview,
   lastResult,
   previewFocusTargets,
-  affectedStarterTargets,
+  resultFocusTargets,
   selectedTemplateId,
   onFocusTemplate,
   onAction
@@ -163,16 +163,15 @@ export function WorkspaceStarterBulkGovernanceCard({
             </p>
           ))}
 
-          {affectedStarterTargets.length > 0 ? (
+          {resultFocusTargets.length > 0 ? (
             <div className="binding-section">
-              <p className="binding-meta">Affected starter focus</p>
+              <p className="binding-meta">Result receipt focus</p>
               <p className="section-copy starter-summary-copy">
-                点击受影响 starter 会自动切换筛选范围，并把右侧详情聚焦到对应模板的
-                source diff / metadata；当前焦点也会同步进 URL，方便刷新后恢复或直接分享给
-                operator。
+                result receipt 已把“已处理 / 已跳过”的 starter 收口到同一张清单里；点击任一条目会自动
+                切换筛选范围，并把右侧详情聚焦到对应模板的 source diff / metadata。
               </p>
               <div className="starter-tag-row">
-                {affectedStarterTargets.map((item) => (
+                {resultFocusTargets.map((item) => (
                   <button
                     key={item.templateId}
                     className={`event-chip event-chip-button ${
@@ -184,9 +183,10 @@ export function WorkspaceStarterBulkGovernanceCard({
                     aria-pressed={selectedTemplateId === item.templateId}
                   >
                     {item.name}
+                    {item.statusLabel ? ` · ${item.statusLabel}` : ""}
+                    {item.sourceWorkflowVersion ? ` · source ${item.sourceWorkflowVersion}` : ""}
                     {item.sandboxNodeSummary ? ` · ${item.sandboxNodeSummary}` : ""}
                     {item.driftNodeCount > 0 ? ` · drift ${item.driftNodeCount}` : ""}
-                    {item.sourceWorkflowVersion ? ` · source ${item.sourceWorkflowVersion}` : ""}
                     {item.archived ? " · archived" : ""}
                   </button>
                 ))}

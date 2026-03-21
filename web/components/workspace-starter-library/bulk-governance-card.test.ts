@@ -12,7 +12,8 @@ import { WorkspaceStarterBulkGovernanceCard } from "./bulk-governance-card";
 import {
   buildBulkActionMessage,
   buildWorkspaceStarterBulkAffectedStarterTargets,
-  buildWorkspaceStarterBulkPreviewFocusTargets
+  buildWorkspaceStarterBulkPreviewFocusTargets,
+  buildWorkspaceStarterBulkResultFocusTargets
 } from "./shared";
 
 describe("WorkspaceStarterBulkGovernanceCard", () => {
@@ -52,8 +53,14 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
         {
           template_id: "starter-manual",
           name: "Manual starter",
+          archived: false,
           reason: "no_source_workflow",
-          detail: "Workspace starter has no source workflow."
+          detail: "Workspace starter has no source workflow.",
+          source_workflow_id: null,
+          source_workflow_version: null,
+          action_decision: null,
+          sandbox_dependency_changes: null,
+          sandbox_dependency_nodes: []
         }
       ],
       skipped_reason_summary: [
@@ -84,6 +91,51 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
             changed_count: 1
           },
           sandbox_dependency_nodes: ["sandbox"]
+        }
+      ],
+      receipt_items: [
+        {
+          template_id: "starter-sandbox",
+          name: "Sandbox starter",
+          outcome: "updated",
+          archived: false,
+          reason: null,
+          detail: "已把 starter 快照应用到最新来源事实。",
+          source_workflow_id: "wf-demo",
+          source_workflow_version: "0.1.5",
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "当前主要是来源快照漂移。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["source 0.1.5"]
+          },
+          sandbox_dependency_changes: {
+            template_count: 1,
+            source_count: 1,
+            added_count: 0,
+            removed_count: 0,
+            changed_count: 1
+          },
+          sandbox_dependency_nodes: ["sandbox"],
+          changed: true,
+          rebase_fields: []
+        },
+        {
+          template_id: "starter-manual",
+          name: "Manual starter",
+          outcome: "skipped",
+          archived: false,
+          reason: "no_source_workflow",
+          detail: "Workspace starter has no source workflow.",
+          source_workflow_id: null,
+          source_workflow_version: null,
+          action_decision: null,
+          sandbox_dependency_changes: null,
+          sandbox_dependency_nodes: [],
+          changed: false,
+          rebase_fields: []
         }
       ]
     };
@@ -189,7 +241,7 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
         isLoadingPreview: false,
         lastResult,
         previewFocusTargets: buildWorkspaceStarterBulkPreviewFocusTargets(preview, templates),
-        affectedStarterTargets: buildWorkspaceStarterBulkAffectedStarterTargets(lastResult, templates),
+        resultFocusTargets: buildWorkspaceStarterBulkResultFocusTargets(lastResult, templates),
         selectedTemplateId: "starter-sandbox",
         onFocusTemplate: () => {},
         onAction: () => {}
@@ -203,13 +255,15 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(html).toContain("Preview focus");
     expect(html).toContain("Sandbox starter · 建议 refresh · source 0.1.5");
     expect(html).toContain("sandbox drift 1");
+    expect(html).toContain("Result receipt:");
+    expect(html).toContain("本次批量刷新请求 2 个 starter。 实际处理 1 个。 跳过 1 个（无来源 1）。");
     expect(html).toContain("Sandbox drift:");
     expect(html).toContain("本次批量刷新涉及 1 个 starter、1 个 sandbox 依赖漂移节点");
     expect(html).toContain("Affected starters:");
     expect(html).toContain("Sandbox starter（sandbox）");
     expect(html).toContain("无来源 1");
-    expect(html).toContain("Affected starter focus");
-    expect(html).toContain("Sandbox starter · sandbox · drift 1 · source 0.1.5");
+    expect(html).toContain("Result receipt focus");
+    expect(html).toContain("Sandbox starter · 已刷新 · 建议 refresh · source 0.1.5 · sandbox · drift 1");
   });
 
   it("adds sandbox dependency drift summary into the bulk action message", () => {

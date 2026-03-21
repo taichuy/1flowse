@@ -17,6 +17,7 @@ from app.schemas.workspace_starter import (
     WorkspaceStarterBulkPreviewRequest,
     WorkspaceStarterBulkPreviewSet,
     WorkspaceStarterBulkDeletedItem,
+    WorkspaceStarterBulkReceiptItem,
     WorkspaceStarterBulkSandboxDependencyItem,
     WorkspaceStarterBulkSkippedItem,
     WorkspaceStarterBulkSkippedSummary,
@@ -39,6 +40,7 @@ class WorkspaceStarterBulkActionAccumulator:
     updated_items: list[WorkspaceStarterTemplateItem] = field(default_factory=list)
     deleted_items: list[WorkspaceStarterBulkDeletedItem] = field(default_factory=list)
     skipped_items: list[WorkspaceStarterBulkSkippedItem] = field(default_factory=list)
+    receipt_items: list[WorkspaceStarterBulkReceiptItem] = field(default_factory=list)
     sandbox_dependency_items: list[WorkspaceStarterBulkSandboxDependencyItem] = field(
         default_factory=list
     )
@@ -62,7 +64,150 @@ class WorkspaceStarterBulkActionAccumulator:
                 self.sandbox_dependency_items
             ),
             sandbox_dependency_items=self.sandbox_dependency_items,
+            receipt_items=self.receipt_items,
         )
+
+
+def _build_result_receipt_item(
+    template_id: str,
+    *,
+    outcome: str,
+    record=None,
+    source_workflow: Workflow | None = None,
+    diff: WorkspaceStarterSourceDiff | None = None,
+    reason: str | None = None,
+    detail: str | None = None,
+    changed: bool | None = None,
+    rebase_fields: list[str] | None = None,
+) -> WorkspaceStarterBulkReceiptItem:
+    return WorkspaceStarterBulkReceiptItem(
+        template_id=template_id,
+        name=getattr(record, "name", None),
+        outcome=outcome,
+        archived=bool(getattr(record, "archived_at", None)),
+        reason=reason,
+        detail=detail,
+        source_workflow_id=(
+            source_workflow.id
+            if source_workflow is not None
+            else getattr(record, "created_from_workflow_id", None)
+        ),
+        source_workflow_version=(
+            source_workflow.version
+            if source_workflow is not None
+            else getattr(record, "created_from_workflow_version", None)
+        ),
+        action_decision=diff.action_decision if diff is not None else None,
+        sandbox_dependency_changes=(
+            diff.sandbox_dependency_summary
+            if diff is not None and diff.sandbox_dependency_entries
+            else None
+        ),
+        sandbox_dependency_nodes=(
+            [entry.id for entry in diff.sandbox_dependency_entries]
+            if diff is not None and diff.sandbox_dependency_entries
+            else []
+        ),
+        changed=changed,
+        rebase_fields=list(rebase_fields or []),
+    )
+
+
+def _append_skipped_item(
+    accumulator: WorkspaceStarterBulkActionAccumulator,
+    template_id: str,
+    *,
+    reason: str,
+    detail: str,
+    record=None,
+    source_workflow: Workflow | None = None,
+    diff: WorkspaceStarterSourceDiff | None = None,
+) -> None:
+    accumulator.skipped_items.append(
+        WorkspaceStarterBulkSkippedItem(
+            template_id=template_id,
+            name=getattr(record, "name", None),
+            archived=bool(getattr(record, "archived_at", None)),
+            reason=reason,
+            detail=detail,
+            source_workflow_id=(
+                source_workflow.id
+                if source_workflow is not None
+                else getattr(record, "created_from_workflow_id", None)
+            ),
+            source_workflow_version=(
+                source_workflow.version
+                if source_workflow is not None
+                else getattr(record, "created_from_workflow_version", None)
+            ),
+            action_decision=diff.action_decision if diff is not None else None,
+            sandbox_dependency_changes=(
+                diff.sandbox_dependency_summary
+                if diff is not None and diff.sandbox_dependency_entries
+                else None
+            ),
+            sandbox_dependency_nodes=(
+                [entry.id for entry in diff.sandbox_dependency_entries]
+                if diff is not None and diff.sandbox_dependency_entries
+                else []
+            ),
+        )
+    )
+    accumulator.receipt_items.append(
+        _build_result_receipt_item(
+            template_id,
+            outcome="skipped",
+            record=record,
+            source_workflow=source_workflow,
+            diff=diff,
+            reason=reason,
+            detail=detail,
+            changed=False,
+        )
+    )
+
+
+def _append_updated_receipt_item(
+    accumulator: WorkspaceStarterBulkActionAccumulator,
+    template_id: str,
+    *,
+    record,
+    source_workflow: Workflow | None = None,
+    diff: WorkspaceStarterSourceDiff | None = None,
+    detail: str | None = None,
+    changed: bool | None = None,
+    rebase_fields: list[str] | None = None,
+) -> None:
+    accumulator.receipt_items.append(
+        _build_result_receipt_item(
+            template_id,
+            outcome="updated",
+            record=record,
+            source_workflow=source_workflow,
+            diff=diff,
+            detail=detail,
+            changed=changed,
+            rebase_fields=rebase_fields,
+        )
+    )
+
+
+def _append_deleted_receipt_item(
+    accumulator: WorkspaceStarterBulkActionAccumulator,
+    template_id: str,
+    *,
+    record,
+    detail: str | None = None,
+) -> None:
+    accumulator.receipt_items.append(
+        _build_result_receipt_item(
+            template_id,
+            outcome="deleted",
+            record=record,
+            detail=detail,
+            changed=True,
+        )
+    )
 
 
 @dataclass
@@ -87,16 +232,23 @@ def execute_workspace_starter_bulk_action(
     )
     record_map = {record.id: record for record in records}
     accumulator = WorkspaceStarterBulkActionAccumulator()
+    source_context_map = (
+        {
+            record.id: _build_source_preview_context(db, starter_service, record)
+            for record in records
+        }
+        if payload.action in {"refresh", "rebase"}
+        else {}
+    )
 
     for template_id in payload.template_ids:
         record = record_map.get(template_id)
         if record is None:
-            accumulator.skipped_items.append(
-                WorkspaceStarterBulkSkippedItem(
-                    template_id=template_id,
-                    reason="not_found",
-                    detail="Workspace starter template not found.",
-                )
+            _append_skipped_item(
+                accumulator,
+                template_id,
+                reason="not_found",
+                detail="Workspace starter template not found.",
             )
             continue
 
@@ -116,6 +268,7 @@ def execute_workspace_starter_bulk_action(
             record,
             action=payload.action,
             accumulator=accumulator,
+            source_context=source_context_map.get(record.id),
         )
 
     db.commit()
@@ -612,13 +765,12 @@ def _archive_template(
     accumulator: WorkspaceStarterBulkActionAccumulator,
 ) -> None:
     if record.archived_at is not None:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="already_archived",
-                detail="Workspace starter is already archived.",
-            )
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            reason="already_archived",
+            detail="Workspace starter is already archived.",
         )
         return
 
@@ -634,6 +786,13 @@ def _archive_template(
     db.add(record)
     db.flush()
     accumulator.updated_items.append(service.serialize(record))
+    _append_updated_receipt_item(
+        accumulator,
+        record.id,
+        record=record,
+        detail="已批量归档 workspace starter。",
+        changed=True,
+    )
 
 
 def _restore_template(
@@ -643,13 +802,12 @@ def _restore_template(
     accumulator: WorkspaceStarterBulkActionAccumulator,
 ) -> None:
     if record.archived_at is None:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="not_archived",
-                detail="Workspace starter is not archived.",
-            )
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            reason="not_archived",
+            detail="Workspace starter is not archived.",
         )
         return
 
@@ -665,6 +823,13 @@ def _restore_template(
     db.add(record)
     db.flush()
     accumulator.updated_items.append(service.serialize(record))
+    _append_updated_receipt_item(
+        accumulator,
+        record.id,
+        record=record,
+        detail="已批量恢复 workspace starter。",
+        changed=True,
+    )
 
 
 def _delete_template(
@@ -674,13 +839,12 @@ def _delete_template(
     accumulator: WorkspaceStarterBulkActionAccumulator,
 ) -> None:
     if record.archived_at is None:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="delete_requires_archive",
-                detail="Archive the workspace starter before deleting it.",
-            )
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            reason="delete_requires_archive",
+            detail="Archive the workspace starter before deleting it.",
         )
         return
 
@@ -691,6 +855,12 @@ def _delete_template(
             name=record.name,
         )
     )
+    _append_deleted_receipt_item(
+        accumulator,
+        record.id,
+        record=record,
+        detail="已批量删除 workspace starter。",
+    )
 
 
 def _sync_template_from_source(
@@ -700,29 +870,79 @@ def _sync_template_from_source(
     *,
     action: str,
     accumulator: WorkspaceStarterBulkActionAccumulator,
+    source_context: WorkspaceStarterBulkSourcePreviewContext | None = None,
 ) -> None:
-    if record.created_from_workflow_id is None:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="no_source_workflow",
-                detail="Workspace starter has no source workflow.",
-            )
+    context = source_context or _build_source_preview_context(db, service, record)
+    if context.blocked_reason is not None or context.blocked_detail is not None:
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            source_workflow=context.source_workflow,
+            reason=context.blocked_reason or "source_workflow_invalid",
+            detail=context.blocked_detail or "Source workflow is not valid.",
+            diff=context.diff,
         )
         return
 
-    source_workflow = db.get(Workflow, record.created_from_workflow_id)
-    if source_workflow is None:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="source_workflow_missing",
-                detail="Source workflow not found.",
-            )
+    diff = context.diff
+    source_workflow = context.source_workflow
+    if diff is None or source_workflow is None:
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            reason="source_workflow_missing",
+            detail="Source workflow not found.",
         )
         return
+
+    if action == "refresh" and not diff.action_decision.can_refresh:
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            source_workflow=source_workflow,
+            reason=_resolve_source_action_block_reason(diff, action=action),
+            detail=diff.action_decision.summary,
+            diff=diff,
+        )
+        return
+
+    if action == "rebase" and not diff.action_decision.can_rebase:
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            source_workflow=source_workflow,
+            reason=_resolve_source_action_block_reason(diff, action=action),
+            detail=diff.action_decision.summary,
+            diff=diff,
+        )
+        return
+
+    validation_required = action == "refresh" or "definition" in diff.rebase_fields
+    if validation_required:
+        try:
+            validate_workspace_starter_definition(
+                db,
+                workspace_id=record.workspace_id,
+                definition=source_workflow.definition,
+                workflow_id=source_workflow.id,
+                workflow_version=source_workflow.version,
+                allow_next_version=False,
+            )
+        except WorkflowDefinitionValidationError as exc:
+            _append_skipped_item(
+                accumulator,
+                record.id,
+                record=record,
+                source_workflow=source_workflow,
+                reason="source_workflow_invalid",
+                detail=str(exc),
+                diff=diff,
+            )
+            return
 
     if action == "refresh":
         _refresh_template_from_workflow(
@@ -731,6 +951,7 @@ def _sync_template_from_source(
             record,
             source_workflow,
             accumulator,
+            diff=diff,
         )
         return
 
@@ -740,6 +961,7 @@ def _sync_template_from_source(
         record,
         source_workflow,
         accumulator,
+        diff=diff,
     )
 
 
@@ -749,19 +971,21 @@ def _refresh_template_from_workflow(
     record,
     source_workflow: Workflow,
     accumulator: WorkspaceStarterBulkActionAccumulator,
+    *,
+    diff: WorkspaceStarterSourceDiff,
 ) -> None:
     try:
         previous_version = record.created_from_workflow_version
-        diff = service.build_source_diff(record, source_workflow)
         changed = service.refresh_from_workflow(db, record, source_workflow)
     except WorkflowDefinitionValidationError as exc:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="source_workflow_invalid",
-                detail=str(exc),
-            )
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            source_workflow=source_workflow,
+            reason="source_workflow_invalid",
+            detail=str(exc),
+            diff=diff,
         )
         return
 
@@ -808,6 +1032,19 @@ def _refresh_template_from_workflow(
     db.add(record)
     db.flush()
     accumulator.updated_items.append(service.serialize(record))
+    _append_updated_receipt_item(
+        accumulator,
+        record.id,
+        record=record,
+        source_workflow=source_workflow,
+        diff=diff,
+        detail=(
+            "已把 starter 快照应用到最新来源事实。"
+            if changed
+            else "已检查来源事实，当前 starter 快照已对齐。"
+        ),
+        changed=changed,
+    )
 
 
 def _rebase_template_from_workflow(
@@ -816,17 +1053,25 @@ def _rebase_template_from_workflow(
     record,
     source_workflow: Workflow,
     accumulator: WorkspaceStarterBulkActionAccumulator,
+    *,
+    diff: WorkspaceStarterSourceDiff,
 ) -> None:
     try:
-        diff = service.rebase_from_workflow(db, record, source_workflow)
+        diff = service.rebase_from_workflow(
+            db,
+            record,
+            source_workflow,
+            diff=diff,
+        )
     except WorkflowDefinitionValidationError as exc:
-        accumulator.skipped_items.append(
-            WorkspaceStarterBulkSkippedItem(
-                template_id=record.id,
-                name=record.name,
-                reason="source_workflow_invalid",
-                detail=str(exc),
-            )
+        _append_skipped_item(
+            accumulator,
+            record.id,
+            record=record,
+            source_workflow=source_workflow,
+            reason="source_workflow_invalid",
+            detail=str(exc),
+            diff=diff,
         )
         return
 
@@ -875,4 +1120,18 @@ def _rebase_template_from_workflow(
     db.add(record)
     db.flush()
     accumulator.updated_items.append(service.serialize(record))
+    _append_updated_receipt_item(
+        accumulator,
+        record.id,
+        record=record,
+        source_workflow=source_workflow,
+        diff=diff,
+        detail=(
+            "已同步 rebase 所需字段。"
+            if diff.changed
+            else "已检查来源事实，当前 starter 与来源已对齐。"
+        ),
+        changed=diff.changed,
+        rebase_fields=diff.rebase_fields,
+    )
 

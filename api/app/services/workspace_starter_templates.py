@@ -290,8 +290,10 @@ class WorkspaceStarterTemplateService:
         db: Session,
         record: WorkspaceStarterTemplateRecord,
         workflow: Workflow,
+        *,
+        diff: WorkspaceStarterSourceDiff | None = None,
     ) -> WorkspaceStarterSourceDiff:
-        diff = self.build_source_diff(record, workflow)
+        diff = diff or self.build_source_diff(record, workflow)
         if "definition" in diff.rebase_fields:
             record.definition = validate_workspace_starter_definition(
                 db,

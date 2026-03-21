@@ -1722,8 +1722,14 @@ def test_workspace_starter_bulk_delete_requires_archive_and_removes_archived_ite
         {
             "template_id": active["id"],
             "name": "Bulk Delete Active Starter",
+            "archived": False,
             "reason": "delete_requires_archive",
             "detail": "Archive the workspace starter before deleting it.",
+            "source_workflow_id": "wf-demo",
+            "source_workflow_version": "0.1.0",
+            "action_decision": None,
+            "sandbox_dependency_changes": None,
+            "sandbox_dependency_nodes": [],
         }
     ]
     assert delete_result["skipped_reason_summary"] == [
@@ -1732,6 +1738,38 @@ def test_workspace_starter_bulk_delete_requires_archive_and_removes_archived_ite
             "count": 1,
             "detail": "Archive the workspace starter before deleting it.",
         }
+    ]
+    assert delete_result["receipt_items"] == [
+        {
+            "template_id": active["id"],
+            "name": "Bulk Delete Active Starter",
+            "outcome": "skipped",
+            "archived": False,
+            "reason": "delete_requires_archive",
+            "detail": "Archive the workspace starter before deleting it.",
+            "source_workflow_id": "wf-demo",
+            "source_workflow_version": "0.1.0",
+            "action_decision": None,
+            "sandbox_dependency_changes": None,
+            "sandbox_dependency_nodes": [],
+            "changed": False,
+            "rebase_fields": [],
+        },
+        {
+            "template_id": archived["id"],
+            "name": "Bulk Delete Archived Starter",
+            "outcome": "deleted",
+            "archived": True,
+            "reason": None,
+            "detail": "已批量删除 workspace starter。",
+            "source_workflow_id": "wf-demo",
+            "source_workflow_version": "0.1.0",
+            "action_decision": None,
+            "sandbox_dependency_changes": None,
+            "sandbox_dependency_nodes": [],
+            "changed": True,
+            "rebase_fields": [],
+        },
     ]
 
     active_detail = client.get(f"/api/workspace-starters/{active['id']}")
@@ -1926,20 +1964,41 @@ def test_workspace_starter_bulk_refresh_skips_source_workflow_with_unavailable_n
     refresh_result = refresh_response.json()
     assert refresh_result["updated_count"] == 0
     assert refresh_result["skipped_count"] == 1
-    assert refresh_result["skipped_items"] == [
-        {
-            "template_id": derived["id"],
-            "name": "Bulk Invalid Source Starter",
-            "reason": "source_workflow_invalid",
-            "detail": refresh_result["skipped_items"][0]["detail"],
-        }
-    ]
-    assert "not currently available for persistence" in refresh_result["skipped_items"][0]["detail"]
+    skipped_item = refresh_result["skipped_items"][0]
+    assert skipped_item["template_id"] == derived["id"]
+    assert skipped_item["name"] == "Bulk Invalid Source Starter"
+    assert skipped_item["archived"] is False
+    assert skipped_item["reason"] == "source_workflow_invalid"
+    assert skipped_item["source_workflow_id"] == "wf-demo"
+    assert skipped_item["source_workflow_version"] == "0.1.4"
+    assert skipped_item["action_decision"]["recommended_action"] == "rebase"
+    assert skipped_item["action_decision"]["can_refresh"] is True
+    assert skipped_item["action_decision"]["can_rebase"] is True
+    assert skipped_item["sandbox_dependency_changes"] is None
+    assert skipped_item["sandbox_dependency_nodes"] == []
+    assert "not currently available for persistence" in skipped_item["detail"]
     assert refresh_result["skipped_reason_summary"] == [
         {
             "reason": "source_workflow_invalid",
             "count": 1,
-            "detail": refresh_result["skipped_items"][0]["detail"],
+            "detail": skipped_item["detail"],
+        }
+    ]
+    assert refresh_result["receipt_items"] == [
+        {
+            "template_id": derived["id"],
+            "name": "Bulk Invalid Source Starter",
+            "outcome": "skipped",
+            "archived": False,
+            "reason": "source_workflow_invalid",
+            "detail": skipped_item["detail"],
+            "source_workflow_id": "wf-demo",
+            "source_workflow_version": "0.1.4",
+            "action_decision": skipped_item["action_decision"],
+            "sandbox_dependency_changes": None,
+            "sandbox_dependency_nodes": [],
+            "changed": False,
+            "rebase_fields": [],
         }
     ]
 
@@ -1974,20 +2033,41 @@ def test_workspace_starter_bulk_rebase_skips_source_workflow_with_unavailable_no
     rebase_result = rebase_response.json()
     assert rebase_result["updated_count"] == 0
     assert rebase_result["skipped_count"] == 1
-    assert rebase_result["skipped_items"] == [
-        {
-            "template_id": derived["id"],
-            "name": "Bulk Invalid Rebase Starter",
-            "reason": "source_workflow_invalid",
-            "detail": rebase_result["skipped_items"][0]["detail"],
-        }
-    ]
-    assert "not currently available for persistence" in rebase_result["skipped_items"][0]["detail"]
+    skipped_item = rebase_result["skipped_items"][0]
+    assert skipped_item["template_id"] == derived["id"]
+    assert skipped_item["name"] == "Bulk Invalid Rebase Starter"
+    assert skipped_item["archived"] is False
+    assert skipped_item["reason"] == "source_workflow_invalid"
+    assert skipped_item["source_workflow_id"] == "wf-demo"
+    assert skipped_item["source_workflow_version"] == "0.1.4"
+    assert skipped_item["action_decision"]["recommended_action"] == "rebase"
+    assert skipped_item["action_decision"]["can_refresh"] is True
+    assert skipped_item["action_decision"]["can_rebase"] is True
+    assert skipped_item["sandbox_dependency_changes"] is None
+    assert skipped_item["sandbox_dependency_nodes"] == []
+    assert "not currently available for persistence" in skipped_item["detail"]
     assert rebase_result["skipped_reason_summary"] == [
         {
             "reason": "source_workflow_invalid",
             "count": 1,
-            "detail": rebase_result["skipped_items"][0]["detail"],
+            "detail": skipped_item["detail"],
+        }
+    ]
+    assert rebase_result["receipt_items"] == [
+        {
+            "template_id": derived["id"],
+            "name": "Bulk Invalid Rebase Starter",
+            "outcome": "skipped",
+            "archived": False,
+            "reason": "source_workflow_invalid",
+            "detail": skipped_item["detail"],
+            "source_workflow_id": "wf-demo",
+            "source_workflow_version": "0.1.4",
+            "action_decision": skipped_item["action_decision"],
+            "sandbox_dependency_changes": None,
+            "sandbox_dependency_nodes": [],
+            "changed": False,
+            "rebase_fields": [],
         }
     ]
 
@@ -2051,6 +2131,22 @@ def test_workspace_starter_bulk_refresh_returns_sandbox_dependency_summary(
             "sandbox_dependency_nodes": ["sandbox"],
         }
     ]
+    receipt_item = refresh_result["receipt_items"][0]
+    assert receipt_item["template_id"] == derived["id"]
+    assert receipt_item["name"] == "Bulk Refresh Sandbox Starter"
+    assert receipt_item["outcome"] == "updated"
+    assert receipt_item["archived"] is False
+    assert receipt_item["detail"] == "已把 starter 快照应用到最新来源事实。"
+    assert receipt_item["source_workflow_id"] == "wf-demo"
+    assert receipt_item["source_workflow_version"] == "0.1.5"
+    assert receipt_item["action_decision"]["recommended_action"] == "rebase"
+    assert receipt_item["action_decision"]["can_refresh"] is True
+    assert receipt_item["action_decision"]["can_rebase"] is True
+    assert "sandbox drift 1" in receipt_item["action_decision"]["fact_chips"]
+    assert receipt_item["sandbox_dependency_changes"] == refresh_result["sandbox_dependency_changes"]
+    assert receipt_item["sandbox_dependency_nodes"] == ["sandbox"]
+    assert receipt_item["changed"] is True
+    assert receipt_item["rebase_fields"] == []
 
 
 def test_workspace_starter_bulk_rebase_returns_sandbox_dependency_summary(
@@ -2111,6 +2207,26 @@ def test_workspace_starter_bulk_rebase_returns_sandbox_dependency_summary(
             },
             "sandbox_dependency_nodes": ["sandbox"],
         }
+    ]
+    receipt_item = rebase_result["receipt_items"][0]
+    assert receipt_item["template_id"] == derived["id"]
+    assert receipt_item["name"] == "Bulk Rebase Sandbox Starter"
+    assert receipt_item["outcome"] == "updated"
+    assert receipt_item["archived"] is False
+    assert receipt_item["detail"] == "已同步 rebase 所需字段。"
+    assert receipt_item["source_workflow_id"] == "wf-demo"
+    assert receipt_item["source_workflow_version"] == "0.1.6"
+    assert receipt_item["action_decision"]["recommended_action"] == "rebase"
+    assert receipt_item["action_decision"]["can_refresh"] is True
+    assert receipt_item["action_decision"]["can_rebase"] is True
+    assert "sandbox drift 1" in receipt_item["action_decision"]["fact_chips"]
+    assert receipt_item["sandbox_dependency_changes"] == rebase_result["sandbox_dependency_changes"]
+    assert receipt_item["sandbox_dependency_nodes"] == ["sandbox"]
+    assert receipt_item["changed"] is True
+    assert sorted(receipt_item["rebase_fields"]) == [
+        "created_from_workflow_version",
+        "default_workflow_name",
+        "definition",
     ]
 
 
@@ -2342,6 +2458,143 @@ def test_workspace_starter_bulk_preview_summarizes_refresh_and_rebase_candidates
             "detail": "Source workflow not found.",
         },
     ]
+
+
+def test_workspace_starter_bulk_refresh_reuses_preview_blockers_in_result_receipt(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow,
+) -> None:
+    refresh_candidate_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Result Refresh Candidate",
+            "description": "Template for bulk result refresh candidate",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "bulk result refresh",
+            "recommended_next_step": "bulk result refresh next",
+            "tags": ["bulk-result", "refresh"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert refresh_candidate_response.status_code == 201
+    refresh_candidate = refresh_candidate_response.json()
+
+    sample_workflow.name = "Bulk Result Workflow v2"
+    sample_workflow.version = "0.2.0"
+    sample_workflow.definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "mock_tool",
+                "type": "tool",
+                "name": "Mock Tool",
+                "config": {"mock_output": {"answer": "done"}},
+            },
+            {
+                "id": "planner",
+                "type": "llm_agent",
+                "name": "Planner",
+                "config": {"prompt": "Plan result drift"},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
+            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "planner"},
+            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "output"},
+        ],
+    }
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    aligned_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Result Aligned Starter",
+            "description": "Template already aligned with source workflow",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "bulk result aligned",
+            "recommended_next_step": "bulk result aligned next",
+            "tags": ["bulk-result", "aligned"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert aligned_response.status_code == 201
+    aligned = aligned_response.json()
+
+    name_only_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Result Name Drift Starter",
+            "description": "Template with name-only drift",
+            "business_track": "应用新建编排",
+            "default_workflow_name": "Demo Workflow",
+            "workflow_focus": "bulk result name drift",
+            "recommended_next_step": "bulk result name drift next",
+            "tags": ["bulk-result", "name-drift"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert name_only_response.status_code == 201
+    name_only = name_only_response.json()
+
+    refresh_response = client.post(
+        "/api/workspace-starters/bulk",
+        json={
+            "workspace_id": "default",
+            "action": "refresh",
+            "template_ids": [refresh_candidate["id"], aligned["id"], name_only["id"]],
+        },
+    )
+
+    assert refresh_response.status_code == 200
+    refresh_result = refresh_response.json()
+    assert refresh_result["updated_count"] == 1
+    assert refresh_result["skipped_count"] == 2
+    assert [item["reason"] for item in refresh_result["skipped_items"]] == [
+        "already_aligned",
+        "name_drift_only",
+    ]
+    assert refresh_result["skipped_reason_summary"] == [
+        {
+            "reason": "already_aligned",
+            "count": 1,
+            "detail": "当前模板快照和来源 workflow 已对齐，无需 refresh 或 rebase。",
+        },
+        {
+            "reason": "name_drift_only",
+            "count": 1,
+            "detail": (
+                "当前只漂移默认 workflow 名称；refresh 不会改名，如需让 starter 命名"
+                "跟随来源，请执行 rebase。"
+            ),
+        },
+    ]
+    assert [item["outcome"] for item in refresh_result["receipt_items"]] == [
+        "updated",
+        "skipped",
+        "skipped",
+    ]
+    assert refresh_result["receipt_items"][0]["source_workflow_version"] == "0.2.0"
+    assert refresh_result["receipt_items"][0]["action_decision"]["recommended_action"] == "rebase"
+    assert refresh_result["receipt_items"][0]["action_decision"]["can_refresh"] is True
+    assert refresh_result["receipt_items"][0]["action_decision"]["can_rebase"] is True
+    assert refresh_result["receipt_items"][1]["reason"] == "already_aligned"
+    assert refresh_result["receipt_items"][1]["action_decision"]["recommended_action"] == "none"
+    assert refresh_result["receipt_items"][2]["reason"] == "name_drift_only"
+    assert refresh_result["receipt_items"][2]["action_decision"]["recommended_action"] == "rebase"
 
 
 def test_workspace_starter_bulk_preview_marks_invalid_source_workflow_as_blocked(

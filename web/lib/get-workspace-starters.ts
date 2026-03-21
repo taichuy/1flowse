@@ -155,14 +155,39 @@ export type WorkspaceStarterBulkPreview = {
 export type WorkspaceStarterBulkSkippedItem = {
   template_id: string;
   name?: string | null;
+  archived: boolean;
   reason:
     | "not_found"
     | "already_archived"
     | "not_archived"
     | "no_source_workflow"
     | "source_workflow_missing"
-    | "delete_requires_archive";
+    | "source_workflow_invalid"
+    | "delete_requires_archive"
+    | "already_aligned"
+    | "name_drift_only";
   detail: string;
+  source_workflow_id?: string | null;
+  source_workflow_version?: string | null;
+  action_decision?: WorkspaceStarterSourceActionDecisionPayload | null;
+  sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
+  sandbox_dependency_nodes: string[];
+};
+
+export type WorkspaceStarterBulkReceiptItem = {
+  template_id: string;
+  name?: string | null;
+  outcome: "updated" | "deleted" | "skipped";
+  archived: boolean;
+  reason?: WorkspaceStarterBulkSkippedItem["reason"] | null;
+  detail?: string | null;
+  source_workflow_id?: string | null;
+  source_workflow_version?: string | null;
+  action_decision?: WorkspaceStarterSourceActionDecisionPayload | null;
+  sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
+  sandbox_dependency_nodes: string[];
+  changed?: boolean | null;
+  rebase_fields: string[];
 };
 
 export type WorkspaceStarterBulkSkippedSummary = {
@@ -197,6 +222,7 @@ export type WorkspaceStarterBulkActionResult = {
   skipped_reason_summary: WorkspaceStarterBulkSkippedSummary[];
   sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
   sandbox_dependency_items: WorkspaceStarterBulkSandboxDependencyItem[];
+  receipt_items: WorkspaceStarterBulkReceiptItem[];
 };
 
 export type WorkspaceStarterValidationIssue = WorkflowDefinitionPreflightIssue;
@@ -438,7 +464,8 @@ export async function bulkUpdateWorkspaceStarters({
       skipped_items: [],
       skipped_reason_summary: [],
       sandbox_dependency_changes: null,
-      sandbox_dependency_items: []
+      sandbox_dependency_items: [],
+      receipt_items: []
     };
   }
 
