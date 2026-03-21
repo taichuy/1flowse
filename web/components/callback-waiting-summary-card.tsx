@@ -18,6 +18,8 @@ import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildCallbackWaitingFocusSkillTraceModel } from "@/lib/callback-waiting-focus-skill-trace";
 import {
+  type ExecutionFocusArtifactLike,
+  type ExecutionFocusToolCallLike,
   formatExecutionFocusArtifactSummary,
   listExecutionFocusArtifactPreviews,
   listExecutionFocusRuntimeFactBadges,
@@ -36,10 +38,11 @@ import {
   pickCallbackWaitingInlineSensitiveAccessEntry
 } from "@/lib/callback-waiting-presenters";
 
-type CallbackWaitingFocusNodeEvidence = Pick<
-  RunExecutionNodeItem,
-  "artifact_refs" | "artifacts" | "tool_calls"
-> &
+type CallbackWaitingFocusNodeEvidence = {
+  artifact_refs: string[];
+  artifacts: ExecutionFocusArtifactLike[];
+  tool_calls: ExecutionFocusToolCallLike[];
+} &
   Partial<
     Pick<
       RunExecutionNodeItem,

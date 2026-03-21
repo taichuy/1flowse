@@ -4,6 +4,7 @@ import type {
 } from "@/lib/get-system-overview";
 import type { RunExecutionView } from "@/lib/get-run-views";
 
+import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics-execution/operator-follow-up-card";
 import { RunDiagnosticsExecutionOverviewBlockers } from "@/components/run-diagnostics-execution/execution-overview-blockers";
 import { MetricChipRow, SummaryCard } from "@/components/run-diagnostics-execution/shared";
 
@@ -96,6 +97,8 @@ export function RunDiagnosticsExecutionOverview({
           <SummaryCard label="Terminated waits" value={callbackWaiting.terminated_node_count} />
         </div>
       ) : null}
+
+      <RunDiagnosticsOperatorFollowUpCard executionView={executionView} />
 
       <MetricChipRow
         title="Ticket statuses"

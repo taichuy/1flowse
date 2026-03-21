@@ -1,5 +1,4 @@
 import type {
-  RunArtifactItem,
   RunCallbackTicketItem,
   RunExecutionFocusReason,
   RunExecutionNodeItem,
@@ -31,19 +30,59 @@ type ExecutionFallbackInsight = {
   followUp: string;
 };
 
-type ExecutionFocusToolExplainableNode = Pick<
-  RunExecutionNodeItem,
-  "tool_calls" | "artifact_refs" | "artifacts"
->;
+export type ExecutionFocusArtifactLike = {
+  artifact_kind: string;
+  content_type?: string | null;
+  summary?: string | null;
+  uri?: string | null;
+  [key: string]: unknown;
+};
 
-type ExecutionFocusRuntimeFactExplainableNode = Pick<
-  RunExecutionNodeItem,
-  | "tool_calls"
-  | "effective_execution_class"
-  | "execution_executor_ref"
-  | "execution_sandbox_backend_id"
-  | "execution_sandbox_runner_kind"
->;
+export type ExecutionFocusToolCallLike = {
+  id: string;
+  run_id?: string | null;
+  node_run_id?: string | null;
+  tool_id: string;
+  tool_name: string;
+  phase?: string | null;
+  status: string;
+  requested_execution_class?: string | null;
+  requested_execution_source?: string | null;
+  requested_execution_profile?: string | null;
+  requested_execution_timeout_ms?: number | null;
+  requested_execution_network_policy?: string | null;
+  requested_execution_filesystem_policy?: string | null;
+  requested_execution_dependency_mode?: string | null;
+  requested_execution_builtin_package_set?: string | null;
+  requested_execution_dependency_ref?: string | null;
+  requested_execution_backend_extensions?: Record<string, unknown> | null;
+  effective_execution_class?: string | null;
+  execution_executor_ref?: string | null;
+  execution_sandbox_backend_id?: string | null;
+  execution_sandbox_backend_executor_ref?: string | null;
+  execution_sandbox_runner_kind?: string | null;
+  execution_blocking_reason?: string | null;
+  execution_fallback_reason?: string | null;
+  request_summary?: string | null;
+  response_summary?: string | null;
+  response_content_type?: string | null;
+  raw_ref?: string | null;
+  [key: string]: unknown;
+};
+
+type ExecutionFocusToolExplainableNode = {
+  tool_calls: ExecutionFocusToolCallLike[];
+  artifact_refs: string[];
+  artifacts: ExecutionFocusArtifactLike[];
+};
+
+type ExecutionFocusRuntimeFactExplainableNode = {
+  tool_calls: ExecutionFocusToolCallLike[];
+  effective_execution_class?: string | null;
+  execution_executor_ref?: string | null;
+  execution_sandbox_backend_id?: string | null;
+  execution_sandbox_runner_kind?: string | null;
+};
 
 export type ExecutionFocusArtifactPreview = {
   key: string;
@@ -184,22 +223,7 @@ export function formatMetricSummary(metrics: Record<string, number>) {
     .join(" · ");
 }
 
-function buildToolExecutionBadges(
-  toolCall: Pick<
-    ToolCallItem,
-    | "phase"
-    | "requested_execution_class"
-    | "requested_execution_profile"
-    | "requested_execution_dependency_mode"
-    | "effective_execution_class"
-    | "execution_sandbox_backend_id"
-    | "execution_sandbox_runner_kind"
-    | "execution_blocking_reason"
-    | "execution_fallback_reason"
-    | "response_content_type"
-    | "raw_ref"
-  >
-) {
+function buildToolExecutionBadges(toolCall: ExecutionFocusToolCallLike) {
   const badges: string[] = [];
   const phase = trimOrNull(toolCall.phase);
   const requestedExecutionClass = trimOrNull(toolCall.requested_execution_class);
@@ -266,21 +290,7 @@ function buildBackendExtensionsSummary(value?: Record<string, unknown> | null) {
   return `extensions ${keys.slice(0, 2).join(", ")} +${keys.length - 2}`;
 }
 
-function buildToolExecutionTraceSummary(
-  toolCall: Pick<
-    ToolCallItem,
-    | "requested_execution_source"
-    | "requested_execution_timeout_ms"
-    | "requested_execution_network_policy"
-    | "requested_execution_filesystem_policy"
-    | "requested_execution_dependency_mode"
-    | "requested_execution_builtin_package_set"
-    | "requested_execution_dependency_ref"
-    | "requested_execution_backend_extensions"
-    | "execution_executor_ref"
-    | "execution_sandbox_backend_executor_ref"
-  >
-) {
+function buildToolExecutionTraceSummary(toolCall: ExecutionFocusToolCallLike) {
   const traceFacts = [
     trimOrNull(toolCall.requested_execution_source)
       ? `source ${trimOrNull(toolCall.requested_execution_source)}`
@@ -315,23 +325,7 @@ function buildToolExecutionTraceSummary(
   return traceFacts.length > 0 ? `执行链：${traceFacts.join(" · ")}。` : null;
 }
 
-function buildToolExecutionDetail(
-  toolCall: Pick<
-    ToolCallItem,
-    | "request_summary"
-    | "response_summary"
-    | "response_content_type"
-    | "requested_execution_source"
-    | "requested_execution_timeout_ms"
-    | "requested_execution_network_policy"
-    | "requested_execution_filesystem_policy"
-    | "execution_executor_ref"
-    | "execution_sandbox_backend_executor_ref"
-    | "execution_blocking_reason"
-    | "execution_fallback_reason"
-    | "raw_ref"
-  >
-) {
+function buildToolExecutionDetail(toolCall: ExecutionFocusToolCallLike) {
   const blockingReason = trimOrNull(toolCall.execution_blocking_reason);
   if (blockingReason) {
     return `执行阻断：${blockingReason}`;
@@ -365,7 +359,7 @@ function buildToolExecutionDetail(
   return "当前 tool call 已进入统一 execution 事实链。";
 }
 
-function countArtifactsByKind(artifacts: RunArtifactItem[]) {
+function countArtifactsByKind(artifacts: ExecutionFocusArtifactLike[]) {
   return artifacts.reduce<Record<string, number>>((summary, artifact) => {
     const key = trimOrNull(artifact.artifact_kind) ?? "artifact";
     summary[key] = (summary[key] ?? 0) + 1;
@@ -391,9 +385,9 @@ export function listExecutionFocusToolCallSummaries(
 }
 
 function summarizeExecutionRuntimeFacts(
-  toolCalls: ToolCallItem[],
+  toolCalls: ExecutionFocusToolCallLike[],
   label: string,
-  resolveValue: (toolCall: ToolCallItem) => string | null
+  resolveValue: (toolCall: ExecutionFocusToolCallLike) => string | null
 ) {
   const counts = toolCalls.reduce<Record<string, number>>((summary, toolCall) => {
     const value = resolveValue(toolCall);
@@ -452,7 +446,7 @@ export function listExecutionFocusRuntimeFactBadges(
 }
 
 export function listExecutionFocusArtifactPreviews(
-  node: Pick<RunExecutionNodeItem, "artifacts">,
+  node: Pick<ExecutionFocusToolExplainableNode, "artifacts">,
   limit = 2
 ): ExecutionFocusArtifactPreview[] {
   return node.artifacts.slice(0, limit).map((artifact, index) => ({
