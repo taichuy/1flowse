@@ -319,6 +319,30 @@ def build_builtin_starters(
         ),
         _build_builtin_starter_item(
             catalog_by_type,
+            id="sandbox-code",
+            name="Sandbox Code Draft",
+            description="预留一个 Sandbox Code 节点，方便把高风险代码执行链路直接从创建入口接回 editor / runtime 主线。",
+            business_track="编排节点能力",
+            default_workflow_name="Sandbox Code Workflow",
+            workflow_focus="先把受控代码执行节点放进真实 workflow，再继续补代码、依赖策略与输出结构。",
+            recommended_next_step="优先补全 code、dependencyMode 和 runtimePolicy，确认当前 sandbox readiness 后再继续扩展上下游节点。",
+            tags=["sandbox_code", "代码执行", "runtime-ready"],
+            nodes=[
+                {"id": "trigger", "type": "trigger", "position": {"x": 80, "y": 220}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "position": {"x": 420, "y": 220},
+                },
+                {"id": "output", "type": "output", "position": {"x": 780, "y": 220}},
+            ],
+            edges=[
+                create_edge("edge_trigger_sandbox", "trigger", "sandbox"),
+                create_edge("edge_sandbox_output", "sandbox", "output"),
+            ],
+        ),
+        _build_builtin_starter_item(
+            catalog_by_type,
             id="tooling",
             name="Tool-enabled Agent",
             description="内置 Agent + Tool 骨架，适合先把工具编排与受控调用链路跑通。",

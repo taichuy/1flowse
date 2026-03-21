@@ -99,6 +99,7 @@ export function inferWorkflowBusinessTrack(
 
   if (
     nodeTypes.has("llm_agent") ||
+    nodeTypes.has("sandbox_code") ||
     nodeTypes.has("mcp_query") ||
     nodeTypes.has("condition") ||
     nodeTypes.has("router")

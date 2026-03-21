@@ -85,6 +85,7 @@ def test_workflow_library_snapshot_includes_shared_catalog_contract(
     assert {item["id"] for item in body["starters"]} >= {
         "blank",
         "agent",
+        "sandbox-code",
         "tooling",
         "response",
         workspace_starter["id"],
@@ -103,7 +104,7 @@ def test_workflow_library_snapshot_includes_shared_catalog_contract(
             "label": "Native node catalog",
             "short_label": "native nodes",
             "summary": "当前 palette 中的原生节点目录，由 7Flows 内部事实模型直接维护。",
-            "count": 6,
+            "count": 7,
         }
     ]
     assert tool_node["binding_required"] is True

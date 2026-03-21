@@ -21,9 +21,9 @@ export function buildWorkspaceStarterPayload({
       recommendedNextStep: "回到创建页验证模板入口，再继续补业务节点和输出约束。"
     },
     "编排节点能力": {
-      description: "来自 editor 的节点编排样板，可继续补 Agent、分支和上下文授权。",
-      workflowFocus: "把当前 workflow 中较成熟的节点组合沉淀成团队级 starter。",
-      recommendedNextStep: "继续结构化高频节点配置，再复用到新的业务流程里。"
+      description: "来自 editor 的节点编排样板，可继续补 Agent、Sandbox Code、分支和上下文授权。",
+      workflowFocus: "把当前 workflow 中较成熟的高频节点组合沉淀成团队级 starter。",
+      recommendedNextStep: "继续结构化高频节点配置与执行策略，再复用到新的业务流程里。"
     },
     "Dify 插件兼容": {
       description: "来自 editor 的工具/兼容链路草稿，适合作为插件能力复用入口。",
