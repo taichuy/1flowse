@@ -123,15 +123,34 @@ export type PublishedInvocationDetailSurfaceCopy = {
   closeDetailLabel: string;
   openRunLabel: string;
   runDrilldownTitle: string;
+  runLabel: string;
+  runStatusLabel: string;
+  currentNodeLabel: string;
+  waitingReasonLabel: string;
+  waitingNodeRunLabel: string;
+  startedLabel: string;
+  finishedLabel: string;
   cacheDrilldownTitle: string;
+  cacheStatusLabel: string;
+  cacheKeyLabel: string;
+  cacheEntryLabel: string;
+  cacheEntryHitsLabel: string;
+  cacheLastHitLabel: string;
+  cacheExpiresLabel: string;
   requestPreviewTitle: string;
   responsePreviewTitle: string;
   canonicalFollowUpTitle: string;
   canonicalFollowUpDescription: string;
   sampledRunFallback: string;
+  sampledRunReasonCallbackWaitingLabel: string;
+  sampledRunReasonExecutionFocusLabel: string;
+  sampledRunReasonFallbackLabel: string;
   sampledRunFocusEvidenceTitle: string;
   sampledRunSkillTraceTitle: string;
   sampledRunSkillTraceDescription: string;
+  sampledRunStatusLabel: string;
+  sampledRunCurrentNodeLabel: string;
+  sampledRunWaitingReasonLabel: string;
   recommendedNextStepTitle: string;
   executionFocusTitle: string;
   liveSandboxReadinessTitle: string;
@@ -150,6 +169,8 @@ export type PublishedInvocationDetailSurfaceCopy = {
   approvalTimelineDescription: string;
   approvalTimelineInboxLabel: string;
   approvalTimelineEmptyState: string;
+  unavailableValueLabel: string;
+  notStartedValueLabel: string;
 };
 
 export type PublishedCacheInventorySurfaceCopy = {
@@ -205,10 +226,25 @@ export type PublishedInvocationEntrySurfaceCopy = {
   waitingOverviewTitle: string;
   canonicalFollowUpTitle: string;
   canonicalFollowUpFallbackHeadline: string;
+  apiKeyLabel: string;
+  requestKeysLabel: string;
+  runLabel: string;
+  runStatusLabel: string;
+  currentNodeLabel: string;
+  waitingReasonLabel: string;
+  callbackTicketsLabel: string;
+  scheduledResumeLabel: string;
+  waitingNodeRunLabel: string;
+  waitingNodeStatusLabel: string;
+  waitingCallbackTicketsLabel: string;
+  waitingCallbackLifecycleLabel: string;
   canonicalFollowUpAffectedRunsLabel: string;
   canonicalFollowUpSampledRunsLabel: string;
   canonicalFollowUpStatusSummaryLabel: string;
   canonicalFollowUpSampleFocusLabel: string;
+  canonicalFollowUpAffectedRunsChipPrefix: string;
+  canonicalFollowUpSampledRunsChipPrefix: string;
+  canonicalFollowUpStatusChipPrefix: string;
   liveSandboxReadinessTitle: string;
   sampledRunFocusEvidenceTitle: string;
   sampledRunSkillTraceTitle: string;
@@ -220,6 +256,9 @@ export type PublishedInvocationEntrySurfaceCopy = {
   detailActionActiveLabel: string;
   errorMessagePrefix: string;
   detailPanelDescription: string;
+  unavailableValueLabel: string;
+  notStartedValueLabel: string;
+  emptyCountValueLabel: string;
 };
 
 export type PublishedInvocationWaitingCardSurface = {
@@ -365,7 +404,7 @@ export function buildPublishedInvocationDetailSurfaceCopy({
 }: {
   blockingNodeRunId?: string | null;
   focusSkillTraceNodeRunId?: string | null;
-}): PublishedInvocationDetailSurfaceCopy {
+} = {}): PublishedInvocationDetailSurfaceCopy {
   const blockingApprovalTimelineCopy = buildSensitiveAccessTimelineSurfaceCopy({
     surface: "publish_blocking_invocation",
     blockingNodeRunId
@@ -379,17 +418,36 @@ export function buildPublishedInvocationDetailSurfaceCopy({
     closeDetailLabel: "关闭详情",
     openRunLabel: "打开 run",
     runDrilldownTitle: "Run drilldown",
+    runLabel: "Run",
+    runStatusLabel: "Status",
+    currentNodeLabel: "Current node",
+    waitingReasonLabel: "Waiting reason",
+    waitingNodeRunLabel: "Waiting node run",
+    startedLabel: "Started",
+    finishedLabel: "Finished",
     cacheDrilldownTitle: "Cache drilldown",
+    cacheStatusLabel: "Status",
+    cacheKeyLabel: "Cache key",
+    cacheEntryLabel: "Entry",
+    cacheEntryHitsLabel: "Entry hits",
+    cacheLastHitLabel: "Last hit",
+    cacheExpiresLabel: "Expires",
     requestPreviewTitle: "Request preview",
     responsePreviewTitle: "Response preview",
     canonicalFollowUpTitle: "Canonical follow-up",
     canonicalFollowUpDescription:
       "publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。",
     sampledRunFallback: "该 sampled run 已回接 canonical follow-up 快照。",
+    sampledRunReasonCallbackWaitingLabel: "callback waiting",
+    sampledRunReasonExecutionFocusLabel: "execution focus",
+    sampledRunReasonFallbackLabel: "run snapshot",
     sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
     sampledRunSkillTraceTitle: "Focused skill trace",
     sampledRunSkillTraceDescription:
       "publish invocation detail 里的 sampled run 现在也直接复用 compact snapshot 的 skill trace，避免还要回跳 run detail 才能确认 focus node 实际加载了哪些参考资料。",
+    sampledRunStatusLabel: "Status",
+    sampledRunCurrentNodeLabel: "Current node",
+    sampledRunWaitingReasonLabel: "Waiting reason",
     recommendedNextStepTitle: "Recommended next step",
     executionFocusTitle: "Execution focus",
     liveSandboxReadinessTitle: "Live sandbox readiness",
@@ -411,7 +469,9 @@ export function buildPublishedInvocationDetailSurfaceCopy({
     approvalTimelineTitle: approvalTimelineCopy.title,
     approvalTimelineDescription: approvalTimelineCopy.description,
     approvalTimelineInboxLabel: approvalTimelineCopy.inboxLinkLabel,
-    approvalTimelineEmptyState: approvalTimelineCopy.emptyState
+    approvalTimelineEmptyState: approvalTimelineCopy.emptyState,
+    unavailableValueLabel: "n/a",
+    notStartedValueLabel: "not-started"
   };
 }
 
@@ -513,10 +573,25 @@ export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationE
     waitingOverviewTitle: "Waiting overview",
     canonicalFollowUpTitle: "Canonical follow-up",
     canonicalFollowUpFallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。",
+    apiKeyLabel: "API key",
+    requestKeysLabel: "Request keys",
+    runLabel: "Run",
+    runStatusLabel: "Run status",
+    currentNodeLabel: "Current node",
+    waitingReasonLabel: "Waiting reason",
+    callbackTicketsLabel: "Callback tickets",
+    scheduledResumeLabel: "Scheduled resume",
+    waitingNodeRunLabel: "Node run",
+    waitingNodeStatusLabel: "Node status",
+    waitingCallbackTicketsLabel: "Callback tickets",
+    waitingCallbackLifecycleLabel: "Callback lifecycle",
     canonicalFollowUpAffectedRunsLabel: "Affected runs",
     canonicalFollowUpSampledRunsLabel: "Sampled runs",
     canonicalFollowUpStatusSummaryLabel: "Status summary",
     canonicalFollowUpSampleFocusLabel: "Sample focus",
+    canonicalFollowUpAffectedRunsChipPrefix: "affected",
+    canonicalFollowUpSampledRunsChipPrefix: "sampled",
+    canonicalFollowUpStatusChipPrefix: "status",
     liveSandboxReadinessTitle: "Live sandbox readiness",
     sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
     sampledRunSkillTraceTitle: "Focused skill trace",
@@ -530,18 +605,23 @@ export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationE
     detailActionActiveLabel: "查看当前详情",
     errorMessagePrefix: "error",
     detailPanelDescription:
-      "详情面板会补 run / callback ticket / callback lifecycle / cache 四类稳定排障入口。"
+      "详情面板会补 run / callback ticket / callback lifecycle / cache 四类稳定排障入口。",
+    unavailableValueLabel: "n/a",
+    notStartedValueLabel: "not-started",
+    emptyCountValueLabel: "0"
   };
 }
 
 export function buildPublishedInvocationWaitingCardSurface({
   waitingLifecycle,
   waitingExplanation,
-  callbackLifecycleFallback
+  callbackLifecycleFallback,
+  surfaceCopy = buildPublishedInvocationEntrySurfaceCopy()
 }: {
   waitingLifecycle?: PublishedEndpointInvocationItem["run_waiting_lifecycle"] | null;
   waitingExplanation?: RunExecutionFocusExplanation | null;
   callbackLifecycleFallback: string;
+  surfaceCopy?: PublishedInvocationEntrySurfaceCopy;
 }): PublishedInvocationWaitingCardSurface | null {
   if (!waitingLifecycle) {
     return null;
@@ -564,7 +644,8 @@ export function buildPublishedInvocationWaitingCardSurface({
     callbackTicketCount: waitingLifecycle.callback_ticket_count ?? 0,
     callbackTicketStatusCounts: waitingLifecycle.callback_ticket_status_counts,
     callbackLifecycleLabel: formatCallbackLifecycleLabel(callbackLifecycle),
-    callbackLifecycleFallback
+    callbackLifecycleFallback,
+    surfaceCopy
   });
   const waitingChips = listCallbackWaitingChips({
     lifecycle: callbackLifecycle,
@@ -705,17 +786,18 @@ export function buildPublishedInvocationCallbackTicketSurface({
   };
 }
 export function formatPublishedInvocationSampleReasonLabel(
-  source: "callback_waiting" | "execution_focus" | null
+  source: "callback_waiting" | "execution_focus" | null,
+  surfaceCopy = buildPublishedInvocationDetailSurfaceCopy()
 ) {
   if (source === "callback_waiting") {
-    return "callback waiting";
+    return surfaceCopy.sampledRunReasonCallbackWaitingLabel;
   }
 
   if (source === "execution_focus") {
-    return "execution focus";
+    return surfaceCopy.sampledRunReasonExecutionFocusLabel;
   }
 
-  return "run snapshot";
+  return surfaceCopy.sampledRunReasonFallbackLabel;
 }
 
 export function buildPublishedInvocationActivityInsightsSurfaceCopy({
@@ -981,46 +1063,60 @@ export function listPublishedInvocationEntryMetaRows({
   runStatus,
   currentNodeId,
   waitingReason,
-  scheduledResumeLabel
+  scheduledResumeLabel,
+  surfaceCopy = buildPublishedInvocationEntrySurfaceCopy()
 }: {
   invocation: PublishedEndpointInvocationItem;
   runStatus: string | null;
   currentNodeId: string | null;
   waitingReason: string | null;
   scheduledResumeLabel: string;
+  surfaceCopy?: PublishedInvocationEntrySurfaceCopy;
 }): PublishedInvocationMetaRow[] {
   return [
     buildPublishedInvocationMetaRow(
       "api-key",
-      "API key",
+      surfaceCopy.apiKeyLabel,
       invocation.api_key_name ?? invocation.api_key_prefix ?? "internal"
     ),
     buildPublishedInvocationMetaRow(
       "request-keys",
-      "Request keys",
+      surfaceCopy.requestKeysLabel,
       formatKeyList(invocation.request_preview.keys ?? [])
     ),
     buildPublishedInvocationMetaRow(
       "run",
-      "Run",
-      invocation.run_id ?? "not-started",
+      surfaceCopy.runLabel,
+      invocation.run_id ?? surfaceCopy.notStartedValueLabel,
       invocation.run_id ? `/runs/${encodeURIComponent(invocation.run_id)}` : null
     ),
     buildPublishedInvocationMetaRow(
       "run-status",
-      "Run status",
+      surfaceCopy.runStatusLabel,
       formatPublishedRunStatusLabel(runStatus)
     ),
-    buildPublishedInvocationMetaRow("current-node", "Current node", currentNodeId ?? "n/a"),
-    buildPublishedInvocationMetaRow("waiting-reason", "Waiting reason", waitingReason ?? "n/a"),
+    buildPublishedInvocationMetaRow(
+      "current-node",
+      surfaceCopy.currentNodeLabel,
+      currentNodeId ?? surfaceCopy.unavailableValueLabel
+    ),
+    buildPublishedInvocationMetaRow(
+      "waiting-reason",
+      surfaceCopy.waitingReasonLabel,
+      waitingReason ?? surfaceCopy.unavailableValueLabel
+    ),
     buildPublishedInvocationMetaRow(
       "callback-tickets",
-      "Callback tickets",
+      surfaceCopy.callbackTicketsLabel,
       invocation.run_waiting_lifecycle
         ? `${invocation.run_waiting_lifecycle.callback_ticket_count} · ${formatPublishedInvocationMetricCounts(invocation.run_waiting_lifecycle.callback_ticket_status_counts)}`
-        : "n/a"
+        : surfaceCopy.unavailableValueLabel
     ),
-    buildPublishedInvocationMetaRow("scheduled-resume", "Scheduled resume", scheduledResumeLabel)
+    buildPublishedInvocationMetaRow(
+      "scheduled-resume",
+      surfaceCopy.scheduledResumeLabel,
+      scheduledResumeLabel
+    )
   ];
 }
 
@@ -1030,7 +1126,8 @@ export function listPublishedInvocationEntryWaitingRows({
   callbackTicketCount,
   callbackTicketStatusCounts,
   callbackLifecycleLabel,
-  callbackLifecycleFallback
+  callbackLifecycleFallback,
+  surfaceCopy = buildPublishedInvocationEntrySurfaceCopy()
 }: {
   nodeRunId: string | null;
   nodeStatus: string | null;
@@ -1038,20 +1135,29 @@ export function listPublishedInvocationEntryWaitingRows({
   callbackTicketStatusCounts: Record<string, number> | null | undefined;
   callbackLifecycleLabel: string | null;
   callbackLifecycleFallback: string;
+  surfaceCopy?: PublishedInvocationEntrySurfaceCopy;
 }): PublishedInvocationMetaRow[] {
   return [
-    buildPublishedInvocationMetaRow("node-run", "Node run", nodeRunId ?? "n/a"),
-    buildPublishedInvocationMetaRow("node-status", "Node status", nodeStatus ?? "n/a"),
+    buildPublishedInvocationMetaRow(
+      "node-run",
+      surfaceCopy.waitingNodeRunLabel,
+      nodeRunId ?? surfaceCopy.unavailableValueLabel
+    ),
+    buildPublishedInvocationMetaRow(
+      "node-status",
+      surfaceCopy.waitingNodeStatusLabel,
+      nodeStatus ?? surfaceCopy.unavailableValueLabel
+    ),
     buildPublishedInvocationMetaRow(
       "callback-tickets",
-      "Callback tickets",
+      surfaceCopy.waitingCallbackTicketsLabel,
       callbackTicketCount
         ? `${callbackTicketCount} · ${formatPublishedInvocationMetricCounts(callbackTicketStatusCounts)}`
-        : "0"
+        : surfaceCopy.emptyCountValueLabel
     ),
     buildPublishedInvocationMetaRow(
       "callback-lifecycle",
-      "Callback lifecycle",
+      surfaceCopy.waitingCallbackLifecycleLabel,
       callbackLifecycleLabel ?? callbackLifecycleFallback
     )
   ];
@@ -1064,7 +1170,8 @@ export function listPublishedInvocationDetailRunRows({
   waitingReason,
   waitingNodeRunId,
   startedAt,
-  finishedAt
+  finishedAt,
+  surfaceCopy = buildPublishedInvocationDetailSurfaceCopy()
 }: {
   runId: string | null;
   runStatus: string | null;
@@ -1073,49 +1180,72 @@ export function listPublishedInvocationDetailRunRows({
   waitingNodeRunId: string | null;
   startedAt: string | null | undefined;
   finishedAt: string | null | undefined;
+  surfaceCopy?: PublishedInvocationDetailSurfaceCopy;
 }): PublishedInvocationMetaRow[] {
   return [
     buildPublishedInvocationMetaRow(
       "run",
-      "Run",
-      runId ?? "not-started",
+      surfaceCopy.runLabel,
+      runId ?? surfaceCopy.notStartedValueLabel,
       runId ? `/runs/${encodeURIComponent(runId)}` : null
     ),
-    buildPublishedInvocationMetaRow("status", "Status", runStatus ?? "n/a"),
-    buildPublishedInvocationMetaRow("current-node", "Current node", currentNodeId ?? "n/a"),
-    buildPublishedInvocationMetaRow("waiting-reason", "Waiting reason", waitingReason ?? "n/a"),
+    buildPublishedInvocationMetaRow(
+      "status",
+      surfaceCopy.runStatusLabel,
+      runStatus ?? surfaceCopy.unavailableValueLabel
+    ),
+    buildPublishedInvocationMetaRow(
+      "current-node",
+      surfaceCopy.currentNodeLabel,
+      currentNodeId ?? surfaceCopy.unavailableValueLabel
+    ),
+    buildPublishedInvocationMetaRow(
+      "waiting-reason",
+      surfaceCopy.waitingReasonLabel,
+      waitingReason ?? surfaceCopy.unavailableValueLabel
+    ),
     buildPublishedInvocationMetaRow(
       "waiting-node-run",
-      "Waiting node run",
-      waitingNodeRunId ?? "n/a"
+      surfaceCopy.waitingNodeRunLabel,
+      waitingNodeRunId ?? surfaceCopy.unavailableValueLabel
     ),
-    buildPublishedInvocationMetaRow("started", "Started", formatTimestamp(startedAt)),
-    buildPublishedInvocationMetaRow("finished", "Finished", formatTimestamp(finishedAt))
+    buildPublishedInvocationMetaRow("started", surfaceCopy.startedLabel, formatTimestamp(startedAt)),
+    buildPublishedInvocationMetaRow("finished", surfaceCopy.finishedLabel, formatTimestamp(finishedAt))
   ];
 }
 
 export function listPublishedInvocationCacheDrilldownRows({
-  cache
+  cache,
+  surfaceCopy = buildPublishedInvocationDetailSurfaceCopy()
 }: {
   cache: PublishedEndpointInvocationDetailResponse["cache"];
+  surfaceCopy?: PublishedInvocationDetailSurfaceCopy;
 }): PublishedInvocationMetaRow[] {
   return [
-    buildPublishedInvocationMetaRow("status", "Status", cache.cache_status),
-    buildPublishedInvocationMetaRow("cache-key", "Cache key", cache.cache_key ?? "n/a"),
-    buildPublishedInvocationMetaRow("entry", "Entry", cache.cache_entry_id ?? "n/a"),
+    buildPublishedInvocationMetaRow("status", surfaceCopy.cacheStatusLabel, cache.cache_status),
+    buildPublishedInvocationMetaRow(
+      "cache-key",
+      surfaceCopy.cacheKeyLabel,
+      cache.cache_key ?? surfaceCopy.unavailableValueLabel
+    ),
+    buildPublishedInvocationMetaRow(
+      "entry",
+      surfaceCopy.cacheEntryLabel,
+      cache.cache_entry_id ?? surfaceCopy.unavailableValueLabel
+    ),
     buildPublishedInvocationMetaRow(
       "entry-hits",
-      "Entry hits",
+      surfaceCopy.cacheEntryHitsLabel,
       String(cache.inventory_entry?.hit_count ?? 0)
     ),
     buildPublishedInvocationMetaRow(
       "last-hit",
-      "Last hit",
+      surfaceCopy.cacheLastHitLabel,
       formatTimestamp(cache.inventory_entry?.last_hit_at)
     ),
     buildPublishedInvocationMetaRow(
       "expires",
-      "Expires",
+      surfaceCopy.cacheExpiresLabel,
       formatTimestamp(cache.inventory_entry?.expires_at)
     )
   ];
@@ -1124,16 +1254,18 @@ export function listPublishedInvocationCacheDrilldownRows({
 export function listPublishedInvocationCanonicalFollowUpChips({
   affectedRunCount,
   sampledRunCount,
-  statusSummary
+  statusSummary,
+  surfaceCopy = buildPublishedInvocationEntrySurfaceCopy()
 }: {
   affectedRunCount: number;
   sampledRunCount: number;
   statusSummary: string | null;
+  surfaceCopy?: PublishedInvocationEntrySurfaceCopy;
 }): string[] {
   return [
-    `affected ${affectedRunCount}`,
-    `sampled ${sampledRunCount}`,
-    ...(statusSummary ? [`status ${statusSummary}`] : [])
+    `${surfaceCopy.canonicalFollowUpAffectedRunsChipPrefix} ${affectedRunCount}`,
+    `${surfaceCopy.canonicalFollowUpSampledRunsChipPrefix} ${sampledRunCount}`,
+    ...(statusSummary ? [`${surfaceCopy.canonicalFollowUpStatusChipPrefix} ${statusSummary}`] : [])
   ];
 }
 
@@ -1164,19 +1296,24 @@ export function listPublishedInvocationRunFollowUpEvidenceChips(
 }
 
 export function listPublishedInvocationRunFollowUpSampleMetaRows(
-  sample: PublishedInvocationRunFollowUpSampleView
+  sample: PublishedInvocationRunFollowUpSampleView,
+  surfaceCopy = buildPublishedInvocationDetailSurfaceCopy()
 ): PublishedInvocationMetaRow[] {
   return [
-    buildPublishedInvocationMetaRow("status", "Status", sample.status ?? "n/a"),
+    buildPublishedInvocationMetaRow(
+      "status",
+      surfaceCopy.sampledRunStatusLabel,
+      sample.status ?? surfaceCopy.unavailableValueLabel
+    ),
     buildPublishedInvocationMetaRow(
       "current-node",
-      "Current node",
-      sample.current_node_id ?? "n/a"
+      surfaceCopy.sampledRunCurrentNodeLabel,
+      sample.current_node_id ?? surfaceCopy.unavailableValueLabel
     ),
     buildPublishedInvocationMetaRow(
       "waiting-reason",
-      "Waiting reason",
-      sample.waiting_reason ?? "n/a"
+      surfaceCopy.sampledRunWaitingReasonLabel,
+      sample.waiting_reason ?? surfaceCopy.unavailableValueLabel
     )
   ];
 }

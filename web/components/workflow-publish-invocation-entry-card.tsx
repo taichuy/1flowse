@@ -78,7 +78,8 @@ export function WorkflowPublishInvocationEntryCard({
   const waitingCardSurface = buildPublishedInvocationWaitingCardSurface({
     waitingLifecycle,
     waitingExplanation,
-    callbackLifecycleFallback: surfaceCopy.callbackLifecycleFallback
+    callbackLifecycleFallback: surfaceCopy.callbackLifecycleFallback,
+    surfaceCopy
   });
   const waitingChips = waitingCardSurface?.waitingChips ?? [];
   const waitingOverviewHeadline = waitingCardSurface?.headline ?? null;
@@ -164,7 +165,8 @@ export function WorkflowPublishInvocationEntryCard({
     runStatus,
     currentNodeId,
     waitingReason,
-    scheduledResumeLabel
+    scheduledResumeLabel,
+    surfaceCopy
   });
   const waitingMetaRows = waitingCardSurface?.waitingRows ?? [];
   const runFollowUpEvidenceChips = runFollowUpSample

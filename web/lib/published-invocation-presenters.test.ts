@@ -74,8 +74,17 @@ describe("published invocation presenters", () => {
       closeDetailLabel: "关闭详情",
       openRunLabel: "打开 run",
       runDrilldownTitle: "Run drilldown",
+      runLabel: "Run",
+      runStatusLabel: "Status",
+      currentNodeLabel: "Current node",
+      waitingReasonLabel: "Waiting reason",
+      waitingNodeRunLabel: "Waiting node run",
       canonicalFollowUpTitle: "Canonical follow-up",
+      cacheStatusLabel: "Status",
+      cacheKeyLabel: "Cache key",
       sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
+      sampledRunReasonCallbackWaitingLabel: "callback waiting",
+      sampledRunStatusLabel: "Status",
       sampledRunSkillTraceTitle: "Focused skill trace",
       recommendedNextStepTitle: "Recommended next step",
       liveSandboxReadinessTitle: "Live sandbox readiness",
@@ -90,7 +99,9 @@ describe("published invocation presenters", () => {
       approvalTimelineDescription: expect.stringContaining("published-surface debugging"),
       approvalTimelineInboxLabel: "open approval inbox slice",
       approvalTimelineEmptyState: "当前这次 invocation 没有关联 sensitive access timeline。",
-      skillTraceDescription: expect.stringContaining("node-run-focus")
+      skillTraceDescription: expect.stringContaining("node-run-focus"),
+      unavailableValueLabel: "n/a",
+      notStartedValueLabel: "not-started"
     });
   });
 
@@ -221,10 +232,25 @@ describe("published invocation presenters", () => {
       waitingOverviewTitle: "Waiting overview",
       canonicalFollowUpTitle: "Canonical follow-up",
       canonicalFollowUpFallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。",
+      apiKeyLabel: "API key",
+      requestKeysLabel: "Request keys",
+      runLabel: "Run",
+      runStatusLabel: "Run status",
+      currentNodeLabel: "Current node",
+      waitingReasonLabel: "Waiting reason",
+      callbackTicketsLabel: "Callback tickets",
+      scheduledResumeLabel: "Scheduled resume",
+      waitingNodeRunLabel: "Node run",
+      waitingNodeStatusLabel: "Node status",
+      waitingCallbackTicketsLabel: "Callback tickets",
+      waitingCallbackLifecycleLabel: "Callback lifecycle",
       canonicalFollowUpAffectedRunsLabel: "Affected runs",
       canonicalFollowUpSampledRunsLabel: "Sampled runs",
       canonicalFollowUpStatusSummaryLabel: "Status summary",
       canonicalFollowUpSampleFocusLabel: "Sample focus",
+      canonicalFollowUpAffectedRunsChipPrefix: "affected",
+      canonicalFollowUpSampledRunsChipPrefix: "sampled",
+      canonicalFollowUpStatusChipPrefix: "status",
       liveSandboxReadinessTitle: "Live sandbox readiness",
       sampledRunFocusEvidenceTitle: "Sampled run focus evidence",
       sampledRunSkillTraceTitle: "Focused skill trace",
@@ -235,7 +261,10 @@ describe("published invocation presenters", () => {
       detailActionLabel: "打开 invocation detail",
       detailActionActiveLabel: "查看当前详情",
       errorMessagePrefix: "error",
-      detailPanelDescription: expect.stringContaining("callback lifecycle / cache")
+      detailPanelDescription: expect.stringContaining("callback lifecycle / cache"),
+      unavailableValueLabel: "n/a",
+      notStartedValueLabel: "not-started",
+      emptyCountValueLabel: "0"
     });
   });
 
@@ -340,6 +369,23 @@ describe("published invocation presenters", () => {
     expect(formatPublishedInvocationSampleReasonLabel("callback_waiting")).toBe("callback waiting");
     expect(formatPublishedInvocationSampleReasonLabel("execution_focus")).toBe("execution focus");
     expect(formatPublishedInvocationSampleReasonLabel(null)).toBe("run snapshot");
+
+    const detailSurfaceCopy = {
+      ...buildPublishedInvocationDetailSurfaceCopy(),
+      sampledRunReasonCallbackWaitingLabel: "callback queue",
+      sampledRunReasonExecutionFocusLabel: "focus trace",
+      sampledRunReasonFallbackLabel: "snapshot source"
+    };
+
+    expect(formatPublishedInvocationSampleReasonLabel("callback_waiting", detailSurfaceCopy)).toBe(
+      "callback queue"
+    );
+    expect(formatPublishedInvocationSampleReasonLabel("execution_focus", detailSurfaceCopy)).toBe(
+      "focus trace"
+    );
+    expect(formatPublishedInvocationSampleReasonLabel(null, detailSurfaceCopy)).toBe(
+      "snapshot source"
+    );
   });
 
   it("统一 publish entry 的 inbox CTA 语义", () => {
@@ -372,6 +418,29 @@ describe("published invocation presenters", () => {
   });
 
   it("为 publish entry/detail 统一拼装 meta rows 与 follow-up chips", () => {
+    const entrySurfaceCopy = {
+      ...buildPublishedInvocationEntrySurfaceCopy(),
+      apiKeyLabel: "Caller key",
+      requestKeysLabel: "Input keys",
+      runLabel: "Run link",
+      currentNodeLabel: "Focus node",
+      callbackTicketsLabel: "Resume tickets",
+      scheduledResumeLabel: "Resume ETA",
+      canonicalFollowUpAffectedRunsChipPrefix: "affected-runs",
+      canonicalFollowUpSampledRunsChipPrefix: "sampled-runs",
+      canonicalFollowUpStatusChipPrefix: "status-mix"
+    };
+    const detailSurfaceCopy = {
+      ...buildPublishedInvocationDetailSurfaceCopy(),
+      runLabel: "Run link",
+      currentNodeLabel: "Focus node",
+      cacheKeyLabel: "Cache fingerprint",
+      cacheEntryLabel: "Inventory entry",
+      sampledRunStatusLabel: "Sample status",
+      sampledRunCurrentNodeLabel: "Sample node",
+      sampledRunWaitingReasonLabel: "Sample wait"
+    };
+
     expect(
       listPublishedInvocationEntryMetaRows({
         invocation: {
@@ -387,22 +456,23 @@ describe("published invocation presenters", () => {
         runStatus: "waiting_callback",
         currentNodeId: "tool_wait",
         waitingReason: "callback pending",
-        scheduledResumeLabel: "45s later"
+        scheduledResumeLabel: "45s later",
+        surfaceCopy: entrySurfaceCopy
       })
     ).toEqual([
-      { key: "api-key", label: "API key", value: "sk-test", href: null },
-      { key: "request-keys", label: "Request keys", value: "query", href: null },
-      { key: "run", label: "Run", value: "run-1", href: "/runs/run-1" },
+      { key: "api-key", label: "Caller key", value: "sk-test", href: null },
+      { key: "request-keys", label: "Input keys", value: "query", href: null },
+      { key: "run", label: "Run link", value: "run-1", href: "/runs/run-1" },
       { key: "run-status", label: "Run status", value: "Waiting callback", href: null },
-      { key: "current-node", label: "Current node", value: "tool_wait", href: null },
+      { key: "current-node", label: "Focus node", value: "tool_wait", href: null },
       { key: "waiting-reason", label: "Waiting reason", value: "callback pending", href: null },
       {
         key: "callback-tickets",
-        label: "Callback tickets",
+        label: "Resume tickets",
         value: "2 · pending 1 · approved 1",
         href: null
       },
-      { key: "scheduled-resume", label: "Scheduled resume", value: "45s later", href: null }
+      { key: "scheduled-resume", label: "Resume ETA", value: "45s later", href: null }
     ]);
 
     expect(
@@ -413,13 +483,14 @@ describe("published invocation presenters", () => {
         waitingReason: "callback pending",
         waitingNodeRunId: "node-run-1",
         startedAt: "2026-03-20T10:00:00Z",
-        finishedAt: null
+        finishedAt: null,
+        surfaceCopy: detailSurfaceCopy
       })
     ).toEqual(
       expect.arrayContaining([
-        { key: "run", label: "Run", value: "run-1", href: "/runs/run-1" },
+        { key: "run", label: "Run link", value: "run-1", href: "/runs/run-1" },
         { key: "status", label: "Status", value: "waiting", href: null },
-        { key: "current-node", label: "Current node", value: "tool_wait", href: null },
+        { key: "current-node", label: "Focus node", value: "tool_wait", href: null },
         { key: "waiting-reason", label: "Waiting reason", value: "callback pending", href: null },
         { key: "waiting-node-run", label: "Waiting node run", value: "node-run-1", href: null }
       ])
@@ -436,13 +507,14 @@ describe("published invocation presenters", () => {
             last_hit_at: "2026-03-20T10:01:00Z",
             expires_at: null
           }
-        }
+        },
+        surfaceCopy: detailSurfaceCopy
       } as never)
     ).toEqual(
       expect.arrayContaining([
         { key: "status", label: "Status", value: "miss", href: null },
-        { key: "cache-key", label: "Cache key", value: "cache-key-1", href: null },
-        { key: "entry", label: "Entry", value: "entry-1", href: null },
+        { key: "cache-key", label: "Cache fingerprint", value: "cache-key-1", href: null },
+        { key: "entry", label: "Inventory entry", value: "entry-1", href: null },
         { key: "entry-hits", label: "Entry hits", value: "3", href: null }
       ])
     );
@@ -451,9 +523,14 @@ describe("published invocation presenters", () => {
       listPublishedInvocationCanonicalFollowUpChips({
         affectedRunCount: 2,
         sampledRunCount: 1,
-        statusSummary: "waiting 1 · failed 1"
+        statusSummary: "waiting 1 · failed 1",
+        surfaceCopy: entrySurfaceCopy
       })
-    ).toEqual(["affected 2", "sampled 1", "status waiting 1 · failed 1"]);
+    ).toEqual([
+      "affected-runs 2",
+      "sampled-runs 1",
+      "status-mix waiting 1 · failed 1"
+    ]);
 
     expect(formatPublishedInvocationMetricCounts({ pending: 1, approved: 1, failed: 0 })).toBe(
       "pending 1 · approved 1"
@@ -464,6 +541,14 @@ describe("published invocation presenters", () => {
   });
 
   it("为 publish entry waiting overview 统一拼装 meta rows", () => {
+    const entrySurfaceCopy = {
+      ...buildPublishedInvocationEntrySurfaceCopy(),
+      waitingNodeRunLabel: "Blocking node",
+      waitingNodeStatusLabel: "Blocking state",
+      waitingCallbackTicketsLabel: "Resume tickets",
+      waitingCallbackLifecycleLabel: "Lifecycle lane"
+    };
+
     expect(
       listPublishedInvocationEntryWaitingRows({
         nodeRunId: "node-run-1",
@@ -471,20 +556,21 @@ describe("published invocation presenters", () => {
         callbackTicketCount: 2,
         callbackTicketStatusCounts: { pending: 1, approved: 1 },
         callbackLifecycleLabel: "pending -> delivered",
-        callbackLifecycleFallback: "tracked in detail panel"
+        callbackLifecycleFallback: "tracked in detail panel",
+        surfaceCopy: entrySurfaceCopy
       })
     ).toEqual([
-      { key: "node-run", label: "Node run", value: "node-run-1", href: null },
-      { key: "node-status", label: "Node status", value: "waiting_callback", href: null },
+      { key: "node-run", label: "Blocking node", value: "node-run-1", href: null },
+      { key: "node-status", label: "Blocking state", value: "waiting_callback", href: null },
       {
         key: "callback-tickets",
-        label: "Callback tickets",
+        label: "Resume tickets",
         value: "2 · pending 1 · approved 1",
         href: null
       },
       {
         key: "callback-lifecycle",
-        label: "Callback lifecycle",
+        label: "Lifecycle lane",
         value: "pending -> delivered",
         href: null
       }
@@ -492,6 +578,13 @@ describe("published invocation presenters", () => {
   });
 
   it("为 sampled run 统一拼装 evidence badges 与 sample meta rows", () => {
+    const detailSurfaceCopy = {
+      ...buildPublishedInvocationDetailSurfaceCopy(),
+      sampledRunStatusLabel: "Sample status",
+      sampledRunCurrentNodeLabel: "Sample node",
+      sampledRunWaitingReasonLabel: "Sample wait"
+    };
+
     const sample = listPublishedInvocationRunFollowUpSampleViews({
       affected_run_count: 1,
       sampled_run_count: 1,
@@ -530,10 +623,10 @@ describe("published invocation presenters", () => {
       "raw refs 1",
       "skill refs 4"
     ]);
-    expect(listPublishedInvocationRunFollowUpSampleMetaRows(sample)).toEqual([
-      { key: "status", label: "Status", value: "waiting", href: null },
-      { key: "current-node", label: "Current node", value: "tool_wait", href: null },
-      { key: "waiting-reason", label: "Waiting reason", value: "callback pending", href: null }
+    expect(listPublishedInvocationRunFollowUpSampleMetaRows(sample, detailSurfaceCopy)).toEqual([
+      { key: "status", label: "Sample status", value: "waiting", href: null },
+      { key: "current-node", label: "Sample node", value: "tool_wait", href: null },
+      { key: "waiting-reason", label: "Sample wait", value: "callback pending", href: null }
     ]);
   });
 

@@ -153,14 +153,19 @@ export function WorkflowPublishInvocationDetailPanel({
     waitingReason,
     waitingNodeRunId: waitingLifecycle?.node_run_id ?? null,
     startedAt: run?.started_at,
-    finishedAt: run?.finished_at ?? invocation.finished_at
+    finishedAt: run?.finished_at ?? invocation.finished_at,
+    surfaceCopy: detailSurfaceCopy
   });
-  const cacheDrilldownRows = listPublishedInvocationCacheDrilldownRows({ cache });
+  const cacheDrilldownRows = listPublishedInvocationCacheDrilldownRows({
+    cache,
+    surfaceCopy: detailSurfaceCopy
+  });
   const canonicalFollowUpChips = runFollowUp
     ? listPublishedInvocationCanonicalFollowUpChips({
         affectedRunCount: runFollowUp.affected_run_count,
         sampledRunCount: runFollowUp.sampled_run_count,
-        statusSummary: runFollowUpStatusSummary
+        statusSummary: runFollowUpStatusSummary,
+        surfaceCopy: entrySurfaceCopy
       })
     : [];
 
@@ -269,9 +274,15 @@ export function WorkflowPublishInvocationDetailPanel({
                   sample.run_snapshot
                 );
                 const sampleReasonLabel =
-                  formatPublishedInvocationSampleReasonLabel(sample.explanation_source);
+                  formatPublishedInvocationSampleReasonLabel(
+                    sample.explanation_source,
+                    detailSurfaceCopy
+                  );
                 const sampleEvidenceChips = listPublishedInvocationRunFollowUpEvidenceChips(sample);
-                const sampleMetaRows = listPublishedInvocationRunFollowUpSampleMetaRows(sample);
+                const sampleMetaRows = listPublishedInvocationRunFollowUpSampleMetaRows(
+                  sample,
+                  detailSurfaceCopy
+                );
 
                 return (
                   <div className="payload-card compact-card" key={sample.run_id}>
