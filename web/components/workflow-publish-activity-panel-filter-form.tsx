@@ -10,9 +10,10 @@ import {
   formatPublishedInvocationSurfaceLabel,
   formatPublishedRunStatusLabel
 } from "@/lib/published-invocation-presenters";
-import { buildWorkflowDetailHref } from "@/lib/workbench-links";
-
-import { TIME_WINDOW_OPTIONS } from "@/components/workflow-publish-activity-panel-helpers";
+import {
+  buildWorkflowPublishActivityHref,
+  TIME_WINDOW_OPTIONS
+} from "@/components/workflow-publish-activity-panel-helpers";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
 
 type WorkflowPublishActivityFilterFormProps = {
@@ -32,7 +33,7 @@ export function WorkflowPublishActivityFilterForm({
 }: WorkflowPublishActivityFilterFormProps) {
   return (
     <form
-      action={buildWorkflowDetailHref(workflowId)}
+      action={buildWorkflowPublishActivityHref({ workflowId })}
       className="trace-filter-form governance-filter-form"
       method="get"
     >
@@ -157,10 +158,7 @@ export function WorkflowPublishActivityFilterForm({
         <button className="ghost-button" type="submit">
           Apply filters
         </button>
-        <a
-          className="inline-link"
-          href={`${buildWorkflowDetailHref(workflowId)}?publish_binding=${encodeURIComponent(bindingId)}`}
-        >
+        <a className="inline-link" href={buildWorkflowPublishActivityHref({ workflowId, bindingId })}>
           Reset
         </a>
       </div>

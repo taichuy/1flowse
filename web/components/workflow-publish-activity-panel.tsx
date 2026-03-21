@@ -4,6 +4,7 @@ import { WorkflowPublishActivityFilterForm } from "@/components/workflow-publish
 import { WorkflowPublishExportActions } from "@/components/workflow-publish-export-actions";
 import {
   buildActiveFilterChips,
+  buildWorkflowPublishActivityHref,
   buildRunStatusOptions,
   type WorkflowPublishActivityPanelProps
 } from "@/components/workflow-publish-activity-panel-helpers";
@@ -11,45 +12,6 @@ import {
   WorkflowPublishActivityDetails,
   WorkflowPublishActivityInsights
 } from "@/components/workflow-publish-activity-panel-sections";
-import { buildWorkflowDetailHref } from "@/lib/workbench-links";
-
-function buildInvocationDetailHref(
-  workflowId: string,
-  bindingId: string,
-  activeInvocationFilter: WorkflowPublishActivityPanelProps["activeInvocationFilter"],
-  invocationId?: string | null
-) {
-  const searchParams = new URLSearchParams();
-  searchParams.set("publish_binding", bindingId);
-  if (activeInvocationFilter?.status) {
-    searchParams.set("publish_status", activeInvocationFilter.status);
-  }
-  if (activeInvocationFilter?.requestSource) {
-    searchParams.set("publish_request_source", activeInvocationFilter.requestSource);
-  }
-  if (activeInvocationFilter?.requestSurface) {
-    searchParams.set("publish_request_surface", activeInvocationFilter.requestSurface);
-  }
-  if (activeInvocationFilter?.cacheStatus) {
-    searchParams.set("publish_cache_status", activeInvocationFilter.cacheStatus);
-  }
-  if (activeInvocationFilter?.runStatus) {
-    searchParams.set("publish_run_status", activeInvocationFilter.runStatus);
-  }
-  if (activeInvocationFilter?.apiKeyId) {
-    searchParams.set("publish_api_key_id", activeInvocationFilter.apiKeyId);
-  }
-  if (activeInvocationFilter?.reasonCode) {
-    searchParams.set("publish_reason_code", activeInvocationFilter.reasonCode);
-  }
-  if (activeInvocationFilter?.timeWindow && activeInvocationFilter.timeWindow !== "all") {
-    searchParams.set("publish_window", activeInvocationFilter.timeWindow);
-  }
-  if (invocationId) {
-    searchParams.set("publish_invocation", invocationId);
-  }
-  return `${buildWorkflowDetailHref(workflowId)}?${searchParams.toString()}`;
-}
 
 export function WorkflowPublishActivityPanel({
   workflowId,
@@ -68,8 +30,12 @@ export function WorkflowPublishActivityPanel({
 }: WorkflowPublishActivityPanelProps) {
   const activeFilterChips = buildActiveFilterChips(activeInvocationFilter, apiKeys);
   const runStatusOptions = buildRunStatusOptions(invocationAudit?.facets.run_status_counts);
-  const clearHref =
-    clearInvocationDetailHref ?? buildInvocationDetailHref(workflowId, binding.id, activeInvocationFilter);
+  const clearHref = clearInvocationDetailHref ??
+    buildWorkflowPublishActivityHref({
+      workflowId,
+      bindingId: binding.id,
+      activeInvocationFilter
+    });
 
   return (
     <div className="entry-card compact-card">
@@ -123,7 +89,12 @@ export function WorkflowPublishActivityPanel({
         buildInvocationDetailHref={(invocationId) =>
           selectedInvocationId === invocationId && selectedInvocationDetailHref
             ? selectedInvocationDetailHref
-            : buildInvocationDetailHref(workflowId, binding.id, activeInvocationFilter, invocationId)
+            : buildWorkflowPublishActivityHref({
+                workflowId,
+                bindingId: binding.id,
+                activeInvocationFilter,
+                invocationId
+              })
         }
         clearInvocationDetailHref={clearHref}
       />
