@@ -137,7 +137,7 @@ export function buildExecutionFocusSectionSurfaceCopy(
   if (surface === "overlay") {
     return {
       sectionDescription:
-        "这里直接复用 run detail 的 execution focus，作者在画布里也能先看当前最相关的 blocker / waiting 节点，而不是立刻跳出到完整 diagnostics。",
+        "这里直接复用 canonical run snapshot 的 execution focus，作者在画布里也能先看当前最相关的 blocker / waiting 节点，而不是立刻跳出到完整 diagnostics。",
       focusNodeDescription:
         "当前节点直接来自后端选出的 canonical execution focus，方便画布 overlay 与 diagnostics / runtime 事实链继续对齐。",
       focusedSkillTraceDescription:

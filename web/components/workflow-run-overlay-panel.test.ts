@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import type { RunSnapshot } from "@/app/actions/run-snapshot";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
@@ -150,6 +151,53 @@ function buildRunDetail(): RunDetail {
   };
 }
 
+function buildRunSnapshot(): RunSnapshot {
+  return {
+    status: "failed",
+    workflowId: "workflow-1",
+    currentNodeId: "tool_wait",
+    waitingReason: null,
+    executionFocusReason: "blocked_execution",
+    executionFocusNodeId: "tool_wait",
+    executionFocusNodeRunId: "node-run-1",
+    executionFocusNodeName: "Tool Wait",
+    executionFocusNodeType: "tool",
+    executionFocusExplanation: {
+      primary_signal: "当前节点因强隔离 backend 不可用而阻断。",
+      follow_up: "先恢复兼容 backend，再重新调度该节点。"
+    },
+    callbackWaitingExplanation: null,
+    callbackWaitingLifecycle: null,
+    executionFocusArtifactCount: 0,
+    executionFocusArtifactRefCount: 0,
+    executionFocusToolCallCount: 1,
+    executionFocusRawRefCount: 0,
+    executionFocusArtifactRefs: [],
+    executionFocusArtifacts: [],
+    executionFocusToolCalls: [
+      {
+        id: "tool-call-1",
+        tool_id: "tool-a",
+        tool_name: "Tool A",
+        phase: "execute",
+        status: "blocked",
+        requested_execution_class: "sandbox",
+        requested_execution_source: "runtime_policy",
+        effective_execution_class: "inline",
+        execution_executor_ref: "tool:compat-adapter:dify-default",
+        execution_sandbox_backend_id: "sandbox-stale",
+        execution_sandbox_runner_kind: "container",
+        execution_blocking_reason: "No compatible sandbox backend is available.",
+        execution_fallback_reason: null,
+        response_summary: null,
+        response_content_type: null,
+        raw_ref: null
+      }
+    ],
+    executionFocusSkillTrace: null
+  };
+}
+
 describe("WorkflowRunOverlayPanel", () => {
   it("surfaces live sandbox readiness alongside overlay execution focus", () => {
     const html = renderToStaticMarkup(
@@ -170,6 +218,7 @@ describe("WorkflowRunOverlayPanel", () => {
         ],
         selectedRunId: "run-1",
         run: buildRunDetail(),
+        runSnapshot: buildRunSnapshot(),
         trace: null,
         traceError: null,
         selectedNodeId: null,

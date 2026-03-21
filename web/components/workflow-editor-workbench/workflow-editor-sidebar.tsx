@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import type { RunSnapshot } from "@/app/actions/run-snapshot";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -42,6 +43,7 @@ type WorkflowEditorSidebarProps = {
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
   run: RunDetail | null;
+  runSnapshot: RunSnapshot | null;
   trace: RunTrace | null;
   traceError: string | null;
   selectedNodeId: string | null;
@@ -76,6 +78,7 @@ export function WorkflowEditorSidebar({
   runs,
   selectedRunId,
   run,
+  runSnapshot,
   trace,
   traceError,
   selectedNodeId,
@@ -289,6 +292,7 @@ export function WorkflowEditorSidebar({
         runs={runs}
         selectedRunId={selectedRunId}
         run={run}
+        runSnapshot={runSnapshot}
         trace={trace}
         traceError={traceError}
         selectedNodeId={selectedNodeId}

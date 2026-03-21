@@ -3,8 +3,10 @@
 import React from "react";
 import Link from "next/link";
 
-import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
+import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
+import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import {
@@ -13,6 +15,7 @@ import {
 } from "@/lib/get-run-trace";
 import type { WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import { buildExecutionFocusSurfaceDescription } from "@/lib/run-execution-focus-presenters";
+import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import {
   formatDuration,
   formatDurationMs,
@@ -23,6 +26,7 @@ type WorkflowRunOverlayPanelProps = {
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
   run: RunDetail | null;
+  runSnapshot: RunSnapshot | null;
   trace: RunTrace | null;
   traceError?: string | null;
   selectedNodeId?: string | null;
@@ -37,6 +41,7 @@ export function WorkflowRunOverlayPanel({
   runs,
   selectedRunId,
   run,
+  runSnapshot,
   trace,
   traceError,
   selectedNodeId,
@@ -51,6 +56,7 @@ export function WorkflowRunOverlayPanel({
       ? run.node_runs.find((nodeRun) => nodeRun.node_id === selectedNodeId) ?? null
       : null;
   const tracePreview = trace?.events.slice(-6) ?? [];
+  const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshot);
 
   return (
     <article className="diagnostic-panel editor-panel">
@@ -154,15 +160,30 @@ export function WorkflowRunOverlayPanel({
                 </div>
               ) : null}
 
-              <RunDetailExecutionFocusCard
-                className="runtime-overlay-focus-card"
-                description={buildExecutionFocusSurfaceDescription("overlay")}
-                recommendedNextStepHref={`/runs/${encodeURIComponent(run.id)}`}
-                recommendedNextStepHrefLabel="open run"
-                run={run}
-                sandboxReadiness={sandboxReadiness}
-                title="Execution focus"
-              />
+              {runSnapshot ? (
+                <div className="runtime-overlay-focus-card">
+                  <p className="section-copy entry-copy">
+                    {buildExecutionFocusSurfaceDescription("overlay")}
+                  </p>
+                  <InlineOperatorActionFeedback
+                    status="success"
+                    message=""
+                    runId={run.id}
+                    runSnapshot={runSnapshot}
+                    title="Execution focus"
+                  />
+                  {sandboxReadinessNode ? (
+                    <SandboxExecutionReadinessCard
+                      node={sandboxReadinessNode}
+                      readiness={sandboxReadiness}
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <p className="empty-state compact">
+                  当前 run 还没有可复用的 canonical execution focus snapshot。
+                </p>
+              )}
 
               <div className="timeline-list runtime-overlay-timeline">
                 {run.node_runs.length === 0 ? (

@@ -230,6 +230,7 @@ export function WorkflowEditorWorkbench({
             runs={runOverlay.availableRuns}
             selectedRunId={runOverlay.selectedRunId}
             run={runOverlay.selectedRunDetail}
+            runSnapshot={runOverlay.selectedRunSnapshot}
             trace={runOverlay.selectedRunTrace}
             traceError={runOverlay.runOverlayError}
             selectedNodeId={graph.selectedNodeId}

@@ -475,6 +475,15 @@ function hasRunDetailExecutionFocusSkillTrace(body: RunDetailResponseBody | null
   return Object.prototype.hasOwnProperty.call(body, "execution_focus_skill_trace");
 }
 
+function hasCanonicalRunDetailExecutionFocus(body: RunDetailResponseBody | null) {
+  return (
+    hasRunDetailExecutionFocus(body) &&
+    hasRunDetailCallbackWaitingExplanation(body) &&
+    hasRunDetailExecutionFocusEvidence(body) &&
+    hasRunDetailExecutionFocusSkillTrace(body)
+  );
+}
+
 function normalizeSignalFollowUpExplanation(
   explanation:
     | {
@@ -679,6 +688,116 @@ export function normalizeOperatorRunFollowUp(
   };
 }
 
+function normalizeRunDetailSnapshot(body: RunDetailResponseBody | null): RunSnapshot | null {
+  if (!body) {
+    return null;
+  }
+
+  const bodyArtifactRefs = normalizeStringList(body.execution_focus_node?.artifact_refs);
+  const bodyArtifacts = normalizeFocusArtifacts(body.execution_focus_node?.artifacts);
+  const bodyToolCalls = normalizeFocusToolCalls(body.execution_focus_node?.tool_calls);
+
+  return {
+    status: body.status ?? null,
+    workflowId: body.workflow_id ?? null,
+    currentNodeId: body.current_node_id ?? null,
+    waitingReason: readCurrentWaitingReason(body) ?? null,
+    executionFocusReason: body.execution_focus_reason ?? null,
+    executionFocusNodeId: body.execution_focus_node?.node_id ?? null,
+    executionFocusNodeRunId: body.execution_focus_node?.node_run_id ?? null,
+    executionFocusNodeName: body.execution_focus_node?.node_name ?? null,
+    executionFocusNodeType: body.execution_focus_node?.node_type ?? null,
+    executionFocusExplanation: normalizeSignalFollowUpExplanation(body.execution_focus_explanation),
+    callbackWaitingExplanation: normalizeSignalFollowUpExplanation(
+      body.execution_focus_node?.callback_waiting_explanation
+    ),
+    callbackWaitingLifecycle: body.execution_focus_node?.callback_waiting_lifecycle ?? null,
+    scheduledResumeDelaySeconds: body.execution_focus_node?.scheduled_resume_delay_seconds ?? null,
+    scheduledResumeReason: body.execution_focus_node?.scheduled_resume_reason ?? null,
+    scheduledResumeSource: body.execution_focus_node?.scheduled_resume_source ?? null,
+    scheduledWaitingStatus: body.execution_focus_node?.scheduled_waiting_status ?? null,
+    scheduledResumeScheduledAt: body.execution_focus_node?.scheduled_resume_scheduled_at ?? null,
+    scheduledResumeDueAt: body.execution_focus_node?.scheduled_resume_due_at ?? null,
+    scheduledResumeRequeuedAt: body.execution_focus_node?.scheduled_resume_requeued_at ?? null,
+    scheduledResumeRequeueSource: body.execution_focus_node?.scheduled_resume_requeue_source ?? null,
+    executionFocusArtifactCount: body.execution_focus_node?.artifacts?.length ?? 0,
+    executionFocusArtifactRefCount: body.execution_focus_node?.artifact_refs?.length ?? 0,
+    executionFocusToolCallCount: body.execution_focus_node?.tool_calls?.length ?? 0,
+    executionFocusRawRefCount:
+      body.execution_focus_node?.tool_calls?.filter((item) => item?.raw_ref?.trim()).length ?? 0,
+    executionFocusArtifactRefs: bodyArtifactRefs,
+    executionFocusArtifacts: bodyArtifacts,
+    executionFocusToolCalls: bodyToolCalls,
+    executionFocusSkillTrace: normalizeFocusSkillTrace(body.execution_focus_skill_trace)
+  };
+}
+
+function normalizeLegacyExecutionViewSnapshot(
+  executionView?: RunExecutionViewResponseBody | null
+): RunSnapshot | null {
+  if (!executionView) {
+    return null;
+  }
+
+  const artifactRefs = normalizeStringList(executionView.execution_focus_node?.artifact_refs);
+  const artifacts = normalizeFocusArtifacts(executionView.execution_focus_node?.artifacts);
+  const toolCalls = normalizeFocusToolCalls(executionView.execution_focus_node?.tool_calls);
+  const skillTrace = normalizeFocusSkillTrace(
+    executionView.skill_trace?.scope === "execution_focus_node" ? executionView.skill_trace : null
+  );
+  const hasFocusFacts = Boolean(
+    executionView.execution_focus_reason ||
+      executionView.execution_focus_node ||
+      executionView.execution_focus_explanation ||
+      skillTrace
+  );
+
+  if (!hasFocusFacts) {
+    return null;
+  }
+
+  return {
+    status: executionView.status ?? null,
+    workflowId: executionView.workflow_id ?? null,
+    currentNodeId: null,
+    waitingReason: null,
+    executionFocusReason: executionView.execution_focus_reason ?? null,
+    executionFocusNodeId: executionView.execution_focus_node?.node_id ?? null,
+    executionFocusNodeRunId: executionView.execution_focus_node?.node_run_id ?? null,
+    executionFocusNodeName: executionView.execution_focus_node?.node_name ?? null,
+    executionFocusNodeType: executionView.execution_focus_node?.node_type ?? null,
+    executionFocusExplanation: normalizeSignalFollowUpExplanation(
+      executionView.execution_focus_explanation
+    ),
+    callbackWaitingExplanation: normalizeSignalFollowUpExplanation(
+      executionView.execution_focus_node?.callback_waiting_explanation
+    ),
+    callbackWaitingLifecycle: executionView.execution_focus_node?.callback_waiting_lifecycle ?? null,
+    scheduledResumeDelaySeconds:
+      executionView.execution_focus_node?.scheduled_resume_delay_seconds ?? null,
+    scheduledResumeReason: executionView.execution_focus_node?.scheduled_resume_reason ?? null,
+    scheduledResumeSource: executionView.execution_focus_node?.scheduled_resume_source ?? null,
+    scheduledWaitingStatus: executionView.execution_focus_node?.scheduled_waiting_status ?? null,
+    scheduledResumeScheduledAt:
+      executionView.execution_focus_node?.scheduled_resume_scheduled_at ?? null,
+    scheduledResumeDueAt: executionView.execution_focus_node?.scheduled_resume_due_at ?? null,
+    scheduledResumeRequeuedAt:
+      executionView.execution_focus_node?.scheduled_resume_requeued_at ?? null,
+    scheduledResumeRequeueSource:
+      executionView.execution_focus_node?.scheduled_resume_requeue_source ?? null,
+    executionFocusArtifactCount: executionView.execution_focus_node?.artifacts?.length ?? 0,
+    executionFocusArtifactRefCount: executionView.execution_focus_node?.artifact_refs?.length ?? 0,
+    executionFocusToolCallCount: executionView.execution_focus_node?.tool_calls?.length ?? 0,
+    executionFocusRawRefCount:
+      executionView.execution_focus_node?.tool_calls?.filter((item) => item?.raw_ref?.trim())
+        .length ?? 0,
+    executionFocusArtifactRefs: artifactRefs,
+    executionFocusArtifacts: artifacts,
+    executionFocusToolCalls: toolCalls,
+    executionFocusSkillTrace: skillTrace
+  };
+}
+
 export function resolveCanonicalOperatorRunSnapshot(input: {
   runId?: string | null;
   runSnapshot?: OperatorRunSnapshotBody | null;
@@ -741,162 +860,100 @@ export async function fetchRunSnapshot(runId: string): Promise<RunSnapshot | nul
     }
 
     const body = (await response.json().catch(() => null)) as RunDetailResponseBody | null;
-    const executionView =
-      hasRunDetailExecutionFocus(body) &&
-      hasRunDetailCallbackWaitingExplanation(body) &&
-      hasRunDetailExecutionFocusEvidence(body) &&
-      hasRunDetailExecutionFocusSkillTrace(body)
-        ? null
-        : await fetchRunExecutionView(normalizedRunId);
-    const executionViewSnapshot = normalizeOperatorRunSnapshot(executionView?.run_snapshot);
+    const runDetailSnapshot = normalizeRunDetailSnapshot(body);
+    const executionView = hasCanonicalRunDetailExecutionFocus(body)
+      ? null
+      : await fetchRunExecutionView(normalizedRunId);
+    const executionViewSnapshot =
+      resolveCanonicalOperatorRunSnapshot({
+        runId: normalizedRunId,
+        runSnapshot: executionView?.run_snapshot,
+        runFollowUp: executionView?.run_follow_up
+      }) ?? normalizeLegacyExecutionViewSnapshot(executionView);
 
-    const bodyArtifactRefs = normalizeStringList(body?.execution_focus_node?.artifact_refs);
-    const executionViewArtifactRefs = normalizeStringList(
-      executionView?.execution_focus_node?.artifact_refs
-    );
-    const bodyArtifacts = normalizeFocusArtifacts(body?.execution_focus_node?.artifacts);
-    const executionViewArtifacts = normalizeFocusArtifacts(
-      executionView?.execution_focus_node?.artifacts
-    );
-    const bodyToolCalls = normalizeFocusToolCalls(body?.execution_focus_node?.tool_calls);
-    const executionViewToolCalls = normalizeFocusToolCalls(
-      executionView?.execution_focus_node?.tool_calls
-    );
+    if (hasCanonicalRunDetailExecutionFocus(body)) {
+      return runDetailSnapshot;
+    }
 
-    return {
-      status: body?.status ?? executionViewSnapshot?.status ?? executionView?.status ?? null,
-      workflowId:
-        body?.workflow_id ?? executionViewSnapshot?.workflowId ?? executionView?.workflow_id ?? null,
-      currentNodeId: body?.current_node_id ?? executionViewSnapshot?.currentNodeId ?? null,
-      waitingReason: readCurrentWaitingReason(body) ?? executionViewSnapshot?.waitingReason ?? null,
-      executionFocusReason:
-        body?.execution_focus_reason ??
-        executionViewSnapshot?.executionFocusReason ??
-        executionView?.execution_focus_reason ??
-        null,
-      executionFocusNodeId:
-        body?.execution_focus_node?.node_id ??
-        executionViewSnapshot?.executionFocusNodeId ??
-        executionView?.execution_focus_node?.node_id ??
-        null,
-      executionFocusNodeRunId:
-        body?.execution_focus_node?.node_run_id ??
-        executionViewSnapshot?.executionFocusNodeRunId ??
-        executionView?.execution_focus_node?.node_run_id ??
-        null,
-      executionFocusNodeName:
-        body?.execution_focus_node?.node_name ??
-        executionViewSnapshot?.executionFocusNodeName ??
-        executionView?.execution_focus_node?.node_name ??
-        null,
-      executionFocusNodeType:
-        body?.execution_focus_node?.node_type ??
-        executionViewSnapshot?.executionFocusNodeType ??
-        executionView?.execution_focus_node?.node_type ??
-        null,
-      executionFocusExplanation:
-        normalizeSignalFollowUpExplanation(body?.execution_focus_explanation) ??
-        executionViewSnapshot?.executionFocusExplanation ??
-        normalizeSignalFollowUpExplanation(executionView?.execution_focus_explanation),
-      callbackWaitingExplanation:
-        normalizeSignalFollowUpExplanation(
-          body?.execution_focus_node?.callback_waiting_explanation
-        ) ??
-        executionViewSnapshot?.callbackWaitingExplanation ??
-        normalizeSignalFollowUpExplanation(
-          executionView?.execution_focus_node?.callback_waiting_explanation
-        ),
-      callbackWaitingLifecycle:
-        body?.execution_focus_node?.callback_waiting_lifecycle ??
-        executionViewSnapshot?.callbackWaitingLifecycle ??
-        executionView?.execution_focus_node?.callback_waiting_lifecycle ??
-        null,
-      scheduledResumeDelaySeconds:
-        body?.execution_focus_node?.scheduled_resume_delay_seconds ??
-        executionViewSnapshot?.scheduledResumeDelaySeconds ??
-        executionView?.execution_focus_node?.scheduled_resume_delay_seconds ??
-        null,
-      scheduledResumeReason:
-        body?.execution_focus_node?.scheduled_resume_reason ??
-        executionViewSnapshot?.scheduledResumeReason ??
-        executionView?.execution_focus_node?.scheduled_resume_reason ??
-        null,
-      scheduledResumeSource:
-        body?.execution_focus_node?.scheduled_resume_source ??
-        executionViewSnapshot?.scheduledResumeSource ??
-        executionView?.execution_focus_node?.scheduled_resume_source ??
-        null,
-      scheduledWaitingStatus:
-        body?.execution_focus_node?.scheduled_waiting_status ??
-        executionViewSnapshot?.scheduledWaitingStatus ??
-        executionView?.execution_focus_node?.scheduled_waiting_status ??
-        null,
-      scheduledResumeScheduledAt:
-        body?.execution_focus_node?.scheduled_resume_scheduled_at ??
-        executionViewSnapshot?.scheduledResumeScheduledAt ??
-        executionView?.execution_focus_node?.scheduled_resume_scheduled_at ??
-        null,
-      scheduledResumeDueAt:
-        body?.execution_focus_node?.scheduled_resume_due_at ??
-        executionViewSnapshot?.scheduledResumeDueAt ??
-        executionView?.execution_focus_node?.scheduled_resume_due_at ??
-        null,
-      scheduledResumeRequeuedAt:
-        body?.execution_focus_node?.scheduled_resume_requeued_at ??
-        executionViewSnapshot?.scheduledResumeRequeuedAt ??
-        executionView?.execution_focus_node?.scheduled_resume_requeued_at ??
-        null,
-      scheduledResumeRequeueSource:
-        body?.execution_focus_node?.scheduled_resume_requeue_source ??
-        executionViewSnapshot?.scheduledResumeRequeueSource ??
-        executionView?.execution_focus_node?.scheduled_resume_requeue_source ??
-        null,
-      executionFocusArtifactCount:
-        body?.execution_focus_node?.artifacts?.length ??
-        executionViewSnapshot?.executionFocusArtifactCount ??
-        executionView?.execution_focus_node?.artifacts?.length ??
-        0,
-      executionFocusArtifactRefCount:
-        body?.execution_focus_node?.artifact_refs?.length ??
-        executionViewSnapshot?.executionFocusArtifactRefCount ??
-        executionView?.execution_focus_node?.artifact_refs?.length ??
-        0,
-      executionFocusToolCallCount:
-        body?.execution_focus_node?.tool_calls?.length ??
-        executionViewSnapshot?.executionFocusToolCallCount ??
-        executionView?.execution_focus_node?.tool_calls?.length ??
-        0,
-      executionFocusRawRefCount:
-        body?.execution_focus_node?.tool_calls?.filter((item) => item?.raw_ref?.trim()).length ??
-        executionViewSnapshot?.executionFocusRawRefCount ??
-        executionView?.execution_focus_node?.tool_calls?.filter((item) => item?.raw_ref?.trim()).length ??
-        0,
-      executionFocusArtifactRefs:
-        bodyArtifactRefs.length > 0
-          ? bodyArtifactRefs
-          : (executionViewSnapshot?.executionFocusArtifactRefs?.length ?? 0) > 0
-            ? executionViewSnapshot?.executionFocusArtifactRefs ?? []
-            : executionViewArtifactRefs,
-      executionFocusArtifacts:
-        bodyArtifacts.length > 0
-          ? bodyArtifacts
-          : (executionViewSnapshot?.executionFocusArtifacts?.length ?? 0) > 0
-            ? executionViewSnapshot?.executionFocusArtifacts ?? []
-            : executionViewArtifacts,
-      executionFocusToolCalls:
-        bodyToolCalls.length > 0
-          ? bodyToolCalls
-          : (executionViewSnapshot?.executionFocusToolCalls?.length ?? 0) > 0
-            ? executionViewSnapshot?.executionFocusToolCalls ?? []
-            : executionViewToolCalls,
-      executionFocusSkillTrace: normalizeFocusSkillTrace(
-        body?.execution_focus_skill_trace ??
-          executionViewSnapshot?.executionFocusSkillTrace ??
-          (executionView?.skill_trace?.scope === "execution_focus_node"
-            ? executionView.skill_trace
-            : null)
-      )
-    };
+    if (executionViewSnapshot) {
+      return {
+        status: runDetailSnapshot?.status ?? executionViewSnapshot.status ?? null,
+        workflowId: runDetailSnapshot?.workflowId ?? executionViewSnapshot.workflowId ?? null,
+        currentNodeId: runDetailSnapshot?.currentNodeId ?? executionViewSnapshot.currentNodeId ?? null,
+        waitingReason:
+          runDetailSnapshot?.waitingReason ?? executionViewSnapshot.waitingReason ?? null,
+        executionFocusReason:
+          executionViewSnapshot.executionFocusReason ?? runDetailSnapshot?.executionFocusReason ?? null,
+        executionFocusNodeId:
+          executionViewSnapshot.executionFocusNodeId ?? runDetailSnapshot?.executionFocusNodeId ?? null,
+        executionFocusNodeRunId:
+          executionViewSnapshot.executionFocusNodeRunId ??
+          runDetailSnapshot?.executionFocusNodeRunId ??
+          null,
+        executionFocusNodeName:
+          executionViewSnapshot.executionFocusNodeName ??
+          runDetailSnapshot?.executionFocusNodeName ??
+          null,
+        executionFocusNodeType:
+          executionViewSnapshot.executionFocusNodeType ??
+          runDetailSnapshot?.executionFocusNodeType ??
+          null,
+        executionFocusExplanation:
+          executionViewSnapshot.executionFocusExplanation ??
+          runDetailSnapshot?.executionFocusExplanation ??
+          null,
+        callbackWaitingExplanation:
+          executionViewSnapshot.callbackWaitingExplanation ??
+          runDetailSnapshot?.callbackWaitingExplanation ??
+          null,
+        callbackWaitingLifecycle:
+          executionViewSnapshot.callbackWaitingLifecycle ??
+          runDetailSnapshot?.callbackWaitingLifecycle ??
+          null,
+        scheduledResumeDelaySeconds:
+          executionViewSnapshot.scheduledResumeDelaySeconds ??
+          runDetailSnapshot?.scheduledResumeDelaySeconds ??
+          null,
+        scheduledResumeReason:
+          executionViewSnapshot.scheduledResumeReason ??
+          runDetailSnapshot?.scheduledResumeReason ??
+          null,
+        scheduledResumeSource:
+          executionViewSnapshot.scheduledResumeSource ??
+          runDetailSnapshot?.scheduledResumeSource ??
+          null,
+        scheduledWaitingStatus:
+          executionViewSnapshot.scheduledWaitingStatus ??
+          runDetailSnapshot?.scheduledWaitingStatus ??
+          null,
+        scheduledResumeScheduledAt:
+          executionViewSnapshot.scheduledResumeScheduledAt ??
+          runDetailSnapshot?.scheduledResumeScheduledAt ??
+          null,
+        scheduledResumeDueAt:
+          executionViewSnapshot.scheduledResumeDueAt ??
+          runDetailSnapshot?.scheduledResumeDueAt ??
+          null,
+        scheduledResumeRequeuedAt:
+          executionViewSnapshot.scheduledResumeRequeuedAt ??
+          runDetailSnapshot?.scheduledResumeRequeuedAt ??
+          null,
+        scheduledResumeRequeueSource:
+          executionViewSnapshot.scheduledResumeRequeueSource ??
+          runDetailSnapshot?.scheduledResumeRequeueSource ??
+          null,
+        executionFocusArtifactCount: executionViewSnapshot.executionFocusArtifactCount ?? 0,
+        executionFocusArtifactRefCount: executionViewSnapshot.executionFocusArtifactRefCount ?? 0,
+        executionFocusToolCallCount: executionViewSnapshot.executionFocusToolCallCount ?? 0,
+        executionFocusRawRefCount: executionViewSnapshot.executionFocusRawRefCount ?? 0,
+        executionFocusArtifactRefs: executionViewSnapshot.executionFocusArtifactRefs ?? [],
+        executionFocusArtifacts: executionViewSnapshot.executionFocusArtifacts ?? [],
+        executionFocusToolCalls: executionViewSnapshot.executionFocusToolCalls ?? [],
+        executionFocusSkillTrace: executionViewSnapshot.executionFocusSkillTrace ?? null
+      };
+    }
+
+    return runDetailSnapshot;
   } catch {
     return null;
   }

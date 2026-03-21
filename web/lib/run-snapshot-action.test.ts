@@ -608,6 +608,91 @@ describe("fetchRunSnapshot", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("execution view 提供 canonical snapshot 时不再混拼旧版 body 的 focus 字段", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/api/runs/run-conflict")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-1",
+          current_node_id: "tool-a",
+          execution_focus_reason: "waiting_callback",
+          execution_focus_node: {
+            node_id: "legacy-node",
+            node_run_id: "node-run-legacy"
+          },
+          node_runs: [
+            {
+              node_id: "tool-a",
+              waiting_reason: "waiting approval"
+            }
+          ]
+        });
+      }
+
+      if (url.endsWith("/api/runs/run-conflict/execution-view")) {
+        return createJsonResponse({
+          status: "waiting",
+          workflow_id: "workflow-1",
+          run_snapshot: {
+            status: "waiting",
+            workflow_id: "workflow-1",
+            current_node_id: "tool-a",
+            waiting_reason: "waiting approval",
+            execution_focus_reason: "blocked_execution",
+            execution_focus_node_id: "tool-a",
+            execution_focus_node_run_id: "node-run-1",
+            execution_focus_node_name: "Tool A",
+            execution_focus_node_type: "tool",
+            execution_focus_explanation: {
+              primary_signal: "执行阻断：当前节点仍在等待审批。",
+              follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
+            },
+            execution_focus_artifact_count: 0,
+            execution_focus_artifact_ref_count: 0,
+            execution_focus_tool_call_count: 1,
+            execution_focus_raw_ref_count: 0,
+            execution_focus_artifact_refs: [],
+            execution_focus_artifacts: [],
+            execution_focus_tool_calls: [
+              {
+                id: "tool-call-1",
+                tool_id: "tool-a",
+                tool_name: "Tool A",
+                phase: "execute",
+                status: "blocked",
+                effective_execution_class: "microvm",
+                execution_sandbox_backend_id: "sandbox-default",
+                execution_sandbox_runner_kind: "container",
+                execution_blocking_reason: "still waiting approval",
+                response_summary: null,
+                response_content_type: null,
+                raw_ref: null
+              }
+            ]
+          }
+        });
+      }
+
+      throw new Error(`unexpected fetch url: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchRunSnapshot("run-conflict")).resolves.toMatchObject({
+      status: "waiting",
+      workflowId: "workflow-1",
+      currentNodeId: "tool-a",
+      waitingReason: "waiting approval",
+      executionFocusReason: "blocked_execution",
+      executionFocusNodeId: "tool-a",
+      executionFocusNodeRunId: "node-run-1",
+      executionFocusNodeName: "Tool A",
+      executionFocusNodeType: "tool"
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("execution view 不可用时仍返回基础 run snapshot", async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

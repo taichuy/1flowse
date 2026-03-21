@@ -76,6 +76,7 @@ describe("WorkflowEditorSidebar", () => {
         runs: [],
         selectedRunId: null,
         run: null,
+        runSnapshot: null,
         trace: null,
         traceError: null,
         selectedNodeId: null,
