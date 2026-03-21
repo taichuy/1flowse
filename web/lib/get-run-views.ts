@@ -212,6 +212,8 @@ export type OperatorRunSnapshot = {
 export type OperatorRunSnapshotSample = {
   run_id: string;
   snapshot?: OperatorRunSnapshot | null;
+  callback_tickets?: RunCallbackTicketItem[];
+  sensitive_access_entries?: SensitiveAccessTimelineEntry[];
 };
 
 export type OperatorRunFollowUpSummary = {

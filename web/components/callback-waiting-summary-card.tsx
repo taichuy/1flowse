@@ -26,6 +26,7 @@ import {
   listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
 import {
+  type CallbackWaitingRecommendedAction,
   buildCallbackWaitingInlineActionStatusHint,
   buildCallbackWaitingInlineActionTitle,
   buildCallbackWaitingSummarySurfaceCopy,
@@ -171,7 +172,7 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeRequeuedAt,
     scheduledResumeRequeueSource
   });
-  const recommendedAction = getCallbackWaitingRecommendedAction({
+  const baseRecommendedAction = getCallbackWaitingRecommendedAction({
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
@@ -184,14 +185,25 @@ export function CallbackWaitingSummaryCard({
     scheduledResumeRequeuedAt,
     scheduledResumeRequeueSource
   });
+  const shouldShowSensitiveAccessInlineActions =
+    showSensitiveAccessInlineActions ?? showInlineActions;
+  const recommendedAction: CallbackWaitingRecommendedAction | null =
+    !shouldShowSensitiveAccessInlineActions &&
+    baseRecommendedAction?.kind === "resolve_inline_sensitive_access" &&
+    inboxHref?.trim()
+      ? {
+          kind: "open_inbox",
+          label: "Open inbox slice first",
+          detail: baseRecommendedAction.detail,
+          ctaLabel: "Open approval inbox"
+        }
+      : baseRecommendedAction;
   const recommendedNextStep = buildCallbackWaitingRecommendedNextStep({
     action: recommendedAction,
     inboxHref,
     operatorFollowUp: callbackFollowUp,
     surfaceCopy
   });
-  const shouldShowSensitiveAccessInlineActions =
-    showSensitiveAccessInlineActions ?? showInlineActions;
   const isObserveFirstRecommendedAction = isObserveFirstCallbackWaitingAction(
     recommendedAction?.kind ?? null
   );

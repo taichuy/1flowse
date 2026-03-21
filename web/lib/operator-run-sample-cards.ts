@@ -1,5 +1,7 @@
 import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
+import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 import type { SkillReferenceLoadItem } from "@/lib/get-run-views";
 import {
   buildExecutionFocusExplainableNode,
@@ -26,6 +28,9 @@ export type OperatorRunSampleCard = {
   callbackWaitingExplanation: NonNullable<RunSnapshotWithId["snapshot"]>["callbackWaitingExplanation"] | null;
   callbackWaitingLifecycle: NonNullable<RunSnapshotWithId["snapshot"]>["callbackWaitingLifecycle"] | null;
   callbackWaitingFocusNodeEvidence: ReturnType<typeof buildExecutionFocusExplainableNode>;
+  callbackTickets: NonNullable<RunSnapshotWithId["callbackTickets"]>;
+  sensitiveAccessEntries: NonNullable<RunSnapshotWithId["sensitiveAccessEntries"]>;
+  inboxHref: string | null;
   scheduledResumeDelaySeconds: number | null;
   scheduledResumeSource: string | null;
   scheduledWaitingStatus: string | null;
@@ -51,12 +56,33 @@ function normalizeText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
+function buildOperatorRunSampleInboxHref(sample: RunSnapshotWithId) {
+  const sensitiveAccessEntries = sample.sensitiveAccessEntries ?? [];
+  const latestApprovalEntry = sensitiveAccessEntries.find((entry) => entry.approval_ticket) ?? null;
+  if (latestApprovalEntry) {
+    return buildSensitiveAccessTimelineInboxHref(latestApprovalEntry, sample.runId);
+  }
+
+  const callbackTickets = sample.callbackTickets ?? [];
+  const firstCallbackTicket = callbackTickets[0] ?? null;
+  if (!firstCallbackTicket) {
+    return null;
+  }
+
+  return buildCallbackTicketInboxHref(firstCallbackTicket, {
+    runId: sample.runId,
+    nodeRunId: firstCallbackTicket.node_run_id ?? sample.snapshot?.executionFocusNodeRunId ?? null
+  });
+}
+
 export function buildOperatorRunSampleCards(
   sampledRuns: RunSnapshotWithId[]
 ): OperatorRunSampleCard[] {
   return sampledRuns
     .map((sample) => {
       const snapshot = sample.snapshot ?? null;
+      const callbackTickets = sample.callbackTickets ?? [];
+      const sensitiveAccessEntries = sample.sensitiveAccessEntries ?? [];
       const model = buildOperatorInlineActionFeedbackModel({ runSnapshot: snapshot });
       const focusNodeEvidence = buildExecutionFocusExplainableNode(snapshot);
       const callbackWaitingExplanation = snapshot?.callbackWaitingExplanation ?? null;
@@ -98,6 +124,9 @@ export function buildOperatorRunSampleCards(
         callbackWaitingExplanation,
         callbackWaitingLifecycle,
         callbackWaitingFocusNodeEvidence: focusNodeEvidence,
+        callbackTickets,
+        sensitiveAccessEntries,
+        inboxHref: buildOperatorRunSampleInboxHref(sample),
         scheduledResumeDelaySeconds,
         scheduledResumeSource,
         scheduledWaitingStatus,

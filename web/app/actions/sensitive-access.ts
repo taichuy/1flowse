@@ -169,7 +169,11 @@ const toRunSnapshot = normalizeOperatorRunSnapshot;
 function toBulkRunSamples(summary?: OperatorRunFollowUpBody | null) {
   return (summary?.sampled_runs ?? []).map((item): RunSnapshotWithId => ({
     runId: item.run_id,
-    snapshot: toRunSnapshot(item.snapshot)
+    snapshot: toRunSnapshot(item.snapshot),
+    callbackTickets: Array.isArray(item.callback_tickets) ? item.callback_tickets : [],
+    sensitiveAccessEntries: Array.isArray(item.sensitive_access_entries)
+      ? item.sensitive_access_entries
+      : []
   }));
 }
 

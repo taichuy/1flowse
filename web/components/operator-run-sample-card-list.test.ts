@@ -3,12 +3,62 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import type { OperatorRunSampleCard } from "@/lib/operator-run-sample-cards";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
 }));
+
+function buildSampleApprovalEntry(): SensitiveAccessTimelineEntry {
+  return {
+    request: {
+      id: "request-1",
+      run_id: "run-1",
+      node_run_id: "node-run-1",
+      requester_type: "tool",
+      requester_id: "callback.wait",
+      resource_id: "resource-1",
+      action_type: "invoke",
+      purpose_text: "Inspect callback blocker",
+      decision: "require_approval",
+      decision_label: "Require approval",
+      reason_code: "policy_requires_approval",
+      reason_label: "Policy requires approval",
+      policy_summary: "Approval is required.",
+      created_at: "2026-03-20T10:00:00Z",
+      decided_at: null
+    },
+    resource: {
+      id: "resource-1",
+      label: "Callback gate",
+      description: "Protected callback endpoint",
+      sensitivity_level: "L2",
+      source: "local_capability",
+      metadata: {},
+      created_at: "2026-03-20T10:00:00Z",
+      updated_at: "2026-03-20T10:00:00Z"
+    },
+    approval_ticket: {
+      id: "approval-ticket-1",
+      access_request_id: "request-1",
+      run_id: "run-1",
+      node_run_id: "node-run-1",
+      status: "pending",
+      waiting_status: "waiting",
+      approved_by: null,
+      decided_at: null,
+      expires_at: "2026-03-20T10:30:00Z",
+      created_at: "2026-03-20T10:00:00Z"
+    },
+    notifications: [],
+    outcome_explanation: {
+      primary_signal: "当前 callback waiting 仍卡在 1 条待处理审批。",
+      follow_up: "优先处理审批票据，再观察 callback waiting 是否恢复。"
+    }
+  };
+}
 
 function buildSampleCard(
   overrides: Partial<OperatorRunSampleCard> = {}
@@ -35,6 +85,7 @@ function buildSampleCard(
       follow_up: "先看当前 tool 实际落在哪个 runner。"
     },
     callbackWaitingLifecycle: null,
+    callbackTickets: [],
     callbackWaitingFocusNodeEvidence: {
       artifact_refs: [],
       artifacts: [],
@@ -85,6 +136,8 @@ function buildSampleCard(
     scheduledResumeDueAt: null,
     scheduledResumeRequeuedAt: null,
     scheduledResumeRequeueSource: null,
+    sensitiveAccessEntries: [],
+    inboxHref: null,
     artifactCount: 0,
     artifactRefCount: 0,
     toolCallCount: 1,
@@ -135,5 +188,43 @@ describe("OperatorRunSampleCardList", () => {
     expect(html).not.toContain("Waiting node focus evidence");
     expect(html).toContain("effective sandbox");
     expect(html.indexOf("effective sandbox")).toBeGreaterThan(html.indexOf("Run run-1"));
+  });
+
+  it("reuses sample callback context to build waiting inbox deep links", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorRunSampleCardList, {
+        cards: [
+          buildSampleCard({
+            callbackTickets: [
+              {
+                ticket: "callback-ticket-1",
+                run_id: "run-1",
+                node_run_id: "node-run-1",
+                tool_call_id: "tool-call-1",
+                tool_id: "callback.wait",
+                tool_call_index: 0,
+                waiting_status: "waiting",
+                status: "pending",
+                reason: "callback pending",
+                callback_payload: null,
+                created_at: "2026-03-20T10:00:00Z",
+                expires_at: null,
+                consumed_at: null,
+                canceled_at: null,
+                expired_at: null
+              }
+            ],
+            sensitiveAccessEntries: [buildSampleApprovalEntry()],
+            inboxHref:
+              "/sensitive-access?status=pending&waiting_status=waiting&run_id=run-1&node_run_id=node-run-1&access_request_id=request-1&approval_ticket_id=approval-ticket-1"
+          })
+        ],
+        skillTraceDescription: "skill trace"
+      })
+    );
+
+    expect(html).toContain("Open approval inbox");
+    expect(html).toContain("approval_ticket_id=approval-ticket-1");
+    expect(html).toContain("Approvals: 1 approval still pending");
   });
 });

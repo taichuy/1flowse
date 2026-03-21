@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   fetchRunSnapshot,
+  normalizeOperatorRunFollowUp,
   normalizeOperatorRunSnapshot,
   resolveCanonicalOperatorRunSnapshot
 } from "@/app/actions/run-snapshot";
@@ -144,6 +145,67 @@ describe("fetchRunSnapshot", () => {
       status: "waiting",
       currentNodeId: "approval_gate",
       waitingReason: "waiting approval"
+    });
+  });
+
+  it("normalizeOperatorRunFollowUp 会保留 sampled run 的 callback 与审批上下文", () => {
+    const summary = normalizeOperatorRunFollowUp({
+      sampled_runs: [
+        {
+          run_id: "run-1",
+          snapshot: {
+            status: "waiting",
+            current_node_id: "approval_gate"
+          },
+          callback_tickets: [
+            {
+              ticket: "callback-ticket-1",
+              run_id: "run-1",
+              node_run_id: "node-run-1",
+              status: "pending",
+              waiting_status: "waiting",
+              tool_call_index: 0,
+              created_at: "2026-03-20T10:00:00Z"
+            }
+          ],
+          sensitive_access_entries: [
+            {
+              request: {
+                id: "request-1",
+                run_id: "run-1",
+                node_run_id: "node-run-1"
+              },
+              approval_ticket: {
+                id: "approval-ticket-1",
+                access_request_id: "request-1",
+                run_id: "run-1",
+                node_run_id: "node-run-1",
+                status: "pending",
+                waiting_status: "waiting",
+                created_at: "2026-03-20T10:00:00Z"
+              },
+              notifications: []
+            }
+          ]
+        }
+      ]
+    } as unknown as Parameters<typeof normalizeOperatorRunFollowUp>[0]);
+
+    expect(summary?.sampledRuns[0]).toMatchObject({
+      runId: "run-1",
+      callbackTickets: [
+        expect.objectContaining({
+          ticket: "callback-ticket-1",
+          node_run_id: "node-run-1"
+        })
+      ],
+      sensitiveAccessEntries: [
+        expect.objectContaining({
+          approval_ticket: expect.objectContaining({
+            id: "approval-ticket-1"
+          })
+        })
+      ]
     });
   });
 

@@ -82,12 +82,14 @@ export function OperatorRunSampleCardList({
 
           <CallbackWaitingSummaryCard
             callbackWaitingExplanation={sample.callbackWaitingExplanation}
+            callbackTickets={sample.callbackTickets}
             lifecycle={sample.callbackWaitingLifecycle}
             focusNodeEvidence={sample.callbackWaitingFocusNodeEvidence}
             focusSkillReferenceCount={sample.skillReferenceCount}
             focusSkillReferenceLoads={sample.focusSkillReferenceLoads}
             focusSkillReferenceNodeId={sample.focusNodeId}
             focusSkillReferenceNodeName={sample.focusNodeLabel}
+            inboxHref={sample.inboxHref}
             nodeRunId={sample.focusNodeRunId}
             runId={sample.runId}
             scheduledResumeDelaySeconds={sample.scheduledResumeDelaySeconds}
@@ -99,6 +101,7 @@ export function OperatorRunSampleCardList({
             scheduledWaitingStatus={sample.scheduledWaitingStatus}
             showFocusExecutionFacts={sample.hasCallbackWaitingSummary}
             showInlineActions={false}
+            sensitiveAccessEntries={sample.sensitiveAccessEntries}
             waitingReason={sample.waitingReason}
           />
 

@@ -1,8 +1,10 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type {
   CallbackWaitingLifecycleSummary,
+  RunCallbackTicketItem,
   SkillReferenceLoadItem
 } from "@/lib/get-run-views";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 
 export type RunSnapshot = {
   status?: string | null;
@@ -80,6 +82,8 @@ export type RunSnapshot = {
 export type RunSnapshotWithId = {
   runId: string;
   snapshot: RunSnapshot | null;
+  callbackTickets?: RunCallbackTicketItem[];
+  sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
 };
 
 export type OperatorRunSnapshotBody = {
@@ -170,6 +174,8 @@ export type OperatorRunFollowUpBody = {
   sampled_runs?: Array<{
     run_id: string;
     snapshot?: OperatorRunSnapshotBody | null;
+    callback_tickets?: RunCallbackTicketItem[];
+    sensitive_access_entries?: SensitiveAccessTimelineEntry[];
   }>;
 };
 
@@ -683,7 +689,11 @@ export function normalizeOperatorRunFollowUp(
       .filter((item) => typeof item?.run_id === "string" && item.run_id.trim())
       .map((item) => ({
         runId: item.run_id,
-        snapshot: normalizeOperatorRunSnapshot(item.snapshot)
+        snapshot: normalizeOperatorRunSnapshot(item.snapshot),
+        callbackTickets: Array.isArray(item.callback_tickets) ? item.callback_tickets : [],
+        sensitiveAccessEntries: Array.isArray(item.sensitive_access_entries)
+          ? item.sensitive_access_entries
+          : []
       }))
   };
 }
@@ -971,7 +981,9 @@ export async function fetchRunSnapshots(
   return Promise.all(
     normalizedRunIds.map(async (runId) => ({
       runId,
-      snapshot: await fetchRunSnapshot(runId)
+      snapshot: await fetchRunSnapshot(runId),
+      callbackTickets: [],
+      sensitiveAccessEntries: []
     }))
   );
 }
