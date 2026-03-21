@@ -483,7 +483,7 @@ describe("published invocation presenters", () => {
           api_key_name: null,
           api_key_prefix: "sk-test",
           request_preview: { keys: ["query"] },
-          run_id: "run-1",
+          run_id: "  run-1  ",
           run_waiting_lifecycle: {
             callback_ticket_count: 2,
             callback_ticket_status_counts: { pending: 1, approved: 1 }
@@ -513,7 +513,7 @@ describe("published invocation presenters", () => {
 
     expect(
       listPublishedInvocationDetailRunRows({
-        runId: "run-1",
+        runId: "  run-1  ",
         runStatus: "waiting",
         currentNodeId: "tool_wait",
         waitingReason: "callback pending",
@@ -531,6 +531,46 @@ describe("published invocation presenters", () => {
         { key: "waiting-node-run", label: "Waiting node run", value: "node-run-1", href: null }
       ])
     );
+
+    expect(
+      listPublishedInvocationEntryMetaRows({
+        invocation: {
+          api_key_name: null,
+          api_key_prefix: "sk-test",
+          request_preview: { keys: [] },
+          run_id: "   ",
+          run_waiting_lifecycle: null
+        } as never,
+        runStatus: null,
+        currentNodeId: null,
+        waitingReason: null,
+        scheduledResumeLabel: entrySurfaceCopy.unavailableValueLabel,
+        surfaceCopy: entrySurfaceCopy
+      })[2]
+    ).toEqual({
+      key: "run",
+      label: "Run link",
+      value: entrySurfaceCopy.notStartedValueLabel,
+      href: null
+    });
+
+    expect(
+      listPublishedInvocationDetailRunRows({
+        runId: "   ",
+        runStatus: null,
+        currentNodeId: null,
+        waitingReason: null,
+        waitingNodeRunId: null,
+        startedAt: null,
+        finishedAt: null,
+        surfaceCopy: detailSurfaceCopy
+      })[0]
+    ).toEqual({
+      key: "run",
+      label: "Run link",
+      value: detailSurfaceCopy.notStartedValueLabel,
+      href: null
+    });
 
     expect(
       listPublishedInvocationCacheDrilldownRows({

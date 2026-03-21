@@ -36,7 +36,8 @@ import {
   buildOperatorInboxSliceLinkSurface,
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep,
-  buildOperatorRunDetailCandidate
+  buildOperatorRunDetailCandidate,
+  buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
@@ -56,7 +57,6 @@ import {
   buildSensitiveAccessTimelineSurfaceCopy
 } from "@/lib/sensitive-access-presenters";
 import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
-import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type PublishedInvocationWaitingOverview = {
   activeWaitingCount: number;
@@ -417,6 +417,34 @@ function buildPublishedInvocationMetaRow(
   href: string | null = null
 ): PublishedInvocationMetaRow {
   return { key, label, value, href };
+}
+
+function normalizePublishedInvocationRunId(runId?: string | null) {
+  const normalizedRunId = runId?.trim();
+
+  return normalizedRunId ? normalizedRunId : null;
+}
+
+function buildPublishedInvocationRunMetaRow({
+  key,
+  label,
+  runId,
+  fallbackValue
+}: {
+  key: string;
+  label: string;
+  runId?: string | null;
+  fallbackValue: string;
+}): PublishedInvocationMetaRow {
+  const normalizedRunId = normalizePublishedInvocationRunId(runId);
+  const runDetailLink = buildOperatorRunDetailLinkSurface({ runId: normalizedRunId });
+
+  return buildPublishedInvocationMetaRow(
+    key,
+    label,
+    normalizedRunId ?? fallbackValue,
+    runDetailLink?.href ?? null
+  );
 }
 
 export function buildPublishedInvocationDetailSurfaceCopy({
@@ -1152,12 +1180,12 @@ export function listPublishedInvocationEntryMetaRows({
       surfaceCopy.requestKeysLabel,
       formatKeyList(invocation.request_preview.keys ?? [])
     ),
-    buildPublishedInvocationMetaRow(
-      "run",
-      surfaceCopy.runLabel,
-      invocation.run_id ?? surfaceCopy.notStartedValueLabel,
-      invocation.run_id ? buildRunDetailHref(invocation.run_id) : null
-    ),
+    buildPublishedInvocationRunMetaRow({
+      key: "run",
+      label: surfaceCopy.runLabel,
+      runId: invocation.run_id,
+      fallbackValue: surfaceCopy.notStartedValueLabel
+    }),
     buildPublishedInvocationMetaRow(
       "run-status",
       surfaceCopy.runStatusLabel,
@@ -1251,12 +1279,12 @@ export function listPublishedInvocationDetailRunRows({
   surfaceCopy?: PublishedInvocationDetailSurfaceCopy;
 }): PublishedInvocationMetaRow[] {
   return [
-    buildPublishedInvocationMetaRow(
-      "run",
-      surfaceCopy.runLabel,
-      runId ?? surfaceCopy.notStartedValueLabel,
-      runId ? buildRunDetailHref(runId) : null
-    ),
+    buildPublishedInvocationRunMetaRow({
+      key: "run",
+      label: surfaceCopy.runLabel,
+      runId,
+      fallbackValue: surfaceCopy.notStartedValueLabel
+    }),
     buildPublishedInvocationMetaRow(
       "status",
       surfaceCopy.runStatusLabel,
