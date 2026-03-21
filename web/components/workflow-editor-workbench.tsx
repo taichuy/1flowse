@@ -27,6 +27,7 @@ import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/wor
 import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
 import { type WorkflowEditorMessageTone } from "@/components/workflow-editor-workbench/shared";
 import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
+import { summarizeWorkflowPersistBlockers } from "@/components/workflow-editor-workbench/persist-blockers";
 import {
   applyRunOverlayToNodes,
   WORKFLOW_EDITOR_NODE_TYPES
@@ -124,6 +125,10 @@ export function WorkflowEditorWorkbench({
     () => pickWorkflowValidationRemediationItem(validation.validationNavigatorItems),
     [validation.validationNavigatorItems]
   );
+  const persistBlockerSummary = useMemo(
+    () => summarizeWorkflowPersistBlockers(validation.persistBlockers),
+    [validation.persistBlockers]
+  );
   const persistence = useWorkflowEditorPersistence({
     workflowId: workflow.id,
     fallbackWorkflowName: workflow.name,
@@ -195,6 +200,8 @@ export function WorkflowEditorWorkbench({
           toolExecutionValidationIssuesCount={validation.toolExecutionValidationIssues.length}
           publishDraftValidationIssuesCount={validation.publishDraftValidationIssues.length}
           persistBlockedMessage={validation.persistBlockedMessage || null}
+          persistBlockerSummary={persistBlockerSummary}
+          persistBlockers={validation.persistBlockers}
           isSaving={persistence.isSaving}
           isSavingStarter={persistence.isSavingStarter}
           onSave={persistence.handleSave}
@@ -213,6 +220,8 @@ export function WorkflowEditorWorkbench({
             unsupportedNodes={validation.unsupportedNodes}
             message={message}
             messageTone={messageTone}
+            persistBlockerSummary={persistBlockerSummary}
+            persistBlockers={validation.persistBlockers}
             executionPreflightMessage={executionPreflightMessage}
             toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
             focusedValidationItem={validationFocusItem}

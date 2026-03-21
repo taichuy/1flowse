@@ -17,6 +17,7 @@ import { WorkflowValidationRemediationCard } from "@/components/workflow-validat
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 
+import type { WorkflowPersistBlocker } from "./persist-blockers";
 import type { WorkflowEditorMessageTone } from "./shared";
 
 type WorkflowEditorSidebarProps = {
@@ -30,6 +31,8 @@ type WorkflowEditorSidebarProps = {
   unsupportedNodes: UnsupportedWorkflowNodeSummary[];
   message: string | null;
   messageTone: WorkflowEditorMessageTone;
+  persistBlockerSummary: string | null;
+  persistBlockers: WorkflowPersistBlocker[];
   executionPreflightMessage: string | null;
   toolExecutionValidationIssueCount: number;
   focusedValidationItem?: WorkflowValidationNavigatorItem | null;
@@ -62,6 +65,8 @@ export function WorkflowEditorSidebar({
   unsupportedNodes,
   message,
   messageTone,
+  persistBlockerSummary,
+  persistBlockers,
   executionPreflightMessage,
   toolExecutionValidationIssueCount,
   focusedValidationItem = null,
@@ -87,6 +92,11 @@ export function WorkflowEditorSidebar({
     (item) => item.bindingRequired
   ).length;
   const remediationItem = focusedValidationItem ?? preflightValidationItem;
+  const feedbackMessage =
+    message ??
+    (persistBlockers.length > 0
+      ? "选择一个待修正项或点击保存，编辑器会跳到首个阻断点。"
+      : "选择节点或连线后，这里会显示编辑器反馈。");
 
   return (
     <aside className="editor-sidebar">
@@ -233,9 +243,21 @@ export function WorkflowEditorSidebar({
           </div>
         </div>
 
-        <p className={`sync-message ${messageTone}`}>
-          {message ?? "选择节点或连线后，这里会显示编辑器反馈。"}
-        </p>
+        {persistBlockers.length > 0 ? (
+          <div className="sync-message error">
+            <strong>Save gate</strong>
+            <p className="section-copy entry-copy">{persistBlockerSummary}</p>
+            <ul className="event-list compact-list">
+              {persistBlockers.slice(0, 4).map((blocker) => (
+                <li key={blocker.id}>
+                  <strong>{blocker.label}</strong>：{blocker.detail} {blocker.nextStep}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <p className={`sync-message ${messageTone}`}>{feedbackMessage}</p>
 
         <SandboxReadinessOverviewCard
           readiness={sandboxReadiness}

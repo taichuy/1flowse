@@ -29,6 +29,10 @@ import {
 } from "@/lib/workflow-node-catalog";
 import { buildPublishedEndpointValidationIssues } from "@/components/workflow-editor-publish-form-validation";
 import { normalizePublishedEndpoint } from "@/components/workflow-editor-publish-form-shared";
+import {
+  buildWorkflowPersistBlockers,
+  formatWorkflowPersistBlockedMessage
+} from "./persist-blockers";
 
 const PREFLIGHT_CATEGORY_LABELS: Record<string, string> = {
   schema: "contract/schema",
@@ -302,36 +306,23 @@ export function useWorkflowEditorValidation({
     variableValidationIssues
   ]);
 
-  const persistBlockedMessage = useMemo(
+  const persistBlockers = useMemo(
     () =>
-      [
-        unsupportedNodes.length > 0
-          ? `当前 workflow 包含未进入执行主链的节点，暂不能保存或沉淀为 workspace starter：${unsupportedNodeSummary}。请先移除或替换这些节点，再继续保存。`
-          : null,
-        contractValidationSummary
-          ? `当前 workflow definition 还有 contract schema 待修正问题：${contractValidationSummary}${contractValidationSummary.endsWith("。") ? "" : "。"}请先在 Node contract / publish draft 中修正后再保存。`
-          : null,
-        toolReferenceValidationSummary
-          ? `当前 workflow definition 还有 tool catalog 引用待修正问题：${toolReferenceValidationSummary}${toolReferenceValidationSummary.endsWith("。") ? "" : "。"}请先修正 tool binding / LLM Agent tool policy 后再保存。`
-          : null,
-        nodeExecutionValidationSummary
-          ? `当前 workflow definition 还有 node execution 待修正问题：${nodeExecutionValidationSummary}${nodeExecutionValidationSummary.endsWith("。") ? "" : "。"}请先把节点 execution class 调回当前实现支持范围，再继续保存。`
-          : null,
-        toolExecutionValidationSummary
-          ? `当前 workflow definition 还有 execution capability 待修正问题：${toolExecutionValidationSummary}${toolExecutionValidationSummary.endsWith("。") ? "" : "。"}${sandboxReadinessPreflightHint ? ` ${sandboxReadinessPreflightHint}` : ""}请先对齐 adapter 绑定、execution class 与 sandbox readiness，再继续保存。`
-          : null,
-        publishDraftValidationSummary
-          ? `当前 workflow definition 还有 publish draft 待修正问题：${publishDraftValidationSummary}${publishDraftValidationSummary.endsWith("。") ? "" : "。"}${hasPublishVersionValidationIssues ? " 如果 endpoint 要跟随本次保存版本，请把 workflowVersion 留空。" : " 请先在 publish draft 表单里修正发布标识、schema、缓存或版本设置，再继续保存。"}`
-          : null,
-        variableValidationSummary
-          ? `当前 workflow definition 还有 variables 待修正问题：${variableValidationSummary}${variableValidationSummary.endsWith("。") ? "" : "。"}请先修正变量名，再继续保存。`
-          : null,
-        serverValidationSummary
-          ? `当前 persisted workflow 已出现服务器侧 definition drift：${serverValidationSummary}${serverValidationSummary.endsWith("。") ? "" : "。"}${hasServerToolExecutionIssues && sandboxReadinessPreflightHint ? ` ${sandboxReadinessPreflightHint}` : ""}${hasServerNodeExecutionIssues ? " 请先把节点 execution class 调回当前实现支持范围，再继续保存。" : "请先对齐当前工具目录、skill 引用或 sandbox readiness，再继续保存。"}`
-          : null
-      ]
-        .filter(Boolean)
-        .join(" "),
+      buildWorkflowPersistBlockers({
+        unsupportedNodeCount: unsupportedNodes.length,
+        unsupportedNodeSummary,
+        contractValidationSummary,
+        toolReferenceValidationSummary,
+        nodeExecutionValidationSummary,
+        toolExecutionValidationSummary,
+        publishDraftValidationSummary,
+        hasPublishVersionValidationIssues,
+        variableValidationSummary,
+        serverValidationSummary,
+        hasServerToolExecutionIssues,
+        hasServerNodeExecutionIssues,
+        sandboxReadinessPreflightHint
+      }),
     [
       contractValidationSummary,
       hasPublishVersionValidationIssues,
@@ -348,11 +339,16 @@ export function useWorkflowEditorValidation({
       variableValidationSummary
     ]
   );
+  const persistBlockedMessage = useMemo(
+    () => formatWorkflowPersistBlockedMessage(persistBlockers),
+    [persistBlockers]
+  );
 
   return {
     availableWorkflowVersions,
     contractValidationIssues,
     nodeExecutionValidationIssues,
+    persistBlockers,
     publishDraftValidationIssues,
     persistBlockedMessage,
     toolExecutionValidationIssues,

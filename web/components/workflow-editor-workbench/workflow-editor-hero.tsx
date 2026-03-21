@@ -1,8 +1,10 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
+import type { WorkflowPersistBlocker } from "./persist-blockers";
 
 type WorkflowEditorHeroProps = {
   workflowId: string;
@@ -24,6 +26,8 @@ type WorkflowEditorHeroProps = {
   toolExecutionValidationIssuesCount: number;
   publishDraftValidationIssuesCount: number;
   persistBlockedMessage: string | null;
+  persistBlockerSummary: string | null;
+  persistBlockers: WorkflowPersistBlocker[];
   isSaving: boolean;
   isSavingStarter: boolean;
   onSave: () => void;
@@ -50,6 +54,8 @@ export function WorkflowEditorHero({
   toolExecutionValidationIssuesCount,
   publishDraftValidationIssuesCount,
   persistBlockedMessage,
+  persistBlockerSummary,
+  persistBlockers,
   isSaving,
   isSavingStarter,
   onSave,
@@ -140,12 +146,18 @@ export function WorkflowEditorHero({
           </p>
         ) : null}
         {persistBlockedMessage ? (
-          <p className="panel-text">
-            当前保存策略：
-            <strong>
-              含 planned / unknown 节点、非法 contract schema、tool catalog 引用漂移、node execution / execution capability 不匹配或 publish draft 未闭环时阻断保存与 starter 沉淀
-            </strong>
-          </p>
+          <>
+            <p className="panel-text">
+              当前保存策略：<strong>{persistBlockerSummary}</strong>
+            </p>
+            <div className="starter-tag-row">
+              {persistBlockers.map((blocker) => (
+                <span className="event-chip" key={blocker.id}>
+                  {blocker.label}
+                </span>
+              ))}
+            </div>
+          </>
         ) : null}
         <p className="panel-text">
           当前治理入口：<strong>editor -&gt; workspace starter library</strong>
