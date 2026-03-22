@@ -212,6 +212,7 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
       runId,
       canonicalFollowUp,
       canonicalRecommendedAction: detail.run_follow_up?.recommended_action ?? null,
+      callbackWaitingActive: Boolean(detail.invocation.run_waiting_lifecycle),
       callbackWaitingFollowUp: detail.callback_waiting_explanation?.follow_up ?? null,
       callbackWaitingAutomation,
       executionFocusFollowUp: detail.execution_focus_explanation?.follow_up ?? null,

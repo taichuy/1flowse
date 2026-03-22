@@ -1426,6 +1426,7 @@ describe("published invocation presenters", () => {
           follow_up: null,
           has_shared_callback_waiting_summary: true
         },
+        callbackWaitingActive: true,
         callbackWaitingFollowUp: "先处理审批票据，再观察 waiting 节点是否恢复。",
         executionFocusFollowUp: "打开 run 看 execution focus。",
         blockingInboxHref: "/sensitive-access/inbox?runId=run-callback-1&nodeRunId=node-run-1",
@@ -1528,6 +1529,7 @@ describe("published invocation presenters", () => {
           follow_up: null,
           has_shared_callback_waiting_summary: false
         },
+        callbackWaitingActive: true,
         callbackWaitingFollowUp: null,
         callbackWaitingAutomation: {
           status: "partial",
@@ -1556,6 +1558,92 @@ describe("published invocation presenters", () => {
         "当前 callback recovery 仍影响 3 个 run / 2 个 workflow；scheduler 仍不健康，优先回到 run library 核对 waiting callback runs 与自动 resume 状态。",
       href: "/runs?focus=callback-waiting",
       href_label: "Open run library"
+    });
+  });
+
+  it("优先复用 invocation 级 canonical callback action，而不是回退到 shared callback recovery", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-callback-approval-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: "先处理审批票据，再回来确认 callback waiting 是否恢复。",
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingActive: true,
+        callbackWaitingFollowUp: null,
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "runLibrary"
+          },
+          steps: []
+        },
+        canonicalRecommendedAction: {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: "/sensitive-access?run_id=run-callback-approval-1&node_run_id=node-run-1",
+          label: "open approval inbox slice"
+        },
+        executionFocusFollowUp: "打开 run 看 execution focus。",
+        blockingInboxHref: null,
+        approvalInboxHref: null
+      })
+    ).toEqual({
+      label: "approval blocker",
+      detail: "先处理审批票据，再回来确认 callback waiting 是否恢复。",
+      href: "/sensitive-access?run_id=run-callback-approval-1&node_run_id=node-run-1",
+      href_label: "open approval inbox slice"
+    });
+  });
+
+  it("没有 live callback context 时忽略顶层 callback follow-up，回退到 execution focus", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-only-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: null,
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingActive: false,
+        callbackWaitingFollowUp: "先观察 callback 是否恢复。",
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "runLibrary"
+          },
+          steps: []
+        },
+        executionFocusFollowUp: "优先打开 run 继续检查 focus node。",
+        blockingInboxHref: "/sensitive-access/inbox?runId=run-focus-only-1&nodeRunId=node-run-1",
+        approvalInboxHref: "/sensitive-access/inbox?runId=run-focus-only-1"
+      })
+    ).toEqual({
+      label: "execution focus",
+      detail: "优先打开 run 继续检查 focus node。",
+      href: "/runs/run-focus-only-1",
+      href_label: "open run"
     });
   });
 

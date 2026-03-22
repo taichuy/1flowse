@@ -626,6 +626,86 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("优先处理 blocker inbox，再观察 waiting 节点是否恢复。");
   });
 
+  it("ignores stale selected-invocation callback copy and keeps next step on execution focus", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.run_follow_up = null;
+    detail.callback_waiting_explanation = {
+      primary_signal: "历史 callback waiting 曾卡住。",
+      follow_up: "先观察 callback 是否恢复。"
+    };
+    detail.callback_tickets = [];
+    detail.sensitive_access_entries = [];
+    detail.blocking_sensitive_access_entries = [];
+    detail.blocking_node_run_id = null;
+    detail.execution_focus_reason = "blocked_execution";
+    detail.execution_focus_explanation = {
+      primary_signal: "sandbox execution 仍被阻断。",
+      follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
+    };
+    detail.invocation.run_waiting_lifecycle = null;
+    detail.invocation.run_status = "failed";
+    detail.invocation.run_waiting_reason = null;
+    detail.run = {
+      id: "run-selected-1",
+      status: "failed",
+      current_node_id: "tool_wait",
+      started_at: "2026-03-21T00:10:00Z",
+      finished_at: "2026-03-21T00:12:00Z"
+    } as never;
+    detail.run_snapshot = {
+      status: "failed",
+      current_node_id: "tool_wait",
+      waiting_reason: null,
+      execution_focus_reason: "blocked_execution",
+      execution_focus_node_id: "tool_wait",
+      execution_focus_node_run_id: "node-run-selected-focus",
+      execution_focus_node_name: "Tool wait",
+      execution_focus_node_type: "tool",
+      execution_focus_explanation: {
+        primary_signal: "sandbox execution 仍被阻断。",
+        follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
+      }
+    } as never;
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit: buildInvocationAudit(),
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: detail
+        },
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "runLibrary"
+          },
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: null
+      })
+    );
+
+    expect(html).toContain("Selected invocation next step");
+    expect(html).toContain("execution focus");
+    expect(html).toContain("优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。");
+    expect(html).not.toContain("callback recovery");
+    expect(html).not.toContain("Open run library");
+  });
+
   it("prefers shared sandbox readiness CTA for selected invocation when execution follow-up is missing", () => {
     const detail = buildSelectedInvocationDetail();
     detail.run_follow_up = null;

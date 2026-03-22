@@ -1842,6 +1842,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   runId,
   canonicalFollowUp,
   canonicalRecommendedAction,
+  callbackWaitingActive = false,
   callbackWaitingFollowUp,
   callbackWaitingAutomation,
   executionFocusFollowUp,
@@ -1858,6 +1859,7 @@ export function buildPublishedInvocationRecommendedNextStep({
     href?: string | null;
     label?: string | null;
   } | null;
+  callbackWaitingActive?: boolean;
   callbackWaitingFollowUp?: string | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   executionFocusFollowUp?: string | null;
@@ -1867,37 +1869,43 @@ export function buildPublishedInvocationRecommendedNextStep({
   approvalInboxHref?: string | null;
 }): PublishedInvocationRecommendedNextStep | null {
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
-  const hasExplicitCallbackFollowUp = Boolean(
-    (callbackWaitingFollowUp && callbackWaitingFollowUp.trim()) ||
-      canonicalFollowUp?.has_shared_callback_waiting_summary
+  const normalizedCallbackWaitingFollowUp = callbackWaitingFollowUp?.trim() || null;
+  const hasSharedCallbackWaitingSummary = Boolean(
+    canonicalFollowUp?.has_shared_callback_waiting_summary
   );
-  const callbackCandidate = buildSharedOrLocalOperatorCandidate({
-    sharedCandidate:
-      (hasExplicitCallbackFollowUp
-        ? null
-        : buildCallbackWaitingAutomationFollowUpCandidate(
-            callbackWaitingAutomation,
-            "callback recovery"
-          )) ??
-      buildOperatorRecommendedActionCandidate({
-        action: canonicalRecommendedAction,
-        detail: callbackWaitingFollowUp ?? canonicalFollowUp?.follow_up ?? null,
-        fallbackDetail:
-          "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。",
-        scope: "callback"
-      }),
-    active: hasExplicitCallbackFollowUp,
-    href: blockingInboxHref ?? approvalInboxHref ?? null,
-    label: blockingInboxHref ? "approval blocker" : "callback waiting",
-    detail: callbackWaitingFollowUp,
-    hrefLabel: blockingInboxHref
-      ? "open blocker inbox slice"
-      : approvalInboxHref
-        ? "open approval inbox slice"
-        : null,
-    fallbackDetail:
-      "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。"
+  const callbackFallbackDetail =
+    "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。";
+  const canonicalCallbackCandidate = buildOperatorRecommendedActionCandidate({
+    action: canonicalRecommendedAction,
+    detail: normalizedCallbackWaitingFollowUp ?? canonicalFollowUp?.follow_up ?? null,
+    fallbackDetail: callbackFallbackDetail,
+    scope: "callback"
   });
+  const shouldSurfaceCallbackNextStep = Boolean(
+    callbackWaitingActive || hasSharedCallbackWaitingSummary || canonicalCallbackCandidate
+  );
+  const callbackCandidate = shouldSurfaceCallbackNextStep
+    ? buildSharedOrLocalOperatorCandidate({
+        sharedCandidate:
+          canonicalCallbackCandidate ??
+          (!normalizedCallbackWaitingFollowUp && !hasSharedCallbackWaitingSummary
+            ? buildCallbackWaitingAutomationFollowUpCandidate(
+                callbackWaitingAutomation,
+                "callback recovery"
+              )
+            : null),
+        active: true,
+        href: blockingInboxHref ?? approvalInboxHref ?? null,
+        label: blockingInboxHref ? "approval blocker" : "callback waiting",
+        detail: normalizedCallbackWaitingFollowUp,
+        hrefLabel: blockingInboxHref
+          ? "open blocker inbox slice"
+          : approvalInboxHref
+            ? "open approval inbox slice"
+            : null,
+        fallbackDetail: callbackFallbackDetail
+      })
+    : null;
   const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
     blockedExecution: executionSnapshot?.executionFocusReason === "blocked_execution",
     hasExecutionBlockingReason: Boolean(

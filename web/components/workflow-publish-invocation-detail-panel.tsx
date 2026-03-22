@@ -155,6 +155,7 @@ export function WorkflowPublishInvocationDetailPanel({
     runId,
     canonicalFollowUp,
     canonicalRecommendedAction: runFollowUp?.recommended_action ?? null,
+    callbackWaitingActive: Boolean(waitingLifecycle),
     callbackWaitingFollowUp: callbackWaitingExplanation?.follow_up ?? null,
     callbackWaitingAutomation,
     executionFocusFollowUp: explicitExecutionFocusFollowUp,
