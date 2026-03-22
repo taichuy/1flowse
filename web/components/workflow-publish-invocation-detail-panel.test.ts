@@ -470,6 +470,42 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
   });
 
+  it("prefers shared callback recovery CTA when publish detail only carries local callback prose", () => {
+    const detail = buildDetail();
+    detail.invocation.run_waiting_lifecycle = { node_run_id: "node-run-tool-wait" } as never;
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "runLibrary"
+          },
+          steps: []
+        }
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("callback recovery");
+    expect(html).toContain("当前 callback recovery 仍影响 3 个 run / 2 个 workflow");
+    expect(html).toContain("Open run library");
+    expect(html).toContain('/runs?focus=callback-waiting');
+  });
+
   it("forwards sampled approval blocker context into the shared callback waiting summary", () => {
     const detail = buildDetail();
     detail.run_follow_up!.sampled_runs[0] = {

@@ -1996,16 +1996,17 @@ export function buildPublishedInvocationRecommendedNextStep({
   const shouldSurfaceCallbackNextStep = Boolean(
     callbackWaitingActive || hasSharedCallbackWaitingSummary || canonicalCallbackCandidate
   );
+  const sharedCallbackRecoveryCandidate =
+    shouldSurfaceCallbackNextStep && !canonicalCallbackCandidate
+      ? buildCallbackWaitingAutomationFollowUpCandidate(
+          callbackWaitingAutomation,
+          "callback recovery"
+        )
+      : null;
   const callbackCandidate = shouldSurfaceCallbackNextStep
     ? buildSharedOrLocalOperatorCandidate({
         sharedCandidate:
-          canonicalCallbackCandidate ??
-          (!normalizedCallbackWaitingFollowUp && !hasSharedCallbackWaitingSummary
-            ? buildCallbackWaitingAutomationFollowUpCandidate(
-                callbackWaitingAutomation,
-                "callback recovery"
-              )
-            : null),
+          canonicalCallbackCandidate ?? sharedCallbackRecoveryCandidate,
         active: true,
         href: blockingInboxHref ?? approvalInboxHref ?? null,
         label: blockingInboxHref ? "approval blocker" : "callback waiting",

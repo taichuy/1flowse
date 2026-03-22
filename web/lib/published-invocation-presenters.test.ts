@@ -1693,6 +1693,47 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("缺少 invocation 级 canonical callback action 时，即使带本地 callback follow-up 也优先 shared callback recovery contract", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-callback-fallback-2",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: "run run-callback-fallback-2：继续观察 callback waiting。",
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingActive: true,
+        callbackWaitingFollowUp: "先处理审批票据，再观察 waiting 节点是否恢复。",
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "runLibrary"
+          },
+          steps: []
+        },
+        executionFocusFollowUp: null,
+        blockingInboxHref: "/sensitive-access/inbox?runId=run-callback-fallback-2&nodeRunId=node-run-1",
+        approvalInboxHref: "/sensitive-access/inbox?runId=run-callback-fallback-2"
+      })
+    ).toEqual({
+      label: "callback recovery",
+      detail:
+        "当前 callback recovery 仍影响 3 个 run / 2 个 workflow；scheduler 仍不健康，优先回到 run library 核对 waiting callback runs 与自动 resume 状态。",
+      href: "/runs?focus=callback-waiting",
+      href_label: "Open run library"
+    });
+  });
+
   it("优先复用 invocation 级 canonical callback action，而不是回退到 shared callback recovery", () => {
     expect(
       buildPublishedInvocationRecommendedNextStep({

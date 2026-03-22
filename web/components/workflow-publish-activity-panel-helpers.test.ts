@@ -304,6 +304,46 @@ describe("workflow publish activity panel helpers", () => {
     });
   });
 
+  it("prefers shared callback recovery CTA for selected invocation next step when only local callback prose remains", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.invocation.run_waiting_lifecycle = { node_run_id: "node-run-wait" } as never;
+
+    const detailSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
+      selectedInvocationId: "invocation-1",
+      selectedInvocationDetail: {
+        kind: "ok",
+        data: detail
+      },
+      callbackWaitingAutomation: {
+        status: "partial",
+        scheduler_required: true,
+        detail: "callback automation degraded",
+        scheduler_health_status: "degraded",
+        scheduler_health_detail: "waiting resume monitor degraded",
+        affected_run_count: 3,
+        affected_workflow_count: 2,
+        primary_blocker_kind: "scheduler_unhealthy",
+        recommended_action: {
+          kind: "open_run_library",
+          label: "Open run library",
+          href: "/runs?focus=callback-waiting",
+          entry_key: "runLibrary"
+        },
+        steps: []
+      }
+    });
+
+    expect(detailSurface.kind).toBe("ok");
+    expect(detailSurface.nextStepSurface).toMatchObject({
+      title: "Selected invocation next step",
+      invocationId: "invocation-1",
+      label: "callback recovery",
+      href: "/runs?focus=callback-waiting",
+      hrefLabel: "Open run library",
+      detail: "当前 callback recovery 仍影响 3 个 run / 2 个 workflow；scheduler 仍不健康，优先回到 run library 核对 waiting callback runs 与自动 resume 状态。"
+    });
+  });
+
   it("restores selected invocation approval CTA from sampled blocker context when top-level inbox facts are missing", () => {
     const detail = buildSelectedInvocationDetail();
     detail.invocation.run_waiting_lifecycle = null;
