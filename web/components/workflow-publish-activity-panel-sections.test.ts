@@ -13,6 +13,7 @@ import type {
 } from "@/lib/get-system-overview";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
 
 vi.mock("next/link", () => ({
@@ -372,6 +373,51 @@ function buildSelectedInvocationDetail(): PublishedEndpointInvocationDetailRespo
   };
 }
 
+function buildSampleApprovalEntry(): SensitiveAccessTimelineEntry {
+  return {
+    request: {
+      id: "request-1",
+      run_id: "run-selected-1",
+      node_run_id: "node-run-wait",
+      requester_type: "human",
+      requester_id: "ops-reviewer",
+      resource_id: "resource-1",
+      action_type: "read",
+      decision: "require_approval",
+      decision_label: "Require approval",
+      reason_code: "approval_required_high_risk",
+      reason_label: "Approval required",
+      policy_summary: "High risk resource requires approval",
+      created_at: "2026-03-21T00:00:00Z",
+      decided_at: null,
+      purpose_text: null
+    },
+    resource: {
+      id: "resource-1",
+      label: "Sensitive approval",
+      description: "Approval required resource",
+      sensitivity_level: "L3",
+      source: "workspace_resource",
+      metadata: {},
+      created_at: "2026-03-21T00:00:00Z",
+      updated_at: "2026-03-21T00:05:00Z"
+    },
+    approval_ticket: {
+      id: "ticket-1",
+      access_request_id: "request-1",
+      run_id: "run-selected-1",
+      node_run_id: "node-run-wait",
+      status: "pending",
+      waiting_status: "waiting",
+      created_at: "2026-03-21T00:00:00Z",
+      decided_at: null,
+      expires_at: null,
+      approved_by: null
+    },
+    notifications: []
+  };
+}
+
 function buildBlockedPayload(): SensitiveAccessBlockingPayload {
   return {
     detail: "Invocation detail is guarded by sensitive access control.",
@@ -512,6 +558,39 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("Selected invocation next step");
     expect(html).toContain("approval blocker");
     expect(html).toContain("open blocker inbox slice");
+  });
+
+  it("bridges sampled approval ticket ids into issue-signal CTA when top-level blocker scope is generic", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.run_follow_up!.sampled_runs[0] = {
+      ...detail.run_follow_up!.sampled_runs[0],
+      sensitive_access_entries: [buildSampleApprovalEntry()]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityInsights, {
+        binding: {
+          rate_limit_policy: {
+            requests: 3,
+            windowSeconds: 60
+          }
+        } as WorkflowPublishActivityPanelProps["binding"],
+        invocationAudit: buildInvocationAudit(),
+        rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: detail
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        activeTimeWindow: "24h"
+      })
+    );
+
+    expect(html).toContain("Selected invocation next step");
+    expect(html).toContain("open blocker inbox slice");
+    expect(html).toContain("approval_ticket_id=ticket-1");
   });
 
   it("reuses shared callback recovery CTA inside waiting follow-up", () => {

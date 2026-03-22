@@ -26,7 +26,9 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRecommendedNextStep,
+  resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
+  buildPublishedInvocationRunFollowUpSampleInboxHref,
   buildPublishedInvocationSelectedNextStepSurface,
   formatPublishedInvocationCacheStatusLabel,
   formatPublishedInvocationReasonLabel,
@@ -206,9 +208,24 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
       callbackTickets: detail.callback_tickets,
       sensitiveAccessEntries: detail.sensitive_access_entries
     });
-    const recommendedNextStepApprovalInboxHref =
-      approvalInboxHref ??
-      buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(recommendedNextStepSample);
+    const {
+      waitingInboxHref: recommendedNextStepApprovalInboxHref,
+      blockingInboxHref: recommendedNextStepBlockingInboxHref
+    } = resolvePublishedInvocationRecommendedNextStepInboxHrefs({
+      canonicalRecommendedAction: detail.run_follow_up?.recommended_action ?? null,
+      waitingInboxHref: approvalInboxHref,
+      blockingInboxHref: buildBlockingPublishedInvocationInboxHref({
+        runId,
+        blockingNodeRunId: detail.blocking_node_run_id,
+        blockingSensitiveAccessEntries: detail.blocking_sensitive_access_entries
+      }),
+      sampledWaitingInboxHref: buildPublishedInvocationRunFollowUpSampleInboxHref(
+        recommendedNextStepSample
+      ),
+      sampledBlockingInboxHref: buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(
+        recommendedNextStepSample
+      )
+    });
     const sharedCallbackWaitingExplanations = samples
       .filter((sample) => sample.has_callback_waiting_summary)
       .map((sample) => sample.run_snapshot.callbackWaitingExplanation);
@@ -229,11 +246,7 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
         recommendedNextStepSample?.run_snapshot ??
         normalizePublishedInvocationRunSnapshot(detail.run_snapshot ?? detail.invocation.run_snapshot ?? null),
       sandboxReadiness,
-      blockingInboxHref: buildBlockingPublishedInvocationInboxHref({
-        runId,
-        blockingNodeRunId: detail.blocking_node_run_id,
-        blockingSensitiveAccessEntries: detail.blocking_sensitive_access_entries
-      }),
+      blockingInboxHref: recommendedNextStepBlockingInboxHref,
       approvalInboxHref: recommendedNextStepApprovalInboxHref
     });
 

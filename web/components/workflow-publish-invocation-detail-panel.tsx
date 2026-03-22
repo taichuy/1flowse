@@ -24,6 +24,7 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationSkillTraceSurface,
   buildPublishedInvocationRecommendedNextStep,
+  resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
   buildPublishedInvocationSelectedNextStepSurface,
@@ -139,23 +140,16 @@ export function WorkflowPublishInvocationDetailPanel({
   );
   const recommendedNextStepSampleApprovalInboxHref =
     buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(recommendedNextStepSample);
-  const shouldPreferSampledRecommendedWaitingInboxHref = Boolean(
-    runFollowUp?.recommended_action == null &&
-      recommendedNextStepSampleInboxHref &&
-      recommendedNextStepSampleInboxHref !== approvalInboxHref
-  );
-  const recommendedNextStepWaitingInboxHref = shouldPreferSampledRecommendedWaitingInboxHref
-    ? recommendedNextStepSampleInboxHref
-    : approvalInboxHref;
-  const shouldPreferSampledRecommendedBlockingInboxHref = Boolean(
-    blockingInboxHref &&
-    runFollowUp?.recommended_action == null &&
-      recommendedNextStepSampleApprovalInboxHref &&
-      recommendedNextStepSampleApprovalInboxHref !== blockingInboxHref
-  );
-  const recommendedNextStepBlockingInboxHref = shouldPreferSampledRecommendedBlockingInboxHref
-    ? recommendedNextStepSampleApprovalInboxHref
-    : blockingInboxHref;
+  const {
+    waitingInboxHref: recommendedNextStepWaitingInboxHref,
+    blockingInboxHref: recommendedNextStepBlockingInboxHref
+  } = resolvePublishedInvocationRecommendedNextStepInboxHrefs({
+    canonicalRecommendedAction: runFollowUp?.recommended_action ?? null,
+    waitingInboxHref: approvalInboxHref,
+    blockingInboxHref,
+    sampledWaitingInboxHref: recommendedNextStepSampleInboxHref,
+    sampledBlockingInboxHref: recommendedNextStepSampleApprovalInboxHref
+  });
   const sharedCallbackWaitingExplanations = runFollowUpSamples
     .filter((sample) => sample.has_callback_waiting_summary)
     .map((sample) => sample.run_snapshot.callbackWaitingExplanation);

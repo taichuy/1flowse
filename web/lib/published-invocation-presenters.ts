@@ -2045,6 +2045,46 @@ export function buildPublishedInvocationRecommendedNextStep({
   });
 }
 
+export function resolvePublishedInvocationRecommendedNextStepInboxHrefs({
+  canonicalRecommendedAction,
+  waitingInboxHref,
+  blockingInboxHref,
+  sampledWaitingInboxHref,
+  sampledBlockingInboxHref
+}: {
+  canonicalRecommendedAction?: {
+    kind?: string | null;
+    entry_key?: string | null;
+    href?: string | null;
+    label?: string | null;
+  } | null;
+  waitingInboxHref?: string | null;
+  blockingInboxHref?: string | null;
+  sampledWaitingInboxHref?: string | null;
+  sampledBlockingInboxHref?: string | null;
+}) {
+  const shouldPreferSampledWaitingInboxHref = Boolean(
+    canonicalRecommendedAction == null &&
+      sampledWaitingInboxHref &&
+      sampledWaitingInboxHref !== waitingInboxHref
+  );
+  const shouldPreferSampledBlockingInboxHref = Boolean(
+    blockingInboxHref &&
+      canonicalRecommendedAction == null &&
+      sampledBlockingInboxHref &&
+      sampledBlockingInboxHref !== blockingInboxHref
+  );
+
+  return {
+    waitingInboxHref: shouldPreferSampledWaitingInboxHref
+      ? sampledWaitingInboxHref
+      : waitingInboxHref ?? null,
+    blockingInboxHref: shouldPreferSampledBlockingInboxHref
+      ? sampledBlockingInboxHref
+      : blockingInboxHref ?? null
+  };
+}
+
 export function buildPublishedInvocationEntryInboxLinkSurface({
   blockingInboxHref,
   waitingInboxHref

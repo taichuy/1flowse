@@ -19,6 +19,7 @@ import {
   buildPublishedInvocationEntryInboxLinkSurface,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRecommendedNextStep,
+  resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
   buildPublishedInvocationWaitingCardSurface,
@@ -145,23 +146,16 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpSampleApprovalInboxHref = buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(
     runFollowUpSample
   );
-  const shouldPreferSampledWaitingInboxHref = Boolean(
-    item.run_follow_up?.recommended_action == null &&
-      runFollowUpSampleInboxHref &&
-      runFollowUpSampleInboxHref !== inboxHref
-  );
-  const preferredWaitingInboxHref = shouldPreferSampledWaitingInboxHref
-    ? runFollowUpSampleInboxHref
-    : inboxHref;
-  const shouldPreferSampledBlockingInboxHref = Boolean(
-    blockingInboxHref &&
-    item.run_follow_up?.recommended_action == null &&
-      runFollowUpSampleApprovalInboxHref &&
-      runFollowUpSampleApprovalInboxHref !== blockingInboxHref
-  );
-  const preferredBlockingInboxHref = shouldPreferSampledBlockingInboxHref
-    ? runFollowUpSampleApprovalInboxHref
-    : blockingInboxHref;
+  const {
+    waitingInboxHref: preferredWaitingInboxHref,
+    blockingInboxHref: preferredBlockingInboxHref
+  } = resolvePublishedInvocationRecommendedNextStepInboxHrefs({
+    canonicalRecommendedAction: item.run_follow_up?.recommended_action ?? null,
+    waitingInboxHref: inboxHref,
+    blockingInboxHref,
+    sampledWaitingInboxHref: runFollowUpSampleInboxHref,
+    sampledBlockingInboxHref: runFollowUpSampleApprovalInboxHref
+  });
   const primaryInboxLink = buildPublishedInvocationEntryInboxLinkSurface({
     blockingInboxHref: preferredBlockingInboxHref,
     waitingInboxHref: preferredWaitingInboxHref

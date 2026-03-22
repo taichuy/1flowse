@@ -339,6 +339,32 @@ describe("workflow publish activity panel helpers", () => {
     expect(detailSurface.nextStepSurface?.href).toContain("approval_ticket_id=ticket-1");
   });
 
+  it("prefers sampled approval blocker href for selected invocation next step when top-level blocker scope is generic", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.run_follow_up!.sampled_runs[0] = {
+      ...detail.run_follow_up!.sampled_runs[0],
+      sensitive_access_entries: [buildSampleApprovalEntry()]
+    };
+
+    const detailSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
+      selectedInvocationId: "invocation-1",
+      selectedInvocationDetail: {
+        kind: "ok",
+        data: detail
+      }
+    });
+
+    expect(detailSurface.kind).toBe("ok");
+    expect(detailSurface.nextStepSurface).toMatchObject({
+      title: "Selected invocation next step",
+      invocationId: "invocation-1",
+      label: "approval blocker",
+      hrefLabel: "open blocker inbox slice",
+      detail: "优先处理 blocker inbox，再观察 waiting 节点是否恢复。"
+    });
+    expect(detailSurface.nextStepSurface?.href).toContain("approval_ticket_id=ticket-1");
+  });
+
   it("projects blocked invocation detail copy from shared guarded surface", () => {
     const detailSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
       selectedInvocationId: "invocation-1",
