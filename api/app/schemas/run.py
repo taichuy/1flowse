@@ -196,6 +196,11 @@ class ToolCallItem(BaseModel):
     execution_sandbox_backend_id: str | None = None
     execution_sandbox_backend_executor_ref: str | None = None
     execution_sandbox_runner_kind: str | None = None
+    adapter_request_trace_id: str | None = None
+    adapter_request_execution: dict | None = None
+    adapter_request_execution_class: str | None = None
+    adapter_request_execution_source: str | None = None
+    adapter_request_execution_contract: dict | None = None
     execution_blocking_reason: str | None = None
     execution_fallback_reason: str | None = None
     response_summary: str | None = None

@@ -61,11 +61,18 @@ export type ExecutionFocusToolCallLike = {
   execution_sandbox_backend_id?: string | null;
   execution_sandbox_backend_executor_ref?: string | null;
   execution_sandbox_runner_kind?: string | null;
+  adapter_request_trace_id?: string | null;
+  adapter_request_execution?: Record<string, unknown> | null;
+  adapter_request_execution_class?: string | null;
+  adapter_request_execution_source?: string | null;
+  adapter_request_execution_contract?: Record<string, unknown> | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   request_summary?: string | null;
   response_summary?: string | null;
   response_content_type?: string | null;
+  execution_trace?: Record<string, unknown> | null;
+  response_meta?: Record<string, unknown> | null;
   raw_ref?: string | null;
   [key: string]: unknown;
 };
@@ -129,6 +136,70 @@ export type ExecutionNodeDiagnosticsSurfaceCopy = {
 function trimOrNull(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readTrimmedRecordString(record: Record<string, unknown> | null, keys: string[]) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const normalized = value.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function readRecordNumber(record: Record<string, unknown> | null, keys: string[]) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function resolveCompatAdapterRequestMeta(toolCall: ExecutionFocusToolCallLike) {
+  const executionTrace = asRecord(toolCall.execution_trace);
+  const responseMeta = asRecord(toolCall.response_meta);
+  const responseRequestMeta = asRecord(responseMeta?.request_meta ?? responseMeta?.requestMeta);
+  const adapterRequestExecution =
+    asRecord(toolCall.adapter_request_execution) ??
+    asRecord(executionTrace?.adapter_request_execution) ??
+    asRecord(responseRequestMeta?.execution);
+  const adapterRequestExecutionContract =
+    asRecord(toolCall.adapter_request_execution_contract) ??
+    asRecord(executionTrace?.adapter_request_execution_contract) ??
+    asRecord(responseRequestMeta?.execution_contract ?? responseRequestMeta?.executionContract);
+
+  return {
+    traceId:
+      trimOrNull(toolCall.adapter_request_trace_id) ??
+      readTrimmedRecordString(executionTrace, ["adapter_request_trace_id"]) ??
+      readTrimmedRecordString(responseRequestMeta, ["trace_id", "traceId"]),
+    execution: adapterRequestExecution,
+    executionClass:
+      trimOrNull(toolCall.adapter_request_execution_class) ??
+      readTrimmedRecordString(executionTrace, ["adapter_request_execution_class"]) ??
+      readTrimmedRecordString(adapterRequestExecution, ["class"]),
+    executionSource:
+      trimOrNull(toolCall.adapter_request_execution_source) ??
+      readTrimmedRecordString(executionTrace, ["adapter_request_execution_source"]) ??
+      readTrimmedRecordString(adapterRequestExecution, ["source"]),
+    executionContract: adapterRequestExecutionContract
+  };
 }
 
 export function buildExecutionFocusSectionSurfaceCopy(
@@ -290,6 +361,90 @@ function buildBackendExtensionsSummary(value?: Record<string, unknown> | null) {
   return `extensions ${keys.slice(0, 2).join(", ")} +${keys.length - 2}`;
 }
 
+function buildCompatAdapterExecutionSummary(toolCall: ExecutionFocusToolCallLike) {
+  const meta = resolveCompatAdapterRequestMeta(toolCall);
+  const execution = meta.execution;
+  const parts = [
+    meta.executionClass ? `class ${meta.executionClass}` : null,
+    meta.executionSource ? `source ${meta.executionSource}` : null,
+    readTrimmedRecordString(execution, ["profile"])
+      ? `profile ${readTrimmedRecordString(execution, ["profile"])}`
+      : null,
+    typeof readRecordNumber(execution, ["timeoutMs", "timeout_ms"]) === "number"
+      ? `timeout ${readRecordNumber(execution, ["timeoutMs", "timeout_ms"])}ms`
+      : null,
+    readTrimmedRecordString(execution, ["networkPolicy", "network_policy"])
+      ? `network ${readTrimmedRecordString(execution, ["networkPolicy", "network_policy"])}`
+      : null,
+    readTrimmedRecordString(execution, ["filesystemPolicy", "filesystem_policy"])
+      ? `filesystem ${readTrimmedRecordString(execution, ["filesystemPolicy", "filesystem_policy"])}`
+      : null,
+    readTrimmedRecordString(execution, ["dependencyMode", "dependency_mode"])
+      ? `deps ${readTrimmedRecordString(execution, ["dependencyMode", "dependency_mode"])}`
+      : null,
+    readTrimmedRecordString(execution, ["dependencyRef", "dependency_ref"])
+      ? `dependency ref ${readTrimmedRecordString(execution, ["dependencyRef", "dependency_ref"])}`
+      : null,
+    readTrimmedRecordString(execution, ["builtinPackageSet", "builtin_package_set"])
+      ? `builtin ${readTrimmedRecordString(execution, ["builtinPackageSet", "builtin_package_set"])}`
+      : null,
+    buildBackendExtensionsSummary(
+      asRecord(execution?.backendExtensions ?? execution?.backend_extensions)
+    )
+  ].filter((item): item is string => Boolean(item));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function buildCompatAdapterExecutionCompactSummary(toolCall: ExecutionFocusToolCallLike) {
+  const summary = buildCompatAdapterExecutionSummary(toolCall);
+  return summary ? summary.replaceAll(" · ", " / ") : null;
+}
+
+function buildCompatAdapterExecutionContractSummary(toolCall: ExecutionFocusToolCallLike) {
+  const contract = resolveCompatAdapterRequestMeta(toolCall).executionContract;
+  const parts = [
+    readTrimmedRecordString(contract, ["kind"]),
+    readTrimmedRecordString(contract, ["toolId", "tool_id"])
+      ? `tool ${readTrimmedRecordString(contract, ["toolId", "tool_id"])}`
+      : null,
+    readTrimmedRecordString(contract, ["irVersion", "ir_version"])
+      ? `ir ${readTrimmedRecordString(contract, ["irVersion", "ir_version"])}`
+      : null
+  ].filter((item): item is string => Boolean(item));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function buildCompatAdapterExecutionContractCompactSummary(toolCall: ExecutionFocusToolCallLike) {
+  const summary = buildCompatAdapterExecutionContractSummary(toolCall);
+  return summary ? summary.replaceAll(" · ", " / ") : null;
+}
+
+function listCompatAdapterRequestCompactFacts(toolCall: ExecutionFocusToolCallLike) {
+  const meta = resolveCompatAdapterRequestMeta(toolCall);
+  const executionSummary = buildCompatAdapterExecutionCompactSummary(toolCall);
+  const executionContractSummary = buildCompatAdapterExecutionContractCompactSummary(toolCall);
+
+  return [
+    meta.traceId ? `compat trace ${meta.traceId}` : null,
+    executionSummary ? `compat exec (${executionSummary})` : null,
+    executionContractSummary ? `compat contract (${executionContractSummary})` : null
+  ].filter((item): item is string => Boolean(item));
+}
+
+export function listCompatAdapterRequestSummaryLines(toolCall: ExecutionFocusToolCallLike) {
+  const meta = resolveCompatAdapterRequestMeta(toolCall);
+  const executionSummary = buildCompatAdapterExecutionSummary(toolCall);
+  const executionContractSummary = buildCompatAdapterExecutionContractSummary(toolCall);
+
+  return [
+    meta.traceId ? `Compat request traceId：${meta.traceId}` : null,
+    executionSummary ? `Compat request execution：${executionSummary}` : null,
+    executionContractSummary ? `Compat request contract：${executionContractSummary}` : null
+  ].filter((item): item is string => Boolean(item));
+}
+
 function buildToolExecutionTraceSummary(toolCall: ExecutionFocusToolCallLike) {
   const traceFacts = [
     trimOrNull(toolCall.requested_execution_source)
@@ -321,6 +476,8 @@ function buildToolExecutionTraceSummary(toolCall: ExecutionFocusToolCallLike) {
       ? `backend ref ${trimOrNull(toolCall.execution_sandbox_backend_executor_ref)}`
       : null
   ].filter((item): item is string => Boolean(item));
+
+  traceFacts.push(...listCompatAdapterRequestCompactFacts(toolCall));
 
   return traceFacts.length > 0 ? `执行链：${traceFacts.join(" · ")}。` : null;
 }

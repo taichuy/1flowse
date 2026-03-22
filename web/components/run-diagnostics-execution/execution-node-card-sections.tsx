@@ -17,7 +17,8 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import {
   formatExecutionBlockingReasonCopy,
-  formatExecutionFallbackReasonCopy
+  formatExecutionFallbackReasonCopy,
+  listCompatAdapterRequestSummaryLines
 } from "@/lib/run-execution-focus-presenters";
 import { formatDurationMs, formatJsonPayload } from "@/lib/runtime-presenters";
 import { buildSensitiveAccessTimelineSurfaceCopy } from "@/lib/sensitive-access-presenters";
@@ -74,6 +75,7 @@ export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallIt
       <div className="event-list">
         {toolCalls.map((toolCall) => {
           const executionBadges = buildToolExecutionBadges(toolCall);
+          const compatRequestSummaryLines = listCompatAdapterRequestSummaryLines(toolCall);
 
           return (
             <article className="event-row compact-card" key={toolCall.id}>
@@ -103,6 +105,11 @@ export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallIt
                   {formatExecutionFallbackReasonCopy(toolCall.execution_fallback_reason)}
                 </p>
               ) : null}
+              {compatRequestSummaryLines.map((line) => (
+                <p className="section-copy entry-copy" key={`${toolCall.id}:${line}`}>
+                  {line}
+                </p>
+              ))}
               <pre>
                 {formatJsonPayload({
                   request_summary: toolCall.request_summary,

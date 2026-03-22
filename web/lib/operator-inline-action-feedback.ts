@@ -129,6 +129,11 @@ export function buildExecutionFocusExplainableNode(
       toolCall?.execution_sandbox_backend_executor_ref
     ),
     execution_sandbox_runner_kind: normalizeText(toolCall?.execution_sandbox_runner_kind),
+    adapter_request_trace_id: normalizeText(toolCall?.adapter_request_trace_id),
+    adapter_request_execution: toolCall?.adapter_request_execution ?? null,
+    adapter_request_execution_class: normalizeText(toolCall?.adapter_request_execution_class),
+    adapter_request_execution_source: normalizeText(toolCall?.adapter_request_execution_source),
+    adapter_request_execution_contract: toolCall?.adapter_request_execution_contract ?? null,
     execution_blocking_reason: normalizeText(toolCall?.execution_blocking_reason),
     execution_fallback_reason: normalizeText(toolCall?.execution_fallback_reason),
     response_summary: normalizeText(toolCall?.response_summary),

@@ -403,6 +403,19 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         == "sandbox-backend:sandbox-default"
     )
     assert node["tool_calls"][0]["execution_sandbox_runner_kind"] == "compat-adapter"
+    assert node["tool_calls"][0]["adapter_request_trace_id"] == "trace-compat-view"
+    assert node["tool_calls"][0]["adapter_request_execution"] == {
+        "class": "sandbox",
+        "source": "runtime_policy",
+        "profile": "risk-reviewed",
+        "timeoutMs": 3000,
+    }
+    assert node["tool_calls"][0]["adapter_request_execution_class"] == "sandbox"
+    assert node["tool_calls"][0]["adapter_request_execution_source"] == "runtime_policy"
+    assert node["tool_calls"][0]["adapter_request_execution_contract"] == {
+        "kind": "tool_execution",
+        "toolId": "compat:dify:plugin/search",
+    }
     assert node["tool_calls"][0]["execution_blocking_reason"] is None
     assert node["tool_calls"][0]["execution_fallback_reason"] is None
     assert node["tool_calls"][0]["response_content_type"] == "json"
@@ -542,6 +555,19 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
             "execution_sandbox_backend_id": "sandbox-default",
             "execution_sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
             "execution_sandbox_runner_kind": "compat-adapter",
+            "adapter_request_trace_id": "trace-compat-view",
+            "adapter_request_execution": {
+                "class": "sandbox",
+                "source": "runtime_policy",
+                "profile": "risk-reviewed",
+                "timeoutMs": 3000,
+            },
+            "adapter_request_execution_class": "sandbox",
+            "adapter_request_execution_source": "runtime_policy",
+            "adapter_request_execution_contract": {
+                "kind": "tool_execution",
+                "toolId": "compat:dify:plugin/search",
+            },
             "execution_blocking_reason": None,
             "execution_fallback_reason": None,
             "response_summary": "Waiting for callback payload.",

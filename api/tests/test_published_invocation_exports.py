@@ -65,6 +65,19 @@ def build_response() -> PublishedEndpointInvocationListResponse:
                 execution_sandbox_backend_id="sandbox-default",
                 execution_sandbox_backend_executor_ref="sandbox-backend:sandbox-default",
                 execution_sandbox_runner_kind="container",
+                adapter_request_trace_id="trace-export-compat",
+                adapter_request_execution={
+                    "class": "sandbox",
+                    "source": "runtime_policy",
+                    "timeoutMs": 1500,
+                },
+                adapter_request_execution_class="sandbox",
+                adapter_request_execution_source="runtime_policy",
+                adapter_request_execution_contract={
+                    "kind": "tool_execution",
+                    "toolId": "native.search",
+                    "irVersion": "2026-03-10",
+                },
                 response_summary="callback payload queued",
                 response_content_type="application/json",
             )
@@ -131,6 +144,19 @@ def test_build_published_invocation_export_payload_preserves_canonical_run_snaps
         "execution_sandbox_backend_id": "sandbox-default",
         "execution_sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
         "execution_sandbox_runner_kind": "container",
+        "adapter_request_trace_id": "trace-export-compat",
+        "adapter_request_execution": {
+            "class": "sandbox",
+            "source": "runtime_policy",
+            "timeoutMs": 1500,
+        },
+        "adapter_request_execution_class": "sandbox",
+        "adapter_request_execution_source": "runtime_policy",
+        "adapter_request_execution_contract": {
+            "kind": "tool_execution",
+            "toolId": "native.search",
+            "irVersion": "2026-03-10",
+        },
         "execution_blocking_reason": None,
         "execution_fallback_reason": None,
         "response_summary": "callback payload queued",
@@ -164,3 +190,13 @@ def test_serialize_published_invocation_export_jsonl_keeps_run_snapshot_executio
     assert invocation["run_snapshot"]["execution_focus_tool_calls"][0][
         "execution_sandbox_runner_kind"
     ] == "container"
+    assert invocation["run_snapshot"]["execution_focus_tool_calls"][0][
+        "adapter_request_trace_id"
+    ] == "trace-export-compat"
+    assert invocation["run_snapshot"]["execution_focus_tool_calls"][0][
+        "adapter_request_execution_contract"
+    ] == {
+        "kind": "tool_execution",
+        "toolId": "native.search",
+        "irVersion": "2026-03-10",
+    }

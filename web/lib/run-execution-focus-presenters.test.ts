@@ -524,6 +524,74 @@ describe("run execution focus presenters", () => {
     expect(summary).toContain("至少 1 条 tool call 已把原始结果落到 raw_ref");
   });
 
+  it("把 compat adapter request meta 压成 compact trace summary", () => {
+    const [summary] = listExecutionFocusToolCallSummaries(
+      createExecutionNode({
+        tool_calls: [
+          {
+            id: "tool-call-compat-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1",
+            tool_id: "compat:dify:plugin/search",
+            tool_name: "Compat Search",
+            phase: "execute",
+            status: "waiting",
+            request_summary: "search knowledge base",
+            execution_trace: null,
+            requested_execution_class: "sandbox",
+            requested_execution_source: "runtime_policy",
+            requested_execution_profile: "risk-reviewed",
+            requested_execution_timeout_ms: 3000,
+            requested_execution_network_policy: "isolated",
+            requested_execution_filesystem_policy: "ephemeral",
+            requested_execution_dependency_mode: null,
+            requested_execution_builtin_package_set: null,
+            requested_execution_dependency_ref: null,
+            requested_execution_backend_extensions: null,
+            effective_execution_class: "sandbox",
+            execution_executor_ref: "tool:compat-adapter:dify-default",
+            execution_sandbox_backend_id: "sandbox-default",
+            execution_sandbox_backend_executor_ref: null,
+            execution_sandbox_runner_kind: "container",
+            adapter_request_trace_id: "trace-focus-compat",
+            adapter_request_execution: {
+              class: "sandbox",
+              source: "runtime_policy",
+              profile: "risk-reviewed",
+              timeoutMs: 3000,
+            },
+            adapter_request_execution_class: "sandbox",
+            adapter_request_execution_source: "runtime_policy",
+            adapter_request_execution_contract: {
+              kind: "tool_execution",
+              toolId: "compat:dify:plugin/search",
+              irVersion: "2026-03-10",
+            },
+            execution_blocking_reason: null,
+            execution_fallback_reason: null,
+            response_summary: "waiting for callback payload",
+            response_content_type: "json",
+            response_meta: {},
+            raw_ref: "artifact://tool-call-compat-1/raw",
+            latency_ms: 120,
+            retry_count: 0,
+            error_message: null,
+            created_at: "2026-03-18T10:00:00Z",
+            finished_at: null,
+          },
+        ],
+      })
+    );
+
+    expect(summary.traceSummary).toContain("compat trace trace-focus-compat");
+    expect(summary.traceSummary).toContain(
+      "compat exec (class sandbox / source runtime_policy / profile risk-reviewed / timeout 3000ms)"
+    );
+    expect(summary.traceSummary).toContain(
+      "compat contract (tool_execution / tool compat:dify:plugin/search / ir 2026-03-10)"
+    );
+  });
+
   it("把 focus tool calls 的实际 execution facts 压成 compact badges", () => {
     const badges = listExecutionFocusRuntimeFactBadges(
       createExecutionNode({

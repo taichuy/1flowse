@@ -295,6 +295,19 @@ function buildDetail(): PublishedEndpointInvocationDetailResponse {
                 execution_executor_ref: "tool:compat-adapter:dify-default",
                 execution_sandbox_backend_id: "sandbox-default",
                 execution_sandbox_runner_kind: "container",
+                adapter_request_trace_id: "trace-follow-up-compat",
+                adapter_request_execution: {
+                  class: "sandbox",
+                  source: "runtime_policy",
+                  timeoutMs: 3000,
+                },
+                adapter_request_execution_class: "sandbox",
+                adapter_request_execution_source: "runtime_policy",
+                adapter_request_execution_contract: {
+                  kind: "tool_execution",
+                  toolId: "callback.wait",
+                  irVersion: "2026-03-10",
+                },
                 response_summary: "callback payload 已写入 artifact",
                 raw_ref: "artifact://callback-tool-raw"
               }
@@ -412,6 +425,9 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("executor tool:compat-adapter:dify-default");
     expect(html).toContain("backend sandbox-default");
     expect(html).toContain("runner container");
+    expect(html).toContain("compat trace trace-follow-up-compat");
+    expect(html).toContain("compat exec (class sandbox / source runtime_policy / timeout 3000ms)");
+    expect(html).toContain("compat contract (tool_execution / tool callback.wait / ir 2026-03-10)");
     expect(html).not.toContain("Sampled run focus evidence");
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
   });

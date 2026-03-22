@@ -38,6 +38,11 @@ export type ToolCallItem = {
   execution_sandbox_backend_id?: string | null;
   execution_sandbox_backend_executor_ref?: string | null;
   execution_sandbox_runner_kind?: string | null;
+  adapter_request_trace_id?: string | null;
+  adapter_request_execution?: Record<string, unknown> | null;
+  adapter_request_execution_class?: string | null;
+  adapter_request_execution_source?: string | null;
+  adapter_request_execution_contract?: Record<string, unknown> | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   response_summary?: string | null;
@@ -164,6 +169,11 @@ export type OperatorRunFocusToolCallItem = {
   execution_sandbox_backend_id?: string | null;
   execution_sandbox_backend_executor_ref?: string | null;
   execution_sandbox_runner_kind?: string | null;
+  adapter_request_trace_id?: string | null;
+  adapter_request_execution?: Record<string, unknown> | null;
+  adapter_request_execution_class?: string | null;
+  adapter_request_execution_source?: string | null;
+  adapter_request_execution_contract?: Record<string, unknown> | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   response_summary?: string | null;

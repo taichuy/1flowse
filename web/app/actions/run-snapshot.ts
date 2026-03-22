@@ -65,6 +65,11 @@ export type RunSnapshot = {
     execution_sandbox_backend_id?: string | null;
     execution_sandbox_backend_executor_ref?: string | null;
     execution_sandbox_runner_kind?: string | null;
+    adapter_request_trace_id?: string | null;
+    adapter_request_execution?: Record<string, unknown> | null;
+    adapter_request_execution_class?: string | null;
+    adapter_request_execution_source?: string | null;
+    adapter_request_execution_contract?: Record<string, unknown> | null;
     execution_blocking_reason?: string | null;
     execution_fallback_reason?: string | null;
     response_summary?: string | null;
@@ -569,6 +574,11 @@ function normalizeFocusToolCalls(
         execution_sandbox_backend_id?: string | null;
         execution_sandbox_backend_executor_ref?: string | null;
         execution_sandbox_runner_kind?: string | null;
+        adapter_request_trace_id?: string | null;
+        adapter_request_execution?: Record<string, unknown> | null;
+        adapter_request_execution_class?: string | null;
+        adapter_request_execution_source?: string | null;
+        adapter_request_execution_contract?: Record<string, unknown> | null;
         execution_blocking_reason?: string | null;
         execution_fallback_reason?: string | null;
         response_summary?: string | null;
@@ -625,6 +635,21 @@ function normalizeFocusToolCalls(
       ? { execution_sandbox_backend_executor_ref: item.execution_sandbox_backend_executor_ref }
       : {}),
     execution_sandbox_runner_kind: item?.execution_sandbox_runner_kind ?? null,
+    ...(item?.adapter_request_trace_id != null
+      ? { adapter_request_trace_id: item.adapter_request_trace_id }
+      : {}),
+    ...(item?.adapter_request_execution != null
+      ? { adapter_request_execution: item.adapter_request_execution }
+      : {}),
+    ...(item?.adapter_request_execution_class != null
+      ? { adapter_request_execution_class: item.adapter_request_execution_class }
+      : {}),
+    ...(item?.adapter_request_execution_source != null
+      ? { adapter_request_execution_source: item.adapter_request_execution_source }
+      : {}),
+    ...(item?.adapter_request_execution_contract != null
+      ? { adapter_request_execution_contract: item.adapter_request_execution_contract }
+      : {}),
     execution_blocking_reason: item?.execution_blocking_reason ?? null,
     execution_fallback_reason: item?.execution_fallback_reason ?? null,
     response_summary: item?.response_summary ?? null,

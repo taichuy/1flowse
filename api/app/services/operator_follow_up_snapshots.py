@@ -209,6 +209,19 @@ def _serialize_operator_focus_tool_call(
             tool_call.execution_sandbox_backend_executor_ref
         ),
         execution_sandbox_runner_kind=tool_call.execution_sandbox_runner_kind,
+        adapter_request_trace_id=tool_call.adapter_request_trace_id,
+        adapter_request_execution=(
+            dict(tool_call.adapter_request_execution)
+            if tool_call.adapter_request_execution
+            else None
+        ),
+        adapter_request_execution_class=tool_call.adapter_request_execution_class,
+        adapter_request_execution_source=tool_call.adapter_request_execution_source,
+        adapter_request_execution_contract=(
+            dict(tool_call.adapter_request_execution_contract)
+            if tool_call.adapter_request_execution_contract
+            else None
+        ),
         execution_blocking_reason=tool_call.execution_blocking_reason,
         execution_fallback_reason=tool_call.execution_fallback_reason,
         response_summary=tool_call.response_summary,

@@ -163,6 +163,11 @@ def serialize_run_artifact(artifact: RunArtifact) -> RunArtifactItem:
 def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
     execution_trace = dict(tool_call.execution_trace or {})
     requested_backend_extensions = execution_trace.get("requested_backend_extensions")
+    adapter_request_execution = execution_trace.get("adapter_request_execution")
+    adapter_request_execution_contract = execution_trace.get(
+        "adapter_request_execution_contract"
+    )
+    response_meta = dict(tool_call.response_meta or {})
     return ToolCallItem(
         id=tool_call.id,
         run_id=tool_call.run_id,
@@ -202,11 +207,28 @@ def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
             "sandbox_backend_executor_ref"
         ),
         execution_sandbox_runner_kind=execution_trace.get("sandbox_runner_kind"),
+        adapter_request_trace_id=execution_trace.get("adapter_request_trace_id"),
+        adapter_request_execution=(
+            dict(adapter_request_execution)
+            if isinstance(adapter_request_execution, dict)
+            else None
+        ),
+        adapter_request_execution_class=execution_trace.get(
+            "adapter_request_execution_class"
+        ),
+        adapter_request_execution_source=execution_trace.get(
+            "adapter_request_execution_source"
+        ),
+        adapter_request_execution_contract=(
+            dict(adapter_request_execution_contract)
+            if isinstance(adapter_request_execution_contract, dict)
+            else None
+        ),
         execution_blocking_reason=execution_trace.get("blocked_reason"),
         execution_fallback_reason=execution_trace.get("fallback_reason"),
         response_summary=tool_call.response_summary,
         response_content_type=tool_call.response_content_type,
-        response_meta=dict(tool_call.response_meta or {}),
+        response_meta=response_meta,
         raw_ref=(
             f"artifact://{tool_call.raw_artifact_id}"
             if tool_call.raw_artifact_id is not None

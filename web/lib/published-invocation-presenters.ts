@@ -1938,6 +1938,24 @@ function buildPublishedInvocationRunSnapshot(
             }
           : {}),
         execution_sandbox_runner_kind: toolCall.execution_sandbox_runner_kind ?? null,
+        ...(toolCall.adapter_request_trace_id != null
+          ? { adapter_request_trace_id: toolCall.adapter_request_trace_id }
+          : {}),
+        ...(toolCall.adapter_request_execution != null
+          ? { adapter_request_execution: toolCall.adapter_request_execution }
+          : {}),
+        ...(toolCall.adapter_request_execution_class != null
+          ? { adapter_request_execution_class: toolCall.adapter_request_execution_class }
+          : {}),
+        ...(toolCall.adapter_request_execution_source != null
+          ? { adapter_request_execution_source: toolCall.adapter_request_execution_source }
+          : {}),
+        ...(toolCall.adapter_request_execution_contract != null
+          ? {
+              adapter_request_execution_contract:
+                toolCall.adapter_request_execution_contract
+            }
+          : {}),
         execution_blocking_reason: toolCall.execution_blocking_reason ?? null,
         execution_fallback_reason: toolCall.execution_fallback_reason ?? null,
         response_summary: toolCall.response_summary ?? null,
