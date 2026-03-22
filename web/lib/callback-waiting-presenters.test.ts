@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CallbackWaitingLifecycleSummary } from "./get-run-views";
 import {
+  buildCallbackWaitingApprovalRecommendedAction,
   buildCallbackWaitingInlineActionStatusHint,
   buildCallbackWaitingInlineActionTitle,
   buildCallbackWaitingRecommendedNextStep,
@@ -85,6 +86,25 @@ describe("callback waiting presenters", () => {
       kind: "watch_scheduled_resume",
       label: "Watch the scheduled resume",
       ctaLabel: "Open waiting inbox"
+    });
+  });
+
+  it("把 approval waiting 的 callback 动作映射成稳定 approval blocker CTA", () => {
+    expect(
+      buildCallbackWaitingApprovalRecommendedAction({
+        action: {
+          kind: "resolve_inline_sensitive_access",
+          label: "Handle approval here first",
+          detail:
+            "1 approval is still pending, so resume should start from approval handling instead of retrying the run."
+        },
+        inboxHref: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1"
+      })
+    ).toEqual({
+      kind: "approval blocker",
+      entry_key: "operatorInbox",
+      href: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+      label: "Open approval inbox"
     });
   });
 

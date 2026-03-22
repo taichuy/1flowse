@@ -16,6 +16,7 @@ import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import {
+  buildCallbackWaitingApprovalRecommendedAction,
   buildCallbackWaitingRecommendedNextStep,
   getCallbackWaitingRecommendedAction,
   pickCallbackWaitingInlineSensitiveAccessEntry
@@ -331,6 +332,18 @@ export function SensitiveAccessTimelineEntryList({
           const hasStructuredCallbackWaitingSummary = hasCallbackWaitingSummaryFacts(
             runContext.snapshot
           );
+          const callbackWaitingRecommendedAction = shouldSurfaceCallbackWaitingSummary(entry)
+            ? getCallbackWaitingRecommendedAction({
+                sensitiveAccessEntries: [entry]
+              })
+            : null;
+          const canonicalCallbackRecommendedAction =
+            runContext.runFollowUp?.recommendedAction ??
+            buildCallbackWaitingApprovalRecommendedAction({
+              action: callbackWaitingRecommendedAction,
+              inboxHref: inboxSliceHref,
+              surfaceCopy: operatorSurfaceCopy
+            });
           const shouldRenderCallbackWaitingSummary =
             shouldSurfaceCallbackWaitingSummary(entry) && !hasStructuredCallbackWaitingSummary;
           const hasStructuredOperatorFeedback = Boolean(
@@ -339,11 +352,6 @@ export function SensitiveAccessTimelineEntryList({
               (runContext.runFollowUp?.sampledRuns.length ?? 0) > 0
           );
           const nodeRunId = entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null;
-          const callbackWaitingRecommendedAction = shouldRenderCallbackWaitingSummary
-            ? getCallbackWaitingRecommendedAction({
-                sensitiveAccessEntries: [entry]
-              })
-            : null;
           const recommendedNextStep = shouldRenderCallbackWaitingSummary
             ? buildCallbackWaitingRecommendedNextStep({
                 action: callbackWaitingRecommendedAction,
@@ -375,7 +383,7 @@ export function SensitiveAccessTimelineEntryList({
             sensitiveAccessEntries: [entry],
             suppressSensitiveAccessContextRows: true,
             showSensitiveAccessInlineActions: false,
-            recommendedAction: runContext.runFollowUp?.recommendedAction ?? null,
+            recommendedAction: canonicalCallbackRecommendedAction,
             operatorFollowUp:
               runContext.runFollowUp?.explanation?.follow_up ??
               canonicalOutcomeExplanation?.follow_up ??

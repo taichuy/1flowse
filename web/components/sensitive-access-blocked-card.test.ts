@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from "react";
+﻿import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -264,6 +264,130 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).toContain("run_id=run-sampled-1");
   });
 
+  it("keeps approval inbox CTA in callback waiting summaries when canonical action is missing", () => {
+    const payload: SensitiveAccessBlockingPayload = {
+      detail: "Published invocation detail requires approval before the payload can be viewed.",
+      resource: {
+        id: "resource-2b",
+        label: "Invocation Detail",
+        description: "Sensitive published invocation detail",
+        sensitivity_level: "L3",
+        source: "workspace_resource",
+        metadata: {
+          run_id: "run-2b"
+        }
+      },
+      access_request: {
+        id: "request-2b",
+        run_id: "run-2b",
+        node_run_id: "node-run-2b",
+        requester_type: "human",
+        requester_id: "ops-reviewer",
+        resource_id: "resource-2b",
+        action_type: "read",
+        decision: "require_approval"
+      },
+      approval_ticket: {
+        id: "ticket-2b",
+        access_request_id: "request-2b",
+        run_id: "run-2b",
+        node_run_id: "node-run-2b",
+        status: "pending",
+        waiting_status: "waiting",
+        approved_by: null
+      },
+      notifications: [
+        {
+          id: "notification-2b",
+          approval_ticket_id: "ticket-2b",
+          channel: "in_app",
+          target: "sensitive-access-inbox",
+          status: "pending"
+        }
+      ],
+      outcome_explanation: {
+        primary_signal: "审批票据仍在等待处理。",
+        follow_up: "先处理审批票据，再观察 callback waiting 是否恢复。"
+      },
+      run_snapshot: {
+        status: "waiting",
+        currentNodeId: "approval_wait",
+        waitingReason: "approval pending",
+        callbackWaitingExplanation: {
+          primary_signal: "当前 blocked run 仍在等待审批。",
+          follow_up: "先处理审批票据，再观察 callback waiting 是否恢复。"
+        },
+        callbackWaitingLifecycle: {
+          wait_cycle_count: 1,
+          issued_ticket_count: 1,
+          expired_ticket_count: 0,
+          consumed_ticket_count: 0,
+          canceled_ticket_count: 0,
+          late_callback_count: 0,
+          resume_schedule_count: 0,
+          max_expired_ticket_count: 0,
+          terminated: false,
+          last_resume_backoff_attempt: 0
+        },
+        executionFocusNodeId: "approval_wait",
+        executionFocusNodeRunId: "node-run-2b",
+        executionFocusNodeName: "Approval Wait"
+      },
+      run_follow_up: {
+        affectedRunCount: 2,
+        sampledRunCount: 1,
+        waitingRunCount: 2,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 0,
+        unknownRunCount: 0,
+        explanation: {
+          primary_signal: "本次影响 2 个 run；已回读 1 个样本。",
+          follow_up: "当前主 run 与 sampled run 都还在等待审批。"
+        },
+        sampledRuns: [
+          {
+            runId: "run-2b-sampled",
+            snapshot: {
+              status: "waiting",
+              currentNodeId: "approval_wait",
+              waitingReason: "approval pending",
+              callbackWaitingExplanation: {
+                primary_signal: "sampled run 仍在等待审批。",
+                follow_up: "处理审批后再观察 sampled run 的 callback waiting。"
+              },
+              callbackWaitingLifecycle: {
+                wait_cycle_count: 1,
+                issued_ticket_count: 1,
+                expired_ticket_count: 0,
+                consumed_ticket_count: 0,
+                canceled_ticket_count: 0,
+                late_callback_count: 0,
+                resume_schedule_count: 0,
+                max_expired_ticket_count: 0,
+                terminated: false,
+                last_resume_backoff_attempt: 0
+              },
+              executionFocusNodeId: "approval_wait",
+              executionFocusNodeRunId: "node-run-2b-sampled",
+              executionFocusNodeName: "Approval Wait"
+            }
+          }
+        ]
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBlockedCard, {
+        title: "Sensitive access blocked",
+        payload
+      })
+    );
+
+    expect((html.match(/approval blocker/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(html.match(/Open approval inbox/g) ?? []).toHaveLength(4);
+  });
+
   it("prefers live sandbox readiness CTA when the blocked run is fail-closed on strong isolation", () => {
     const payload: SensitiveAccessBlockingPayload = {
       detail: "Published invocation detail requires approval before the payload can be viewed.",
@@ -358,3 +482,5 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).not.toContain("approval blocker");
   });
 });
+
+

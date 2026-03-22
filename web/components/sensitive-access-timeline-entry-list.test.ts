@@ -259,6 +259,10 @@ describe("SensitiveAccessTimelineEntryList", () => {
       inboxHref: expect.stringContaining("/sensitive-access?"),
       callbackTickets,
       callbackWaitingAutomation,
+      recommendedAction: {
+        kind: "approval blocker",
+        href: expect.stringContaining("/sensitive-access?")
+      },
       showSensitiveAccessInlineActions: false
     });
     expect(

@@ -87,20 +87,30 @@ export function SensitiveAccessBlockedCard({
     runSnapshot: payload.run_snapshot ?? null,
     runFollowUpExplanation: payload.run_follow_up?.explanation ?? null
   });
+  const canonicalCallbackRecommendedAction =
+    payload.run_follow_up?.recommendedAction ??
+    (payload.approval_ticket?.status === "pending" && inboxHref
+      ? {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: inboxHref,
+          label: "Open approval inbox"
+        }
+      : null);
   const recommendedNextStep = buildSensitiveAccessBlockedRecommendedNextStep({
     inboxHref,
     runId,
     outcomeExplanation: canonicalOutcomeExplanation,
     runSnapshot: payload.run_snapshot ?? null,
     runFollowUpExplanation: payload.run_follow_up?.explanation ?? null,
-    recommendedAction: payload.run_follow_up?.recommendedAction ?? null,
+    recommendedAction: canonicalCallbackRecommendedAction,
     sandboxReadiness
   });
   const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
     inboxHref,
     callbackWaitingAutomation,
     showSensitiveAccessInlineActions: false,
-    recommendedAction: payload.run_follow_up?.recommendedAction ?? null,
+    recommendedAction: canonicalCallbackRecommendedAction,
     operatorFollowUp: payload.run_follow_up?.explanation?.follow_up ?? null,
     preferCanonicalRecommendedNextStep: true
   };

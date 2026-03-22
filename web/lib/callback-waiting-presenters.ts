@@ -10,6 +10,8 @@ import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep,
+  type OperatorFollowUpSurfaceCopy,
+  type OperatorRecommendedActionLike,
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
@@ -272,6 +274,37 @@ export function buildCallbackWaitingRecommendedNextStep({
     operatorFollowUp,
     operatorLabel: "callback waiting follow-up"
   });
+}
+
+export function buildCallbackWaitingApprovalRecommendedAction({
+  action,
+  inboxHref,
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+}: {
+  action?: CallbackWaitingRecommendedAction | null;
+  inboxHref?: string | null;
+  surfaceCopy?: OperatorFollowUpSurfaceCopy;
+}): OperatorRecommendedActionLike | null {
+  const normalizedInboxHref = inboxHref?.trim() || null;
+
+  if (!normalizedInboxHref) {
+    return null;
+  }
+
+  if (action?.kind !== "resolve_inline_sensitive_access" && action?.kind !== "open_inbox") {
+    return null;
+  }
+
+  return {
+    kind: "approval blocker",
+    entry_key: "operatorInbox",
+    href: normalizedInboxHref,
+    label:
+      action.ctaLabel?.trim() ||
+      (action.kind === "resolve_inline_sensitive_access"
+        ? "Open approval inbox"
+        : surfaceCopy.openInboxSliceLabel)
+  };
 }
 
 export type CallbackWaitingAutomationHealthSnapshot = {
