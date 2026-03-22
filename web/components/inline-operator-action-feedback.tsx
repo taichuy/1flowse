@@ -28,7 +28,7 @@ import { listExecutionFocusRuntimeFactBadges } from "@/lib/run-execution-focus-p
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import {
   buildSandboxReadinessFollowUpCandidate,
-  messageMentionsSandboxExecution
+  shouldPreferSharedSandboxReadinessFollowUp
 } from "@/lib/system-overview-follow-up-presenters";
 import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
@@ -73,12 +73,16 @@ export function InlineOperatorActionFeedback({
   const hasExplicitRecommendedNextStepOverride = recommendedNextStepOverride !== undefined;
   const executionNeedsSharedSandboxFollowUp =
     Boolean(sandboxReadinessNode) &&
-    (Boolean(sandboxReadinessNode?.execution_blocking_reason) ||
-      messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.primary_signal) ||
-      messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.follow_up) ||
-      messageMentionsSandboxExecution(model.runSnapshotSummary) ||
-      messageMentionsSandboxExecution(model.runFollowUpFollowUp) ||
-      messageMentionsSandboxExecution(runSnapshot?.executionFocusNodeType));
+    shouldPreferSharedSandboxReadinessFollowUp({
+      hasExecutionBlockingReason: Boolean(sandboxReadinessNode?.execution_blocking_reason),
+      signals: [
+        runSnapshot?.executionFocusExplanation?.primary_signal,
+        runSnapshot?.executionFocusExplanation?.follow_up,
+        model.runSnapshotSummary,
+        model.runFollowUpFollowUp,
+        runSnapshot?.executionFocusNodeType
+      ]
+    });
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;

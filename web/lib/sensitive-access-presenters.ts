@@ -17,7 +17,7 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import {
   buildSandboxReadinessFollowUpCandidate,
-  messageMentionsSandboxExecution
+  shouldPreferSharedSandboxReadinessFollowUp
 } from "@/lib/system-overview-follow-up-presenters";
 
 const DECISION_LABELS: Record<string, string> = {
@@ -303,22 +303,23 @@ function sensitiveAccessNeedsSharedSandboxFollowUp({
 }) {
   const focusToolCalls = runSnapshot?.executionFocusToolCalls ?? [];
 
-  return (
-    runSnapshot?.executionFocusReason === "blocked_execution" ||
-    messageMentionsSandboxExecution(outcomeExplanation?.primary_signal) ||
-    messageMentionsSandboxExecution(outcomeExplanation?.follow_up) ||
-    messageMentionsSandboxExecution(runFollowUpExplanation?.primary_signal) ||
-    messageMentionsSandboxExecution(runFollowUpExplanation?.follow_up) ||
-    messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.primary_signal) ||
-    messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.follow_up) ||
-    messageMentionsSandboxExecution(runSnapshot?.executionFocusNodeType) ||
-    focusToolCalls.some(
-      (toolCall) =>
-        messageMentionsSandboxExecution(toolCall.execution_blocking_reason) ||
-        messageMentionsSandboxExecution(toolCall.requested_execution_class) ||
-        messageMentionsSandboxExecution(toolCall.effective_execution_class)
-    )
-  );
+  return shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution: runSnapshot?.executionFocusReason === "blocked_execution",
+    signals: [
+      outcomeExplanation?.primary_signal,
+      outcomeExplanation?.follow_up,
+      runFollowUpExplanation?.primary_signal,
+      runFollowUpExplanation?.follow_up,
+      runSnapshot?.executionFocusExplanation?.primary_signal,
+      runSnapshot?.executionFocusExplanation?.follow_up,
+      runSnapshot?.executionFocusNodeType,
+      ...focusToolCalls.flatMap((toolCall) => [
+        toolCall.execution_blocking_reason,
+        toolCall.requested_execution_class,
+        toolCall.effective_execution_class
+      ])
+    ]
+  });
 }
 
 export function buildSensitiveAccessBlockedRecommendedNextStep({

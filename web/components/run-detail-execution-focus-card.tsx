@@ -15,7 +15,7 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import {
   buildSandboxReadinessFollowUpCandidate,
-  messageMentionsSandboxExecution
+  shouldPreferSharedSandboxReadinessFollowUp
 } from "@/lib/system-overview-follow-up-presenters";
 import { buildRunDetailExecutionFocusViewModel } from "@/lib/run-detail-execution-focus";
 import {
@@ -55,11 +55,10 @@ export function RunDetailExecutionFocusCard({
   }
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(focus.evidence);
   const explicitExecutionFollowUp = run.execution_focus_explanation?.follow_up?.trim() || null;
-  const executionNeedsSharedSandboxFollowUp =
-    focus.reason === "blocked_execution" ||
-    messageMentionsSandboxExecution(focus.primarySignal) ||
-    messageMentionsSandboxExecution(explicitExecutionFollowUp) ||
-    messageMentionsSandboxExecution(focus.nodeType);
+  const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution: focus.reason === "blocked_execution",
+    signals: [focus.primarySignal, explicitExecutionFollowUp, focus.nodeType]
+  });
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;

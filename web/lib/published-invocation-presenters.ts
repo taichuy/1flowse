@@ -47,6 +47,7 @@ import {
   buildSandboxReadinessSystemFollowUp,
   buildCallbackWaitingAutomationFollowUpCandidate,
   buildSandboxReadinessFollowUpCandidate,
+  shouldPreferSharedSandboxReadinessFollowUp,
   messageMentionsCallbackAutomation,
   messageMentionsSandboxExecution,
   resolvePreferredSystemOverviewFollowUpSurface
@@ -1878,13 +1879,18 @@ export function buildPublishedInvocationRecommendedNextStep({
           "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。"
       })
     : buildCallbackWaitingAutomationFollowUpCandidate(callbackWaitingAutomation, "callback recovery");
-  const executionNeedsSharedSandboxFollowUp =
-    executionSnapshot?.executionFocusReason === "blocked_execution" ||
-    Boolean(buildSandboxReadinessNodeFromRunSnapshot(executionSnapshot)?.execution_blocking_reason) ||
-    messageMentionsSandboxExecution(executionFocusFollowUp) ||
-    messageMentionsSandboxExecution(executionSnapshot?.executionFocusExplanation?.primary_signal) ||
-    messageMentionsSandboxExecution(executionSnapshot?.executionFocusExplanation?.follow_up) ||
-    messageMentionsSandboxExecution(executionSnapshot?.executionFocusNodeType);
+  const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution: executionSnapshot?.executionFocusReason === "blocked_execution",
+    hasExecutionBlockingReason: Boolean(
+      buildSandboxReadinessNodeFromRunSnapshot(executionSnapshot)?.execution_blocking_reason
+    ),
+    signals: [
+      executionFocusFollowUp,
+      executionSnapshot?.executionFocusExplanation?.primary_signal,
+      executionSnapshot?.executionFocusExplanation?.follow_up,
+      executionSnapshot?.executionFocusNodeType
+    ]
+  });
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;

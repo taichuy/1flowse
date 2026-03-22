@@ -41,7 +41,7 @@ import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import {
   buildSandboxReadinessFollowUpCandidate,
-  messageMentionsSandboxExecution
+  shouldPreferSharedSandboxReadinessFollowUp
 } from "@/lib/system-overview-follow-up-presenters";
 import { resolveSensitiveAccessInboxEntryScopes } from "@/lib/sensitive-access-inbox-entry-scope";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
@@ -125,11 +125,14 @@ export function SensitiveAccessInboxEntryCard({
         runId: executionContext.runId
       })
     : null;
-  const executionNeedsSharedSandboxFollowUp =
-    executionContext?.focusReason === "blocked_execution" ||
-    messageMentionsSandboxExecution(executionFocusPrimarySignal) ||
-    messageMentionsSandboxExecution(executionFocusFollowUp) ||
-    messageMentionsSandboxExecution(executionContext?.focusNode.node_type);
+  const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution: executionContext?.focusReason === "blocked_execution",
+    signals: [
+      executionFocusPrimarySignal,
+      executionFocusFollowUp,
+      executionContext?.focusNode.node_type
+    ]
+  });
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;

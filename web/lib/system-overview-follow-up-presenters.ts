@@ -55,6 +55,22 @@ export function messageMentionsSandboxExecution(message?: string | null) {
   );
 }
 
+export function shouldPreferSharedSandboxReadinessFollowUp({
+  blockedExecution = false,
+  hasExecutionBlockingReason = false,
+  signals = []
+}: {
+  blockedExecution?: boolean;
+  hasExecutionBlockingReason?: boolean;
+  signals?: Array<string | null | undefined>;
+}) {
+  return (
+    blockedExecution ||
+    hasExecutionBlockingReason ||
+    signals.some((signal) => messageMentionsSandboxExecution(signal))
+  );
+}
+
 export function messageMentionsCallbackAutomation(message?: string | null) {
   const normalizedMessage = message?.toLowerCase() ?? "";
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCallbackWaitingAutomationSystemFollowUp,
-  resolvePreferredSystemOverviewFollowUpSurface
+  resolvePreferredSystemOverviewFollowUpSurface,
+  shouldPreferSharedSandboxReadinessFollowUp
 } from "./system-overview-follow-up-presenters";
 
 describe("system overview follow-up presenters", () => {
@@ -94,5 +95,32 @@ describe("system overview follow-up presenters", () => {
       entryKey: "workflowLibrary",
       href: "/workflows?execution=sandbox"
     });
+  });
+
+  it("prioritizes shared sandbox readiness when blocked execution is explicit", () => {
+    expect(
+      shouldPreferSharedSandboxReadinessFollowUp({
+        blockedExecution: true,
+        signals: ["当前 follow-up 没有出现 sandbox 关键字"]
+      })
+    ).toBe(true);
+  });
+
+  it("prioritizes shared sandbox readiness when execution signals mention strong isolation", () => {
+    expect(
+      shouldPreferSharedSandboxReadinessFollowUp({
+        signals: [
+          "继续检查 callback backlog。",
+          "No compatible sandbox backend is available.",
+          "agent_plan"
+        ]
+      })
+    ).toBe(true);
+
+    expect(
+      shouldPreferSharedSandboxReadinessFollowUp({
+        signals: ["继续检查 callback backlog。", "agent_plan"]
+      })
+    ).toBe(false);
   });
 });

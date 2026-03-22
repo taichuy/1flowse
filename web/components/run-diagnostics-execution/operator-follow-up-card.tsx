@@ -18,7 +18,7 @@ import {
 import {
   buildCallbackWaitingAutomationFollowUpCandidate,
   buildSandboxReadinessFollowUpCandidate,
-  messageMentionsSandboxExecution
+  shouldPreferSharedSandboxReadinessFollowUp
 } from "@/lib/system-overview-follow-up-presenters";
 import {
   buildExecutionFocusSectionSurfaceCopy,
@@ -79,14 +79,18 @@ export function RunDiagnosticsOperatorFollowUpCard({
         "callback recovery"
       )
     : null;
-  const executionNeedsSharedSandboxFollowUp =
-    executionView.execution_focus_reason === "blocked_execution" ||
-    snapshot?.execution_focus_reason === "blocked_execution" ||
-    messageMentionsSandboxExecution(snapshot?.execution_focus_explanation?.primary_signal) ||
-    messageMentionsSandboxExecution(executionFollowUp) ||
-    messageMentionsSandboxExecution(executionView.execution_focus_explanation?.primary_signal) ||
-    messageMentionsSandboxExecution(executionView.execution_focus_explanation?.follow_up) ||
-    messageMentionsSandboxExecution(snapshot?.execution_focus_node_type);
+  const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution:
+      executionView.execution_focus_reason === "blocked_execution" ||
+      snapshot?.execution_focus_reason === "blocked_execution",
+    signals: [
+      snapshot?.execution_focus_explanation?.primary_signal,
+      executionFollowUp,
+      executionView.execution_focus_explanation?.primary_signal,
+      executionView.execution_focus_explanation?.follow_up,
+      snapshot?.execution_focus_node_type
+    ]
+  });
   const sharedSandboxCandidate = hasExecutionFocusFacts && executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
