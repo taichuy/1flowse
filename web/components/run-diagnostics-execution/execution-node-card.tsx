@@ -313,6 +313,7 @@ export function ExecutionNodeCard({
             entries={node.sensitive_access_entries}
             emptyCopy="No sensitive access decisions were recorded for this node."
             defaultRunId={latestApprovalEntry?.request.run_id ?? latestApprovalEntry?.approval_ticket?.run_id ?? null}
+            sandboxReadiness={sandboxReadiness}
           />
       </ExecutionNodeSensitiveAccessSection>
 

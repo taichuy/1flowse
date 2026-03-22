@@ -399,6 +399,7 @@ export function WorkflowPublishActivityDetails({
               callbackWaitingAutomation={callbackWaitingAutomation}
               clearHref={clearInvocationDetailHref}
               payload={selectedInvocationSurface.payload}
+              sandboxReadiness={sandboxReadiness}
               summary={selectedInvocationSurface.blockedSurfaceCopy.summary}
               title={selectedInvocationSurface.blockedSurfaceCopy.title}
             />

@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { RunDiagnosticsTraceFiltersSection } from "@/components/run-diagnostics-panel/trace-filters-section";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
 import { buildRunDiagnosticsTraceSurfaceCopy } from "@/lib/run-diagnostics-presenters";
 
@@ -43,9 +46,43 @@ function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
   };
 }
 
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    degraded_backend_count: 0,
+    offline_backend_count: 0,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: false,
+        backend_ids: [],
+        supported_languages: [],
+        supported_profiles: [],
+        supported_dependency_modes: [],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason: "No sandbox backend is currently enabled."
+      }
+    ],
+    supported_languages: [],
+    supported_profiles: [],
+    supported_dependency_modes: [],
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false
+  };
+}
+
 describe("RunDiagnosticsTraceFiltersSection", () => {
   it("uses shared trace export blocker copy instead of local summary overrides", () => {
     const callbackWaitingAutomation = buildCallbackWaitingAutomation();
+    const sandboxReadiness = buildSandboxReadiness();
 
     renderToStaticMarkup(
       createElement(RunDiagnosticsTraceFiltersSection, {
@@ -57,7 +94,8 @@ describe("RunDiagnosticsTraceFiltersSection", () => {
         eventTypeOptions: ["node.started"],
         nodeRunOptions: ["node-run-1"],
         activeFilters: [],
-        callbackWaitingAutomation
+        callbackWaitingAutomation,
+        sandboxReadiness
       })
     );
 
@@ -66,6 +104,7 @@ describe("RunDiagnosticsTraceFiltersSection", () => {
         callbackWaitingAutomation,
         runId: "run-1",
         requesterId: "run-diagnostics-trace-export",
+        sandboxReadiness,
         query: {
           limit: 50,
           order: "desc"

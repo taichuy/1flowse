@@ -2,7 +2,10 @@ import React from "react";
 import Link from "next/link";
 
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import { DEFAULT_RUN_TRACE_LIMIT, type RunTraceQuery } from "@/lib/get-run-trace";
 import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
 import { buildRunDiagnosticsTraceSurfaceCopy } from "@/lib/run-diagnostics-presenters";
@@ -16,6 +19,7 @@ type RunDiagnosticsTraceFiltersSectionProps = {
   nodeRunOptions: string[];
   activeFilters: string[];
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function RunDiagnosticsTraceFiltersSection({
@@ -24,7 +28,8 @@ export function RunDiagnosticsTraceFiltersSection({
   eventTypeOptions,
   nodeRunOptions,
   activeFilters,
-  callbackWaitingAutomation = null
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: RunDiagnosticsTraceFiltersSectionProps) {
   const surfaceCopy = buildRunDiagnosticsTraceSurfaceCopy({
     defaultLimit: DEFAULT_RUN_TRACE_LIMIT
@@ -146,6 +151,7 @@ export function RunDiagnosticsTraceFiltersSection({
               query={activeTraceQuery}
               requesterId="run-diagnostics-trace-export"
               runId={runId}
+              sandboxReadiness={sandboxReadiness}
             />
           </div>
         </form>

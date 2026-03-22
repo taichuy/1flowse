@@ -274,4 +274,79 @@ describe("InlineOperatorActionFeedback", () => {
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");
   });
+
+  it("prioritizes the shared sandbox readiness CTA for blocked execution follow-up", () => {
+    const html = renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        message: "",
+        title: "Operator follow-up",
+        runId: "run-1",
+        sandboxReadiness: {
+          ...buildSandboxReadiness(),
+          affected_run_count: 4,
+          affected_workflow_count: 1,
+          primary_blocker_kind: "execution_class_blocked",
+          recommended_action: {
+            kind: "open_workflow_library",
+            entry_key: "workflowLibrary",
+            href: "/workflows?execution=sandbox",
+            label: "Open workflow library"
+          }
+        },
+        runFollowUpExplanation: {
+          primary_signal: "operator follow-up 已刷新。",
+          follow_up: "本地 run follow-up：先回看 execution focus。"
+        },
+        runSnapshot: {
+          status: "failed",
+          currentNodeId: "sandbox_tool",
+          executionFocusNodeId: "sandbox_tool",
+          executionFocusNodeRunId: "node-run-1",
+          executionFocusNodeName: "Sandbox Tool",
+          executionFocusNodeType: "tool",
+          executionFocusExplanation: {
+            primary_signal: "当前节点因 sandbox backend 不可用而阻断。",
+            follow_up: "先恢复 backend，再重试该节点。"
+          },
+          executionFocusToolCalls: [
+            {
+              id: "tool-call-1",
+              tool_id: "sandbox.code",
+              tool_name: "Sandbox Code",
+              phase: "tool",
+              status: "failed",
+              requested_execution_class: "sandbox",
+              requested_execution_source: "runtime_policy",
+              requested_execution_profile: null,
+              requested_execution_timeout_ms: null,
+              requested_execution_network_policy: null,
+              requested_execution_filesystem_policy: null,
+              requested_execution_dependency_mode: null,
+              requested_execution_builtin_package_set: null,
+              requested_execution_dependency_ref: null,
+              requested_execution_backend_extensions: null,
+              effective_execution_class: "sandbox",
+              execution_executor_ref: null,
+              execution_sandbox_backend_id: null,
+              execution_sandbox_backend_executor_ref: null,
+              execution_sandbox_runner_kind: null,
+              execution_blocking_reason: "No compatible sandbox backend is available.",
+              execution_fallback_reason: null,
+              response_summary: null,
+              response_content_type: null,
+              raw_ref: null
+            }
+          ]
+        }
+      })
+    );
+
+    expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("Open workflow library");
+    expect(html).toContain('/workflows?execution=sandbox');
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain("本地 run follow-up：先回看 execution focus。");
+  });
 });

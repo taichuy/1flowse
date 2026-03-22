@@ -5,7 +5,10 @@ import Link from "next/link";
 
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import {
   resolveSensitiveAccessBlockingRunId,
@@ -41,6 +44,7 @@ type SensitiveAccessBlockedCardProps = {
   clearHref?: string | null;
   summary?: string;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function SensitiveAccessBlockedCard({
@@ -48,7 +52,8 @@ export function SensitiveAccessBlockedCard({
   payload,
   clearHref = null,
   summary,
-  callbackWaitingAutomation = null
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: SensitiveAccessBlockedCardProps) {
   const runId = resolveSensitiveAccessBlockingRunId(payload);
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
@@ -191,6 +196,7 @@ export function SensitiveAccessBlockedCard({
           runFollowUp={payload.run_follow_up ?? null}
           runId={runId}
           runSnapshot={payload.run_snapshot ?? null}
+          sandboxReadiness={sandboxReadiness}
           status="success"
           title="Canonical follow-up"
         />
@@ -204,6 +210,7 @@ export function SensitiveAccessBlockedCard({
         }
         notifications={payload.notifications}
         runId={runId}
+        sandboxReadiness={sandboxReadiness}
         ticket={payload.approval_ticket}
       />
     </article>

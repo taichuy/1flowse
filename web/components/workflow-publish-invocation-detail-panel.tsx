@@ -578,6 +578,7 @@ export function WorkflowPublishInvocationDetailPanel({
             defaultRunId={runId}
             entries={blockingSensitiveAccessEntries}
             emptyCopy={detailSurfaceCopy.blockingApprovalTimelineEmptyState}
+            sandboxReadiness={sandboxReadiness}
           />
         </div>
       ) : null}
@@ -598,6 +599,7 @@ export function WorkflowPublishInvocationDetailPanel({
           defaultRunId={runId}
           entries={sensitiveAccessEntries}
           emptyCopy={detailSurfaceCopy.approvalTimelineEmptyState}
+          sandboxReadiness={sandboxReadiness}
         />
       </div>
     </article>

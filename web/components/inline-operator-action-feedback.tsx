@@ -26,6 +26,10 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import { listExecutionFocusRuntimeFactBadges } from "@/lib/run-execution-focus-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
+import {
+  buildSandboxReadinessFollowUpCandidate,
+  messageMentionsSandboxExecution
+} from "@/lib/system-overview-follow-up-presenters";
 import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 type InlineOperatorActionFeedbackProps = {
@@ -67,22 +71,35 @@ export function InlineOperatorActionFeedback({
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   const runDetailLink = buildOperatorRunDetailLinkSurface({ runId, surfaceCopy });
   const hasExplicitRecommendedNextStepOverride = recommendedNextStepOverride !== undefined;
+  const executionNeedsSharedSandboxFollowUp =
+    Boolean(sandboxReadinessNode) &&
+    (Boolean(sandboxReadinessNode?.execution_blocking_reason) ||
+      messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.primary_signal) ||
+      messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.follow_up) ||
+      messageMentionsSandboxExecution(model.runSnapshotSummary) ||
+      messageMentionsSandboxExecution(model.runFollowUpFollowUp) ||
+      messageMentionsSandboxExecution(runSnapshot?.executionFocusNodeType));
+  const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
   const recommendedNextStep =
     hasExplicitRecommendedNextStepOverride
       ? recommendedNextStepOverride
       : !hasCallbackWaitingSummary
       ? buildOperatorRecommendedNextStep({
-          execution: buildOperatorRunDetailCandidate({
-            active: Boolean(
-              runId || model.runFollowUpFollowUp || model.runSnapshotSummary || model.focusNodeLabel
-            ),
-            runId,
-            label: runId ? "run detail" : "execution follow-up",
-            detail: model.runFollowUpFollowUp,
-            fallbackDetail:
-              model.runSnapshotSummary ?? executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy
-          }),
+          execution:
+            sharedSandboxCandidate ??
+            buildOperatorRunDetailCandidate({
+              active: Boolean(
+                runId || model.runFollowUpFollowUp || model.runSnapshotSummary || model.focusNodeLabel
+              ),
+              runId,
+              label: runId ? "run detail" : "execution follow-up",
+              detail: model.runFollowUpFollowUp,
+              fallbackDetail:
+                model.runSnapshotSummary ?? executionSurfaceCopy.recommendedNextStepFallbackDetail,
+              surfaceCopy
+            }),
           operatorFollowUp: model.outcomeFollowUp,
           operatorLabel: "operator result"
         })

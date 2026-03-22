@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RunDiagnosticsPanel } from "@/components/run-diagnostics-panel";
 import type { RunDetail } from "@/lib/get-run-detail";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 
 const { traceFiltersSectionSpy } = vi.hoisted(() => ({
   traceFiltersSectionSpy: vi.fn()
@@ -75,6 +78,39 @@ function buildRunDetail(): RunDetail {
   };
 }
 
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    degraded_backend_count: 0,
+    offline_backend_count: 0,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: false,
+        backend_ids: [],
+        supported_languages: [],
+        supported_profiles: [],
+        supported_dependency_modes: [],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason: "No sandbox backend is currently enabled."
+      }
+    ],
+    supported_languages: [],
+    supported_profiles: [],
+    supported_dependency_modes: [],
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false
+  };
+}
+
 describe("RunDiagnosticsPanel", () => {
   it("通过 shared presenter 渲染 hero 与状态面板 copy", () => {
     const callbackWaitingAutomation = {
@@ -85,6 +121,7 @@ describe("RunDiagnosticsPanel", () => {
       scheduler_health_detail: "scheduler loop is healthy",
       steps: []
     } satisfies CallbackWaitingAutomationCheck;
+    const sandboxReadiness = buildSandboxReadiness();
 
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsPanel, {
@@ -97,7 +134,8 @@ describe("RunDiagnosticsPanel", () => {
         },
         executionView: null,
         evidenceView: null,
-        callbackWaitingAutomation
+        callbackWaitingAutomation,
+        sandboxReadiness
       })
     );
 
@@ -118,7 +156,8 @@ describe("RunDiagnosticsPanel", () => {
     expect(traceFiltersSectionSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         callbackWaitingAutomation,
-        runId: "run-1"
+        runId: "run-1",
+        sandboxReadiness
       })
     );
   });

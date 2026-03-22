@@ -3,7 +3,10 @@
 import { useState } from "react";
 
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import {
   buildRunTraceExportUrl,
   type RunTraceQuery
@@ -22,6 +25,7 @@ type RunTraceExportActionsProps = {
   formats?: RunTraceExportFormat[];
   requesterId?: string;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 const DEFAULT_FORMATS: RunTraceExportFormat[] = ["json", "jsonl"];
@@ -36,7 +40,8 @@ export function RunTraceExportActions({
   query,
   formats = DEFAULT_FORMATS,
   requesterId = "run-diagnostics-export-ui",
-  callbackWaitingAutomation = null
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: RunTraceExportActionsProps) {
   const [activeFormat, setActiveFormat] = useState<RunTraceExportFormat | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -117,6 +122,7 @@ export function RunTraceExportActions({
           <SensitiveAccessBlockedCard
             callbackWaitingAutomation={callbackWaitingAutomation}
             payload={blockedPayload}
+            sandboxReadiness={sandboxReadiness}
             summary={blockedCopy?.summary}
             title={blockedCopy?.title ?? "Trace export access blocked"}
           />

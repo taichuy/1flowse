@@ -28,11 +28,18 @@ vi.mock("@/components/workflow-publish-api-key-manager", () => ({
 vi.mock("@/components/sensitive-access-blocked-card", () => ({
   SensitiveAccessBlockedCard: ({
     title,
-    summary
+    summary,
+    sandboxReadiness
   }: {
     title: string;
     summary?: string;
-  }) => createElement("div", null, `${title} :: ${summary ?? ""}`)
+    sandboxReadiness?: SandboxReadinessCheck | null;
+  }) =>
+    createElement(
+      "div",
+      null,
+      `${title} :: ${summary ?? ""} :: sandbox:${sandboxReadiness?.execution_classes?.[0]?.execution_class ?? "none"}`
+    )
 }));
 
 function buildSandboxReadiness(): SandboxReadinessCheck {
@@ -266,6 +273,7 @@ describe("WorkflowPublishBindingCard", () => {
     expect(html).toContain("Cache inventory waiting on approval");
     expect(html).toContain("cache inventory 查看不会绕过审批、通知与 run follow-up 事实链");
     expect(html).toContain("当前信号：审批票据仍在等待处理。");
+    expect(html).toContain("sandbox:sandbox");
     expect(html).not.toContain("Cache inventory access blocked");
   });
 });

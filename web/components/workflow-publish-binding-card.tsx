@@ -224,6 +224,7 @@ export function WorkflowPublishBindingCard({
               <SensitiveAccessBlockedCard
                 callbackWaitingAutomation={callbackWaitingAutomation}
                 payload={cacheInventory.payload}
+                sandboxReadiness={sandboxReadiness}
                 summary={cacheInventoryBlockedCopy?.summary}
                 title={cacheInventoryBlockedCopy?.title ?? "Cache inventory access blocked"}
               />

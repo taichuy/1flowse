@@ -164,6 +164,7 @@ export function WorkflowPublishExportActions({
           <SensitiveAccessBlockedCard
             callbackWaitingAutomation={callbackWaitingAutomation}
             payload={blockedPayload}
+            sandboxReadiness={sandboxReadiness}
             summary={blockedCopy?.summary}
             title={blockedCopy?.title ?? "Publish activity export access blocked"}
           />

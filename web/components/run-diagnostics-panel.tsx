@@ -154,6 +154,7 @@ export function RunDiagnosticsPanel({
         nodeRunOptions={nodeRunOptions}
         activeFilters={activeFilters}
         callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <RunDiagnosticsExecutionSections

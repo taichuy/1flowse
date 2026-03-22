@@ -161,6 +161,7 @@ export function WorkflowRunOverlayPanel({
                   }}
                   requesterId="workflow-run-overlay-export"
                   runId={run.id}
+                  sandboxReadiness={sandboxReadiness}
                 />
               </div>
 
@@ -197,6 +198,7 @@ export function WorkflowRunOverlayPanel({
                     runId={run.id}
                     runSnapshot={runSnapshotModel}
                     callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+                    sandboxReadiness={sandboxReadiness}
                     title="Execution focus"
                   />
                   {sandboxReadinessNode ? (

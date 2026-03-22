@@ -7,7 +7,10 @@ import { useMemo, useState } from "react";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import type { RunCallbackTicketItem } from "@/lib/get-run-views";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import { formatTimestamp } from "@/lib/runtime-presenters";
@@ -41,6 +44,7 @@ type SensitiveAccessTimelineEntryListProps = {
   defaultRunId?: string | null;
   callbackTickets?: RunCallbackTicketItem[];
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 type DecisionFilterValue =
@@ -186,7 +190,8 @@ export function SensitiveAccessTimelineEntryList({
   emptyCopy,
   defaultRunId,
   callbackTickets = [],
-  callbackWaitingAutomation = null
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: SensitiveAccessTimelineEntryListProps) {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilterValue>("all");
@@ -461,6 +466,7 @@ export function SensitiveAccessTimelineEntryList({
                   runFollowUp={runContext.runFollowUp ?? null}
                   runId={runId}
                   runSnapshot={runContext.snapshot}
+                  sandboxReadiness={sandboxReadiness}
                   status="success"
                   title="Operator follow-up"
                 />

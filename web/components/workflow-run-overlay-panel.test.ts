@@ -274,6 +274,7 @@ describe("WorkflowRunOverlayPanel", () => {
         runId: "run-1",
         requesterId: "workflow-run-overlay-export",
         formats: ["json"],
+        sandboxReadiness: buildSandboxReadiness(),
         query: {
           limit: DEFAULT_RUN_TRACE_LIMIT,
           order: "asc"
