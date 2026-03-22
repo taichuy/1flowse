@@ -849,6 +849,32 @@ describe("published invocation presenters", () => {
     expect(bridgedIssueSignalsSurface?.insight).toContain("invocation-1");
     expect(bridgedIssueSignalsSurface?.followUpHref).toBeUndefined();
 
+    const bridgedFromSecondaryFailureReason = buildPublishedInvocationIssueSignalsSurface({
+      reasonCounts: [
+        { value: "runtime_failed", count: 2 },
+        { value: "rate_limit_exceeded", count: 1 }
+      ],
+      failureReasons: [
+        {
+          message: "quota hit before runtime failed",
+          count: 1,
+          last_invoked_at: "2026-03-21T00:20:00Z"
+        },
+        {
+          message: "sandbox backend offline",
+          count: 2,
+          last_invoked_at: "2026-03-21T00:00:00Z"
+        }
+      ],
+      selectedInvocationErrorMessage: " Sandbox backend offline ",
+      selectedInvocationNextStepSurface: selectedNextStepSurface,
+      sandboxReadiness: null
+    });
+
+    expect(bridgedFromSecondaryFailureReason?.selectedNextStepSurface).toEqual(selectedNextStepSurface);
+    expect(bridgedFromSecondaryFailureReason?.insight).toContain("聚合 failure reason");
+    expect(bridgedFromSecondaryFailureReason?.followUpHref).toBeUndefined();
+
     expect(
       buildPublishedInvocationSkillTraceSurface({
         scope: "execution_focus_node",
@@ -1276,7 +1302,25 @@ describe("published invocation presenters", () => {
         selectedInvocationErrorMessage: "sandbox backend offline during invocation",
         selectedInvocationNextStepSurface: selectedNextStepSurface
       })
-    ).toContain("当前打开的 invocation-1 已对齐最近 failure reason");
+    ).toContain("当前打开的 invocation-1 已对齐聚合 failure reason");
+    expect(
+      buildPublishedInvocationFailureReasonInsight({
+        failureReasons: [
+          {
+            message: "quota hit before runtime failed",
+            count: 1,
+            last_invoked_at: null
+          },
+          {
+            message: "sandbox backend offline during invocation",
+            count: 2,
+            last_invoked_at: null
+          }
+        ],
+        selectedInvocationErrorMessage: "sandbox backend offline during invocation",
+        selectedInvocationNextStepSurface: selectedNextStepSurface
+      })
+    ).toContain("当前打开的 invocation-1 已对齐聚合 failure reason");
     expect(
       buildPublishedInvocationFailureReasonInsight({
         reasonCounts: [{ value: "runtime_failed", count: 2 }],

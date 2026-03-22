@@ -464,10 +464,53 @@ describe("WorkflowPublishActivityInsights", () => {
     );
 
     expect(html).toContain("Issue signals");
-    expect(html).toContain("当前打开的 invocation-1 已对齐最近 failure reason");
+    expect(html).toContain("当前打开的 invocation-1 已对齐聚合 failure reason");
     expect(html).toContain("Selected invocation next step");
     expect(html).toContain("approval blocker");
     expect(html).toContain("优先处理 blocker inbox，再观察 waiting 节点是否恢复。");
+    expect(html).toContain("open blocker inbox slice");
+  });
+
+  it("bridges selected invocation next step into issue signals when a secondary failure reason matches", () => {
+    const invocationAudit = buildInvocationAudit();
+    invocationAudit.facets.recent_failure_reasons = [
+      {
+        message: "quota hit before runtime failed",
+        count: 1,
+        last_invoked_at: "2026-03-21T00:16:00Z"
+      },
+      {
+        message: "sandbox backend offline during invocation",
+        count: 2,
+        last_invoked_at: "2026-03-21T00:15:00Z"
+      }
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityInsights, {
+        binding: {
+          rate_limit_policy: {
+            requests: 3,
+            windowSeconds: 60
+          }
+        } as WorkflowPublishActivityPanelProps["binding"],
+        invocationAudit,
+        rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: buildSelectedInvocationDetail()
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        activeTimeWindow: "24h"
+      })
+    );
+
+    expect(html).toContain("Issue signals");
+    expect(html).toContain("当前打开的 invocation-1 已对齐聚合 failure reason");
+    expect(html).toContain("Selected invocation next step");
+    expect(html).toContain("approval blocker");
     expect(html).toContain("open blocker inbox slice");
   });
 

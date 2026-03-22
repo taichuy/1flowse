@@ -988,7 +988,7 @@ export function buildPublishedInvocationIssueSignalsSurface({
   }
 
   const selectedNextStepSurface = resolvePublishedInvocationMatchedSelectedNextStepSurface({
-    failureMessage: failureReasons?.[0]?.message ?? null,
+    failureReasons,
     selectedInvocationErrorMessage,
     selectedInvocationNextStepSurface
   });
@@ -1205,23 +1205,50 @@ function normalizePublishedInvocationFailureReasonMessage(message?: string | nul
 
 function resolvePublishedInvocationMatchedSelectedNextStepSurface({
   failureMessage,
+  failureReasons,
   selectedInvocationErrorMessage,
   selectedInvocationNextStepSurface
 }: {
   failureMessage?: string | null;
+  failureReasons?: PublishedInvocationFailureReasonItem[] | null;
   selectedInvocationErrorMessage?: string | null;
   selectedInvocationNextStepSurface?: PublishedInvocationSelectedNextStepSurface | null;
 }) {
-  const normalizedFailureMessage = normalizePublishedInvocationFailureReasonMessage(failureMessage);
+  const normalizedFailureMessage = resolvePublishedInvocationMatchedFailureReasonMessage({
+    failureMessage,
+    failureReasons,
+    selectedInvocationErrorMessage
+  });
+
+  return normalizedFailureMessage ? selectedInvocationNextStepSurface ?? null : null;
+}
+
+function resolvePublishedInvocationMatchedFailureReasonMessage({
+  failureMessage,
+  failureReasons,
+  selectedInvocationErrorMessage
+}: {
+  failureMessage?: string | null;
+  failureReasons?: PublishedInvocationFailureReasonItem[] | null;
+  selectedInvocationErrorMessage?: string | null;
+}) {
   const normalizedSelectedInvocationErrorMessage = normalizePublishedInvocationFailureReasonMessage(
     selectedInvocationErrorMessage
   );
 
-  return normalizedFailureMessage &&
-    normalizedSelectedInvocationErrorMessage &&
-    normalizedFailureMessage === normalizedSelectedInvocationErrorMessage
-    ? selectedInvocationNextStepSurface ?? null
-    : null;
+  if (!normalizedSelectedInvocationErrorMessage) {
+    return null;
+  }
+
+  const candidateMessages = [failureMessage, ...(failureReasons?.map((reason) => reason.message) ?? [])];
+
+  return (
+    candidateMessages.find(
+      (message) =>
+        normalizePublishedInvocationFailureReasonMessage(message) ===
+        normalizedSelectedInvocationErrorMessage
+    ) ?? null
+  );
 }
 
 export function formatPublishedInvocationMetricCounts(
@@ -1737,14 +1764,18 @@ export function buildPublishedInvocationFailureReasonInsight({
   const authRejectedCount =
     getFacetCount(reasonCounts, "api_key_invalid") + getFacetCount(reasonCounts, "api_key_required");
   const latestFailure = failureReasons?.[0]?.message?.trim();
+  const matchedFailureMessage = resolvePublishedInvocationMatchedFailureReasonMessage({
+    failureReasons,
+    selectedInvocationErrorMessage
+  });
   const matchedSelectedNextStepSurface = resolvePublishedInvocationMatchedSelectedNextStepSurface({
-    failureMessage: latestFailure,
+    failureReasons,
     selectedInvocationErrorMessage,
     selectedInvocationNextStepSurface
   });
 
   if (matchedSelectedNextStepSurface) {
-    return `当前打开的 ${matchedSelectedNextStepSurface.invocationId} 已对齐最近 failure reason；下面直接复用 selected invocation 的 canonical next step，避免继续只靠 failure message 推断动作。`;
+    return `当前打开的 ${matchedSelectedNextStepSurface.invocationId} 已对齐聚合 failure reason${matchedFailureMessage ? " 对应的 message" : ""}；下面直接复用 selected invocation 的 canonical next step，避免继续只靠 failure message 推断动作。`;
   }
 
   if (runtimeFailedCount > 0) {
