@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics-execution/operator-follow-up-card";
 import type { RunExecutionView } from "@/lib/get-run-views";
@@ -9,6 +9,25 @@ import type {
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
 import { buildRunDiagnosticsOperatorFollowUpSurfaceCopy } from "@/lib/workbench-entry-surfaces";
+
+type CallbackSummaryMockProps = {
+  waitingReason?: string | null;
+  nodeRunId?: string | null;
+  callbackTickets?: Array<{ id?: string | null }>;
+  sensitiveAccessEntries?: Array<{ request?: { id?: string | null } | null }>;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  inboxHref?: string | null;
+  preferCanonicalRecommendedNextStep?: boolean;
+};
+
+const callbackSummaryMock = vi.fn(
+  ({ waitingReason, nodeRunId }: CallbackSummaryMockProps) =>
+    createElement(
+      "div",
+      { "data-testid": "callback-summary" },
+      `${waitingReason ?? "no-waiting"} · ${nodeRunId ?? "no-node-run"}`
+    )
+);
 
 function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
   return {
@@ -73,18 +92,7 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/components/callback-waiting-summary-card", () => ({
-  CallbackWaitingSummaryCard: ({
-    waitingReason,
-    nodeRunId
-  }: {
-    waitingReason?: string | null;
-    nodeRunId?: string | null;
-  }) =>
-    createElement(
-      "div",
-      { "data-testid": "callback-summary" },
-      `${waitingReason ?? "no-waiting"} · ${nodeRunId ?? "no-node-run"}`
-    )
+  CallbackWaitingSummaryCard: (props: CallbackSummaryMockProps) => callbackSummaryMock(props)
 }));
 
 vi.mock("@/components/operator-focus-evidence-card", () => ({
@@ -303,6 +311,10 @@ function buildExecutionView(): RunExecutionView {
 }
 
 describe("RunDiagnosticsOperatorFollowUpCard", () => {
+  beforeEach(() => {
+    callbackSummaryMock.mockClear();
+  });
+
   it("renders the canonical operator snapshot in diagnostics", () => {
     const surfaceCopy = buildRunDiagnosticsOperatorFollowUpSurfaceCopy();
     const html = renderToStaticMarkup(
@@ -325,6 +337,69 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
     expect(html).toContain("callback pending · node-run-1");
     expect(html).toContain("聚焦节点已沉淀 1 个 artifact");
     expect(html).toContain("Focused skill trace · 1");
+  });
+
+  it("passes local callback blocker context into the diagnostics callback summary", () => {
+    const executionView = buildExecutionView();
+    executionView.execution_focus_node = {
+      node_id: "sandbox_code_1",
+      node_run_id: "node-run-1",
+      node_name: "Sandbox Code",
+      callback_tickets: [
+        {
+          id: "callback-ticket-1",
+          run_id: "run-123",
+          node_run_id: "node-run-1"
+        }
+      ],
+      sensitive_access_entries: [
+        {
+          request: {
+            id: "access-request-1",
+            node_run_id: "node-run-1"
+          },
+          approval_ticket: {
+            id: "approval-ticket-1",
+            status: "pending",
+            waiting_status: "waiting",
+            node_run_id: "node-run-1"
+          }
+        }
+      ]
+    } as never;
+    if (executionView.run_follow_up) {
+      executionView.run_follow_up.recommended_action = null;
+    }
+
+    renderToStaticMarkup(
+      createElement(RunDiagnosticsOperatorFollowUpCard, {
+        executionView,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: null
+      })
+    );
+
+    expect(callbackSummaryMock).toHaveBeenCalled();
+    expect(callbackSummaryMock.mock.calls[0]?.[0]).toMatchObject({
+      callbackWaitingAutomation: expect.objectContaining({
+        status: "healthy"
+      }),
+      callbackTickets: [
+        expect.objectContaining({
+          id: "callback-ticket-1"
+        })
+      ],
+      sensitiveAccessEntries: [
+        expect.objectContaining({
+          request: expect.objectContaining({
+            id: "access-request-1"
+          })
+        })
+      ],
+      inboxHref:
+        "/sensitive-access?status=pending&waiting_status=waiting&run_id=run-123&node_run_id=node-run-1&access_request_id=access-request-1&approval_ticket_id=approval-ticket-1",
+      preferCanonicalRecommendedNextStep: true
+    });
   });
 
   it("returns nothing when neither snapshot nor follow-up facts exist", () => {

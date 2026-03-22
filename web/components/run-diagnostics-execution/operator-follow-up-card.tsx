@@ -4,11 +4,12 @@ import Link from "next/link";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
-import type { RunExecutionView } from "@/lib/get-run-views";
+import type { RunExecutionNodeItem, RunExecutionView } from "@/lib/get-run-views";
 import {
   buildOperatorRecommendedActionCandidate,
   buildSharedOrLocalOperatorCandidate,
@@ -27,6 +28,7 @@ import {
   listExecutionFocusArtifactPreviews,
   listExecutionFocusToolCallSummaries
 } from "@/lib/run-execution-focus-presenters";
+import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 import {
   buildRunDetailExecutionFocusSurfaceCopy,
   buildRunDiagnosticsOperatorFollowUpSurfaceCopy
@@ -156,6 +158,18 @@ export function RunDiagnosticsOperatorFollowUpCard({
     ? formatExecutionFocusArtifactSummary(focusNodeEvidence)
     : null;
   const focusSkillTrace = snapshot?.execution_focus_skill_trace ?? null;
+  const callbackSummaryFocusNode = resolveCallbackSummaryFocusNode(executionView, snapshot);
+  const callbackSummaryInboxHref = buildCallbackSummaryInboxHref({
+    runId: executionView.run_id,
+    snapshot,
+    focusNode: callbackSummaryFocusNode
+  });
+  const callbackSummaryNodeRunId =
+    snapshot?.execution_focus_node_run_id ?? callbackSummaryFocusNode?.node_run_id ?? null;
+  const callbackSummaryNodeId =
+    snapshot?.execution_focus_node_id ?? callbackSummaryFocusNode?.node_id ?? null;
+  const callbackSummaryNodeName =
+    snapshot?.execution_focus_node_name ?? callbackSummaryFocusNode?.node_name ?? null;
 
   return (
     <section>
@@ -203,8 +217,11 @@ export function RunDiagnosticsOperatorFollowUpCard({
       ) : null}
       {snapshot ? (
         <CallbackWaitingSummaryCard
+          callbackTickets={callbackSummaryFocusNode?.callback_tickets ?? []}
+          callbackWaitingAutomation={callbackWaitingAutomation}
           lifecycle={snapshot.callback_waiting_lifecycle ?? null}
           callbackWaitingExplanation={snapshot.callback_waiting_explanation ?? null}
+          inboxHref={callbackSummaryInboxHref}
           waitingReason={snapshot.waiting_reason ?? null}
           scheduledResumeDelaySeconds={snapshot.scheduled_resume_delay_seconds ?? null}
           scheduledResumeSource={snapshot.scheduled_resume_source ?? null}
@@ -214,15 +231,16 @@ export function RunDiagnosticsOperatorFollowUpCard({
           scheduledResumeRequeuedAt={snapshot.scheduled_resume_requeued_at ?? null}
           scheduledResumeRequeueSource={snapshot.scheduled_resume_requeue_source ?? null}
           runId={executionView.run_id}
-          nodeRunId={snapshot.execution_focus_node_run_id ?? null}
+          nodeRunId={callbackSummaryNodeRunId}
           focusNodeEvidence={focusNodeEvidence}
           focusSkillReferenceLoads={focusSkillTrace?.loads ?? []}
           focusSkillReferenceCount={focusSkillTrace?.reference_count ?? 0}
-          focusSkillReferenceNodeId={snapshot.execution_focus_node_id ?? null}
-          focusSkillReferenceNodeName={snapshot.execution_focus_node_name ?? null}
+          focusSkillReferenceNodeId={callbackSummaryNodeId}
+          focusSkillReferenceNodeName={callbackSummaryNodeName}
           operatorFollowUp={followUp?.explanation?.follow_up ?? null}
           recommendedAction={followUp?.recommended_action ?? null}
           preferCanonicalRecommendedNextStep
+          sensitiveAccessEntries={callbackSummaryFocusNode?.sensitive_access_entries ?? []}
           showFocusExecutionFacts
           showInlineActions={false}
         />
@@ -258,6 +276,67 @@ function buildFocusNodeLabel(snapshot: RunExecutionView["run_snapshot"]) {
   }
 
   return focusNodeName || focusNodeId || null;
+}
+
+function resolveCallbackSummaryFocusNode(
+  executionView: RunExecutionView,
+  snapshot: RunExecutionView["run_snapshot"]
+): RunExecutionNodeItem | null {
+  const focusNodeRunId = snapshot?.execution_focus_node_run_id?.trim() || null;
+  const focusNodeId = snapshot?.execution_focus_node_id?.trim() || null;
+  const explicitFocusNode = executionView.execution_focus_node ?? null;
+
+  if (explicitFocusNode?.node_run_id && explicitFocusNode.node_run_id === focusNodeRunId) {
+    return explicitFocusNode;
+  }
+
+  if (focusNodeRunId) {
+    const matchedNode = executionView.nodes.find((node) => node.node_run_id === focusNodeRunId) ?? null;
+    if (matchedNode) {
+      return matchedNode;
+    }
+  }
+
+  if (explicitFocusNode?.node_id && explicitFocusNode.node_id === focusNodeId) {
+    return explicitFocusNode;
+  }
+
+  if (focusNodeId) {
+    const matchedNode = executionView.nodes.find((node) => node.node_id === focusNodeId) ?? null;
+    if (matchedNode) {
+      return matchedNode;
+    }
+  }
+
+  return explicitFocusNode;
+}
+
+function buildCallbackSummaryInboxHref({
+  runId,
+  snapshot,
+  focusNode
+}: {
+  runId: string;
+  snapshot: RunExecutionView["run_snapshot"];
+  focusNode?: RunExecutionNodeItem | null;
+}) {
+  const focusSensitiveAccessEntry = focusNode?.sensitive_access_entries.find(
+    (entry) => entry.approval_ticket != null
+  );
+  if (focusSensitiveAccessEntry) {
+    return buildSensitiveAccessTimelineInboxHref(focusSensitiveAccessEntry, runId);
+  }
+
+  const focusCallbackTicket = focusNode?.callback_tickets[0];
+  if (!focusCallbackTicket) {
+    return null;
+  }
+
+  return buildCallbackTicketInboxHref(focusCallbackTicket, {
+    runId,
+    nodeRunId:
+      focusCallbackTicket.node_run_id ?? focusNode?.node_run_id ?? snapshot?.execution_focus_node_run_id ?? null
+  });
 }
 
 function hasCallbackWaitingFacts(snapshot: RunExecutionView["run_snapshot"]) {
