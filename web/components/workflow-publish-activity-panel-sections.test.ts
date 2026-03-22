@@ -662,6 +662,45 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain('/sensitive-access?status=pending');
   });
 
+  it("reuses operator backlog CTA inside issue signals when sync waiting is rejected", () => {
+    const invocationAudit = buildInvocationAudit();
+    invocationAudit.summary.approval_ticket_count = 1;
+    invocationAudit.summary.pending_approval_count = 1;
+    invocationAudit.summary.approved_approval_count = 0;
+    invocationAudit.summary.rejected_approval_count = 0;
+    invocationAudit.summary.expired_approval_count = 0;
+    invocationAudit.summary.pending_notification_count = 0;
+    invocationAudit.summary.delivered_notification_count = 0;
+    invocationAudit.summary.failed_notification_count = 0;
+    invocationAudit.facets.reason_counts = [{ value: "sync_waiting_unsupported", count: 1 }];
+    invocationAudit.facets.run_status_counts = [{ value: "waiting_input", count: 1 }];
+    invocationAudit.facets.recent_failure_reasons = [
+      {
+        message: "approval pending cannot stay on sync publish surface",
+        count: 1,
+        last_invoked_at: "2026-03-21T00:15:00Z"
+      }
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityInsights, {
+        binding: {
+          rate_limit_policy: null
+        } as WorkflowPublishActivityPanelProps["binding"],
+        invocationAudit,
+        rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        activeTimeWindow: "24h"
+      })
+    );
+
+    expect(html).toContain("Issue signals");
+    expect(html).toContain("open approval inbox slice");
+    expect(html).toContain('/sensitive-access?status=pending');
+    expect(html).toContain("pending approval ticket");
+  });
+
   it("shows live diagnosis inside failure reason cards", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishActivityDetails, {

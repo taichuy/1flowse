@@ -917,6 +917,37 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("在 sync waiting issue signals 里复用 approval/notification backlog CTA", () => {
+    expect(
+      buildPublishedInvocationIssueSignalsSurface({
+        summary: {
+          approval_ticket_count: 0,
+          pending_approval_count: 0,
+          approved_approval_count: 0,
+          rejected_approval_count: 0,
+          expired_approval_count: 0,
+          pending_notification_count: 0,
+          delivered_notification_count: 0,
+          failed_notification_count: 1
+        },
+        reasonCounts: [{ value: "sync_waiting_unsupported", count: 1 }],
+        runStatusCounts: [{ value: "waiting_input", count: 1 }],
+        failureReasons: [
+          {
+            message: "approval pending cannot stay on sync publish surface",
+            count: 1,
+            last_invoked_at: "2026-03-21T00:00:00Z"
+          }
+        ]
+      })
+    ).toMatchObject({
+      chips: ["Sync waiting not supported 1"],
+      insight: expect.stringContaining("1 failed notification"),
+      followUpHref: "/sensitive-access?notification_status=failed",
+      followUpHrefLabel: "open approval inbox slice"
+    });
+  });
+
   it("为 publish activity insights 统一拼装 summary / waiting / rate-limit rows", () => {
     const surfaceCopy = buildPublishedInvocationActivityInsightsSurfaceCopy();
     const waitingOverview = {
@@ -1561,7 +1592,7 @@ describe("published invocation presenters", () => {
     });
   });
 
-  it("shared callback waiting summary 与顶层 primary signal 重复时回退到 generic headline", () => {
+  it("shared callback waiting summary 与��层 primary signal 重���时回退到 generic headline", () => {
     expect(
       buildPublishedInvocationCanonicalFollowUpCopy({
         explanation: {

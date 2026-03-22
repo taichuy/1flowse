@@ -88,6 +88,29 @@ type PublishedInvocationSensitiveAccessSummary = NonNullable<
   NonNullable<PublishedEndpointInvocationItem["run_waiting_lifecycle"]>["sensitive_access_summary"]
 >;
 
+type PublishedInvocationSensitiveAccessSummaryCounts = Pick<
+  PublishedEndpointInvocationSummary,
+  | "approval_ticket_count"
+  | "pending_approval_count"
+  | "approved_approval_count"
+  | "rejected_approval_count"
+  | "expired_approval_count"
+  | "pending_notification_count"
+  | "delivered_notification_count"
+  | "failed_notification_count"
+>;
+
+type PublishedInvocationSensitiveAccessSummaryLike =
+  | PublishedInvocationSensitiveAccessSummary
+  | PublishedInvocationSensitiveAccessSummaryCounts;
+
+type PublishedInvocationDiagnosticFollowUpSurface = {
+  source: "callback_waiting_automation" | "sandbox_readiness" | "sensitive_access";
+  detail: string;
+  href: string | null;
+  hrefLabel: string | null;
+};
+
 type PublishedInvocationRunFollowUpSummary = NonNullable<PublishedEndpointInvocationItem["run_follow_up"]>;
 type PublishedInvocationRunFollowUpSample =
   PublishedInvocationRunFollowUpSummary["sampled_runs"][number];
@@ -964,6 +987,7 @@ export function buildPublishedInvocationActivityTrafficMixSurface({
 }
 
 export function buildPublishedInvocationIssueSignalsSurface({
+  summary,
   reasonCounts,
   runStatusCounts,
   failureReasons,
@@ -973,6 +997,7 @@ export function buildPublishedInvocationIssueSignalsSurface({
   selectedInvocationNextStepSurface,
   surfaceCopy = buildPublishedInvocationActivityInsightsSurfaceCopy()
 }: {
+  summary?: PublishedInvocationSensitiveAccessSummaryLike | null;
   reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
   runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
   failureReasons?: PublishedInvocationFailureReasonItem[] | null;
@@ -995,24 +1020,32 @@ export function buildPublishedInvocationIssueSignalsSurface({
   const followUpSurface = selectedNextStepSurface
     ? null
     : buildPublishedInvocationDiagnosticFollowUpSurface({
+        summary,
         reasonCounts,
         runStatusCounts,
         message: failureReasons?.[0]?.message ?? null,
         sandboxReadiness,
         callbackWaitingAutomation
       });
+  const baseInsight = buildPublishedInvocationFailureReasonInsight({
+    reasonCounts,
+    failureReasons,
+    sandboxReadiness,
+    callbackWaitingAutomation,
+    selectedInvocationErrorMessage,
+    selectedInvocationNextStepSurface
+  });
+  const insight =
+    followUpSurface?.source === "sensitive_access"
+      ? joinFragments(
+          [baseInsight, followUpSurface.detail].filter((value): value is string => Boolean(value))
+        )
+      : baseInsight;
 
   return {
     title: surfaceCopy.issueSignalsTitle,
     description: surfaceCopy.issueSignalsDescription,
-    insight: buildPublishedInvocationFailureReasonInsight({
-      reasonCounts,
-      failureReasons,
-      sandboxReadiness,
-      callbackWaitingAutomation,
-      selectedInvocationErrorMessage,
-      selectedInvocationNextStepSurface
-    }),
+    insight,
     chips,
     selectedNextStepSurface,
     ...(followUpSurface?.href ? { followUpHref: followUpSurface.href } : {}),
@@ -1935,18 +1968,18 @@ export function buildPublishedInvocationFailureMessageDiagnosis({
 }
 
 export function hasPublishedInvocationBlockingSensitiveAccessSummary(
-  summary?: PublishedInvocationSensitiveAccessSummary | null
+  summary?: PublishedInvocationSensitiveAccessSummaryLike | null
 ) {
   if (!summary) {
     return false;
   }
 
   return Boolean(
-    summary.pending_approval_count > 0 ||
-      summary.rejected_approval_count > 0 ||
-      summary.expired_approval_count > 0 ||
-      summary.pending_notification_count > 0 ||
-      summary.failed_notification_count > 0
+    (summary.pending_approval_count ?? 0) > 0 ||
+      (summary.rejected_approval_count ?? 0) > 0 ||
+      (summary.expired_approval_count ?? 0) > 0 ||
+      (summary.pending_notification_count ?? 0) > 0 ||
+      (summary.failed_notification_count ?? 0) > 0
   );
 }
 
@@ -2956,28 +2989,177 @@ export function buildPublishedInvocationWaitingOverview({
 }
 
 function buildPublishedInvocationDiagnosticFollowUpSurface({
+  summary,
   reasonCounts,
   runStatusCounts,
   message,
   sandboxReadiness,
   callbackWaitingAutomation
 }: {
+  summary?: PublishedInvocationSensitiveAccessSummaryLike | null;
   reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
   runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
   message?: string | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 }) {
-  return resolvePreferredSystemOverviewFollowUpSurface({
+  const callbackFollowUpSurface = resolvePreferredSystemOverviewFollowUpSurface({
     callbackActive:
       getFacetCount(runStatusCounts, "waiting_callback") > 0 ||
       messageMentionsCallbackAutomation(message),
-    callbackWaitingAutomation,
+    callbackWaitingAutomation
+  });
+
+  if (callbackFollowUpSurface) {
+    return mapPublishedInvocationSystemFollowUpSurface(callbackFollowUpSurface);
+  }
+
+  const sensitiveAccessFollowUpSurface =
+    shouldPreferPublishedInvocationSensitiveAccessFollowUp({
+      summary,
+      reasonCounts,
+      runStatusCounts,
+      message
+    })
+      ? buildPublishedInvocationSensitiveAccessFollowUpSurface(summary)
+      : null;
+
+  if (sensitiveAccessFollowUpSurface) {
+    return sensitiveAccessFollowUpSurface;
+  }
+
+  const sandboxFollowUpSurface = resolvePreferredSystemOverviewFollowUpSurface({
     sandboxActive:
       getFacetCount(reasonCounts, "runtime_failed") > 0 ||
       messageMentionsSandboxExecution(message),
     sandboxReadiness
   });
+
+  return sandboxFollowUpSurface
+    ? mapPublishedInvocationSystemFollowUpSurface(sandboxFollowUpSurface)
+    : null;
+}
+
+function mapPublishedInvocationSystemFollowUpSurface(surface: {
+  source: "callback_waiting_automation" | "sandbox_readiness";
+  detail: string;
+  href: string | null;
+  hrefLabel: string | null;
+}): PublishedInvocationDiagnosticFollowUpSurface {
+  return {
+    source: surface.source,
+    detail: surface.detail,
+    href: surface.href,
+    hrefLabel: surface.hrefLabel
+  };
+}
+
+function shouldPreferPublishedInvocationSensitiveAccessFollowUp({
+  summary,
+  reasonCounts,
+  runStatusCounts,
+  message
+}: {
+  summary?: PublishedInvocationSensitiveAccessSummaryLike | null;
+  reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  message?: string | null;
+}) {
+  if (!hasPublishedInvocationBlockingSensitiveAccessSummary(summary)) {
+    return false;
+  }
+
+  if (getFacetCount(runStatusCounts, "waiting_input") > 0) {
+    return true;
+  }
+
+  if (getFacetCount(reasonCounts, "sync_waiting_unsupported") > 0) {
+    return true;
+  }
+
+  const normalizedMessage = normalizePublishedInvocationFailureReasonMessage(message);
+  if (!normalizedMessage) {
+    return false;
+  }
+
+  return (
+    normalizedMessage.includes("approval") ||
+    normalizedMessage.includes("notification") ||
+    normalizedMessage.includes("sensitive access")
+  );
+}
+
+function buildPublishedInvocationSensitiveAccessFollowUpSurface(
+  summary?: PublishedInvocationSensitiveAccessSummaryLike | null
+): PublishedInvocationDiagnosticFollowUpSurface | null {
+  if (!summary) {
+    return null;
+  }
+
+  const inboxLabel = buildSensitiveAccessTimelineSurfaceCopy({
+    surface: "publish_invocation"
+  }).inboxLinkLabel;
+  const buildSurface = ({
+    detail,
+    href
+  }: {
+    detail: string;
+    href: string;
+  }): PublishedInvocationDiagnosticFollowUpSurface | null => {
+    const linkSurface = buildOperatorInboxSliceLinkSurface({ href, hrefLabel: inboxLabel });
+    if (!linkSurface) {
+      return null;
+    }
+
+    return {
+      source: "sensitive_access",
+      detail,
+      href: linkSurface.href,
+      hrefLabel: linkSurface.label
+    };
+  };
+
+  if ((summary.pending_approval_count ?? 0) > 0) {
+    return buildSurface({
+      detail:
+        `Sensitive access inbox 里仍有 ${formatCountLabel(summary.pending_approval_count ?? 0, "pending approval ticket")}；优先处理审批票据，再决定这是不是纯 publish/runtime failure。`,
+      href: buildSensitiveAccessInboxHref({ status: "pending" })
+    });
+  }
+
+  if ((summary.failed_notification_count ?? 0) > 0) {
+    return buildSurface({
+      detail:
+        `Sensitive access inbox 里仍有 ${formatCountLabel(summary.failed_notification_count ?? 0, "failed notification")}；优先重试通知投递，再决定这是不是纯 publish/runtime failure。`,
+      href: buildSensitiveAccessInboxHref({ notificationStatus: "failed" })
+    });
+  }
+
+  if ((summary.pending_notification_count ?? 0) > 0) {
+    return buildSurface({
+      detail:
+        `Sensitive access inbox 里仍有 ${formatCountLabel(summary.pending_notification_count ?? 0, "pending notification")}；先确认通知是否送达，再决定这是不是纯 publish/runtime failure。`,
+      href: buildSensitiveAccessInboxHref({ notificationStatus: "pending" })
+    });
+  }
+
+  if ((summary.rejected_approval_count ?? 0) > 0) {
+    return buildSurface({
+      detail:
+        `Sensitive access inbox 里有 ${formatCountLabel(summary.rejected_approval_count ?? 0, "rejected approval ticket")}；先确认 operator decision，再决定是否重新发起 publish。`,
+      href: buildSensitiveAccessInboxHref({ status: "rejected" })
+    });
+  }
+
+  if ((summary.expired_approval_count ?? 0) > 0) {
+    return buildSurface({
+      detail:
+        `Sensitive access inbox 里有 ${formatCountLabel(summary.expired_approval_count ?? 0, "expired approval ticket")}；先续期或重新发起审批，再决定是否重试 publish。`,
+      href: buildSensitiveAccessInboxHref({ status: "expired" })
+    });
+  }
+
+  return null;
 }
 
 export function formatRateLimitPressure(

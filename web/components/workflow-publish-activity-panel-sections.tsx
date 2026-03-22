@@ -125,6 +125,7 @@ export function WorkflowPublishActivityInsights({
     runStatesEmptyLabel: insightsSurfaceCopy.trafficRunStatesEmptyLabel
   });
   const issueSignalsSurface = buildPublishedInvocationIssueSignalsSurface({
+    summary,
     reasonCounts,
     runStatusCounts,
     failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
