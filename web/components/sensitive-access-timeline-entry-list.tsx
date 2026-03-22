@@ -6,7 +6,10 @@ import { useMemo, useState } from "react";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
+import type { RunCallbackTicketItem } from "@/lib/get-run-views";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import {
@@ -36,6 +39,8 @@ type SensitiveAccessTimelineEntryListProps = {
   entries: SensitiveAccessTimelineEntry[];
   emptyCopy: string;
   defaultRunId?: string | null;
+  callbackTickets?: RunCallbackTicketItem[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 };
 
 type DecisionFilterValue =
@@ -179,7 +184,9 @@ function renderFilterStrip<T extends string>({
 export function SensitiveAccessTimelineEntryList({
   entries,
   emptyCopy,
-  defaultRunId
+  defaultRunId,
+  callbackTickets = [],
+  callbackWaitingAutomation = null
 }: SensitiveAccessTimelineEntryListProps) {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilterValue>("all");
@@ -354,6 +361,14 @@ export function SensitiveAccessTimelineEntryList({
               : operatorSurfaceCopy.openInboxSliceLabel;
           const shouldRenderStandaloneRecommendedNextStep =
             !shouldRenderCallbackWaitingSummary && !hasStructuredOperatorFeedback && recommendedNextStep;
+          const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
+            inboxHref: inboxSliceHref,
+            callbackTickets,
+            callbackWaitingAutomation,
+            sensitiveAccessEntries: [entry],
+            suppressSensitiveAccessContextRows: true,
+            showSensitiveAccessInlineActions: false
+          };
 
           return (
             <article className="event-row compact-card" key={entry.request.id}>
@@ -434,12 +449,7 @@ export function SensitiveAccessTimelineEntryList({
 
               {hasStructuredOperatorFeedback ? (
                 <InlineOperatorActionFeedback
-                  callbackWaitingSummaryProps={{
-                    inboxHref: inboxSliceHref,
-                    sensitiveAccessEntries: [entry],
-                    suppressSensitiveAccessContextRows: true,
-                    showSensitiveAccessInlineActions: false
-                  }}
+                  callbackWaitingSummaryProps={callbackWaitingSummaryProps}
                   message=""
                   outcomeExplanation={shouldRenderCallbackWaitingSummary ? null : canonicalOutcomeExplanation}
                   recommendedNextStep={
@@ -471,6 +481,8 @@ export function SensitiveAccessTimelineEntryList({
               {shouldRenderCallbackWaitingSummary ? (
                 <CallbackWaitingSummaryCard
                   callbackWaitingExplanation={entry.outcome_explanation ?? null}
+                  callbackTickets={callbackTickets}
+                  callbackWaitingAutomation={callbackWaitingAutomation}
                   className="payload-card compact-card"
                   inboxHref={inboxSliceHref}
                   nodeRunId={nodeRunId}
@@ -538,6 +550,7 @@ export function SensitiveAccessTimelineEntryList({
               ) : null}
 
               <SensitiveAccessInlineActions
+                callbackWaitingSummaryProps={callbackWaitingSummaryProps}
                 compact
                 nodeRunId={nodeRunId}
                 notifications={entry.notifications}

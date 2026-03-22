@@ -573,6 +573,8 @@ export function WorkflowPublishInvocationDetailPanel({
             </div>
           ) : null}
           <SensitiveAccessTimelineEntryList
+            callbackTickets={callbackTickets}
+            callbackWaitingAutomation={callbackWaitingAutomation}
             defaultRunId={runId}
             entries={blockingSensitiveAccessEntries}
             emptyCopy={detailSurfaceCopy.blockingApprovalTimelineEmptyState}
@@ -591,6 +593,8 @@ export function WorkflowPublishInvocationDetailPanel({
           </div>
         ) : null}
         <SensitiveAccessTimelineEntryList
+          callbackTickets={callbackTickets}
+          callbackWaitingAutomation={callbackWaitingAutomation}
           defaultRunId={runId}
           entries={sensitiveAccessEntries}
           emptyCopy={detailSurfaceCopy.approvalTimelineEmptyState}

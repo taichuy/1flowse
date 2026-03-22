@@ -41,6 +41,7 @@ import {
   listCallbackWaitingOperatorStatuses,
   pickCallbackWaitingInlineSensitiveAccessEntry
 } from "@/lib/callback-waiting-presenters";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 
 type CallbackWaitingFocusNodeEvidence = {
   artifact_refs: string[];
@@ -247,6 +248,14 @@ export function CallbackWaitingSummaryCard({
       : recommendedAction?.kind === "cleanup_expired_tickets"
         ? "cleanup"
         : null;
+  const sensitiveAccessCallbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
+    inboxHref,
+    callbackTickets,
+    callbackWaitingAutomation,
+    sensitiveAccessEntries,
+    suppressSensitiveAccessContextRows,
+    showSensitiveAccessInlineActions: false
+  };
   const callbackInlineActionTitle = buildCallbackWaitingInlineActionTitle({
     actionKind: recommendedAction?.kind ?? null,
     surfaceCopy
@@ -423,6 +432,7 @@ export function CallbackWaitingSummaryCard({
       ) : null}
       {shouldShowSensitiveAccessInlineActions && inlineSensitiveAccessEntry ? (
         <SensitiveAccessInlineActions
+          callbackWaitingSummaryProps={sensitiveAccessCallbackWaitingSummaryProps}
           compact
           nodeRunId={
             inlineSensitiveAccessEntry.approval_ticket?.node_run_id ?? inlineActionNodeRunId

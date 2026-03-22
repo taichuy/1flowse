@@ -17,6 +17,7 @@ import {
   getApprovalExpectationCopy,
   getNotificationRetryExpectationCopy
 } from "@/lib/operator-action-result-presenters";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import { buildSensitiveAccessNotificationRetryGuidance } from "@/lib/sensitive-access-notification-guidance";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 
@@ -45,6 +46,7 @@ type SensitiveAccessInlineActionsProps = {
   runId?: string | null;
   nodeRunId?: string | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingSummaryProps?: CallbackWaitingSummaryProps;
   compact?: boolean;
 };
 
@@ -117,6 +119,7 @@ export function SensitiveAccessInlineActions({
   runId = null,
   nodeRunId = null,
   sandboxReadiness = null,
+  callbackWaitingSummaryProps,
   compact = false
 }: SensitiveAccessInlineActionsProps) {
   const router = useRouter();
@@ -173,6 +176,7 @@ export function SensitiveAccessInlineActions({
           <p className="empty-state compact">{getApprovalExpectationCopy()}</p>
           {decisionState.message && decisionState.ticketId === ticket?.id ? (
             <InlineOperatorActionFeedback
+              callbackWaitingSummaryProps={callbackWaitingSummaryProps}
               message={decisionState.message}
               outcomeExplanation={decisionState.outcomeExplanation}
               runFollowUpExplanation={decisionState.runFollowUpExplanation}
@@ -257,6 +261,7 @@ export function SensitiveAccessInlineActions({
           <p className="empty-state compact">{getNotificationRetryExpectationCopy()}</p>
           {retryState.message && retryState.dispatchId === retriableNotification.id ? (
             <InlineOperatorActionFeedback
+              callbackWaitingSummaryProps={callbackWaitingSummaryProps}
               message={retryState.message}
               outcomeExplanation={retryState.outcomeExplanation}
               runFollowUpExplanation={retryState.runFollowUpExplanation}

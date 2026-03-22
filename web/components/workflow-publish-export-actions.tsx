@@ -4,7 +4,10 @@ import React from "react";
 import { useMemo, useState } from "react";
 
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import {
   buildPublishedEndpointInvocationExportUrl,
   type PublishedEndpointInvocationExportFormat,
@@ -26,6 +29,7 @@ type WorkflowPublishExportActionsProps = {
   bindingId: string;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   formats?: PublishedEndpointInvocationExportFormat[];
   requesterId?: string;
 };
@@ -43,6 +47,7 @@ export function WorkflowPublishExportActions({
   bindingId,
   activeInvocationFilter,
   sandboxReadiness,
+  callbackWaitingAutomation = null,
   formats = DEFAULT_FORMATS,
   requesterId = "publish-activity-export-ui"
 }: WorkflowPublishExportActionsProps) {
@@ -157,6 +162,7 @@ export function WorkflowPublishExportActions({
       {blockedPayload ? (
         <div className="trace-export-blocked">
           <SensitiveAccessBlockedCard
+            callbackWaitingAutomation={callbackWaitingAutomation}
             payload={blockedPayload}
             summary={blockedCopy?.summary}
             title={blockedCopy?.title ?? "Publish activity export access blocked"}

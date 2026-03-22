@@ -8,6 +8,7 @@ import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-prese
 
 const inlineFeedbackProps: Array<Record<string, unknown>> = [];
 const callbackSummaryProps: Array<Record<string, unknown>> = [];
+const sensitiveAccessInlineActionProps: Array<Record<string, unknown>> = [];
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -41,7 +42,10 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
-  SensitiveAccessInlineActions: () => createElement("div", { "data-testid": "sensitive-access-inline-actions" })
+  SensitiveAccessInlineActions: (props: Record<string, unknown>) => {
+    sensitiveAccessInlineActionProps.push(props);
+    return createElement("div", { "data-testid": "sensitive-access-inline-actions" });
+  }
 }));
 
 function buildEntry(): SensitiveAccessTimelineEntry {
@@ -139,6 +143,7 @@ describe("SensitiveAccessTimelineEntryList", () => {
   beforeEach(() => {
     inlineFeedbackProps.length = 0;
     callbackSummaryProps.length = 0;
+    sensitiveAccessInlineActionProps.length = 0;
   });
 
   it("uses the matching sampled run snapshot instead of the first stale sample", () => {
@@ -201,6 +206,25 @@ describe("SensitiveAccessTimelineEntryList", () => {
 
   it("passes sensitive-access callback context into inline feedback when run snapshot already carries callback waiting facts", () => {
     const entry = buildEntry();
+    const callbackTickets = [
+      {
+        ticket: "callback-ticket-1",
+        run_id: "run-current",
+        node_run_id: "node-run-current",
+        status: "pending",
+        waiting_status: "waiting",
+        tool_call_index: 0,
+        created_at: "2026-03-20T10:00:00Z"
+      }
+    ];
+    const callbackWaitingAutomation = {
+      status: "healthy",
+      scheduler_required: true,
+      detail: "callback waiting automation healthy",
+      scheduler_health_status: "healthy",
+      scheduler_health_detail: "scheduler ready",
+      steps: []
+    };
 
     const html = renderToStaticMarkup(
       createElement(SensitiveAccessTimelineEntryList, {
@@ -221,7 +245,9 @@ describe("SensitiveAccessTimelineEntryList", () => {
             }
           }
         ],
-        emptyCopy: "no entries"
+        emptyCopy: "no entries",
+        callbackTickets,
+        callbackWaitingAutomation
       })
     );
 
@@ -231,6 +257,8 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(inlineFeedbackProps[0]?.recommendedNextStep ?? null).toBeNull();
     expect(inlineFeedbackProps[0]?.callbackWaitingSummaryProps).toMatchObject({
       inboxHref: expect.stringContaining("/sensitive-access?"),
+      callbackTickets,
+      callbackWaitingAutomation,
       showSensitiveAccessInlineActions: false
     });
     expect(
@@ -248,6 +276,12 @@ describe("SensitiveAccessTimelineEntryList", () => {
         }
       )?.inboxHref
     ).toContain("run_id=run-current");
+    expect(sensitiveAccessInlineActionProps).toHaveLength(1);
+    expect(sensitiveAccessInlineActionProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      callbackTickets,
+      callbackWaitingAutomation,
+      showSensitiveAccessInlineActions: false
+    });
   });
 
   it("renders a standalone shared recommended next step when only operator follow-up remains", () => {

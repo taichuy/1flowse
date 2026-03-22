@@ -5,6 +5,8 @@ import Link from "next/link";
 
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import {
   resolveSensitiveAccessBlockingRunId,
   type SensitiveAccessBlockingPayload
@@ -38,13 +40,15 @@ type SensitiveAccessBlockedCardProps = {
   payload: SensitiveAccessBlockingPayload;
   clearHref?: string | null;
   summary?: string;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 };
 
 export function SensitiveAccessBlockedCard({
   title,
   payload,
   clearHref = null,
-  summary
+  summary,
+  callbackWaitingAutomation = null
 }: SensitiveAccessBlockedCardProps) {
   const runId = resolveSensitiveAccessBlockingRunId(payload);
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
@@ -85,6 +89,11 @@ export function SensitiveAccessBlockedCard({
     runSnapshot: payload.run_snapshot ?? null,
     runFollowUpExplanation: payload.run_follow_up?.explanation ?? null
   });
+  const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
+    inboxHref,
+    callbackWaitingAutomation,
+    showSensitiveAccessInlineActions: false
+  };
 
   return (
     <article className="entry-card compact-card">
@@ -174,6 +183,7 @@ export function SensitiveAccessBlockedCard({
 
       {hasStructuredFollowUp ? (
         <InlineOperatorActionFeedback
+          callbackWaitingSummaryProps={callbackWaitingSummaryProps}
           message=""
           outcomeExplanation={canonicalOutcomeExplanation}
           recommendedNextStep={recommendedNextStep}
@@ -187,6 +197,7 @@ export function SensitiveAccessBlockedCard({
       ) : null}
 
       <SensitiveAccessInlineActions
+        callbackWaitingSummaryProps={callbackWaitingSummaryProps}
         compact
         nodeRunId={
           payload.approval_ticket?.node_run_id ?? payload.access_request.node_run_id ?? null

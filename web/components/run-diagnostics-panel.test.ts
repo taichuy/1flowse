@@ -6,6 +6,10 @@ import { RunDiagnosticsPanel } from "@/components/run-diagnostics-panel";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 
+const { traceFiltersSectionSpy } = vi.hoisted(() => ({
+  traceFiltersSectionSpy: vi.fn()
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
@@ -16,8 +20,10 @@ vi.mock("@/components/run-diagnostics-panel/overview-sections", () => ({
 }));
 
 vi.mock("@/components/run-diagnostics-panel/trace-filters-section", () => ({
-  RunDiagnosticsTraceFiltersSection: () =>
-    createElement("div", { "data-testid": "trace-filters-section" })
+  RunDiagnosticsTraceFiltersSection: (props: Record<string, unknown>) => {
+    traceFiltersSectionSpy(props);
+    return createElement("div", { "data-testid": "trace-filters-section" });
+  }
 }));
 
 vi.mock("@/components/run-diagnostics-execution-sections", () => ({
@@ -109,5 +115,11 @@ describe("RunDiagnosticsPanel", () => {
     expect(html).toContain("返回系统首页");
     expect(html).toContain('href="/"');
     expect(html).toContain("打开原始 events API");
+    expect(traceFiltersSectionSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callbackWaitingAutomation,
+        runId: "run-1"
+      })
+    );
   });
 });

@@ -7,6 +7,7 @@ import type { CallbackWaitingLifecycleSummary } from "@/lib/get-run-views";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 
 const callbackInlineActionProps: Array<Record<string, unknown>> = [];
+const sensitiveAccessInlineActionProps: Array<Record<string, unknown>> = [];
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -28,7 +29,10 @@ vi.mock("@/components/callback-waiting-inline-actions", () => ({
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
-  SensitiveAccessInlineActions: () => createElement("div", { "data-testid": "sensitive-access-inline-actions" })
+  SensitiveAccessInlineActions: (props: Record<string, unknown>) => {
+    sensitiveAccessInlineActionProps.push(props);
+    return createElement("div", { "data-testid": "sensitive-access-inline-actions" });
+  }
 }));
 
 type FocusNodeEvidence = NonNullable<ComponentProps<typeof CallbackWaitingSummaryCard>["focusNodeEvidence"]>;
@@ -168,6 +172,7 @@ function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
 describe("CallbackWaitingSummaryCard", () => {
   beforeEach(() => {
     callbackInlineActionProps.length = 0;
+    sensitiveAccessInlineActionProps.length = 0;
   });
 
   it("puts compact execution fact badges before the evidence card when enabled", () => {
@@ -286,6 +291,40 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(callbackInlineActionProps).toHaveLength(1);
     expect(callbackInlineActionProps[0]?.callbackWaitingSummaryProps).toMatchObject({
       inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+      callbackTickets,
+      callbackWaitingAutomation,
+      showSensitiveAccessInlineActions: false
+    });
+  });
+
+  it("passes shared callback waiting context into nested sensitive-access actions", () => {
+    const callbackTickets = [
+      {
+        ticket: "callback-ticket-1",
+        run_id: "run-1",
+        node_run_id: "node-run-action",
+        status: "pending",
+        waiting_status: "waiting",
+        tool_call_index: 0,
+        created_at: "2026-03-20T10:00:00Z"
+      }
+    ];
+    const callbackWaitingAutomation = buildCallbackWaitingAutomation();
+
+    renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        runId: "run-1",
+        nodeRunId: "node-run-action",
+        callbackTickets,
+        callbackWaitingAutomation,
+        inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-action",
+        sensitiveAccessEntries: [buildSensitiveAccessEntry()]
+      })
+    );
+
+    expect(sensitiveAccessInlineActionProps).toHaveLength(1);
+    expect(sensitiveAccessInlineActionProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-action",
       callbackTickets,
       callbackWaitingAutomation,
       showSensitiveAccessInlineActions: false

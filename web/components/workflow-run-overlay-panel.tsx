@@ -153,6 +153,7 @@ export function WorkflowRunOverlayPanel({
                   </Link>
                 ) : null}
                 <RunTraceExportActions
+                  callbackWaitingAutomation={callbackWaitingAutomation}
                   formats={["json"]}
                   query={{
                     limit: DEFAULT_RUN_TRACE_LIMIT,

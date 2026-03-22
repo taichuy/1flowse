@@ -64,6 +64,7 @@ export function WorkflowPublishActivityPanel({
           workflowId={workflowId}
           bindingId={binding.id}
           activeInvocationFilter={activeInvocationFilter}
+          callbackWaitingAutomation={callbackWaitingAutomation}
           sandboxReadiness={sandboxReadiness}
         />
       </div>

@@ -308,6 +308,8 @@ export function ExecutionNodeCard({
 
       <ExecutionNodeSensitiveAccessSection count={node.sensitive_access_entries.length}>
           <SensitiveAccessTimelineEntryList
+            callbackTickets={node.callback_tickets}
+            callbackWaitingAutomation={callbackWaitingAutomation}
             entries={node.sensitive_access_entries}
             emptyCopy="No sensitive access decisions were recorded for this node."
             defaultRunId={latestApprovalEntry?.request.run_id ?? latestApprovalEntry?.approval_ticket?.run_id ?? null}

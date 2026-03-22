@@ -10,6 +10,8 @@ import type {
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
 
+const sensitiveAccessTimelineProps: Array<Record<string, unknown>> = [];
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
@@ -20,15 +22,17 @@ vi.mock("@/components/run-diagnostics-execution/execution-node-card", () => ({
 }));
 
 vi.mock("@/components/sensitive-access-timeline-entry-list", () => ({
-  SensitiveAccessTimelineEntryList: ({ emptyCopy }: { emptyCopy: string }) =>
-    createElement(
+  SensitiveAccessTimelineEntryList: (props: Record<string, unknown>) => {
+    sensitiveAccessTimelineProps.push(props);
+    return createElement(
       "div",
       {
         "data-testid": "sensitive-access-timeline-entry-list",
-        "data-empty-copy": emptyCopy
+        "data-empty-copy": String(props.emptyCopy ?? "")
       },
-      emptyCopy
-    )
+      String(props.emptyCopy ?? "")
+    );
+  }
 }));
 
 vi.mock("@/components/tool-governance-summary", () => ({
@@ -469,6 +473,27 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
 
     expect(html).toContain("approval_ticket_id=ticket-1");
     expect(html).toContain("Handle approval here first");
+  });
+
+  it("passes shared callback blocker context into approval timeline lists", () => {
+    const detail = buildDetail();
+    const initialLength = sensitiveAccessTimelineProps.length;
+
+    renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    const currentProps = sensitiveAccessTimelineProps.slice(initialLength);
+    expect(currentProps.length).toBeGreaterThan(0);
+    currentProps.forEach((props) => {
+      expect(props.callbackWaitingAutomation).toEqual(callbackWaitingAutomation);
+      expect(props.callbackTickets).toEqual(detail.callback_tickets);
+    });
   });
 
   it("keeps invocation-level summary but defers duplicated callback follow-up to the sampled shared summary", () => {

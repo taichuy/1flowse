@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { RunDiagnosticsTraceFiltersSection } from "@/components/run-diagnostics-panel/trace-filters-section";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
 import { buildRunDiagnosticsTraceSurfaceCopy } from "@/lib/run-diagnostics-presenters";
 
@@ -22,8 +23,30 @@ vi.mock("@/components/run-trace-export-actions", () => ({
   }
 }));
 
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "configured",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "unhealthy",
+    scheduler_health_detail: "scheduler is currently backlogged.",
+    affected_run_count: 2,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "callback_waiting",
+      entry_key: "runs",
+      href: "/runs?status=waiting",
+      label: "Open run library"
+    },
+    steps: []
+  };
+}
+
 describe("RunDiagnosticsTraceFiltersSection", () => {
   it("uses shared trace export blocker copy instead of local summary overrides", () => {
+    const callbackWaitingAutomation = buildCallbackWaitingAutomation();
+
     renderToStaticMarkup(
       createElement(RunDiagnosticsTraceFiltersSection, {
         runId: "run-1",
@@ -33,12 +56,14 @@ describe("RunDiagnosticsTraceFiltersSection", () => {
         },
         eventTypeOptions: ["node.started"],
         nodeRunOptions: ["node-run-1"],
-        activeFilters: []
+        activeFilters: [],
+        callbackWaitingAutomation
       })
     );
 
     expect(exportActionSpy).toHaveBeenCalledWith(
       expect.objectContaining({
+        callbackWaitingAutomation,
         runId: "run-1",
         requesterId: "run-diagnostics-trace-export",
         query: {

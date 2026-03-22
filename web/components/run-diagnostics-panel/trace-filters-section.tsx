@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import { DEFAULT_RUN_TRACE_LIMIT, type RunTraceQuery } from "@/lib/get-run-trace";
 import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
 import { buildRunDiagnosticsTraceSurfaceCopy } from "@/lib/run-diagnostics-presenters";
@@ -14,6 +15,7 @@ type RunDiagnosticsTraceFiltersSectionProps = {
   eventTypeOptions: string[];
   nodeRunOptions: string[];
   activeFilters: string[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 };
 
 export function RunDiagnosticsTraceFiltersSection({
@@ -21,7 +23,8 @@ export function RunDiagnosticsTraceFiltersSection({
   activeTraceQuery,
   eventTypeOptions,
   nodeRunOptions,
-  activeFilters
+  activeFilters,
+  callbackWaitingAutomation = null
 }: RunDiagnosticsTraceFiltersSectionProps) {
   const surfaceCopy = buildRunDiagnosticsTraceSurfaceCopy({
     defaultLimit: DEFAULT_RUN_TRACE_LIMIT
@@ -139,6 +142,7 @@ export function RunDiagnosticsTraceFiltersSection({
               {resetRunLink.label}
             </Link>
             <RunTraceExportActions
+              callbackWaitingAutomation={callbackWaitingAutomation}
               query={activeTraceQuery}
               requesterId="run-diagnostics-trace-export"
               runId={runId}

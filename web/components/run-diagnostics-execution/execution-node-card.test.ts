@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExecutionNodeCard } from "@/components/run-diagnostics-execution/execution-node-card";
 import type {
@@ -8,6 +8,8 @@ import type {
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
 import type { RunExecutionNodeItem, RunExecutionSkillTrace } from "@/lib/get-run-views";
+
+const sensitiveAccessTimelineProps: Array<Record<string, unknown>> = [];
 
 vi.mock("@/components/callback-waiting-summary-card", () => ({
   CallbackWaitingSummaryCard: ({
@@ -72,8 +74,10 @@ vi.mock("@/components/run-diagnostics-execution/execution-node-card-sections", (
 }));
 
 vi.mock("@/components/sensitive-access-timeline-entry-list", () => ({
-  SensitiveAccessTimelineEntryList: () =>
-    createElement("div", { "data-testid": "sensitive-access-timeline-entry-list" })
+  SensitiveAccessTimelineEntryList: (props: Record<string, unknown>) => {
+    sensitiveAccessTimelineProps.push(props);
+    return createElement("div", { "data-testid": "sensitive-access-timeline-entry-list" });
+  }
 }));
 
 function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
@@ -371,12 +375,17 @@ function buildSkillTrace(): RunExecutionSkillTrace {
 }
 
 describe("ExecutionNodeCard", () => {
+  beforeEach(() => {
+    sensitiveAccessTimelineProps.length = 0;
+  });
+
   it("passes compact focus evidence and skill trace into callback waiting summary", () => {
+    const callbackWaitingAutomation = buildCallbackWaitingAutomation();
     const html = renderToStaticMarkup(
       createElement(ExecutionNodeCard, {
         node: buildExecutionNode(),
         runId: "run-callback-1",
-        callbackWaitingAutomation: buildCallbackWaitingAutomation()
+        callbackWaitingAutomation
       })
     );
 
@@ -387,6 +396,8 @@ describe("ExecutionNodeCard", () => {
     expect(html).toContain("skill loads 1");
     expect(html).toContain("skill refs 1");
     expect(html).toContain("skill node callback_node Callback node");
+    expect(sensitiveAccessTimelineProps[0]?.callbackWaitingAutomation).toEqual(callbackWaitingAutomation);
+    expect(sensitiveAccessTimelineProps[0]?.callbackTickets).toEqual(buildExecutionNode().callback_tickets);
     expect(html).not.toContain("当前节点仍在等待 callback。");
     expect(html).not.toContain("优先观察定时恢复是否已重新排队。");
   });

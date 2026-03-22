@@ -153,6 +153,7 @@ export function RunDiagnosticsPanel({
         eventTypeOptions={eventTypeOptions}
         nodeRunOptions={nodeRunOptions}
         activeFilters={activeFilters}
+        callbackWaitingAutomation={callbackWaitingAutomation}
       />
 
       <RunDiagnosticsExecutionSections

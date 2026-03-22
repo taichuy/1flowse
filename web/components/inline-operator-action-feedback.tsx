@@ -6,12 +6,8 @@ import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
-import type { RunCallbackTicketItem } from "@/lib/get-run-views";
-import type {
-  CallbackWaitingAutomationCheck,
-  SandboxReadinessCheck
-} from "@/lib/get-system-overview";
-import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import {
   buildExecutionFocusExplainableNode,
   buildOperatorInlineActionFeedbackModel,
@@ -39,14 +35,7 @@ type InlineOperatorActionFeedbackProps = {
   runId?: string | null;
   recommendedNextStep?: OperatorRecommendedNextStep | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
-  callbackWaitingSummaryProps?: {
-    inboxHref?: string | null;
-    callbackTickets?: RunCallbackTicketItem[];
-    callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
-    sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
-    suppressSensitiveAccessContextRows?: boolean;
-    showSensitiveAccessInlineActions?: boolean;
-  };
+  callbackWaitingSummaryProps?: CallbackWaitingSummaryProps;
 } & OperatorInlineActionResultState;
 
 export function InlineOperatorActionFeedback({

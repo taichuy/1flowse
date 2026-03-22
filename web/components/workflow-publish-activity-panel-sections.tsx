@@ -396,6 +396,7 @@ export function WorkflowPublishActivityDetails({
             />
           ) : clearInvocationDetailHref && selectedInvocationSurface.kind === "blocked" ? (
             <SensitiveAccessBlockedCard
+              callbackWaitingAutomation={callbackWaitingAutomation}
               clearHref={clearInvocationDetailHref}
               payload={selectedInvocationSurface.payload}
               summary={selectedInvocationSurface.blockedSurfaceCopy.summary}

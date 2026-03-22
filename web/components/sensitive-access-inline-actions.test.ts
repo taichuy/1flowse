@@ -57,6 +57,18 @@ describe("SensitiveAccessInlineActions", () => {
   });
 
   it("passes canonical run follow-up into approval and retry feedback cards", () => {
+    const callbackWaitingSummaryProps = {
+      inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+      callbackWaitingAutomation: {
+        status: "healthy",
+        scheduler_required: true,
+        detail: "callback waiting automation healthy",
+        scheduler_health_status: "healthy",
+        scheduler_health_detail: "scheduler ready",
+        steps: []
+      },
+      showSensitiveAccessInlineActions: false
+    };
     const decisionRunFollowUp = {
       affectedRunCount: 1,
       sampledRunCount: 1,
@@ -121,12 +133,15 @@ describe("SensitiveAccessInlineActions", () => {
         notificationChannels: [],
         runId: "run-1",
         nodeRunId: "node-run-1",
+        callbackWaitingSummaryProps,
         compact: true
       })
     );
 
     expect(html).toContain('data-has-run-follow-up="true"');
     expect(inlineFeedbackProps).toHaveLength(2);
+    expect(inlineFeedbackProps[0]?.callbackWaitingSummaryProps).toEqual(callbackWaitingSummaryProps);
+    expect(inlineFeedbackProps[1]?.callbackWaitingSummaryProps).toEqual(callbackWaitingSummaryProps);
     expect(inlineFeedbackProps[0]?.runFollowUp).toEqual(decisionRunFollowUp);
     expect(inlineFeedbackProps[1]?.runFollowUp).toEqual(retryRunFollowUp);
   });

@@ -13,9 +13,6 @@ import {
   getCleanupExpectationCopy,
   getManualResumeExpectationCopy
 } from "@/lib/operator-action-result-presenters";
-import type { RunCallbackTicketItem } from "@/lib/get-run-views";
-import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
-import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
   buildCallbackWaitingInlineActionStatusHint,
   buildCallbackWaitingInlineActionTitle,
@@ -23,6 +20,7 @@ import {
   type CallbackWaitingInlineActionPreference,
   type CallbackWaitingRecommendedAction
 } from "@/lib/callback-waiting-presenters";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 
 type CallbackWaitingInlineActionsProps = {
@@ -34,14 +32,7 @@ type CallbackWaitingInlineActionsProps = {
   preferredAction?: CallbackWaitingInlineActionPreference;
   recommendedActionKind?: CallbackWaitingRecommendedAction["kind"] | null;
   statusHint?: string | null;
-  callbackWaitingSummaryProps?: {
-    inboxHref?: string | null;
-    callbackTickets?: RunCallbackTicketItem[];
-    callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
-    sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
-    suppressSensitiveAccessContextRows?: boolean;
-    showSensitiveAccessInlineActions?: boolean;
-  };
+  callbackWaitingSummaryProps?: CallbackWaitingSummaryProps;
 };
 
 const initialState: CleanupRunCallbackTicketsState = {

@@ -254,6 +254,7 @@ describe("WorkflowRunOverlayPanel", () => {
         trace: null,
         traceError: null,
         selectedNodeId: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         sandboxReadiness: buildSandboxReadiness(),
         isLoading: false,
         isRefreshingRuns: false,
@@ -269,6 +270,7 @@ describe("WorkflowRunOverlayPanel", () => {
     expect(html).toContain("历史 run 记录的 backend 是 sandbox-stale");
     expect(exportActionSpy).toHaveBeenCalledWith(
       expect.objectContaining({
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         runId: "run-1",
         requesterId: "workflow-run-overlay-export",
         formats: ["json"],
