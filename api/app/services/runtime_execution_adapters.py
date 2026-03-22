@@ -81,6 +81,60 @@ def _normalize_backend_extensions(value: object) -> dict[str, Any] | None:
     return dict(value)
 
 
+def build_node_execution_signal_payload(
+    *,
+    node: dict[str, Any],
+    execution_policy: ResolvedExecutionPolicy,
+    effective_execution_class: str | None = None,
+    executor_ref: str | None = None,
+    sandbox_backend_id: str | None = None,
+    sandbox_backend_executor_ref: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "node_id": node.get("id"),
+        "node_type": node.get("type"),
+        "requested_execution_class": execution_policy.execution_class,
+        "execution_source": execution_policy.source,
+    }
+    if execution_policy.profile is not None:
+        payload["requested_execution_profile"] = execution_policy.profile
+    if execution_policy.timeout_ms is not None:
+        payload["requested_execution_timeout_ms"] = execution_policy.timeout_ms
+    if execution_policy.network_policy is not None:
+        payload["requested_network_policy"] = execution_policy.network_policy
+    if execution_policy.filesystem_policy is not None:
+        payload["requested_filesystem_policy"] = execution_policy.filesystem_policy
+
+    if (
+        str(node.get("type") or "") == "sandbox_code"
+        and execution_policy.execution_class in {"sandbox", "microvm"}
+    ):
+        dependency_contract = resolve_sandbox_code_dependency_contract(
+            config=dict(node.get("config") or {}),
+            execution_policy=execution_policy,
+        )
+        if dependency_contract.dependency_mode is not None:
+            payload["requested_dependency_mode"] = dependency_contract.dependency_mode
+        if dependency_contract.builtin_package_set is not None:
+            payload["requested_builtin_package_set"] = (
+                dependency_contract.builtin_package_set
+            )
+        if dependency_contract.dependency_ref is not None:
+            payload["requested_dependency_ref"] = dependency_contract.dependency_ref
+        if dependency_contract.backend_extensions is not None:
+            payload["requested_backend_extensions"] = dependency_contract.backend_extensions
+
+    if effective_execution_class is not None:
+        payload["effective_execution_class"] = effective_execution_class
+    if executor_ref is not None:
+        payload["executor_ref"] = executor_ref
+    if sandbox_backend_id is not None:
+        payload["sandbox_backend_id"] = sandbox_backend_id
+    if sandbox_backend_executor_ref is not None:
+        payload["sandbox_backend_executor_ref"] = sandbox_backend_executor_ref
+    return payload
+
+
 def _parse_sandbox_code_dispatch_config(
     config: dict[str, Any],
     *,
@@ -170,13 +224,12 @@ class SandboxCodeExecutionAdapter:
         events = [
             RuntimeEvent(
                 "node.execution.dispatched",
-                {
-                    "node_id": request.node.get("id"),
-                    "node_type": request.node.get("type"),
-                    "requested_execution_class": request.execution_policy.execution_class,
-                    "effective_execution_class": "subprocess",
-                    "executor_ref": self.adapter_ref,
-                },
+                build_node_execution_signal_payload(
+                    node=request.node,
+                    execution_policy=request.execution_policy,
+                    effective_execution_class="subprocess",
+                    executor_ref=self.adapter_ref,
+                ),
             )
         ]
 
@@ -252,13 +305,12 @@ class BranchSubprocessExecutionAdapter:
         events = [
             RuntimeEvent(
                 "node.execution.dispatched",
-                {
-                    "node_id": request.node.get("id"),
-                    "node_type": node_type,
-                    "requested_execution_class": request.execution_policy.execution_class,
-                    "effective_execution_class": "subprocess",
-                    "executor_ref": self.adapter_ref,
-                },
+                build_node_execution_signal_payload(
+                    node=request.node,
+                    execution_policy=request.execution_policy,
+                    effective_execution_class="subprocess",
+                    executor_ref=self.adapter_ref,
+                ),
             )
         ]
         execution = self._branch_executor.execute(
@@ -349,13 +401,14 @@ class RemoteSandboxExecutionAdapter:
             events=[
                 RuntimeEvent(
                     "node.execution.dispatched",
-                    {
-                        "node_id": request.node.get("id"),
-                        "node_type": request.node.get("type"),
-                        "requested_execution_class": request.execution_policy.execution_class,
-                        "effective_execution_class": execution.effective_execution_class,
-                        "executor_ref": execution.executor_ref,
-                    },
+                    build_node_execution_signal_payload(
+                        node=request.node,
+                        execution_policy=request.execution_policy,
+                        effective_execution_class=execution.effective_execution_class,
+                        executor_ref=execution.executor_ref,
+                        sandbox_backend_id=execution.backend_id,
+                        sandbox_backend_executor_ref=execution.executor_ref,
+                    ),
                 ),
                 RuntimeEvent(
                     "sandbox_code.completed",

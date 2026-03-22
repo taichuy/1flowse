@@ -875,7 +875,38 @@ def test_get_run_execution_view_includes_dependency_contract_fields(
         started_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC),
         phase_started_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC),
     )
-    sqlite_session.add_all([run, node_run])
+    sqlite_session.add_all(
+        [
+            run,
+            node_run,
+            RunEvent(
+                run_id=run.id,
+                node_run_id=node_run.id,
+                event_type="node.execution.dispatched",
+                payload={
+                    "node_id": node_run.node_id,
+                    "node_type": node_run.node_type,
+                    "requested_execution_class": "sandbox",
+                    "execution_source": "runtime_policy",
+                    "requested_execution_profile": "python-safe",
+                    "requested_execution_timeout_ms": 15000,
+                    "requested_network_policy": "restricted",
+                    "requested_filesystem_policy": "ephemeral",
+                    "requested_dependency_mode": "dependency_ref",
+                    "requested_dependency_ref": "bundle:finance-safe-v1",
+                    "requested_backend_extensions": {
+                        "mountPreset": "finance",
+                        "gpu": False,
+                    },
+                    "effective_execution_class": "sandbox",
+                    "executor_ref": "sandbox-backend:sandbox-default",
+                    "sandbox_backend_id": "sandbox-default",
+                    "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+                },
+                created_at=datetime(2026, 3, 18, 9, 0, 5, tzinfo=UTC),
+            ),
+        ]
+    )
     sqlite_session.commit()
 
     response = client.get(f"/api/runs/{run.id}/execution-view")
@@ -896,6 +927,27 @@ def test_get_run_execution_view_includes_dependency_contract_fields(
         "mountPreset": "finance",
         "gpu": False,
     }
+    assert node["execution_dispatched_count"] == 1
+    assert node["requested_execution_class"] == "sandbox"
+    assert node["requested_execution_source"] == "runtime_policy"
+    assert node["requested_execution_profile"] == "python-safe"
+    assert node["requested_execution_timeout_ms"] == 15000
+    assert node["requested_execution_network_policy"] == "restricted"
+    assert node["requested_execution_filesystem_policy"] == "ephemeral"
+    assert node["requested_execution_dependency_mode"] == "dependency_ref"
+    assert node["requested_execution_builtin_package_set"] is None
+    assert node["requested_execution_dependency_ref"] == "bundle:finance-safe-v1"
+    assert node["requested_execution_backend_extensions"] == {
+        "mountPreset": "finance",
+        "gpu": False,
+    }
+    assert node["effective_execution_class"] == "sandbox"
+    assert node["execution_executor_ref"] == "sandbox-backend:sandbox-default"
+    assert node["execution_sandbox_backend_id"] == "sandbox-default"
+    assert (
+        node["execution_sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default"
+    )
 
 
 def test_get_run_execution_view_surfaces_skill_reference_loads(

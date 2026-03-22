@@ -389,6 +389,8 @@ def test_runtime_service_executes_condition_node_via_host_subprocess(
         "node_id": "branch",
         "node_type": "condition",
         "requested_execution_class": "subprocess",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "host-reviewed",
         "effective_execution_class": "subprocess",
         "executor_ref": "runtime:host-subprocess-branch",
     }
@@ -728,6 +730,7 @@ def test_runtime_service_blocks_sandbox_code_without_registered_backend(
         "node_id": "sandbox",
         "node_type": "sandbox_code",
         "requested_execution_class": "sandbox",
+        "execution_source": "default",
         "reason": sandbox_run.error_message,
     }
 
@@ -985,8 +988,17 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
         "node_id": "sandbox",
         "node_type": "sandbox_code",
         "requested_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "python-safe",
+        "requested_execution_timeout_ms": 15000,
+        "requested_network_policy": "restricted",
+        "requested_filesystem_policy": "ephemeral",
+        "requested_dependency_mode": "builtin",
+        "requested_builtin_package_set": "py-data-basic",
         "effective_execution_class": "sandbox",
         "executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
     }
 
     sandbox_artifact = next(
@@ -1139,6 +1151,40 @@ def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
     assert describe_request.execution_class == "sandbox"
     assert describe_request.dependency_mode == "dependency_ref"
     assert describe_request.dependency_ref == "bundle:finance-safe-v1"
+
+    run = sqlite_session.scalars(
+        select(Run).where(Run.workflow_id == workflow.id).order_by(Run.created_at.desc())
+    ).first()
+    assert run is not None
+    assert run.status == "failed"
+
+    sandbox_run = sqlite_session.scalars(
+        select(NodeRun)
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "sandbox")
+        .order_by(NodeRun.started_at.desc())
+    ).first()
+    assert sandbox_run is not None
+    assert sandbox_run.status == "blocked"
+
+    unavailable_event = sqlite_session.scalars(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run.id,
+            RunEvent.node_run_id == sandbox_run.id,
+            RunEvent.event_type == "node.execution.unavailable",
+        )
+        .order_by(RunEvent.id.asc())
+    ).first()
+    assert unavailable_event is not None
+    assert unavailable_event.payload == {
+        "node_id": "sandbox",
+        "node_type": "sandbox_code",
+        "requested_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_dependency_mode": "dependency_ref",
+        "requested_dependency_ref": "bundle:finance-safe-v1",
+        "reason": sandbox_run.error_message,
+    }
 
 
 class _BackendExtensionsMismatchSandboxBackendClientStub:
@@ -1316,6 +1362,8 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         "node_id": "tool",
         "node_type": "tool",
         "requested_execution_class": "microvm",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "strict",
         "reason": (
             "No sandbox backend is registered. Strong-isolation paths must fail closed until "
             "a compatible backend is available."
