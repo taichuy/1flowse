@@ -267,6 +267,32 @@ describe("getSensitiveAccessInboxSnapshot", () => {
     expect(snapshot.channels).toHaveLength(1);
     expect(snapshot.summary.ticket_count).toBe(1);
     expect(snapshot.summary.pending_notification_count).toBe(1);
+    expect(snapshot.summary.affected_run_count).toBe(1);
+    expect(snapshot.summary.affected_workflow_count).toBe(1);
+    expect(snapshot.summary.primary_blocker_kind).toBe("pending_approval");
+    expect(snapshot.summary.blockers).toEqual([
+      {
+        kind: "pending_approval",
+        tone: "blocked",
+        item_count: 1,
+        affected_run_count: 1,
+        affected_workflow_count: 1
+      },
+      {
+        kind: "waiting_resume",
+        tone: "blocked",
+        item_count: 1,
+        affected_run_count: 1,
+        affected_workflow_count: 1
+      },
+      {
+        kind: "pending_notification",
+        tone: "degraded",
+        item_count: 1,
+        affected_run_count: 1,
+        affected_workflow_count: 1
+      }
+    ]);
   });
 
   it("matches the inbox execution context to the current run before using stale sampled snapshots", async () => {

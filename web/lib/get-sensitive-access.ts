@@ -240,6 +240,25 @@ export type SensitiveAccessInboxSummary = {
   pending_notification_count: number;
   delivered_notification_count: number;
   failed_notification_count: number;
+  affected_run_count?: number;
+  affected_workflow_count?: number;
+  primary_blocker_kind?:
+    | "pending_approval"
+    | "waiting_resume"
+    | "failed_notification"
+    | "pending_notification"
+    | null;
+  blockers?: Array<{
+    kind:
+      | "pending_approval"
+      | "waiting_resume"
+      | "failed_notification"
+      | "pending_notification";
+    tone: "blocked" | "degraded";
+    item_count: number;
+    affected_run_count: number;
+    affected_workflow_count: number;
+  }>;
 };
 
 export type SensitiveAccessBulkAction = "approved" | "rejected" | "retry";
@@ -420,7 +439,24 @@ export async function getSensitiveAccessInboxSnapshot({
     resources,
     requests,
     notifications,
-    summary: body?.summary ?? buildInboxSummary(entries)
+    summary: normalizeInboxSummary(body?.summary ?? null, entries)
+  };
+}
+
+function normalizeInboxSummary(
+  summary: SensitiveAccessInboxSummary | null | undefined,
+  entries: SensitiveAccessInboxEntry[]
+): SensitiveAccessInboxSummary {
+  const fallback = buildInboxSummary(entries);
+  if (!summary) {
+    return fallback;
+  }
+
+  return {
+    ...fallback,
+    ...summary,
+    primary_blocker_kind: summary.primary_blocker_kind ?? fallback.primary_blocker_kind,
+    blockers: summary.blockers ?? fallback.blockers
   };
 }
 
@@ -584,6 +620,72 @@ function buildInboxSummary(
   entries: SensitiveAccessInboxEntry[]
 ): SensitiveAccessInboxSummary {
   const notifications = entries.flatMap((entry) => entry.notifications);
+  const collectImpactedScope = (
+    scopedEntries: SensitiveAccessInboxEntry[]
+  ): { runIds: Set<string>; workflowIds: Set<string> } => {
+    const runIds = new Set<string>();
+    const workflowIds = new Set<string>();
+    scopedEntries.forEach((entry) => {
+      const runId =
+        entry.ticket.run_id?.trim() ||
+        entry.request?.run_id?.trim() ||
+        entry.runFollowUp?.sampledRuns.find((sample) => sample.runId.trim())?.runId?.trim() ||
+        null;
+      if (runId) {
+        runIds.add(runId);
+      }
+
+      const workflowId =
+        entry.runSnapshot?.workflowId?.trim() ||
+        entry.runFollowUp?.sampledRuns
+          .map((sample) => sample.snapshot?.workflowId?.trim() ?? "")
+          .find(Boolean) ||
+        null;
+      if (workflowId) {
+        workflowIds.add(workflowId);
+      }
+    });
+    return { runIds, workflowIds };
+  };
+
+  const { runIds, workflowIds } = collectImpactedScope(entries);
+  const blockers = [
+    {
+      kind: "pending_approval" as const,
+      tone: "blocked" as const,
+      item_count: entries.filter((item) => item.ticket.status === "pending").length,
+      entries: entries.filter((item) => item.ticket.status === "pending")
+    },
+    {
+      kind: "waiting_resume" as const,
+      tone: "blocked" as const,
+      item_count: entries.filter((item) => item.ticket.waiting_status === "waiting").length,
+      entries: entries.filter((item) => item.ticket.waiting_status === "waiting")
+    },
+    {
+      kind: "failed_notification" as const,
+      tone: "blocked" as const,
+      item_count: notifications.filter((item) => item.status === "failed").length,
+      entries: entries.filter((item) => item.notifications.some((notification) => notification.status === "failed"))
+    },
+    {
+      kind: "pending_notification" as const,
+      tone: "degraded" as const,
+      item_count: notifications.filter((item) => item.status === "pending").length,
+      entries: entries.filter((item) => item.notifications.some((notification) => notification.status === "pending"))
+    }
+  ]
+    .filter((blocker) => blocker.item_count > 0)
+    .map((blocker) => {
+      const blockerScope = collectImpactedScope(blocker.entries);
+      return {
+        kind: blocker.kind,
+        tone: blocker.tone,
+        item_count: blocker.item_count,
+        affected_run_count: blockerScope.runIds.size,
+        affected_workflow_count: blockerScope.workflowIds.size
+      };
+    });
 
   return {
     ticket_count: entries.length,
@@ -596,6 +698,10 @@ function buildInboxSummary(
     failed_ticket_count: entries.filter((item) => item.ticket.waiting_status === "failed").length,
     pending_notification_count: notifications.filter((item) => item.status === "pending").length,
     delivered_notification_count: notifications.filter((item) => item.status === "delivered").length,
-    failed_notification_count: notifications.filter((item) => item.status === "failed").length
+    failed_notification_count: notifications.filter((item) => item.status === "failed").length,
+    affected_run_count: runIds.size,
+    affected_workflow_count: workflowIds.size,
+    primary_blocker_kind: blockers[0]?.kind ?? null,
+    blockers
   };
 }

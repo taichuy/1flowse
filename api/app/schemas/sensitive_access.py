@@ -28,6 +28,13 @@ NotificationChannelDeliveryMode = Literal["inline", "worker"]
 NotificationChannelHealthStatus = Literal["ready", "degraded"]
 NotificationChannelTargetKind = Literal["in_app", "http_url", "email_list"]
 NotificationChannelConfigFactStatus = Literal["configured", "missing", "info"]
+SensitiveAccessInboxBlockerKind = Literal[
+    "pending_approval",
+    "waiting_resume",
+    "failed_notification",
+    "pending_notification",
+]
+SensitiveAccessInboxBlockerTone = Literal["blocked", "degraded"]
 ApprovalTicketBulkSkipReason = Literal["not_found", "not_pending", "invalid_state"]
 NotificationDispatchBulkSkipReason = Literal[
     "not_found",
@@ -198,6 +205,14 @@ class SensitiveAccessInboxEntryItem(BaseModel):
     run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
+class SensitiveAccessInboxBlockerSummary(BaseModel):
+    kind: SensitiveAccessInboxBlockerKind
+    tone: SensitiveAccessInboxBlockerTone
+    item_count: int = 0
+    affected_run_count: int = 0
+    affected_workflow_count: int = 0
+
+
 class SensitiveAccessInboxSummary(BaseModel):
     ticket_count: int = 0
     pending_ticket_count: int = 0
@@ -210,6 +225,10 @@ class SensitiveAccessInboxSummary(BaseModel):
     pending_notification_count: int = 0
     delivered_notification_count: int = 0
     failed_notification_count: int = 0
+    affected_run_count: int = 0
+    affected_workflow_count: int = 0
+    primary_blocker_kind: SensitiveAccessInboxBlockerKind | None = None
+    blockers: list[SensitiveAccessInboxBlockerSummary] = Field(default_factory=list)
 
 
 class SensitiveAccessInboxResponse(BaseModel):

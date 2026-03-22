@@ -105,7 +105,40 @@ describe("buildCrossEntryRiskDigest", () => {
         failed_ticket_count: 0,
         pending_notification_count: 1,
         delivered_notification_count: 0,
-        failed_notification_count: 1
+        failed_notification_count: 1,
+        affected_run_count: 2,
+        affected_workflow_count: 1,
+        primary_blocker_kind: "pending_approval",
+        blockers: [
+          {
+            kind: "pending_approval",
+            tone: "blocked",
+            item_count: 2,
+            affected_run_count: 2,
+            affected_workflow_count: 1
+          },
+          {
+            kind: "waiting_resume",
+            tone: "blocked",
+            item_count: 2,
+            affected_run_count: 2,
+            affected_workflow_count: 1
+          },
+          {
+            kind: "failed_notification",
+            tone: "blocked",
+            item_count: 1,
+            affected_run_count: 1,
+            affected_workflow_count: 1
+          },
+          {
+            kind: "pending_notification",
+            tone: "degraded",
+            item_count: 1,
+            affected_run_count: 1,
+            affected_workflow_count: 1
+          }
+        ]
       },
       channels: [
         {
@@ -145,7 +178,14 @@ describe("buildCrossEntryRiskDigest", () => {
     expect(digest.focusAreas.find((area) => area.id === "operator")?.summary).toContain(
       "2 个审批待处理"
     );
+    expect(digest.focusAreas.find((area) => area.id === "operator")?.summary).toContain(
+      "影响 2 个 run / 1 个 workflow"
+    );
     expect(digest.headline).toContain("Approval & notification backlog");
+    expect(digest.metrics).toContainEqual({
+      label: "Impacted",
+      value: "2 runs / 1 workflows"
+    });
   });
 
   it("stays healthy when cross-entry recovery signals are already aligned", () => {

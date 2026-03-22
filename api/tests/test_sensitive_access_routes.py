@@ -1754,5 +1754,24 @@ def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
         "pending_notification_count": 0,
         "delivered_notification_count": 1,
         "failed_notification_count": 0,
+        "affected_run_count": 1,
+        "affected_workflow_count": 1,
+        "primary_blocker_kind": "pending_approval",
+        "blockers": [
+            {
+                "kind": "pending_approval",
+                "tone": "blocked",
+                "item_count": 1,
+                "affected_run_count": 1,
+                "affected_workflow_count": 1,
+            },
+            {
+                "kind": "waiting_resume",
+                "tone": "blocked",
+                "item_count": 1,
+                "affected_run_count": 1,
+                "affected_workflow_count": 1,
+            },
+        ],
     }
     assert any(item["channel"] == "in_app" for item in body["channels"])

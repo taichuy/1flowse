@@ -101,27 +101,111 @@ function getCallbackTone(
 }
 
 function getOperatorTone({
-  pendingApprovalCount,
-  waitingResumeCount,
-  failedNotificationCount,
-  pendingNotificationCount,
+  blockers,
   channelAttentionCount
 }: {
-  pendingApprovalCount: number;
-  waitingResumeCount: number;
-  failedNotificationCount: number;
-  pendingNotificationCount: number;
+  blockers: NonNullable<SensitiveAccessInboxSummary["blockers"]>;
   channelAttentionCount: number;
 }): CrossEntryRiskDigestTone {
-  if (pendingApprovalCount > 0 || waitingResumeCount > 0 || failedNotificationCount > 0) {
+  if (blockers.some((blocker) => blocker.tone === "blocked")) {
     return "blocked";
   }
 
-  if (pendingNotificationCount > 0 || channelAttentionCount > 0) {
+  if (blockers.some((blocker) => blocker.tone === "degraded") || channelAttentionCount > 0) {
     return "degraded";
   }
 
   return "healthy";
+}
+
+function formatImpactedScopeSummary(summary: SensitiveAccessInboxSummary) {
+  const affectedRunCount = summary.affected_run_count ?? 0;
+  const affectedWorkflowCount = summary.affected_workflow_count ?? 0;
+  if (affectedRunCount <= 0 && affectedWorkflowCount <= 0) {
+    return null;
+  }
+
+  return joinNonEmpty(
+    [
+      affectedRunCount > 0 ? `${affectedRunCount} 个 run` : null,
+      affectedWorkflowCount > 0 ? `${affectedWorkflowCount} 个 workflow` : null
+    ],
+    " / "
+  );
+}
+
+function formatOperatorBlockerSummary(
+  blocker: NonNullable<SensitiveAccessInboxSummary["blockers"]>[number]
+) {
+  const impactedScope = joinNonEmpty(
+    [
+      blocker.affected_run_count > 0 ? `${blocker.affected_run_count} 个 run` : null,
+      blocker.affected_workflow_count > 0
+        ? `${blocker.affected_workflow_count} 个 workflow`
+        : null
+    ],
+    " / "
+  );
+
+  switch (blocker.kind) {
+    case "pending_approval":
+      return joinNonEmpty([
+        `${blocker.item_count} 个审批待处理`,
+        impactedScope ? `影响 ${impactedScope}` : null
+      ], "，");
+    case "waiting_resume":
+      return joinNonEmpty([
+        `${blocker.item_count} 个 waiting 恢复仍被阻塞`,
+        impactedScope ? `影响 ${impactedScope}` : null
+      ], "，");
+    case "failed_notification":
+      return joinNonEmpty([
+        `${blocker.item_count} 条通知投递失败`,
+        impactedScope ? `影响 ${impactedScope}` : null
+      ], "，");
+    case "pending_notification":
+      return joinNonEmpty([
+        `${blocker.item_count} 条通知仍在排队`,
+        impactedScope ? `影响 ${impactedScope}` : null
+      ], "，");
+    default:
+      return null;
+  }
+}
+
+function buildLegacyOperatorBlockers(
+  summary: SensitiveAccessInboxSummary
+): NonNullable<SensitiveAccessInboxSummary["blockers"]> {
+  return [
+    {
+      kind: "pending_approval" as const,
+      tone: "blocked" as const,
+      item_count: summary.pending_ticket_count,
+      affected_run_count: summary.affected_run_count ?? 0,
+      affected_workflow_count: summary.affected_workflow_count ?? 0
+    },
+    {
+      kind: "waiting_resume" as const,
+      tone: "blocked" as const,
+      item_count: summary.waiting_ticket_count,
+      affected_run_count: summary.affected_run_count ?? 0,
+      affected_workflow_count: summary.affected_workflow_count ?? 0
+    },
+    {
+      kind: "failed_notification" as const,
+      tone: "blocked" as const,
+      item_count: summary.failed_notification_count,
+      affected_run_count: summary.affected_run_count ?? 0,
+      affected_workflow_count: summary.affected_workflow_count ?? 0
+    },
+    {
+      kind: "pending_notification" as const,
+      tone: "degraded" as const,
+      item_count: summary.pending_notification_count,
+      affected_run_count: summary.affected_run_count ?? 0,
+      affected_workflow_count: summary.affected_workflow_count ?? 0
+    }
+  ].filter((blocker) => blocker.item_count > 0);
 }
 
 function getOverallTone(
@@ -211,20 +295,18 @@ export function buildCrossEntryRiskDigest({
   const waitingResumeCount = sensitiveAccessSummary.waiting_ticket_count;
   const failedNotificationCount = sensitiveAccessSummary.failed_notification_count;
   const pendingNotificationCount = sensitiveAccessSummary.pending_notification_count;
+  const operatorBlockers = sensitiveAccessSummary.blockers ?? buildLegacyOperatorBlockers(sensitiveAccessSummary);
   const channelAttention = getChannelAttentionSummary(channels);
   const operatorTone = getOperatorTone({
-    pendingApprovalCount,
-    waitingResumeCount,
-    failedNotificationCount,
-    pendingNotificationCount,
+    blockers: operatorBlockers,
     channelAttentionCount: channelAttention.attentionCount
   });
   const operatorSummary =
     joinNonEmpty([
-      pendingApprovalCount > 0 ? `${pendingApprovalCount} 个审批待处理` : null,
-      waitingResumeCount > 0 ? `${waitingResumeCount} 个 waiting 恢复仍被阻塞` : null,
-      failedNotificationCount > 0 ? `${failedNotificationCount} 条通知投递失败` : null,
-      pendingNotificationCount > 0 ? `${pendingNotificationCount} 条通知仍在排队` : null,
+      formatImpactedScopeSummary(sensitiveAccessSummary)
+        ? `当前 operator backlog 影响 ${formatImpactedScopeSummary(sensitiveAccessSummary)}。`
+        : null,
+      ...operatorBlockers.map((blocker) => formatOperatorBlockerSummary(blocker)),
       channelAttention.attentionCount > 0
         ? `${channelAttention.attentionCount} 个通知渠道需要关注（${channelAttention.names.join(" / ")}）`
         : null
@@ -276,16 +358,33 @@ export function buildCrossEntryRiskDigest({
   const entryKeys = buildEntryKeys(primaryEntryKey);
 
   const entryOverrides: WorkbenchEntryLinkOverrides = {};
-  if (pendingApprovalCount > 0) {
-    entryOverrides.operatorInbox = {
-      href: "/sensitive-access?status=pending",
-      label: "打开待处理 inbox"
-    };
-  } else if (waitingResumeCount > 0) {
-    entryOverrides.operatorInbox = {
-      href: "/sensitive-access?waiting_status=waiting",
-      label: "查看 waiting resume"
-    };
+  switch (sensitiveAccessSummary.primary_blocker_kind ?? operatorBlockers[0]?.kind ?? null) {
+    case "pending_approval":
+      entryOverrides.operatorInbox = {
+        href: "/sensitive-access?status=pending",
+        label: "打开待处理 inbox"
+      };
+      break;
+    case "waiting_resume":
+      entryOverrides.operatorInbox = {
+        href: "/sensitive-access?waiting_status=waiting",
+        label: "查看 waiting resume"
+      };
+      break;
+    case "failed_notification":
+      entryOverrides.operatorInbox = {
+        href: "/sensitive-access?notification_status=failed",
+        label: "查看失败通知"
+      };
+      break;
+    case "pending_notification":
+      entryOverrides.operatorInbox = {
+        href: "/sensitive-access?notification_status=pending",
+        label: "查看通知队列"
+      };
+      break;
+    default:
+      break;
   }
 
   return {
@@ -315,6 +414,10 @@ export function buildCrossEntryRiskDigest({
       {
         label: "Notifications",
         value: `${failedNotificationCount} failed / ${channelAttention.attentionCount} channels attention`
+      },
+      {
+        label: "Impacted",
+        value: `${sensitiveAccessSummary.affected_run_count ?? 0} runs / ${sensitiveAccessSummary.affected_workflow_count ?? 0} workflows`
       }
     ],
     focusAreas,
