@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 import {
   buildSensitiveAccessBlockedRecommendedNextStep,
@@ -50,6 +51,48 @@ function buildBlockedPayload(
     run_snapshot: null,
     run_follow_up: null,
     ...overrides
+  };
+}
+
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    degraded_backend_count: 0,
+    offline_backend_count: 1,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: false,
+        backend_ids: [],
+        supported_languages: ["python"],
+        supported_profiles: ["default"],
+        supported_dependency_modes: ["builtin"],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason: "No compatible sandbox backend is available."
+      }
+    ],
+    supported_languages: ["python"],
+    supported_profiles: ["default"],
+    supported_dependency_modes: ["builtin"],
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflowLibrary"
+    }
   };
 }
 
@@ -220,5 +263,49 @@ describe("sensitive access presenters", () => {
       href: "/runs/run-1",
       href_label: operatorSurfaceCopy.openRunLabel
     });
+  });
+
+  it("命中强隔离阻断时优先复用 live sandbox readiness CTA", () => {
+    const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
+    expect(
+      buildSensitiveAccessBlockedRecommendedNextStep({
+        inboxHref: "/sensitive-access/inbox?status=pending",
+        runId: "run-1",
+        outcomeExplanation: {
+          primary_signal: "审批票据仍在等待处理。",
+          follow_up: "先处理审批票据，再重试导出。"
+        },
+        runSnapshot: {
+          status: "failed",
+          executionFocusReason: "blocked_execution",
+          executionFocusNodeType: "tool",
+          executionFocusExplanation: {
+            primary_signal: "当前 focus 节点因强隔离 backend 不可用而阻断。",
+            follow_up: "先恢复兼容 backend，再重新调度该节点。"
+          },
+          executionFocusToolCalls: [
+            {
+              id: "tool-call-1",
+              tool_id: "sandbox.tool",
+              tool_name: "Sandbox Tool",
+              status: "failed",
+              requested_execution_class: "sandbox",
+              effective_execution_class: "inline",
+              execution_blocking_reason: "No compatible sandbox backend is available."
+            }
+          ]
+        },
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    ).toMatchObject({
+      label: "sandbox readiness",
+      href: "/workflows?execution=sandbox",
+      href_label: "Open workflow library",
+      detail:
+        "当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow；优先回到 workflow library 处理强隔离 execution class 与隔离需求。"
+    });
+
+    expect(operatorSurfaceCopy.openInboxSliceLabel).not.toBe("Open workflow library");
   });
 });

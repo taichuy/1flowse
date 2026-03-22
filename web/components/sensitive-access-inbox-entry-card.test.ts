@@ -53,7 +53,16 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
     supports_builtin_package_sets: false,
     supports_backend_extensions: false,
     supports_network_policy: false,
-    supports_filesystem_policy: false
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflowLibrary"
+    }
   };
 }
 
@@ -482,5 +491,42 @@ describe("SensitiveAccessInboxEntryCard", () => {
 
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");
+  });
+
+  it("prefers the live sandbox readiness CTA when the inbox focus is blocked on strong isolation", () => {
+    const entry = buildEntry();
+    entry.executionContext = {
+      ...entry.executionContext!,
+      focusExplanation: {
+        primary_signal: "当前 focus 节点因强隔离 backend 不可用而阻断。",
+        follow_up: "先恢复兼容 backend，再重新调度该节点。"
+      },
+      focusNode: {
+        ...entry.executionContext!.focusNode,
+        execution_blocking_reason: "No compatible sandbox backend is available.",
+        tool_calls: [
+          {
+            ...entry.executionContext!.focusNode.tool_calls[0]!,
+            status: "failed",
+            execution_blocking_reason: "No compatible sandbox backend is available.",
+            effective_execution_class: "inline"
+          }
+        ]
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessInboxEntryCard, {
+        entry,
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain("优先回到 workflow library 处理强隔离 execution class 与隔离需求。");
+    expect(html).toContain("Open workflow library");
+    expect(html).toContain("先恢复兼容 backend，再重新调度该节点。");
   });
 });

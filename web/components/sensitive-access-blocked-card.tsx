@@ -92,7 +92,8 @@ export function SensitiveAccessBlockedCard({
     runId,
     outcomeExplanation: payload.outcome_explanation ?? null,
     runSnapshot: payload.run_snapshot ?? null,
-    runFollowUpExplanation: payload.run_follow_up?.explanation ?? null
+    runFollowUpExplanation: payload.run_follow_up?.explanation ?? null,
+    sandboxReadiness
   });
   const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
     inboxHref,

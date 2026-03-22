@@ -358,7 +358,8 @@ export function SensitiveAccessTimelineEntryList({
                 runId,
                 outcomeExplanation: canonicalOutcomeExplanation,
                 runSnapshot: runContext.snapshot,
-                runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null
+                runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null,
+                sandboxReadiness
               });
           const inboxLinkLabel =
             recommendedNextStep?.href === inboxSliceHref && recommendedNextStep.href_label

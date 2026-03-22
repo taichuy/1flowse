@@ -39,6 +39,10 @@ import {
 } from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
+import {
+  buildSandboxReadinessFollowUpCandidate,
+  messageMentionsSandboxExecution
+} from "@/lib/system-overview-follow-up-presenters";
 import { resolveSensitiveAccessInboxEntryScopes } from "@/lib/sensitive-access-inbox-entry-scope";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
@@ -114,37 +118,47 @@ export function SensitiveAccessInboxEntryCard({
   });
   const executionSurfaceCopy = executionContext
     ? buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
-      focusMatchesEntry: executionContext.focusMatchesEntry,
-      entryNodeRunId: executionContext.entryNodeRunId,
-      focusNodeName: executionContext.focusNode.node_name,
-      focusInboxHref,
-      runId: executionContext.runId
-    })
+        focusMatchesEntry: executionContext.focusMatchesEntry,
+        entryNodeRunId: executionContext.entryNodeRunId,
+        focusNodeName: executionContext.focusNode.node_name,
+        focusInboxHref,
+        runId: executionContext.runId
+      })
     : null;
-  const shouldDeferToSharedCallbackWaitingSummary = hasCallbackWaitingSummaryFacts({
-    callbackWaitingExplanation: callbackWaitingContext?.callbackWaitingExplanation,
-    callbackWaitingLifecycle: callbackWaitingContext?.lifecycle,
-    waitingReason: callbackWaitingContext?.waitingReason,
-    scheduledResumeDelaySeconds: callbackWaitingContext?.scheduledResumeDelaySeconds,
-    scheduledResumeSource: callbackWaitingContext?.scheduledResumeSource,
-    scheduledWaitingStatus: callbackWaitingContext?.scheduledWaitingStatus,
-    scheduledResumeScheduledAt: callbackWaitingContext?.scheduledResumeScheduledAt,
-    scheduledResumeDueAt: callbackWaitingContext?.scheduledResumeDueAt,
-    scheduledResumeRequeuedAt: callbackWaitingContext?.scheduledResumeRequeuedAt,
-    scheduledResumeRequeueSource: callbackWaitingContext?.scheduledResumeRequeueSource
-  });
+  const executionNeedsSharedSandboxFollowUp =
+    executionContext?.focusReason === "blocked_execution" ||
+    messageMentionsSandboxExecution(executionFocusPrimarySignal) ||
+    messageMentionsSandboxExecution(executionFocusFollowUp) ||
+    messageMentionsSandboxExecution(executionContext?.focusNode.node_type);
+  const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
+  const shouldDeferToSharedCallbackWaitingSummary =
+    hasCallbackWaitingSummaryFacts({
+      callbackWaitingExplanation: callbackWaitingContext?.callbackWaitingExplanation,
+      callbackWaitingLifecycle: callbackWaitingContext?.lifecycle,
+      waitingReason: callbackWaitingContext?.waitingReason,
+      scheduledResumeDelaySeconds: callbackWaitingContext?.scheduledResumeDelaySeconds,
+      scheduledResumeSource: callbackWaitingContext?.scheduledResumeSource,
+      scheduledWaitingStatus: callbackWaitingContext?.scheduledWaitingStatus,
+      scheduledResumeScheduledAt: callbackWaitingContext?.scheduledResumeScheduledAt,
+      scheduledResumeDueAt: callbackWaitingContext?.scheduledResumeDueAt,
+      scheduledResumeRequeuedAt: callbackWaitingContext?.scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource: callbackWaitingContext?.scheduledResumeRequeueSource
+    }) && !sharedSandboxCandidate;
   const focusSkillTraceReferenceLoads = executionContext?.skillTrace?.loads ?? [];
   const focusSkillTraceReferenceCount = executionContext?.skillTrace?.reference_count ?? null;
   const recommendedNextStep = !shouldDeferToSharedCallbackWaitingSummary && executionSurfaceCopy
     ? buildOperatorRecommendedNextStep({
-        execution: {
-          active: true,
-          label: executionSurfaceCopy.recommendedNextStepLabel,
-          detail: executionFocusFollowUp,
-          href: executionSurfaceCopy.recommendedNextStepHref,
-          href_label: executionSurfaceCopy.recommendedNextStepHrefLabel,
-          fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
-        }
+        execution:
+          sharedSandboxCandidate ?? {
+            active: true,
+            label: executionSurfaceCopy.recommendedNextStepLabel,
+            detail: executionFocusFollowUp,
+            href: executionSurfaceCopy.recommendedNextStepHref,
+            href_label: executionSurfaceCopy.recommendedNextStepHrefLabel,
+            fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
+          }
       })
     : null;
 

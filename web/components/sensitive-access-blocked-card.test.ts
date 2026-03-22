@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
 
 vi.mock("next/link", () => ({
@@ -14,6 +15,48 @@ vi.mock("@/components/sensitive-access-inline-actions", () => ({
   SensitiveAccessInlineActions: () =>
     createElement("div", { "data-testid": "sensitive-access-inline-actions" })
 }));
+
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    degraded_backend_count: 0,
+    offline_backend_count: 1,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: false,
+        backend_ids: [],
+        supported_languages: ["python"],
+        supported_profiles: ["default"],
+        supported_dependency_modes: ["builtin"],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason: "No compatible sandbox backend is available."
+      }
+    ],
+    supported_languages: ["python"],
+    supported_profiles: ["default"],
+    supported_dependency_modes: ["builtin"],
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflowLibrary"
+    }
+  };
+}
 
 describe("SensitiveAccessBlockedCard", () => {
   it("renders canonical follow-up and run snapshot evidence", () => {
@@ -219,5 +262,99 @@ describe("SensitiveAccessBlockedCard", () => {
 
     expect(html).toContain("/runs/run-sampled-1");
     expect(html).toContain("run_id=run-sampled-1");
+  });
+
+  it("prefers live sandbox readiness CTA when the blocked run is fail-closed on strong isolation", () => {
+    const payload: SensitiveAccessBlockingPayload = {
+      detail: "Published invocation detail requires approval before the payload can be viewed.",
+      resource: {
+        id: "resource-3",
+        label: "Invocation Detail",
+        description: "Sensitive published invocation detail",
+        sensitivity_level: "L3",
+        source: "workspace_resource",
+        metadata: {
+          run_id: "run-3"
+        }
+      },
+      access_request: {
+        id: "request-3",
+        run_id: "run-3",
+        node_run_id: "node-run-3",
+        requester_type: "human",
+        requester_id: "ops-reviewer",
+        resource_id: "resource-3",
+        action_type: "read",
+        decision: "require_approval"
+      },
+      approval_ticket: {
+        id: "ticket-3",
+        access_request_id: "request-3",
+        run_id: "run-3",
+        node_run_id: "node-run-3",
+        status: "pending",
+        waiting_status: "waiting",
+        approved_by: null
+      },
+      notifications: [],
+      outcome_explanation: {
+        primary_signal: "审批票据仍在等待处理。",
+        follow_up: "先处理审批票据，再重试导出。"
+      },
+      run_snapshot: {
+        status: "failed",
+        currentNodeId: "sandbox_call",
+        executionFocusReason: "blocked_execution",
+        executionFocusNodeId: "sandbox_call",
+        executionFocusNodeRunId: "node-run-3",
+        executionFocusNodeName: "Sandbox Call",
+        executionFocusNodeType: "tool",
+        executionFocusExplanation: {
+          primary_signal: "当前 focus 节点因强隔离 backend 不可用而阻断。",
+          follow_up: "先恢复兼容 backend，再重新调度该节点。"
+        },
+        executionFocusToolCalls: [
+          {
+            id: "tool-call-3",
+            tool_id: "sandbox.tool",
+            tool_name: "Sandbox Tool",
+            phase: "execute",
+            status: "failed",
+            requested_execution_class: "sandbox",
+            effective_execution_class: "inline",
+            execution_blocking_reason: "No compatible sandbox backend is available."
+          }
+        ]
+      },
+      run_follow_up: {
+        affectedRunCount: 1,
+        sampledRunCount: 0,
+        waitingRunCount: 0,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 1,
+        unknownRunCount: 0,
+        explanation: {
+          primary_signal: "当前 sampled run 显示强隔离执行链路已 fail-closed。",
+          follow_up: "先恢复兼容 backend，再重新调度该节点。"
+        },
+        sampledRuns: []
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBlockedCard, {
+        title: "Sensitive access blocked",
+        payload,
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain("优先回到 workflow library 处理强隔离 execution class 与隔离需求。");
+    expect(html).toContain("Open workflow library");
+    expect(html).not.toContain("approval blocker");
   });
 });

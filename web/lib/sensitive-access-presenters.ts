@@ -7,6 +7,7 @@ import type {
   SensitiveAccessRequestItem,
   SignalFollowUpExplanation
 } from "@/lib/get-sensitive-access";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import {
   buildOperatorInboxSliceCandidate,
   buildOperatorFollowUpSurfaceCopy,
@@ -14,6 +15,10 @@ import {
   buildOperatorRunDetailCandidate,
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
+import {
+  buildSandboxReadinessFollowUpCandidate,
+  messageMentionsSandboxExecution
+} from "@/lib/system-overview-follow-up-presenters";
 
 const DECISION_LABELS: Record<string, string> = {
   allow: "allowed",
@@ -287,18 +292,55 @@ export function getSensitiveAccessCanonicalOutcomeExplanation({
 export const getSensitiveAccessTimelineCanonicalOutcomeExplanation =
   getSensitiveAccessCanonicalOutcomeExplanation;
 
+function sensitiveAccessNeedsSharedSandboxFollowUp({
+  outcomeExplanation,
+  runSnapshot,
+  runFollowUpExplanation
+}: {
+  outcomeExplanation?: SignalFollowUpExplanation | null;
+  runSnapshot?: OperatorRunSnapshotSummary | null;
+  runFollowUpExplanation?: SignalFollowUpExplanation | null;
+}) {
+  const focusToolCalls = runSnapshot?.executionFocusToolCalls ?? [];
+
+  return (
+    runSnapshot?.executionFocusReason === "blocked_execution" ||
+    messageMentionsSandboxExecution(outcomeExplanation?.primary_signal) ||
+    messageMentionsSandboxExecution(outcomeExplanation?.follow_up) ||
+    messageMentionsSandboxExecution(runFollowUpExplanation?.primary_signal) ||
+    messageMentionsSandboxExecution(runFollowUpExplanation?.follow_up) ||
+    messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.primary_signal) ||
+    messageMentionsSandboxExecution(runSnapshot?.executionFocusExplanation?.follow_up) ||
+    messageMentionsSandboxExecution(runSnapshot?.executionFocusNodeType) ||
+    focusToolCalls.some(
+      (toolCall) =>
+        messageMentionsSandboxExecution(toolCall.execution_blocking_reason) ||
+        messageMentionsSandboxExecution(toolCall.requested_execution_class) ||
+        messageMentionsSandboxExecution(toolCall.effective_execution_class)
+    )
+  );
+}
+
 export function buildSensitiveAccessBlockedRecommendedNextStep({
   inboxHref,
   runId,
   outcomeExplanation,
   runSnapshot,
-  runFollowUpExplanation
+  runFollowUpExplanation,
+  sandboxReadiness
 }: {
   inboxHref?: string | null;
   runId?: string | null;
   outcomeExplanation?: SignalFollowUpExplanation | null;
   runSnapshot?: OperatorRunSnapshotSummary | null;
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
+  sandboxReadiness?: Pick<
+    SandboxReadinessCheck,
+    | "affected_run_count"
+    | "affected_workflow_count"
+    | "primary_blocker_kind"
+    | "recommended_action"
+  > | null;
 }): OperatorRecommendedNextStep | null {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const blockerFollowUp =
@@ -311,24 +353,33 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
     normalizeCopy(runFollowUpExplanation?.follow_up) ??
     normalizeCopy(runSnapshot?.executionFocusExplanation?.follow_up) ??
     normalizeCopy(runSnapshot?.callbackWaitingExplanation?.follow_up);
+  const sharedSandboxCandidate = sensitiveAccessNeedsSharedSandboxFollowUp({
+    outcomeExplanation,
+    runSnapshot,
+    runFollowUpExplanation
+  })
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
 
   return buildOperatorRecommendedNextStep({
     callback: buildOperatorInboxSliceCandidate({
-      active: Boolean(inboxHref || blockerFollowUp),
+      active: !sharedSandboxCandidate && Boolean(inboxHref || blockerFollowUp),
       detail: blockerFollowUp,
       href: inboxHref,
       fallbackDetail:
         "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。",
       surfaceCopy: operatorSurfaceCopy
     }),
-    execution: buildOperatorRunDetailCandidate({
-      active: Boolean(runId || executionFollowUp),
-      runId,
-      detail: executionFollowUp,
-      fallbackDetail:
-        "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
-      surfaceCopy: operatorSurfaceCopy
-    }),
+    execution:
+      sharedSandboxCandidate ??
+      buildOperatorRunDetailCandidate({
+        active: Boolean(runId || executionFollowUp),
+        runId,
+        detail: executionFollowUp,
+        fallbackDetail:
+          "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
+        surfaceCopy: operatorSurfaceCopy
+      }),
     operatorFollowUp: blockerFollowUp,
     operatorLabel: "approval follow-up"
   });
