@@ -5,6 +5,7 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { OperatorRunSampleCard } from "@/lib/operator-run-sample-cards";
 import {
@@ -15,12 +16,14 @@ import {
 
 type OperatorRunSampleCardListProps = {
   cards: OperatorRunSampleCard[];
+  callbackWaitingSummaryProps?: CallbackWaitingSummaryProps;
   skillTraceDescription: string;
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function OperatorRunSampleCardList({
   cards,
+  callbackWaitingSummaryProps,
   skillTraceDescription,
   sandboxReadiness = null
 }: OperatorRunSampleCardListProps) {
@@ -102,6 +105,8 @@ export function OperatorRunSampleCardList({
             focusSkillReferenceNodeName={sample.focusNodeLabel}
             inboxHref={sample.inboxHref}
             nodeRunId={sample.focusNodeRunId}
+            operatorFollowUp={callbackWaitingSummaryProps?.operatorFollowUp}
+            recommendedAction={callbackWaitingSummaryProps?.recommendedAction}
             runId={sample.runId}
             scheduledResumeDelaySeconds={sample.scheduledResumeDelaySeconds}
             scheduledResumeDueAt={sample.scheduledResumeDueAt}
@@ -110,6 +115,9 @@ export function OperatorRunSampleCardList({
             scheduledResumeScheduledAt={sample.scheduledResumeScheduledAt}
             scheduledResumeSource={sample.scheduledResumeSource}
             scheduledWaitingStatus={sample.scheduledWaitingStatus}
+            preferCanonicalRecommendedNextStep={
+              callbackWaitingSummaryProps?.preferCanonicalRecommendedNextStep ?? false
+            }
             showFocusExecutionFacts={sample.hasCallbackWaitingSummary}
             showInlineActions={false}
             sensitiveAccessEntries={sample.sensitiveAccessEntries}

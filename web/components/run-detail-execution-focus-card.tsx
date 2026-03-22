@@ -170,6 +170,9 @@ export function RunDetailExecutionFocusCard({
             focusSkillReferenceNodeId={focus.nodeId}
             focusSkillReferenceNodeName={focus.nodeName}
             nodeRunId={focus.nodeRunId}
+            operatorFollowUp={run.run_follow_up?.explanation?.follow_up ?? null}
+            recommendedAction={run.run_follow_up?.recommended_action ?? null}
+            preferCanonicalRecommendedNextStep
             runId={run.id}
             scheduledResumeDelaySeconds={focus.scheduledResumeDelaySeconds}
             scheduledResumeDueAt={focus.scheduledResumeDueAt}

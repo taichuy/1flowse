@@ -100,6 +100,9 @@ export function WorkflowPublishInvocationCallbackSection({
         inboxHref={inboxHref}
         runId={invocation.run_id ?? null}
         nodeRunId={waitingLifecycle?.node_run_id ?? null}
+        operatorFollowUp={invocation.run_follow_up?.explanation?.follow_up ?? null}
+        recommendedAction={invocation.run_follow_up?.recommended_action ?? null}
+        preferCanonicalRecommendedNextStep
       />
       {shouldRenderBlockers ? (
         <div className="publish-meta-grid">

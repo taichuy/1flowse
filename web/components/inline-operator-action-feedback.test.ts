@@ -12,6 +12,7 @@ import type {
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 
 const callbackSummaryProps: Array<Record<string, unknown>> = [];
+const runSampleListProps: Array<Record<string, unknown>> = [];
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -30,7 +31,10 @@ vi.mock("@/components/operator-focus-evidence-card", () => ({
 }));
 
 vi.mock("@/components/operator-run-sample-card-list", () => ({
-  OperatorRunSampleCardList: () => createElement("div", { "data-testid": "run-sample-list" })
+  OperatorRunSampleCardList: (props: Record<string, unknown>) => {
+    runSampleListProps.push(props);
+    return createElement("div", { "data-testid": "run-sample-list" });
+  }
 }));
 
 vi.mock("@/components/skill-reference-load-list", () => ({
@@ -147,6 +151,7 @@ describe("InlineOperatorActionFeedback", () => {
 
   beforeEach(() => {
     callbackSummaryProps.length = 0;
+    runSampleListProps.length = 0;
   });
 
   it("treats an explicit null recommendedNextStep override as disabling the auto fallback", () => {
@@ -204,6 +209,14 @@ describe("InlineOperatorActionFeedback", () => {
           callbackTickets,
           callbackWaitingAutomation,
           sensitiveAccessEntries: [buildSensitiveAccessEntry()],
+          recommendedAction: {
+            kind: "approval blocker",
+            entry_key: "operatorInbox",
+            href: inboxHref,
+            label: "Open approval inbox"
+          },
+          operatorFollowUp: "Open the approval inbox first.",
+          preferCanonicalRecommendedNextStep: true,
           showSensitiveAccessInlineActions: false
         }
       })
@@ -220,7 +233,76 @@ describe("InlineOperatorActionFeedback", () => {
       ((callbackSummaryProps[0]?.callbackTickets as RunCallbackTicketItem[] | undefined) ?? [])[0]?.ticket
     ).toBe("callback-ticket-1");
     expect(callbackSummaryProps[0]?.callbackWaitingAutomation).toEqual(callbackWaitingAutomation);
+    expect(callbackSummaryProps[0]?.recommendedAction).toMatchObject({
+      kind: "approval blocker",
+      entry_key: "operatorInbox",
+      href: inboxHref,
+      label: "Open approval inbox"
+    });
+    expect(callbackSummaryProps[0]?.operatorFollowUp).toBe("Open the approval inbox first.");
+    expect(callbackSummaryProps[0]?.preferCanonicalRecommendedNextStep).toBe(true);
     expect(callbackSummaryProps[0]?.showSensitiveAccessInlineActions).toBe(false);
+  });
+
+  it("forwards canonical callback follow-up into sampled run cards", () => {
+    renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        message: "",
+        title: "Operator follow-up",
+        runId: "run-1",
+        runFollowUp: {
+          affectedRunCount: 1,
+          sampledRunCount: 1,
+          waitingRunCount: 1,
+          runningRunCount: 0,
+          succeededRunCount: 0,
+          failedRunCount: 0,
+          unknownRunCount: 0,
+          recommendedAction: {
+            kind: "approval blocker",
+            entryKey: "operatorInbox",
+            href: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+            label: "Open approval inbox"
+          },
+          sampledRuns: [
+            {
+              runId: "run-1",
+              snapshot: {
+                status: "waiting",
+                currentNodeId: "approval_gate",
+                waitingReason: "approval pending",
+                executionFocusNodeId: "approval_gate",
+                executionFocusNodeRunId: "node-run-1",
+                executionFocusNodeName: "Approval Gate",
+                callbackWaitingExplanation: {
+                  primary_signal: "当前 run 仍在等待审批。",
+                  follow_up: "优先处理审批票据，再回来看 waiting 是否恢复。"
+                }
+              },
+              callbackTickets: [],
+              sensitiveAccessEntries: []
+            }
+          ]
+        },
+        runFollowUpExplanation: {
+          primary_signal: "本次影响 1 个 run；operator follow-up 已刷新。",
+          follow_up: "Open the approval inbox first."
+        }
+      })
+    );
+
+    expect(runSampleListProps).toHaveLength(1);
+    expect(runSampleListProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      recommendedAction: {
+        kind: "approval blocker",
+        entryKey: "operatorInbox",
+        href: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+        label: "Open approval inbox"
+      },
+      operatorFollowUp: "Open the approval inbox first.",
+      preferCanonicalRecommendedNextStep: true
+    });
   });
 
   it("surfaces live sandbox readiness for blocked operator follow-up snapshots", () => {

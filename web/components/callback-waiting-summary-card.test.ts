@@ -175,6 +175,13 @@ describe("CallbackWaitingSummaryCard", () => {
     sensitiveAccessInlineActionProps.length = 0;
   });
 
+  const canonicalRecommendedAction = {
+    kind: "approval blocker",
+    entry_key: "operatorInbox",
+    href: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+    label: "Open approval inbox"
+  };
+
   it("puts compact execution fact badges before the evidence card when enabled", () => {
     const html = renderToStaticMarkup(
       createElement(CallbackWaitingSummaryCard, {
@@ -263,6 +270,26 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(html).toContain("data-testid=\"callback-waiting-inline-actions\"");
   });
 
+  it("prefers the canonical operator recommended next step when requested", () => {
+    const html = renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        lifecycle: buildLifecycle({ late_callback_count: 1 }),
+        inboxHref: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+        recommendedAction: canonicalRecommendedAction,
+        operatorFollowUp: "Open the approval inbox first, then retry the callback path.",
+        preferCanonicalRecommendedNextStep: true,
+        runId: "run-1"
+      })
+    );
+
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("Open the approval inbox first, then retry the callback path.");
+    expect(html).toContain("Open approval inbox");
+    expect(html).toContain(
+      'href="/sensitive-access?run_id=run-1&amp;approval_ticket_id=ticket-1"'
+    );
+  });
+
   it("passes shared callback waiting context into inline actions feedback", () => {
     const callbackTickets = [
       {
@@ -284,6 +311,9 @@ describe("CallbackWaitingSummaryCard", () => {
         callbackTickets,
         callbackWaitingAutomation,
         inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+        recommendedAction: canonicalRecommendedAction,
+        operatorFollowUp: "Open approval inbox first.",
+        preferCanonicalRecommendedNextStep: true,
         showSensitiveAccessInlineActions: false
       })
     );
@@ -293,7 +323,10 @@ describe("CallbackWaitingSummaryCard", () => {
       inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
       callbackTickets,
       callbackWaitingAutomation,
-      showSensitiveAccessInlineActions: false
+      showSensitiveAccessInlineActions: false,
+      recommendedAction: canonicalRecommendedAction,
+      operatorFollowUp: "Open approval inbox first.",
+      preferCanonicalRecommendedNextStep: true
     });
   });
 
@@ -318,6 +351,9 @@ describe("CallbackWaitingSummaryCard", () => {
         callbackTickets,
         callbackWaitingAutomation,
         inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-action",
+        recommendedAction: canonicalRecommendedAction,
+        operatorFollowUp: "Open approval inbox first.",
+        preferCanonicalRecommendedNextStep: true,
         sensitiveAccessEntries: [buildSensitiveAccessEntry()]
       })
     );
@@ -327,7 +363,10 @@ describe("CallbackWaitingSummaryCard", () => {
       inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-action",
       callbackTickets,
       callbackWaitingAutomation,
-      showSensitiveAccessInlineActions: false
+      showSensitiveAccessInlineActions: false,
+      recommendedAction: canonicalRecommendedAction,
+      operatorFollowUp: "Open approval inbox first.",
+      preferCanonicalRecommendedNextStep: true
     });
   });
 });

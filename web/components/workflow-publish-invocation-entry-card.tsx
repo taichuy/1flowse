@@ -329,6 +329,9 @@ export function WorkflowPublishInvocationEntryCard({
                     runFollowUpSample.run_snapshot.executionFocusNodeName ?? null
                   }
                   nodeRunId={runFollowUpSample.run_snapshot.executionFocusNodeRunId ?? null}
+                  operatorFollowUp={runFollowUp?.explanation?.follow_up ?? null}
+                  recommendedAction={runFollowUp?.recommended_action ?? null}
+                  preferCanonicalRecommendedNextStep
                   runId={runFollowUpSample.run_id}
                   scheduledResumeDelaySeconds={
                     runFollowUpSample.run_snapshot.scheduledResumeDelaySeconds ?? null

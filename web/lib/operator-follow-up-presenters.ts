@@ -44,6 +44,7 @@ export type OperatorRecommendedNextStepCandidate = {
 export type OperatorRecommendedActionLike = {
   kind?: string | null;
   entry_key?: string | null;
+  entryKey?: string | null;
   href?: string | null;
   label?: string | null;
 };
@@ -281,7 +282,7 @@ export function buildOperatorRecommendedActionCandidate({
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
 }): OperatorRecommendedNextStepCandidate | null {
   const kind = normalizeFollowUpCopy(action?.kind);
-  const entryKey = normalizeFollowUpCopy(action?.entry_key);
+  const entryKey = normalizeFollowUpCopy(action?.entry_key ?? action?.entryKey);
   const href = normalizeHref(action?.href);
   const hrefLabel = normalizeFollowUpCopy(action?.label);
   const callbackLike = isCallbackLikeOperatorRecommendedAction(action);

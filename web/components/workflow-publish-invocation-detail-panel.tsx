@@ -389,6 +389,9 @@ export function WorkflowPublishInvocationDetailPanel({
                           sample.run_snapshot.executionFocusNodeName ?? null
                         }
                         nodeRunId={sample.run_snapshot.executionFocusNodeRunId ?? null}
+                        operatorFollowUp={runFollowUp?.explanation?.follow_up ?? null}
+                        recommendedAction={runFollowUp?.recommended_action ?? null}
+                        preferCanonicalRecommendedNextStep
                         runId={sample.run_id}
                         showFocusExecutionFacts
                         scheduledResumeDelaySeconds={

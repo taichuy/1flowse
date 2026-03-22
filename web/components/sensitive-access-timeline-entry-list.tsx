@@ -373,7 +373,13 @@ export function SensitiveAccessTimelineEntryList({
             callbackWaitingAutomation,
             sensitiveAccessEntries: [entry],
             suppressSensitiveAccessContextRows: true,
-            showSensitiveAccessInlineActions: false
+            showSensitiveAccessInlineActions: false,
+            recommendedAction: runContext.runFollowUp?.recommendedAction ?? null,
+            operatorFollowUp:
+              runContext.runFollowUp?.explanation?.follow_up ??
+              canonicalOutcomeExplanation?.follow_up ??
+              null,
+            preferCanonicalRecommendedNextStep: true
           };
 
           return (
@@ -493,6 +499,9 @@ export function SensitiveAccessTimelineEntryList({
                   className="payload-card compact-card"
                   inboxHref={inboxSliceHref}
                   nodeRunId={nodeRunId}
+                  operatorFollowUp={runContext.runFollowUp?.explanation?.follow_up ?? null}
+                  recommendedAction={runContext.runFollowUp?.recommendedAction ?? null}
+                  preferCanonicalRecommendedNextStep
                   runId={runId}
                   sensitiveAccessEntries={[entry]}
                   showInlineActions={false}

@@ -99,7 +99,10 @@ export function SensitiveAccessBlockedCard({
   const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
     inboxHref,
     callbackWaitingAutomation,
-    showSensitiveAccessInlineActions: false
+    showSensitiveAccessInlineActions: false,
+    recommendedAction: payload.run_follow_up?.recommendedAction ?? null,
+    operatorFollowUp: payload.run_follow_up?.explanation?.follow_up ?? null,
+    preferCanonicalRecommendedNextStep: true
   };
 
   return (

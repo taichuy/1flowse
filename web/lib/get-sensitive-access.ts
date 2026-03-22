@@ -188,19 +188,7 @@ export type SensitiveAccessInboxEntry = {
   resource: SensitiveResourceItem | null;
   notifications: NotificationDispatchItem[];
   runSnapshot?: OperatorRunSnapshotSummary | null;
-  runFollowUp?: {
-    affectedRunCount: number;
-    sampledRunCount: number;
-    waitingRunCount: number;
-    runningRunCount: number;
-    succeededRunCount: number;
-    failedRunCount: number;
-    unknownRunCount: number;
-    sampledRuns: Array<{
-      runId: string;
-      snapshot: OperatorRunSnapshotSummary | null;
-    }>;
-  } | null;
+  runFollowUp?: NonNullable<ReturnType<typeof normalizeOperatorRunFollowUp>> | null;
   callbackWaitingContext?: SensitiveAccessInboxCallbackContext | null;
   executionContext?: SensitiveAccessInboxExecutionContext | null;
 };

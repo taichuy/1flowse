@@ -308,6 +308,8 @@ export function SensitiveAccessInboxEntryCard({
             lifecycle={callbackWaitingContext.lifecycle}
             nodeRunId={callbackWaitingContext.displayNodeRunId}
             actionNodeRunId={callbackWaitingContext.actionNodeRunId ?? actionScope.nodeRunId}
+            recommendedAction={entry.runFollowUp?.recommendedAction ?? null}
+            preferCanonicalRecommendedNextStep={Boolean(entry.runFollowUp?.recommendedAction)}
             runId={callbackWaitingContext.runId}
             scheduledResumeDelaySeconds={callbackWaitingContext.scheduledResumeDelaySeconds}
             scheduledResumeSource={callbackWaitingContext.scheduledResumeSource}

@@ -71,6 +71,13 @@ export function InlineOperatorActionFeedback({
   const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshot);
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   const runDetailLink = buildOperatorRunDetailLinkSurface({ runId, surfaceCopy });
+  const canonicalCallbackRecommendedAction =
+    callbackWaitingSummaryProps?.recommendedAction ?? runFollowUp?.recommendedAction ?? null;
+  const canonicalCallbackOperatorFollowUp =
+    callbackWaitingSummaryProps?.operatorFollowUp ?? model.runFollowUpFollowUp;
+  const preferCanonicalCallbackRecommendedNextStep =
+    callbackWaitingSummaryProps?.preferCanonicalRecommendedNextStep ??
+    Boolean(canonicalCallbackRecommendedAction);
   const hasExplicitRecommendedNextStepOverride = recommendedNextStepOverride !== undefined;
   const executionNeedsSharedSandboxFollowUp =
     Boolean(sandboxReadinessNode) &&
@@ -283,6 +290,9 @@ export function InlineOperatorActionFeedback({
           showInlineActions={false}
           waitingReason={runSnapshot?.waitingReason ?? null}
           inboxHref={callbackWaitingSummaryProps?.inboxHref}
+          recommendedAction={canonicalCallbackRecommendedAction}
+          operatorFollowUp={canonicalCallbackOperatorFollowUp}
+          preferCanonicalRecommendedNextStep={preferCanonicalCallbackRecommendedNextStep}
           sensitiveAccessEntries={callbackWaitingSummaryProps?.sensitiveAccessEntries}
           suppressSensitiveAccessContextRows={
             callbackWaitingSummaryProps?.suppressSensitiveAccessContextRows ?? false
@@ -317,6 +327,11 @@ export function InlineOperatorActionFeedback({
           </p>
           <OperatorRunSampleCardList
             cards={sampledRunCards}
+            callbackWaitingSummaryProps={{
+              recommendedAction: canonicalCallbackRecommendedAction,
+              operatorFollowUp: canonicalCallbackOperatorFollowUp,
+              preferCanonicalRecommendedNextStep: preferCanonicalCallbackRecommendedNextStep
+            }}
             sandboxReadiness={sandboxReadiness}
             skillTraceDescription="当前 operator 结果会继续复用 sampled run focus node 的 compact skill trace，方便确认等待链路里实际加载了哪些参考资料。"
           />

@@ -220,6 +220,9 @@ export function RunDiagnosticsOperatorFollowUpCard({
           focusSkillReferenceCount={focusSkillTrace?.reference_count ?? 0}
           focusSkillReferenceNodeId={snapshot.execution_focus_node_id ?? null}
           focusSkillReferenceNodeName={snapshot.execution_focus_node_name ?? null}
+          operatorFollowUp={followUp?.explanation?.follow_up ?? null}
+          recommendedAction={followUp?.recommended_action ?? null}
+          preferCanonicalRecommendedNextStep
           showFocusExecutionFacts
           showInlineActions={false}
         />

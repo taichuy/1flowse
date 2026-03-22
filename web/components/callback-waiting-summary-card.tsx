@@ -42,6 +42,11 @@ import {
   pickCallbackWaitingInlineSensitiveAccessEntry
 } from "@/lib/callback-waiting-presenters";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
+import {
+  buildOperatorRecommendedActionCandidate,
+  buildOperatorRecommendedNextStep,
+  type OperatorRecommendedActionLike
+} from "@/lib/operator-follow-up-presenters";
 
 type CallbackWaitingFocusNodeEvidence = {
   artifact_refs: string[];
@@ -65,6 +70,9 @@ type CallbackWaitingSummaryCardProps = {
   callbackWaitingExplanation?: RunExecutionFocusExplanation | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   waitingReason?: string | null;
+  recommendedAction?: OperatorRecommendedActionLike | null;
+  operatorFollowUp?: string | null;
+  preferCanonicalRecommendedNextStep?: boolean;
   scheduledResumeDelaySeconds?: number | null;
   scheduledResumeSource?: string | null;
   scheduledWaitingStatus?: string | null;
@@ -99,6 +107,9 @@ export function CallbackWaitingSummaryCard({
   callbackWaitingExplanation,
   callbackWaitingAutomation,
   waitingReason,
+  recommendedAction: canonicalRecommendedAction,
+  operatorFollowUp,
+  preferCanonicalRecommendedNextStep = false,
   scheduledResumeDelaySeconds,
   scheduledResumeSource,
   scheduledWaitingStatus,
@@ -203,13 +214,33 @@ export function CallbackWaitingSummaryCard({
           ctaLabel: "Open approval inbox"
         }
       : baseRecommendedAction;
-  const recommendedNextStep = buildCallbackWaitingRecommendedNextStep({
+  const localRecommendedNextStep = buildCallbackWaitingRecommendedNextStep({
     action: recommendedAction,
     inboxHref,
     callbackWaitingAutomation,
     operatorFollowUp: callbackFollowUp,
     surfaceCopy
   });
+  const canonicalRecommendedActionCandidate = buildOperatorRecommendedActionCandidate({
+    action: canonicalRecommendedAction,
+    detail: callbackFollowUp ?? operatorFollowUp,
+    fallbackDetail:
+      localRecommendedNextStep?.detail ??
+      recommendedAction?.detail ??
+      callbackFollowUp ??
+      operatorFollowUp ??
+      "Review the callback waiting timeline before forcing another resume.",
+    scope: "callback"
+  });
+  const canonicalRecommendedNextStep =
+    preferCanonicalRecommendedNextStep && canonicalRecommendedActionCandidate
+      ? buildOperatorRecommendedNextStep({
+          callback: canonicalRecommendedActionCandidate,
+          operatorFollowUp: callbackFollowUp ?? operatorFollowUp,
+          operatorLabel: "callback waiting follow-up"
+        })
+      : null;
+  const recommendedNextStep = canonicalRecommendedNextStep ?? localRecommendedNextStep;
   const isObserveFirstRecommendedAction = isObserveFirstCallbackWaitingAction(
     recommendedAction?.kind ?? null
   );
@@ -254,7 +285,10 @@ export function CallbackWaitingSummaryCard({
     callbackWaitingAutomation,
     sensitiveAccessEntries,
     suppressSensitiveAccessContextRows,
-    showSensitiveAccessInlineActions: false
+    showSensitiveAccessInlineActions: false,
+    recommendedAction: canonicalRecommendedAction,
+    operatorFollowUp,
+    preferCanonicalRecommendedNextStep
   };
   const callbackInlineActionTitle = buildCallbackWaitingInlineActionTitle({
     actionKind: recommendedAction?.kind ?? null,
@@ -451,7 +485,10 @@ export function CallbackWaitingSummaryCard({
             callbackWaitingAutomation,
             sensitiveAccessEntries,
             suppressSensitiveAccessContextRows,
-            showSensitiveAccessInlineActions: shouldShowSensitiveAccessInlineActions
+            showSensitiveAccessInlineActions: shouldShowSensitiveAccessInlineActions,
+            recommendedAction: canonicalRecommendedAction,
+            operatorFollowUp,
+            preferCanonicalRecommendedNextStep
           }}
           compact
           nodeRunId={inlineActionNodeRunId}

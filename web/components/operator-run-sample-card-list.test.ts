@@ -292,4 +292,30 @@ describe("OperatorRunSampleCardList", () => {
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");
   });
+
+  it("reuses the canonical callback CTA across sampled run cards", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorRunSampleCardList, {
+        cards: [buildSampleCard()],
+        callbackWaitingSummaryProps: {
+          recommendedAction: {
+            kind: "approval blocker",
+            entry_key: "operatorInbox",
+            href: "/sensitive-access?run_id=run-1&approval_ticket_id=approval-ticket-1",
+            label: "Open approval inbox"
+          },
+          operatorFollowUp: "优先处理审批票据，再观察 callback waiting 是否恢复。",
+          preferCanonicalRecommendedNextStep: true
+        },
+        skillTraceDescription: "skill trace"
+      })
+    );
+
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("Open approval inbox");
+    expect(html).toContain("先看当前 tool 实际落在哪个 runner。");
+    expect(html).toContain(
+      'href="/sensitive-access?run_id=run-1&amp;approval_ticket_id=approval-ticket-1"'
+    );
+  });
 });
