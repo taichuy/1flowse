@@ -311,6 +311,7 @@ class RunDetail(BaseModel):
     execution_focus_node: RunDetailExecutionFocusNode | None = None
     execution_focus_explanation: SignalFollowUpExplanation | None = None
     execution_focus_skill_trace: OperatorRunFocusSkillTrace | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
     node_runs: list[NodeRunItem]
     artifacts: list[RunArtifactItem] = Field(default_factory=list)
     tool_calls: list[ToolCallItem] = Field(default_factory=list)

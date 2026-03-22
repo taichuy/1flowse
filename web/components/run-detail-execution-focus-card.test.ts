@@ -340,6 +340,57 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("open run");
   });
 
+  it("prefers canonical run follow-up action before local run CTA fallback", () => {
+    const run = buildRunDetail();
+    run.node_runs[0] = {
+      ...run.node_runs[0]!,
+      waiting_reason: null
+    };
+    run.execution_focus_explanation = {
+      primary_signal: "当前节点需要继续核对 execution focus。",
+      follow_up: null
+    };
+    run.run_follow_up = {
+      affected_run_count: 1,
+      sampled_run_count: 1,
+      waiting_run_count: 1,
+      running_run_count: 0,
+      succeeded_run_count: 0,
+      failed_run_count: 0,
+      unknown_run_count: 0,
+      recommended_action: {
+        kind: "approval blocker",
+        entry_key: "operatorInbox",
+        href: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+        label: "open approval inbox slice"
+      },
+      sampled_runs: [
+        {
+          run_id: "run-1",
+          snapshot: null,
+          callback_tickets: [],
+          sensitive_access_entries: []
+        }
+      ],
+      explanation: {
+        primary_signal: "当前 run 已接入 canonical follow-up。",
+        follow_up: "先处理审批票据，再回来继续看 execution focus。"
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDetailExecutionFocusCard, {
+        run,
+        title: "Execution focus"
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("先处理审批票据，再回来继续看 execution focus。");
+    expect(html).toContain("open approval inbox slice");
+  });
+
   it("renders the shared skill trace narrative when focus references are present", () => {
     const surfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
     const run = buildRunDetail();

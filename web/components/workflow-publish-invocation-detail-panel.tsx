@@ -154,6 +154,7 @@ export function WorkflowPublishInvocationDetailPanel({
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId,
     canonicalFollowUp,
+    canonicalRecommendedAction: runFollowUp?.recommended_action ?? null,
     callbackWaitingFollowUp: callbackWaitingExplanation?.follow_up ?? null,
     callbackWaitingAutomation,
     executionFocusFollowUp: explicitExecutionFocusFollowUp,

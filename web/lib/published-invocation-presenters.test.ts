@@ -1491,6 +1491,34 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("优先复用后端 canonical approval action，而不是回退到本地 run CTA", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-approval-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: "先处理审批票据，再回来确认 execution 是否恢复。",
+          has_shared_callback_waiting_summary: false
+        },
+        canonicalRecommendedAction: {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: "/sensitive-access?run_id=run-focus-approval-1&node_run_id=node-run-1",
+          label: "open approval inbox slice"
+        },
+        callbackWaitingFollowUp: null,
+        executionFocusFollowUp: null,
+        blockingInboxHref: null,
+        approvalInboxHref: null
+      })
+    ).toEqual({
+      label: "approval blocker",
+      detail: "先处理审批票据，再回来确认 execution 是否恢复。",
+      href: "/sensitive-access?run_id=run-focus-approval-1&node_run_id=node-run-1",
+      href_label: "open approval inbox slice"
+    });
+  });
+
   it("在缺少 callback waiting follow-up 时回退到 shared callback recovery contract", () => {
     expect(
       buildPublishedInvocationRecommendedNextStep({

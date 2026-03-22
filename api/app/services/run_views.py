@@ -145,6 +145,7 @@ def serialize_run_detail(
             if operator_snapshot is not None
             else None
         ),
+        run_follow_up=(execution_view.run_follow_up if execution_view is not None else None),
         node_runs=[
             {
                 "id": node_run.id,

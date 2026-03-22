@@ -10,7 +10,8 @@ import type {
 } from "@/lib/get-system-overview";
 import type { RunExecutionView } from "@/lib/get-run-views";
 import {
-  buildOperatorRunDetailCandidate,
+  buildOperatorRecommendedActionCandidate,
+  buildSharedOrLocalOperatorCandidate,
   buildOperatorRecommendedNextStep,
   buildOperatorRunSnapshotMetaRows,
   buildOperatorFollowUpSurfaceCopy
@@ -79,6 +80,13 @@ export function RunDiagnosticsOperatorFollowUpCard({
         "callback recovery"
       )
     : null;
+  const canonicalCallbackCandidate = buildOperatorRecommendedActionCandidate({
+    action: followUp?.recommended_action ?? null,
+    detail: callbackFollowUp ?? followUp?.explanation?.follow_up ?? null,
+    fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
+    scope: "callback",
+    surfaceCopy
+  });
   const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
     blockedExecution:
       executionView.execution_focus_reason === "blocked_execution" ||
@@ -94,45 +102,32 @@ export function RunDiagnosticsOperatorFollowUpCard({
   const sharedSandboxCandidate = hasExecutionFocusFacts && executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
+  const canonicalExecutionCandidate = buildOperatorRecommendedActionCandidate({
+    action: followUp?.recommended_action ?? null,
+    detail: executionFollowUp ?? followUp?.explanation?.follow_up ?? null,
+    fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    scope: "execution",
+    surfaceCopy
+  });
   const recommendedNextStep = buildOperatorRecommendedNextStep({
-    callback:
-      sharedCallbackCandidate ??
-      (callbackFollowUp?.trim()
-        ? buildOperatorRunDetailCandidate({
-            active: hasCallbackFacts,
-            label: "observe waiting",
-            detail: callbackFollowUp,
-            runId: executionView.run_id,
-            fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
-            surfaceCopy
-          })
-        : buildOperatorRunDetailCandidate({
-            active: hasCallbackFacts,
-            label: "observe waiting",
-            detail: callbackFollowUp,
-            runId: executionView.run_id,
-            fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
-            surfaceCopy
-          })),
-    execution:
-      sharedSandboxCandidate ??
-      (executionFollowUp?.trim()
-        ? buildOperatorRunDetailCandidate({
-            active: hasExecutionFocusFacts,
-            label: "inspect execution focus",
-            detail: executionFollowUp,
-            runId: executionView.run_id,
-            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy
-          })
-        : buildOperatorRunDetailCandidate({
-            active: hasExecutionFocusFacts,
-            label: "inspect execution focus",
-            detail: executionFollowUp,
-            runId: executionView.run_id,
-            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy
-          })),
+    callback: buildSharedOrLocalOperatorCandidate({
+      sharedCandidate: sharedCallbackCandidate ?? canonicalCallbackCandidate,
+      active: hasCallbackFacts,
+      label: "observe waiting",
+      detail: callbackFollowUp ?? followUp?.explanation?.follow_up ?? null,
+      runId: executionView.run_id,
+      fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
+      surfaceCopy
+    }),
+    execution: buildSharedOrLocalOperatorCandidate({
+      sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
+      active: hasExecutionFocusFacts,
+      label: "inspect execution focus",
+      detail: executionFollowUp ?? followUp?.explanation?.follow_up ?? null,
+      runId: executionView.run_id,
+      fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+      surfaceCopy
+    }),
     operatorFollowUp: followUp?.explanation?.follow_up ?? null,
     operatorLabel: "operator follow-up"
   });

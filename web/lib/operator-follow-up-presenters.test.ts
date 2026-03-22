@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOperatorRecommendedActionCandidate,
+  buildOperatorNavigationCandidate,
   buildOperatorInboxSliceLinkSurface,
   buildOperatorInboxSliceCandidate,
   buildOperatorFollowUpSurfaceCopy,
   buildRequiredOperatorRunDetailLinkSurface,
   buildOperatorRunDetailLinkSurface,
   buildOperatorRunDetailCandidate,
+  buildSharedOrLocalOperatorCandidate,
   buildOperatorRunSnapshotMetaRows,
   formatOperatorOpenRunLinkLabel
 } from "./operator-follow-up-presenters";
@@ -96,6 +99,107 @@ describe("operator follow-up presenters", () => {
       href_label: "open inbox slice",
       fallback_detail: "fallback"
     });
+  });
+
+  it("在存在 inbox href 时优先构建 inbox slice candidate", () => {
+    expect(
+      buildOperatorNavigationCandidate({
+        href: "/sensitive-access?run_id=run-1",
+        runId: "run-123456789",
+        label: "execution focus",
+        detail: "优先处理当前 blocker。",
+        fallbackDetail: "fallback"
+      })
+    ).toEqual({
+      active: true,
+      label: "execution focus",
+      detail: "优先处理当前 blocker。",
+      href: "/sensitive-access?run_id=run-1",
+      href_label: "open inbox slice",
+      fallback_detail: "fallback"
+    });
+  });
+
+  it("在缺少 inbox href 时回退到 run detail candidate", () => {
+    expect(
+      buildOperatorNavigationCandidate({
+        runId: "run-123456789",
+        label: "execution focus",
+        detail: "优先打开 run。",
+        fallbackDetail: "fallback"
+      })
+    ).toEqual({
+      active: true,
+      label: "execution focus",
+      detail: "优先打开 run。",
+      href: "/runs/run-123456789",
+      href_label: "open run",
+      fallback_detail: "fallback"
+    });
+  });
+
+  it("在 shared candidate 存在时优先复用 shared contract", () => {
+    expect(
+      buildSharedOrLocalOperatorCandidate({
+        sharedCandidate: {
+          active: true,
+          label: "sandbox readiness",
+          detail: "优先回到 workflow library 检查强隔离能力。",
+          href: "/workflows?execution=sandbox",
+          href_label: "Open workflow library",
+          fallback_detail: "fallback"
+        },
+        runId: "run-123456789",
+        detail: "优先打开 run。",
+        fallbackDetail: "fallback"
+      })
+    ).toEqual({
+      active: true,
+      label: "sandbox readiness",
+      detail: "优先回到 workflow library 检查强隔离能力。",
+      href: "/workflows?execution=sandbox",
+      href_label: "Open workflow library",
+      fallback_detail: "fallback"
+    });
+  });
+
+  it("把后端 canonical callback action 映射成 inbox candidate", () => {
+    expect(
+      buildOperatorRecommendedActionCandidate({
+        action: {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+          label: "open approval inbox slice"
+        },
+        detail: "先处理审批票据。",
+        fallbackDetail: "fallback",
+        scope: "callback"
+      })
+    ).toEqual({
+      active: true,
+      label: "approval blocker",
+      detail: "先处理审批票据。",
+      href: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+      href_label: "open approval inbox slice",
+      fallback_detail: "fallback"
+    });
+  });
+
+  it("不会把 canonical callback action 误当成 execution candidate", () => {
+    expect(
+      buildOperatorRecommendedActionCandidate({
+        action: {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+          label: "open approval inbox slice"
+        },
+        detail: "先处理审批票据。",
+        fallbackDetail: "fallback",
+        scope: "execution"
+      })
+    ).toBeNull();
   });
 
   it("为直达 run 链接复用统一 href 与标签 surface", () => {

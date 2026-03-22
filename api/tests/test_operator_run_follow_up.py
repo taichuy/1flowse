@@ -691,3 +691,10 @@ def test_load_operator_run_snapshot_prefers_callback_waiting_explanation(
             "来源为 scheduler_waiting_resume_monitor。若仍无推进，再考虑手动 resume。"
         ),
     }
+    assert summary.recommended_action is not None
+    assert summary.recommended_action.model_dump() == {
+        "kind": "callback waiting",
+        "entry_key": "runLibrary",
+        "href": f"/runs/{run.id}",
+        "label": "open run",
+    }

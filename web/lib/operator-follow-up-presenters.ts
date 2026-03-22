@@ -41,6 +41,13 @@ export type OperatorRecommendedNextStepCandidate = {
   fallback_detail: string;
 };
 
+export type OperatorRecommendedActionLike = {
+  kind?: string | null;
+  entry_key?: string | null;
+  href?: string | null;
+  label?: string | null;
+};
+
 function normalizeFollowUpCopy(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -49,6 +56,20 @@ function normalizeFollowUpCopy(value?: string | null) {
 function normalizeHref(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function isCallbackLikeOperatorRecommendedAction(
+  action?: OperatorRecommendedActionLike | null
+) {
+  const entryKey = normalizeFollowUpCopy(action?.entry_key)?.toLowerCase();
+  const kind = normalizeFollowUpCopy(action?.kind)?.toLowerCase();
+
+  return (
+    entryKey === "operatorinbox" ||
+    kind === "approval blocker" ||
+    kind === "callback waiting" ||
+    kind === "approval follow-up"
+  );
 }
 
 export function buildOperatorFollowUpSurfaceCopy(): OperatorFollowUpSurfaceCopy {
@@ -164,6 +185,128 @@ export function buildOperatorInboxSliceCandidate({
     href_label: normalizedHref ? hrefLabel?.trim() || surfaceCopy.openInboxSliceLabel : null,
     fallback_detail: fallbackDetail
   };
+}
+
+export function buildOperatorNavigationCandidate({
+  active,
+  href,
+  runId,
+  label,
+  detail,
+  fallbackDetail,
+  hrefLabel,
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+}: {
+  active?: boolean;
+  href?: string | null;
+  runId?: string | null;
+  label?: string;
+  detail?: string | null;
+  fallbackDetail: string;
+  hrefLabel?: string | null;
+  surfaceCopy?: OperatorFollowUpSurfaceCopy;
+}): OperatorRecommendedNextStepCandidate {
+  const normalizedHref = normalizeHref(href);
+
+  return normalizedHref
+    ? buildOperatorInboxSliceCandidate({
+        active,
+        href: normalizedHref,
+        label,
+        detail,
+        fallbackDetail,
+        hrefLabel,
+        surfaceCopy
+      })
+    : buildOperatorRunDetailCandidate({
+        active,
+        runId,
+        label,
+        detail,
+        fallbackDetail,
+        hrefLabel,
+        surfaceCopy
+      });
+}
+
+export function buildSharedOrLocalOperatorCandidate({
+  sharedCandidate,
+  active,
+  href,
+  runId,
+  label,
+  detail,
+  fallbackDetail,
+  hrefLabel,
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+}: {
+  sharedCandidate?: OperatorRecommendedNextStepCandidate | null;
+  active?: boolean;
+  href?: string | null;
+  runId?: string | null;
+  label?: string;
+  detail?: string | null;
+  fallbackDetail: string;
+  hrefLabel?: string | null;
+  surfaceCopy?: OperatorFollowUpSurfaceCopy;
+}): OperatorRecommendedNextStepCandidate {
+  return (
+    sharedCandidate ??
+    buildOperatorNavigationCandidate({
+      active,
+      href,
+      runId,
+      label,
+      detail,
+      fallbackDetail,
+      hrefLabel,
+      surfaceCopy
+    })
+  );
+}
+
+export function buildOperatorRecommendedActionCandidate({
+  action,
+  detail,
+  fallbackDetail,
+  active,
+  scope = "any",
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+}: {
+  action?: OperatorRecommendedActionLike | null;
+  detail?: string | null;
+  fallbackDetail: string;
+  active?: boolean;
+  scope?: "callback" | "execution" | "any";
+  surfaceCopy?: OperatorFollowUpSurfaceCopy;
+}): OperatorRecommendedNextStepCandidate | null {
+  const kind = normalizeFollowUpCopy(action?.kind);
+  const entryKey = normalizeFollowUpCopy(action?.entry_key);
+  const href = normalizeHref(action?.href);
+  const hrefLabel = normalizeFollowUpCopy(action?.label);
+  const callbackLike = isCallbackLikeOperatorRecommendedAction(action);
+
+  if (!kind && !entryKey && !href && !hrefLabel) {
+    return null;
+  }
+
+  if (scope === "callback" && !callbackLike) {
+    return null;
+  }
+
+  if (scope === "execution" && callbackLike) {
+    return null;
+  }
+
+  return buildOperatorNavigationCandidate({
+    active: active ?? true,
+    href,
+    label: kind ?? (callbackLike ? "approval blocker" : "run detail"),
+    detail,
+    fallbackDetail,
+    hrefLabel,
+    surfaceCopy
+  });
 }
 
 export function formatOperatorOpenRunLinkLabel(

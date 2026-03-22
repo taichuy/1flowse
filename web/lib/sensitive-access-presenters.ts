@@ -9,10 +9,10 @@ import type {
 } from "@/lib/get-sensitive-access";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import {
-  buildOperatorInboxSliceCandidate,
+  buildOperatorRecommendedActionCandidate,
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep,
-  buildOperatorRunDetailCandidate,
+  buildSharedOrLocalOperatorCandidate,
   type OperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
 import {
@@ -328,6 +328,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   outcomeExplanation,
   runSnapshot,
   runFollowUpExplanation,
+  recommendedAction,
   sandboxReadiness
 }: {
   inboxHref?: string | null;
@@ -335,6 +336,12 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   outcomeExplanation?: SignalFollowUpExplanation | null;
   runSnapshot?: OperatorRunSnapshotSummary | null;
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
+  recommendedAction?: {
+    kind?: string | null;
+    entry_key?: string | null;
+    href?: string | null;
+    label?: string | null;
+  } | null;
   sandboxReadiness?: Pick<
     SandboxReadinessCheck,
     | "affected_run_count"
@@ -361,26 +368,45 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   })
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
+  const canonicalCallbackCandidate = buildOperatorRecommendedActionCandidate({
+    action: recommendedAction,
+    detail: blockerFollowUp,
+    fallbackDetail:
+      "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。",
+    scope: "callback",
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const canonicalExecutionCandidate = buildOperatorRecommendedActionCandidate({
+    action: recommendedAction,
+    detail: executionFollowUp,
+    fallbackDetail:
+      "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
+    scope: "execution",
+    surfaceCopy: operatorSurfaceCopy
+  });
 
   return buildOperatorRecommendedNextStep({
-    callback: buildOperatorInboxSliceCandidate({
-      active: !sharedSandboxCandidate && Boolean(inboxHref || blockerFollowUp),
-      detail: blockerFollowUp,
-      href: inboxHref,
+    callback: !sharedSandboxCandidate
+      ? buildSharedOrLocalOperatorCandidate({
+          sharedCandidate: canonicalCallbackCandidate,
+          active: Boolean(inboxHref || blockerFollowUp),
+          label: "approval blocker",
+          detail: blockerFollowUp,
+          href: inboxHref,
+          fallbackDetail:
+            "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。",
+          surfaceCopy: operatorSurfaceCopy
+        })
+      : null,
+    execution: buildSharedOrLocalOperatorCandidate({
+      sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
+      active: Boolean(runId || executionFollowUp),
+      runId,
+      detail: executionFollowUp,
       fallbackDetail:
-        "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。",
+        "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
       surfaceCopy: operatorSurfaceCopy
     }),
-    execution:
-      sharedSandboxCandidate ??
-      buildOperatorRunDetailCandidate({
-        active: Boolean(runId || executionFollowUp),
-        runId,
-        detail: executionFollowUp,
-        fallbackDetail:
-          "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
-        surfaceCopy: operatorSurfaceCopy
-      }),
     operatorFollowUp: blockerFollowUp,
     operatorLabel: "approval follow-up"
   });

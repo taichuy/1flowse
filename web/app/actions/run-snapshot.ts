@@ -181,6 +181,12 @@ export type OperatorRunFollowUpBody = {
   succeeded_run_count?: number;
   failed_run_count?: number;
   unknown_run_count?: number;
+  recommended_action?: {
+    kind?: string | null;
+    entry_key?: string | null;
+    href?: string | null;
+    label?: string | null;
+  } | null;
   explanation?: {
     primary_signal?: string | null;
     follow_up?: string | null;
@@ -201,6 +207,12 @@ export type OperatorRunFollowUpSummary = {
   succeededRunCount: number;
   failedRunCount: number;
   unknownRunCount: number;
+  recommendedAction?: {
+    kind: string;
+    entryKey: string | null;
+    href: string | null;
+    label: string | null;
+  } | null;
   sampledRuns: RunSnapshotWithId[];
 };
 
@@ -208,6 +220,7 @@ type RunDetailResponseBody = {
   status?: string;
   workflow_id?: string | null;
   current_node_id?: string | null;
+  run_follow_up?: OperatorRunFollowUpBody | null;
   execution_focus_reason?: string | null;
   execution_focus_node?: {
     node_id?: string | null;
@@ -719,6 +732,27 @@ export function normalizeOperatorRunFollowUp(
     succeededRunCount: summary.succeeded_run_count ?? 0,
     failedRunCount: summary.failed_run_count ?? 0,
     unknownRunCount: summary.unknown_run_count ?? 0,
+    recommendedAction:
+      typeof summary.recommended_action?.kind === "string" && summary.recommended_action.kind.trim()
+        ? {
+            kind: summary.recommended_action.kind.trim(),
+            entryKey:
+              typeof summary.recommended_action.entry_key === "string" &&
+              summary.recommended_action.entry_key.trim()
+                ? summary.recommended_action.entry_key.trim()
+                : null,
+            href:
+              typeof summary.recommended_action.href === "string" &&
+              summary.recommended_action.href.trim()
+                ? summary.recommended_action.href.trim()
+                : null,
+            label:
+              typeof summary.recommended_action.label === "string" &&
+              summary.recommended_action.label.trim()
+                ? summary.recommended_action.label.trim()
+                : null
+          }
+        : null,
     sampledRuns: (summary.sampled_runs ?? [])
       .filter((item) => typeof item?.run_id === "string" && item.run_id.trim())
       .map((item) => ({

@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from urllib.parse import quote, urlencode
 
 from app.models.run import NodeRun, Run
 from app.schemas.explanations import SignalFollowUpExplanation
@@ -8,6 +9,7 @@ from app.schemas.operator_follow_up import (
     OperatorRunFocusSkillReferenceItem,
     OperatorRunFocusSkillTrace,
     OperatorRunFocusToolCallItem,
+    OperatorRunRecommendedAction,
     OperatorRunFollowUpSummary,
     OperatorRunSnapshot,
     OperatorRunSnapshotSample,
@@ -114,6 +116,127 @@ def _format_run_snapshot_summary(snapshot: OperatorRunSnapshot | None) -> str | 
             if not effective_primary_signal and normalized_waiting_reason
             else None,
         ]
+    )
+
+
+def _select_primary_sample(
+    summary: OperatorRunFollowUpSummary,
+) -> OperatorRunSnapshotSample | None:
+    for item in summary.sampled_runs:
+        if item.snapshot is not None and str(item.run_id or "").strip():
+            return item
+    for item in summary.sampled_runs:
+        if str(item.run_id or "").strip():
+            return item
+    return None
+
+
+def _build_run_detail_href(run_id: str) -> str:
+    return f"/runs/{quote(run_id.strip(), safe='')}"
+
+
+def _build_sensitive_access_inbox_href(run_id: str, node_run_id: str | None = None) -> str:
+    params: dict[str, str] = {"run_id": run_id.strip()}
+    if node_run_id and node_run_id.strip():
+        params["node_run_id"] = node_run_id.strip()
+    return f"/sensitive-access?{urlencode(params)}"
+
+
+def _extract_nested_value(entry: dict[str, object], *keys: str) -> str | None:
+    current: object = entry
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    if isinstance(current, str):
+        normalized = current.strip()
+        return normalized or None
+    return None
+
+
+def _has_callback_waiting_facts(snapshot: OperatorRunSnapshot | None) -> bool:
+    return bool(
+        snapshot is not None
+        and (
+            snapshot.callback_waiting_explanation is not None
+            or snapshot.callback_waiting_lifecycle is not None
+            or str(snapshot.waiting_reason or "").strip()
+            or snapshot.scheduled_resume_due_at is not None
+            or snapshot.scheduled_resume_delay_seconds is not None
+            or snapshot.scheduled_resume_requeued_at is not None
+        )
+    )
+
+
+def _has_execution_focus_facts(snapshot: OperatorRunSnapshot | None) -> bool:
+    return bool(
+        snapshot is not None
+        and (
+            snapshot.execution_focus_reason is not None
+            or snapshot.execution_focus_explanation is not None
+            or str(snapshot.execution_focus_node_id or "").strip()
+            or str(snapshot.execution_focus_node_run_id or "").strip()
+            or str(snapshot.execution_focus_node_type or "").strip()
+        )
+    )
+
+
+def build_operator_run_follow_up_recommended_action(
+    summary: OperatorRunFollowUpSummary,
+) -> OperatorRunRecommendedAction | None:
+    sample = _select_primary_sample(summary)
+    if sample is None:
+        return None
+
+    run_id = str(sample.run_id or "").strip() or None
+    if run_id is None:
+        return None
+
+    snapshot = sample.snapshot
+    sensitive_access_entry = next(
+        (
+            entry
+            for entry in sample.sensitive_access_entries
+            if isinstance(entry, dict)
+        ),
+        None,
+    )
+
+    if sensitive_access_entry is not None:
+        node_run_id = (
+            _extract_nested_value(sensitive_access_entry, "approval_ticket", "node_run_id")
+            or _extract_nested_value(sensitive_access_entry, "request", "node_run_id")
+            or str(snapshot.execution_focus_node_run_id or "").strip()
+            or None
+        )
+        return OperatorRunRecommendedAction(
+            kind="approval blocker",
+            entry_key="operatorInbox",
+            href=_build_sensitive_access_inbox_href(run_id, node_run_id),
+            label="open approval inbox slice",
+        )
+
+    if _has_callback_waiting_facts(snapshot):
+        return OperatorRunRecommendedAction(
+            kind="callback waiting",
+            entry_key="runLibrary",
+            href=_build_run_detail_href(run_id),
+            label="open run",
+        )
+
+    if _has_execution_focus_facts(snapshot):
+        return OperatorRunRecommendedAction(
+            kind="execution focus",
+            entry_key="runLibrary",
+            href=_build_run_detail_href(run_id),
+            label="open run",
+        )
+
+    return OperatorRunRecommendedAction(
+        kind="run detail",
+        entry_key="runLibrary",
+        href=_build_run_detail_href(run_id),
+        label="open run",
     )
 
 
@@ -471,4 +594,5 @@ def build_single_run_follow_up_summary(
         summary.unknown_run_count += 1
 
     summary.explanation = build_operator_run_follow_up_explanation(summary)
+    summary.recommended_action = build_operator_run_follow_up_recommended_action(summary)
     return summary

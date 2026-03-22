@@ -179,6 +179,7 @@ export function WorkflowPublishInvocationEntryCard({
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId: item.run_id ?? null,
     canonicalFollowUp,
+    canonicalRecommendedAction: item.run_follow_up?.recommended_action ?? null,
     callbackWaitingFollowUp: waitingLifecycle ? waitingExplanation?.follow_up ?? null : null,
     callbackWaitingAutomation,
     executionFocusFollowUp,

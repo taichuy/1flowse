@@ -163,6 +163,16 @@ class OperatorRunSnapshotSample(BaseModel):
     sensitive_access_entries: list[dict[str, Any]] = Field(default_factory=list)
 
 
+OperatorRunRecommendedActionEntryKey = Literal["runLibrary", "operatorInbox"]
+
+
+class OperatorRunRecommendedAction(BaseModel):
+    kind: str
+    entry_key: OperatorRunRecommendedActionEntryKey
+    href: str
+    label: str
+
+
 class OperatorRunFollowUpSummary(BaseModel):
     affected_run_count: int = 0
     sampled_run_count: int = 0
@@ -173,3 +183,4 @@ class OperatorRunFollowUpSummary(BaseModel):
     unknown_run_count: int = 0
     sampled_runs: list[OperatorRunSnapshotSample] = Field(default_factory=list)
     explanation: SignalFollowUpExplanation | None = None
+    recommended_action: OperatorRunRecommendedAction | None = None

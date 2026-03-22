@@ -347,6 +347,12 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert body["run_follow_up"] is not None
     assert body["run_follow_up"]["affected_run_count"] == 1
     assert body["run_follow_up"]["sampled_run_count"] == 1
+    assert body["run_follow_up"]["recommended_action"] == {
+        "kind": "approval blocker",
+        "entry_key": "operatorInbox",
+        "href": f"/sensitive-access?run_id={run.id}&node_run_id={node_run.id}",
+        "label": "open approval inbox slice",
+    }
     sampled_run = body["run_follow_up"]["sampled_runs"][0]
     assert sampled_run["run_id"] == run.id
     assert sampled_run["snapshot"] == body["run_snapshot"]
@@ -690,6 +696,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert run_detail_body["execution_focus_node"]["sensitive_access_entries"] == node[
         "sensitive_access_entries"
     ]
+    assert run_detail_body["run_follow_up"] == body["run_follow_up"]
     assert run_detail_body["execution_focus_skill_trace"] is None
 
 

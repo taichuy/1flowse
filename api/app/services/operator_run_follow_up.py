@@ -11,6 +11,7 @@ from app.schemas.operator_follow_up import (
 from app.schemas.run_views import RunExecutionView
 from app.services.operator_follow_up_snapshots import (
     build_operator_run_follow_up_explanation,
+    build_operator_run_follow_up_recommended_action,
     build_operator_run_snapshot,
     build_waiting_reason_lookup,
 )
@@ -253,4 +254,5 @@ def _build_operator_run_follow_up_summary(
         )
 
     summary.explanation = build_operator_run_follow_up_explanation(summary)
+    summary.recommended_action = build_operator_run_follow_up_recommended_action(summary)
     return summary

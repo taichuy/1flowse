@@ -8,9 +8,9 @@ import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import {
+  buildOperatorRecommendedActionCandidate,
   buildOperatorFollowUpSurfaceCopy,
-  buildOperatorInboxSliceCandidate,
-  buildOperatorRunDetailCandidate,
+  buildSharedOrLocalOperatorCandidate,
   buildOperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
 import {
@@ -63,47 +63,24 @@ export function RunDetailExecutionFocusCard({
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
   const shouldDeferToCallbackWaitingSummary = focus.hasCallbackSummary && !sharedSandboxCandidate;
-  const executionCandidate =
-    sharedSandboxCandidate ??
-    (explicitExecutionFollowUp
-      ? recommendedNextStepHref?.trim()
-        ? buildOperatorInboxSliceCandidate({
-            active: true,
-            href: recommendedNextStepHref,
-            label: "execution focus",
-            detail: explicitExecutionFollowUp,
-            hrefLabel: recommendedNextStepHrefLabel,
-            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy: operatorSurfaceCopy
-          })
-        : buildOperatorRunDetailCandidate({
-            active: true,
-            runId: run.id,
-            label: "execution focus",
-            detail: explicitExecutionFollowUp,
-            hrefLabel: recommendedNextStepHrefLabel,
-            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy: operatorSurfaceCopy
-          })
-      : recommendedNextStepHref?.trim()
-        ? buildOperatorInboxSliceCandidate({
-            active: true,
-            href: recommendedNextStepHref,
-            label: "execution focus",
-            detail: null,
-            hrefLabel: recommendedNextStepHrefLabel,
-            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy: operatorSurfaceCopy
-          })
-        : buildOperatorRunDetailCandidate({
-            active: true,
-            runId: run.id,
-            label: "execution focus",
-            detail: null,
-            hrefLabel: recommendedNextStepHrefLabel,
-            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy: operatorSurfaceCopy
-          }));
+  const canonicalExecutionCandidate = buildOperatorRecommendedActionCandidate({
+    action: run.run_follow_up?.recommended_action ?? null,
+    detail: explicitExecutionFollowUp ?? run.run_follow_up?.explanation?.follow_up ?? null,
+    fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    scope: "any",
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const executionCandidate = buildSharedOrLocalOperatorCandidate({
+    sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
+    active: true,
+    href: recommendedNextStepHref,
+    runId: run.id,
+    label: "execution focus",
+    detail: explicitExecutionFollowUp ?? run.run_follow_up?.explanation?.follow_up ?? null,
+    hrefLabel: recommendedNextStepHrefLabel,
+    fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    surfaceCopy: operatorSurfaceCopy
+  });
   const recommendedNextStep = !shouldDeferToCallbackWaitingSummary
     ? buildOperatorRecommendedNextStep({
         execution: executionCandidate

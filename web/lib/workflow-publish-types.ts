@@ -339,6 +339,12 @@ export type OperatorRunFollowUpSummary = {
   succeeded_run_count: number;
   failed_run_count: number;
   unknown_run_count: number;
+  recommended_action?: {
+    kind: string;
+    entry_key: string;
+    href: string | null;
+    label: string | null;
+  } | null;
   sampled_runs: OperatorRunFollowUpSnapshotSample[];
   explanation?: RunExecutionFocusExplanation | null;
 };

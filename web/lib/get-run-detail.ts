@@ -2,6 +2,7 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type {
   AICallItem,
   CallbackWaitingLifecycleSummary,
+  OperatorRunFollowUpSummary,
   RunArtifactItem,
   RunExecutionFocusExplanation,
   RunExecutionFocusReason,
@@ -106,6 +107,7 @@ export type RunDetail = {
     source_counts?: Record<string, number> | null;
     loads?: SkillReferenceLoadItem[] | null;
   } | null;
+  run_follow_up?: OperatorRunFollowUpSummary | null;
   node_runs: NodeRunItem[];
   artifacts?: RunArtifactItem[];
   tool_calls?: ToolCallItem[];

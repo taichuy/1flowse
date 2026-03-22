@@ -211,6 +211,7 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
     const nextStep = buildPublishedInvocationRecommendedNextStep({
       runId,
       canonicalFollowUp,
+      canonicalRecommendedAction: detail.run_follow_up?.recommended_action ?? null,
       callbackWaitingFollowUp: detail.callback_waiting_explanation?.follow_up ?? null,
       callbackWaitingAutomation,
       executionFocusFollowUp: detail.execution_focus_explanation?.follow_up ?? null,

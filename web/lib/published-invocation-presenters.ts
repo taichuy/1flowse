@@ -33,11 +33,11 @@ import {
   type OperatorInlineFocusArtifactPreview
 } from "@/lib/operator-inline-action-feedback";
 import {
-  buildOperatorInboxSliceCandidate,
+  buildOperatorRecommendedActionCandidate,
+  buildSharedOrLocalOperatorCandidate,
   buildOperatorInboxSliceLinkSurface,
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep,
-  buildOperatorRunDetailCandidate,
   buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
@@ -1841,6 +1841,7 @@ export function hasPublishedInvocationBlockingSensitiveAccessSummary(
 export function buildPublishedInvocationRecommendedNextStep({
   runId,
   canonicalFollowUp,
+  canonicalRecommendedAction,
   callbackWaitingFollowUp,
   callbackWaitingAutomation,
   executionFocusFollowUp,
@@ -1851,6 +1852,12 @@ export function buildPublishedInvocationRecommendedNextStep({
 }: {
   runId?: string | null;
   canonicalFollowUp?: PublishedInvocationCanonicalFollowUpCopy | null;
+  canonicalRecommendedAction?: {
+    kind?: string | null;
+    entry_key?: string | null;
+    href?: string | null;
+    label?: string | null;
+  } | null;
   callbackWaitingFollowUp?: string | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   executionFocusFollowUp?: string | null;
@@ -1864,21 +1871,33 @@ export function buildPublishedInvocationRecommendedNextStep({
     (callbackWaitingFollowUp && callbackWaitingFollowUp.trim()) ||
       canonicalFollowUp?.has_shared_callback_waiting_summary
   );
-  const callbackCandidate = hasExplicitCallbackFollowUp
-    ? buildOperatorInboxSliceCandidate({
-        active: true,
-        href: blockingInboxHref ?? approvalInboxHref ?? null,
-        label: blockingInboxHref ? "approval blocker" : "callback waiting",
-        detail: callbackWaitingFollowUp,
-        hrefLabel: blockingInboxHref
-          ? "open blocker inbox slice"
-          : approvalInboxHref
-            ? "open approval inbox slice"
-            : null,
+  const callbackCandidate = buildSharedOrLocalOperatorCandidate({
+    sharedCandidate:
+      (hasExplicitCallbackFollowUp
+        ? null
+        : buildCallbackWaitingAutomationFollowUpCandidate(
+            callbackWaitingAutomation,
+            "callback recovery"
+          )) ??
+      buildOperatorRecommendedActionCandidate({
+        action: canonicalRecommendedAction,
+        detail: callbackWaitingFollowUp ?? canonicalFollowUp?.follow_up ?? null,
         fallbackDetail:
-          "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。"
-      })
-    : buildCallbackWaitingAutomationFollowUpCandidate(callbackWaitingAutomation, "callback recovery");
+          "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。",
+        scope: "callback"
+      }),
+    active: hasExplicitCallbackFollowUp,
+    href: blockingInboxHref ?? approvalInboxHref ?? null,
+    label: blockingInboxHref ? "approval blocker" : "callback waiting",
+    detail: callbackWaitingFollowUp,
+    hrefLabel: blockingInboxHref
+      ? "open blocker inbox slice"
+      : approvalInboxHref
+        ? "open approval inbox slice"
+        : null,
+    fallbackDetail:
+      "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。"
+  });
   const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
     blockedExecution: executionSnapshot?.executionFocusReason === "blocked_execution",
     hasExecutionBlockingReason: Boolean(
@@ -1894,24 +1913,24 @@ export function buildPublishedInvocationRecommendedNextStep({
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
-  const executionCandidate =
-    sharedSandboxCandidate ??
-    (executionFocusFollowUp?.trim()
-      ? buildOperatorRunDetailCandidate({
-          active: true,
-          runId,
-          label: "execution focus",
-          detail: executionFocusFollowUp,
-          fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
-        })
-      : buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness") ??
-        buildOperatorRunDetailCandidate({
-          active: Boolean(runId),
-          runId,
-          label: "execution focus",
-          detail: executionFocusFollowUp,
-          fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
-        }));
+  const executionCandidate = buildSharedOrLocalOperatorCandidate({
+    sharedCandidate:
+      sharedSandboxCandidate ??
+      buildOperatorRecommendedActionCandidate({
+        action: canonicalRecommendedAction,
+        detail: executionFocusFollowUp ?? canonicalFollowUp?.follow_up ?? null,
+        fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+        scope: "execution"
+      }) ??
+      (!executionFocusFollowUp?.trim()
+        ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+        : null),
+    active: Boolean(runId || executionFocusFollowUp?.trim()),
+    runId,
+    label: "execution focus",
+    detail: executionFocusFollowUp,
+    fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
+  });
 
   return buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
