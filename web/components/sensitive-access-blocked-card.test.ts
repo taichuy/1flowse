@@ -176,7 +176,7 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("approval blocker");
     expect(html).toContain("open inbox slice");
-    expect(html).toContain("优先处理审批票据，再观察 waiting 节点是否恢复");
+    expect(html).toContain("审批通过后继续观察 review 节点");
     expect(html).not.toContain("当前阻断来自敏感访问审批票据");
     expect(html).toContain("Run status");
     expect(html).toContain("waiting");

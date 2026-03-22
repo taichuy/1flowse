@@ -265,6 +265,17 @@ describe("sensitive access presenters", () => {
     });
   });
 
+  it("没有稳定 CTA 或导航目标时，不再把 follow_up 单独投影成 next-step 卡片", () => {
+    expect(
+      buildSensitiveAccessBlockedRecommendedNextStep({
+        outcomeExplanation: {
+          primary_signal: "审批票据仍在等待处理。",
+          follow_up: "先处理审批票据，再重试导出。"
+        }
+      })
+    ).toBeNull();
+  });
+
   it("命中强隔离阻断时优先复用 live sandbox readiness CTA", () => {
     const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
 

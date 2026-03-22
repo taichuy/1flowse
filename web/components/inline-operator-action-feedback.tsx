@@ -101,24 +101,22 @@ export function InlineOperatorActionFeedback({
     scope: "any",
     surfaceCopy
   });
+  const executionCandidate = buildSharedOrLocalOperatorCandidate({
+    sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
+    active: Boolean(runId),
+    runId,
+    label: runId ? "run detail" : "execution follow-up",
+    detail: model.runFollowUpFollowUp,
+    fallbackDetail: model.runSnapshotSummary ?? executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    surfaceCopy
+  });
   const recommendedNextStep =
     hasExplicitRecommendedNextStepOverride
       ? recommendedNextStepOverride
       : !hasCallbackWaitingSummary
       ? buildOperatorRecommendedNextStep({
-          execution: buildSharedOrLocalOperatorCandidate({
-            sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
-            active: Boolean(
-              runId || model.runFollowUpFollowUp || model.runSnapshotSummary || model.focusNodeLabel
-            ),
-            runId,
-            label: runId ? "run detail" : "execution follow-up",
-            detail: model.runFollowUpFollowUp,
-            fallbackDetail:
-              model.runSnapshotSummary ?? executionSurfaceCopy.recommendedNextStepFallbackDetail,
-            surfaceCopy
-          }),
-          operatorFollowUp: model.outcomeFollowUp,
+          execution: executionCandidate,
+          operatorFollowUp: executionCandidate.active ? model.outcomeFollowUp : null,
           operatorLabel: "operator result"
         })
       : null;

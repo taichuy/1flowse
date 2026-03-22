@@ -359,6 +359,7 @@ export function SensitiveAccessTimelineEntryList({
                 outcomeExplanation: canonicalOutcomeExplanation,
                 runSnapshot: runContext.snapshot,
                 runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null,
+                recommendedAction: runContext.runFollowUp?.recommendedAction ?? null,
                 sandboxReadiness
               });
           const inboxLinkLabel =

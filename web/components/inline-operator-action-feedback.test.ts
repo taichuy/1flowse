@@ -172,6 +172,23 @@ describe("InlineOperatorActionFeedback", () => {
     expect(html).not.toContain(operatorSurfaceCopy.recommendedNextStepTitle);
   });
 
+  it("keeps follow_up as explanation text when no stable CTA target is available", () => {
+    const html = renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        message: "",
+        title: "Operator follow-up",
+        runFollowUpExplanation: {
+          primary_signal: "本次已刷新 operator follow-up。",
+          follow_up: "先联系值班 operator 手动确认当前阻断。"
+        }
+      })
+    );
+
+    expect(html).not.toContain(operatorSurfaceCopy.recommendedNextStepTitle);
+    expect(html).toContain("先联系值班 operator 手动确认当前阻断。");
+  });
+
   it("forwards callback waiting summary context to the shared summary card", () => {
     const inboxHref = "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1";
     const callbackWaitingAutomation = buildCallbackWaitingAutomation();

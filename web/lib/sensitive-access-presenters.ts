@@ -384,30 +384,35 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
     scope: "execution",
     surfaceCopy: operatorSurfaceCopy
   });
+  const callbackCandidate = !sharedSandboxCandidate && !canonicalExecutionCandidate
+    ? buildSharedOrLocalOperatorCandidate({
+        sharedCandidate: canonicalCallbackCandidate,
+        active: Boolean(inboxHref),
+        label: "approval blocker",
+        detail: blockerFollowUp,
+        href: inboxHref,
+        fallbackDetail:
+          "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。",
+        surfaceCopy: operatorSurfaceCopy
+      })
+    : null;
+  const executionCandidate = buildSharedOrLocalOperatorCandidate({
+    sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
+    active: Boolean(runId),
+    runId,
+    detail: executionFollowUp,
+    fallbackDetail:
+      "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const hasStableRecommendedCandidate = Boolean(
+    callbackCandidate?.active || executionCandidate.active
+  );
 
   return buildOperatorRecommendedNextStep({
-    callback: !sharedSandboxCandidate
-      ? buildSharedOrLocalOperatorCandidate({
-          sharedCandidate: canonicalCallbackCandidate,
-          active: Boolean(inboxHref || blockerFollowUp),
-          label: "approval blocker",
-          detail: blockerFollowUp,
-          href: inboxHref,
-          fallbackDetail:
-            "当前敏感访问仍被 approval blocker 拦住；优先处理审批票据、通知与 waiting 恢复，再继续查看 run detail 或原入口。",
-          surfaceCopy: operatorSurfaceCopy
-        })
-      : null,
-    execution: buildSharedOrLocalOperatorCandidate({
-      sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
-      active: Boolean(runId || executionFollowUp),
-      runId,
-      detail: executionFollowUp,
-      fallbackDetail:
-        "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
-      surfaceCopy: operatorSurfaceCopy
-    }),
-    operatorFollowUp: blockerFollowUp,
+    callback: callbackCandidate,
+    execution: executionCandidate,
+    operatorFollowUp: hasStableRecommendedCandidate ? blockerFollowUp : null,
     operatorLabel: "approval follow-up"
   });
 }

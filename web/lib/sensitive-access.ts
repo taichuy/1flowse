@@ -222,6 +222,7 @@ export function normalizeSensitiveAccessRunFollowUp(
     const normalizedSummary = summary as SensitiveAccessRunFollowUp;
     return {
       ...normalizedSummary,
+      recommendedAction: normalizedSummary.recommendedAction ?? null,
       explanation: normalizeSignalFollowUpExplanation(summary.explanation ?? null),
       sampledRuns: Array.isArray(normalizedSummary.sampledRuns)
         ? normalizedSummary.sampledRuns.map((item) => ({
@@ -242,6 +243,7 @@ export function normalizeSensitiveAccessRunFollowUp(
       succeededRunCount: normalized.succeededRunCount,
       failedRunCount: normalized.failedRunCount,
       unknownRunCount: normalized.unknownRunCount,
+      recommendedAction: normalized.recommendedAction ?? null,
       sampledRuns: Array.isArray(summary.sampled_runs)
         ? summary.sampled_runs
             .filter((item) => typeof item?.run_id === "string" && item.run_id.trim())

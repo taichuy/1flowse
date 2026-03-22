@@ -227,6 +227,65 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).not.toContain("旧的审批摘要不应继续盖过 canonical snapshot。");
   });
 
+  it("优先复用 run follow-up 的稳定 recommended_action，而不是退回 inbox CTA", () => {
+    const baseEntry = buildTimelineEntry();
+    const markup = renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          buildTimelineEntry({
+            request: {
+              ...baseEntry.request,
+              decision: "allow",
+              decision_label: "allow",
+              reason_code: "sensitive_access_allowed",
+              reason_label: "允许",
+              policy_summary: "当前访问已通过审批。",
+              decided_at: "2026-03-19T00:10:00Z"
+            },
+            approval_ticket: {
+              ...baseEntry.approval_ticket!,
+              status: "approved",
+              waiting_status: "resumed",
+              approved_by: "operator-1",
+              decided_at: "2026-03-19T00:10:00Z"
+            },
+            notifications: [],
+            outcome_explanation: {
+              primary_signal: "审批票据仍在等待处理。",
+              follow_up: "先处理审批票据，再重试导出。"
+            },
+            run_snapshot: null,
+            run_follow_up: {
+              affected_run_count: 1,
+              sampled_run_count: 0,
+              waiting_run_count: 1,
+              running_run_count: 0,
+              succeeded_run_count: 0,
+              failed_run_count: 0,
+              unknown_run_count: 0,
+              recommended_action: {
+                kind: "open_workflow_library",
+                entry_key: "workflowLibrary",
+                href: "/workflows?execution=sandbox",
+                label: "Open workflow library"
+              },
+              sampled_runs: [],
+              explanation: {
+                primary_signal: "当前审批阻断同时命中了强隔离治理。",
+                follow_up: "先回到 workflow library 处理强隔离配置。"
+              }
+            }
+          })
+        ],
+        emptyCopy: "empty",
+        defaultRunId: "run-1"
+      })
+    );
+
+    expect(markup).toContain("Open workflow library");
+    expect(markup).toContain('/workflows?execution=sandbox');
+  });
+
   it("在 entry 自身没有 run_snapshot 时回退到 sampled run snapshot", () => {
     const baseEntry = buildTimelineEntry();
     const markup = renderToStaticMarkup(

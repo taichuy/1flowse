@@ -90,7 +90,7 @@ export function SensitiveAccessBlockedCard({
   const recommendedNextStep = buildSensitiveAccessBlockedRecommendedNextStep({
     inboxHref,
     runId,
-    outcomeExplanation: payload.outcome_explanation ?? null,
+    outcomeExplanation: canonicalOutcomeExplanation,
     runSnapshot: payload.run_snapshot ?? null,
     runFollowUpExplanation: payload.run_follow_up?.explanation ?? null,
     recommendedAction: payload.run_follow_up?.recommendedAction ?? null,
