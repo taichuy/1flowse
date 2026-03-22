@@ -261,6 +261,73 @@ describe("InlineOperatorActionFeedback", () => {
     expect(callbackSummaryProps[0]?.showSensitiveAccessInlineActions).toBe(false);
   });
 
+  it("prefers refreshed action-result follow-up over parent callback summary props", () => {
+    const staleInboxHref = "/sensitive-access?run_id=run-1&approval_ticket_id=stale-ticket";
+    const refreshedInboxHref = "/sensitive-access?run_id=run-1&approval_ticket_id=fresh-ticket";
+
+    renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        message: "",
+        title: "Operator follow-up",
+        runId: "run-1",
+        runSnapshot: {
+          status: "waiting",
+          currentNodeId: "approval_gate",
+          waitingReason: "approval pending",
+          executionFocusNodeId: "approval_gate",
+          executionFocusNodeRunId: "node-run-1",
+          executionFocusNodeName: "Approval Gate",
+          callbackWaitingExplanation: {
+            primary_signal: "当前 run 仍在等待审批。",
+            follow_up: "旧 summary 仍指向上一次审批票据。"
+          }
+        },
+        callbackWaitingSummaryProps: {
+          recommendedAction: {
+            kind: "approval blocker",
+            entry_key: "operatorInbox",
+            href: staleInboxHref,
+            label: "Open stale approval inbox"
+          },
+          operatorFollowUp: "Open the stale approval inbox first.",
+          preferCanonicalRecommendedNextStep: true
+        },
+        runFollowUp: {
+          affectedRunCount: 1,
+          sampledRunCount: 0,
+          waitingRunCount: 1,
+          runningRunCount: 0,
+          succeededRunCount: 0,
+          failedRunCount: 0,
+          unknownRunCount: 0,
+          recommendedAction: {
+            kind: "approval blocker",
+            entryKey: "operatorInbox",
+            href: refreshedInboxHref,
+            label: "Open refreshed approval inbox"
+          },
+          sampledRuns: []
+        },
+        runFollowUpExplanation: {
+          primary_signal: "operator follow-up 已刷新。",
+          follow_up: "Open the refreshed approval inbox first."
+        }
+      })
+    );
+
+    expect(callbackSummaryProps).toHaveLength(1);
+    expect(callbackSummaryProps[0]?.recommendedAction).toMatchObject({
+      kind: "approval blocker",
+      href: refreshedInboxHref,
+      label: "Open refreshed approval inbox"
+    });
+    expect(callbackSummaryProps[0]?.operatorFollowUp).toBe(
+      "Open the refreshed approval inbox first."
+    );
+    expect(callbackSummaryProps[0]?.preferCanonicalRecommendedNextStep).toBe(true);
+  });
+
   it("forwards canonical callback follow-up into sampled run cards", () => {
     renderToStaticMarkup(
       createElement(InlineOperatorActionFeedback, {

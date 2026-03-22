@@ -72,12 +72,14 @@ export function InlineOperatorActionFeedback({
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   const runDetailLink = buildOperatorRunDetailLinkSurface({ runId, surfaceCopy });
   const canonicalCallbackRecommendedAction =
-    callbackWaitingSummaryProps?.recommendedAction ?? runFollowUp?.recommendedAction ?? null;
+    runFollowUp?.recommendedAction ?? callbackWaitingSummaryProps?.recommendedAction ?? null;
   const canonicalCallbackOperatorFollowUp =
-    callbackWaitingSummaryProps?.operatorFollowUp ?? model.runFollowUpFollowUp;
+    model.runFollowUpFollowUp ?? callbackWaitingSummaryProps?.operatorFollowUp ?? null;
   const preferCanonicalCallbackRecommendedNextStep =
-    callbackWaitingSummaryProps?.preferCanonicalRecommendedNextStep ??
-    Boolean(canonicalCallbackRecommendedAction);
+    runFollowUp?.recommendedAction
+      ? true
+      : callbackWaitingSummaryProps?.preferCanonicalRecommendedNextStep ??
+        Boolean(canonicalCallbackRecommendedAction);
   const hasExplicitRecommendedNextStepOverride = recommendedNextStepOverride !== undefined;
   const executionNeedsSharedSandboxFollowUp =
     Boolean(sandboxReadinessNode) &&
