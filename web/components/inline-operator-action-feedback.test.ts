@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import type { RunCallbackTicketItem } from "@/lib/get-run-views";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 
 const callbackSummaryProps: Array<Record<string, unknown>> = [];
@@ -119,6 +122,26 @@ function buildSensitiveAccessEntry(): SensitiveAccessTimelineEntry {
   };
 }
 
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "configured",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "unhealthy",
+    scheduler_health_detail: "scheduler is currently backlogged.",
+    affected_run_count: 2,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "callback_waiting",
+      entry_key: "runs",
+      href: "/runs?status=waiting",
+      label: "Open run library"
+    },
+    steps: []
+  };
+}
+
 describe("InlineOperatorActionFeedback", () => {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
 
@@ -146,6 +169,7 @@ describe("InlineOperatorActionFeedback", () => {
 
   it("forwards callback waiting summary context to the shared summary card", () => {
     const inboxHref = "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1";
+    const callbackWaitingAutomation = buildCallbackWaitingAutomation();
     const callbackTickets: RunCallbackTicketItem[] = [
       {
         ticket: "callback-ticket-1",
@@ -178,6 +202,7 @@ describe("InlineOperatorActionFeedback", () => {
         callbackWaitingSummaryProps: {
           inboxHref,
           callbackTickets,
+          callbackWaitingAutomation,
           sensitiveAccessEntries: [buildSensitiveAccessEntry()],
           showSensitiveAccessInlineActions: false
         }
@@ -194,6 +219,7 @@ describe("InlineOperatorActionFeedback", () => {
     expect(
       ((callbackSummaryProps[0]?.callbackTickets as RunCallbackTicketItem[] | undefined) ?? [])[0]?.ticket
     ).toBe("callback-ticket-1");
+    expect(callbackSummaryProps[0]?.callbackWaitingAutomation).toEqual(callbackWaitingAutomation);
     expect(callbackSummaryProps[0]?.showSensitiveAccessInlineActions).toBe(false);
   });
 

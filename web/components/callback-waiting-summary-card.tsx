@@ -435,6 +435,14 @@ export function CallbackWaitingSummaryCard({
       {shouldShowCallbackInlineActions ? (
         <CallbackWaitingInlineActions
           allowManualResume={!hasTermination}
+          callbackWaitingSummaryProps={{
+            inboxHref,
+            callbackTickets,
+            callbackWaitingAutomation,
+            sensitiveAccessEntries,
+            suppressSensitiveAccessContextRows,
+            showSensitiveAccessInlineActions: shouldShowSensitiveAccessInlineActions
+          }}
           compact
           nodeRunId={inlineActionNodeRunId}
           preferredAction={preferredInlineAction}

@@ -8,7 +8,10 @@ import type {
 } from "@/lib/get-workflow-library";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { RunDetail } from "@/lib/get-run-detail";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
@@ -52,6 +55,7 @@ type WorkflowEditorSidebarProps = {
   trace: RunTrace | null;
   traceError: string | null;
   selectedNodeId: string | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   isLoadingRunOverlay: boolean;
@@ -88,6 +92,7 @@ export function WorkflowEditorSidebar({
   trace,
   traceError,
   selectedNodeId,
+  callbackWaitingAutomation,
   sandboxReadiness,
   workspaceStarterGovernanceQueryScope = null,
   isLoadingRunOverlay,
@@ -314,6 +319,7 @@ export function WorkflowEditorSidebar({
         trace={trace}
         traceError={traceError}
         selectedNodeId={selectedNodeId}
+        callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
         isLoading={isLoadingRunOverlay}
         isRefreshingRuns={isRefreshingRuns}

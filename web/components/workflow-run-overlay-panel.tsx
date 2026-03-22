@@ -8,7 +8,10 @@ import { InlineOperatorActionFeedback } from "@/components/inline-operator-actio
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import type { RunDetail } from "@/lib/get-run-detail";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import {
   DEFAULT_RUN_TRACE_LIMIT,
   type RunTrace
@@ -32,6 +35,7 @@ type WorkflowRunOverlayPanelProps = {
   trace: RunTrace | null;
   traceError?: string | null;
   selectedNodeId?: string | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   isLoading: boolean;
   isRefreshingRuns: boolean;
@@ -47,6 +51,7 @@ export function WorkflowRunOverlayPanel({
   trace,
   traceError,
   selectedNodeId,
+  callbackWaitingAutomation,
   sandboxReadiness,
   isLoading,
   isRefreshingRuns,
@@ -64,6 +69,7 @@ export function WorkflowRunOverlayPanel({
     ? {
         inboxHref: buildOperatorRunSampleInboxHref(runSnapshot),
         callbackTickets: runSnapshot.callbackTickets ?? [],
+        callbackWaitingAutomation,
         sensitiveAccessEntries: runSnapshot.sensitiveAccessEntries ?? [],
         showSensitiveAccessInlineActions: false
       }

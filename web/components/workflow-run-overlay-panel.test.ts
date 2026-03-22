@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { RunSnapshot, RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import type { RunDetail } from "@/lib/get-run-detail";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import { DEFAULT_RUN_TRACE_LIMIT } from "@/lib/get-run-trace";
 
 const { exportActionSpy } = vi.hoisted(() => ({
@@ -54,6 +57,26 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
     supports_backend_extensions: false,
     supports_network_policy: true,
     supports_filesystem_policy: true
+  };
+}
+
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "configured",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "unhealthy",
+    scheduler_health_detail: "scheduler is currently backlogged.",
+    affected_run_count: 2,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "callback_waiting",
+      entry_key: "runs",
+      href: "/runs?status=waiting",
+      label: "Open run library"
+    },
+    steps: []
   };
 }
 
@@ -295,6 +318,9 @@ describe("WorkflowRunOverlayPanel", () => {
               follow_up: "先打开 inbox slice，确认 callback ticket 处理进度。"
             },
             callbackWaitingLifecycle: null,
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeScheduledAt: "2026-03-20T10:00:00Z",
+            scheduledResumeDueAt: "2026-03-20T10:00:45Z",
             executionFocusArtifactCount: 0,
             executionFocusArtifactRefCount: 0,
             executionFocusToolCallCount: 0,
@@ -320,6 +346,7 @@ describe("WorkflowRunOverlayPanel", () => {
         trace: null,
         traceError: null,
         selectedNodeId: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         sandboxReadiness: buildSandboxReadiness(),
         isLoading: false,
         isRefreshingRuns: false,
@@ -329,5 +356,6 @@ describe("WorkflowRunOverlayPanel", () => {
     );
 
     expect(html).toContain("/sensitive-access?run_id=run-1&amp;node_run_id=node-run-1");
+    expect(html).toContain("scheduler is currently backlogged.");
   });
 });

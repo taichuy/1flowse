@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CallbackWaitingInlineActions } from "@/components/callback-waiting-inline-actions";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 
 type MockActionState = Record<string, unknown>;
 
@@ -45,6 +46,26 @@ vi.mock("@/components/inline-operator-action-feedback", async () => {
   };
 });
 
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "configured",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "unhealthy",
+    scheduler_health_detail: "scheduler is currently backlogged.",
+    affected_run_count: 2,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "callback_waiting",
+      entry_key: "runs",
+      href: "/runs?status=waiting",
+      label: "Open run library"
+    },
+    steps: []
+  };
+}
+
 describe("CallbackWaitingInlineActions", () => {
   beforeEach(() => {
     inlineFeedbackProps.length = 0;
@@ -52,6 +73,7 @@ describe("CallbackWaitingInlineActions", () => {
   });
 
   it("passes canonical run follow-up into resume and cleanup feedback cards", () => {
+    const callbackWaitingAutomation = buildCallbackWaitingAutomation();
     const cleanupRunFollowUp = {
       affectedRunCount: 1,
       sampledRunCount: 1,
@@ -99,7 +121,23 @@ describe("CallbackWaitingInlineActions", () => {
         runId: "run-1",
         nodeRunId: "node-run-1",
         compact: true,
-        allowManualResume: true
+        allowManualResume: true,
+        callbackWaitingSummaryProps: {
+          inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+          callbackTickets: [
+            {
+              ticket: "callback-ticket-1",
+              run_id: "run-1",
+              node_run_id: "node-run-1",
+              status: "pending",
+              waiting_status: "waiting",
+              tool_call_index: 0,
+              created_at: "2026-03-20T10:00:00Z"
+            }
+          ],
+          callbackWaitingAutomation,
+          sensitiveAccessEntries: []
+        }
       })
     );
 
@@ -107,6 +145,14 @@ describe("CallbackWaitingInlineActions", () => {
     expect(inlineFeedbackProps).toHaveLength(2);
     expect(inlineFeedbackProps[0]?.runFollowUp).toEqual(resumeRunFollowUp);
     expect(inlineFeedbackProps[1]?.runFollowUp).toEqual(cleanupRunFollowUp);
+    expect(inlineFeedbackProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      callbackWaitingAutomation,
+      inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1"
+    });
+    expect(inlineFeedbackProps[1]?.callbackWaitingSummaryProps).toMatchObject({
+      callbackWaitingAutomation,
+      inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1"
+    });
   });
 
   it("renders a custom compact title when the caller marks actions as optional overrides", () => {

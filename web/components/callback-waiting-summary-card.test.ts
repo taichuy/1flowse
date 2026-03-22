@@ -1,9 +1,12 @@
 import { createElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import type { CallbackWaitingLifecycleSummary } from "@/lib/get-run-views";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+
+const callbackInlineActionProps: Array<Record<string, unknown>> = [];
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -11,15 +14,17 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/components/callback-waiting-inline-actions", () => ({
-  CallbackWaitingInlineActions: ({ title }: { title?: string }) =>
-    createElement(
+  CallbackWaitingInlineActions: (props: Record<string, unknown>) => {
+    callbackInlineActionProps.push(props);
+    return createElement(
       "div",
       {
         "data-testid": "callback-waiting-inline-actions",
-        "data-title": title ?? ""
+        "data-title": String(props.title ?? "")
       },
-      title ?? null
-    )
+      props.title ? String(props.title) : null
+    );
+  }
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
@@ -140,7 +145,31 @@ function buildLifecycle(
   };
 }
 
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "configured",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "unhealthy",
+    scheduler_health_detail: "scheduler is currently backlogged.",
+    affected_run_count: 2,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "callback_waiting",
+      entry_key: "runs",
+      href: "/runs?status=waiting",
+      label: "Open run library"
+    },
+    steps: []
+  };
+}
+
 describe("CallbackWaitingSummaryCard", () => {
+  beforeEach(() => {
+    callbackInlineActionProps.length = 0;
+  });
+
   it("puts compact execution fact badges before the evidence card when enabled", () => {
     const html = renderToStaticMarkup(
       createElement(CallbackWaitingSummaryCard, {
@@ -227,5 +256,39 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(html).toContain("Open waiting inbox");
     expect(html).toContain("data-title=\"Optional callback override\"");
     expect(html).toContain("data-testid=\"callback-waiting-inline-actions\"");
+  });
+
+  it("passes shared callback waiting context into inline actions feedback", () => {
+    const callbackTickets = [
+      {
+        ticket: "callback-ticket-1",
+        run_id: "run-1",
+        node_run_id: "node-run-1",
+        status: "pending",
+        waiting_status: "waiting",
+        tool_call_index: 0,
+        created_at: "2026-03-20T10:00:00Z"
+      }
+    ];
+    const callbackWaitingAutomation = buildCallbackWaitingAutomation();
+
+    renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        runId: "run-1",
+        nodeRunId: "node-run-1",
+        callbackTickets,
+        callbackWaitingAutomation,
+        inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+        showSensitiveAccessInlineActions: false
+      })
+    );
+
+    expect(callbackInlineActionProps).toHaveLength(1);
+    expect(callbackInlineActionProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      inboxHref: "/sensitive-access?run_id=run-1&node_run_id=node-run-1",
+      callbackTickets,
+      callbackWaitingAutomation,
+      showSensitiveAccessInlineActions: false
+    });
   });
 });

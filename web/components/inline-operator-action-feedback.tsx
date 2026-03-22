@@ -7,7 +7,10 @@ import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { RunCallbackTicketItem } from "@/lib/get-run-views";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
   buildExecutionFocusExplainableNode,
@@ -39,6 +42,7 @@ type InlineOperatorActionFeedbackProps = {
   callbackWaitingSummaryProps?: {
     inboxHref?: string | null;
     callbackTickets?: RunCallbackTicketItem[];
+    callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
     sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
     suppressSensitiveAccessContextRows?: boolean;
     showSensitiveAccessInlineActions?: boolean;
@@ -242,6 +246,7 @@ export function InlineOperatorActionFeedback({
         <CallbackWaitingSummaryCard
           callbackWaitingExplanation={runSnapshot?.callbackWaitingExplanation ?? null}
           callbackTickets={callbackWaitingSummaryProps?.callbackTickets}
+          callbackWaitingAutomation={callbackWaitingSummaryProps?.callbackWaitingAutomation ?? null}
           lifecycle={runSnapshot?.callbackWaitingLifecycle ?? null}
           focusNodeEvidence={callbackWaitingFocusNode}
           focusSkillReferenceCount={runSnapshot?.executionFocusSkillTrace?.reference_count ?? 0}

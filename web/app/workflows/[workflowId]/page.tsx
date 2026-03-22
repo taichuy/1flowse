@@ -100,6 +100,7 @@ export default async function WorkflowEditorPage({
         toolSourceLanes={workflowLibrary.toolSourceLanes}
         tools={workflowLibrary.tools}
         adapters={pluginRegistry.adapters}
+        callbackWaitingAutomation={systemOverview.callback_waiting_automation}
         sandboxReadiness={systemOverview.sandbox_readiness}
         sandboxBackends={systemOverview.sandbox_backends}
         recentRuns={recentRuns}

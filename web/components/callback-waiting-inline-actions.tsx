@@ -13,6 +13,9 @@ import {
   getCleanupExpectationCopy,
   getManualResumeExpectationCopy
 } from "@/lib/operator-action-result-presenters";
+import type { RunCallbackTicketItem } from "@/lib/get-run-views";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import {
   buildCallbackWaitingInlineActionStatusHint,
   buildCallbackWaitingInlineActionTitle,
@@ -31,6 +34,14 @@ type CallbackWaitingInlineActionsProps = {
   preferredAction?: CallbackWaitingInlineActionPreference;
   recommendedActionKind?: CallbackWaitingRecommendedAction["kind"] | null;
   statusHint?: string | null;
+  callbackWaitingSummaryProps?: {
+    inboxHref?: string | null;
+    callbackTickets?: RunCallbackTicketItem[];
+    callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+    sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+    suppressSensitiveAccessContextRows?: boolean;
+    showSensitiveAccessInlineActions?: boolean;
+  };
 };
 
 const initialState: CleanupRunCallbackTicketsState = {
@@ -53,7 +64,8 @@ export function CallbackWaitingInlineActions({
   allowManualResume = true,
   preferredAction = null,
   recommendedActionKind = null,
-  statusHint = null
+  statusHint = null,
+  callbackWaitingSummaryProps
 }: CallbackWaitingInlineActionsProps) {
   const surfaceCopy = buildCallbackWaitingSummarySurfaceCopy();
   const router = useRouter();
@@ -97,6 +109,7 @@ export function CallbackWaitingInlineActions({
       <p className="empty-state compact">{getManualResumeExpectationCopy()}</p>
       {resumeState.message && resumeState.runId === runId ? (
         <InlineOperatorActionFeedback
+          callbackWaitingSummaryProps={callbackWaitingSummaryProps}
           message={resumeState.message}
           outcomeExplanation={resumeState.outcomeExplanation}
           runFollowUpExplanation={resumeState.runFollowUpExplanation}
@@ -123,6 +136,7 @@ export function CallbackWaitingInlineActions({
       <p className="empty-state compact">{getCleanupExpectationCopy()}</p>
       {cleanupState.message && cleanupState.scopeKey === scopeKey ? (
         <InlineOperatorActionFeedback
+          callbackWaitingSummaryProps={callbackWaitingSummaryProps}
           message={cleanupState.message}
           outcomeExplanation={cleanupState.outcomeExplanation}
           runFollowUpExplanation={cleanupState.runFollowUpExplanation}

@@ -5,6 +5,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type {
+  CallbackWaitingAutomationCheck,
   SandboxBackendCheck,
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
@@ -47,6 +48,7 @@ type WorkflowEditorWorkbenchProps = {
   toolSourceLanes: WorkflowLibrarySourceLane[];
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   sandboxBackends?: SandboxBackendCheck[] | null;
   recentRuns: WorkflowRunListItem[];
@@ -64,6 +66,7 @@ export function WorkflowEditorWorkbench({
   toolSourceLanes,
   tools,
   adapters,
+  callbackWaitingAutomation,
   sandboxReadiness,
   sandboxBackends,
   recentRuns,
@@ -246,6 +249,7 @@ export function WorkflowEditorWorkbench({
             trace={runOverlay.selectedRunTrace}
             traceError={runOverlay.runOverlayError}
             selectedNodeId={graph.selectedNodeId}
+            callbackWaitingAutomation={callbackWaitingAutomation}
             sandboxReadiness={sandboxReadiness}
             workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
