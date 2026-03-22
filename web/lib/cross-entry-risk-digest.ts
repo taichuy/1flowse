@@ -3,11 +3,17 @@ import type {
   NotificationChannelCapabilityItem,
   SensitiveAccessInboxSummary
 } from "@/lib/get-sensitive-access";
+import { buildOperatorInboxSliceLinkSurface } from "@/lib/operator-follow-up-presenters";
+import { resolveSensitiveAccessPrimaryBacklog } from "@/lib/sensitive-access-follow-up-presenters";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck,
   SystemOverviewRecommendedAction
 } from "@/lib/get-system-overview";
+import {
+  buildCallbackWaitingAutomationSystemFollowUp,
+  buildSandboxReadinessSystemFollowUp
+} from "@/lib/system-overview-follow-up-presenters";
 import {
   formatSandboxReadinessDetail,
   formatSandboxReadinessHeadline,
@@ -251,6 +257,23 @@ function buildLegacyOperatorBlockers(
   ].filter((blocker) => blocker.item_count > 0);
 }
 
+function buildOperatorBacklogNextStep(
+  primaryBacklog: ReturnType<typeof resolveSensitiveAccessPrimaryBacklog>
+) {
+  switch (primaryBacklog?.kind) {
+    case "pending_approval":
+      return "优先先收掉 pending approval ticket 对应的审批票据，再回到具体 run。";
+    case "waiting_resume":
+      return "优先回到 inbox 处理 waiting resume，再确认 run 是否真正继续推进。";
+    case "failed_notification":
+      return "优先重试失败通知或更换目标，再回到具体 run 继续排障。";
+    case "pending_notification":
+      return "先确认通知是否送达，再回到具体 run 判断是否还有真实阻塞。";
+    default:
+      return "优先在 sensitive access inbox 收掉 pending approval、waiting resume 和失败通知，再回到具体 run。";
+  }
+}
+
 function getOverallTone(
   focusAreas: CrossEntryRiskDigestFocusArea[]
 ): CrossEntryRiskDigestTone {
@@ -333,12 +356,22 @@ export function buildCrossEntryRiskDigest({
     })?.summary ??
     callbackWaitingAutomation.scheduler_health_detail ??
     callbackWaitingAutomation.detail;
+  const sandboxFollowUpSurface = buildSandboxReadinessSystemFollowUp(sandboxReadiness);
+  const callbackFollowUpSurface = buildCallbackWaitingAutomationSystemFollowUp(
+    callbackWaitingAutomation
+  );
 
   const pendingApprovalCount = sensitiveAccessSummary.pending_ticket_count;
   const waitingResumeCount = sensitiveAccessSummary.waiting_ticket_count;
   const failedNotificationCount = sensitiveAccessSummary.failed_notification_count;
   const pendingNotificationCount = sensitiveAccessSummary.pending_notification_count;
   const operatorBlockers = sensitiveAccessSummary.blockers ?? buildLegacyOperatorBlockers(sensitiveAccessSummary);
+  const operatorPrimaryBacklog = resolveSensitiveAccessPrimaryBacklog({
+    pendingApprovalCount,
+    waitingResumeCount,
+    failedNotificationCount,
+    pendingNotificationCount
+  });
   const channelAttention = getChannelAttentionSummary(channels);
   const operatorTone = getOperatorTone({
     blockers: operatorBlockers,
@@ -364,6 +397,7 @@ export function buildCrossEntryRiskDigest({
         sandboxSummary ||
         "当前还没有足够的 sandbox readiness 事实，请优先核对 backend 健康与 execution class 可用性。",
       nextStep:
+        sandboxFollowUpSurface?.detail ??
         "先确认 workflow 需要的 execution class 是否仍被 live readiness 覆盖，再继续处理运行阻塞。",
       entryKey: resolveRecommendedEntryKey({
         action: sandboxReadiness.recommended_action,
@@ -378,6 +412,7 @@ export function buildCrossEntryRiskDigest({
         callbackSummary ||
         "当前还拿不到 callback waiting automation 摘要，先核对 scheduler 与 waiting 恢复步骤是否真正接管。",
       nextStep:
+        callbackFollowUpSurface?.detail ??
         "先看 waiting resume / cleanup 是否由 scheduler 正常接管，再进入单条 run 继续排障。",
       entryKey: resolveRecommendedEntryKey({
         action: callbackWaitingAutomation.recommended_action,
@@ -389,8 +424,7 @@ export function buildCrossEntryRiskDigest({
       title: "Approval & notification backlog",
       tone: operatorTone,
       summary: operatorSummary,
-      nextStep:
-        "优先在 sensitive access inbox 收掉 pending approval、waiting resume 和失败通知，再回到具体 run。",
+      nextStep: buildOperatorBacklogNextStep(operatorPrimaryBacklog),
       entryKey: "operatorInbox"
     }
   ];
@@ -407,33 +441,14 @@ export function buildCrossEntryRiskDigest({
   const entryKeys = buildEntryKeys(primaryEntryKey);
 
   const entryOverrides: WorkbenchEntryLinkOverrides = {};
-  switch (sensitiveAccessSummary.primary_blocker_kind ?? operatorBlockers[0]?.kind ?? null) {
-    case "pending_approval":
-      entryOverrides.operatorInbox = {
-        href: "/sensitive-access?status=pending",
-        label: "打开待处理 inbox"
-      };
-      break;
-    case "waiting_resume":
-      entryOverrides.operatorInbox = {
-        href: "/sensitive-access?waiting_status=waiting",
-        label: "查看 waiting resume"
-      };
-      break;
-    case "failed_notification":
-      entryOverrides.operatorInbox = {
-        href: "/sensitive-access?notification_status=failed",
-        label: "查看失败通知"
-      };
-      break;
-    case "pending_notification":
-      entryOverrides.operatorInbox = {
-        href: "/sensitive-access?notification_status=pending",
-        label: "查看通知队列"
-      };
-      break;
-    default:
-      break;
+  const operatorInboxLinkSurface = buildOperatorInboxSliceLinkSurface({
+    href: operatorPrimaryBacklog?.href ?? null
+  });
+  if (operatorInboxLinkSurface) {
+    entryOverrides.operatorInbox = {
+      href: operatorInboxLinkSurface.href,
+      label: operatorInboxLinkSurface.label
+    };
   }
 
   applyRecommendedActionOverride(entryOverrides, sandboxReadiness.recommended_action);

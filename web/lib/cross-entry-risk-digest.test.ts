@@ -171,6 +171,7 @@ describe("buildCrossEntryRiskDigest", () => {
     expect(digest.entryOverrides?.operatorInbox?.href).toBe(
       "/sensitive-access?status=pending"
     );
+    expect(digest.entryOverrides?.operatorInbox?.label).toBe("open inbox slice");
     expect(digest.metrics).toContainEqual({
       label: "Approval",
       value: "2 pending / 2 waiting"
@@ -180,6 +181,9 @@ describe("buildCrossEntryRiskDigest", () => {
     );
     expect(digest.focusAreas.find((area) => area.id === "operator")?.summary).toContain(
       "影响 2 个 run / 1 个 workflow"
+    );
+    expect(digest.focusAreas.find((area) => area.id === "operator")?.nextStep).toContain(
+      "审批票据"
     );
     expect(digest.headline).toContain("Approval & notification backlog");
     expect(digest.metrics).toContainEqual({

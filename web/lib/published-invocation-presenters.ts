@@ -64,6 +64,7 @@ import {
 } from "@/lib/sandbox-readiness-presenters";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import { resolveSensitiveAccessPrimaryBacklog } from "@/lib/sensitive-access-follow-up-presenters";
 import {
   buildSensitiveAccessBlockedSurfaceCopy,
   buildSensitiveAccessTimelineSurfaceCopy
@@ -3099,6 +3100,13 @@ function buildPublishedInvocationSensitiveAccessFollowUpSurface(
   const inboxLabel = buildSensitiveAccessTimelineSurfaceCopy({
     surface: "publish_invocation"
   }).inboxLinkLabel;
+  const primaryBacklog = resolveSensitiveAccessPrimaryBacklog({
+    pendingApprovalCount: summary.pending_approval_count,
+    failedNotificationCount: summary.failed_notification_count,
+    pendingNotificationCount: summary.pending_notification_count,
+    rejectedApprovalCount: summary.rejected_approval_count,
+    expiredApprovalCount: summary.expired_approval_count
+  });
   const buildSurface = ({
     detail,
     href
@@ -3119,47 +3127,44 @@ function buildPublishedInvocationSensitiveAccessFollowUpSurface(
     };
   };
 
-  if ((summary.pending_approval_count ?? 0) > 0) {
-    return buildSurface({
-      detail:
-        `Sensitive access inbox 里仍有 ${formatCountLabel(summary.pending_approval_count ?? 0, "pending approval ticket")}；优先处理审批票据，再决定这是不是纯 publish/runtime failure。`,
-      href: buildSensitiveAccessInboxHref({ status: "pending" })
-    });
+  if (!primaryBacklog) {
+    return null;
   }
 
-  if ((summary.failed_notification_count ?? 0) > 0) {
-    return buildSurface({
-      detail:
-        `Sensitive access inbox 里仍有 ${formatCountLabel(summary.failed_notification_count ?? 0, "failed notification")}；优先重试通知投递，再决定这是不是纯 publish/runtime failure。`,
-      href: buildSensitiveAccessInboxHref({ notificationStatus: "failed" })
-    });
+  switch (primaryBacklog.kind) {
+    case "pending_approval":
+      return buildSurface({
+        detail:
+          `Sensitive access inbox 里仍有 ${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)}；优先处理审批票据，再决定这是不是纯 publish/runtime failure。`,
+        href: primaryBacklog.href
+      });
+    case "failed_notification":
+      return buildSurface({
+        detail:
+          `Sensitive access inbox 里仍有 ${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)}；优先重试通知投递，再决定这是不是纯 publish/runtime failure。`,
+        href: primaryBacklog.href
+      });
+    case "pending_notification":
+      return buildSurface({
+        detail:
+          `Sensitive access inbox 里仍有 ${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)}；先确认通知是否送达，再决定这是不是纯 publish/runtime failure。`,
+        href: primaryBacklog.href
+      });
+    case "rejected_approval":
+      return buildSurface({
+        detail:
+          `Sensitive access inbox 里有 ${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)}；先确认 operator decision，再决定是否重新发起 publish。`,
+        href: primaryBacklog.href
+      });
+    case "expired_approval":
+      return buildSurface({
+        detail:
+          `Sensitive access inbox 里有 ${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)}；先续期或重新发起审批，再决定是否重试 publish。`,
+        href: primaryBacklog.href
+      });
+    default:
+      return null;
   }
-
-  if ((summary.pending_notification_count ?? 0) > 0) {
-    return buildSurface({
-      detail:
-        `Sensitive access inbox 里仍有 ${formatCountLabel(summary.pending_notification_count ?? 0, "pending notification")}；先确认通知是否送达，再决定这是不是纯 publish/runtime failure。`,
-      href: buildSensitiveAccessInboxHref({ notificationStatus: "pending" })
-    });
-  }
-
-  if ((summary.rejected_approval_count ?? 0) > 0) {
-    return buildSurface({
-      detail:
-        `Sensitive access inbox 里有 ${formatCountLabel(summary.rejected_approval_count ?? 0, "rejected approval ticket")}；先确认 operator decision，再决定是否重新发起 publish。`,
-      href: buildSensitiveAccessInboxHref({ status: "rejected" })
-    });
-  }
-
-  if ((summary.expired_approval_count ?? 0) > 0) {
-    return buildSurface({
-      detail:
-        `Sensitive access inbox 里有 ${formatCountLabel(summary.expired_approval_count ?? 0, "expired approval ticket")}；先续期或重新发起审批，再决定是否重试 publish。`,
-      href: buildSensitiveAccessInboxHref({ status: "expired" })
-    });
-  }
-
-  return null;
 }
 
 export function formatRateLimitPressure(
