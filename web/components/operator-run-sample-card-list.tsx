@@ -97,6 +97,9 @@ export function OperatorRunSampleCardList({
           <CallbackWaitingSummaryCard
             callbackWaitingExplanation={sample.callbackWaitingExplanation}
             callbackTickets={sample.callbackTickets}
+            callbackWaitingAutomation={
+              callbackWaitingSummaryProps?.callbackWaitingAutomation ?? null
+            }
             lifecycle={sample.callbackWaitingLifecycle}
             focusNodeEvidence={sample.callbackWaitingFocusNodeEvidence}
             focusSkillReferenceCount={sample.skillReferenceCount}

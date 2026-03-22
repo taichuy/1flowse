@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { OperatorRunSampleCard } from "@/lib/operator-run-sample-cards";
 
 vi.mock("next/link", () => ({
@@ -43,6 +46,26 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
     supports_backend_extensions: false,
     supports_network_policy: false,
     supports_filesystem_policy: false
+  };
+}
+
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "partial",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "degraded",
+    scheduler_health_detail: "waiting resume monitor degraded",
+    affected_run_count: 3,
+    affected_workflow_count: 2,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "open_run_library",
+      label: "Open run library",
+      href: "/runs?focus=callback-waiting",
+      entry_key: "runLibrary"
+    },
+    steps: []
   };
 }
 
@@ -317,5 +340,23 @@ describe("OperatorRunSampleCardList", () => {
     expect(html).toContain(
       'href="/sensitive-access?run_id=run-1&amp;approval_ticket_id=approval-ticket-1"'
     );
+  });
+
+  it("surfaces shared callback recovery CTA for sampled runs when only automation supplies it", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorRunSampleCardList, {
+        cards: [buildSampleCard()],
+        callbackWaitingSummaryProps: {
+          callbackWaitingAutomation: buildCallbackWaitingAutomation()
+        },
+        skillTraceDescription: "skill trace"
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("callback recovery");
+    expect(html).toContain("当前 callback recovery 仍影响 3 个 run / 2 个 workflow");
+    expect(html).toContain("Open run library");
+    expect(html).toContain('/runs?focus=callback-waiting');
   });
 });

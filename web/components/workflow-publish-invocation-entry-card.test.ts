@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowPublishInvocationEntryCard } from "@/components/workflow-publish-invocation-entry-card";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
 
 vi.mock("next/link", () => ({
@@ -230,6 +233,26 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
     supports_backend_extensions: false,
     supports_network_policy: true,
     supports_filesystem_policy: true
+  };
+}
+
+function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
+  return {
+    status: "partial",
+    scheduler_required: true,
+    detail: "callback automation degraded",
+    scheduler_health_status: "degraded",
+    scheduler_health_detail: "waiting resume monitor degraded",
+    affected_run_count: 3,
+    affected_workflow_count: 2,
+    primary_blocker_kind: "scheduler_unhealthy",
+    recommended_action: {
+      kind: "open_run_library",
+      label: "Open run library",
+      href: "/runs?focus=callback-waiting",
+      entry_key: "runLibrary"
+    },
+    steps: []
   };
 }
 
@@ -745,5 +768,55 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).toContain("/workflows?execution=sandbox");
     expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
     expect(html).toContain("backend 是 sandbox-stale");
+  });
+
+  it("forwards callback waiting automation into sampled shared callback summaries", async () => {
+    vi.resetModules();
+
+    const callbackSummaryProps: Array<Record<string, unknown>> = [];
+
+    vi.doMock("next/link", () => ({
+      default: ({
+        children,
+        href,
+        ...props
+      }: {
+        children: ReactNode;
+        href?: string;
+      } & Record<string, unknown>) => createElement("a", { href: href ?? "#", ...props }, children)
+    }));
+    vi.doMock("@/components/callback-waiting-summary-card", () => ({
+      CallbackWaitingSummaryCard: (props: Record<string, unknown>) => {
+        callbackSummaryProps.push(props);
+        return createElement("div", { "data-testid": "callback-waiting-summary-card" });
+      }
+    }));
+
+    try {
+      const { WorkflowPublishInvocationEntryCard: IsolatedWorkflowPublishInvocationEntryCard } =
+        await import("@/components/workflow-publish-invocation-entry-card");
+      const callbackWaitingAutomation = buildCallbackWaitingAutomation();
+
+      renderToStaticMarkup(
+        createElement(IsolatedWorkflowPublishInvocationEntryCard, {
+          item: buildInvocationItem(),
+          detailHref: "/published/invocation-1",
+          detailActive: false,
+          callbackWaitingAutomation
+        })
+      );
+
+      expect(
+        callbackSummaryProps.some(
+          (props) =>
+            props.runId === "run-callback-1" &&
+            props.callbackWaitingAutomation === callbackWaitingAutomation
+        )
+      ).toBe(true);
+    } finally {
+      vi.doUnmock("@/components/callback-waiting-summary-card");
+      vi.doUnmock("next/link");
+      vi.resetModules();
+    }
   });
 });

@@ -330,6 +330,7 @@ export function WorkflowPublishInvocationEntryCard({
                     runFollowUpSample.run_snapshot.callbackWaitingExplanation ?? null
                   }
                   callbackTickets={runFollowUpSample.callback_tickets}
+                  callbackWaitingAutomation={callbackWaitingAutomation}
                   lifecycle={runFollowUpSample.run_snapshot.callbackWaitingLifecycle ?? null}
                   focusNodeEvidence={runFollowUpSampleFocusNodeEvidence}
                   focusSkillReferenceCount={

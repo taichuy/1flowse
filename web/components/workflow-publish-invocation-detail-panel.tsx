@@ -394,6 +394,7 @@ export function WorkflowPublishInvocationDetailPanel({
                           sample.run_snapshot.callbackWaitingExplanation ?? null
                         }
                         callbackTickets={sample.callback_tickets}
+                        callbackWaitingAutomation={callbackWaitingAutomation}
                         lifecycle={sample.run_snapshot.callbackWaitingLifecycle ?? null}
                         focusNodeEvidence={sampleFocusNodeEvidence}
                         focusSkillReferenceCount={

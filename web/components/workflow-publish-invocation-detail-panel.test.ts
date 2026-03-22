@@ -1303,4 +1303,78 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("node run node-run-skill · node node-skill");
     expect(html).toContain("missing catalog entry tool-missing");
   });
+
+  it("forwards callback waiting automation into sampled publish detail summaries", async () => {
+    vi.resetModules();
+
+    const callbackSummaryProps: Array<Record<string, unknown>> = [];
+
+    vi.doMock("next/link", () => ({
+      default: ({
+        children,
+        href,
+        ...props
+      }: {
+        children: ReactNode;
+        href?: string;
+      } & Record<string, unknown>) => createElement("a", { href: href ?? "#", ...props }, children)
+    }));
+    vi.doMock("@/components/run-diagnostics-execution/execution-node-card", () => ({
+      ExecutionNodeCard: () => createElement("div", { "data-testid": "execution-node-card" })
+    }));
+    vi.doMock("@/components/sensitive-access-timeline-entry-list", () => ({
+      SensitiveAccessTimelineEntryList: (props: Record<string, unknown>) =>
+        createElement(
+          "div",
+          {
+            "data-testid": "sensitive-access-timeline-entry-list",
+            "data-empty-copy": String(props.emptyCopy ?? "")
+          },
+          String(props.emptyCopy ?? "")
+        )
+    }));
+    vi.doMock("@/components/tool-governance-summary", () => ({
+      ToolGovernanceSummary: () => createElement("div", { "data-testid": "tool-governance-summary" })
+    }));
+    vi.doMock("@/components/workflow-publish-invocation-callback-section", () => ({
+      WorkflowPublishInvocationCallbackSection: () =>
+        createElement("div", { "data-testid": "workflow-publish-invocation-callback-section" })
+    }));
+    vi.doMock("@/components/callback-waiting-summary-card", () => ({
+      CallbackWaitingSummaryCard: (props: Record<string, unknown>) => {
+        callbackSummaryProps.push(props);
+        return createElement("div", { "data-testid": "callback-waiting-summary-card" });
+      }
+    }));
+
+    try {
+      const { WorkflowPublishInvocationDetailPanel: IsolatedWorkflowPublishInvocationDetailPanel } =
+        await import("@/components/workflow-publish-invocation-detail-panel");
+
+      renderToStaticMarkup(
+        createElement(IsolatedWorkflowPublishInvocationDetailPanel, {
+          detail: buildDetail(),
+          clearHref: "/published?clear=1",
+          tools: [],
+          callbackWaitingAutomation
+        })
+      );
+
+      expect(
+        callbackSummaryProps.some(
+          (props) =>
+            props.runId === "run-callback-1" &&
+            props.callbackWaitingAutomation === callbackWaitingAutomation
+        )
+      ).toBe(true);
+    } finally {
+      vi.doUnmock("@/components/callback-waiting-summary-card");
+      vi.doUnmock("@/components/workflow-publish-invocation-callback-section");
+      vi.doUnmock("@/components/tool-governance-summary");
+      vi.doUnmock("@/components/sensitive-access-timeline-entry-list");
+      vi.doUnmock("@/components/run-diagnostics-execution/execution-node-card");
+      vi.doUnmock("next/link");
+      vi.resetModules();
+    }
+  });
 });
