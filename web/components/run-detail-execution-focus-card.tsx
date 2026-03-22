@@ -13,7 +13,10 @@ import {
   buildOperatorRunDetailCandidate,
   buildOperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
-import { buildSandboxReadinessFollowUpCandidate } from "@/lib/system-overview-follow-up-presenters";
+import {
+  buildSandboxReadinessFollowUpCandidate,
+  messageMentionsSandboxExecution
+} from "@/lib/system-overview-follow-up-presenters";
 import { buildRunDetailExecutionFocusViewModel } from "@/lib/run-detail-execution-focus";
 import {
   formatExecutionFocusArtifactSummary,
@@ -50,31 +53,40 @@ export function RunDetailExecutionFocusCard({
   if (!focus) {
     return null;
   }
-  const shouldDeferToCallbackWaitingSummary = focus.hasCallbackSummary;
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(focus.evidence);
   const explicitExecutionFollowUp = run.execution_focus_explanation?.follow_up?.trim() || null;
-  const executionCandidate = explicitExecutionFollowUp
-    ? recommendedNextStepHref?.trim()
-      ? buildOperatorInboxSliceCandidate({
-          active: true,
-          href: recommendedNextStepHref,
-          label: "execution focus",
-          detail: explicitExecutionFollowUp,
-          hrefLabel: recommendedNextStepHrefLabel,
-          fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-          surfaceCopy: operatorSurfaceCopy
-        })
-      : buildOperatorRunDetailCandidate({
-          active: true,
-          runId: run.id,
-          label: "execution focus",
-          detail: explicitExecutionFollowUp,
-          hrefLabel: recommendedNextStepHrefLabel,
-          fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-          surfaceCopy: operatorSurfaceCopy
-        })
-    : buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness") ??
-      (recommendedNextStepHref?.trim()
+  const executionNeedsSharedSandboxFollowUp =
+    focus.reason === "blocked_execution" ||
+    messageMentionsSandboxExecution(focus.primarySignal) ||
+    messageMentionsSandboxExecution(explicitExecutionFollowUp) ||
+    messageMentionsSandboxExecution(focus.nodeType);
+  const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
+  const shouldDeferToCallbackWaitingSummary = focus.hasCallbackSummary && !sharedSandboxCandidate;
+  const executionCandidate =
+    sharedSandboxCandidate ??
+    (explicitExecutionFollowUp
+      ? recommendedNextStepHref?.trim()
+        ? buildOperatorInboxSliceCandidate({
+            active: true,
+            href: recommendedNextStepHref,
+            label: "execution focus",
+            detail: explicitExecutionFollowUp,
+            hrefLabel: recommendedNextStepHrefLabel,
+            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+            surfaceCopy: operatorSurfaceCopy
+          })
+        : buildOperatorRunDetailCandidate({
+            active: true,
+            runId: run.id,
+            label: "execution focus",
+            detail: explicitExecutionFollowUp,
+            hrefLabel: recommendedNextStepHrefLabel,
+            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+            surfaceCopy: operatorSurfaceCopy
+          })
+      : recommendedNextStepHref?.trim()
         ? buildOperatorInboxSliceCandidate({
             active: true,
             href: recommendedNextStepHref,
@@ -98,6 +110,10 @@ export function RunDetailExecutionFocusCard({
         execution: executionCandidate
       })
     : null;
+  const shouldRenderStandaloneExecutionFollowUp =
+    !shouldDeferToCallbackWaitingSummary &&
+    Boolean(explicitExecutionFollowUp) &&
+    explicitExecutionFollowUp !== recommendedNextStep?.detail;
 
   return (
     <div className={className}>
@@ -113,6 +129,9 @@ export function RunDetailExecutionFocusCard({
         {description ? <p className="section-copy entry-copy">{description}</p> : null}
         {focus.primarySignal && !shouldDeferToCallbackWaitingSummary ? (
           <p className="section-copy entry-copy">{focus.primarySignal}</p>
+        ) : null}
+        {shouldRenderStandaloneExecutionFollowUp ? (
+          <p className="section-copy entry-copy">{explicitExecutionFollowUp}</p>
         ) : null}
         {recommendedNextStep ? (
           <div className="entry-card compact-card">

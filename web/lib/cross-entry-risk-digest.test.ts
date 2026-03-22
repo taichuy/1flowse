@@ -248,4 +248,83 @@ describe("buildCrossEntryRiskDigest", () => {
     expect(digest.primaryEntryKey).toBe("workflowLibrary");
     expect(digest.headline).toContain("跨入口风险已收敛");
   });
+
+  it("normalizes shared recommended action entry keys for cross-entry CTA overrides", () => {
+    const digest = buildCrossEntryRiskDigest({
+      sandboxReadiness: {
+        enabled_backend_count: 0,
+        healthy_backend_count: 0,
+        degraded_backend_count: 0,
+        offline_backend_count: 1,
+        execution_classes: [
+          {
+            execution_class: "sandbox",
+            available: false,
+            backend_ids: [],
+            supported_languages: [],
+            supported_profiles: [],
+            supported_dependency_modes: [],
+            supports_tool_execution: false,
+            supports_builtin_package_sets: false,
+            supports_backend_extensions: false,
+            supports_network_policy: false,
+            supports_filesystem_policy: false,
+            reason: "sandbox backend offline"
+          }
+        ],
+        supported_languages: [],
+        supported_profiles: [],
+        supported_dependency_modes: [],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        affected_run_count: 4,
+        affected_workflow_count: 1,
+        primary_blocker_kind: "execution_class_blocked",
+        recommended_action: {
+          kind: "open_workflow_library",
+          label: "Open workflow library",
+          href: "/workflows?execution=sandbox",
+          entry_key: "workflow_library"
+        }
+      },
+      callbackWaitingAutomation: {
+        status: "configured",
+        scheduler_required: true,
+        detail: "healthy",
+        scheduler_health_status: "healthy",
+        scheduler_health_detail: "healthy",
+        steps: []
+      },
+      sensitiveAccessSummary: {
+        ticket_count: 0,
+        pending_ticket_count: 0,
+        approved_ticket_count: 0,
+        rejected_ticket_count: 0,
+        expired_ticket_count: 0,
+        waiting_ticket_count: 0,
+        resumed_ticket_count: 0,
+        failed_ticket_count: 0,
+        pending_notification_count: 0,
+        delivered_notification_count: 0,
+        failed_notification_count: 0,
+        affected_run_count: 0,
+        affected_workflow_count: 0,
+        primary_blocker_kind: null,
+        blockers: []
+      },
+      channels: []
+    });
+
+    expect(digest.primaryEntryKey).toBe("workflowLibrary");
+    expect(digest.focusAreas.find((area) => area.id === "sandbox")).toMatchObject({
+      entryKey: "workflowLibrary"
+    });
+    expect(digest.entryOverrides?.workflowLibrary).toEqual({
+      href: "/workflows?execution=sandbox",
+      label: "Open workflow library"
+    });
+  });
 });

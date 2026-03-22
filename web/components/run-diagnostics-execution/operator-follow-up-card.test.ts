@@ -439,4 +439,38 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
     expect(html).toContain('href="/runs?focus=callback-waiting"');
     expect(html).toContain("Open run library");
   });
+
+  it("在 callback follow-up 已存在时仍优先展示 live callback recovery contract", () => {
+    const executionView = buildExecutionView();
+
+    const html = renderToStaticMarkup(
+      createElement(RunDiagnosticsOperatorFollowUpCard, {
+        executionView,
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "run_library"
+          },
+          steps: []
+        },
+        sandboxReadiness: null
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("callback recovery");
+    expect(html).toContain("当前 callback recovery 仍影响 3 个 run / 2 个 workflow");
+    expect(html).toContain('href="/runs?focus=callback-waiting"');
+    expect(html).toContain("Open run library");
+  });
 });

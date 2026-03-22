@@ -17,7 +17,8 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import {
   buildCallbackWaitingAutomationFollowUpCandidate,
-  buildSandboxReadinessFollowUpCandidate
+  buildSandboxReadinessFollowUpCandidate,
+  messageMentionsSandboxExecution
 } from "@/lib/system-overview-follow-up-presenters";
 import {
   buildExecutionFocusSectionSurfaceCopy,
@@ -70,48 +71,64 @@ export function RunDiagnosticsOperatorFollowUpCard({
     snapshot?.execution_focus_explanation?.follow_up ??
     executionView.execution_focus_explanation?.follow_up ??
     null;
+  const hasCallbackFacts = hasCallbackWaitingFacts(snapshot);
+  const hasExecutionFocusFacts = hasExecutionFacts(snapshot, executionView);
+  const sharedCallbackCandidate = hasCallbackFacts
+    ? buildCallbackWaitingAutomationFollowUpCandidate(
+        callbackWaitingAutomation,
+        "callback recovery"
+      )
+    : null;
+  const executionNeedsSharedSandboxFollowUp =
+    executionView.execution_focus_reason === "blocked_execution" ||
+    snapshot?.execution_focus_reason === "blocked_execution" ||
+    messageMentionsSandboxExecution(snapshot?.execution_focus_explanation?.primary_signal) ||
+    messageMentionsSandboxExecution(executionFollowUp) ||
+    messageMentionsSandboxExecution(executionView.execution_focus_explanation?.primary_signal) ||
+    messageMentionsSandboxExecution(executionView.execution_focus_explanation?.follow_up) ||
+    messageMentionsSandboxExecution(snapshot?.execution_focus_node_type);
+  const sharedSandboxCandidate = hasExecutionFocusFacts && executionNeedsSharedSandboxFollowUp
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
   const recommendedNextStep = buildOperatorRecommendedNextStep({
     callback:
-      callbackFollowUp?.trim()
+      sharedCallbackCandidate ??
+      (callbackFollowUp?.trim()
         ? buildOperatorRunDetailCandidate({
-            active: hasCallbackWaitingFacts(snapshot),
+            active: hasCallbackFacts,
             label: "observe waiting",
             detail: callbackFollowUp,
             runId: executionView.run_id,
             fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
             surfaceCopy
           })
-        : buildCallbackWaitingAutomationFollowUpCandidate(
-              callbackWaitingAutomation,
-              "callback recovery"
-            ) ??
-          buildOperatorRunDetailCandidate({
-            active: hasCallbackWaitingFacts(snapshot),
+        : buildOperatorRunDetailCandidate({
+            active: hasCallbackFacts,
             label: "observe waiting",
             detail: callbackFollowUp,
             runId: executionView.run_id,
             fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
             surfaceCopy
-          }),
+          })),
     execution:
-      executionFollowUp?.trim()
+      sharedSandboxCandidate ??
+      (executionFollowUp?.trim()
         ? buildOperatorRunDetailCandidate({
-            active: hasExecutionFacts(snapshot, executionView),
+            active: hasExecutionFocusFacts,
             label: "inspect execution focus",
             detail: executionFollowUp,
             runId: executionView.run_id,
             fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
             surfaceCopy
           })
-        : buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness") ??
-          buildOperatorRunDetailCandidate({
-            active: hasExecutionFacts(snapshot, executionView),
+        : buildOperatorRunDetailCandidate({
+            active: hasExecutionFocusFacts,
             label: "inspect execution focus",
             detail: executionFollowUp,
             runId: executionView.run_id,
             fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
             surfaceCopy
-          }),
+          })),
     operatorFollowUp: followUp?.explanation?.follow_up ?? null,
     operatorLabel: "operator follow-up"
   });

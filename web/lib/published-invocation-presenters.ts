@@ -46,7 +46,10 @@ import {
   buildCallbackWaitingAutomationSystemFollowUp,
   buildSandboxReadinessSystemFollowUp,
   buildCallbackWaitingAutomationFollowUpCandidate,
-  buildSandboxReadinessFollowUpCandidate
+  buildSandboxReadinessFollowUpCandidate,
+  messageMentionsCallbackAutomation,
+  messageMentionsSandboxExecution,
+  resolvePreferredSystemOverviewFollowUpSurface
 } from "@/lib/system-overview-follow-up-presenters";
 import {
   formatMetricSummary,
@@ -2626,10 +2629,10 @@ export function buildPublishedInvocationWaitingOverview({
   const activeWaitingCount = generalWaitingCount + waitingInputCount + callbackWaitingCount;
   const syncWaitingRejectedCount = getFacetCount(reasonCounts, "sync_waiting_unsupported");
   const lastRunStatusLabel = formatPublishedInvocationOptionalRunStatus(summary?.last_run_status, null);
-  const callbackFollowUpSurface =
-    callbackWaitingCount > 0
-      ? buildCallbackWaitingAutomationSystemFollowUp(callbackWaitingAutomation)
-      : null;
+  const callbackFollowUpSurface = resolvePreferredSystemOverviewFollowUpSurface({
+    callbackActive: callbackWaitingCount > 0,
+    callbackWaitingAutomation
+  });
 
   const chips: string[] = [];
   if (activeWaitingCount > 0) {
@@ -2717,26 +2720,6 @@ export function buildPublishedInvocationWaitingOverview({
   };
 }
 
-function messageMentionsSandboxExecution(message?: string | null) {
-  const normalizedMessage = message?.toLowerCase() ?? "";
-  return (
-    normalizedMessage.includes("sandbox") ||
-    normalizedMessage.includes("microvm") ||
-    normalizedMessage.includes("execution class") ||
-    normalizedMessage.includes("backend offline") ||
-    normalizedMessage.includes("tool execution")
-  );
-}
-
-function messageMentionsCallbackAutomation(message?: string | null) {
-  const normalizedMessage = message?.toLowerCase() ?? "";
-  return (
-    normalizedMessage.includes("callback") ||
-    normalizedMessage.includes("resume") ||
-    normalizedMessage.includes("scheduler")
-  );
-}
-
 function buildPublishedInvocationDiagnosticFollowUpSurface({
   reasonCounts,
   runStatusCounts,
@@ -2750,23 +2733,16 @@ function buildPublishedInvocationDiagnosticFollowUpSurface({
   sandboxReadiness?: SandboxReadinessCheck | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 }) {
-  const callbackWaitingCount = getFacetCount(runStatusCounts, "waiting_callback");
-  if (
-    (callbackWaitingCount > 0 || messageMentionsCallbackAutomation(message)) &&
-    callbackWaitingAutomation
-  ) {
-    const callbackSurface = buildCallbackWaitingAutomationSystemFollowUp(callbackWaitingAutomation);
-    if (callbackSurface) {
-      return callbackSurface;
-    }
-  }
-
-  const runtimeFailedCount = getFacetCount(reasonCounts, "runtime_failed");
-  if ((runtimeFailedCount > 0 || messageMentionsSandboxExecution(message)) && sandboxReadiness) {
-    return buildSandboxReadinessSystemFollowUp(sandboxReadiness);
-  }
-
-  return null;
+  return resolvePreferredSystemOverviewFollowUpSurface({
+    callbackActive:
+      getFacetCount(runStatusCounts, "waiting_callback") > 0 ||
+      messageMentionsCallbackAutomation(message),
+    callbackWaitingAutomation,
+    sandboxActive:
+      getFacetCount(reasonCounts, "runtime_failed") > 0 ||
+      messageMentionsSandboxExecution(message),
+    sandboxReadiness
+  });
 }
 
 export function formatRateLimitPressure(

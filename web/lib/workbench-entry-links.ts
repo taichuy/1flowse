@@ -27,6 +27,15 @@ export const WORKBENCH_ENTRY_LINK_REGISTRY = {
 
 export type WorkbenchEntryLinkKey = keyof typeof WORKBENCH_ENTRY_LINK_REGISTRY;
 
+const WORKBENCH_ENTRY_LINK_KEY_ALIASES = {
+  home: "home",
+  workflow_library: "workflowLibrary",
+  run_library: "runLibrary",
+  operator_inbox: "operatorInbox",
+  create_workflow: "createWorkflow",
+  workspace_starter_library: "workspaceStarterLibrary"
+} as const satisfies Record<string, WorkbenchEntryLinkKey>;
+
 export type WorkbenchEntryLinkDefinition = {
   href: string;
   label: string;
@@ -44,6 +53,25 @@ export type WorkbenchEntryLinksConfig = {
   variant?: "hero" | "inline";
   primaryKey?: WorkbenchEntryLinkKey;
 };
+
+export function normalizeWorkbenchEntryLinkKey(
+  value?: string | null
+): WorkbenchEntryLinkKey | null {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  if (Object.hasOwn(WORKBENCH_ENTRY_LINK_REGISTRY, normalizedValue)) {
+    return normalizedValue as WorkbenchEntryLinkKey;
+  }
+
+  const aliasKey = normalizedValue as keyof typeof WORKBENCH_ENTRY_LINK_KEY_ALIASES;
+
+  return Object.hasOwn(WORKBENCH_ENTRY_LINK_KEY_ALIASES, aliasKey)
+    ? WORKBENCH_ENTRY_LINK_KEY_ALIASES[aliasKey]
+    : null;
+}
 
 export function resolveWorkbenchEntryLink(
   key: WorkbenchEntryLinkKey,

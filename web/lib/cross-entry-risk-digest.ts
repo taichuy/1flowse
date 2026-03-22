@@ -13,11 +13,11 @@ import {
   listSandboxAvailableClasses,
   listSandboxBlockedClasses
 } from "@/lib/sandbox-readiness-presenters";
-import { WORKBENCH_ENTRY_LINK_REGISTRY } from "@/lib/workbench-entry-links";
 import type {
   WorkbenchEntryLinkKey,
   WorkbenchEntryLinkOverrides
 } from "@/lib/workbench-entry-links";
+import { normalizeWorkbenchEntryLinkKey } from "@/lib/workbench-entry-links";
 
 export type CrossEntryRiskDigestTone = "healthy" | "degraded" | "blocked";
 
@@ -89,10 +89,6 @@ function formatImpactedMetricValue(
   )} workflows`;
 }
 
-function isWorkbenchEntryLinkKey(value?: string | null): value is WorkbenchEntryLinkKey {
-  return typeof value === "string" && value in WORKBENCH_ENTRY_LINK_REGISTRY;
-}
-
 function resolveRecommendedEntryKey({
   action,
   fallback
@@ -100,20 +96,21 @@ function resolveRecommendedEntryKey({
   action?: { entry_key?: string | null } | null;
   fallback: WorkbenchEntryLinkKey;
 }) {
-  return isWorkbenchEntryLinkKey(action?.entry_key) ? action.entry_key : fallback;
+  return normalizeWorkbenchEntryLinkKey(action?.entry_key) ?? fallback;
 }
 
 function applyRecommendedActionOverride(
   overrides: WorkbenchEntryLinkOverrides,
   action?: { entry_key?: string | null; href?: string | null; label?: string | null } | null
 ) {
-  if (!isWorkbenchEntryLinkKey(action?.entry_key)) {
+  const entryKey = normalizeWorkbenchEntryLinkKey(action?.entry_key);
+  if (!entryKey) {
     return;
   }
 
-  overrides[action.entry_key] = {
-    href: action.href?.trim() || undefined,
-    label: action.label?.trim() || undefined
+  overrides[entryKey] = {
+    href: action?.href?.trim() || undefined,
+    label: action?.label?.trim() || undefined
   };
 }
 
@@ -368,7 +365,10 @@ export function buildCrossEntryRiskDigest({
         "当前还没有足够的 sandbox readiness 事实，请优先核对 backend 健康与 execution class 可用性。",
       nextStep:
         "先确认 workflow 需要的 execution class 是否仍被 live readiness 覆盖，再继续处理运行阻塞。",
-      entryKey: "workflowLibrary"
+      entryKey: resolveRecommendedEntryKey({
+        action: sandboxReadiness.recommended_action,
+        fallback: "workflowLibrary"
+      })
     },
     {
       id: "callback",
@@ -379,7 +379,10 @@ export function buildCrossEntryRiskDigest({
         "当前还拿不到 callback waiting automation 摘要，先核对 scheduler 与 waiting 恢复步骤是否真正接管。",
       nextStep:
         "先看 waiting resume / cleanup 是否由 scheduler 正常接管，再进入单条 run 继续排障。",
-      entryKey: "runLibrary"
+      entryKey: resolveRecommendedEntryKey({
+        action: callbackWaitingAutomation.recommended_action,
+        fallback: "runLibrary"
+      })
     },
     {
       id: "operator",
@@ -432,6 +435,9 @@ export function buildCrossEntryRiskDigest({
     default:
       break;
   }
+
+  applyRecommendedActionOverride(entryOverrides, sandboxReadiness.recommended_action);
+  applyRecommendedActionOverride(entryOverrides, callbackWaitingAutomation.recommended_action);
 
   return {
     tone,

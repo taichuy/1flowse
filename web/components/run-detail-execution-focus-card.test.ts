@@ -276,6 +276,11 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");
     expect(html).toContain("Strong-isolation execution must fail closed");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain("Open workflow library");
+    expect(html).toContain("先恢复兼容 backend，再重新调度该节点。");
   });
 
   it("falls back to the shared sandbox readiness CTA when execution follow-up is missing", () => {
