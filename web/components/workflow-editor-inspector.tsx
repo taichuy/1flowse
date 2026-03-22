@@ -3,7 +3,10 @@
 import React from "react";
 import type { Edge, Node } from "@xyflow/react";
 
-import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type {
+  PluginAdapterRegistryItem,
+  PluginToolRegistryItem
+} from "@/lib/get-plugin-registry";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type {
@@ -24,6 +27,7 @@ type WorkflowEditorInspectorProps = {
   nodes: Array<Node<WorkflowCanvasNodeData>>;
   edges: Array<Edge<WorkflowCanvasEdgeData>>;
   tools: PluginToolRegistryItem[];
+  adapters: PluginAdapterRegistryItem[];
   nodeConfigText: string;
   onNodeConfigTextChange: (value: string) => void;
   onApplyNodeConfigJson: () => void;
@@ -69,6 +73,7 @@ export function WorkflowEditorInspector({
   nodes,
   edges,
   tools,
+  adapters,
   nodeConfigText,
   onNodeConfigTextChange,
   onApplyNodeConfigJson,
@@ -132,6 +137,7 @@ export function WorkflowEditorInspector({
               node={selectedNode}
               nodes={nodes}
               tools={tools}
+              adapters={adapters}
               sandboxReadiness={sandboxReadiness}
               highlightedFieldPath={highlightedNodeSection === "config" ? highlightedNodeFieldPath : null}
               focusedValidationItem={

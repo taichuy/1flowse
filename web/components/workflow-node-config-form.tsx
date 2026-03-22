@@ -12,6 +12,7 @@ export function WorkflowNodeConfigForm({
   node,
   nodes,
   tools,
+  adapters,
   sandboxReadiness,
   highlightedFieldPath,
   focusedValidationItem,
@@ -35,6 +36,7 @@ export function WorkflowNodeConfigForm({
         <ToolNodeConfigForm
           node={node}
           tools={tools}
+          adapters={adapters}
           sandboxReadiness={sandboxReadiness}
           highlightedFieldPath={highlightedFieldPath}
           focusedValidationItem={focusedValidationItem}

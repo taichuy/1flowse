@@ -7,6 +7,7 @@ import type {
   PluginAdapterRegistryItem,
   PluginToolRegistryItem
 } from "@/lib/get-plugin-registry";
+import { describePluginAdapterHealth } from "@/lib/plugin-adapter-presenters";
 import { compareToolsByGovernance } from "@/lib/tool-governance";
 
 type PluginRegistryPanelProps = {
@@ -49,7 +50,7 @@ export function PluginRegistryPanel({
                 </div>
                 <p className="adapter-endpoint">{adapter.endpoint}</p>
                 <p className="adapter-copy">
-                  {adapter.detail ?? describeAdapterMode(adapter.mode)}
+                  {describePluginAdapterHealth(adapter)}
                 </p>
                 <div className="adapter-meta-row">
                   <span className="event-chip">{adapter.ecosystem}</span>
@@ -214,16 +215,4 @@ function readRuntimeBinding(pluginMeta: PluginToolRegistryItem["plugin_meta"]) {
     provider: provider || "-",
     tool_name: tool_name || "-"
   };
-}
-
-function describeAdapterMode(mode: PluginAdapterRegistryItem["mode"]) {
-  if (mode === "proxy") {
-    return "当前 adapter 会把翻译后的 invoke payload 继续代理到 Dify plugin daemon，并把结果聚合回 7Flows tool runtime。";
-  }
-
-  if (mode === "translate") {
-    return "当前 adapter 只做受约束 contract 校验与 payload 翻译；目录同步会调用 adapter 的 /tools，并把结果写入 API 持久化目录。";
-  }
-
-  return "目录同步会调用 adapter 的 /tools，并把返回结果写入 API 持久化目录。";
 }

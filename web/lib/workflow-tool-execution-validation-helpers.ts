@@ -9,6 +9,10 @@ import type {
   WorkflowExplicitAdapterBindingValidationOptions,
   WorkflowToolExecutionValidationIssue
 } from "@/lib/workflow-tool-execution-validation-types";
+import {
+  describePluginAdapterHealth,
+  formatPluginAdapterDescriptor
+} from "@/lib/plugin-adapter-presenters";
 
 export function validateExplicitAdapterBinding({
   context,
@@ -26,7 +30,9 @@ export function validateExplicitAdapterBinding({
     return {
       nodeId,
       nodeName,
-      message: `${context} 绑定了 adapter ${adapterId}，但当前 workspace 看不到这个 adapter，工具 ${toolId} 无法按该绑定执行。`,
+      message:
+        `${context} 绑定了 adapter ${adapterId}，但当前 workspace 看不到这个 adapter，工具 ${toolId} 无法按该绑定执行。` +
+        ` ${buildEcosystemAdapterHint(ecosystem, adapters)}`,
       path,
       field
     };
@@ -35,7 +41,9 @@ export function validateExplicitAdapterBinding({
     return {
       nodeId,
       nodeName,
-      message: `${context} 绑定的 adapter ${adapterId} 服务于 ${adapter.ecosystem}，与工具 ${toolId} 需要的 ${ecosystem} 不一致。`,
+      message:
+        `${context} 绑定的 adapter ${adapterId} 服务于 ${adapter.ecosystem}，与工具 ${toolId} 需要的 ${ecosystem} 不一致。` +
+        ` ${buildEcosystemAdapterHint(ecosystem, adapters)}`,
       path,
       field
     };
@@ -44,7 +52,9 @@ export function validateExplicitAdapterBinding({
     return {
       nodeId,
       nodeName,
-      message: `${context} 绑定的 adapter ${adapterId} 当前已禁用，工具 ${toolId} 不能按该绑定执行。`,
+      message:
+        `${context} 绑定的 adapter ${adapterId} 当前已禁用，工具 ${toolId} 不能按该绑定执行。` +
+        ` ${buildAdapterHealthHint(adapter)}`,
       path,
       field
     };
@@ -115,7 +125,9 @@ export function buildExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 显式请求了 ${requestedExecutionClass}，但当前没有可用 adapter 能为 ${toolId} 提供 ${resolvedEcosystem} 执行入口。`,
+      message:
+        `${context} 显式请求了 ${requestedExecutionClass}，但当前没有可用 adapter 能为 ${toolId} 提供 ${resolvedEcosystem} 执行入口。` +
+        ` ${buildEcosystemAdapterHint(resolvedEcosystem, adapters)}`,
       path,
       field
     };
@@ -128,9 +140,11 @@ export function buildExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 显式请求了 ${requestedExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
-        ", "
-      )}。`,
+      message:
+        `${context} 显式请求了 ${requestedExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
+          ", "
+        )}。` +
+        ` ${buildAdapterHealthHint(adapter)}`,
       path,
       field
     };
@@ -369,7 +383,9 @@ export function buildDefaultExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。${defaultReason}`,
+      message:
+        `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。` +
+        `${defaultReason} ${buildEcosystemAdapterHint(resolvedEcosystem, adapters)}`,
       path,
       field
     };
@@ -382,9 +398,10 @@ export function buildDefaultExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
-        ", "
-      )}。${defaultReason}`,
+      message:
+        `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
+          ", "
+        )}。${defaultReason} ${buildAdapterHealthHint(adapter)}`,
       path,
       field
     };
@@ -431,6 +448,30 @@ function resolveAdapterForExecution({
   }
 
   return adapters.find((adapter) => adapter.enabled && adapter.ecosystem === ecosystem) ?? null;
+}
+
+function buildAdapterHealthHint(adapter: PluginAdapterRegistryItem) {
+  const detail = describePluginAdapterHealth(adapter);
+  const executionClasses = adapter.supported_execution_classes?.length
+    ? adapter.supported_execution_classes.join(", ")
+    : "subprocess";
+  return [
+    `当前状态 ${adapter.status}`,
+    adapter.mode ? `mode ${adapter.mode}` : null,
+    `supports ${executionClasses}`,
+    detail
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("；");
+}
+
+function buildEcosystemAdapterHint(ecosystem: string, adapters: PluginAdapterRegistryItem[]) {
+  const ecosystemAdapters = adapters.filter((adapter) => adapter.ecosystem === ecosystem);
+  if (ecosystemAdapters.length === 0) {
+    return `当前 workspace 里还没有 ${ecosystem} adapter；请先在 Adapter health and sync 确认 compat runtime 已注册。`;
+  }
+
+  return `当前 ${ecosystem} adapter：${ecosystemAdapters.map(formatPluginAdapterDescriptor).join("；")}。`;
 }
 
 function buildSandboxReadinessIssue({

@@ -274,6 +274,7 @@ export function WorkflowEditorWorkbench({
               nodes={graph.nodes}
               edges={graph.edges}
               tools={tools}
+              adapters={adapters}
               nodeConfigText={graph.nodeConfigText}
               onNodeConfigTextChange={graph.setNodeConfigText}
               onApplyNodeConfigJson={graph.applyNodeConfigJson}

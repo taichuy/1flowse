@@ -10,7 +10,8 @@ import type {
 } from "./get-system-overview";
 import {
   buildDefaultExecutionCapabilityIssue,
-  buildExecutionCapabilityIssue
+  buildExecutionCapabilityIssue,
+  validateExplicitAdapterBinding
 } from "./workflow-tool-execution-validation-helpers";
 
 function createCompatTool(): PluginToolRegistryItem {
@@ -50,7 +51,9 @@ function createNativeTool(
   };
 }
 
-function createAdapter(): PluginAdapterRegistryItem {
+function createAdapter(
+  overrides: Partial<PluginAdapterRegistryItem> = {}
+): PluginAdapterRegistryItem {
   return {
     id: "dify-default",
     ecosystem: "compat:dify",
@@ -61,7 +64,8 @@ function createAdapter(): PluginAdapterRegistryItem {
     plugin_kinds: ["tool"],
     supported_execution_classes: ["subprocess", "sandbox", "microvm"],
     status: "up",
-    detail: null
+    detail: null,
+    ...overrides
   };
 }
 
@@ -152,6 +156,31 @@ function createSandboxBackends(
 }
 
 describe("workflow tool execution validation helpers", () => {
+  it("在显式 adapter 绑定失效时带出 compat health detail", () => {
+    const issue = validateExplicitAdapterBinding({
+      context: "Tool 节点 Search",
+      toolId: "compat:dify:plugin:demo/search",
+      ecosystem: "compat:dify",
+      adapterId: "dify-default",
+      adapters: [
+        createAdapter({
+          enabled: false,
+          status: "degraded",
+          detail: "daemon unreachable",
+          mode: "proxy"
+        })
+      ],
+      path: "nodes[0].config.tool.adapterId",
+      field: "adapterId",
+      nodeId: "node-1",
+      nodeName: "Node 1"
+    });
+
+    expect(issue?.message).toContain("daemon unreachable");
+    expect(issue?.message).toContain("当前状态 degraded");
+    expect(issue?.message).toContain("supports subprocess, sandbox, microvm");
+  });
+
   it("按 execution class 校验 dependencyMode 能力，而不是只看全局聚合", () => {
     const issue = buildExecutionCapabilityIssue({
       context: "节点 toolPolicy.execution",

@@ -2,7 +2,10 @@
 
 import type { Node } from "@xyflow/react";
 
-import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type {
+  PluginAdapterRegistryItem,
+  PluginToolRegistryItem
+} from "@/lib/get-plugin-registry";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
@@ -11,6 +14,7 @@ export type WorkflowNodeConfigFormProps = {
   node: Node<WorkflowCanvasNodeData>;
   nodes: Array<Node<WorkflowCanvasNodeData>>;
   tools: PluginToolRegistryItem[];
+  adapters: PluginAdapterRegistryItem[];
   sandboxReadiness?: SandboxReadinessCheck | null;
   highlightedFieldPath?: string | null;
   focusedValidationItem?: WorkflowValidationNavigatorItem | null;

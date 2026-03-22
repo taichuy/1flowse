@@ -13,6 +13,7 @@ describe("WorkflowEditorInspector", () => {
         nodes: [],
         edges: [],
         tools: [],
+        adapters: [],
         nodeConfigText: "{}",
         onNodeConfigTextChange: () => undefined,
         onApplyNodeConfigJson: () => undefined,
