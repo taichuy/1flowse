@@ -138,16 +138,6 @@ export function WorkflowPublishInvocationEntryCard({
       : [],
     fallbackHeadline: surfaceCopy.canonicalFollowUpFallbackHeadline
   });
-  const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
-    runId: item.run_id ?? null,
-    canonicalFollowUp,
-    callbackWaitingFollowUp: waitingLifecycle ? waitingExplanation?.follow_up ?? null : null,
-    callbackWaitingAutomation,
-    executionFocusFollowUp,
-    sandboxReadiness,
-    blockingInboxHref,
-    approvalInboxHref: inboxHref
-  });
   const runFollowUpSamplePrimarySignal = runFollowUpSample?.explanation?.primary_signal?.trim() || null;
   const runFollowUpSampleFocusNodeEvidence = runFollowUpSample
     ? buildExecutionFocusExplainableNode(runFollowUpSample.run_snapshot)
@@ -186,6 +176,17 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpEvidenceChips = runFollowUpSample
     ? listPublishedInvocationRunFollowUpEvidenceChips(runFollowUpSample)
     : [];
+  const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
+    runId: item.run_id ?? null,
+    canonicalFollowUp,
+    callbackWaitingFollowUp: waitingLifecycle ? waitingExplanation?.follow_up ?? null : null,
+    callbackWaitingAutomation,
+    executionFocusFollowUp,
+    executionSnapshot: runFollowUpSample?.run_snapshot ?? runSnapshot,
+    sandboxReadiness,
+    blockingInboxHref,
+    approvalInboxHref: inboxHref
+  });
 
   return (
     <article className="payload-card compact-card">

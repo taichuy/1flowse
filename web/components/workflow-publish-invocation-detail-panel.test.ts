@@ -395,6 +395,40 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
   };
 }
 
+function buildBlockedSandboxReadiness(): SandboxReadinessCheck {
+  const readiness = buildSandboxReadiness();
+
+  return {
+    ...readiness,
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    offline_backend_count: 1,
+    execution_classes: readiness.execution_classes.map((item) => ({
+      ...item,
+      available: false,
+      backend_ids: [],
+      supports_tool_execution: false,
+      supports_builtin_package_sets: false,
+      supports_network_policy: false,
+      supports_filesystem_policy: false,
+      reason: "No compatible sandbox backend is available."
+    })),
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflowLibrary"
+    }
+  };
+}
+
 const callbackWaitingAutomation: CallbackWaitingAutomationCheck = {
   status: "healthy",
   scheduler_required: true,
@@ -758,6 +792,118 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("execution focus");
     expect(html).toContain("open run");
     expect(html).toContain("优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。");
+  });
+
+  it("prefers shared sandbox readiness CTA when blocked execution still carries a local follow-up", () => {
+    const detail = buildDetail();
+    detail.run_follow_up = null;
+    detail.callback_waiting_explanation = null;
+    detail.callback_tickets = [];
+    detail.sensitive_access_entries = [];
+    detail.blocking_sensitive_access_entries = [];
+    detail.blocking_node_run_id = null;
+    detail.execution_focus_reason = "blocked_execution";
+    detail.execution_focus_explanation = {
+      primary_signal: "sandbox execution 仍被阻断。",
+      follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
+    };
+    detail.run_snapshot = {
+      status: "failed",
+      current_node_id: "tool_wait",
+      waiting_reason: null,
+      execution_focus_reason: "blocked_execution",
+      execution_focus_node_id: "tool_wait",
+      execution_focus_node_run_id: "node-run-focus",
+      execution_focus_node_name: "Tool wait",
+      execution_focus_node_type: "tool",
+      execution_focus_explanation: {
+        primary_signal: "sandbox execution 仍被阻断。",
+        follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
+      },
+      execution_focus_tool_calls: [
+        {
+          id: "tool-call-1",
+          tool_id: "callback.wait",
+          tool_name: "Callback Wait",
+          phase: "execute",
+          status: "failed",
+          requested_execution_class: "sandbox",
+          effective_execution_class: "inline",
+          execution_sandbox_backend_id: "sandbox-stale",
+          execution_blocking_reason: "No compatible sandbox backend is available."
+        }
+      ]
+    } as never;
+    detail.execution_focus_node = {
+      node_run_id: "node-run-focus",
+      node_id: "tool_wait",
+      node_name: "Tool wait",
+      node_type: "tool",
+      status: "blocked",
+      phase: "execute",
+      retry_count: 0,
+      artifact_refs: [],
+      error_message: null,
+      waiting_reason: null,
+      started_at: "2026-03-20T10:00:00Z",
+      finished_at: null,
+      execution_class: "sandbox",
+      execution_source: "runtime_policy",
+      execution_profile: null,
+      execution_timeout_ms: null,
+      execution_network_policy: null,
+      execution_filesystem_policy: null,
+      execution_dependency_mode: null,
+      execution_builtin_package_set: null,
+      execution_dependency_ref: null,
+      execution_backend_extensions: null,
+      execution_dispatched_count: 1,
+      execution_fallback_count: 0,
+      execution_blocked_count: 1,
+      execution_unavailable_count: 0,
+      requested_execution_class: "sandbox",
+      requested_execution_source: "runtime_policy",
+      requested_execution_profile: null,
+      requested_execution_timeout_ms: null,
+      requested_execution_network_policy: null,
+      requested_execution_filesystem_policy: null,
+      requested_execution_dependency_mode: null,
+      requested_execution_builtin_package_set: null,
+      requested_execution_dependency_ref: null,
+      requested_execution_backend_extensions: null,
+      execution_blocking_reason: "No compatible sandbox backend is available.",
+      effective_execution_class: "inline",
+      execution_sandbox_backend_id: "sandbox-stale",
+      execution_executor_ref: "tool:compat-adapter:dify-default",
+      execution_sandbox_backend_executor_ref: null,
+      execution_sandbox_runner_kind: "container",
+      execution_fallback_reason: null,
+      event_count: 0,
+      event_type_counts: {},
+      last_event_type: null,
+      artifacts: [],
+      tool_calls: [],
+      ai_calls: [],
+      callback_tickets: [],
+      skill_reference_load_count: 0,
+      skill_reference_loads: [],
+      sensitive_access_entries: []
+    } as never;
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation,
+        sandboxReadiness: buildBlockedSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("/workflows?execution=sandbox");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
   });
 
   it("prefers shared sandbox readiness CTA when execution focus follow-up is missing", () => {

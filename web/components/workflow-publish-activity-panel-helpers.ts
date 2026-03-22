@@ -32,6 +32,7 @@ import {
   formatPublishedInvocationSurfaceLabel,
   formatPublishedRunStatusLabel,
   listPublishedInvocationRunFollowUpSampleViews,
+  normalizePublishedInvocationRunSnapshot,
   type PublishedInvocationSelectedNextStepSurface,
   type PublishedInvocationUnavailableDetailSurfaceCopy
 } from "@/lib/published-invocation-presenters";
@@ -196,6 +197,9 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
     const detail = selectedInvocationDetail.data;
     const entrySurfaceCopy = buildPublishedInvocationEntrySurfaceCopy();
     const samples = listPublishedInvocationRunFollowUpSampleViews(detail.run_follow_up ?? null);
+    const runId = detail.run?.id ?? detail.invocation.run_id ?? null;
+    const recommendedNextStepSample =
+      samples.find((sample) => sample.run_id === runId) ?? samples[0] ?? null;
     const sharedCallbackWaitingExplanations = samples
       .filter((sample) => sample.has_callback_waiting_summary)
       .map((sample) => sample.run_snapshot.callbackWaitingExplanation);
@@ -205,14 +209,17 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
       fallbackHeadline: entrySurfaceCopy.canonicalFollowUpFallbackHeadline
     });
     const nextStep = buildPublishedInvocationRecommendedNextStep({
-      runId: detail.run?.id ?? detail.invocation.run_id ?? null,
+      runId,
       canonicalFollowUp,
       callbackWaitingFollowUp: detail.callback_waiting_explanation?.follow_up ?? null,
       callbackWaitingAutomation,
       executionFocusFollowUp: detail.execution_focus_explanation?.follow_up ?? null,
+      executionSnapshot:
+        recommendedNextStepSample?.run_snapshot ??
+        normalizePublishedInvocationRunSnapshot(detail.run_snapshot ?? detail.invocation.run_snapshot ?? null),
       sandboxReadiness,
       blockingInboxHref: buildBlockingPublishedInvocationInboxHref({
-        runId: detail.run?.id ?? detail.invocation.run_id ?? null,
+        runId,
         blockingNodeRunId: detail.blocking_node_run_id,
         blockingSensitiveAccessEntries: detail.blocking_sensitive_access_entries
       }),

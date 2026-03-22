@@ -1615,6 +1615,88 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("命中强隔离阻断时即使 execution focus 有本地 follow-up 也优先 shared sandbox readiness CTA", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-fallback-3",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: null,
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingFollowUp: null,
+        executionFocusFollowUp: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。",
+        executionSnapshot: {
+          status: "failed",
+          executionFocusReason: "blocked_execution",
+          executionFocusNodeType: "tool",
+          executionFocusExplanation: {
+            primary_signal: "当前 focus 节点因强隔离 backend 不可用而阻断。",
+            follow_up: "先恢复兼容 backend，再重新调度该节点。"
+          },
+          executionFocusToolCalls: [
+            {
+              id: "tool-call-1",
+              tool_id: "sandbox.tool",
+              tool_name: "Sandbox Tool",
+              status: "failed",
+              requested_execution_class: "sandbox",
+              effective_execution_class: "inline",
+              execution_blocking_reason: "No compatible sandbox backend is available."
+            }
+          ]
+        } as never,
+        sandboxReadiness: {
+          enabled_backend_count: 0,
+          execution_classes: [
+            {
+              execution_class: "sandbox_code",
+              available: false,
+              backend_ids: [],
+              supported_languages: [],
+              supported_profiles: [],
+              supported_dependency_modes: [],
+              supports_tool_execution: false,
+              supports_builtin_package_sets: false,
+              supports_backend_extensions: false,
+              supports_network_policy: false,
+              supports_filesystem_policy: false,
+              reason: "execution class blocked"
+            }
+          ],
+          supported_languages: [],
+          supported_profiles: [],
+          supported_dependency_modes: [],
+          supports_tool_execution: false,
+          supports_builtin_package_sets: false,
+          supports_backend_extensions: false,
+          supports_network_policy: false,
+          supports_filesystem_policy: false,
+          offline_backend_count: 0,
+          degraded_backend_count: 0,
+          healthy_backend_count: 0,
+          affected_run_count: 4,
+          affected_workflow_count: 1,
+          primary_blocker_kind: "execution_class_blocked",
+          recommended_action: {
+            kind: "open_workflow_library",
+            label: "Open workflow library",
+            href: "/workflows?execution=sandbox",
+            entry_key: "workflowLibrary"
+          }
+        },
+        blockingInboxHref: null,
+        approvalInboxHref: null
+      })
+    ).toEqual({
+      label: "sandbox readiness",
+      detail:
+        "当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow；优先回到 workflow library 处理强隔离 execution class 与隔离需求。",
+      href: "/workflows?execution=sandbox",
+      href_label: "Open workflow library"
+    });
+  });
+
   it("把 approval 与 notification blocker 聚合成 chips", () => {
     expect(
       listPublishedInvocationSensitiveAccessChips({

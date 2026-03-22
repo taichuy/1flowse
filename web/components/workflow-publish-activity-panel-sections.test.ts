@@ -758,6 +758,107 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
   });
 
+  it("prefers shared sandbox readiness CTA for selected invocation even when a local execution follow-up exists", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.run_follow_up = null;
+    detail.callback_waiting_explanation = null;
+    detail.callback_tickets = [];
+    detail.sensitive_access_entries = [];
+    detail.blocking_sensitive_access_entries = [];
+    detail.blocking_node_run_id = null;
+    detail.execution_focus_reason = "blocked_execution";
+    detail.execution_focus_explanation = {
+      primary_signal: "sandbox execution 仍被阻断。",
+      follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
+    };
+    detail.run_snapshot = {
+      status: "failed",
+      current_node_id: "tool_wait",
+      waiting_reason: null,
+      execution_focus_reason: "blocked_execution",
+      execution_focus_node_id: "tool_wait",
+      execution_focus_node_run_id: "node-run-selected-focus",
+      execution_focus_node_name: "Tool wait",
+      execution_focus_node_type: "tool",
+      execution_focus_explanation: {
+        primary_signal: "sandbox execution 仍被阻断。",
+        follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
+      },
+      execution_focus_tool_calls: [
+        {
+          id: "tool-call-1",
+          tool_id: "callback.wait",
+          tool_name: "Callback Wait",
+          phase: "execute",
+          status: "failed",
+          requested_execution_class: "sandbox",
+          effective_execution_class: "inline",
+          execution_sandbox_backend_id: "sandbox-stale",
+          execution_blocking_reason: "No compatible sandbox backend is available."
+        }
+      ]
+    } as never;
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit: buildInvocationAudit(),
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: detail
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: {
+          enabled_backend_count: 0,
+          healthy_backend_count: 0,
+          degraded_backend_count: 0,
+          offline_backend_count: 0,
+          execution_classes: [
+            {
+              execution_class: "sandbox",
+              available: false,
+              backend_ids: [],
+              supported_languages: [],
+              supported_profiles: [],
+              supported_dependency_modes: [],
+              supports_tool_execution: false,
+              supports_builtin_package_sets: false,
+              supports_backend_extensions: false,
+              supports_network_policy: false,
+              supports_filesystem_policy: false,
+              reason: "execution class blocked"
+            }
+          ],
+          supported_languages: [],
+          supported_profiles: [],
+          supported_dependency_modes: [],
+          supports_tool_execution: false,
+          supports_builtin_package_sets: false,
+          supports_backend_extensions: false,
+          supports_network_policy: false,
+          supports_filesystem_policy: false,
+          affected_run_count: 4,
+          affected_workflow_count: 1,
+          primary_blocker_kind: "execution_class_blocked",
+          recommended_action: {
+            kind: "open_workflow_library",
+            label: "Open workflow library",
+            href: "/workflows?execution=sandbox",
+            entry_key: "workflowLibrary"
+          }
+        },
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: null
+      })
+    );
+
+    expect(html).toContain("Selected invocation next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("Open workflow library");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+  });
+
   it("reuses the projected selected next-step surface inside detail panel without duplicating narrative", () => {
     const invocationAudit = {
       ...buildInvocationAudit(),

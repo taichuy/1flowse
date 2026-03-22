@@ -233,6 +233,40 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
   };
 }
 
+function buildBlockedSandboxReadiness(): SandboxReadinessCheck {
+  const readiness = buildSandboxReadiness();
+
+  return {
+    ...readiness,
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    offline_backend_count: 1,
+    execution_classes: readiness.execution_classes.map((item) => ({
+      ...item,
+      available: false,
+      backend_ids: [],
+      supports_tool_execution: false,
+      supports_builtin_package_sets: false,
+      supports_network_policy: false,
+      supports_filesystem_policy: false,
+      reason: "No compatible sandbox backend is available."
+    })),
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflowLibrary"
+    }
+  };
+}
+
 describe("WorkflowPublishInvocationEntryCard", () => {
   it("renders callback sampled run cards through shared callback waiting follow-up", () => {
     const html = renderToStaticMarkup(
@@ -580,7 +614,73 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).toContain("execution focus");
     expect(html).toContain("open run");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 已 ready。");
-    expect(html).toContain("历史 run 记录的 backend 是 sandbox-stale");
+    expect(html).toContain("backend 是 sandbox-stale");
     expect(html).toContain("compare with live readiness");
+  });
+
+  it("prefers shared sandbox readiness CTA when the sampled run is fail-closed on strong isolation", () => {
+    const item = buildInvocationItem();
+    item.run_follow_up = {
+      affected_run_count: 1,
+      sampled_run_count: 1,
+      waiting_run_count: 0,
+      running_run_count: 0,
+      succeeded_run_count: 0,
+      failed_run_count: 1,
+      unknown_run_count: 0,
+      explanation: {
+        primary_signal: "sampled run blocked by sandbox availability",
+        follow_up: "check sandbox readiness"
+      },
+      sampled_runs: [
+        {
+          run_id: "run-callback-1",
+          snapshot: {
+            status: "failed",
+            current_node_id: "tool_wait",
+            waiting_reason: null,
+            execution_focus_reason: "blocked_execution",
+            execution_focus_node_id: "tool_wait",
+            execution_focus_node_run_id: "node-run-tool-wait",
+            execution_focus_node_name: "Tool wait",
+            execution_focus_node_type: "tool",
+            execution_focus_explanation: {
+              primary_signal: "strong isolation failed on historical run",
+              follow_up: "compare with live readiness"
+            },
+            execution_focus_tool_calls: [
+              {
+                id: "tool-call-1",
+                tool_id: "callback.wait",
+                tool_name: "Callback Wait",
+                phase: "execute",
+                status: "failed",
+                requested_execution_class: "sandbox",
+                effective_execution_class: "inline",
+                execution_executor_ref: "tool:compat-adapter:dify-default",
+                execution_sandbox_backend_id: "sandbox-stale",
+                execution_sandbox_runner_kind: "container",
+                execution_blocking_reason: "No compatible sandbox backend is available."
+              }
+            ]
+          }
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item,
+        detailHref: "/published/invocation-1",
+        detailActive: false,
+        sandboxReadiness: buildBlockedSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("/workflows?execution=sandbox");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain("backend 是 sandbox-stale");
   });
 });

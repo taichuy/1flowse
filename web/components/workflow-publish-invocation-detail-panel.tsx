@@ -131,6 +131,8 @@ export function WorkflowPublishInvocationDetailPanel({
       })
     : null;
   const runFollowUpSamples = listPublishedInvocationRunFollowUpSampleViews(runFollowUp);
+  const recommendedNextStepSample =
+    runFollowUpSamples.find((sample) => sample.run_id === runId) ?? runFollowUpSamples[0] ?? null;
   const sharedCallbackWaitingExplanations = runFollowUpSamples
     .filter((sample) => sample.has_callback_waiting_summary)
     .map((sample) => sample.run_snapshot.callbackWaitingExplanation);
@@ -155,6 +157,7 @@ export function WorkflowPublishInvocationDetailPanel({
     callbackWaitingFollowUp: callbackWaitingExplanation?.follow_up ?? null,
     callbackWaitingAutomation,
     executionFocusFollowUp: explicitExecutionFocusFollowUp,
+    executionSnapshot: recommendedNextStepSample?.run_snapshot ?? runSnapshot,
     sandboxReadiness,
     blockingInboxHref,
     approvalInboxHref

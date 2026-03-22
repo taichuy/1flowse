@@ -56,6 +56,7 @@ import {
   type ExecutionFocusToolCallSummary
 } from "@/lib/run-execution-focus-presenters";
 import {
+  buildSandboxReadinessNodeFromRunSnapshot,
   formatSandboxReadinessDetail,
   formatSandboxReadinessHeadline,
   listSandboxBlockedClasses
@@ -1842,6 +1843,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   callbackWaitingFollowUp,
   callbackWaitingAutomation,
   executionFocusFollowUp,
+  executionSnapshot,
   sandboxReadiness,
   blockingInboxHref,
   approvalInboxHref
@@ -1851,6 +1853,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   callbackWaitingFollowUp?: string | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   executionFocusFollowUp?: string | null;
+  executionSnapshot?: RunSnapshot | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   blockingInboxHref?: string | null;
   approvalInboxHref?: string | null;
@@ -1875,22 +1878,34 @@ export function buildPublishedInvocationRecommendedNextStep({
           "当前 invocation 的下一步仍落在 callback waiting / approval 事实链；优先确认票据、回调和自动 resume 是否正在推进。"
       })
     : buildCallbackWaitingAutomationFollowUpCandidate(callbackWaitingAutomation, "callback recovery");
-  const executionCandidate = executionFocusFollowUp?.trim()
-    ? buildOperatorRunDetailCandidate({
-        active: true,
-        runId,
-        label: "execution focus",
-        detail: executionFocusFollowUp,
-        fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
-      })
-    : buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness") ??
-      buildOperatorRunDetailCandidate({
-        active: Boolean(runId),
-        runId,
-        label: "execution focus",
-        detail: executionFocusFollowUp,
-        fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
-      });
+  const executionNeedsSharedSandboxFollowUp =
+    executionSnapshot?.executionFocusReason === "blocked_execution" ||
+    Boolean(buildSandboxReadinessNodeFromRunSnapshot(executionSnapshot)?.execution_blocking_reason) ||
+    messageMentionsSandboxExecution(executionFocusFollowUp) ||
+    messageMentionsSandboxExecution(executionSnapshot?.executionFocusExplanation?.primary_signal) ||
+    messageMentionsSandboxExecution(executionSnapshot?.executionFocusExplanation?.follow_up) ||
+    messageMentionsSandboxExecution(executionSnapshot?.executionFocusNodeType);
+  const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
+  const executionCandidate =
+    sharedSandboxCandidate ??
+    (executionFocusFollowUp?.trim()
+      ? buildOperatorRunDetailCandidate({
+          active: true,
+          runId,
+          label: "execution focus",
+          detail: executionFocusFollowUp,
+          fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
+        })
+      : buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness") ??
+        buildOperatorRunDetailCandidate({
+          active: Boolean(runId),
+          runId,
+          label: "execution focus",
+          detail: executionFocusFollowUp,
+          fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
+        }));
 
   return buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
