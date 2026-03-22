@@ -37,7 +37,16 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
     supports_builtin_package_sets: false,
     supports_backend_extensions: false,
     supports_network_policy: false,
-    supports_filesystem_policy: false
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflow_library"
+    }
   };
 }
 
@@ -267,6 +276,63 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 仍 blocked。");
     expect(html).toContain("Strong-isolation execution must fail closed");
+  });
+
+  it("falls back to the shared sandbox readiness CTA when execution follow-up is missing", () => {
+    const run = buildRunDetail();
+    run.node_runs[0] = {
+      ...run.node_runs[0]!,
+      waiting_reason: null
+    };
+    run.execution_focus_reason = "blocked_execution";
+    run.execution_focus_node = {
+      ...run.execution_focus_node!,
+      status: "blocked",
+      execution_blocking_reason: "No compatible sandbox backend is available.",
+      effective_execution_class: "inline"
+    };
+    run.execution_focus_explanation = {
+      primary_signal: "当前节点因强隔离 backend 不可用而阻断。",
+      follow_up: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDetailExecutionFocusCard, {
+        run,
+        title: "Execution focus",
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain("优先回到 workflow library 处理强隔离 execution class 与隔离需求。");
+    expect(html).toContain("Open workflow library");
+  });
+
+  it("falls back to the run detail CTA when no explicit execution follow-up exists", () => {
+    const run = buildRunDetail();
+    run.node_runs[0] = {
+      ...run.node_runs[0]!,
+      waiting_reason: null
+    };
+    run.execution_focus_explanation = {
+      primary_signal: "当前节点需要继续核对 execution focus。",
+      follow_up: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDetailExecutionFocusCard, {
+        run,
+        title: "Execution focus"
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("execution focus");
+    expect(html).toContain("当前 run 已回接 canonical execution focus；优先继续检查 focus node、runtime evidence 和 execution fallback / blocking 原因。");
+    expect(html).toContain("open run");
   });
 
   it("renders the shared skill trace narrative when focus references are present", () => {
