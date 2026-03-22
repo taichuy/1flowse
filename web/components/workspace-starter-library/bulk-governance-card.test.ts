@@ -360,6 +360,7 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(html).toContain("Primary signal:");
     expect(html).toContain("同一份 result receipt 现在会把 operator / AI 复用的 follow-up 解释直接放进后端共享契约");
     expect(html).toContain("先修复来源 workflow 的缺失或无效问题，再重新执行批量刷新。");
+    expect(html).toContain("优先聚焦 starter：Manual starter");
     expect(html).toContain("Result receipt focus");
     expect(html).toContain("Sandbox starter · 已刷新 · 建议 refresh · source 0.1.5 · sandbox · drift 1");
   });

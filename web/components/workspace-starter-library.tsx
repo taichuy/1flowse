@@ -166,6 +166,7 @@ export function WorkspaceStarterLibrary({
             isLoadingSourceDiff={isLoadingSourceDiff}
             isRefreshing={isRefreshing}
             isRebasing={isRebasing}
+            createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
             onRefresh={handleRefreshFromSource}
             onRebase={handleRebaseFromSource}
           />

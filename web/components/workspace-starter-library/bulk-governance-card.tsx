@@ -67,6 +67,7 @@ export function WorkspaceStarterBulkGovernanceCard({
   const narrativeItems = lastResult ? buildWorkspaceStarterBulkResultNarrative(lastResult) : [];
   const outcomePrimarySignal = lastResult?.outcome_explanation?.primary_signal?.trim() || null;
   const outcomeFollowUp = lastResult?.outcome_explanation?.follow_up?.trim() || null;
+  const primaryResultFocusTarget = resultFocusTargets[0] ?? null;
 
   return (
     <div className="binding-card compact-card">
@@ -244,6 +245,18 @@ export function WorkspaceStarterBulkGovernanceCard({
                 <p className="section-copy starter-summary-copy">
                   <strong>Next step:</strong> {outcomeFollowUp}
                 </p>
+              ) : null}
+              {primaryResultFocusTarget ? (
+                <div className="binding-actions">
+                  <button
+                    className="sync-button secondary"
+                    type="button"
+                    onClick={() => onFocusTemplate(primaryResultFocusTarget.templateId)}
+                    disabled={isMutating}
+                  >
+                    {`优先聚焦 starter：${primaryResultFocusTarget.name}`}
+                  </button>
+                </div>
               ) : null}
             </div>
           ) : null}

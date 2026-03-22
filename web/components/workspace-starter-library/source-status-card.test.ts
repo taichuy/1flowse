@@ -67,6 +67,7 @@ describe("WorkspaceStarterSourceCard", () => {
         isLoadingSourceDiff: false,
         isRefreshing: false,
         isRebasing: false,
+        createWorkflowHref: "/workflows/new?starter=starter-1",
         onRefresh: vi.fn(),
         onRebase: vi.fn()
       })
@@ -79,5 +80,72 @@ describe("WorkspaceStarterSourceCard", () => {
     expect(html).toContain("source 0.2.0");
     expect(html).toContain("Demo Workflow");
     expect(html).toContain("Review the follow-up before refreshing.");
+    expect(html).not.toContain("带此 starter 回到创建页");
+    expect(html).toContain("从源 workflow 刷新快照");
+    expect(html).toContain("执行 rebase");
+  });
+
+  it("replaces disabled source actions with a stable create entry when source is missing", () => {
+    const template: WorkspaceStarterTemplateItem = {
+      id: "starter-missing-source",
+      workspace_id: "default",
+      name: "Missing source starter",
+      description: "Starter with a deleted source workflow.",
+      business_track: "应用新建编排",
+      default_workflow_name: "Missing Source Workflow",
+      workflow_focus: "Keep authoring unblocked.",
+      recommended_next_step: "Confirm the template is still reusable.",
+      tags: ["workspace starter"],
+      definition: {
+        nodes: [
+          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+          { id: "output", type: "output", name: "Output", config: {} }
+        ],
+        edges: [{ id: "e1", sourceNodeId: "trigger", targetNodeId: "output" }],
+        variables: [],
+        publish: []
+      },
+      created_from_workflow_id: "wf-missing",
+      created_from_workflow_version: "0.4.0",
+      archived: false,
+      archived_at: null,
+      created_at: "2026-03-21T12:00:00Z",
+      updated_at: "2026-03-21T12:30:00Z",
+      source_governance: {
+        kind: "missing_source",
+        status_label: "来源缺失",
+        summary: "记录中的来源 workflow 已不存在或当前不可访问。",
+        source_workflow_id: "wf-missing",
+        source_workflow_name: null,
+        template_version: "0.4.0",
+        source_version: null,
+        action_decision: null,
+        outcome_explanation: {
+          primary_signal: "当前 starter 记录的来源 workflow 已不可用。",
+          follow_up: "先在当前库里确认模板仍可复用，再从创建页继续创建。"
+        }
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceStarterSourceCard, {
+        template,
+        sourceGovernance: template.source_governance ?? null,
+        sourceDiff: null,
+        isLoadingSourceDiff: false,
+        isRefreshing: false,
+        isRebasing: false,
+        createWorkflowHref: "/workflows/new?starter=starter-missing-source",
+        onRefresh: vi.fn(),
+        onRebase: vi.fn()
+      })
+    );
+
+    expect(html).toContain("来源缺失");
+    expect(html).toContain("当前 starter 记录的来源 workflow 已不可用。");
+    expect(html).toContain("确认模板后带此 starter 回到创建页");
+    expect(html).toContain('/workflows/new?starter=starter-missing-source');
+    expect(html).not.toContain("从源 workflow 刷新快照");
+    expect(html).not.toContain("执行 rebase");
   });
 });

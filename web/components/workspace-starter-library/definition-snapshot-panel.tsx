@@ -24,6 +24,7 @@ type WorkspaceStarterDefinitionSnapshotPanelProps = {
   isLoadingSourceDiff: boolean;
   isRefreshing: boolean;
   isRebasing: boolean;
+  createWorkflowHref?: string | null;
   onRefresh: () => void;
   onRebase: () => void;
 };
@@ -37,6 +38,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
   isLoadingSourceDiff,
   isRefreshing,
   isRebasing,
+  createWorkflowHref = null,
   onRefresh,
   onRebase
 }: WorkspaceStarterDefinitionSnapshotPanelProps) {
@@ -110,6 +112,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             isLoadingSourceDiff={isLoadingSourceDiff}
             isRefreshing={isRefreshing}
             isRebasing={isRebasing}
+            createWorkflowHref={createWorkflowHref}
             onRefresh={onRefresh}
             onRebase={onRebase}
           />

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import type {
   WorkspaceStarterSourceActionDecisionPayload,
   WorkspaceStarterSourceDiff,
@@ -16,6 +18,7 @@ type WorkspaceStarterSourceCardProps = {
   isLoadingSourceDiff: boolean;
   isRefreshing: boolean;
   isRebasing: boolean;
+  createWorkflowHref?: string | null;
   onRefresh: () => void;
   onRebase: () => void;
 };
@@ -27,6 +30,7 @@ export function WorkspaceStarterSourceCard({
   isLoadingSourceDiff,
   isRefreshing,
   isRebasing,
+  createWorkflowHref = null,
   onRefresh,
   onRebase
 }: WorkspaceStarterSourceCardProps) {
@@ -39,7 +43,13 @@ export function WorkspaceStarterSourceCard({
     : fallbackActionDecision;
   const canRefresh = hasSourceBinding && !isLoadingSourceDiff && actionDecision.canRefresh;
   const canRebase = hasSourceBinding && !isLoadingSourceDiff && actionDecision.canRebase;
+  const shouldShowSourceActions = isLoadingSourceDiff || canRefresh || canRebase;
   const templateNextStep = template.recommended_next_step.trim();
+  const createWorkflowActionLabel = resolveCreateWorkflowActionLabel({
+    governanceKind: sourceGovernance?.kind ?? null,
+    createWorkflowHref,
+    archived: template.archived
+  });
 
   return (
     <div className="binding-card compact-card">
@@ -83,33 +93,51 @@ export function WorkspaceStarterSourceCard({
               <strong>Template note:</strong> {templateNextStep}
             </p>
           ) : null}
-          <div className="binding-actions">
-            <button
-              className={
-                actionDecision.recommendedAction === "refresh"
-                  ? "sync-button"
-                  : "sync-button secondary"
-              }
-              type="button"
-              onClick={onRefresh}
-              disabled={!canRefresh || isRefreshing}
-            >
-              {isRefreshing ? "刷新中..." : "从源 workflow 刷新快照"}
-            </button>
-            <button
-              className={
-                actionDecision.recommendedAction === "rebase"
-                  ? "sync-button"
-                  : "sync-button secondary"
-              }
-              type="button"
-              onClick={onRebase}
-              disabled={!canRebase || isRebasing}
-            >
-              {isRebasing ? "Rebase 中..." : "执行 rebase"}
-            </button>
-          </div>
+          {shouldShowSourceActions || createWorkflowActionLabel ? (
+            <div className="binding-actions">
+              {shouldShowSourceActions ? (
+                <>
+                  <button
+                    className={
+                      actionDecision.recommendedAction === "refresh"
+                        ? "sync-button"
+                        : "sync-button secondary"
+                    }
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={!canRefresh || isRefreshing}
+                  >
+                    {isRefreshing ? "刷新中..." : "从源 workflow 刷新快照"}
+                  </button>
+                  <button
+                    className={
+                      actionDecision.recommendedAction === "rebase"
+                        ? "sync-button"
+                        : "sync-button secondary"
+                    }
+                    type="button"
+                    onClick={onRebase}
+                    disabled={!canRebase || isRebasing}
+                  >
+                    {isRebasing ? "Rebase 中..." : "执行 rebase"}
+                  </button>
+                </>
+              ) : null}
+              {createWorkflowActionLabel && createWorkflowHref ? (
+                <Link className="inline-link secondary" href={createWorkflowHref}>
+                  {createWorkflowActionLabel}
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
         </>
+      ) : null}
+      {!hasSourceBinding && createWorkflowActionLabel && createWorkflowHref ? (
+        <div className="binding-actions">
+          <Link className="inline-link secondary" href={createWorkflowHref}>
+            {createWorkflowActionLabel}
+          </Link>
+        </div>
       ) : null}
       {sourceGovernance ? (
         <div className="summary-strip compact-strip">
@@ -144,4 +172,28 @@ function normalizeActionDecision(actionDecision: WorkspaceStarterSourceActionDec
     canRebase: actionDecision.can_rebase,
     factChips: actionDecision.fact_chips
   };
+}
+
+function resolveCreateWorkflowActionLabel({
+  governanceKind,
+  createWorkflowHref,
+  archived
+}: {
+  governanceKind: WorkspaceStarterSourceGovernance["kind"] | null;
+  createWorkflowHref?: string | null;
+  archived: boolean;
+}) {
+  if (!createWorkflowHref || archived) {
+    return null;
+  }
+
+  if (governanceKind === "missing_source") {
+    return "确认模板后带此 starter 回到创建页";
+  }
+
+  if (governanceKind === "no_source" || governanceKind === "synced") {
+    return "带此 starter 回到创建页";
+  }
+
+  return null;
 }
