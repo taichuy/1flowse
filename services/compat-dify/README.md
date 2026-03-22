@@ -9,11 +9,14 @@
 - `GET /healthz`
   - 返回 adapter 当前 `status` 与 `mode`
   - `status` 默认使用 `up / degraded / down / disabled` 这组健康语义
+  - 当 `proxy` 模式缺少 daemon 配置时，会直接返回可排障的 `detail`
 - `GET /tools`
   - 从本地 catalog 翻译出受约束 tool 目录
   - 同时暴露 `constrained_ir` 与 compat runtime 线索，供 API registry sync 使用
+  - 每个 tool 会显式声明 `supported_execution_classes` 与 `default_execution_class`
 - `POST /invoke`
   - 先按本地 `executionContract` / `constrained_ir` 校验请求
+  - 保留 host 透传的统一 `execution` 提示与 `traceId`，作为 adapter request meta 返回
   - `translate` 模式下仅输出翻译后的 Dify dispatch payload 预览
   - `proxy` 模式下继续把 payload 转发到 Dify plugin daemon，并把流式 `ToolInvokeMessage` 聚合回 7Flows tool runtime 输出
 
@@ -48,7 +51,7 @@ cd services/compat-dify
 - `translate`
   - 默认模式
   - `/invoke` 只做 contract 校验与 Dify dispatch payload 翻译
-  - 返回值包含脱敏后的 `translatedRequest` 预览，便于 operator 校准 compat 边界
+  - 返回值包含脱敏后的 `translatedRequest` 预览，以及原始 request meta（含 `execution`），便于 operator 校准 compat 边界
 - `proxy`
   - 需要同时配置 `PLUGIN_DAEMON_URL` 和 `PLUGIN_DAEMON_API_KEY`
   - `/invoke` 会把翻译后的 payload 转发到 Dify plugin daemon，并聚合流式输出
