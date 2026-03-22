@@ -21,6 +21,7 @@ import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition
 import {
   buildWorkspaceStarterBulkPreviewFocusTargets,
   buildWorkspaceStarterBulkResultFocusTargets,
+  buildWorkspaceStarterSourceGovernancePrimaryFollowUp,
   buildWorkspaceStarterSourceGovernanceFocusTargets,
   buildWorkspaceStarterSourceGovernancePresenter,
   formatTimestamp,
@@ -99,6 +100,11 @@ export function WorkspaceStarterTemplateListPanel({
     sourceGovernanceScope,
     templates
   );
+  const sourceGovernancePrimaryFollowUp = buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+    sourceGovernanceScope,
+    templates,
+    createWorkflowHref
+  });
   const surfaceCopy = buildWorkspaceStarterTemplateListSurfaceCopy({ createWorkflowHref });
 
   return (
@@ -230,6 +236,7 @@ export function WorkspaceStarterTemplateListPanel({
         <WorkspaceStarterBulkGovernanceCard
           inScopeCount={filteredTemplates.length}
           sourceGovernanceScope={sourceGovernanceScope}
+          sourceGovernancePrimaryFollowUp={sourceGovernancePrimaryFollowUp}
           sourceGovernanceFocusTargets={sourceGovernanceFocusTargets}
           preview={bulkPreview}
           previewNotice={bulkPreviewNotice}

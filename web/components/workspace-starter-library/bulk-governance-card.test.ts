@@ -15,7 +15,8 @@ import {
   buildWorkspaceStarterBulkAffectedStarterTargets,
   buildWorkspaceStarterBulkPreviewFocusTargets,
   buildWorkspaceStarterBulkResultFocusTargets,
-  buildWorkspaceStarterSourceGovernanceFocusTargets
+  buildWorkspaceStarterSourceGovernanceFocusTargets,
+  buildWorkspaceStarterSourceGovernancePrimaryFollowUp
 } from "./shared";
 
 describe("WorkspaceStarterBulkGovernanceCard", () => {
@@ -316,6 +317,10 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
       createElement(WorkspaceStarterBulkGovernanceCard, {
         inScopeCount: 2,
         sourceGovernanceScope,
+        sourceGovernancePrimaryFollowUp: buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+          sourceGovernanceScope,
+          templates
+        }),
         sourceGovernanceFocusTargets: buildWorkspaceStarterSourceGovernanceFocusTargets(
           sourceGovernanceScope,
           templates
@@ -343,6 +348,9 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(html).toContain(
       "当前筛选范围 2 个 starter 中，来源漂移 1 个，无来源 1 个；AI/operator 可以直接按 follow-up queue 继续治理。"
     );
+    expect(html).toContain("Primary follow-up");
+    expect(html).toContain("Sandbox starter 当前是共享来源治理队列的首个待处理 starter。");
+    expect(html).toContain("优先聚焦 starter：Sandbox starter");
     expect(html).toContain("后端 summary 已把当前范围里的 follow-up queue 编成统一清单");
     expect(html).toContain("刷新 preview:");
     expect(html).toContain("候选 1 个；阻塞 1 个（无来源 1）");

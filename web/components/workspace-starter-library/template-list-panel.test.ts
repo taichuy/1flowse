@@ -117,6 +117,9 @@ describe("WorkspaceStarterTemplateListPanel", () => {
     expect(html).toContain("Source:</strong> 当前 starter 与来源 workflow 版本不一致。");
     expect(html).toContain("先打开 source diff，再决定 refresh 还是 rebase。");
     expect(html).toContain("全部治理状态");
+    expect(html).toContain("Primary follow-up");
+    expect(html).toContain("Drifted starter 当前是共享来源治理队列的首个待处理 starter。");
+    expect(html).toContain("优先聚焦 starter：Drifted starter");
     expect(html).toContain(surfaceCopy.sourceGovernanceMeta);
     expect(html).toContain(surfaceCopy.followUpQueueLabel);
     expect(html).toContain(surfaceCopy.followUpQueueMeta);

@@ -120,6 +120,14 @@ export type WorkspaceStarterGovernanceRecommendedNextStep = {
   focusLabel: string | null;
 };
 
+export type WorkspaceStarterSourceGovernancePrimaryFollowUp = {
+  label: string;
+  headline: string;
+  detail: string;
+  focusTemplateId: string | null;
+  focusLabel: string | null;
+};
+
 export type WorkspaceStarterSourceGovernanceScopeSummary = {
   chips: string[];
   summary: string;
@@ -515,6 +523,94 @@ export function buildWorkspaceStarterSourceGovernanceFocusTargets(
       }
     ];
   });
+}
+
+export function buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+  sourceGovernanceScope,
+  templates,
+  createWorkflowHref
+}: {
+  sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummaryPayload | null;
+  templates: WorkspaceStarterTemplateItem[];
+  createWorkflowHref?: string | null;
+}): WorkspaceStarterSourceGovernancePrimaryFollowUp | null {
+  if (!sourceGovernanceScope) {
+    return null;
+  }
+
+  const prioritizedTemplateIds = Array.from(
+    new Set(
+      (sourceGovernanceScope.follow_up_template_ids ?? [])
+        .map((templateId) => templateId.trim())
+        .filter(Boolean)
+    )
+  );
+  const templatesById = new Map(templates.map((template) => [template.id, template] as const));
+  const prioritizedTemplates = prioritizedTemplateIds.flatMap((templateId) => {
+    const template = templatesById.get(templateId);
+    return template ? [template] : [];
+  });
+  const primaryTemplate = prioritizedTemplates[0] ?? null;
+
+  if (!primaryTemplate) {
+    if (prioritizedTemplateIds.length > 0 || sourceGovernanceScope.attention_count > 0) {
+      return {
+        label: "待重新定位",
+        headline: "当前筛选范围仍有共享来源治理待处理项。",
+        detail:
+          "后端 follow-up queue 指向的 starter 当前不在列表里；先重新加载或调整筛选范围，再决定 refresh / rebase / create workflow。",
+        focusTemplateId: null,
+        focusLabel: null
+      };
+    }
+
+    return {
+      label: "无需治理",
+      headline: "当前筛选范围没有共享来源治理 backlog。",
+      detail:
+        "可以继续复用这些 starter；如需进一步治理，再看 bulk preview 或逐个进入右侧 source diff / metadata 详情。",
+      focusTemplateId: null,
+      focusLabel: null
+    };
+  }
+
+  const presenter = buildWorkspaceStarterSourceGovernancePresenter(primaryTemplate);
+  const fallbackActionDecision: WorkspaceStarterSourceActionDecision = {
+    recommendedAction: "none",
+    statusLabel: presenter.actionStatusLabel ?? presenter.statusLabel,
+    summary: presenter.followUp ?? presenter.summary,
+    canRefresh: false,
+    canRebase: false,
+    factChips: presenter.factChips
+  };
+  const recommendedNextStep = buildWorkspaceStarterSourceGovernanceRecommendedNextStep({
+    template: primaryTemplate,
+    sourceGovernance: primaryTemplate.source_governance,
+    actionDecision:
+      normalizeSourceActionDecision(primaryTemplate.source_governance?.action_decision) ??
+      fallbackActionDecision,
+    createWorkflowHref
+  });
+  const focusTemplateName = normalizeString(primaryTemplate.name) ?? primaryTemplate.id;
+  const queueLeadDetail =
+    prioritizedTemplates.length > 1
+      ? `后端 follow-up queue 已把 ${focusTemplateName} 排在当前范围的首位，后面还有 ${prioritizedTemplates.length - 1} 个待处理 starter。`
+      : `后端 follow-up queue 已把 ${focusTemplateName} 排在当前范围的首位。`;
+  const detailParts: string[] = [];
+
+  for (const fragment of [queueLeadDetail, recommendedNextStep?.detail, presenter.followUp, presenter.summary]) {
+    if (fragment && !detailParts.includes(fragment)) {
+      detailParts.push(fragment);
+    }
+  }
+
+  return {
+    label: recommendedNextStep?.label ?? presenter.actionStatusLabel ?? presenter.statusLabel,
+    headline: `${focusTemplateName} 当前是共享来源治理队列的首个待处理 starter。`,
+    detail: detailParts.join(" "),
+    focusTemplateId: primaryTemplate.id,
+    focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null
+  };
 }
 
 export function buildWorkspaceStarterSourceGovernanceScopeSummary(

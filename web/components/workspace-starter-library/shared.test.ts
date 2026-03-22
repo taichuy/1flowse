@@ -16,6 +16,7 @@ import {
   buildWorkspaceStarterBulkResultNarrative,
   buildWorkspaceStarterSourceActionDecision,
   buildWorkspaceStarterSourceGovernanceFocusTargets,
+  buildWorkspaceStarterSourceGovernancePrimaryFollowUp,
   buildWorkspaceStarterLibrarySearchParams,
   resolveWorkspaceStarterLibraryViewState
 } from "./shared";
@@ -466,6 +467,91 @@ describe("workspace starter source action decision", () => {
         archived: false
       }
     ]);
+  });
+
+  it("builds a stable primary follow-up from the shared source governance queue", () => {
+    const primaryFollowUp = buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+      sourceGovernanceScope: {
+        workspace_id: "default",
+        total_count: 2,
+        attention_count: 2,
+        counts: {
+          drifted: 1,
+          missing_source: 1,
+          no_source: 0,
+          synced: 0
+        },
+        chips: ["来源漂移 1", "来源缺失 1"],
+        summary:
+          "当前筛选范围 2 个 starter 中，来源漂移 1 个，来源缺失 1 个；AI/operator 可以直接按 follow-up queue 继续治理。",
+        follow_up_template_ids: ["missing-template", "starter-active-a", "starter-active-sandbox"]
+      },
+      templates: [
+        {
+          ...templates[0],
+          source_governance: {
+            kind: "drifted",
+            status_label: "来源漂移",
+            summary: "Starter 与来源 workflow 存在差异。",
+            source_workflow_id: "wf-a",
+            source_workflow_name: "Active workflow",
+            template_version: "0.1.0",
+            source_version: "0.2.0",
+            action_decision: {
+              recommended_action: "refresh",
+              status_label: "建议 refresh",
+              summary: "当前主要是来源快照漂移。",
+              can_refresh: true,
+              can_rebase: true,
+              fact_chips: ["source 0.2.0"]
+            },
+            outcome_explanation: {
+              primary_signal: "当前 starter 与来源 workflow 版本不一致。",
+              follow_up: "先看 source diff，再决定 refresh 还是 rebase。"
+            }
+          }
+        },
+        templates[2]
+      ]
+    });
+
+    expect(primaryFollowUp).toEqual({
+      label: "建议 refresh",
+      headline: "Active starter A 当前是共享来源治理队列的首个待处理 starter。",
+      detail:
+        "后端 follow-up queue 已把 Active starter A 排在当前范围的首位，后面还有 1 个待处理 starter。 当前主要是来源快照漂移。 先看 source diff，再决定 refresh 还是 rebase。 当前 starter 与来源 workflow 版本不一致。",
+      focusTemplateId: "starter-active-a",
+      focusLabel: "优先聚焦 starter：Active starter A"
+    });
+  });
+
+  it("falls back to a clear state when the shared source governance queue is empty", () => {
+    const primaryFollowUp = buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+      sourceGovernanceScope: {
+        workspace_id: "default",
+        total_count: 1,
+        attention_count: 0,
+        counts: {
+          drifted: 0,
+          missing_source: 0,
+          no_source: 1,
+          synced: 0
+        },
+        chips: ["无来源 1"],
+        summary: "当前筛选范围 1 个 starter 中，无来源 1 个；当前没有明显的来源治理阻塞，可以直接复用这些 starter。",
+        follow_up_template_ids: []
+      },
+      templates
+    });
+
+    expect(primaryFollowUp).toEqual({
+      label: "无需治理",
+      headline: "当前筛选范围没有共享来源治理 backlog。",
+      detail:
+        "可以继续复用这些 starter；如需进一步治理，再看 bulk preview 或逐个进入右侧 source diff / metadata 详情。",
+      focusTemplateId: null,
+      focusLabel: null
+    });
   });
 
   it("builds bulk result receipt narratives and focus targets", () => {

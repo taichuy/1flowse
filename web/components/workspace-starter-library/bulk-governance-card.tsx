@@ -14,6 +14,7 @@ import {
   type WorkspaceStarterBulkPreviewFocusTarget,
   type WorkspaceStarterBulkResultFocusTarget,
   type WorkspaceStarterSourceGovernanceFocusTarget,
+  type WorkspaceStarterSourceGovernancePrimaryFollowUp,
   buildWorkspaceStarterBulkPreviewNarrative,
   buildWorkspaceStarterBulkResultNarrative,
   getWorkspaceStarterBulkActionButtonLabel,
@@ -24,6 +25,7 @@ import {
 type WorkspaceStarterBulkGovernanceCardProps = {
   inScopeCount: number;
   sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummary | null;
+  sourceGovernancePrimaryFollowUp: WorkspaceStarterSourceGovernancePrimaryFollowUp | null;
   sourceGovernanceFocusTargets: WorkspaceStarterSourceGovernanceFocusTarget[];
   preview: WorkspaceStarterBulkPreview | null;
   previewNotice: string | null;
@@ -50,6 +52,7 @@ const BULK_ACTIONS: WorkspaceStarterBulkAction[] = [
 export function WorkspaceStarterBulkGovernanceCard({
   inScopeCount,
   sourceGovernanceScope,
+  sourceGovernancePrimaryFollowUp,
   sourceGovernanceFocusTargets,
   preview,
   previewNotice,
@@ -122,6 +125,35 @@ export function WorkspaceStarterBulkGovernanceCard({
           <p className="section-copy starter-summary-copy">
             <strong>Source governance:</strong> {sourceGovernanceScope.summary}
           </p>
+          {sourceGovernancePrimaryFollowUp ? (
+            <div className="entry-card compact-card">
+              <div className="payload-card-header">
+                <span className="status-meta">Primary follow-up</span>
+                <span className="event-chip">{sourceGovernancePrimaryFollowUp.label}</span>
+              </div>
+              <p className="section-copy starter-summary-copy">
+                {sourceGovernancePrimaryFollowUp.headline}
+              </p>
+              <p className="section-copy starter-summary-copy">
+                {sourceGovernancePrimaryFollowUp.detail}
+              </p>
+              {sourceGovernancePrimaryFollowUp.focusTemplateId &&
+              sourceGovernancePrimaryFollowUp.focusLabel ? (
+                <div className="binding-actions">
+                  <button
+                    className="sync-button secondary"
+                    type="button"
+                    onClick={() =>
+                      onSelectQueuedTemplate(sourceGovernancePrimaryFollowUp.focusTemplateId!)
+                    }
+                    disabled={isMutating}
+                  >
+                    {sourceGovernancePrimaryFollowUp.focusLabel}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {sourceGovernanceFocusTargets.length > 0 ? (
             <>
               <p className="section-copy starter-summary-copy">
