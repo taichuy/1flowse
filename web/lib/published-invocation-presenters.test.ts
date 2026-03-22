@@ -1195,6 +1195,50 @@ describe("published invocation presenters", () => {
         }
       })
     ).toContain("结合 live sandbox readiness");
+    expect(
+      buildPublishedInvocationFailureReasonInsight({
+        reasonCounts: [{ value: "runtime_failed", count: 2 }],
+        sandboxReadiness: {
+          enabled_backend_count: 0,
+          healthy_backend_count: 0,
+          degraded_backend_count: 0,
+          offline_backend_count: 1,
+          execution_classes: [
+            {
+              execution_class: "sandbox",
+              available: false,
+              backend_ids: [],
+              supported_languages: [],
+              supported_profiles: [],
+              supported_dependency_modes: [],
+              supports_tool_execution: false,
+              supports_builtin_package_sets: false,
+              supports_backend_extensions: false,
+              supports_network_policy: false,
+              supports_filesystem_policy: false,
+              reason: "No sandbox backend is currently enabled."
+            }
+          ],
+          supported_languages: [],
+          supported_profiles: [],
+          supported_dependency_modes: [],
+          supports_tool_execution: false,
+          supports_builtin_package_sets: false,
+          supports_backend_extensions: false,
+          supports_network_policy: false,
+          supports_filesystem_policy: false,
+          affected_run_count: 4,
+          affected_workflow_count: 1,
+          primary_blocker_kind: "execution_class_blocked",
+          recommended_action: {
+            kind: "open_workflow_library",
+            label: "Open workflow library",
+            href: "/workflows?execution=sandbox",
+            entry_key: "workflow_library"
+          }
+        }
+      })
+    ).toContain("优先回到 workflow library 处理强隔离 execution class 与隔离需求");
 
     expect(
       buildPublishedInvocationFailureMessageDiagnosis({
@@ -1228,12 +1272,21 @@ describe("published invocation presenters", () => {
           supports_builtin_package_sets: false,
           supports_backend_extensions: false,
           supports_network_policy: false,
-          supports_filesystem_policy: false
+          supports_filesystem_policy: false,
+          affected_run_count: 4,
+          affected_workflow_count: 1,
+          primary_blocker_kind: "execution_class_blocked",
+          recommended_action: {
+            kind: "open_workflow_library",
+            label: "Open workflow library",
+            href: "/workflows?execution=sandbox",
+            entry_key: "workflow_library"
+          }
         }
       })
     ).toEqual({
       headline: "当前 live sandbox readiness 仍在报警。",
-      detail: expect.stringContaining("先确认强隔离 backend / capability 是否仍 blocked")
+      detail: expect.stringContaining("优先回到 workflow library 处理强隔离 execution class 与隔离需求")
     });
   });
 
@@ -1546,7 +1599,7 @@ describe("published invocation presenters", () => {
     ).toBe("当前 callback waiting 仍卡在 1 条待处理审批。");
     expect(
       formatPublishedInvocationWaitingFollowUp({
-        primary_signal: "当前 callback waiting 仍卡在 1 条待处理审批。",
+        primary_signal: "当前 callback waiting 仍卡在 1 条待处理审批��",
         follow_up: "  先处理审批，再观察 waiting 节点是否恢复。  "
       })
     ).toBe("先处理审批，再观察 waiting 节点是否恢复。");

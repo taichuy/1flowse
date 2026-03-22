@@ -43,6 +43,7 @@ import {
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 import {
+  buildSandboxReadinessSystemFollowUp,
   buildCallbackWaitingAutomationFollowUpCandidate,
   buildSandboxReadinessFollowUpCandidate
 } from "@/lib/system-overview-follow-up-presenters";
@@ -1648,12 +1649,17 @@ export function buildPublishedInvocationFailureReasonInsight({
 
   if (runtimeFailedCount > 0) {
     if (sandboxReadiness) {
+      const sharedSandboxFollowUp = buildSandboxReadinessSystemFollowUp(sandboxReadiness);
       const readinessHeadline = formatSandboxReadinessHeadline(sandboxReadiness);
       const readinessDetail = formatSandboxReadinessDetail(sandboxReadiness);
       const hasLiveReadinessPressure =
         listSandboxBlockedClasses(sandboxReadiness).length > 0 ||
         sandboxReadiness.offline_backend_count > 0 ||
         sandboxReadiness.degraded_backend_count > 0;
+
+      if (sharedSandboxFollowUp) {
+        return `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；${sharedSandboxFollowUp.detail}`;
+      }
 
       return hasLiveReadinessPressure
         ? `当前 reason code 里已有 ${runtimeFailedCount} 条 Runtime failed；结合 live sandbox readiness：${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""}，要优先判断是不是强隔离 backend / capability 仍 blocked。`
@@ -1717,6 +1723,7 @@ export function buildPublishedInvocationFailureMessageDiagnosis({
       };
     }
 
+    const sharedSandboxFollowUp = buildSandboxReadinessSystemFollowUp(sandboxReadiness);
     const hasLiveReadinessPressure =
       listSandboxBlockedClasses(sandboxReadiness).length > 0 ||
       sandboxReadiness.offline_backend_count > 0 ||
@@ -1727,7 +1734,9 @@ export function buildPublishedInvocationFailureMessageDiagnosis({
     return hasLiveReadinessPressure
       ? {
           headline: "当前 live sandbox readiness 仍在报警。",
-          detail: `${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""} 这说明这条 failure 不能只按历史 message 处理，先确认强隔离 backend / capability 是否仍 blocked。`
+          detail: sharedSandboxFollowUp
+            ? `${sharedSandboxFollowUp.detail} 这说明这条 failure 不能只按历史 message 处理。`
+            : `${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""} 这说明这条 failure 不能只按历史 message 处理，先确认强隔离 backend / capability 是否仍 blocked。`
         }
       : {
           headline: "当前 live sandbox readiness 已恢复。",

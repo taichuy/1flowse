@@ -4,6 +4,10 @@ import Link from "next/link";
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { RunExecutionView } from "@/lib/get-run-views";
 import {
   buildOperatorRunDetailCandidate,
@@ -11,6 +15,10 @@ import {
   buildOperatorRunSnapshotMetaRows,
   buildOperatorFollowUpSurfaceCopy
 } from "@/lib/operator-follow-up-presenters";
+import {
+  buildCallbackWaitingAutomationFollowUpCandidate,
+  buildSandboxReadinessFollowUpCandidate
+} from "@/lib/system-overview-follow-up-presenters";
 import {
   buildExecutionFocusSectionSurfaceCopy,
   formatExecutionFocusArtifactSummary,
@@ -24,10 +32,14 @@ import {
 
 type RunDiagnosticsOperatorFollowUpCardProps = {
   executionView: RunExecutionView;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function RunDiagnosticsOperatorFollowUpCard({
-  executionView
+  executionView,
+  callbackWaitingAutomation,
+  sandboxReadiness = null
 }: RunDiagnosticsOperatorFollowUpCardProps) {
   const snapshot = executionView.run_snapshot;
   const followUp = executionView.run_follow_up;
@@ -53,29 +65,53 @@ export function RunDiagnosticsOperatorFollowUpCard({
     executionView.execution_focus_explanation?.primary_signal?.trim() ||
     followUp?.explanation?.primary_signal?.trim() ||
     null;
+  const callbackFollowUp = snapshot?.callback_waiting_explanation?.follow_up ?? null;
+  const executionFollowUp =
+    snapshot?.execution_focus_explanation?.follow_up ??
+    executionView.execution_focus_explanation?.follow_up ??
+    null;
   const recommendedNextStep = buildOperatorRecommendedNextStep({
-    callback: buildOperatorRunDetailCandidate({
-      active: hasCallbackWaitingFacts(snapshot),
-      label: "observe waiting",
-      detail:
-        snapshot?.callback_waiting_explanation?.follow_up ??
-        executionView.execution_focus_explanation?.follow_up ??
-        null,
-      runId: executionView.run_id,
-      fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
-      surfaceCopy
-    }),
-    execution: buildOperatorRunDetailCandidate({
-      active: hasExecutionFacts(snapshot, executionView),
-      label: "inspect execution focus",
-      detail:
-        snapshot?.execution_focus_explanation?.follow_up ??
-        executionView.execution_focus_explanation?.follow_up ??
-        null,
-      runId: executionView.run_id,
-      fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
-      surfaceCopy
-    }),
+    callback:
+      callbackFollowUp?.trim()
+        ? buildOperatorRunDetailCandidate({
+            active: hasCallbackWaitingFacts(snapshot),
+            label: "observe waiting",
+            detail: callbackFollowUp,
+            runId: executionView.run_id,
+            fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
+            surfaceCopy
+          })
+        : buildCallbackWaitingAutomationFollowUpCandidate(
+              callbackWaitingAutomation,
+              "callback recovery"
+            ) ??
+          buildOperatorRunDetailCandidate({
+            active: hasCallbackWaitingFacts(snapshot),
+            label: "observe waiting",
+            detail: callbackFollowUp,
+            runId: executionView.run_id,
+            fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
+            surfaceCopy
+          }),
+    execution:
+      executionFollowUp?.trim()
+        ? buildOperatorRunDetailCandidate({
+            active: hasExecutionFacts(snapshot, executionView),
+            label: "inspect execution focus",
+            detail: executionFollowUp,
+            runId: executionView.run_id,
+            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+            surfaceCopy
+          })
+        : buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness") ??
+          buildOperatorRunDetailCandidate({
+            active: hasExecutionFacts(snapshot, executionView),
+            label: "inspect execution focus",
+            detail: executionFollowUp,
+            runId: executionView.run_id,
+            fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+            surfaceCopy
+          }),
     operatorFollowUp: followUp?.explanation?.follow_up ?? null,
     operatorLabel: "operator follow-up"
   });

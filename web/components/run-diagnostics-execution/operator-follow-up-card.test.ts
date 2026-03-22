@@ -6,6 +6,63 @@ import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics
 import type { RunExecutionView } from "@/lib/get-run-views";
 import { buildRunDiagnosticsOperatorFollowUpSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
+function buildCallbackWaitingAutomation() {
+  return {
+    status: "healthy",
+    scheduler_required: true,
+    detail: "callback automation healthy",
+    scheduler_health_status: "healthy",
+    scheduler_health_detail: "scheduler is healthy",
+    affected_run_count: 0,
+    affected_workflow_count: 0,
+    primary_blocker_kind: null,
+    recommended_action: null,
+    steps: []
+  };
+}
+
+function buildSandboxReadiness() {
+  return {
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    degraded_backend_count: 0,
+    offline_backend_count: 1,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: false,
+        backend_ids: [],
+        supported_languages: [],
+        supported_profiles: [],
+        supported_dependency_modes: [],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason: "No sandbox backend is currently enabled."
+      }
+    ],
+    supported_languages: [],
+    supported_profiles: [],
+    supported_dependency_modes: [],
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "open_workflow_library",
+      label: "Open workflow library",
+      href: "/workflows?execution=sandbox",
+      entry_key: "workflow_library"
+    }
+  };
+}
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
@@ -246,7 +303,9 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
     const surfaceCopy = buildRunDiagnosticsOperatorFollowUpSurfaceCopy();
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsOperatorFollowUpCard, {
-        executionView: buildExecutionView()
+        executionView: buildExecutionView(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: null
       })
     );
 
@@ -272,10 +331,112 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
 
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsOperatorFollowUpCard, {
-        executionView
+        executionView,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: null
       })
     );
 
     expect(html).toBe("");
+  });
+
+  it("在 execution follow-up 缺失时回退到 shared sandbox readiness contract", () => {
+    const executionView = buildExecutionView();
+    if (executionView.run_snapshot) {
+      executionView.run_snapshot.callback_waiting_explanation = null;
+      executionView.run_snapshot.callback_waiting_lifecycle = null;
+      executionView.run_snapshot.waiting_reason = null;
+      executionView.run_snapshot.scheduled_resume_delay_seconds = null;
+      executionView.run_snapshot.scheduled_resume_due_at = null;
+      executionView.run_snapshot.scheduled_resume_scheduled_at = null;
+      executionView.run_snapshot.execution_focus_explanation = {
+        primary_signal: "当前 execution focus 停在 sandbox_code。",
+        follow_up: null
+      };
+    }
+    executionView.execution_focus_explanation = {
+      primary_signal: "顶层 execution focus 仍在等待 sandbox callback。",
+      follow_up: null
+    };
+    executionView.run_follow_up = {
+      ...(executionView.run_follow_up ?? {
+        affected_run_count: 0,
+        sampled_run_count: 0,
+        waiting_run_count: 0,
+        running_run_count: 0,
+        succeeded_run_count: 0,
+        failed_run_count: 0,
+        unknown_run_count: 0,
+        sampled_runs: []
+      }),
+      explanation: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDiagnosticsOperatorFollowUpCard, {
+        executionView,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("sandbox readiness");
+    expect(html).toContain("当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow");
+    expect(html).toContain('href="/workflows?execution=sandbox"');
+    expect(html).toContain("Open workflow library");
+  });
+
+  it("在 callback follow-up 缺失时回退到 shared callback recovery contract", () => {
+    const executionView = buildExecutionView();
+    if (executionView.run_snapshot) {
+      executionView.run_snapshot.callback_waiting_explanation = {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: null
+      };
+    }
+    executionView.run_follow_up = {
+      ...(executionView.run_follow_up ?? {
+        affected_run_count: 0,
+        sampled_run_count: 0,
+        waiting_run_count: 0,
+        running_run_count: 0,
+        succeeded_run_count: 0,
+        failed_run_count: 0,
+        unknown_run_count: 0,
+        sampled_runs: []
+      }),
+      explanation: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDiagnosticsOperatorFollowUpCard, {
+        executionView,
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "run_library"
+          },
+          steps: []
+        },
+        sandboxReadiness: null
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("callback recovery");
+    expect(html).toContain("当前 callback recovery 仍影响 3 个 run / 2 个 workflow");
+    expect(html).toContain('href="/runs?focus=callback-waiting"');
+    expect(html).toContain("Open run library");
   });
 });

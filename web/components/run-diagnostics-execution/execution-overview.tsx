@@ -98,7 +98,11 @@ export function RunDiagnosticsExecutionOverview({
         </div>
       ) : null}
 
-      <RunDiagnosticsOperatorFollowUpCard executionView={executionView} />
+      <RunDiagnosticsOperatorFollowUpCard
+        executionView={executionView}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
+      />
 
       <MetricChipRow
         title="Ticket statuses"
