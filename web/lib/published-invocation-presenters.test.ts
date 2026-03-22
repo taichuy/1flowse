@@ -1562,6 +1562,142 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("在 approval/input wait 的 waiting overview 里优先复用 failed notification backlog CTA", () => {
+    expect(
+      buildPublishedInvocationWaitingOverview({
+        summary: {
+          total_count: 2,
+          succeeded_count: 0,
+          failed_count: 0,
+          rejected_count: 0,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0,
+          last_run_status: "waiting_input",
+          approval_ticket_count: 1,
+          pending_approval_count: 0,
+          approved_approval_count: 0,
+          rejected_approval_count: 1,
+          expired_approval_count: 0,
+          pending_notification_count: 1,
+          delivered_notification_count: 0,
+          failed_notification_count: 2
+        },
+        runStatusCounts: [{ value: "waiting_input", count: 1 }],
+        reasonCounts: []
+      })
+    ).toMatchObject({
+      waitingInputCount: 1,
+      detail: expect.stringContaining(
+        "2 failed notifications still need delivery retry in sensitive access inbox"
+      ),
+      followUpHref: "/sensitive-access?notification_status=failed",
+      followUpHrefLabel: "open approval inbox slice"
+    });
+  });
+
+  it("在 approval/input wait 的 waiting overview 里回退到 pending notification backlog CTA", () => {
+    expect(
+      buildPublishedInvocationWaitingOverview({
+        summary: {
+          total_count: 2,
+          succeeded_count: 0,
+          failed_count: 0,
+          rejected_count: 0,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0,
+          last_run_status: "waiting_input",
+          approval_ticket_count: 0,
+          pending_approval_count: 0,
+          approved_approval_count: 0,
+          rejected_approval_count: 0,
+          expired_approval_count: 0,
+          pending_notification_count: 2,
+          delivered_notification_count: 0,
+          failed_notification_count: 0
+        },
+        runStatusCounts: [{ value: "waiting_input", count: 1 }],
+        reasonCounts: []
+      })
+    ).toMatchObject({
+      waitingInputCount: 1,
+      detail: expect.stringContaining(
+        "2 pending notifications are still waiting for delivery confirmation in sensitive access inbox"
+      ),
+      followUpHref: "/sensitive-access?notification_status=pending",
+      followUpHrefLabel: "open approval inbox slice"
+    });
+  });
+
+  it("在 sync waiting rejected 的 waiting overview 里回退到 rejected approval backlog CTA", () => {
+    expect(
+      buildPublishedInvocationWaitingOverview({
+        summary: {
+          total_count: 1,
+          succeeded_count: 0,
+          failed_count: 1,
+          rejected_count: 0,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0,
+          last_run_status: "failed",
+          approval_ticket_count: 1,
+          pending_approval_count: 0,
+          approved_approval_count: 0,
+          rejected_approval_count: 1,
+          expired_approval_count: 0,
+          pending_notification_count: 0,
+          delivered_notification_count: 0,
+          failed_notification_count: 0
+        },
+        runStatusCounts: [],
+        reasonCounts: [{ value: "sync_waiting_unsupported", count: 1 }]
+      })
+    ).toMatchObject({
+      syncWaitingRejectedCount: 1,
+      detail: expect.stringContaining(
+        "1 rejected approval ticket still need operator review in sensitive access inbox before retrying publish"
+      ),
+      followUpHref: "/sensitive-access?status=rejected",
+      followUpHrefLabel: "open approval inbox slice"
+    });
+  });
+
+  it("在 sync waiting rejected 的 waiting overview 里回退到 expired approval backlog CTA", () => {
+    expect(
+      buildPublishedInvocationWaitingOverview({
+        summary: {
+          total_count: 1,
+          succeeded_count: 0,
+          failed_count: 1,
+          rejected_count: 0,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0,
+          last_run_status: "failed",
+          approval_ticket_count: 1,
+          pending_approval_count: 0,
+          approved_approval_count: 0,
+          rejected_approval_count: 0,
+          expired_approval_count: 1,
+          pending_notification_count: 0,
+          delivered_notification_count: 0,
+          failed_notification_count: 0
+        },
+        runStatusCounts: [],
+        reasonCounts: [{ value: "sync_waiting_unsupported", count: 1 }]
+      })
+    ).toMatchObject({
+      syncWaitingRejectedCount: 1,
+      detail: expect.stringContaining(
+        "1 expired approval ticket still need renewal in sensitive access inbox before retrying publish"
+      ),
+      followUpHref: "/sensitive-access?status=expired",
+      followUpHrefLabel: "open approval inbox slice"
+    });
+  });
+
   it("为 invocation detail unavailable 提供共享 surface copy", () => {
     expect(buildPublishedInvocationUnavailableDetailSurfaceCopy()).toEqual({
       title: "Invocation detail unavailable",

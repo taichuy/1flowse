@@ -112,6 +112,10 @@ type PublishedInvocationDiagnosticFollowUpSurface = {
   hrefLabel: string | null;
 };
 
+type PublishedInvocationSensitiveAccessPrimaryBacklog = ReturnType<
+  typeof resolveSensitiveAccessPrimaryBacklog
+>;
+
 type PublishedInvocationRunFollowUpSummary = NonNullable<PublishedEndpointInvocationItem["run_follow_up"]>;
 type PublishedInvocationRunFollowUpSample =
   PublishedInvocationRunFollowUpSummary["sampled_runs"][number];
@@ -2879,16 +2883,24 @@ export function buildPublishedInvocationWaitingOverview({
   const activeWaitingCount = generalWaitingCount + waitingInputCount + callbackWaitingCount;
   const syncWaitingRejectedCount = getFacetCount(reasonCounts, "sync_waiting_unsupported");
   const lastRunStatusLabel = formatPublishedInvocationOptionalRunStatus(summary?.last_run_status, null);
-  const pendingApprovalCount = summary?.pending_approval_count ?? 0;
+  const primarySensitiveAccessBacklog = resolvePublishedInvocationSensitiveAccessPrimaryBacklog(summary);
   const callbackFollowUpSurface = resolvePreferredSystemOverviewFollowUpSurface({
     callbackActive: callbackWaitingCount > 0,
     callbackWaitingAutomation
   });
-  const approvalInboxLabel = buildSensitiveAccessTimelineSurfaceCopy({
+  const sensitiveAccessInboxLabel = buildSensitiveAccessTimelineSurfaceCopy({
     surface: "publish_invocation"
   }).inboxLinkLabel;
-  const approvalFollowUpHref =
-    pendingApprovalCount > 0 ? buildSensitiveAccessInboxHref({ status: "pending" }) : null;
+  const sensitiveAccessFollowUpHref = primarySensitiveAccessBacklog?.href ?? null;
+  const sensitiveAccessFollowUpDetail = formatPublishedInvocationWaitingSensitiveAccessBacklogDetail(
+    primarySensitiveAccessBacklog
+  );
+  const followUpHref = callbackFollowUpSurface?.href ?? sensitiveAccessFollowUpHref;
+  const followUpHrefLabel = callbackFollowUpSurface?.href
+    ? callbackFollowUpSurface.hrefLabel
+    : sensitiveAccessFollowUpHref
+      ? sensitiveAccessInboxLabel
+      : null;
 
   const chips: string[] = [];
   if (activeWaitingCount > 0) {
@@ -2918,9 +2930,7 @@ export function buildPublishedInvocationWaitingOverview({
           ? joinFragments(
               [
                 `${formatCountLabel(waitingInputCount, "run")} are paused on approval or operator input`,
-                pendingApprovalCount > 0
-                  ? `${formatCountLabel(pendingApprovalCount, "approval ticket")} are still pending in sensitive access inbox`
-                  : null
+                sensitiveAccessFollowUpDetail
               ].filter((value): value is string => Boolean(value))
             )
           : null,
@@ -2946,16 +2956,8 @@ export function buildPublishedInvocationWaitingOverview({
       headline: `${formatCountLabel(activeWaitingCount, "publish invocation")} are still attached to the durable runtime waiting path.`,
       detail: detailParts.join(" "),
       chips,
-      ...(callbackFollowUpSurface?.href ?? approvalFollowUpHref
-        ? { followUpHref: callbackFollowUpSurface?.href ?? approvalFollowUpHref }
-        : {}),
-      ...(callbackFollowUpSurface?.hrefLabel ?? approvalInboxLabel
-        ? {
-            followUpHrefLabel:
-              callbackFollowUpSurface?.hrefLabel ??
-              (approvalFollowUpHref ? approvalInboxLabel : null)
-          }
-        : {})
+      ...(followUpHref ? { followUpHref } : {}),
+      ...(followUpHrefLabel ? { followUpHrefLabel } : {})
     };
   }
 
@@ -2966,11 +2968,18 @@ export function buildPublishedInvocationWaitingOverview({
       waitingInputCount,
       generalWaitingCount,
       syncWaitingRejectedCount,
-    lastRunStatusLabel,
-    headline: `No active waiting runs remain, but ${formatCountLabel(syncWaitingRejectedCount, "sync publish invocation")} hit the waiting boundary.`,
-    detail:
-      "These requests reached a workflow that wanted to pause, but the synchronous publish surface could only reject the call. Prefer async routes or open a recent invocation detail to inspect the waiting lifecycle.",
-    chips
+      lastRunStatusLabel,
+      headline: `No active waiting runs remain, but ${formatCountLabel(syncWaitingRejectedCount, "sync publish invocation")} hit the waiting boundary.`,
+      detail: joinFragments(
+        [
+          "These requests reached a workflow that wanted to pause, but the synchronous publish surface could only reject the call. Prefer async routes or open a recent invocation detail to inspect the waiting lifecycle.",
+          sensitiveAccessFollowUpDetail
+        ].filter((value): value is string => Boolean(value))
+      ) ??
+        "These requests reached a workflow that wanted to pause, but the synchronous publish surface could only reject the call. Prefer async routes or open a recent invocation detail to inspect the waiting lifecycle.",
+      chips,
+      ...(sensitiveAccessFollowUpHref ? { followUpHref: sensitiveAccessFollowUpHref } : {}),
+      ...(sensitiveAccessFollowUpHref ? { followUpHrefLabel: sensitiveAccessInboxLabel } : {})
     };
   }
 
@@ -3090,6 +3099,47 @@ function shouldPreferPublishedInvocationSensitiveAccessFollowUp({
   );
 }
 
+function resolvePublishedInvocationSensitiveAccessPrimaryBacklog(
+  summary?: PublishedInvocationSensitiveAccessSummaryLike | null
+): PublishedInvocationSensitiveAccessPrimaryBacklog {
+  if (!summary) {
+    return null;
+  }
+
+  return resolveSensitiveAccessPrimaryBacklog({
+    pendingApprovalCount: summary.pending_approval_count,
+    failedNotificationCount: summary.failed_notification_count,
+    pendingNotificationCount: summary.pending_notification_count,
+    rejectedApprovalCount: summary.rejected_approval_count,
+    expiredApprovalCount: summary.expired_approval_count
+  });
+}
+
+function formatPublishedInvocationWaitingSensitiveAccessBacklogDetail(
+  primaryBacklog: PublishedInvocationSensitiveAccessPrimaryBacklog
+) {
+  if (!primaryBacklog) {
+    return null;
+  }
+
+  switch (primaryBacklog.kind) {
+    case "pending_approval":
+      return `${formatCountLabel(primaryBacklog.count, "approval ticket")} are still pending in sensitive access inbox`;
+    case "failed_notification":
+      return `${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)} still need delivery retry in sensitive access inbox`;
+    case "pending_notification":
+      return `${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)} are still waiting for delivery confirmation in sensitive access inbox`;
+    case "rejected_approval":
+      return `${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)} still need operator review in sensitive access inbox before retrying publish`;
+    case "expired_approval":
+      return `${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)} still need renewal in sensitive access inbox before retrying publish`;
+    case "waiting_resume":
+      return `${formatCountLabel(primaryBacklog.count, primaryBacklog.countLabel)} still need resume follow-up in sensitive access inbox`;
+    default:
+      return null;
+  }
+}
+
 function buildPublishedInvocationSensitiveAccessFollowUpSurface(
   summary?: PublishedInvocationSensitiveAccessSummaryLike | null
 ): PublishedInvocationDiagnosticFollowUpSurface | null {
@@ -3100,13 +3150,7 @@ function buildPublishedInvocationSensitiveAccessFollowUpSurface(
   const inboxLabel = buildSensitiveAccessTimelineSurfaceCopy({
     surface: "publish_invocation"
   }).inboxLinkLabel;
-  const primaryBacklog = resolveSensitiveAccessPrimaryBacklog({
-    pendingApprovalCount: summary.pending_approval_count,
-    failedNotificationCount: summary.failed_notification_count,
-    pendingNotificationCount: summary.pending_notification_count,
-    rejectedApprovalCount: summary.rejected_approval_count,
-    expiredApprovalCount: summary.expired_approval_count
-  });
+  const primaryBacklog = resolvePublishedInvocationSensitiveAccessPrimaryBacklog(summary);
   const buildSurface = ({
     detail,
     href
