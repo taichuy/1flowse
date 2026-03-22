@@ -240,4 +240,70 @@ describe("run actions", () => {
       workflowIds: ["wf-1"]
     });
   });
+
+  it("手动恢复缺少 outcome explanation 时仍保留 canonical run follow-up", async () => {
+    vi.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        run: {
+          workflow_id: "wf-1",
+          status: "running",
+          current_node_id: "review"
+        },
+        run_snapshot: {
+          workflow_id: "wf-1",
+          status: "running",
+          current_node_id: "review",
+          waiting_reason: null
+        },
+        callback_blocker_delta: {
+          summary: "阻塞变化：external callback blocker 已清除。"
+        },
+        run_follow_up: {
+          affected_run_count: 1,
+          sampled_run_count: 1,
+          waiting_run_count: 0,
+          running_run_count: 1,
+          succeeded_run_count: 0,
+          failed_run_count: 0,
+          unknown_run_count: 0,
+          explanation: {
+            primary_signal: "本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。",
+            follow_up: "样本 run 已切到 review，下一步继续确认执行是否离开恢复事件。"
+          },
+          sampled_runs: [
+            {
+              run_id: "run-1",
+              snapshot: {
+                workflow_id: "wf-1",
+                status: "running",
+                current_node_id: "review",
+                waiting_reason: null
+              }
+            }
+          ]
+        }
+      })
+    );
+
+    const formData = new FormData();
+    formData.set("runId", "run-1");
+    formData.set("nodeRunId", "node-run-1");
+
+    const result = await resumeRun(
+      { status: "idle", message: "", runId: "run-1" },
+      formData
+    );
+
+    expect(result).toMatchObject({
+      status: "success",
+      runId: "run-1"
+    });
+    expect(result.message).toContain("已发起恢复尝试，run 已重新进入 running。");
+    expect(result.message).toContain("阻塞变化：external callback blocker 已清除。");
+    expect(result.message).toContain("本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。");
+    expect(result.message).toContain("样本 run 已切到 review，下一步继续确认执行是否离开恢复事件。");
+    expect(
+      (result.message.match(/阻塞变化：external callback blocker 已清除。/g) ?? []).length
+    ).toBe(1);
+  });
 });

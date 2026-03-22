@@ -619,4 +619,95 @@ describe("sensitive access actions", () => {
     );
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("批量审批缺少 outcome explanation 时仍保留 canonical run follow-up", async () => {
+    vi.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        requested_count: 1,
+        decided_count: 1,
+        skipped_count: 0,
+        callback_blocker_delta: {
+          sampled_scope_count: 1,
+          changed_scope_count: 1,
+          cleared_scope_count: 1,
+          fully_cleared_scope_count: 1,
+          still_blocked_scope_count: 0,
+          summary: "已回读 1 个 blocker 样本；发生变化 1 个。"
+        },
+        decided_items: [
+          {
+            id: "ticket-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1"
+          }
+        ],
+        skipped_reason_summary: [],
+        run_follow_up: {
+          affected_run_count: 1,
+          sampled_run_count: 1,
+          waiting_run_count: 1,
+          running_run_count: 0,
+          succeeded_run_count: 0,
+          failed_run_count: 0,
+          unknown_run_count: 0,
+          explanation: {
+            primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+            follow_up: "run run-1：当前 run 状态：waiting。 当前节点：review。 重点信号：等待原因：waiting approval"
+          },
+          sampled_runs: [
+            {
+              run_id: "run-1",
+              snapshot: {
+                workflow_id: "wf-1",
+                status: "waiting",
+                current_node_id: "review",
+                execution_focus_explanation: {
+                  primary_signal: "等待原因：waiting approval",
+                  follow_up: "继续观察 runtime 是否恢复。"
+                }
+              }
+            }
+          ]
+        }
+      })
+    );
+
+    const result = await bulkDecideSensitiveAccessApprovalTickets({
+      tickets: [
+        {
+          ticketId: "ticket-1",
+          runId: "run-1",
+          nodeRunId: "node-run-1"
+        }
+      ],
+      status: "approved",
+      approvedBy: "operator-1"
+    });
+
+    expect(result).toMatchObject({
+      action: "approved",
+      status: "success",
+      requestedCount: 1,
+      updatedCount: 1,
+      skippedCount: 0,
+      blockerSampleCount: 1,
+      blockerChangedCount: 1,
+      blockerClearedCount: 1,
+      blockerFullyClearedCount: 1,
+      blockerStillBlockedCount: 0,
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1
+    });
+    expect(result.message).toContain("批量批准 1 条票据，跳过 0 条。");
+    expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
+    expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
+    expect(result.message).toContain(
+      "run run-1：当前 run 状态：waiting。 当前节点：review。 重点信号：等待原因：waiting approval"
+    );
+    expect(result.message).not.toContain("已回读 1 个样本，当前状态分布：waiting 1。");
+    expect(
+      (result.message.match(/已回读 1 个 blocker 样本；发生变化 1 个。/g) ?? []).length
+    ).toBe(1);
+  });
 });

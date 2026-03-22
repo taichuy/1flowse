@@ -8,7 +8,9 @@ import type {
 } from "@/lib/get-sensitive-access";
 import {
   formatBulkOperatorOutcomeExplanationMessage,
+  formatBulkApprovalDecisionBaseMessage,
   formatBulkApprovalDecisionResultMessage,
+  formatBulkNotificationRetryBaseMessage,
   formatBulkNotificationRetryResultMessage,
   formatOperatorOutcomeExplanationMessage,
   formatApprovalDecisionResultMessage,
@@ -530,15 +532,22 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
         blockerDeltaSummary: blockerDelta?.summary,
         affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns,
-        fallback: formatBulkApprovalDecisionResultMessage({
-          decision: input.status,
-          updatedCount,
-          skippedCount,
-          skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
-          affectedRunCount: followUpSummary.affectedRunCount,
-          sampledRuns,
-          blockerDeltaSummary: blockerDelta?.summary
-        })
+        fallback: body?.run_follow_up?.explanation
+          ? formatBulkApprovalDecisionBaseMessage({
+              decision: input.status,
+              updatedCount,
+              skippedCount,
+              skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary)
+            })
+          : formatBulkApprovalDecisionResultMessage({
+              decision: input.status,
+              updatedCount,
+              skippedCount,
+              skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
+              affectedRunCount: followUpSummary.affectedRunCount,
+              sampledRuns,
+              blockerDeltaSummary: blockerDelta?.summary
+            })
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
@@ -647,14 +656,20 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
         blockerDeltaSummary: blockerDelta?.summary,
         affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns,
-        fallback: formatBulkNotificationRetryResultMessage({
-          updatedCount,
-          skippedCount,
-          skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
-          affectedRunCount: followUpSummary.affectedRunCount,
-          sampledRuns,
-          blockerDeltaSummary: blockerDelta?.summary
-        })
+        fallback: body?.run_follow_up?.explanation
+          ? formatBulkNotificationRetryBaseMessage({
+              updatedCount,
+              skippedCount,
+              skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary)
+            })
+          : formatBulkNotificationRetryResultMessage({
+              updatedCount,
+              skippedCount,
+              skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
+              affectedRunCount: followUpSummary.affectedRunCount,
+              sampledRuns,
+              blockerDeltaSummary: blockerDelta?.summary
+            })
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,

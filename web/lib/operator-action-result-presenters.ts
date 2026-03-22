@@ -97,6 +97,23 @@ function joinParts(parts: Array<string | null | undefined>) {
   return parts.filter((part): part is string => Boolean(part && part.trim())).join(" ");
 }
 
+function appendUniqueParts(
+  base: string | null | undefined,
+  extras: Array<string | null | undefined>
+) {
+  const normalizedBase = base?.trim() || null;
+  const normalizedExtras = extras.filter((extra): extra is string => {
+    const normalizedExtra = extra?.trim();
+    if (!normalizedExtra) {
+      return false;
+    }
+
+    return !(normalizedBase && normalizedBase.includes(normalizedExtra));
+  });
+
+  return joinParts([normalizedBase, ...normalizedExtras]);
+}
+
 function formatRunSnapshotEvidenceSummary({
   executionFocusNodeName,
   executionFocusNodeId,
@@ -277,21 +294,16 @@ export function formatOperatorOutcomeExplanationMessage(input: {
   const followUp = input.explanation?.follow_up?.trim() || null;
   const runFollowUpPrimarySignal = input.runFollowUpExplanation?.primary_signal?.trim() || null;
   const runFollowUpFollowUp = input.runFollowUpExplanation?.follow_up?.trim() || null;
-  if (!primarySignal && !followUp) {
-    return input.fallback;
-  }
-
   const runFollowUpSummary =
     joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ||
     formatRunSnapshotSummary(input.runSnapshot ?? {});
+  const explanationSummary = joinParts([primarySignal, followUp]);
 
   return (
-    joinParts([
-      primarySignal,
-      followUp,
+    appendUniqueParts(explanationSummary || input.fallback, [
       input.blockerDeltaSummary,
       runFollowUpSummary
-    ]) ?? input.fallback
+    ]) || input.fallback
   );
 }
 
@@ -307,24 +319,19 @@ export function formatBulkOperatorOutcomeExplanationMessage(input: {
   const followUp = input.explanation?.follow_up?.trim() || null;
   const runFollowUpPrimarySignal = input.runFollowUpExplanation?.primary_signal?.trim() || null;
   const runFollowUpFollowUp = input.runFollowUpExplanation?.follow_up?.trim() || null;
-  if (!primarySignal && !followUp) {
-    return input.fallback;
-  }
-
   const runFollowUpSummary =
     joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ||
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
     });
+  const explanationSummary = joinParts([primarySignal, followUp]);
 
   return (
-    joinParts([
-      primarySignal,
-      followUp,
+    appendUniqueParts(explanationSummary || input.fallback, [
       input.blockerDeltaSummary,
       runFollowUpSummary
-    ]) ?? input.fallback
+    ]) || input.fallback
   );
 }
 
@@ -565,15 +572,27 @@ export function formatBulkApprovalDecisionResultMessage(input: {
   sampledRuns: BulkRunSnapshotSample[];
   blockerDeltaSummary?: string | null;
 }) {
-  const actionLabel = input.decision === "approved" ? "批准" : "拒绝";
+  const baseMessage = formatBulkApprovalDecisionBaseMessage(input);
   return joinParts([
-    `批量${actionLabel} ${input.updatedCount} 条票据，跳过 ${input.skippedCount} 条。`,
-    input.skippedSummary ?? null,
+    baseMessage,
     input.blockerDeltaSummary,
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
     })
+  ]);
+}
+
+export function formatBulkApprovalDecisionBaseMessage(input: {
+  decision: "approved" | "rejected";
+  updatedCount: number;
+  skippedCount: number;
+  skippedSummary?: string | null;
+}) {
+  const actionLabel = input.decision === "approved" ? "批准" : "拒绝";
+  return joinParts([
+    `批量${actionLabel} ${input.updatedCount} 条票据，跳过 ${input.skippedCount} 条。`,
+    input.skippedSummary ?? null
   ]);
 }
 
@@ -585,13 +604,24 @@ export function formatBulkNotificationRetryResultMessage(input: {
   sampledRuns: BulkRunSnapshotSample[];
   blockerDeltaSummary?: string | null;
 }) {
+  const baseMessage = formatBulkNotificationRetryBaseMessage(input);
   return joinParts([
-    `批量重试 ${input.updatedCount} 条通知，跳过 ${input.skippedCount} 条。`,
-    input.skippedSummary ?? null,
+    baseMessage,
     input.blockerDeltaSummary,
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
     })
+  ]);
+}
+
+export function formatBulkNotificationRetryBaseMessage(input: {
+  updatedCount: number;
+  skippedCount: number;
+  skippedSummary?: string | null;
+}) {
+  return joinParts([
+    `批量重试 ${input.updatedCount} 条通知，跳过 ${input.skippedCount} 条。`,
+    input.skippedSummary ?? null
   ]);
 }
