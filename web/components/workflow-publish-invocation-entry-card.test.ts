@@ -337,6 +337,69 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(html).toContain("Handle approval here first");
   });
 
+  it("prefers sampled approval inbox ids for top-level blocker CTAs when only generic waiting scope exists", () => {
+    const item = buildInvocationItem();
+    item.run_waiting_lifecycle = {
+      node_run_id: "node-run-tool-wait",
+      node_status: "waiting_callback",
+      waiting_reason: "callback pending",
+      callback_ticket_count: 1,
+      callback_ticket_status_counts: { pending: 1 },
+      callback_waiting_lifecycle: {
+        wait_cycle_count: 1,
+        issued_ticket_count: 1,
+        expired_ticket_count: 0,
+        consumed_ticket_count: 0,
+        canceled_ticket_count: 0,
+        late_callback_count: 0,
+        resume_schedule_count: 1,
+        max_expired_ticket_count: 0,
+        terminated: false,
+        last_resume_delay_seconds: 45,
+        last_resume_source: "callback_ticket_monitor",
+        last_resume_backoff_attempt: 0
+      },
+      callback_waiting_explanation: {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: "优先处理审批票据，再观察 waiting 节点是否恢复。"
+      },
+      sensitive_access_summary: {
+        request_count: 1,
+        approval_ticket_count: 1,
+        pending_approval_count: 1,
+        approved_approval_count: 0,
+        rejected_approval_count: 0,
+        expired_approval_count: 0,
+        pending_notification_count: 0,
+        delivered_notification_count: 0,
+        failed_notification_count: 0
+      },
+      scheduled_resume_delay_seconds: 45,
+      scheduled_resume_source: "callback_ticket_monitor",
+      scheduled_waiting_status: "waiting_callback",
+      scheduled_resume_scheduled_at: "2026-03-20T10:00:00Z",
+      scheduled_resume_due_at: "2026-03-20T10:00:45Z",
+      scheduled_resume_requeued_at: null,
+      scheduled_resume_requeue_source: null
+    };
+    item.run_follow_up!.sampled_runs[0] = {
+      ...item.run_follow_up!.sampled_runs[0],
+      callback_tickets: [],
+      sensitive_access_entries: [buildSampleApprovalEntry()]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item,
+        detailHref: "/published/invocation-1",
+        detailActive: false
+      })
+    );
+
+    expect(html).toContain("open blocker inbox slice");
+    expect(html.match(/approval_ticket_id=ticket-1/g)?.length ?? 0).toBeGreaterThan(1);
+  });
+
   it("prefers the current run sample and surfaces its execution badges before evidence", () => {
     const item = buildInvocationItem();
     const runFollowUp = item.run_follow_up!;

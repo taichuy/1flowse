@@ -134,9 +134,28 @@ export function WorkflowPublishInvocationDetailPanel({
     callbackTickets,
     sensitiveAccessEntries
   });
-  const recommendedNextStepApprovalInboxHref =
-    approvalInboxHref ??
+  const recommendedNextStepSampleInboxHref = buildPublishedInvocationRunFollowUpSampleInboxHref(
+    recommendedNextStepSample
+  );
+  const recommendedNextStepSampleApprovalInboxHref =
     buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(recommendedNextStepSample);
+  const shouldPreferSampledRecommendedWaitingInboxHref = Boolean(
+    runFollowUp?.recommended_action == null &&
+      recommendedNextStepSampleInboxHref &&
+      recommendedNextStepSampleInboxHref !== approvalInboxHref
+  );
+  const recommendedNextStepWaitingInboxHref = shouldPreferSampledRecommendedWaitingInboxHref
+    ? recommendedNextStepSampleInboxHref
+    : approvalInboxHref;
+  const shouldPreferSampledRecommendedBlockingInboxHref = Boolean(
+    blockingInboxHref &&
+    runFollowUp?.recommended_action == null &&
+      recommendedNextStepSampleApprovalInboxHref &&
+      recommendedNextStepSampleApprovalInboxHref !== blockingInboxHref
+  );
+  const recommendedNextStepBlockingInboxHref = shouldPreferSampledRecommendedBlockingInboxHref
+    ? recommendedNextStepSampleApprovalInboxHref
+    : blockingInboxHref;
   const sharedCallbackWaitingExplanations = runFollowUpSamples
     .filter((sample) => sample.has_callback_waiting_summary)
     .map((sample) => sample.run_snapshot.callbackWaitingExplanation);
@@ -165,8 +184,8 @@ export function WorkflowPublishInvocationDetailPanel({
     executionFocusFollowUp: explicitExecutionFocusFollowUp,
     executionSnapshot: recommendedNextStepSample?.run_snapshot ?? runSnapshot,
     sandboxReadiness,
-    blockingInboxHref,
-    approvalInboxHref: recommendedNextStepApprovalInboxHref
+    blockingInboxHref: recommendedNextStepBlockingInboxHref,
+    approvalInboxHref: recommendedNextStepWaitingInboxHref
   });
   const resolvedNextStepSurface =
     selectedNextStepSurface ??

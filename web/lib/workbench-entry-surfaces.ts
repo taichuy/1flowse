@@ -269,12 +269,14 @@ export function buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
   entryNodeRunId,
   focusNodeName,
   focusInboxHref,
+  focusInboxHrefLabel,
   runId
 }: {
   focusMatchesEntry: boolean;
   entryNodeRunId?: string | null;
   focusNodeName: string;
   focusInboxHref?: string | null;
+  focusInboxHrefLabel?: string | null;
   runId: string;
 }): SensitiveAccessInboxEntryExecutionSurfaceCopy {
   const runDetailLink = buildRequiredOperatorRunDetailLinkSurface({ runId });
@@ -294,7 +296,7 @@ export function buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
     recommendedNextStepHrefLabel: focusMatchesEntry
       ? null
       : focusInboxHref
-        ? "slice to focus node"
+        ? focusInboxHrefLabel?.trim() || "slice to focus node"
         : runDetailLink.label,
     recommendedNextStepFallbackDetail: focusMatchesEntry
       ? "当前票据已命中 canonical blocker；优先处理本条审批，再确认 run 是否继续推进。"

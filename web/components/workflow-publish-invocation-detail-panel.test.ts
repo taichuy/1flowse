@@ -541,6 +541,74 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("优先处理审批票据，再观察 waiting 节点是否恢复。");
   });
 
+  it("prefers sampled approval inbox ids for publish detail CTAs when top-level scope is only generic", () => {
+    const detail = buildDetail();
+    detail.callback_tickets = [];
+    detail.sensitive_access_entries = [];
+    detail.blocking_sensitive_access_entries = [];
+    detail.blocking_node_run_id = "node-run-tool-wait";
+    detail.invocation.run_waiting_lifecycle = {
+      node_run_id: "node-run-tool-wait",
+      node_status: "waiting_callback",
+      waiting_reason: "callback pending",
+      callback_ticket_count: 1,
+      callback_ticket_status_counts: { pending: 1 },
+      callback_waiting_lifecycle: {
+        wait_cycle_count: 1,
+        issued_ticket_count: 1,
+        expired_ticket_count: 0,
+        consumed_ticket_count: 0,
+        canceled_ticket_count: 0,
+        late_callback_count: 0,
+        resume_schedule_count: 1,
+        max_expired_ticket_count: 0,
+        terminated: false,
+        last_resume_delay_seconds: 45,
+        last_resume_source: "callback_ticket_monitor",
+        last_resume_backoff_attempt: 0
+      },
+      callback_waiting_explanation: {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: "优先处理审批票据，再观察 waiting 节点是否恢复。"
+      },
+      sensitive_access_summary: {
+        request_count: 1,
+        approval_ticket_count: 1,
+        pending_approval_count: 1,
+        approved_approval_count: 0,
+        rejected_approval_count: 0,
+        expired_approval_count: 0,
+        pending_notification_count: 0,
+        delivered_notification_count: 0,
+        failed_notification_count: 0
+      },
+      scheduled_resume_delay_seconds: 45,
+      scheduled_resume_source: "callback_ticket_monitor",
+      scheduled_waiting_status: "waiting_callback",
+      scheduled_resume_scheduled_at: "2026-03-20T10:00:00Z",
+      scheduled_resume_due_at: "2026-03-20T10:00:45Z",
+      scheduled_resume_requeued_at: null,
+      scheduled_resume_requeue_source: null
+    };
+    detail.run_follow_up!.sampled_runs[0] = {
+      ...detail.run_follow_up!.sampled_runs[0],
+      callback_tickets: [],
+      sensitive_access_entries: [buildSampleApprovalEntry()]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    expect(html).toContain("open approval inbox slice");
+    expect(html.match(/approval_ticket_id=ticket-1/g)?.length ?? 0).toBeGreaterThan(1);
+  });
+
   it("passes shared callback blocker context into approval timeline lists", () => {
     const detail = buildDetail();
     const initialLength = sensitiveAccessTimelineProps.length;

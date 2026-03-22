@@ -28,6 +28,7 @@ import {
   buildOperatorRunDetailLinkSurface,
   formatOperatorOpenRunLinkLabel
 } from "@/lib/operator-follow-up-presenters";
+import { buildOperatorRunFollowUpSampleInboxContext } from "@/lib/operator-run-follow-up-samples";
 import {
   formatExecutionFocusArtifactSummary,
   formatExecutionFocusFollowUp,
@@ -101,6 +102,22 @@ export function SensitiveAccessInboxEntryCard({
         nodeRunId: executionContext.focusNode.node_run_id
       })
     : null;
+  const sampledFocusInboxContext =
+    executionContext && entry.runFollowUp?.recommendedAction == null
+      ? buildOperatorRunFollowUpSampleInboxContext({
+          runFollowUp: entry.runFollowUp,
+          runId: executionContext.runId
+        })
+      : null;
+  const shouldPreferSampledFocusInboxContext = Boolean(
+    sampledFocusInboxContext && sampledFocusInboxContext.href !== focusInboxHref
+  );
+  const resolvedFocusInboxHref = shouldPreferSampledFocusInboxContext
+    ? sampledFocusInboxContext?.href ?? focusInboxHref
+    : focusInboxHref;
+  const resolvedFocusInboxHrefLabel = shouldPreferSampledFocusInboxContext
+    ? sampledFocusInboxContext?.hrefLabel ?? null
+    : null;
   const displayRunLink = buildOperatorRunDetailLinkSurface({
     runId: displayScope.runId,
     hrefLabel: displayScope.runId
@@ -113,7 +130,8 @@ export function SensitiveAccessInboxEntryCard({
     surfaceCopy: operatorSurfaceCopy
   });
   const focusInboxLink = buildOperatorInboxSliceLinkSurface({
-    href: focusInboxHref,
+    href: resolvedFocusInboxHref,
+    hrefLabel: resolvedFocusInboxHrefLabel,
     surfaceCopy: operatorSurfaceCopy
   });
   const executionSurfaceCopy = executionContext
@@ -121,7 +139,8 @@ export function SensitiveAccessInboxEntryCard({
         focusMatchesEntry: executionContext.focusMatchesEntry,
         entryNodeRunId: executionContext.entryNodeRunId,
         focusNodeName: executionContext.focusNode.node_name,
-        focusInboxHref,
+        focusInboxHref: resolvedFocusInboxHref,
+        focusInboxHrefLabel: resolvedFocusInboxHrefLabel,
         runId: executionContext.runId
       })
     : null;

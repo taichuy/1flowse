@@ -252,6 +252,66 @@ describe("SensitiveAccessInboxEntryCard", () => {
     expect(html).toContain("node_run_id=node-run-focus");
   });
 
+  it("prefers sampled approval inbox ids when the canonical focus CTA only has a broad node slice", () => {
+    const entry = buildEntry();
+    entry.executionContext = {
+      ...entry.executionContext!,
+      focusMatchesEntry: false,
+      entryNodeRunId: "node-run-entry",
+      focusNode: {
+        ...entry.executionContext!.focusNode,
+        node_run_id: "node-run-focus",
+        node_name: "Focus Node"
+      }
+    };
+    entry.runFollowUp = {
+      affectedRunCount: 1,
+      sampledRunCount: 1,
+      waitingRunCount: 1,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      recommendedAction: null,
+      sampledRuns: [
+        {
+          runId: "run-1",
+          snapshot: {
+            status: "waiting",
+            currentNodeId: "focus-node",
+            waitingReason: "approval pending",
+            executionFocusNodeId: "focus-node",
+            executionFocusNodeRunId: "node-run-focus",
+            executionFocusNodeName: "Focus Node"
+          },
+          callbackTickets: [],
+          sensitiveAccessEntries: [
+            {
+              request: {
+                ...entry.request!,
+                id: "request-focus-1",
+                node_run_id: "node-run-focus"
+              },
+              resource: entry.resource!,
+              approval_ticket: {
+                ...entry.ticket,
+                id: "ticket-focus-1",
+                access_request_id: "request-focus-1",
+                node_run_id: "node-run-focus"
+              },
+              notifications: []
+            }
+          ]
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
+
+    expect(html).toContain("open approval inbox slice");
+    expect(html.match(/approval_ticket_id=ticket-focus-1/g)?.length ?? 0).toBeGreaterThan(1);
+  });
+
   it("falls back to canonical scope when the ticket run_id is missing", () => {
     const entry = buildEntry();
     entry.ticket.run_id = null;

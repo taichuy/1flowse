@@ -19,6 +19,7 @@ import {
   buildPublishedInvocationEntryInboxLinkSurface,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
   buildPublishedInvocationWaitingCardSurface,
   listPublishedInvocationEntryMetaRows,
@@ -110,10 +111,6 @@ export function WorkflowPublishInvocationEntryCard({
         blockingSensitiveAccessEntries: []
       })
     : null;
-  const primaryInboxLink = buildPublishedInvocationEntryInboxLinkSurface({
-    blockingInboxHref,
-    waitingInboxHref: inboxHref
-  });
   const runFollowUp = item.run_follow_up;
   const runFollowUpStatusSummary = runFollowUp
     ? formatMetricSummary({
@@ -145,6 +142,30 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpSampleInboxHref = buildPublishedInvocationRunFollowUpSampleInboxHref(
     runFollowUpSample
   );
+  const runFollowUpSampleApprovalInboxHref = buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(
+    runFollowUpSample
+  );
+  const shouldPreferSampledWaitingInboxHref = Boolean(
+    item.run_follow_up?.recommended_action == null &&
+      runFollowUpSampleInboxHref &&
+      runFollowUpSampleInboxHref !== inboxHref
+  );
+  const preferredWaitingInboxHref = shouldPreferSampledWaitingInboxHref
+    ? runFollowUpSampleInboxHref
+    : inboxHref;
+  const shouldPreferSampledBlockingInboxHref = Boolean(
+    blockingInboxHref &&
+    item.run_follow_up?.recommended_action == null &&
+      runFollowUpSampleApprovalInboxHref &&
+      runFollowUpSampleApprovalInboxHref !== blockingInboxHref
+  );
+  const preferredBlockingInboxHref = shouldPreferSampledBlockingInboxHref
+    ? runFollowUpSampleApprovalInboxHref
+    : blockingInboxHref;
+  const primaryInboxLink = buildPublishedInvocationEntryInboxLinkSurface({
+    blockingInboxHref: preferredBlockingInboxHref,
+    waitingInboxHref: preferredWaitingInboxHref
+  });
   const runSnapshot = normalizePublishedInvocationRunSnapshot(item.run_snapshot);
   const runSnapshotReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshot);
   const runFollowUpSampleReadinessNode = runFollowUpSample
@@ -186,8 +207,8 @@ export function WorkflowPublishInvocationEntryCard({
     executionFocusFollowUp,
     executionSnapshot: runFollowUpSample?.run_snapshot ?? runSnapshot,
     sandboxReadiness,
-    blockingInboxHref,
-    approvalInboxHref: inboxHref
+    blockingInboxHref: preferredBlockingInboxHref,
+    approvalInboxHref: preferredWaitingInboxHref
   });
 
   return (
