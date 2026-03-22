@@ -28,6 +28,7 @@ import {
   buildPublishedInvocationRecommendedNextStep,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
   buildPublishedInvocationUnavailableDetailSurfaceCopy,
+  buildPublishedInvocationWaitingOverview,
   buildPublishedInvocationWaitingCardSurface,
   formatPublishedInvocationApiKeyUsageMix,
   formatPublishedInvocationMetricCounts,
@@ -1286,7 +1287,81 @@ describe("published invocation presenters", () => {
       })
     ).toEqual({
       headline: "当前 live sandbox readiness 仍在报警。",
-      detail: expect.stringContaining("优先回到 workflow library 处理强隔离 execution class 与隔离需求")
+      detail: expect.stringContaining("优先回到 workflow library 处理强隔离 execution class 与隔离需求"),
+      href: "/workflows?execution=sandbox",
+      hrefLabel: "Open workflow library"
+    });
+
+    expect(
+      buildPublishedInvocationFailureMessageDiagnosis({
+        message: "callback resume scheduler is degraded",
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "run_library"
+          },
+          steps: []
+        }
+      })
+    ).toEqual({
+      headline: "这条 failure 更像 callback waiting / recovery 链路问题。",
+      detail:
+        "当前 callback recovery 仍影响 3 个 run / 2 个 workflow；scheduler 仍不健康，优先回到 run library 核对 waiting callback runs 与自动 resume 状态。 这说明这条 failure 不能只按历史 message 处理。",
+      href: "/runs?focus=callback-waiting",
+      hrefLabel: "Open run library"
+    });
+  });
+
+  it("在 waiting overview 里复用 shared callback recovery contract", () => {
+    expect(
+      buildPublishedInvocationWaitingOverview({
+        summary: {
+          total_count: 4,
+          succeeded_count: 1,
+          failed_count: 2,
+          rejected_count: 1,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0,
+          last_run_status: "waiting_callback"
+        },
+        runStatusCounts: [{ value: "waiting_callback", count: 2 }],
+        reasonCounts: [],
+        callbackWaitingAutomation: {
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "run_library"
+          },
+          steps: []
+        }
+      })
+    ).toMatchObject({
+      callbackWaitingCount: 2,
+      detail: expect.stringContaining(
+        "当前 callback recovery 仍影响 3 个 run / 2 个 workflow；scheduler 仍不健康，优先回到 run library 核对 waiting callback runs 与自动 resume 状态。"
+      ),
+      followUpHref: "/runs?focus=callback-waiting",
+      followUpHrefLabel: "Open run library"
     });
   });
 

@@ -43,6 +43,7 @@ import {
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
 import {
+  buildCallbackWaitingAutomationSystemFollowUp,
   buildSandboxReadinessSystemFollowUp,
   buildCallbackWaitingAutomationFollowUpCandidate,
   buildSandboxReadinessFollowUpCandidate
@@ -74,6 +75,8 @@ type PublishedInvocationWaitingOverview = {
   headline: string;
   detail: string;
   chips: string[];
+  followUpHref?: string | null;
+  followUpHrefLabel?: string | null;
 };
 
 type PublishedInvocationSensitiveAccessSummary = NonNullable<
@@ -230,6 +233,8 @@ export type PublishedInvocationTrafficTimelineBucketSurface = {
 export type PublishedInvocationFailureMessageDiagnosis = {
   headline: string;
   detail: string;
+  href?: string | null;
+  hrefLabel?: string | null;
 };
 
 export type PublishedInvocationUnavailableDetailSurfaceCopy = {
@@ -349,6 +354,8 @@ export type PublishedInvocationIssueSignalsSurface = {
   description: string;
   insight: string | null;
   chips: string[];
+  followUpHref?: string | null;
+  followUpHrefLabel?: string | null;
 };
 
 export type PublishedInvocationSkillTraceNodeSurface = {
@@ -951,13 +958,17 @@ export function buildPublishedInvocationActivityTrafficMixSurface({
 
 export function buildPublishedInvocationIssueSignalsSurface({
   reasonCounts,
+  runStatusCounts,
   failureReasons,
   sandboxReadiness,
+  callbackWaitingAutomation,
   surfaceCopy = buildPublishedInvocationActivityInsightsSurfaceCopy()
 }: {
   reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
   failureReasons?: PublishedInvocationFailureReasonItem[] | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   surfaceCopy?: PublishedInvocationActivityInsightsSurfaceCopy;
 }): PublishedInvocationIssueSignalsSurface | null {
   const chips = listPublishedInvocationIssueSignalChips(reasonCounts ?? []);
@@ -965,15 +976,26 @@ export function buildPublishedInvocationIssueSignalsSurface({
     return null;
   }
 
+  const followUpSurface = buildPublishedInvocationDiagnosticFollowUpSurface({
+    reasonCounts,
+    runStatusCounts,
+    message: failureReasons?.[0]?.message ?? null,
+    sandboxReadiness,
+    callbackWaitingAutomation
+  });
+
   return {
     title: surfaceCopy.issueSignalsTitle,
     description: surfaceCopy.issueSignalsDescription,
     insight: buildPublishedInvocationFailureReasonInsight({
       reasonCounts,
       failureReasons,
-      sandboxReadiness
+      sandboxReadiness,
+      callbackWaitingAutomation
     }),
-    chips
+    chips,
+    ...(followUpSurface?.href ? { followUpHref: followUpSurface.href } : {}),
+    ...(followUpSurface?.hrefLabel ? { followUpHrefLabel: followUpSurface.hrefLabel } : {})
   };
 }
 
@@ -1095,11 +1117,13 @@ export function buildPublishedInvocationFailureReasonCardSurface({
   item,
   reasonCounts,
   sandboxReadiness,
+  callbackWaitingAutomation,
   surfaceCopy = buildPublishedInvocationActivityDetailsSurfaceCopy()
 }: {
   item: PublishedInvocationFailureReasonItem;
   reasonCounts: PublishedEndpointInvocationFacetItem[];
   sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   surfaceCopy?: PublishedInvocationActivityDetailsSurfaceCopy;
 }): PublishedInvocationFailureReasonCardSurface {
   return {
@@ -1109,7 +1133,8 @@ export function buildPublishedInvocationFailureReasonCardSurface({
     diagnosis: buildPublishedInvocationFailureMessageDiagnosis({
       message: item.message,
       reasonCounts,
-      sandboxReadiness
+      sandboxReadiness,
+      callbackWaitingAutomation
     }),
     lastSeenLabel: formatPublishedInvocationFailureReasonLastSeen(item.last_invoked_at)
   };
@@ -1636,11 +1661,13 @@ export function buildPublishedInvocationUnavailableDetailSurfaceCopy(): Publishe
 export function buildPublishedInvocationFailureReasonInsight({
   reasonCounts,
   failureReasons,
-  sandboxReadiness
+  sandboxReadiness,
+  callbackWaitingAutomation
 }: {
   reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
   failureReasons?: PublishedInvocationFailureReasonItem[] | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 }): string | null {
   const runtimeFailedCount = getFacetCount(reasonCounts, "runtime_failed");
   const rateLimitExceededCount = getFacetCount(reasonCounts, "rate_limit_exceeded");
@@ -1679,7 +1706,16 @@ export function buildPublishedInvocationFailureReasonInsight({
 
   const latestFailure = failureReasons?.[0]?.message?.trim();
   if (latestFailure) {
-    return `最近失败明细集中在：${latestFailure}`;
+    const followUpSurface = buildPublishedInvocationDiagnosticFollowUpSurface({
+      reasonCounts,
+      message: latestFailure,
+      sandboxReadiness,
+      callbackWaitingAutomation
+    });
+
+    return followUpSurface
+      ? `最近失败明细集中在：${latestFailure}；${followUpSurface.detail}`
+      : `最近失败明细集中在：${latestFailure}`;
   }
 
   return null;
@@ -1688,11 +1724,13 @@ export function buildPublishedInvocationFailureReasonInsight({
 export function buildPublishedInvocationFailureMessageDiagnosis({
   message,
   reasonCounts,
-  sandboxReadiness
+  sandboxReadiness,
+  callbackWaitingAutomation
 }: {
   message: string;
   reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 }): PublishedInvocationFailureMessageDiagnosis | null {
   const normalizedMessage = message.toLowerCase();
   const runtimeFailedCount = getFacetCount(reasonCounts, "runtime_failed");
@@ -1708,12 +1746,24 @@ export function buildPublishedInvocationFailureMessageDiagnosis({
     normalizedMessage.includes("unauthor") ||
     normalizedMessage.includes("forbidden") ||
     normalizedMessage.includes("auth");
+  const mentionsCallback = messageMentionsCallbackAutomation(message);
   const mentionsSandbox =
-    normalizedMessage.includes("sandbox") ||
-    normalizedMessage.includes("microvm") ||
-    normalizedMessage.includes("execution class") ||
-    normalizedMessage.includes("backend offline") ||
-    normalizedMessage.includes("tool execution");
+    messageMentionsSandboxExecution(message);
+
+  const sharedCallbackFollowUp = buildCallbackWaitingAutomationSystemFollowUp(
+    callbackWaitingAutomation
+  );
+
+  if (mentionsCallback) {
+    return {
+      headline: "这条 failure 更像 callback waiting / recovery 链路问题。",
+      detail: sharedCallbackFollowUp
+        ? `${sharedCallbackFollowUp.detail} 这说明这条 failure 不能只按历史 message 处理。`
+        : "优先结合 waiting callback runs、callback ticket 和自动 resume 状态，区分 live blockage 与历史故障。",
+      ...(sharedCallbackFollowUp?.href ? { href: sharedCallbackFollowUp.href } : {}),
+      ...(sharedCallbackFollowUp?.hrefLabel ? { hrefLabel: sharedCallbackFollowUp.hrefLabel } : {})
+    };
+  }
 
   if (mentionsSandbox || runtimeFailedCount > 0) {
     if (!sandboxReadiness) {
@@ -1736,7 +1786,9 @@ export function buildPublishedInvocationFailureMessageDiagnosis({
           headline: "当前 live sandbox readiness 仍在报警。",
           detail: sharedSandboxFollowUp
             ? `${sharedSandboxFollowUp.detail} 这说明这条 failure 不能只按历史 message 处理。`
-            : `${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""} 这说明这条 failure 不能只按历史 message 处理，先确认强隔离 backend / capability 是否仍 blocked。`
+            : `${readinessHeadline}${readinessDetail ? ` ${readinessDetail}` : ""} 这说明这条 failure 不能只按历史 message 处理，先确认强隔离 backend / capability 是否仍 blocked。`,
+          ...(sharedSandboxFollowUp?.href ? { href: sharedSandboxFollowUp.href } : {}),
+          ...(sharedSandboxFollowUp?.hrefLabel ? { hrefLabel: sharedSandboxFollowUp.hrefLabel } : {})
         }
       : {
           headline: "当前 live sandbox readiness 已恢复。",
@@ -2560,11 +2612,13 @@ export function formatPublishedInvocationRunStatusMix(
 export function buildPublishedInvocationWaitingOverview({
   summary,
   runStatusCounts,
-  reasonCounts
+  reasonCounts,
+  callbackWaitingAutomation
 }: {
   summary?: PublishedEndpointInvocationSummary | null;
   runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
   reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
 }): PublishedInvocationWaitingOverview {
   const generalWaitingCount = getFacetCount(runStatusCounts, "waiting");
   const waitingInputCount = getFacetCount(runStatusCounts, "waiting_input");
@@ -2572,6 +2626,10 @@ export function buildPublishedInvocationWaitingOverview({
   const activeWaitingCount = generalWaitingCount + waitingInputCount + callbackWaitingCount;
   const syncWaitingRejectedCount = getFacetCount(reasonCounts, "sync_waiting_unsupported");
   const lastRunStatusLabel = formatPublishedInvocationOptionalRunStatus(summary?.last_run_status, null);
+  const callbackFollowUpSurface =
+    callbackWaitingCount > 0
+      ? buildCallbackWaitingAutomationSystemFollowUp(callbackWaitingAutomation)
+      : null;
 
   const chips: string[] = [];
   if (activeWaitingCount > 0) {
@@ -2594,7 +2652,8 @@ export function buildPublishedInvocationWaitingOverview({
     const blockers = joinFragments(
       [
         callbackWaitingCount > 0
-          ? `${formatCountLabel(callbackWaitingCount, "run")} are still waiting on callback tickets or external tool responses`
+          ? callbackFollowUpSurface?.detail ??
+            `${formatCountLabel(callbackWaitingCount, "run")} are still waiting on callback tickets or external tool responses`
           : null,
         waitingInputCount > 0
           ? `${formatCountLabel(waitingInputCount, "run")} are paused on approval or operator input`
@@ -2620,7 +2679,11 @@ export function buildPublishedInvocationWaitingOverview({
       lastRunStatusLabel,
       headline: `${formatCountLabel(activeWaitingCount, "publish invocation")} are still attached to the durable runtime waiting path.`,
       detail: detailParts.join(" "),
-      chips
+      chips,
+      ...(callbackFollowUpSurface?.href ? { followUpHref: callbackFollowUpSurface.href } : {}),
+      ...(callbackFollowUpSurface?.hrefLabel
+        ? { followUpHrefLabel: callbackFollowUpSurface.hrefLabel }
+        : {})
     };
   }
 
@@ -2631,11 +2694,11 @@ export function buildPublishedInvocationWaitingOverview({
       waitingInputCount,
       generalWaitingCount,
       syncWaitingRejectedCount,
-      lastRunStatusLabel,
-      headline: `No active waiting runs remain, but ${formatCountLabel(syncWaitingRejectedCount, "sync publish invocation")} hit the waiting boundary.`,
-      detail:
-        "These requests reached a workflow that wanted to pause, but the synchronous publish surface could only reject the call. Prefer async routes or open a recent invocation detail to inspect the waiting lifecycle.",
-      chips
+    lastRunStatusLabel,
+    headline: `No active waiting runs remain, but ${formatCountLabel(syncWaitingRejectedCount, "sync publish invocation")} hit the waiting boundary.`,
+    detail:
+      "These requests reached a workflow that wanted to pause, but the synchronous publish surface could only reject the call. Prefer async routes or open a recent invocation detail to inspect the waiting lifecycle.",
+    chips
     };
   }
 
@@ -2652,6 +2715,58 @@ export function buildPublishedInvocationWaitingOverview({
       : "The current audit slice has no waiting runs or synchronous waiting rejections to triage.",
     chips
   };
+}
+
+function messageMentionsSandboxExecution(message?: string | null) {
+  const normalizedMessage = message?.toLowerCase() ?? "";
+  return (
+    normalizedMessage.includes("sandbox") ||
+    normalizedMessage.includes("microvm") ||
+    normalizedMessage.includes("execution class") ||
+    normalizedMessage.includes("backend offline") ||
+    normalizedMessage.includes("tool execution")
+  );
+}
+
+function messageMentionsCallbackAutomation(message?: string | null) {
+  const normalizedMessage = message?.toLowerCase() ?? "";
+  return (
+    normalizedMessage.includes("callback") ||
+    normalizedMessage.includes("resume") ||
+    normalizedMessage.includes("scheduler")
+  );
+}
+
+function buildPublishedInvocationDiagnosticFollowUpSurface({
+  reasonCounts,
+  runStatusCounts,
+  message,
+  sandboxReadiness,
+  callbackWaitingAutomation
+}: {
+  reasonCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  runStatusCounts?: PublishedEndpointInvocationFacetItem[] | null;
+  message?: string | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+}) {
+  const callbackWaitingCount = getFacetCount(runStatusCounts, "waiting_callback");
+  if (
+    (callbackWaitingCount > 0 || messageMentionsCallbackAutomation(message)) &&
+    callbackWaitingAutomation
+  ) {
+    const callbackSurface = buildCallbackWaitingAutomationSystemFollowUp(callbackWaitingAutomation);
+    if (callbackSurface) {
+      return callbackSurface;
+    }
+  }
+
+  const runtimeFailedCount = getFacetCount(reasonCounts, "runtime_failed");
+  if ((runtimeFailedCount > 0 || messageMentionsSandboxExecution(message)) && sandboxReadiness) {
+    return buildSandboxReadinessSystemFollowUp(sandboxReadiness);
+  }
+
+  return null;
 }
 
 export function formatRateLimitPressure(

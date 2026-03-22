@@ -72,6 +72,7 @@ export function WorkflowPublishActivityPanel({
         binding={binding}
         invocationAudit={invocationAudit}
         rateLimitWindowAudit={rateLimitWindowAudit}
+        callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
         activeTimeWindow={activeInvocationFilter?.timeWindow ?? null}
       />

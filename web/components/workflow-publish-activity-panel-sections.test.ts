@@ -7,7 +7,10 @@ import {
   WorkflowPublishActivityInsights
 } from "@/components/workflow-publish-activity-panel-sections";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
 import type { PublishedEndpointInvocationListResponse } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
@@ -87,6 +90,20 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
     supports_backend_extensions: false,
     supports_network_policy: false,
     supports_filesystem_policy: false
+  };
+}
+
+function buildCallbackWaitingAutomation(
+  overrides: Partial<CallbackWaitingAutomationCheck> = {}
+): CallbackWaitingAutomationCheck {
+  return {
+    status: "disabled",
+    scheduler_required: false,
+    detail: "disabled in test",
+    scheduler_health_status: "idle",
+    scheduler_health_detail: "not configured",
+    steps: [],
+    ...overrides
   };
 }
 
@@ -402,6 +419,7 @@ describe("WorkflowPublishActivityInsights", () => {
         } as WorkflowPublishActivityPanelProps["binding"],
         invocationAudit: buildInvocationAudit(),
         rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         sandboxReadiness: buildSandboxReadiness(),
         activeTimeWindow: "24h"
       })
@@ -414,6 +432,44 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("Waiting follow-up");
     expect(html).toContain("Rate limit window");
     expect(html).toContain("Issue signals");
+  });
+
+  it("reuses shared callback recovery CTA inside waiting follow-up", () => {
+    const invocationAudit = buildInvocationAudit();
+    invocationAudit.summary.last_run_status = "waiting_callback";
+    invocationAudit.facets.run_status_counts = [{ value: "waiting_callback", count: 2 }];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityInsights, {
+        binding: {
+          rate_limit_policy: null
+        } as WorkflowPublishActivityPanelProps["binding"],
+        invocationAudit,
+        rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation({
+          status: "partial",
+          scheduler_required: true,
+          detail: "callback automation degraded",
+          scheduler_health_status: "degraded",
+          scheduler_health_detail: "waiting resume monitor degraded",
+          affected_run_count: 3,
+          affected_workflow_count: 2,
+          primary_blocker_kind: "scheduler_unhealthy",
+          recommended_action: {
+            kind: "open_run_library",
+            label: "Open run library",
+            href: "/runs?focus=callback-waiting",
+            entry_key: "run_library"
+          }
+        }),
+        sandboxReadiness: buildSandboxReadiness(),
+        activeTimeWindow: "24h"
+      })
+    );
+
+    expect(html).toContain("当前 callback recovery 仍影响 3 个 run / 2 个 workflow");
+    expect(html).toContain("Open run library");
+    expect(html).toContain('/runs?focus=callback-waiting');
   });
 
   it("shows live diagnosis inside failure reason cards", () => {
@@ -431,7 +487,18 @@ describe("WorkflowPublishActivityInsights", () => {
           scheduler_health_detail: "not configured",
           steps: []
         },
-        sandboxReadiness: buildSandboxReadiness(),
+        sandboxReadiness: {
+          ...buildSandboxReadiness(),
+          affected_run_count: 4,
+          affected_workflow_count: 1,
+          primary_blocker_kind: "execution_class_blocked",
+          recommended_action: {
+            kind: "open_workflow_library",
+            label: "Open workflow library",
+            href: "/workflows?execution=sandbox",
+            entry_key: "workflow_library"
+          }
+        },
         buildInvocationDetailHref: () => "#",
         clearInvocationDetailHref: null
       })
@@ -439,7 +506,9 @@ describe("WorkflowPublishActivityInsights", () => {
 
     expect(html).toContain("Failure reason");
     expect(html).toContain("当前 live sandbox readiness 仍在报警");
-    expect(html).toContain("先确认强隔离 backend / capability 是否仍 blocked");
+    expect(html).toContain("优先回到 workflow library 处理强隔离 execution class 与隔离需求");
+    expect(html).toContain("Open workflow library");
+    expect(html).toContain('/workflows?execution=sandbox');
   });
 
   it("uses shared activity details copy for API key usage and failure cards", () => {
@@ -480,6 +549,7 @@ describe("WorkflowPublishActivityInsights", () => {
         } as WorkflowPublishActivityPanelProps["binding"],
         invocationAudit: buildInvocationAudit(),
         rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         sandboxReadiness: buildSandboxReadiness(),
         activeTimeWindow: "24h"
       })
@@ -506,6 +576,7 @@ describe("WorkflowPublishActivityInsights", () => {
         } as WorkflowPublishActivityPanelProps["binding"],
         invocationAudit: buildInvocationAuditWithTrafficMix(),
         rateLimitWindowAudit: buildRateLimitWindowAudit(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         sandboxReadiness: buildSandboxReadiness(),
         activeTimeWindow: "24h"
       })

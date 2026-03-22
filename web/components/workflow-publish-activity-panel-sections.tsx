@@ -40,6 +40,7 @@ type WorkflowPublishActivityInsightsProps = {
   binding: WorkflowPublishActivityPanelProps["binding"];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
   activeTimeWindow: WorkflowPublishActivityPanelProps["activeInvocationFilter"] extends infer T
     ? T extends { timeWindow: infer U }
@@ -52,6 +53,7 @@ export function WorkflowPublishActivityInsights({
   binding,
   invocationAudit,
   rateLimitWindowAudit,
+  callbackWaitingAutomation,
   sandboxReadiness,
   activeTimeWindow
 }: WorkflowPublishActivityInsightsProps) {
@@ -67,7 +69,8 @@ export function WorkflowPublishActivityInsights({
   const waitingOverview = buildPublishedInvocationWaitingOverview({
     summary,
     runStatusCounts,
-    reasonCounts
+    reasonCounts,
+    callbackWaitingAutomation
   });
   const windowUsed = rateLimitWindowAudit
     ? rateLimitWindowAudit.summary.succeeded_count + rateLimitWindowAudit.summary.failed_count
@@ -113,8 +116,10 @@ export function WorkflowPublishActivityInsights({
   });
   const issueSignalsSurface = buildPublishedInvocationIssueSignalsSurface({
     reasonCounts,
+    runStatusCounts,
     failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
     sandboxReadiness,
+    callbackWaitingAutomation,
     surfaceCopy: insightsSurfaceCopy
   });
 
@@ -184,6 +189,13 @@ export function WorkflowPublishActivityInsights({
             ))}
           </dl>
           <p className="section-copy entry-copy">{waitingOverview.detail}</p>
+          {waitingOverview.followUpHref && waitingOverview.followUpHrefLabel ? (
+            <div className="tool-badge-row">
+              <Link className="event-chip inbox-filter-link" href={waitingOverview.followUpHref}>
+                {waitingOverview.followUpHrefLabel}
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <div className="payload-card compact-card">
@@ -230,6 +242,11 @@ export function WorkflowPublishActivityInsights({
                 {chip}
               </span>
             ))}
+            {issueSignalsSurface.followUpHref && issueSignalsSurface.followUpHrefLabel ? (
+              <Link className="event-chip inbox-filter-link" href={issueSignalsSurface.followUpHref}>
+                {issueSignalsSurface.followUpHrefLabel}
+              </Link>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -311,6 +328,7 @@ export function WorkflowPublishActivityDetails({
               item,
               reasonCounts,
               sandboxReadiness,
+              callbackWaitingAutomation,
               surfaceCopy: detailsSurfaceCopy
             });
 
@@ -325,6 +343,13 @@ export function WorkflowPublishActivityDetails({
                   <>
                     <p className="section-copy entry-copy">{cardSurface.diagnosis.headline}</p>
                     <p className="binding-meta">{cardSurface.diagnosis.detail}</p>
+                    {cardSurface.diagnosis.href && cardSurface.diagnosis.hrefLabel ? (
+                      <div className="tool-badge-row">
+                        <Link className="event-chip inbox-filter-link" href={cardSurface.diagnosis.href}>
+                          {cardSurface.diagnosis.hrefLabel}
+                        </Link>
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
                 <p className="section-copy entry-copy">{cardSurface.lastSeenLabel}</p>
