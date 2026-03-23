@@ -352,7 +352,8 @@ export function WorkflowPublishInvocationDetailPanel({
                   ? buildOperatorRecommendedNextStep({
                       execution: sampleSandboxCandidate,
                       operatorFollowUp: sampleFollowUp ?? sample.snapshot_summary,
-                      operatorLabel: "sampled run"
+                      operatorLabel: "sampled run",
+                      currentHref
                     })
                   : null;
                 const sampleReasonLabel =
@@ -446,6 +447,7 @@ export function WorkflowPublishInvocationDetailPanel({
                     ) : null}
                     {sample.has_callback_waiting_summary ? (
                       <CallbackWaitingSummaryCard
+                        currentHref={currentHref}
                         callbackWaitingExplanation={
                           sample.run_snapshot.callbackWaitingExplanation ?? null
                         }
@@ -575,6 +577,7 @@ export function WorkflowPublishInvocationDetailPanel({
       ) : null}
 
       <WorkflowPublishInvocationCallbackSection
+        currentHref={currentHref}
         invocation={invocation}
         callbackTickets={callbackTickets}
         sensitiveAccessEntries={sensitiveAccessEntries}

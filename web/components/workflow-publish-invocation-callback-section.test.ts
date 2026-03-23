@@ -4,12 +4,62 @@ import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowPublishInvocationCallbackSection } from "@/components/workflow-publish-invocation-callback-section";
 
+const callbackSummaryProps: Array<Record<string, unknown>> = [];
+
 vi.mock("@/components/callback-waiting-summary-card", () => ({
-  CallbackWaitingSummaryCard: ({ inboxHref }: { inboxHref?: string | null }) =>
-    createElement("div", { "data-testid": "callback-waiting-summary-card" }, inboxHref ?? "no-inbox")
+  CallbackWaitingSummaryCard: (props: Record<string, unknown>) => {
+    callbackSummaryProps.push(props);
+    return createElement(
+      "div",
+      { "data-testid": "callback-waiting-summary-card" },
+      String(props.inboxHref ?? "no-inbox")
+    );
+  }
 }));
 
 describe("WorkflowPublishInvocationCallbackSection", () => {
+  it("forwards current publish detail href into the shared callback summary", () => {
+    renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationCallbackSection, {
+        currentHref: "/workflows/workflow-1?publish_invocation=invocation-1",
+        invocation: {
+          run_id: "run-callback-1",
+          run_waiting_reason: "waiting_callback",
+          run_waiting_lifecycle: {
+            node_run_id: "node-run-callback-1",
+            callback_waiting_lifecycle: null,
+            waiting_reason: "waiting_callback",
+            scheduled_resume_delay_seconds: null,
+            scheduled_resume_source: null,
+            scheduled_waiting_status: null,
+            scheduled_resume_scheduled_at: null,
+            scheduled_resume_due_at: null,
+            scheduled_resume_requeued_at: null,
+            scheduled_resume_requeue_source: null
+          }
+        } as never,
+        callbackTickets: [],
+        sensitiveAccessEntries: [],
+        callbackWaitingAutomation: {
+          status: "disabled",
+          scheduler_required: false,
+          detail: "disabled in test",
+          scheduler_health_status: "idle",
+          scheduler_health_detail: "not configured",
+          steps: []
+        },
+        callbackWaitingExplanation: null,
+        executionFocusNode: null
+      })
+    );
+
+    expect(
+      callbackSummaryProps.some(
+        (props) => props.currentHref === "/workflows/workflow-1?publish_invocation=invocation-1"
+      )
+    ).toBe(true);
+  });
+
   it("uses shared drilldown surface copy", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishInvocationCallbackSection, {

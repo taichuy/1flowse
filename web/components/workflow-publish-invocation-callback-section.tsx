@@ -18,6 +18,7 @@ import {
 } from "@/lib/published-invocation-presenters";
 
 type WorkflowPublishInvocationCallbackSectionProps = {
+  currentHref?: string | null;
   invocation: PublishedEndpointInvocationItem;
   callbackTickets: PublishedEndpointInvocationCallbackTicketItem[];
   sensitiveAccessEntries: SensitiveAccessTimelineEntry[];
@@ -27,6 +28,7 @@ type WorkflowPublishInvocationCallbackSectionProps = {
 };
 
 export function WorkflowPublishInvocationCallbackSection({
+  currentHref = null,
   invocation,
   callbackTickets,
   sensitiveAccessEntries,
@@ -78,6 +80,7 @@ export function WorkflowPublishInvocationCallbackSection({
         </div>
       ) : null}
       <CallbackWaitingSummaryCard
+        currentHref={currentHref}
         callbackTickets={callbackTickets}
         callbackWaitingAutomation={callbackWaitingAutomation}
         callbackWaitingExplanation={resolvedCallbackWaitingExplanation}
