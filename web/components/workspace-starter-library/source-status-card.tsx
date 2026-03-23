@@ -9,6 +9,7 @@ import type {
 } from "@/lib/get-workspace-starters";
 
 import {
+  buildWorkspaceStarterSourceCardSurface,
   buildWorkspaceStarterSourceActionDecision,
   buildWorkspaceStarterSourceGovernanceSurface
 } from "./shared";
@@ -43,6 +44,12 @@ export function WorkspaceStarterSourceCard({
     createWorkflowHref,
     fallbackActionDecision
   });
+  const sourceCardSurface = buildWorkspaceStarterSourceCardSurface({
+    template,
+    sourceGovernance,
+    sourceGovernanceSurface,
+    isLoadingSourceDiff
+  });
   const presenter = sourceGovernanceSurface.presenter;
   const actionDecision = sourceGovernanceSurface.actionDecision;
   const canRefresh = hasSourceBinding && !isLoadingSourceDiff && actionDecision.canRefresh;
@@ -64,9 +71,7 @@ export function WorkspaceStarterSourceCard({
         <div>
           <p className="entry-card-title">Source workflow drift</p>
           <p className="binding-meta">
-            {sourceGovernance?.source_workflow_name?.trim() ||
-              template.created_from_workflow_id ||
-              "no workflow binding"}
+            {sourceCardSurface.sourceLabel}
           </p>
         </div>
         <span className="health-pill">{presenter.statusLabel}</span>
@@ -78,7 +83,7 @@ export function WorkspaceStarterSourceCard({
         <>
           <div className="starter-tag-row">
             <span className="health-pill">
-              {isLoadingSourceDiff ? "loading diff" : actionDecision.statusLabel}
+              {sourceCardSurface.actionStatusLabel}
             </span>
             {!isLoadingSourceDiff
               ? actionDecision.factChips.map((item) => (
@@ -98,9 +103,7 @@ export function WorkspaceStarterSourceCard({
             </div>
           ) : (
             <p className="section-copy starter-summary-copy">
-              {isLoadingSourceDiff
-                ? "正在加载 source diff，稍后会把 refresh / rebase 建议收口到这里。"
-                : governanceFollowUp || actionDecision.summary}
+              {sourceCardSurface.fallbackDetail}
             </p>
           )}
           {shouldRenderStandaloneGovernanceFollowUp ? (
@@ -159,22 +162,12 @@ export function WorkspaceStarterSourceCard({
       ) : null}
       {shouldRenderGovernanceSummaryStrip ? (
         <div className="summary-strip compact-strip">
-          <div className="summary-card">
-            <span>Template ver</span>
-            <strong>{sourceGovernance?.template_version ?? template.created_from_workflow_version ?? "n/a"}</strong>
-          </div>
-          <div className="summary-card">
-            <span>Source ver</span>
-            <strong>{presenter.sourceVersion ?? "n/a"}</strong>
-          </div>
-          <div className="summary-card">
-            <span>Governance kind</span>
-            <strong>{presenter.kind}</strong>
-          </div>
-          <div className="summary-card">
-            <span>Recommended</span>
-            <strong>{actionDecision.recommendedAction}</strong>
-          </div>
+          {sourceCardSurface.summaryCards.map((card) => (
+            <div className="summary-card" key={`${card.label}-${card.value}`}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </div>
+          ))}
         </div>
       ) : null}
     </div>

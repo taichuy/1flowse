@@ -21,6 +21,7 @@ import {
   buildWorkspaceStarterBulkResultSurface,
   buildWorkspaceStarterHistoryPayloadSnapshot,
   buildWorkspaceStarterSourceActionDecision,
+  buildWorkspaceStarterSourceCardSurface,
   buildWorkspaceStarterSourceDiffSurface,
   buildWorkspaceStarterSourceGovernanceSurface,
   buildWorkspaceStarterSourceGovernanceFocusTargets,
@@ -608,6 +609,75 @@ describe("workspace starter source action decision", () => {
       detail: "带此 starter 回到创建页继续创建 workflow，并保留当前模板上下文。",
       focusTemplateId: null,
       focusLabel: null
+    });
+  });
+
+  it("projects source status cards without leaking raw governance enums", () => {
+    const sourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
+      template: {
+        ...templates[0],
+        source_governance: {
+          kind: "drifted",
+          status_label: "建议 refresh",
+          summary: "当前 starter 与来源 workflow 版本不一致。",
+          source_workflow_id: "wf-a",
+          source_workflow_name: "Active workflow",
+          template_version: "0.1.0",
+          source_version: "0.2.0",
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "优先 refresh 同步最新 definition / version。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["template 0.1.0", "source 0.2.0"]
+          },
+          outcome_explanation: {
+            primary_signal: "当前 starter 与来源 workflow 版本不一致。",
+            follow_up: "优先 refresh 同步最新 definition / version。"
+          }
+        }
+      },
+      createWorkflowHref: "/workflows/new?starter=starter-active-a"
+    });
+
+    expect(
+      buildWorkspaceStarterSourceCardSurface({
+        template: templates[0],
+        sourceGovernance: {
+          kind: "drifted",
+          status_label: "建议 refresh",
+          summary: "当前 starter 与来源 workflow 版本不一致。",
+          source_workflow_id: "wf-a",
+          source_workflow_name: "Active workflow",
+          template_version: "0.1.0",
+          source_version: "0.2.0",
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "优先 refresh 同步最新 definition / version。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["template 0.1.0", "source 0.2.0"]
+          },
+          outcome_explanation: {
+            primary_signal: "当前 starter 与来源 workflow 版本不一致。",
+            follow_up: "优先 refresh 同步最新 definition / version。"
+          }
+        },
+        sourceGovernanceSurface,
+        isLoadingSourceDiff: false
+      })
+    ).toEqual({
+      sourceLabel: "Active workflow",
+      actionStatusLabel: "建议 refresh",
+      fallbackDetail: "优先 refresh 同步最新 definition / version。",
+      summaryCards: [
+        { label: "Template ver", value: "0.1.0" },
+        { label: "Source ver", value: "0.2.0" },
+        { label: "Governance", value: "建议 refresh" },
+        { label: "Next step", value: "建议 refresh" }
+      ]
     });
   });
 

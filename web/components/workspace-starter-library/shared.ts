@@ -151,6 +151,18 @@ export type WorkspaceStarterSourceGovernanceSurface = {
   recommendedNextStep: WorkspaceStarterGovernanceRecommendedNextStep | null;
 };
 
+export type WorkspaceStarterSourceCardSummaryCard = {
+  label: string;
+  value: string;
+};
+
+export type WorkspaceStarterSourceCardSurface = {
+  sourceLabel: string;
+  actionStatusLabel: string;
+  fallbackDetail: string;
+  summaryCards: WorkspaceStarterSourceCardSummaryCard[];
+};
+
 export type WorkspaceStarterSourceGovernancePrimaryFollowUp = {
   label: string;
   headline: string;
@@ -509,6 +521,59 @@ export function buildWorkspaceStarterSourceGovernanceSurface({
       actionDecision,
       createWorkflowHref
     })
+  };
+}
+
+export function buildWorkspaceStarterSourceCardSurface({
+  template,
+  sourceGovernance,
+  sourceGovernanceSurface,
+  isLoadingSourceDiff
+}: {
+  template: Pick<WorkspaceStarterTemplateItem, "created_from_workflow_id" | "created_from_workflow_version">;
+  sourceGovernance?: WorkspaceStarterSourceGovernance | null;
+  sourceGovernanceSurface: WorkspaceStarterSourceGovernanceSurface;
+  isLoadingSourceDiff: boolean;
+}): WorkspaceStarterSourceCardSurface {
+  const { presenter, actionDecision, recommendedNextStep } = sourceGovernanceSurface;
+  const sourceLabel =
+    normalizeString(sourceGovernance?.source_workflow_name) ??
+    normalizeString(template.created_from_workflow_id) ??
+    "当前没有来源 workflow 绑定";
+  const actionStatusLabel = isLoadingSourceDiff
+    ? presenter.actionStatusLabel ?? presenter.statusLabel
+    : actionDecision.statusLabel;
+  const fallbackDetail = isLoadingSourceDiff
+    ? "正在加载 source diff；完成后会把 refresh / rebase 建议收口到统一 next-step。"
+    : presenter.followUp ?? actionDecision.summary;
+  const nextStepValue =
+    recommendedNextStep?.label ?? presenter.actionStatusLabel ?? presenter.statusLabel;
+
+  return {
+    sourceLabel,
+    actionStatusLabel,
+    fallbackDetail,
+    summaryCards: [
+      {
+        label: "Template ver",
+        value:
+          normalizeString(sourceGovernance?.template_version) ??
+          normalizeString(template.created_from_workflow_version) ??
+          "n/a"
+      },
+      {
+        label: "Source ver",
+        value: presenter.sourceVersion ?? "n/a"
+      },
+      {
+        label: "Governance",
+        value: presenter.actionStatusLabel ?? presenter.statusLabel
+      },
+      {
+        label: "Next step",
+        value: nextStepValue
+      }
+    ]
   };
 }
 
