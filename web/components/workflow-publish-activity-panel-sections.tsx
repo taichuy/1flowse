@@ -16,19 +16,10 @@ import type {
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import {
-  buildPublishedInvocationActivityPrimaryFollowUpSurface,
-  buildPublishedInvocationActivitySummaryCardSurfaces,
+  buildPublishedInvocationActivityInsightsSurface,
   buildPublishedInvocationApiKeyUsageCardSurface,
   buildPublishedInvocationActivityDetailsSurfaceCopy,
-  buildPublishedInvocationActivityInsightsSurfaceCopy,
-  buildPublishedInvocationActivityTrafficMixSurface,
   buildPublishedInvocationFailureReasonCardSurface,
-  buildPublishedInvocationIssueSignalsSurface,
-  buildPublishedInvocationRateLimitWindowInsight,
-  buildPublishedInvocationWaitingOverview,
-  formatRateLimitPressure,
-  listPublishedInvocationActivityWaitingRows,
-  listPublishedInvocationRateLimitRows
 } from "@/lib/published-invocation-presenters";
 
 import {
@@ -101,98 +92,34 @@ export function WorkflowPublishActivityInsights({
   sandboxReadiness,
   activeTimeWindow
 }: WorkflowPublishActivityInsightsProps) {
-  const summary = invocationAudit?.summary;
-  const requestSourceCounts = invocationAudit?.facets.request_source_counts ?? [];
-  const requestSurfaceCounts = invocationAudit?.facets.request_surface_counts ?? [];
-  const cacheStatusCounts = invocationAudit?.facets.cache_status_counts ?? [];
-  const runStatusCounts = invocationAudit?.facets.run_status_counts ?? [];
-  const reasonCounts = invocationAudit?.facets.reason_counts ?? [];
   const timeline = invocationAudit?.facets.timeline ?? [];
   const timelineGranularity = invocationAudit?.facets.timeline_granularity ?? "hour";
-  const rateLimitPolicy = binding.rate_limit_policy;
-  const waitingOverview = buildPublishedInvocationWaitingOverview({
-    summary,
-    runStatusCounts,
-    reasonCounts,
-    callbackWaitingAutomation
-  });
-  const windowUsed = rateLimitWindowAudit
-    ? rateLimitWindowAudit.summary.succeeded_count + rateLimitWindowAudit.summary.failed_count
-    : 0;
-  const windowRejected = rateLimitWindowAudit?.summary.rejected_count ?? 0;
-  const remainingQuota = rateLimitPolicy ? Math.max(rateLimitPolicy.requests - windowUsed, 0) : null;
-  const pressure = rateLimitPolicy ? formatRateLimitPressure(rateLimitPolicy.requests, windowUsed) : null;
-  const rateLimitWindowInsight = buildPublishedInvocationRateLimitWindowInsight({
-    pressure,
-    remainingQuota,
-    windowRejected,
-    failedCount: summary?.failed_count ?? 0,
-    timeWindowLabel: formatTimeWindowLabel(activeTimeWindow ?? "all")
-  });
-  const insightsSurfaceCopy = buildPublishedInvocationActivityInsightsSurfaceCopy({
-    rateLimitWindowStartedAt: rateLimitWindowAudit?.filters.created_from ?? null
-  });
+  const timeWindowLabel = formatTimeWindowLabel(activeTimeWindow ?? "all");
   const selectedInvocationSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
     selectedInvocationId: selectedInvocationId ?? null,
     selectedInvocationDetail: selectedInvocationDetail ?? null,
     callbackWaitingAutomation,
     sandboxReadiness
   });
-  const waitingRows = listPublishedInvocationActivityWaitingRows({
-    waitingOverview,
-    surfaceCopy: insightsSurfaceCopy
-  });
-  const rateLimitRows = rateLimitPolicy
-    ? listPublishedInvocationRateLimitRows({
-        rateLimitPolicy,
-        windowUsed,
-        remainingQuota,
-        pressureLabel: pressure?.label ?? "0%",
-        windowRejected,
-        surfaceCopy: insightsSurfaceCopy
-      })
-    : [];
-  const trafficMixSurface = buildPublishedInvocationActivityTrafficMixSurface({
-    requestSourceCounts,
-    requestSurfaceCounts,
-    cacheStatusCounts,
-    runStatusCounts,
-    runStatesEmptyLabel: insightsSurfaceCopy.trafficRunStatesEmptyLabel
-  });
-  const issueSignalsSurface = buildPublishedInvocationIssueSignalsSurface({
-    summary,
-    reasonCounts,
-    runStatusCounts,
-    failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
-    sandboxReadiness,
+  const insightsSurface = buildPublishedInvocationActivityInsightsSurface({
+    invocationAudit,
+    rateLimitWindowAudit,
+    rateLimitPolicy: binding.rate_limit_policy,
     callbackWaitingAutomation,
+    sandboxReadiness,
+    timeWindowLabel,
     selectedInvocationErrorMessage:
       selectedInvocationSurface.kind === "ok"
         ? selectedInvocationSurface.detail.invocation.error_message ?? null
         : null,
     selectedInvocationNextStepSurface:
-    selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.nextStepSurface : null,
-    surfaceCopy: insightsSurfaceCopy
-  });
-  const primaryFollowUp = buildPublishedInvocationActivityPrimaryFollowUpSurface({
-    waitingOverview,
-    issueSignalsSurface,
-    trafficMixSurface,
-    rateLimitWindowInsight,
-    rateLimitPressure: pressure,
-    rateLimitWindowRejectedCount: windowRejected
-  });
-  const summaryCards = buildPublishedInvocationActivitySummaryCardSurfaces({
-    summary,
-    waitingOverview,
-    primaryFollowUp,
-    surfaceCopy: insightsSurfaceCopy
+      selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.nextStepSurface : null
   });
 
   return (
     <>
       <div className="summary-strip compact-strip">
-        {summaryCards.map((card) => (
+        {insightsSurface.summaryCards.map((card) => (
           <article className="summary-card" key={card.key}>
             <span>{card.label}</span>
             <strong>{card.value}</strong>
@@ -209,33 +136,19 @@ export function WorkflowPublishActivityInsights({
       <div className="publish-meta-grid">
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">{insightsSurfaceCopy.trafficMixTitle}</span>
+            <span className="status-meta">{insightsSurface.trafficMixCard.title}</span>
           </div>
           <dl className="compact-meta-list">
-            <div>
-              <dt>{insightsSurfaceCopy.trafficWorkflowLabel}</dt>
-              <dd>{trafficMixSurface.workflowCount}</dd>
-            </div>
-            <div>
-              <dt>{insightsSurfaceCopy.trafficAliasLabel}</dt>
-              <dd>{trafficMixSurface.aliasCount}</dd>
-            </div>
-            <div>
-              <dt>{insightsSurfaceCopy.trafficPathLabel}</dt>
-              <dd>{trafficMixSurface.pathCount}</dd>
-            </div>
-            <div>
-              <dt>{insightsSurfaceCopy.trafficCacheSurfaceLabel}</dt>
-              <dd>{trafficMixSurface.cacheSurfaceSummary}</dd>
-            </div>
-            <div>
-              <dt>{insightsSurfaceCopy.trafficRunStatesLabel}</dt>
-              <dd>{trafficMixSurface.runStatesSummary}</dd>
-            </div>
+            {insightsSurface.trafficMixCard.rows.map((row) => (
+              <div key={row.key}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
           </dl>
-          {trafficMixSurface.requestSurfaceLabels.length ? (
+          {insightsSurface.trafficMixCard.requestSurfaceLabels.length ? (
             <div className="tool-badge-row">
-              {trafficMixSurface.requestSurfaceLabels.map((label) => (
+              {insightsSurface.trafficMixCard.requestSurfaceLabels.map((label) => (
                 <span className="event-chip" key={label}>
                   {label}
                 </span>
@@ -246,25 +159,29 @@ export function WorkflowPublishActivityInsights({
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">{insightsSurfaceCopy.waitingFollowUpTitle}</span>
+            <span className="status-meta">{insightsSurface.waitingFollowUpCard.title}</span>
           </div>
-          <p className="section-copy entry-copy">{waitingOverview.headline}</p>
-          {waitingOverview.chips.length ? (
-            <p className="binding-meta">{waitingOverview.chips.join(" · ")}</p>
+          <p className="section-copy entry-copy">{insightsSurface.waitingFollowUpCard.headline}</p>
+          {insightsSurface.waitingFollowUpCard.chips.length ? (
+            <p className="binding-meta">{insightsSurface.waitingFollowUpCard.chips.join(" · ")}</p>
           ) : null}
           <dl className="compact-meta-list">
-            {waitingRows.map((row) => (
+            {insightsSurface.waitingFollowUpCard.rows.map((row) => (
               <div key={row.key}>
                 <dt>{row.label}</dt>
                 <dd>{row.value}</dd>
               </div>
             ))}
           </dl>
-          <p className="section-copy entry-copy">{waitingOverview.detail}</p>
-          {waitingOverview.followUpHref && waitingOverview.followUpHrefLabel ? (
+          <p className="section-copy entry-copy">{insightsSurface.waitingFollowUpCard.detail}</p>
+          {insightsSurface.waitingFollowUpCard.followUpHref &&
+          insightsSurface.waitingFollowUpCard.followUpHrefLabel ? (
             <div className="tool-badge-row">
-              <Link className="event-chip inbox-filter-link" href={waitingOverview.followUpHref}>
-                {waitingOverview.followUpHrefLabel}
+              <Link
+                className="event-chip inbox-filter-link"
+                href={insightsSurface.waitingFollowUpCard.followUpHref}
+              >
+                {insightsSurface.waitingFollowUpCard.followUpHrefLabel}
               </Link>
             </div>
           ) : null}
@@ -272,25 +189,27 @@ export function WorkflowPublishActivityInsights({
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">{insightsSurfaceCopy.rateLimitWindowTitle}</span>
+            <span className="status-meta">{insightsSurface.rateLimitWindowCard.title}</span>
           </div>
-          {rateLimitPolicy ? (
+          {insightsSurface.rateLimitWindowCard.enabled ? (
             <>
               <dl className="compact-meta-list">
-                {rateLimitRows.map((row) => (
+                {insightsSurface.rateLimitWindowCard.rows.map((row) => (
                   <div key={row.key}>
                     <dt>{row.label}</dt>
                     <dd>{row.value}</dd>
                   </div>
                 ))}
               </dl>
-              <p className="section-copy entry-copy">{insightsSurfaceCopy.rateLimitWindowDescription}</p>
-              {rateLimitWindowInsight ? (
-                <p className="section-copy entry-copy">{rateLimitWindowInsight}</p>
+              {insightsSurface.rateLimitWindowCard.description ? (
+                <p className="section-copy entry-copy">{insightsSurface.rateLimitWindowCard.description}</p>
+              ) : null}
+              {insightsSurface.rateLimitWindowCard.insight ? (
+                <p className="section-copy entry-copy">{insightsSurface.rateLimitWindowCard.insight}</p>
               ) : null}
             </>
           ) : (
-            <p className="empty-state compact">{insightsSurfaceCopy.rateLimitDisabledEmptyState}</p>
+            <p className="empty-state compact">{insightsSurface.rateLimitWindowCard.emptyState}</p>
           )}
         </div>
       </div>
@@ -298,30 +217,34 @@ export function WorkflowPublishActivityInsights({
       <WorkflowPublishTrafficTimeline
         timeline={timeline}
         timelineGranularity={timelineGranularity}
-        timeWindowLabel={formatTimeWindowLabel(activeTimeWindow ?? "all")}
+        timeWindowLabel={timeWindowLabel}
       />
 
-      {issueSignalsSurface ? (
+      {insightsSurface.issueSignalsSurface ? (
         <div className="entry-card compact-card">
-          <p className="entry-card-title">{issueSignalsSurface.title}</p>
-          <p className="section-copy entry-copy">{issueSignalsSurface.description}</p>
-          {issueSignalsSurface.insight ? (
-            <p className="section-copy entry-copy">{issueSignalsSurface.insight}</p>
+          <p className="entry-card-title">{insightsSurface.issueSignalsSurface.title}</p>
+          <p className="section-copy entry-copy">{insightsSurface.issueSignalsSurface.description}</p>
+          {insightsSurface.issueSignalsSurface.insight ? (
+            <p className="section-copy entry-copy">{insightsSurface.issueSignalsSurface.insight}</p>
           ) : null}
-          {issueSignalsSurface.selectedNextStepSurface ? (
+          {insightsSurface.issueSignalsSurface.selectedNextStepSurface ? (
             <PublishedInvocationSelectedNextStepCard
-              surface={issueSignalsSurface.selectedNextStepSurface}
+              surface={insightsSurface.issueSignalsSurface.selectedNextStepSurface}
             />
           ) : null}
           <div className="tool-badge-row">
-            {issueSignalsSurface.chips.map((chip) => (
+            {insightsSurface.issueSignalsSurface.chips.map((chip) => (
               <span className="event-chip" key={chip}>
                 {chip}
               </span>
             ))}
-            {issueSignalsSurface.followUpHref && issueSignalsSurface.followUpHrefLabel ? (
-              <Link className="event-chip inbox-filter-link" href={issueSignalsSurface.followUpHref}>
-                {issueSignalsSurface.followUpHrefLabel}
+            {insightsSurface.issueSignalsSurface.followUpHref &&
+            insightsSurface.issueSignalsSurface.followUpHrefLabel ? (
+              <Link
+                className="event-chip inbox-filter-link"
+                href={insightsSurface.issueSignalsSurface.followUpHref}
+              >
+                {insightsSurface.issueSignalsSurface.followUpHrefLabel}
               </Link>
             ) : null}
           </div>

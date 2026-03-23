@@ -440,6 +440,39 @@ export type PublishedInvocationActivityTrafficMixSurface = {
   requestSurfaceLabels: string[];
 };
 
+export type PublishedInvocationActivityTrafficMixCardSurface = {
+  title: string;
+  rows: PublishedInvocationMetaRow[];
+  requestSurfaceLabels: string[];
+};
+
+export type PublishedInvocationActivityWaitingFollowUpCardSurface = {
+  title: string;
+  headline: string;
+  chips: string[];
+  rows: PublishedInvocationMetaRow[];
+  detail: string;
+  followUpHref: string | null;
+  followUpHrefLabel: string | null;
+};
+
+export type PublishedInvocationActivityRateLimitWindowCardSurface = {
+  title: string;
+  enabled: boolean;
+  rows: PublishedInvocationMetaRow[];
+  description: string | null;
+  insight: string | null;
+  emptyState: string | null;
+};
+
+export type PublishedInvocationActivityInsightsSurface = {
+  summaryCards: PublishedInvocationActivitySummaryCardSurface[];
+  trafficMixCard: PublishedInvocationActivityTrafficMixCardSurface;
+  waitingFollowUpCard: PublishedInvocationActivityWaitingFollowUpCardSurface;
+  rateLimitWindowCard: PublishedInvocationActivityRateLimitWindowCardSurface;
+  issueSignalsSurface: PublishedInvocationIssueSignalsSurface | null;
+};
+
 export type PublishedInvocationActivityDetailsSurfaceCopy = {
   selectedInvocationNextStepTitle: string;
   invocationAuditEmptyState: string;
@@ -1159,6 +1192,158 @@ export function buildPublishedInvocationActivitySummaryCardSurfaces({
       hrefLabel: primaryFollowUp.hrefLabel
     }
   ];
+}
+
+export function buildPublishedInvocationActivityInsightsSurface({
+  invocationAudit,
+  rateLimitWindowAudit,
+  rateLimitPolicy,
+  callbackWaitingAutomation,
+  sandboxReadiness,
+  timeWindowLabel = "全部时间",
+  selectedInvocationErrorMessage,
+  selectedInvocationNextStepSurface
+}: {
+  invocationAudit?: PublishedEndpointInvocationListResponse | null;
+  rateLimitWindowAudit?: PublishedEndpointInvocationListResponse | null;
+  rateLimitPolicy?: WorkflowPublishedEndpointItem["rate_limit_policy"] | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  timeWindowLabel?: string;
+  selectedInvocationErrorMessage?: string | null;
+  selectedInvocationNextStepSurface?: PublishedInvocationSelectedNextStepSurface | null;
+}): PublishedInvocationActivityInsightsSurface {
+  const summary = invocationAudit?.summary;
+  const requestSourceCounts = invocationAudit?.facets.request_source_counts ?? [];
+  const requestSurfaceCounts = invocationAudit?.facets.request_surface_counts ?? [];
+  const cacheStatusCounts = invocationAudit?.facets.cache_status_counts ?? [];
+  const runStatusCounts = invocationAudit?.facets.run_status_counts ?? [];
+  const reasonCounts = invocationAudit?.facets.reason_counts ?? [];
+  const waitingOverview = buildPublishedInvocationWaitingOverview({
+    summary,
+    runStatusCounts,
+    reasonCounts,
+    callbackWaitingAutomation
+  });
+  const windowUsed = rateLimitWindowAudit
+    ? rateLimitWindowAudit.summary.succeeded_count + rateLimitWindowAudit.summary.failed_count
+    : 0;
+  const windowRejected = rateLimitWindowAudit?.summary.rejected_count ?? 0;
+  const remainingQuota = rateLimitPolicy ? Math.max(rateLimitPolicy.requests - windowUsed, 0) : null;
+  const pressure = rateLimitPolicy ? formatRateLimitPressure(rateLimitPolicy.requests, windowUsed) : null;
+  const surfaceCopy = buildPublishedInvocationActivityInsightsSurfaceCopy({
+    rateLimitWindowStartedAt: rateLimitWindowAudit?.filters.created_from ?? null
+  });
+  const trafficMixSurface = buildPublishedInvocationActivityTrafficMixSurface({
+    requestSourceCounts,
+    requestSurfaceCounts,
+    cacheStatusCounts,
+    runStatusCounts,
+    runStatesEmptyLabel: surfaceCopy.trafficRunStatesEmptyLabel
+  });
+  const issueSignalsSurface = buildPublishedInvocationIssueSignalsSurface({
+    summary,
+    reasonCounts,
+    runStatusCounts,
+    failureReasons: invocationAudit?.facets.recent_failure_reasons ?? [],
+    sandboxReadiness,
+    callbackWaitingAutomation,
+    selectedInvocationErrorMessage,
+    selectedInvocationNextStepSurface,
+    surfaceCopy
+  });
+  const rateLimitWindowInsight = buildPublishedInvocationRateLimitWindowInsight({
+    pressure,
+    remainingQuota,
+    windowRejected,
+    failedCount: summary?.failed_count ?? 0,
+    timeWindowLabel
+  });
+  const primaryFollowUp = buildPublishedInvocationActivityPrimaryFollowUpSurface({
+    waitingOverview,
+    issueSignalsSurface,
+    trafficMixSurface,
+    rateLimitWindowInsight,
+    rateLimitPressure: pressure,
+    rateLimitWindowRejectedCount: windowRejected
+  });
+
+  return {
+    summaryCards: buildPublishedInvocationActivitySummaryCardSurfaces({
+      summary,
+      waitingOverview,
+      primaryFollowUp,
+      surfaceCopy
+    }),
+    trafficMixCard: {
+      title: surfaceCopy.trafficMixTitle,
+      rows: [
+        buildPublishedInvocationMetaRow(
+          "traffic-workflow",
+          surfaceCopy.trafficWorkflowLabel,
+          String(trafficMixSurface.workflowCount)
+        ),
+        buildPublishedInvocationMetaRow(
+          "traffic-alias",
+          surfaceCopy.trafficAliasLabel,
+          String(trafficMixSurface.aliasCount)
+        ),
+        buildPublishedInvocationMetaRow(
+          "traffic-path",
+          surfaceCopy.trafficPathLabel,
+          String(trafficMixSurface.pathCount)
+        ),
+        buildPublishedInvocationMetaRow(
+          "traffic-cache-surface",
+          surfaceCopy.trafficCacheSurfaceLabel,
+          trafficMixSurface.cacheSurfaceSummary
+        ),
+        buildPublishedInvocationMetaRow(
+          "traffic-run-states",
+          surfaceCopy.trafficRunStatesLabel,
+          trafficMixSurface.runStatesSummary
+        )
+      ],
+      requestSurfaceLabels: trafficMixSurface.requestSurfaceLabels
+    },
+    waitingFollowUpCard: {
+      title: surfaceCopy.waitingFollowUpTitle,
+      headline: waitingOverview.headline,
+      chips: waitingOverview.chips,
+      rows: listPublishedInvocationActivityWaitingRows({
+        waitingOverview,
+        surfaceCopy
+      }),
+      detail: waitingOverview.detail,
+      followUpHref: waitingOverview.followUpHref ?? null,
+      followUpHrefLabel: waitingOverview.followUpHrefLabel ?? null
+    },
+    rateLimitWindowCard: rateLimitPolicy
+      ? {
+          title: surfaceCopy.rateLimitWindowTitle,
+          enabled: true,
+          rows: listPublishedInvocationRateLimitRows({
+            rateLimitPolicy,
+            windowUsed,
+            remainingQuota,
+            pressureLabel: pressure?.label ?? "0%",
+            windowRejected,
+            surfaceCopy
+          }),
+          description: surfaceCopy.rateLimitWindowDescription,
+          insight: rateLimitWindowInsight,
+          emptyState: null
+        }
+      : {
+          title: surfaceCopy.rateLimitWindowTitle,
+          enabled: false,
+          rows: [],
+          description: null,
+          insight: null,
+          emptyState: surfaceCopy.rateLimitDisabledEmptyState
+        },
+    issueSignalsSurface
+  };
 }
 
 export function buildPublishedInvocationIssueSignalsSurface({

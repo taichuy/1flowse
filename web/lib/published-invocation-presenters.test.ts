@@ -7,6 +7,7 @@ import {
   buildPublishedInvocationActivityBlockedDetailSurfaceCopy,
   buildPublishedInvocationApiKeyUsageCardSurface,
   buildPublishedInvocationActivityDetailsSurfaceCopy,
+  buildPublishedInvocationActivityInsightsSurface,
   buildPublishedInvocationActivityPrimaryFollowUpSurface,
   buildPublishedInvocationActivitySummaryCardSurfaces,
   buildPublishedInvocationActivityInsightsSurfaceCopy,
@@ -1186,6 +1187,153 @@ describe("published invocation presenters", () => {
       runStatesSummary: "Run failed 2 / Waiting callback 1",
       requestSurfaceLabels: ["OpenAI responses 2", "Native workflow route 1"]
     });
+  });
+
+  it("把 publish activity 聚合卡片收口成统一 insights surface", () => {
+    const selectedNextStepSurface = buildPublishedInvocationSelectedNextStepSurface({
+      invocationId: "invocation-1",
+      nextStep: {
+        label: "approval blocker",
+        detail: "先处理 blocker inbox，再观察 waiting 节点是否恢复。",
+        href: "/sensitive-access/inbox?run_id=run-selected-1",
+        href_label: "open blocker inbox slice"
+      }
+    });
+
+    const surface = buildPublishedInvocationActivityInsightsSurface({
+      invocationAudit: {
+        filters: {},
+        summary: {
+          total_count: 4,
+          succeeded_count: 1,
+          failed_count: 2,
+          rejected_count: 1,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0,
+          last_invoked_at: "2026-03-21T00:15:00Z",
+          last_status: "failed",
+          last_cache_status: "miss",
+          last_run_id: "run-1",
+          last_run_status: "failed",
+          last_reason_code: "runtime_failed"
+        },
+        facets: {
+          status_counts: [],
+          request_source_counts: [
+            { value: "workflow", count: 3 },
+            { value: "alias", count: 1 },
+            { value: "path", count: 2 }
+          ],
+          request_surface_counts: [
+            { value: "openai.responses", count: 2 },
+            { value: "native.workflow", count: 1 }
+          ],
+          cache_status_counts: [
+            { value: "hit", count: 2 },
+            { value: "miss", count: 1 }
+          ],
+          run_status_counts: [{ value: "waiting_callback", count: 1 }],
+          reason_counts: [{ value: "runtime_failed", count: 2 }],
+          api_key_usage: [],
+          recent_failure_reasons: [
+            {
+              message: "sandbox backend offline",
+              count: 2,
+              last_invoked_at: "2026-03-21T00:15:00Z"
+            }
+          ],
+          timeline_granularity: "hour",
+          timeline: []
+        },
+        items: []
+      },
+      rateLimitWindowAudit: {
+        filters: {
+          created_from: "2026-03-21T00:00:00Z"
+        },
+        summary: {
+          total_count: 3,
+          succeeded_count: 1,
+          failed_count: 2,
+          rejected_count: 1,
+          cache_hit_count: 0,
+          cache_miss_count: 0,
+          cache_bypass_count: 0
+        },
+        facets: {
+          status_counts: [],
+          request_source_counts: [],
+          request_surface_counts: [],
+          cache_status_counts: [],
+          run_status_counts: [],
+          reason_counts: [],
+          api_key_usage: [],
+          recent_failure_reasons: [],
+          timeline_granularity: "hour",
+          timeline: []
+        },
+        items: []
+      },
+      rateLimitPolicy: {
+        requests: 4,
+        windowSeconds: 60
+      },
+      callbackWaitingAutomation: null,
+      sandboxReadiness: null,
+      timeWindowLabel: "最近 24 小时",
+      selectedInvocationErrorMessage: " sandbox backend offline ",
+      selectedInvocationNextStepSurface: selectedNextStepSurface
+    });
+
+    expect(surface.summaryCards.at(-1)).toMatchObject({
+      key: "summary-focus",
+      label: "Summary focus",
+      value: "attention"
+    });
+    expect(surface.summaryCards.at(-1)?.detail).toContain("waiting on callback tickets or external tool responses");
+    expect(surface.trafficMixCard).toEqual({
+      title: "Traffic mix",
+      rows: [
+        { key: "traffic-workflow", label: "Workflow", value: "3", href: null },
+        { key: "traffic-alias", label: "Alias", value: "1", href: null },
+        { key: "traffic-path", label: "Path", value: "2", href: null },
+        {
+          key: "traffic-cache-surface",
+          label: "Cache surface",
+          value: "Cache hit 2 / Cache miss 1 / Cache bypass 0",
+          href: null
+        },
+        {
+          key: "traffic-run-states",
+          label: "Run states",
+          value: "Waiting callback 1",
+          href: null
+        }
+      ],
+      requestSurfaceLabels: ["OpenAI responses 2", "Native workflow route 1"]
+    });
+    expect(surface.waitingFollowUpCard.title).toBe("Waiting follow-up");
+    expect(surface.waitingFollowUpCard.rows).toContainEqual({
+      key: "callback-waits",
+      label: "Callback waits",
+      value: "1",
+      href: null
+    });
+    expect(surface.rateLimitWindowCard).toMatchObject({
+      title: "Rate limit window",
+      enabled: true,
+      description: expect.stringContaining("当前窗口从"),
+      insight: "当前窗口已经出现 1 次限流拒绝；如果失败面板同时看到 runtime failed，先把 quota hit 与执行链路异常拆开排查。",
+      emptyState: null
+    });
+    expect(surface.rateLimitWindowCard.rows).toContainEqual({
+      key: "rate-limit-policy",
+      label: "Policy",
+      value: "4 / 60s",
+      href: null
+    });
+    expect(surface.issueSignalsSurface?.selectedNextStepSurface).toEqual(selectedNextStepSurface);
   });
 
   it("为 traffic timeline bucket 提供共享 facet rows", () => {
