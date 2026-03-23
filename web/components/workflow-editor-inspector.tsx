@@ -280,6 +280,7 @@ export function WorkflowEditorInspector({
             title="Inspector remediation"
             summary={persistBlockerSummary ?? persistBlockedMessage}
             blockers={persistBlockers}
+            sandboxReadiness={sandboxReadiness}
           />
         </article>
       ) : null}

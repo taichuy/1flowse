@@ -20,13 +20,15 @@ type SandboxReadinessOverviewCardProps = {
   title?: string;
   intro?: string | null;
   hideWhenHealthy?: boolean;
+  hideRecommendedNextStep?: boolean;
 };
 
 export function SandboxReadinessOverviewCard({
   readiness,
   title = "Live sandbox readiness",
   intro = null,
-  hideWhenHealthy = false
+  hideWhenHealthy = false,
+  hideRecommendedNextStep = false
 }: SandboxReadinessOverviewCardProps) {
   if (!readiness) {
     return null;
@@ -75,7 +77,7 @@ export function SandboxReadinessOverviewCard({
       {formatSandboxReadinessDetail(readiness) ? (
         <p className="section-copy entry-copy">{formatSandboxReadinessDetail(readiness)}</p>
       ) : null}
-      {recommendedNextStep ? (
+      {!hideRecommendedNextStep && recommendedNextStep ? (
         <div className="entry-card compact-card">
           <div className="payload-card-header">
             <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>

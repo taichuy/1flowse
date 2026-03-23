@@ -204,6 +204,7 @@ export function WorkflowEditorPublishForm({
         title="Publish save gate"
         summary={publishPersistBlockerSummary}
         blockers={publishPersistBlockers}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <div className="tool-badge-row">

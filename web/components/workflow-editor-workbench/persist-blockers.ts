@@ -1,3 +1,13 @@
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import {
+  buildOperatorRecommendedNextStep,
+  type OperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
+import {
+  buildSandboxReadinessFollowUpCandidate,
+  shouldPreferSharedSandboxReadinessFollowUp
+} from "@/lib/system-overview-follow-up-presenters";
+
 export type WorkflowPersistBlocker = {
   id:
     | "unsupported_nodes"
@@ -175,4 +185,32 @@ export function summarizeWorkflowPersistBlockers(blockers: WorkflowPersistBlocke
   return blockers.length > 3
     ? `当前保存会被 ${blockers.length} 类问题阻断：${summary} 等。`
     : `当前保存会被 ${blockers.length} 类问题阻断：${summary}。`;
+}
+
+export function buildWorkflowPersistBlockerRecommendedNextStep(
+  blockers: WorkflowPersistBlocker[],
+  sandboxReadiness?: Pick<
+    SandboxReadinessCheck,
+    | "affected_run_count"
+    | "affected_workflow_count"
+    | "primary_blocker_kind"
+    | "recommended_action"
+  > | null
+): OperatorRecommendedNextStep | null {
+  if (blockers.length === 0) {
+    return null;
+  }
+
+  const shouldUseSharedSandboxReadiness = shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution: blockers.some((blocker) => blocker.id === "tool_execution"),
+    signals: blockers.flatMap((blocker) => [blocker.label, blocker.detail, blocker.nextStep])
+  });
+
+  if (!shouldUseSharedSandboxReadiness) {
+    return null;
+  }
+
+  return buildOperatorRecommendedNextStep({
+    execution: buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+  });
 }

@@ -218,6 +218,7 @@ export function WorkflowEditorVariableForm({
         title="Variable save gate"
         summary={variablePersistBlockerSummary}
         blockers={variablePersistBlockers}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <div className="tool-badge-row">

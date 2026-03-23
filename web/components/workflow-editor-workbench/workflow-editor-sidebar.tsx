@@ -31,7 +31,10 @@ import { WorkflowValidationRemediationCard } from "@/components/workflow-validat
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 
-import type { WorkflowPersistBlocker } from "./persist-blockers";
+import {
+  buildWorkflowPersistBlockerRecommendedNextStep,
+  type WorkflowPersistBlocker
+} from "./persist-blockers";
 import type { WorkflowEditorMessageKind, WorkflowEditorMessageTone } from "./shared";
 
 type WorkflowEditorSidebarProps = {
@@ -120,6 +123,10 @@ export function WorkflowEditorSidebar({
     (item) => item.bindingRequired
   ).length;
   const remediationItem = focusedValidationItem ?? preflightValidationItem;
+  const persistBlockerRecommendedNextStep = buildWorkflowPersistBlockerRecommendedNextStep(
+    persistBlockers,
+    sandboxReadiness
+  );
   const feedbackMessage =
     message ??
     (persistBlockers.length > 0
@@ -295,6 +302,7 @@ export function WorkflowEditorSidebar({
             title="Save gate"
             summary={persistBlockerSummary}
             blockers={persistBlockers}
+            sandboxReadiness={sandboxReadiness}
           />
         ) : null}
 
@@ -313,6 +321,7 @@ export function WorkflowEditorSidebar({
           title="Execution preflight"
           intro={executionPreflightMessage}
           hideWhenHealthy={toolExecutionValidationIssueCount === 0}
+          hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
         />
 
         {remediationItem ? (

@@ -1,8 +1,60 @@
-import { createElement } from "react";
+import * as React from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowEditorInspector } from "@/components/workflow-editor-inspector";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+
+Object.assign(globalThis, { React });
+
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
+}));
+
+function buildSandboxReadiness(): SandboxReadinessCheck {
+  return {
+    enabled_backend_count: 0,
+    healthy_backend_count: 0,
+    degraded_backend_count: 0,
+    offline_backend_count: 0,
+    execution_classes: [
+      {
+        execution_class: "sandbox",
+        available: false,
+        backend_ids: [],
+        supported_languages: [],
+        supported_profiles: [],
+        supported_dependency_modes: [],
+        supports_tool_execution: false,
+        supports_builtin_package_sets: false,
+        supports_backend_extensions: false,
+        supports_network_policy: false,
+        supports_filesystem_policy: false,
+        reason:
+          "No sandbox backend is currently enabled. Strong-isolation execution must fail closed until a compatible backend is configured."
+      }
+    ],
+    supported_languages: [],
+    supported_profiles: [],
+    supported_dependency_modes: [],
+    supports_tool_execution: false,
+    supports_builtin_package_sets: false,
+    supports_backend_extensions: false,
+    supports_network_policy: false,
+    supports_filesystem_policy: false,
+    affected_run_count: 4,
+    affected_workflow_count: 1,
+    primary_blocker_kind: "execution_class_blocked",
+    recommended_action: {
+      kind: "workflow library",
+      entry_key: "workflowLibrary",
+      href: "/workflows?execution=sandbox",
+      label: "Open workflow library"
+    }
+  };
+}
 
 describe("WorkflowEditorInspector", () => {
   it("shows the shared save gate remediation summary inside inspector", () => {
@@ -49,7 +101,7 @@ describe("WorkflowEditorInspector", () => {
             nextStep: "请先在 publish draft 表单里修正发布标识、schema、缓存或版本设置，再继续保存。"
           }
         ],
-        sandboxReadiness: null
+        sandboxReadiness: buildSandboxReadiness()
       })
     );
 
@@ -59,5 +111,7 @@ describe("WorkflowEditorInspector", () => {
     expect(html).toContain("Execution capability");
     expect(html).toContain("Publish draft");
     expect(html).toContain("adapter 绑定、execution class 与 sandbox readiness");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("Open workflow library");
   });
 });
