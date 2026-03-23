@@ -1,4 +1,5 @@
 import {
+  buildOperatorFollowUpSurfaceCopy,
   buildRequiredOperatorRunDetailLinkSurface,
   type OperatorFollowUpLinkSurface
 } from "@/lib/operator-follow-up-presenters";
@@ -91,6 +92,8 @@ export type WorkflowPublishPanelSurfaceCopy = {
 
 export type WorkflowCreateWizardSurfaceCopy = {
   heroLinks: WorkbenchEntryLinksConfig;
+  recommendedNextStepTitle: string;
+  createWorkflowRecommendedNextStepLabel: string;
   emptyStateDescription: string;
   emptyStateLinks: WorkbenchEntryLinksConfig;
   scopedGovernanceDescription: string;
@@ -397,6 +400,8 @@ export function buildWorkflowCreateWizardSurfaceCopy({
 }: {
   starterGovernanceHref: string;
 }): WorkflowCreateWizardSurfaceCopy {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
   return {
     heroLinks: {
       keys: ["home", "workspaceStarterLibrary"],
@@ -408,6 +413,8 @@ export function buildWorkflowCreateWizardSurfaceCopy({
       primaryKey: "home",
       variant: "inline"
     },
+    recommendedNextStepTitle: operatorSurfaceCopy.recommendedNextStepTitle,
+    createWorkflowRecommendedNextStepLabel: "创建 workflow",
     emptyStateDescription:
       "这通常说明你是从 workspace starter 治理页带着 follow-up / 搜索条件回来，但当前范围里没有仍可直接创建的 active starter。",
     emptyStateLinks: {

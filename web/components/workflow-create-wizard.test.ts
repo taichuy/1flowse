@@ -166,6 +166,8 @@ describe("WorkflowCreateWizard", () => {
     expect(html).toContain("建议 refresh");
     expect(html).toContain("来源 workflow 0.2.0 相比模板快照 0.1.0 已有漂移。");
     expect(html).toContain("管理这个 workspace starter");
+    expect(html).not.toContain("下一步：");
+    expect(html.match(/Recommended next step/g)?.length).toBe(1);
     expect(html).toContain(
       "/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );
@@ -270,6 +272,8 @@ describe("WorkflowCreateWizard", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("优先 refresh，再进入画布创建草稿。");
     expect(html).toContain("来源 workflow 已推进到 0.4.0。");
+    expect(html).toContain("管理这个 workspace starter");
+    expect(html).not.toContain("下一步：");
   });
 
   it("shows the no-source clear state for workspace starters in the create flow", () => {
@@ -349,8 +353,11 @@ describe("WorkflowCreateWizard", () => {
     );
 
     expect(html).toContain("Source governance");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("创建 workflow");
     expect(html).toContain("这个 starter 没有绑定来源 workflow，当前只保留模板快照。");
     expect(html).toContain("管理这个 workspace starter");
+    expect(html).toContain("Create directly when no upstream source is needed.");
   });
 
   it("keeps workspace starter governance filters in the manage link", () => {

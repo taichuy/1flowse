@@ -24,7 +24,10 @@ import type {
   WorkflowLibraryStarterItem,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
-import { buildWorkflowCreateWizardSurfaceCopy } from "@/lib/workbench-entry-surfaces";
+import {
+  buildWorkflowCreateWizardSurfaceCopy,
+  type WorkflowCreateWizardSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
 import {
   createWorkflow,
   type WorkflowListItem,
@@ -130,15 +133,6 @@ export function WorkflowCreateWizard({
   const selectedStarterSourcePresenter =
     selectedStarterSourceGovernanceSurface?.presenter ?? null;
   const selectedStarterSourceChips = selectedStarterSourcePresenter?.factChips ?? [];
-  const selectedStarterSourceFollowUp =
-    selectedStarterSourceGovernanceSurface?.recommendedNextStep?.detail ??
-    selectedStarterSourcePresenter?.followUp ??
-    "";
-  const selectedStarterSourceFollowUpLabel =
-    selectedStarterSourceGovernanceSurface?.recommendedNextStep?.label ??
-    selectedStarterSourcePresenter?.actionStatusLabel ??
-    selectedStarterSourcePresenter?.statusLabel ??
-    "";
   const shouldRenderSelectedStarterSourceGovernance = Boolean(
     selectedStarter &&
       (selectedStarter.origin === "workspace" ||
@@ -179,6 +173,14 @@ export function WorkflowCreateWizard({
   const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
     starterGovernanceHref
   });
+  const selectedStarterNextStepSurface = selectedStarter
+    ? buildWorkflowCreateStarterNextStepSurface({
+        starter: selectedStarter,
+        sourceGovernanceSurface: selectedStarterSourceGovernanceSurface,
+        starterGovernanceHref,
+        surfaceCopy
+      })
+    : null;
   const selectedStarterSandboxDependencySummary = useMemo(
     () =>
       selectedStarter
@@ -461,9 +463,27 @@ export function WorkflowCreateWizard({
               </div>
               <p className="starter-focus-copy">{selectedStarter.trackSummary}</p>
               <p className="starter-focus-copy">{selectedStarter.source.summary}</p>
-              <p className="starter-focus-copy">
-                下一步：{selectedStarter.recommendedNextStep}
-              </p>
+              {selectedStarterNextStepSurface ? (
+                <div className="entry-card compact-card">
+                  <div className="payload-card-header">
+                    <span className="status-meta">{surfaceCopy.recommendedNextStepTitle}</span>
+                    <span className="event-chip">{selectedStarterNextStepSurface.label}</span>
+                    {selectedStarterNextStepSurface.href &&
+                    selectedStarterNextStepSurface.hrefLabel ? (
+                      <WorkbenchEntryLink
+                        className="inline-link secondary"
+                        linkKey="workspaceStarterLibrary"
+                        override={{ href: selectedStarterNextStepSurface.href }}
+                      >
+                        {selectedStarterNextStepSurface.hrefLabel}
+                      </WorkbenchEntryLink>
+                    ) : null}
+                  </div>
+                  <p className="section-copy starter-summary-copy">
+                    {selectedStarterNextStepSurface.detail}
+                  </p>
+                </div>
+              ) : null}
               {shouldRenderSelectedStarterSourceGovernance && selectedStarterSourcePresenter ? (
                 <div className="binding-form">
                   <p className="binding-label">Source governance</p>
@@ -485,19 +505,6 @@ export function WorkflowCreateWizard({
                   <p className="section-copy starter-summary-copy">
                     {selectedStarterSourcePresenter.summary}
                   </p>
-                  {selectedStarterSourceFollowUp ? (
-                    <div className="entry-card compact-card">
-                      <div className="payload-card-header">
-                        <span className="status-meta">Recommended next step</span>
-                        {selectedStarterSourceFollowUpLabel ? (
-                          <span className="event-chip">{selectedStarterSourceFollowUpLabel}</span>
-                        ) : null}
-                      </div>
-                      <p className="section-copy starter-summary-copy">
-                        {selectedStarterSourceFollowUp}
-                      </p>
-                    </div>
-                  ) : null}
                   {selectedStarterSourceChips.length > 0 ? (
                     <div className="starter-tag-row">
                       {selectedStarterSourceChips.map((chip) => (
@@ -507,18 +514,6 @@ export function WorkflowCreateWizard({
                       ))}
                     </div>
                   ) : null}
-                  <p className="binding-meta">
-                    {surfaceCopy.sourceGovernanceFollowUpPrefix}
-                    {" "}
-                    <WorkbenchEntryLink
-                      className="inline-link secondary"
-                      linkKey="workspaceStarterLibrary"
-                      override={{ href: starterGovernanceHref }}
-                    >
-                      {surfaceCopy.sourceGovernanceFollowUpLinkLabel}
-                    </WorkbenchEntryLink>
-                    。
-                  </p>
                 </div>
               ) : null}
               {selectedStarter.referencedTools.length > 0 ? (
@@ -664,6 +659,17 @@ type WorkspaceStarterSourceGovernanceSurfaceTemplate = Parameters<
   typeof buildWorkspaceStarterSourceGovernanceSurface
 >[0]["template"];
 
+type WorkspaceStarterSourceGovernanceSurface = ReturnType<
+  typeof buildWorkspaceStarterSourceGovernanceSurface
+>;
+
+type WorkflowCreateStarterNextStepSurface = {
+  label: string;
+  detail: string;
+  href: string | null;
+  hrefLabel: string | null;
+};
+
 function toWorkspaceStarterSourceGovernanceTemplate(
   starter: WorkflowStarterTemplate
 ): WorkspaceStarterSourceGovernanceSurfaceTemplate {
@@ -684,6 +690,59 @@ function toWorkspaceStarterSourceGovernanceTemplate(
           action_decision: governance.actionDecision ?? null,
           outcome_explanation: governance.outcomeExplanation ?? null
         }
+      : null
+  };
+}
+
+function buildWorkflowCreateStarterNextStepSurface({
+  starter,
+  sourceGovernanceSurface,
+  starterGovernanceHref,
+  surfaceCopy
+}: {
+  starter: WorkflowStarterTemplate;
+  sourceGovernanceSurface: WorkspaceStarterSourceGovernanceSurface | null;
+  starterGovernanceHref: string;
+  surfaceCopy: WorkflowCreateWizardSurfaceCopy;
+}): WorkflowCreateStarterNextStepSurface {
+  const presenter = sourceGovernanceSurface?.presenter ?? null;
+  const recommendedNextStep = sourceGovernanceSurface?.recommendedNextStep ?? null;
+  const shouldLinkToStarterGovernance =
+    starter.origin === "workspace" ||
+    Boolean(starter.createdFromWorkflowId) ||
+    Boolean(starter.sourceGovernance);
+
+  if (
+    recommendedNextStep &&
+    (recommendedNextStep.action === "refresh" || recommendedNextStep.action === "rebase")
+  ) {
+    return {
+      label: recommendedNextStep.label,
+      detail: recommendedNextStep.detail,
+      href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
+      hrefLabel: shouldLinkToStarterGovernance
+        ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
+        : null
+    };
+  }
+
+  if (presenter?.needsAttention) {
+    return {
+      label: presenter.actionStatusLabel ?? presenter.statusLabel,
+      detail: presenter.followUp ?? presenter.summary,
+      href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
+      hrefLabel: shouldLinkToStarterGovernance
+        ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
+        : null
+    };
+  }
+
+  return {
+    label: surfaceCopy.createWorkflowRecommendedNextStepLabel,
+    detail: starter.recommendedNextStep,
+    href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
+    hrefLabel: shouldLinkToStarterGovernance
+      ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
       : null
   };
 }

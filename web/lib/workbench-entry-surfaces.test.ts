@@ -240,6 +240,8 @@ describe("workbench entry surface copy", () => {
     expect(surfaceCopy.emptyStateLinks.overrides?.workspaceStarterLibrary?.label).toBe(
       "回到治理页"
     );
+    expect(surfaceCopy.recommendedNextStepTitle).toBe("Recommended next step");
+    expect(surfaceCopy.createWorkflowRecommendedNextStepLabel).toBe("创建 workflow");
     expect(surfaceCopy.scopedGovernanceBackLinkLabel).toBe("回到治理页");
     expect(surfaceCopy.sourceGovernanceFollowUpLinkLabel).toBe(
       "管理这个 workspace starter"
