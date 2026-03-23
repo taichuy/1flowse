@@ -22,6 +22,8 @@ node scripts/check-dependabot-drift.js
 - Dependabot open alerts
 - 与本地 `pnpm-lock.yaml`、`package.json` 的版本对比
 
+如果在 GitHub Actions 中运行，脚本还会把结论写入 `GITHUB_STEP_SUMMARY`，方便在 workflow 页面直接查看证据。
+
 ## 结果解释
 
 - `exit 0`
@@ -41,6 +43,19 @@ node scripts/check-dependabot-drift.js
    - 到仓库 `Settings -> Security & analysis` 检查 `Dependency graph` 是否开启。
    - 如仓库策略允许，再检查 `Automatic dependency submission` 是否已配置并正常跑在默认分支。
 4. 不要因为 UI 暂时没刷新就直接 dismiss alert；应先保留命令输出、锁文件事实和结论，再等待依赖图恢复或补管理员侧操作。
+
+## 仓库自动复验
+
+- 仓库提供 `.github/workflows/github-security-drift.yml`，会在以下时机自动复验：
+  - 手动 `workflow_dispatch`
+  - 每日定时 `schedule`
+  - `taichuy_dev` 上与 `web/package.json`、`web/pnpm-lock.yaml`、`scripts/check-dependabot-drift.js` 相关的 push
+- 工作流会上传 `dependabot-drift-report` artifact，并把摘要写入 workflow summary。
+- exit code 解释与本地一致：
+  - `0`：没有 open alert
+  - `1`：仍有真实未修或无法解析的告警，工作流失败
+  - `2`：已确认是平台状态漂移，工作流保留 warning 与证据，但不把本轮代码视为失败
+- 当管理员完成 `Security & analysis` 检查后，优先手动重跑该 workflow，再判断告警是否自动收口。
 
 ## 当前仓库已验证的信号
 

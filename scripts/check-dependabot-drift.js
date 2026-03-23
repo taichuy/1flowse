@@ -140,6 +140,81 @@ function printSection(title) {
   console.log(`\n=== ${title} ===`);
 }
 
+function buildMarkdownSummary({
+  repository,
+  defaultBranch,
+  manifestNodes,
+  openAlerts,
+  results,
+  actionableAlerts,
+}) {
+  const lines = [
+    '## GitHub 安全告警漂移检查',
+    '',
+    `- 仓库：\`${repository.owner}/${repository.repo}\``,
+    `- 默认分支：\`${defaultBranch || 'unknown'}\``,
+    `- dependency graph manifests：\`${manifestNodes.length}\``,
+  ];
+
+  if (manifestNodes.length > 0) {
+    lines.push(
+      `- manifest 列表：${manifestNodes
+        .map((node) => `\`${node.filename}\`（dependencies=${node.dependenciesCount}，parseable=${node.parseable}）`)
+        .join('；')}`,
+    );
+  }
+
+  lines.push('');
+  lines.push('### Dependabot open alerts');
+
+  if (openAlerts.length === 0) {
+    lines.push('');
+    lines.push('- 当前没有 open alert。');
+  } else {
+    lines.push('');
+    lines.push('| Alert | Package | Manifest | Patched | Local | Verdict |');
+    lines.push('| --- | --- | --- | --- | --- | --- |');
+    results.forEach((result, index) => {
+      const alert = openAlerts[index];
+      lines.push(
+        `| #${alert.number} | \`${result.packageName}\` | \`${result.manifestPath}\` | \`${result.patchedVersion || 'unknown'}\` | \`${result.localVersions.join(', ') || 'none'}\` | \`${result.state}\` |`,
+      );
+    });
+  }
+
+  lines.push('');
+  lines.push('### 结论');
+  lines.push('');
+
+  if (openAlerts.length === 0) {
+    lines.push('- 当前没有 open alert。');
+    return lines.join('\n');
+  }
+
+  if (actionableAlerts.length === 0) {
+    lines.push('- 所有 open alerts 都已经被当前锁文件修复，本地事实与 GitHub 告警状态发生漂移。');
+    if (manifestNodes.length === 0) {
+      lines.push(
+        '- GraphQL 依赖图当前没有返回 manifest；优先检查仓库 `Settings -> Security & analysis` 中的 `Dependency graph` 与 `Automatic dependency submission`。',
+      );
+    }
+    lines.push('- 建议保留证据，不要直接 dismiss alert；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
+    return lines.join('\n');
+  }
+
+  lines.push('- 仍存在至少一个未被当前锁文件修复或无法解析的告警，需要继续修依赖或补排查。');
+  return lines.join('\n');
+}
+
+function writeMarkdownSummary(params) {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryPath) {
+    return;
+  }
+
+  fs.writeFileSync(summaryPath, `${buildMarkdownSummary(params)}\n`, 'utf8');
+}
+
 function main() {
   const remoteUrl = run('git', ['config', '--get', 'remote.origin.url']);
   const repository = parseRemoteRepository(remoteUrl);
@@ -175,6 +250,14 @@ function main() {
   printSection('Dependabot open alerts');
   if (openAlerts.length === 0) {
     console.log('当前没有 open alert。');
+    writeMarkdownSummary({
+      repository,
+      defaultBranch: repositoryData.data.repository.defaultBranchRef?.name,
+      manifestNodes,
+      openAlerts,
+      results,
+      actionableAlerts,
+    });
     process.exit(0);
   }
 
@@ -195,10 +278,26 @@ function main() {
       console.log('GitHub GraphQL 依赖图当前没有返回任何 manifest，优先检查仓库 Settings -> Security & analysis 中的 Dependency graph 与 Automatic dependency submission。');
     }
     console.log('建议保留证据，不要直接 dismiss 告警；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
+    writeMarkdownSummary({
+      repository,
+      defaultBranch: repositoryData.data.repository.defaultBranchRef?.name,
+      manifestNodes,
+      openAlerts,
+      results,
+      actionableAlerts,
+    });
     process.exit(2);
   }
 
   console.log('仍存在至少一个未被当前锁文件修复或无法解析的告警，需要继续修依赖或补排查。');
+  writeMarkdownSummary({
+    repository,
+    defaultBranch: repositoryData.data.repository.defaultBranchRef?.name,
+    manifestNodes,
+    openAlerts,
+    results,
+    actionableAlerts,
+  });
   process.exit(1);
 }
 

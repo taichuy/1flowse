@@ -26,6 +26,7 @@
 
 - durable change 必须做与改动类型匹配的验证，不能只靠主观判断宣称完成。
 - 当 GitHub Dependabot 告警与本地锁文件 / `audit` 结果冲突时，先运行 `node scripts/check-dependabot-drift.js`，对齐默认分支 dependency graph、open alert 与本地解析版本，再决定是修依赖还是追查平台状态漂移。
+- 如果仓库已配置 `.github/workflows/github-security-drift.yml`，依赖或锁文件相关改动合入 `taichuy_dev` 后，默认补看一次 workflow summary；`exit 2` 视为平台漂移预警，不直接 dismiss alert。
 - 共享规则、目录入口、技能结构或长期决策变化时，必须同步更新对应文档、`AGENTS.md`、skill 索引或 ADR。
 - 一轮工作经验证成立后，默认做一次非交互式 Git 提交，并尝试把当前分支推送到远端。
 - 如果本轮只是探索态，或推送因权限 / 保护分支 / 网络问题失败，最终汇报里必须明确说明原因。
