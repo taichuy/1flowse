@@ -6,6 +6,7 @@ import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
 import {
   buildWorkflowPublishPrimaryFollowUpSurface,
+  buildWorkflowPublishSummaryCardSurfaces,
 } from "@/lib/published-invocation-presenters";
 import { buildWorkflowPublishPanelSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import type {
@@ -61,20 +62,10 @@ export function WorkflowPublishPanel({
 }: WorkflowPublishPanelProps) {
   const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy();
   const primaryFollowUp = buildWorkflowPublishPrimaryFollowUpSurface(bindings);
-  const publishedCount = bindings.filter(
-    (binding) => binding.lifecycle_status === "published"
-  ).length;
-  const cacheEnabledCount = bindings.filter(
-    (binding) => binding.cache_inventory?.enabled
-  ).length;
-  const cacheEntryCount = bindings.reduce(
-    (count, binding) => count + (binding.cache_inventory?.active_entry_count ?? 0),
-    0
-  );
-  const rejectedCount = bindings.reduce(
-    (count, binding) => count + (binding.activity?.rejected_count ?? 0),
-    0
-  );
+  const summaryCards = buildWorkflowPublishSummaryCardSurfaces({
+    bindings,
+    primaryFollowUp
+  });
 
   return (
     <section className="shell workflow-management-shell">
@@ -90,26 +81,18 @@ export function WorkflowPublishPanel({
         <WorkbenchEntryLinks {...surfaceCopy.headerLinks} />
 
         <div className="summary-strip">
-          <article className="summary-card">
-            <span>Bindings</span>
-            <strong>{bindings.length}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Published</span>
-            <strong>{publishedCount}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Rejected calls</span>
-            <strong>{rejectedCount}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Active cache entries</span>
-            <strong>{cacheEntryCount}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Cache enabled</span>
-            <strong>{cacheEnabledCount}</strong>
-          </article>
+          {summaryCards.map((card) => (
+            <article className="summary-card" key={card.key}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              {card.detail ? <p className="binding-meta">{card.detail}</p> : null}
+              {card.href && card.hrefLabel ? (
+                <Link className="inline-link" href={card.href}>
+                  {card.hrefLabel}
+                </Link>
+              ) : null}
+            </article>
+          ))}
         </div>
 
         <article className="payload-card compact-card">

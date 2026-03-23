@@ -36,6 +36,45 @@ import {
 } from "@/components/workflow-publish-activity-panel-helpers";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
 
+function PublishedInvocationSelectedNextStepCard({
+  surface,
+  showTitle = true
+}: {
+  surface: {
+    title: string;
+    invocationId: string;
+    label: string;
+    detail: string;
+    href?: string | null;
+    hrefLabel?: string | null;
+  };
+  showTitle?: boolean;
+}) {
+  return (
+    <div className="entry-card compact-card">
+      <div className="payload-card-header">
+        {showTitle ? (
+          <div>
+            <p className="entry-card-title">{surface.title}</p>
+            <p className="binding-meta">{surface.invocationId}</p>
+          </div>
+        ) : (
+          <span className="status-meta">{surface.invocationId}</span>
+        )}
+        <span className="event-chip">{surface.label}</span>
+      </div>
+      <p className="section-copy entry-copy">{surface.detail}</p>
+      {surface.href && surface.hrefLabel ? (
+        <div className="tool-badge-row">
+          <Link className="event-chip inbox-filter-link" href={surface.href}>
+            {surface.hrefLabel}
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type WorkflowPublishActivityInsightsProps = {
   binding: WorkflowPublishActivityPanelProps["binding"];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
@@ -254,27 +293,9 @@ export function WorkflowPublishActivityInsights({
             <p className="section-copy entry-copy">{issueSignalsSurface.insight}</p>
           ) : null}
           {issueSignalsSurface.selectedNextStepSurface ? (
-            <div className="entry-card compact-card">
-              <div className="payload-card-header">
-                <div>
-                  <p className="entry-card-title">{issueSignalsSurface.selectedNextStepSurface.title}</p>
-                  <p className="binding-meta">{issueSignalsSurface.selectedNextStepSurface.invocationId}</p>
-                </div>
-                <span className="event-chip">{issueSignalsSurface.selectedNextStepSurface.label}</span>
-              </div>
-              <p className="section-copy entry-copy">{issueSignalsSurface.selectedNextStepSurface.detail}</p>
-              {issueSignalsSurface.selectedNextStepSurface.href &&
-              issueSignalsSurface.selectedNextStepSurface.hrefLabel ? (
-                <div className="tool-badge-row">
-                  <Link
-                    className="event-chip inbox-filter-link"
-                    href={issueSignalsSurface.selectedNextStepSurface.href}
-                  >
-                    {issueSignalsSurface.selectedNextStepSurface.hrefLabel}
-                  </Link>
-                </div>
-              ) : null}
-            </div>
+            <PublishedInvocationSelectedNextStepCard
+              surface={issueSignalsSurface.selectedNextStepSurface}
+            />
           ) : null}
           <div className="tool-badge-row">
             {issueSignalsSurface.chips.map((chip) => (
@@ -403,26 +424,10 @@ export function WorkflowPublishActivityDetails({
                   </>
                 ) : null}
                 {cardSurface.selectedNextStepSurface ? (
-                  <div className="entry-card compact-card">
-                    <div className="payload-card-header">
-                      <span className="status-meta">{cardSurface.selectedNextStepSurface.invocationId}</span>
-                      <span className="event-chip">{cardSurface.selectedNextStepSurface.label}</span>
-                    </div>
-                    <p className="section-copy entry-copy">
-                      {cardSurface.selectedNextStepSurface.detail}
-                    </p>
-                    {cardSurface.selectedNextStepSurface.href &&
-                    cardSurface.selectedNextStepSurface.hrefLabel ? (
-                      <div className="tool-badge-row">
-                        <Link
-                          className="event-chip inbox-filter-link"
-                          href={cardSurface.selectedNextStepSurface.href}
-                        >
-                          {cardSurface.selectedNextStepSurface.hrefLabel}
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
+                  <PublishedInvocationSelectedNextStepCard
+                    surface={cardSurface.selectedNextStepSurface}
+                    showTitle={false}
+                  />
                 ) : null}
                 <p className="section-copy entry-copy">{cardSurface.lastSeenLabel}</p>
               </article>
@@ -432,27 +437,7 @@ export function WorkflowPublishActivityDetails({
       ) : null}
 
       {selectedInvocationSurface.nextStepSurface && !clearInvocationDetailHref ? (
-        <article className="entry-card compact-card">
-          <div className="payload-card-header">
-            <div>
-              <p className="entry-card-title">{selectedInvocationSurface.nextStepSurface.title}</p>
-              <p className="binding-meta">{selectedInvocationSurface.nextStepSurface.invocationId}</p>
-            </div>
-            <span className="event-chip">{selectedInvocationSurface.nextStepSurface.label}</span>
-          </div>
-          <p className="section-copy entry-copy">{selectedInvocationSurface.nextStepSurface.detail}</p>
-          {selectedInvocationSurface.nextStepSurface.href &&
-          selectedInvocationSurface.nextStepSurface.hrefLabel ? (
-            <div className="tool-badge-row">
-              <Link
-                className="event-chip inbox-filter-link"
-                href={selectedInvocationSurface.nextStepSurface.href}
-              >
-                {selectedInvocationSurface.nextStepSurface.hrefLabel}
-              </Link>
-            </div>
-          ) : null}
-        </article>
+        <PublishedInvocationSelectedNextStepCard surface={selectedInvocationSurface.nextStepSurface} />
       ) : null}
 
       {items.length ? (

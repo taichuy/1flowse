@@ -123,6 +123,15 @@ export type WorkflowPublishPrimaryFollowUpSurface = {
   hrefLabel: string | null;
 };
 
+export type WorkflowPublishSummaryCardSurface = {
+  key: string;
+  label: string;
+  value: string;
+  detail: string | null;
+  href: string | null;
+  hrefLabel: string | null;
+};
+
 type PublishedInvocationSensitiveAccessPrimaryBacklog = ReturnType<
   typeof resolveSensitiveAccessPrimaryBacklog
 >;
@@ -3427,6 +3436,82 @@ export function buildWorkflowPublishPrimaryFollowUpSurface(
     href: null,
     hrefLabel: null
   };
+}
+
+export function buildWorkflowPublishSummaryCardSurfaces({
+  bindings,
+  primaryFollowUp
+}: {
+  bindings: Array<
+    Pick<WorkflowPublishedEndpointItem, "activity" | "cache_inventory" | "lifecycle_status">
+  >;
+  primaryFollowUp?: WorkflowPublishPrimaryFollowUpSurface | null;
+}): WorkflowPublishSummaryCardSurface[] {
+  const resolvedPrimaryFollowUp = primaryFollowUp ?? buildWorkflowPublishPrimaryFollowUpSurface(bindings);
+  const publishedCount = bindings.filter((binding) => binding.lifecycle_status === "published").length;
+  const cacheEnabledCount = bindings.filter((binding) => binding.cache_inventory?.enabled).length;
+  const cacheEntryCount = bindings.reduce(
+    (count, binding) => count + (binding.cache_inventory?.active_entry_count ?? 0),
+    0
+  );
+  const rejectedCount = bindings.reduce(
+    (count, binding) => count + (binding.activity?.rejected_count ?? 0),
+    0
+  );
+
+  return [
+    {
+      key: "bindings",
+      label: "Bindings",
+      value: String(bindings.length),
+      detail: null,
+      href: null,
+      hrefLabel: null
+    },
+    {
+      key: "published",
+      label: "Published",
+      value: String(publishedCount),
+      detail: null,
+      href: null,
+      hrefLabel: null
+    },
+    {
+      key: "rejected-calls",
+      label: "Rejected calls",
+      value: String(rejectedCount),
+      detail: null,
+      href: null,
+      hrefLabel: null
+    },
+    {
+      key: "active-cache-entries",
+      label: "Active cache entries",
+      value: String(cacheEntryCount),
+      detail: null,
+      href: null,
+      hrefLabel: null
+    },
+    {
+      key: "cache-enabled",
+      label: "Cache enabled",
+      value: String(cacheEnabledCount),
+      detail: null,
+      href: null,
+      hrefLabel: null
+    },
+    {
+      key: "summary-focus",
+      label: "Summary focus",
+      value: resolvedPrimaryFollowUp.tone === "healthy" ? "clear" : "attention",
+      detail:
+        resolvedPrimaryFollowUp.tone === "healthy"
+          ? resolvedPrimaryFollowUp.headline
+          : resolvedPrimaryFollowUp.detail,
+      href: resolvedPrimaryFollowUp.href,
+      hrefLabel: resolvedPrimaryFollowUp.hrefLabel
+    }
+  ];
 }
 
 export function formatRateLimitPressure(

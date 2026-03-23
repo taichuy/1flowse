@@ -182,6 +182,9 @@ describe("WorkflowPublishPanel", () => {
     expect(html).toContain("backend");
     expect(html).toContain("ready sandbox");
     expect(html).toContain("binding:binding-1");
+    expect(html).toContain("Summary focus");
+    expect(html).toContain("clear");
+    expect(html).toContain("Current publish bindings do not show a shared operator backlog.");
     expect(html).toContain("回到 workflow 列表");
     expect(html).toContain('/workflows');
     expect(html).toContain('/runs');
@@ -233,6 +236,8 @@ describe("WorkflowPublishPanel", () => {
     );
 
     expect(html).toContain("Primary follow-up");
+    expect(html).toContain("Summary focus");
+    expect(html).toContain("attention");
     expect(html).toContain("Sensitive access approvals remain the primary publish backlog");
     expect(html).toContain("2 pending approval tickets");
     expect(html).toContain("binding-level failures");
@@ -283,6 +288,9 @@ describe("WorkflowPublishPanel", () => {
     );
 
     expect(html).toContain("No shared sensitive-access backlog remains at the publish summary level.");
+    expect(html).toContain("Summary focus");
+    expect(html).toContain("attention");
+    expect(html).toContain("Continue from the binding activity panels below to inspect callback waiting, runtime failures or policy mismatches.");
     expect(html).toContain("2 failed invocations");
     expect(html).toContain("1 rejected invocation");
     expect(html).toContain("binding-level diagnosis");
