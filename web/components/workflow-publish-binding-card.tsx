@@ -21,6 +21,7 @@ import type {
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import type { WorkflowDetail } from "@/lib/get-workflows";
+import { buildWorkflowPublishBindingCardSurface } from "@/lib/workflow-publish-binding-presenters";
 import { buildPublishedCacheInventorySurfaceCopy } from "@/lib/published-invocation-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
@@ -54,6 +55,7 @@ export function WorkflowPublishBindingCard({
   callbackWaitingAutomation,
   sandboxReadiness
 }: WorkflowPublishBindingCardProps) {
+  const bindingSurface = buildWorkflowPublishBindingCardSurface(binding);
   const cacheSummary = binding.cache_inventory;
   const activity = binding.activity;
   const resolvedCacheInventory = cacheInventory?.kind === "ok" ? cacheInventory.data : null;
@@ -74,10 +76,6 @@ export function WorkflowPublishBindingCard({
           ? "populated"
           : "empty"
   });
-  const varyBy =
-    cacheSummary && cacheSummary.vary_by.length > 0
-      ? cacheSummary.vary_by
-      : ["full-payload"];
 
   return (
     <article className="binding-card">
@@ -87,24 +85,18 @@ export function WorkflowPublishBindingCard({
           <h3>{binding.endpoint_name}</h3>
         </div>
         <span className={`health-pill ${binding.lifecycle_status}`}>
-          {binding.lifecycle_status}
+          {bindingSurface.lifecycleLabel}
         </span>
       </div>
 
-      <p className="binding-meta">
-        <strong>{binding.endpoint_id}</strong> · alias {binding.endpoint_alias} · path{" "}
-        {binding.route_path}
-      </p>
+      <p className="binding-meta">{bindingSurface.endpointSummary}</p>
 
       <div className="tool-badge-row">
-        <span className="event-chip">{binding.protocol}</span>
-        <span className="event-chip">{binding.auth_mode}</span>
-        <span className="event-chip">
-          workflow {binding.workflow_version} {"->"} {binding.target_workflow_version}
-        </span>
-        <span className="event-chip">
-          {binding.streaming ? "streaming" : "non-streaming"}
-        </span>
+        {bindingSurface.protocolChips.map((chip) => (
+          <span className="event-chip" key={`${binding.id}-${chip}`}>
+            {chip}
+          </span>
+        ))}
       </div>
 
       <div className="publish-meta-grid">
@@ -113,24 +105,12 @@ export function WorkflowPublishBindingCard({
             <span className="status-meta">Activity</span>
           </div>
           <dl className="compact-meta-list">
-            <div>
-              <dt>Total</dt>
-              <dd>{activity?.total_count ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Success</dt>
-              <dd>{activity?.succeeded_count ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Cache</dt>
-              <dd>
-                hit {activity?.cache_hit_count ?? 0} / miss {activity?.cache_miss_count ?? 0}
-              </dd>
-            </div>
-            <div>
-              <dt>Last call</dt>
-              <dd>{formatTimestamp(activity?.last_invoked_at)}</dd>
-            </div>
+            {bindingSurface.activityRows.map((row) => (
+              <div key={row.key}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
           </dl>
         </div>
 
@@ -139,30 +119,12 @@ export function WorkflowPublishBindingCard({
             <span className="status-meta">Policy</span>
           </div>
           <dl className="compact-meta-list">
-            <div>
-              <dt>Rate limit</dt>
-              <dd>
-                {binding.rate_limit_policy
-                  ? `${binding.rate_limit_policy.requests} / ${binding.rate_limit_policy.windowSeconds}s`
-                  : "disabled"}
-              </dd>
-            </div>
-            <div>
-              <dt>Cache policy</dt>
-              <dd>
-                {binding.cache_policy
-                  ? `ttl ${binding.cache_policy.ttl}s · max ${binding.cache_policy.maxEntries}`
-                  : "disabled"}
-              </dd>
-            </div>
-            <div>
-              <dt>Published at</dt>
-              <dd>{formatTimestamp(binding.published_at)}</dd>
-            </div>
-            <div>
-              <dt>Updated</dt>
-              <dd>{formatTimestamp(binding.updated_at)}</dd>
-            </div>
+            {bindingSurface.policyRows.map((row) => (
+              <div key={row.key}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
           </dl>
         </div>
       </div>
@@ -192,30 +154,20 @@ export function WorkflowPublishBindingCard({
         <p className="entry-card-title">Cache inventory</p>
         <p className="section-copy entry-copy">{cacheInventorySurfaceCopy.description}</p>
         <div className="summary-strip compact-strip">
-          <article className="summary-card">
-            <span>Enabled</span>
-            <strong>{cacheSummary?.enabled ? "yes" : "no"}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Entries</span>
-            <strong>{cacheSummary?.active_entry_count ?? 0}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Total hits</span>
-            <strong>{cacheSummary?.total_hit_count ?? 0}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Nearest expiry</span>
-            <strong>{formatTimestamp(cacheSummary?.nearest_expires_at)}</strong>
-          </article>
+          {bindingSurface.cacheInventorySummaryCards.map((card) => (
+            <article className="summary-card" key={card.key}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+            </article>
+          ))}
         </div>
 
         {cacheSummary?.enabled ? (
           <>
             <div className="tool-badge-row">
-              {varyBy.map((fieldPath) => (
-                <span className="event-chip" key={`${binding.id}-${fieldPath}`}>
-                  vary {fieldPath}
+              {bindingSurface.cacheInventoryVaryLabels.map((label) => (
+                <span className="event-chip" key={`${binding.id}-${label}`}>
+                  {label}
                 </span>
               ))}
             </div>
@@ -274,9 +226,7 @@ export function WorkflowPublishBindingCard({
       ) : (
         <div className="entry-card compact-card">
           <p className="entry-card-title">API key governance</p>
-          <p className="empty-state compact">
-            当前 binding 使用 `auth_mode={binding.auth_mode}`，不需要单独管理 published API key。
-          </p>
+          <p className="empty-state compact">{bindingSurface.apiKeyGovernanceEmptyState}</p>
         </div>
       )}
     </article>

@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import type { UpdatePublishedEndpointLifecycleState } from "@/app/actions/publish";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
-import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
+import { buildWorkflowPublishLifecycleActionSurface } from "@/lib/workflow-publish-binding-presenters";
 
 type WorkflowPublishLifecycleFormProps = {
   workflowId: string;
@@ -18,12 +18,18 @@ type WorkflowPublishLifecycleFormProps = {
   ) => Promise<UpdatePublishedEndpointLifecycleState>;
 };
 
-function PublishLifecycleSubmitButton({ label }: { label: string }) {
+function PublishLifecycleSubmitButton({
+  label,
+  pendingLabel
+}: {
+  label: string;
+  pendingLabel: string;
+}) {
   const { pending } = useFormStatus();
 
   return (
     <button className="sync-button" type="submit" disabled={pending}>
-      {pending ? "提交中..." : label}
+      {pending ? pendingLabel : label}
     </button>
   );
 }
@@ -35,15 +41,16 @@ export function WorkflowPublishLifecycleForm({
   sandboxReadiness,
   action
 }: WorkflowPublishLifecycleFormProps) {
-  const nextStatus = currentStatus === "published" ? "offline" : "published";
-  const buttonLabel = currentStatus === "published" ? "下线 endpoint" : "发布 endpoint";
-  const sandboxPreflightHint = formatSandboxReadinessPreflightHint(sandboxReadiness);
+  const surface = buildWorkflowPublishLifecycleActionSurface({
+    currentStatus,
+    sandboxReadiness
+  });
   const initialState: UpdatePublishedEndpointLifecycleState = {
     status: "idle",
     message: "",
     workflowId,
     bindingId,
-    nextStatus
+    nextStatus: surface.nextStatus
   };
   const [state, formAction] = useActionState(action, initialState);
 
@@ -51,14 +58,14 @@ export function WorkflowPublishLifecycleForm({
     <form action={formAction} className="binding-actions publish-lifecycle-form">
       <input type="hidden" name="workflowId" value={workflowId} />
       <input type="hidden" name="bindingId" value={bindingId} />
-      <input type="hidden" name="nextStatus" value={nextStatus} />
-      {sandboxPreflightHint ? (
-        <p className="section-copy entry-copy">
-          当前 lifecycle action 只切换 binding 对外状态；若后续 sampled run 仍依赖 strong-isolation，
-          请先核对：{sandboxPreflightHint}
-        </p>
+      <input type="hidden" name="nextStatus" value={surface.nextStatus} />
+      {surface.preflightDescription ? (
+        <p className="section-copy entry-copy">{surface.preflightDescription}</p>
       ) : null}
-      <PublishLifecycleSubmitButton label={buttonLabel} />
+      <PublishLifecycleSubmitButton
+        label={surface.submitLabel}
+        pendingLabel={surface.pendingLabel}
+      />
       {state.message ? (
         <p className={`sync-message ${state.status}`}>{state.message}</p>
       ) : null}

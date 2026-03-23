@@ -276,4 +276,29 @@ describe("WorkflowPublishBindingCard", () => {
     expect(html).toContain("sandbox:sandbox");
     expect(html).not.toContain("Cache inventory access blocked");
   });
+
+  it("uses shared auth governance fallback copy when api keys are not required", () => {
+    const binding = buildBinding();
+    binding.auth_mode = "session";
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishBindingCard, {
+        workflow: buildWorkflow(),
+        tools: [],
+        binding,
+        cacheInventory: null as never,
+        apiKeys: [],
+        invocationAudit: null,
+        selectedInvocationId: null,
+        selectedInvocationDetail: null as never,
+        rateLimitWindowAudit: null,
+        activeInvocationFilter: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("当前 binding 使用 auth_mode=session，不需要单独管理 published API key。");
+    expect(html).not.toContain("api-key-manager");
+  });
 });
