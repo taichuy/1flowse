@@ -160,6 +160,17 @@ export function buildWorkflowCreateHrefFromWorkspaceStarterViewState(
   return query ? `/workflows/new?${query}` : "/workflows/new";
 }
 
+export function buildWorkflowLibraryHrefFromWorkspaceStarterViewState(
+  viewState: Pick<
+    WorkspaceStarterLibraryViewState,
+    "activeTrack" | "sourceGovernanceKind" | "needsFollowUp" | "searchQuery" | "selectedTemplateId"
+  >
+) {
+  const searchParams = buildWorkspaceStarterGovernanceSearchParams(viewState);
+  const query = searchParams.toString();
+  return query ? `/workflows?${query}` : "/workflows";
+}
+
 export function buildWorkflowEditorHrefFromWorkspaceStarterViewState(
   workflowId: string,
   viewState: Pick<

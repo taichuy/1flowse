@@ -216,7 +216,9 @@ describe("WorkflowPublishPanel", () => {
           timeWindow: "all"
         },
         callbackWaitingAutomation: buildCallbackWaitingAutomation(),
-        sandboxReadiness: buildSandboxReadiness()
+        sandboxReadiness: buildSandboxReadiness(),
+        workflowLibraryHref:
+          "/workflows?starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
       })
     );
 
@@ -231,7 +233,9 @@ describe("WorkflowPublishPanel", () => {
     expect(html).not.toContain('<span class="health-pill healthy">healthy</span>');
     expect(html).toContain("Current publish bindings do not show a shared operator backlog.");
     expect(html).toContain("回到 workflow 列表");
-    expect(html).toContain('/workflows');
+    expect(html).toContain(
+      '/workflows?starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
     expect(html).toContain('/runs');
     expect(html).toContain('/sensitive-access');
     expect(html).toContain("返回系统首页");

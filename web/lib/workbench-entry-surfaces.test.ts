@@ -85,7 +85,11 @@ describe("workbench entry surface copy", () => {
   });
 
   it("keeps workflow library follow-up copy and CTA set centralized", () => {
-    const surfaceCopy = buildWorkflowLibrarySurfaceCopy();
+    const surfaceCopy = buildWorkflowLibrarySurfaceCopy({
+      createWorkflowHref: "/workflows/new?starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+      workspaceStarterLibraryHref:
+        "/workspace-starters?starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    });
 
     expect(surfaceCopy.heroLinks.keys).toEqual([
       "createWorkflow",
@@ -93,9 +97,16 @@ describe("workbench entry surface copy", () => {
       "runLibrary",
       "home"
     ]);
+    expect(surfaceCopy.heroLinks.overrides?.createWorkflow?.href).toContain("starter=starter-1");
+    expect(surfaceCopy.heroLinks.overrides?.workspaceStarterLibrary?.href).toContain(
+      "starter=starter-1"
+    );
     expect(surfaceCopy.nextStepTitle).toBe("继续推进主链");
     expect(surfaceCopy.nextStepLinks.overrides?.workspaceStarterLibrary?.label).toBe(
       "打开 workspace starter library"
+    );
+    expect(surfaceCopy.nextStepLinks.overrides?.workspaceStarterLibrary?.href).toContain(
+      "starter=starter-1"
     );
     expect(surfaceCopy.nextStepLinks.overrides?.operatorInbox?.label).toBe(
       "打开 sensitive access inbox"
@@ -149,7 +160,10 @@ describe("workbench entry surface copy", () => {
   });
 
   it("reuses the shared workflow library CTA contract for publish governance", () => {
-    const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy();
+    const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy({
+      workflowLibraryHref:
+        "/workflows?starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    });
 
     expect(surfaceCopy.eyebrow).toBe("Publish");
     expect(surfaceCopy.title).toBe("Endpoint governance");
@@ -161,6 +175,9 @@ describe("workbench entry surface copy", () => {
       primaryKey: "workflowLibrary",
       variant: "inline"
     });
+    expect(surfaceCopy.headerLinks.overrides?.workflowLibrary?.href).toContain(
+      "starter=starter-1"
+    );
     expect(surfaceCopy.headerLinks.overrides?.workflowLibrary?.label).toBe(
       "回到 workflow 列表"
     );
@@ -203,6 +220,8 @@ describe("workbench entry surface copy", () => {
 
   it("keeps workflow editor governance CTA copy in the shared hero contract", () => {
     const surfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
+      workflowLibraryHref:
+        "/workflows?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
       createWorkflowHref:
         "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted",
       workspaceStarterLibraryHref:
@@ -215,6 +234,9 @@ describe("workbench entry surface copy", () => {
       primaryKey: "workflowLibrary",
       variant: "inline"
     });
+    expect(surfaceCopy.heroLinks.overrides?.workflowLibrary?.href).toContain(
+      "starter=workspace-starter-1"
+    );
     expect(surfaceCopy.heroLinks.overrides?.workflowLibrary?.label).toBe("回到 workflow 列表");
     expect(surfaceCopy.heroLinks.overrides?.createWorkflow?.href).toContain("needs_follow_up=true");
     expect(surfaceCopy.heroLinks.overrides?.workspaceStarterLibrary?.href).toContain(

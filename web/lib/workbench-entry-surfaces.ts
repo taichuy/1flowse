@@ -231,12 +231,26 @@ export function buildAuthorFacingWorkflowDetailLinkSurface({
   };
 }
 
-export function buildWorkflowLibrarySurfaceCopy(): WorkflowLibrarySurfaceCopy {
+export function buildWorkflowLibrarySurfaceCopy({
+  createWorkflowHref = "/workflows/new",
+  workspaceStarterLibraryHref = "/workspace-starters"
+}: {
+  createWorkflowHref?: string;
+  workspaceStarterLibraryHref?: string;
+} = {}): WorkflowLibrarySurfaceCopy {
   return {
     heroDescription:
       "这里汇总可编辑 workflow、工具治理信号与下一步动作，避免从 sensitive access 或首页回链时落到不存在的 workflows 路由。",
     heroLinks: {
-      keys: ["createWorkflow", "workspaceStarterLibrary", "runLibrary", "home"]
+      keys: ["createWorkflow", "workspaceStarterLibrary", "runLibrary", "home"],
+      overrides: {
+        createWorkflow: {
+          href: createWorkflowHref
+        },
+        workspaceStarterLibrary: {
+          href: workspaceStarterLibraryHref
+        }
+      }
     },
     editorListDescription:
       "列表继续复用 editor chip 语义，优先暴露节点数、工具治理与强隔离信号，让作者与 operator 都能直接进入正确的 workflow 详情。",
@@ -251,6 +265,7 @@ export function buildWorkflowLibrarySurfaceCopy(): WorkflowLibrarySurfaceCopy {
       keys: ["workspaceStarterLibrary", "operatorInbox", "runLibrary"],
       overrides: {
         workspaceStarterLibrary: {
+          href: workspaceStarterLibraryHref,
           label: "打开 workspace starter library"
         },
         operatorInbox: {
@@ -339,10 +354,12 @@ export function buildRunDiagnosticsOperatorFollowUpSurfaceCopy(): RunDiagnostics
 }
 
 export function buildWorkflowEditorHeroSurfaceCopy({
+  workflowLibraryHref = "/workflows",
   createWorkflowHref,
   workspaceStarterLibraryHref,
   plannedNodeSummary
 }: {
+  workflowLibraryHref?: string;
   createWorkflowHref: string;
   workspaceStarterLibraryHref: string;
   plannedNodeSummary?: string | null;
@@ -352,6 +369,7 @@ export function buildWorkflowEditorHeroSurfaceCopy({
       keys: ["workflowLibrary", "home", "createWorkflow", "workspaceStarterLibrary"],
       overrides: {
         workflowLibrary: {
+          href: workflowLibraryHref,
           label: "回到 workflow 列表"
         },
         createWorkflow: {
@@ -421,7 +439,11 @@ export function buildWorkflowEditorStarterSaveSurfaceCopy({
   };
 }
 
-export function buildWorkflowPublishPanelSurfaceCopy(): WorkflowPublishPanelSurfaceCopy {
+export function buildWorkflowPublishPanelSurfaceCopy({
+  workflowLibraryHref = "/workflows"
+}: {
+  workflowLibraryHref?: string;
+} = {}): WorkflowPublishPanelSurfaceCopy {
   return {
     eyebrow: "Publish",
     title: "Endpoint governance",
@@ -435,6 +457,7 @@ export function buildWorkflowPublishPanelSurfaceCopy(): WorkflowPublishPanelSurf
       keys: ["workflowLibrary", "runLibrary", "operatorInbox", "home"],
       overrides: {
         workflowLibrary: {
+          href: workflowLibraryHref,
           label: "回到 workflow 列表"
         }
       },

@@ -21,14 +21,30 @@ import { getWorkflows, type WorkflowListItem } from "@/lib/get-workflows";
 import { formatCountMap } from "@/lib/runtime-presenters";
 import {
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  buildWorkflowLibraryHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState
+} from "@/lib/workspace-starter-governance-query";
+import {
+  pickWorkspaceStarterGovernanceQueryScope,
+  readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
 
 export const metadata: Metadata = {
   title: "Workflows | 7Flows Studio"
 };
 
-export default async function WorkflowsPage() {
+type WorkflowsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function WorkflowsPage({
+  searchParams
+}: WorkflowsPageProps = {}) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const workspaceStarterViewState = pickWorkspaceStarterGovernanceQueryScope(
+    readWorkspaceStarterLibraryViewState(resolvedSearchParams)
+  );
   const [workflows, systemOverview, sensitiveAccessInbox, workflowLibrary] = await Promise.all([
     getWorkflows(),
     getSystemOverview(),
@@ -36,11 +52,19 @@ export default async function WorkflowsPage() {
     getWorkflowLibrarySnapshot()
   ]);
   const summary = buildWorkflowLibrarySummary(workflows);
-  const surfaceCopy = buildWorkflowLibrarySurfaceCopy();
+  const surfaceCopy = buildWorkflowLibrarySurfaceCopy({
+    createWorkflowHref: buildWorkflowCreateHrefFromWorkspaceStarterViewState(
+      workspaceStarterViewState
+    ),
+    workspaceStarterLibraryHref: buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+      workspaceStarterViewState
+    )
+  });
   const recommendedNextStep = buildWorkflowLibraryRecommendedNextStep({
     summary,
     sandboxReadiness: systemOverview.sandbox_readiness,
-    starters: workflowLibrary.starters
+    starters: workflowLibrary.starters,
+    workspaceStarterViewState
   });
   const crossEntryRiskDigest = buildCrossEntryRiskDigest({
     sandboxReadiness: systemOverview.sandbox_readiness,
@@ -109,9 +133,12 @@ export default async function WorkflowsPage() {
           ) : (
             <div className="workflow-chip-row">
               {workflows.map((workflow) => {
-                const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
-                  workflowId: workflow.id
-                });
+                const workflowDetailLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState(
+                  {
+                    workflowId: workflow.id,
+                    viewState: workspaceStarterViewState
+                  }
+                );
 
                 return (
                   <WorkflowChipLink
@@ -220,16 +247,21 @@ function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
 function buildWorkflowLibraryRecommendedNextStep({
   summary,
   sandboxReadiness,
-  starters
+  starters,
+  workspaceStarterViewState
 }: {
   summary: ReturnType<typeof buildWorkflowLibrarySummary>;
   sandboxReadiness?: SandboxReadinessCheck | null;
   starters: WorkflowLibraryStarterItem[];
+  workspaceStarterViewState: Parameters<
+    typeof buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState
+  >[0]["viewState"];
 }): OperatorRecommendedNextStep | null {
   const workflowMissingTools = summary.workflowsWithMissingTools[0] ?? null;
   if (workflowMissingTools) {
-    const workflowLink = buildAuthorFacingWorkflowDetailLinkSurface({
+    const workflowLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
       workflowId: workflowMissingTools.id,
+      viewState: workspaceStarterViewState,
       variant: "editor"
     });
     const missingToolCount = workflowMissingTools.tool_governance?.missing_tool_ids.length ?? 0;
@@ -246,8 +278,9 @@ function buildWorkflowLibraryRecommendedNextStep({
 
   const workflowStrongIsolation = summary.workflowsWithStrongIsolation[0] ?? null;
   if (workflowStrongIsolation && hasWorkflowLibrarySandboxRisk(sandboxReadiness)) {
-    const workflowLink = buildAuthorFacingWorkflowDetailLinkSurface({
+    const workflowLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
       workflowId: workflowStrongIsolation.id,
+      viewState: workspaceStarterViewState,
       variant: "editor"
     });
 
@@ -263,14 +296,20 @@ function buildWorkflowLibraryRecommendedNextStep({
   }
 
   if (summary.workflowCount === 0) {
-    return buildWorkflowLibraryEmptyStateRecommendedNextStep(starters);
+    return buildWorkflowLibraryEmptyStateRecommendedNextStep(
+      starters,
+      workspaceStarterViewState
+    );
   }
 
   return null;
 }
 
 function buildWorkflowLibraryEmptyStateRecommendedNextStep(
-  starters: WorkflowLibraryStarterItem[]
+  starters: WorkflowLibraryStarterItem[],
+  workspaceStarterViewState: Parameters<
+    typeof buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState
+  >[0]["viewState"]
 ): OperatorRecommendedNextStep {
   const activeStarters = starters.filter((starter) => !starter.archived);
   const starterRequiringGovernanceFollowUp =
@@ -322,7 +361,9 @@ function buildWorkflowLibraryEmptyStateRecommendedNextStep(
     label: "starter library",
     detail:
       "当前 workflow 列表仍为空，workspace starter library 里也还没有可直接复用的 active starter；先准备第一个 starter，再回到创建页继续主链。",
-    href: "/workspace-starters",
+    href: buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+      workspaceStarterViewState
+    ),
     href_label: "打开 workspace starter library"
   };
 }

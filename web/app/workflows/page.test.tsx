@@ -292,4 +292,69 @@ describe("WorkflowsPage", () => {
     expect(html).toContain("用这个 starter 创建 workflow");
     expect(html).toContain("/workflows/new?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92");
   });
+
+  it("preserves workspace starter scope across workflow library links", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshot()
+    );
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshot());
+    vi.mocked(getWorkflows).mockResolvedValue([
+      {
+        id: "workflow-1",
+        name: "Scoped workflow",
+        version: "1.0.0",
+        status: "draft",
+        node_count: 4,
+        tool_governance: {
+          referenced_tool_ids: ["tool-1"],
+          missing_tool_ids: ["tool-missing"],
+          governed_tool_count: 1,
+          strong_isolation_tool_count: 0
+        }
+      }
+    ]);
+
+    const html = renderToStaticMarkup(
+      await WorkflowsPage({
+        searchParams: Promise.resolve({
+          track: "应用新建编排",
+          starter: "starter-openclaw"
+        })
+      })
+    );
+
+    expect(html).toContain(
+      '/workflows/new?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
+    expect(html).toContain(
+      '/workspace-starters?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
+    expect(html).toContain(
+      '/workflows/workflow-1?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
+  });
+
+  it("keeps the fallback starter-library CTA inside the current starter scope", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshot()
+    );
+    vi.mocked(getWorkflows).mockResolvedValue([]);
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshot());
+
+    const html = renderToStaticMarkup(
+      await WorkflowsPage({
+        searchParams: Promise.resolve({
+          track: "应用新建编排",
+          starter: "starter-openclaw"
+        })
+      })
+    );
+
+    expect(html).toContain("starter library");
+    expect(html).toContain(
+      '/workspace-starters?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
+  });
 });

@@ -45,6 +45,7 @@ type WorkflowPublishPanelProps = {
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowLibraryHref?: string;
 };
 
 export function WorkflowPublishPanel({
@@ -59,9 +60,10 @@ export function WorkflowPublishPanel({
   rateLimitWindowAuditsByBinding,
   activeInvocationFilter,
   callbackWaitingAutomation,
-  sandboxReadiness
+  sandboxReadiness,
+  workflowLibraryHref
 }: WorkflowPublishPanelProps) {
-  const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy();
+  const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy({ workflowLibraryHref });
   const primaryFollowUp = buildWorkflowPublishPrimaryFollowUpSurface(bindings);
   const primaryFollowUpToneSurface = buildWorkflowPublishPrimaryFollowUpToneSurface(
     primaryFollowUp.tone

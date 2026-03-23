@@ -76,6 +76,8 @@ describe("WorkflowEditorHero", () => {
 
   it("keeps workspace starter governance scope in editor actions", () => {
     const surfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
+      workflowLibraryHref:
+        "/workflows?starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
       createWorkflowHref:
         "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
       workspaceStarterLibraryHref:
@@ -107,6 +109,8 @@ describe("WorkflowEditorHero", () => {
         persistBlockers: [],
         isSaving: false,
         isSavingStarter: false,
+        workflowLibraryHref:
+          "/workflows?starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
         createWorkflowHref:
           "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
         workspaceStarterLibraryHref:
@@ -120,7 +124,9 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain(surfaceCopy.scopedGovernancePrefix);
     expect(html).toContain(surfaceCopy.scopedGovernanceBackLinkLabel);
     expect(html).toContain(surfaceCopy.scopedGovernanceCreateWorkflowLabel);
-    expect(html).toContain('/workflows');
+    expect(html).toContain(
+      '/workflows?starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
     expect(html).toContain(
       "/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );

@@ -34,6 +34,7 @@ type WorkflowEditorHeroProps = {
   persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
   isSaving: boolean;
   isSavingStarter: boolean;
+  workflowLibraryHref?: string;
   createWorkflowHref?: string;
   workspaceStarterLibraryHref?: string;
   hasScopedWorkspaceStarterFilters?: boolean;
@@ -66,6 +67,7 @@ export function WorkflowEditorHero({
   persistBlockerRecommendedNextStep = null,
   isSaving,
   isSavingStarter,
+  workflowLibraryHref = "/workflows",
   createWorkflowHref = "/workflows/new",
   workspaceStarterLibraryHref = "/workspace-starters",
   hasScopedWorkspaceStarterFilters = false,
@@ -74,6 +76,7 @@ export function WorkflowEditorHero({
 }: WorkflowEditorHeroProps) {
   const plannedNodeSummary = plannedNodeLabels.join(" / ");
   const heroSurfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
+    workflowLibraryHref,
     createWorkflowHref,
     workspaceStarterLibraryHref,
     plannedNodeSummary

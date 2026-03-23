@@ -58,6 +58,7 @@ type WorkflowEditorWorkbenchProps = {
   sandboxReadiness?: SandboxReadinessCheck | null;
   sandboxBackends?: SandboxBackendCheck[] | null;
   recentRuns: WorkflowRunListItem[];
+  workflowLibraryHref?: string;
   createWorkflowHref?: string;
   workspaceStarterLibraryHref?: string;
   hasScopedWorkspaceStarterFilters?: boolean;
@@ -76,6 +77,7 @@ export function WorkflowEditorWorkbench({
   sandboxReadiness,
   sandboxBackends,
   recentRuns,
+  workflowLibraryHref,
   createWorkflowHref,
   workspaceStarterLibraryHref,
   hasScopedWorkspaceStarterFilters = false,
@@ -245,6 +247,7 @@ export function WorkflowEditorWorkbench({
           persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
           isSaving={persistence.isSaving}
           isSavingStarter={persistence.isSavingStarter}
+          workflowLibraryHref={workflowLibraryHref}
           createWorkflowHref={createWorkflowHref}
           workspaceStarterLibraryHref={workspaceStarterLibraryHref}
           hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
