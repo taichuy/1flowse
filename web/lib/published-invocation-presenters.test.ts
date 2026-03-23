@@ -1276,6 +1276,40 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("在 publish slice 被 legacy unsupported auth mode 阻塞时提升治理 blocker", () => {
+    expect(
+      buildWorkflowPublishPrimaryFollowUpSurface([
+        {
+          lifecycle_status: "draft",
+          activity: {
+            total_count: 0,
+            succeeded_count: 0,
+            failed_count: 0,
+            rejected_count: 0,
+            cache_hit_count: 0,
+            cache_miss_count: 0,
+            cache_bypass_count: 0
+          },
+          issues: [
+            {
+              category: "unsupported_auth_mode",
+              message: "Legacy token auth is still persisted on this binding.",
+              remediation: "Switch back to api_key or internal before publishing.",
+              blocks_lifecycle_publish: true
+            }
+          ]
+        }
+      ])
+    ).toEqual({
+      tone: "attention",
+      headline: "1 binding is blocked by legacy unsupported auth mode governance.",
+      detail:
+        "Switch these bindings back to auth_mode `api_key` or `internal`, save the workflow to resync durable bindings, then retry publish lifecycle actions from the cards below.",
+      href: null,
+      hrefLabel: null
+    });
+  });
+
   it("在 workflow 尚未配置 publish bindings 时不再把 publish summary 说成 clear", () => {
     expect(buildWorkflowPublishPrimaryFollowUpSurface([])).toEqual({
       tone: "attention",

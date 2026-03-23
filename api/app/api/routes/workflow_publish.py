@@ -16,6 +16,9 @@ from app.services.workflow_publish import (
     WorkflowPublishBindingError,
     WorkflowPublishBindingService,
 )
+from app.services.workflow_publish_auth_mode_validation import (
+    collect_invalid_published_endpoint_auth_mode_issues,
+)
 
 router = APIRouter(prefix="/workflows", tags=["workflow-publish"])
 workflow_publish_service = WorkflowPublishBindingService()
@@ -77,6 +80,11 @@ def _serialize_workflow_published_endpoint_item(
     activity: PublishedEndpointInvocationSummary | None = None,
     cache_inventory=None,
 ) -> WorkflowPublishedEndpointItem:
+    issues = collect_invalid_published_endpoint_auth_mode_issues(
+        endpoint_id=record.endpoint_id,
+        endpoint_name=record.endpoint_name,
+        auth_mode=record.auth_mode,
+    )
     return WorkflowPublishedEndpointItem(
         id=record.id,
         workflow_id=record.workflow_id,
@@ -103,6 +111,7 @@ def _serialize_workflow_published_endpoint_item(
         updated_at=record.updated_at,
         activity=_serialize_published_invocation_summary(activity),
         cache_inventory=_serialize_published_cache_inventory_summary(cache_inventory),
+        issues=issues,
     )
 
 

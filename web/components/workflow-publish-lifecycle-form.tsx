@@ -6,12 +6,14 @@ import { useFormStatus } from "react-dom";
 import type { UpdatePublishedEndpointLifecycleState } from "@/app/actions/publish";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { buildWorkflowPublishLifecycleActionSurface } from "@/lib/workflow-publish-binding-presenters";
+import type { WorkflowPublishedEndpointIssue } from "@/lib/get-workflow-publish";
 
 type WorkflowPublishLifecycleFormProps = {
   workflowId: string;
   bindingId: string;
   currentStatus: "draft" | "published" | "offline";
   sandboxReadiness?: SandboxReadinessCheck | null;
+  issues?: WorkflowPublishedEndpointIssue[];
   action: (
     state: UpdatePublishedEndpointLifecycleState,
     formData: FormData
@@ -20,15 +22,17 @@ type WorkflowPublishLifecycleFormProps = {
 
 function PublishLifecycleSubmitButton({
   label,
-  pendingLabel
+  pendingLabel,
+  disabled = false
 }: {
   label: string;
   pendingLabel: string;
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
   return (
-    <button className="sync-button" type="submit" disabled={pending}>
+    <button className="sync-button" type="submit" disabled={pending || disabled}>
       {pending ? pendingLabel : label}
     </button>
   );
@@ -39,11 +43,13 @@ export function WorkflowPublishLifecycleForm({
   bindingId,
   currentStatus,
   sandboxReadiness,
+  issues,
   action
 }: WorkflowPublishLifecycleFormProps) {
   const surface = buildWorkflowPublishLifecycleActionSurface({
     currentStatus,
-    sandboxReadiness
+    sandboxReadiness,
+    issues
   });
   const initialState: UpdatePublishedEndpointLifecycleState = {
     status: "idle",
@@ -65,6 +71,7 @@ export function WorkflowPublishLifecycleForm({
       <PublishLifecycleSubmitButton
         label={surface.submitLabel}
         pendingLabel={surface.pendingLabel}
+        disabled={surface.submitDisabled}
       />
       {state.message ? (
         <p className={`sync-message ${state.status}`}>{state.message}</p>

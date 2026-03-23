@@ -408,6 +408,14 @@ export type PublishedEndpointCacheInventoryResponse = {
   items: PublishedEndpointCacheInventoryItem[];
 };
 
+export type WorkflowPublishedEndpointIssue = {
+  category: "unsupported_auth_mode";
+  message: string;
+  field?: string | null;
+  remediation?: string | null;
+  blocks_lifecycle_publish: boolean;
+};
+
 export type PublishedEndpointApiKeyItem = {
   id: string;
   workflow_id: string;
@@ -459,4 +467,5 @@ export type WorkflowPublishedEndpointItem = {
   updated_at: string;
   activity?: PublishedEndpointInvocationSummary | null;
   cache_inventory?: PublishedEndpointCacheInventorySummary | null;
+  issues?: WorkflowPublishedEndpointIssue[];
 };

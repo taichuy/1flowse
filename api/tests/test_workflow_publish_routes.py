@@ -54,6 +54,7 @@ def test_create_workflow_persists_publish_bindings(client: TestClient) -> None:
     assert body[0]["cache_policy"] is None
     assert body[0]["published_at"] is None
     assert body[0]["unpublished_at"] is None
+    assert body[0]["issues"] == []
 
 
 def test_create_workflow_persists_publish_cache_policy(client: TestClient) -> None:
@@ -1219,7 +1220,7 @@ def test_invoke_published_native_endpoint_uses_response_cache(
     assert all(item["cache_key"] for item in cache_inventory_body["items"])
 
 
-def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
+def test_publish_binding_rejects_legacy_unsupported_auth_mode(
     client: TestClient,
     sqlite_session: Session,
 ) -> None:
@@ -1263,26 +1264,48 @@ def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/lifecycle",
         json={"status": "published"},
     )
-    assert publish_response.status_code == 200
+    assert publish_response.status_code == 422
+    assert "unsupported legacy auth mode 'token'" in publish_response.json()["detail"]
+    assert "use 'api_key' or 'internal'" in publish_response.json()["detail"]
+
+    list_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert list_response.status_code == 200
+    listed_binding = list_response.json()[0]
+    assert listed_binding["issues"] == [
+        {
+            "category": "unsupported_auth_mode",
+            "message": (
+                "Published endpoint 'Native Chat' still uses unsupported legacy auth "
+                "mode 'token'. Current publish lifecycle only supports durable "
+                "bindings with auth_mode 'api_key' or 'internal'."
+            ),
+            "field": "auth_mode",
+            "remediation": (
+                "Update the workflow definition to use 'api_key' or 'internal', save "
+                "to resync bindings, then retry the publish lifecycle action."
+            ),
+            "blocks_lifecycle_publish": True,
+        }
+    ]
 
     invoke_response = client.post(
         f"/v1/workflows/{workflow_id}/published-endpoints/native-chat/run",
         json={"input_payload": {}},
     )
-    assert invoke_response.status_code == 422
-    assert "auth mode 'token' is not supported yet" in invoke_response.json()["detail"]
+    assert invoke_response.status_code == 404
 
     activity_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations"
     )
     assert activity_response.status_code == 200
     body = activity_response.json()
-    assert body["summary"]["total_count"] == 1
-    assert body["summary"]["rejected_count"] == 1
-    assert body["summary"]["last_status"] == "rejected"
-    assert body["items"][0]["status"] == "rejected"
-    assert body["items"][0]["run_id"] is None
-    assert body["items"][0]["run_follow_up"] is None
+    assert body["summary"]["total_count"] == 0
+    assert body["summary"]["rejected_count"] == 0
+    assert body["summary"]["last_status"] is None
+    assert body["items"] == []
 
 
 def test_get_published_invocation_detail_drills_into_run_callback_and_cache(

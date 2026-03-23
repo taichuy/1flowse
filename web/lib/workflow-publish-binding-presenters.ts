@@ -19,6 +19,12 @@ export type WorkflowPublishBindingSummaryCard = {
   value: string;
 };
 
+export type WorkflowPublishBindingIssueSurface = {
+  title: string;
+  message: string;
+  remediation: string | null;
+};
+
 export type WorkflowPublishBindingCardSurface = {
   headerEyebrow: string;
   lifecycleLabel: string;
@@ -36,6 +42,7 @@ export type WorkflowPublishBindingCardSurface = {
   cacheInventorySummaryCards: WorkflowPublishBindingSummaryCard[];
   cacheInventoryVaryLabels: string[];
   cacheEntryTitle: string;
+  issueSurface: WorkflowPublishBindingIssueSurface | null;
   apiKeyGovernanceTitle: string;
   apiKeyGovernanceEmptyState: string;
 };
@@ -45,6 +52,7 @@ export type WorkflowPublishLifecycleActionSurface = {
   submitLabel: string;
   pendingLabel: string;
   preflightDescription: string | null;
+  submitDisabled: boolean;
 };
 
 export type WorkflowPublishExportActionSurface = {
@@ -186,6 +194,14 @@ function resolveLatestApiKeyLastUsedAt(apiKeys: PublishedEndpointApiKeyItem[]) {
   return latestValue;
 }
 
+function resolveLifecycleBlockingIssue(
+  binding: Pick<WorkflowPublishedEndpointItem, "issues">
+) {
+  return (
+    binding.issues?.find((issue) => issue.blocks_lifecycle_publish) ?? null
+  );
+}
+
 export function buildWorkflowPublishBindingCardSurface(
   binding: WorkflowPublishedEndpointItem
 ): WorkflowPublishBindingCardSurface {
@@ -198,6 +214,17 @@ export function buildWorkflowPublishBindingCardSurface(
     cacheSummary && cacheSummary.vary_by.length > 0
       ? cacheSummary.vary_by
       : ["full-payload"];
+  const lifecycleBlockingIssue = resolveLifecycleBlockingIssue(binding);
+  const issueSurface = lifecycleBlockingIssue
+    ? {
+        title: "Publish governance blocker",
+        message: lifecycleBlockingIssue.message,
+        remediation: lifecycleBlockingIssue.remediation ?? null
+      }
+    : null;
+  const apiKeyGovernanceEmptyState = lifecycleBlockingIssue
+    ? `当前 binding 仍处于 unsupported legacy auth mode：${lifecycleBlockingIssue.message}`
+    : `当前 binding 使用 auth_mode=${binding.auth_mode}，不需要单独管理 published API key。`;
 
   return {
     headerEyebrow: "Endpoint",
@@ -277,8 +304,9 @@ export function buildWorkflowPublishBindingCardSurface(
     ],
     cacheInventoryVaryLabels: varyBy.map((fieldPath) => `vary ${fieldPath}`),
     cacheEntryTitle: "Cache entry",
+    issueSurface,
     apiKeyGovernanceTitle: "API key governance",
-    apiKeyGovernanceEmptyState: `当前 binding 使用 auth_mode=${binding.auth_mode}，不需要单独管理 published API key。`
+    apiKeyGovernanceEmptyState
   };
 }
 
@@ -407,22 +435,37 @@ export function buildWorkflowPublishLifecycleMutationSuccessMessage({
 
 export function buildWorkflowPublishLifecycleActionSurface({
   currentStatus,
-  sandboxReadiness
+  sandboxReadiness,
+  issues = []
 }: {
   currentStatus: "draft" | "published" | "offline";
   sandboxReadiness?: SandboxReadinessCheck | null;
+  issues?: WorkflowPublishedEndpointItem["issues"];
 }): WorkflowPublishLifecycleActionSurface {
   const nextStatus = currentStatus === "published" ? "offline" : "published";
   const submitLabel = currentStatus === "published" ? "下线 endpoint" : "发布 endpoint";
   const sandboxPreflightHint = formatSandboxReadinessPreflightHint(sandboxReadiness);
+  const lifecycleBlockingIssue =
+    nextStatus === "published"
+      ? (issues ?? []).find((issue) => issue.blocks_lifecycle_publish) ?? null
+      : null;
+  const preflightDetails = [
+    lifecycleBlockingIssue
+      ? [lifecycleBlockingIssue.message, lifecycleBlockingIssue.remediation]
+          .filter((fragment): fragment is string => Boolean(fragment))
+          .join(" ")
+      : null,
+    sandboxPreflightHint
+      ? `当前 lifecycle action 只切换 binding 对外状态；若后续 sampled run 仍依赖 strong-isolation，请先核对：${sandboxPreflightHint}`
+      : null
+  ].filter((fragment): fragment is string => Boolean(fragment));
 
   return {
     nextStatus,
     submitLabel,
     pendingLabel: "提交中...",
-    preflightDescription: sandboxPreflightHint
-      ? `当前 lifecycle action 只切换 binding 对外状态；若后续 sampled run 仍依赖 strong-isolation，请先核对：${sandboxPreflightHint}`
-      : null
+    preflightDescription: preflightDetails.join(" ") || null,
+    submitDisabled: Boolean(lifecycleBlockingIssue)
   };
 }
 

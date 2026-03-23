@@ -204,8 +204,32 @@ describe("workflow-publish-binding-presenters", () => {
     expect(surface.cacheInventoryBlockedFallbackTitle).toBe("Cache inventory access blocked");
     expect(surface.cacheInventoryVaryLabels).toEqual(["vary full-payload"]);
     expect(surface.cacheEntryTitle).toBe("Cache entry");
+    expect(surface.issueSurface).toBeNull();
     expect(surface.apiKeyGovernanceTitle).toBe("API key governance");
     expect(surface.apiKeyGovernanceEmptyState).toContain("auth_mode=session");
+  });
+
+  it("surfaces lifecycle blockers for legacy unsupported auth modes", () => {
+    const surface = buildWorkflowPublishBindingCardSurface({
+      ...buildBinding(),
+      auth_mode: "token",
+      issues: [
+        {
+          category: "unsupported_auth_mode",
+          message: "Legacy token auth is still persisted on this binding.",
+          field: "auth_mode",
+          remediation: "Switch back to api_key or internal before publishing.",
+          blocks_lifecycle_publish: true
+        }
+      ]
+    });
+
+    expect(surface.issueSurface).toEqual({
+      title: "Publish governance blocker",
+      message: "Legacy token auth is still persisted on this binding.",
+      remediation: "Switch back to api_key or internal before publishing."
+    });
+    expect(surface.apiKeyGovernanceEmptyState).toContain("unsupported legacy auth mode");
   });
 
   it("maps binding lifecycle enums to shared user-facing labels", () => {
@@ -274,9 +298,33 @@ describe("workflow-publish-binding-presenters", () => {
     expect(surface.nextStatus).toBe("offline");
     expect(surface.submitLabel).toBe("下线 endpoint");
     expect(surface.pendingLabel).toBe("提交中...");
+    expect(surface.submitDisabled).toBe(false);
     expect(surface.preflightDescription).toContain("当前 lifecycle action 只切换 binding 对外状态");
     expect(surface.preflightDescription).toContain("当前 sandbox readiness：");
     expect(surface.preflightDescription).toContain("degraded");
+  });
+
+  it("adds legacy auth blocker guidance before publish lifecycle actions", () => {
+    const surface = buildWorkflowPublishLifecycleActionSurface({
+      currentStatus: "draft",
+      issues: [
+        {
+          category: "unsupported_auth_mode",
+          message: "Legacy token auth is still persisted on this binding.",
+          remediation: "Switch back to api_key or internal before publishing.",
+          blocks_lifecycle_publish: true
+        }
+      ]
+    });
+
+    expect(surface.nextStatus).toBe("published");
+    expect(surface.submitDisabled).toBe(true);
+    expect(surface.preflightDescription).toContain(
+      "Legacy token auth is still persisted on this binding."
+    );
+    expect(surface.preflightDescription).toContain(
+      "Switch back to api_key or internal before publishing."
+    );
   });
 
   it("builds shared lifecycle mutation messages", () => {

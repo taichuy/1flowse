@@ -102,6 +102,16 @@ export function WorkflowPublishBindingCard({
         ))}
       </div>
 
+      {bindingSurface.issueSurface ? (
+        <div className="entry-card compact-card">
+          <p className="entry-card-title">{bindingSurface.issueSurface.title}</p>
+          <p className="section-copy entry-copy">{bindingSurface.issueSurface.message}</p>
+          {bindingSurface.issueSurface.remediation ? (
+            <p className="binding-meta">{bindingSurface.issueSurface.remediation}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="publish-meta-grid">
         <div className="payload-card compact-card">
           <div className="payload-card-header">
@@ -221,6 +231,7 @@ export function WorkflowPublishBindingCard({
         bindingId={binding.id}
         currentStatus={binding.lifecycle_status}
         sandboxReadiness={sandboxReadiness}
+        issues={binding.issues}
         action={updatePublishedEndpointLifecycle}
       />
 

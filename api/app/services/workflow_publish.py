@@ -14,6 +14,9 @@ from app.schemas.workflow_published_endpoint import (
     normalize_published_endpoint_path,
 )
 from app.services.compiled_blueprints import CompiledBlueprintService
+from app.services.workflow_publish_auth_mode_validation import (
+    collect_invalid_published_endpoint_auth_mode_issues,
+)
 
 
 class WorkflowPublishBindingError(ValueError):
@@ -227,6 +230,23 @@ class WorkflowPublishBindingService:
                 "Lifecycle status 'draft' is reserved for synced bindings "
                 "and cannot be set manually."
             )
+
+        if lifecycle_status == "published":
+            blocking_issue = next(
+                iter(
+                    collect_invalid_published_endpoint_auth_mode_issues(
+                        endpoint_id=record.endpoint_id,
+                        endpoint_name=record.endpoint_name,
+                        auth_mode=record.auth_mode,
+                    )
+                ),
+                None,
+            )
+            if blocking_issue is not None and blocking_issue.blocks_lifecycle_publish:
+                detail = blocking_issue.message
+                if blocking_issue.remediation:
+                    detail = f"{detail} {blocking_issue.remediation}"
+                raise WorkflowPublishBindingError(detail)
 
         now = datetime.now(UTC)
         if lifecycle_status == "published":

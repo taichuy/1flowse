@@ -59,10 +59,19 @@ PublishedEndpointInvocationReasonCode = Literal[
     "workflow_missing",
 ]
 PublishedEndpointInvocationTimeBucketGranularity = Literal["hour", "day"]
+PublishedEndpointIssueCategory = Literal["unsupported_auth_mode"]
 
 
 class WorkflowPublishedEndpointLifecycleUpdate(BaseModel):
     status: Literal["published", "offline"]
+
+
+class WorkflowPublishedEndpointIssue(BaseModel):
+    category: PublishedEndpointIssueCategory
+    message: str
+    field: str | None = None
+    remediation: str | None = None
+    blocks_lifecycle_publish: bool = False
 
 
 class WorkflowPublishedEndpointItem(BaseModel):
@@ -91,6 +100,7 @@ class WorkflowPublishedEndpointItem(BaseModel):
     updated_at: datetime
     activity: PublishedEndpointInvocationSummary | None = None
     cache_inventory: PublishedEndpointCacheInventorySummary | None = None
+    issues: list[WorkflowPublishedEndpointIssue] = Field(default_factory=list)
 
 
 class PublishedNativeRunRequest(BaseModel):

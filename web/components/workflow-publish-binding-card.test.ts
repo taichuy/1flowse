@@ -236,6 +236,41 @@ describe("WorkflowPublishBindingCard", () => {
     expect(html).toContain("lifecycle-form:sandbox");
   });
 
+  it("renders publish governance blockers from binding issues", () => {
+    const binding = buildBinding();
+    binding.auth_mode = "token";
+    binding.issues = [
+      {
+        category: "unsupported_auth_mode",
+        message: "Legacy token auth is still persisted on this binding.",
+        field: "auth_mode",
+        remediation: "Switch back to api_key or internal before publishing.",
+        blocks_lifecycle_publish: true
+      }
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishBindingCard, {
+        workflow: buildWorkflow(),
+        tools: [],
+        binding,
+        cacheInventory: null as never,
+        apiKeys: [],
+        invocationAudit: null,
+        selectedInvocationId: null,
+        selectedInvocationDetail: null as never,
+        rateLimitWindowAudit: null,
+        activeInvocationFilter: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Publish governance blocker");
+    expect(html).toContain("Legacy token auth is still persisted on this binding.");
+    expect(html).toContain("Switch back to api_key or internal before publishing.");
+  });
+
   it("uses shared blocked surface copy for cache inventory", () => {
     const binding = buildBinding();
     binding.cache_inventory = {

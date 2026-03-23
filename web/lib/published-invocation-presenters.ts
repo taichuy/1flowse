@@ -3880,7 +3880,9 @@ function formatWorkflowPublishLifecycleCoverageDetail({
 }
 
 export function buildWorkflowPublishPrimaryFollowUpSurface(
-  bindings: Array<Pick<WorkflowPublishedEndpointItem, "activity" | "lifecycle_status">>
+  bindings: Array<
+    Pick<WorkflowPublishedEndpointItem, "activity" | "lifecycle_status" | "issues">
+  >
 ): WorkflowPublishPrimaryFollowUpSurface {
   const aggregateSummary = bindings.reduce<WorkflowPublishSensitiveAccessAggregate>(
     (summary, binding) => {
@@ -3955,6 +3957,9 @@ export function buildWorkflowPublishPrimaryFollowUpSurface(
   );
   const bindingsWithOperatorBacklog = bindings.reduce((count, binding) => {
     return resolvePublishedInvocationSensitiveAccessPrimaryBacklog(binding.activity) ? count + 1 : count;
+  }, 0);
+  const lifecycleBlockedBindings = bindings.reduce((count, binding) => {
+    return binding.issues?.some((issue) => issue.blocks_lifecycle_publish) ? count + 1 : count;
   }, 0);
 
   const inboxLabel = buildSensitiveAccessTimelineSurfaceCopy({
@@ -4093,6 +4098,17 @@ export function buildWorkflowPublishPrimaryFollowUpSurface(
   }
 
   if (lifecycleCoverage.published === 0) {
+    if (lifecycleBlockedBindings > 0) {
+      return {
+        tone: "attention",
+        headline: `${formatCountLabel(lifecycleBlockedBindings, "binding")} ${lifecycleBlockedBindings === 1 ? "is" : "are"} blocked by legacy unsupported auth mode governance.`,
+        detail:
+          "Switch these bindings back to auth_mode `api_key` or `internal`, save the workflow to resync durable bindings, then retry publish lifecycle actions from the cards below.",
+        href: null,
+        hrefLabel: null
+      };
+    }
+
     const lifecycleFollowUpDetails = [
       formatWorkflowPublishLifecycleCoverageDetail({
         count: lifecycleCoverage.draft,
