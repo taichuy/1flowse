@@ -108,6 +108,14 @@ describe("callback waiting presenters", () => {
     });
   });
 
+  it("没有稳定 CTA 时，不把裸 follow_up 投影成 recommended next step", () => {
+    expect(
+      buildCallbackWaitingRecommendedNextStep({
+        operatorFollowUp: "先继续观察 callback ticket 是否真正被消费。"
+      })
+    ).toBeNull();
+  });
+
   it("暴露 callback waiting 共享 surface copy", () => {
     expect(buildCallbackWaitingSummarySurfaceCopy()).toMatchObject({
       recommendedNextStepTitle: "Recommended next step",

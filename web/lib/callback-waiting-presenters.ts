@@ -247,30 +247,32 @@ export function buildCallbackWaitingRecommendedNextStep({
   operatorFollowUp?: string | null;
   surfaceCopy?: CallbackWaitingSummarySurfaceCopy;
 }): OperatorRecommendedNextStep | null {
-  if (!action) {
-    return buildOperatorRecommendedNextStep({
-      callback: buildCallbackWaitingAutomationFollowUpCandidate(
+  const callbackCandidate = !action
+    ? buildCallbackWaitingAutomationFollowUpCandidate(
         callbackWaitingAutomation,
         "callback recovery"
-      ),
-      operatorFollowUp,
-      operatorLabel: "callback waiting follow-up"
-    });
+      )
+    : {
+        active: true,
+        label: action.label,
+        detail: null,
+        href: CALLBACK_WAITING_RECOMMENDED_ACTIONS_WITH_INBOX_CTA.has(action.kind)
+          ? inboxHref?.trim() || null
+          : null,
+        href_label: CALLBACK_WAITING_RECOMMENDED_ACTIONS_WITH_INBOX_CTA.has(action.kind)
+          ? (inboxHref?.trim()
+              ? action.ctaLabel?.trim() || surfaceCopy.defaultInboxLinkLabel
+              : null)
+          : null,
+        fallback_detail: action.detail
+      };
+
+  if (!callbackCandidate) {
+    return null;
   }
 
-  const href = CALLBACK_WAITING_RECOMMENDED_ACTIONS_WITH_INBOX_CTA.has(action.kind)
-    ? inboxHref?.trim() || null
-    : null;
-
   return buildOperatorRecommendedNextStep({
-    callback: {
-      active: true,
-      label: action.label,
-      detail: null,
-      href,
-      href_label: href ? action.ctaLabel?.trim() || surfaceCopy.defaultInboxLinkLabel : null,
-      fallback_detail: action.detail
-    },
+    callback: callbackCandidate,
     operatorFollowUp,
     operatorLabel: "callback waiting follow-up"
   });

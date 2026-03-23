@@ -2450,11 +2450,14 @@ export function buildPublishedInvocationRecommendedNextStep({
     detail: executionFocusFollowUp,
     fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
   });
+  const hasStableRecommendedCandidate = Boolean(
+    callbackCandidate?.active || executionCandidate.active
+  );
 
   return buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
     execution: executionCandidate,
-    operatorFollowUp: canonicalFollowUp?.follow_up ?? null
+    operatorFollowUp: hasStableRecommendedCandidate ? canonicalFollowUp?.follow_up ?? null : null
   });
 }
 

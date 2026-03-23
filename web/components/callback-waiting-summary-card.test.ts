@@ -270,6 +270,21 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(html).toContain("data-testid=\"callback-waiting-inline-actions\"");
   });
 
+  it("keeps callback follow-up as explanation when no stable next-step target exists", () => {
+    const html = renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        callbackWaitingExplanation: {
+          primary_signal: "当前 waiting 节点仍在等待 callback。",
+          follow_up: "先继续观察 callback ticket 是否真正被消费。"
+        },
+        showInlineActions: false
+      })
+    );
+
+    expect(html).toContain("先继续观察 callback ticket 是否真正被消费。");
+    expect(html).not.toContain("Recommended next step");
+  });
+
   it("prefers the canonical operator recommended next step when requested", () => {
     const html = renderToStaticMarkup(
       createElement(CallbackWaitingSummaryCard, {

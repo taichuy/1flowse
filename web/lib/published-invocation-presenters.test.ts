@@ -2162,6 +2162,24 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("没有稳定 CTA 或导航目标时，不再把 canonical follow-up 单独投影成 next-step 卡片", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: null,
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: "先继续回看 invocation 的 callback / execution 事实链。",
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingActive: false,
+        callbackWaitingFollowUp: null,
+        executionFocusFollowUp: null,
+        blockingInboxHref: null,
+        approvalInboxHref: null
+      })
+    ).toBeNull();
+  });
+
   it("优先复用后端 canonical approval action，而不是回退到本地 run CTA", () => {
     expect(
       buildPublishedInvocationRecommendedNextStep({
