@@ -6,9 +6,17 @@ import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocke
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
 
+let mockPathname = "/workflows/workflow-1";
+let mockSearchParams = "";
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockPathname,
+  useSearchParams: () => new URLSearchParams(mockSearchParams)
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
@@ -264,6 +272,97 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).toContain("run_id=run-sampled-1");
   });
 
+  it("keeps workspace starter scope on blocked-card run drilldown links", () => {
+    mockSearchParams =
+      "track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&needs_follow_up=true";
+
+    const payload: SensitiveAccessBlockingPayload = {
+      detail: "Blocked export still needs approval.",
+      resource: {
+        id: "resource-scope-1",
+        label: "Trace export",
+        description: "Scoped trace export",
+        sensitivity_level: "L3",
+        source: "workspace_resource",
+        metadata: {
+          run_id: "run-1"
+        }
+      },
+      access_request: {
+        id: "request-scope-1",
+        run_id: "run-1",
+        node_run_id: "node-run-1",
+        requester_type: "human",
+        requester_id: "ops-reviewer",
+        resource_id: "resource-scope-1",
+        action_type: "read",
+        decision: "require_approval"
+      },
+      approval_ticket: {
+        id: "ticket-scope-1",
+        access_request_id: "request-scope-1",
+        run_id: "run-1",
+        node_run_id: "node-run-1",
+        status: "pending",
+        waiting_status: "waiting",
+        approved_by: null
+      },
+      notifications: [],
+      outcome_explanation: {
+        primary_signal: "审批票据仍在等待处理。",
+        follow_up: "先处理审批票据，再继续回看 scoped run detail。"
+      },
+      run_snapshot: {
+        status: "waiting",
+        currentNodeId: "approval_wait",
+        executionFocusNodeId: "approval_wait",
+        executionFocusNodeRunId: "node-run-1",
+        executionFocusNodeName: "Approval Wait"
+      },
+      run_follow_up: {
+        affectedRunCount: 1,
+        sampledRunCount: 1,
+        waitingRunCount: 1,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 0,
+        unknownRunCount: 0,
+        explanation: {
+          primary_signal: "本次影响 1 个 run；已回读 1 个样本。",
+          follow_up: "优先留在当前 workspace starter scope 继续排障。"
+        },
+        sampledRuns: [
+          {
+            runId: "run-sampled-1",
+            snapshot: {
+              status: "waiting",
+              currentNodeId: "approval_wait",
+              executionFocusNodeId: "approval_wait",
+              executionFocusNodeRunId: "node-run-sampled-1",
+              executionFocusNodeName: "Approval Wait"
+            }
+          }
+        ]
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBlockedCard, {
+        title: "Sensitive access blocked",
+        payload
+      })
+    );
+
+    expect(html).toContain(
+      "/runs/run-1?needs_follow_up=true&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+    expect(html).toContain(
+      "/runs/run-sampled-1?needs_follow_up=true&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+
+    mockSearchParams = "";
+  });
+
   it("keeps approval inbox CTA in callback waiting summaries when canonical action is missing", () => {
     const payload: SensitiveAccessBlockingPayload = {
       detail: "Published invocation detail requires approval before the payload can be viewed.",
@@ -482,5 +581,3 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).not.toContain("approval blocker");
   });
 });
-
-

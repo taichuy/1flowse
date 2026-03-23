@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
@@ -28,6 +29,10 @@ import {
   buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 function normalizeApprovalStatus(value?: string | null) {
   return value === "pending" || value === "approved" || value === "rejected" || value === "expired"
@@ -56,7 +61,26 @@ export function SensitiveAccessBlockedCard({
   callbackWaitingAutomation = null,
   sandboxReadiness = null
 }: SensitiveAccessBlockedCardProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const runId = resolveSensitiveAccessBlockingRunId(payload);
+  const currentHref = React.useMemo(() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+  const workspaceStarterViewState = React.useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
+  const scopedRunDetailHref = runId ? resolveRunDetailHref(runId) : null;
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const inboxHref = buildSensitiveAccessInboxHref({
     runId,
@@ -72,6 +96,7 @@ export function SensitiveAccessBlockedCard({
   });
   const runLink = buildOperatorRunDetailLinkSurface({
     runId,
+    runHref: scopedRunDetailHref,
     hrefLabel: runId,
     surfaceCopy: operatorSurfaceCopy
   });
@@ -106,8 +131,10 @@ export function SensitiveAccessBlockedCard({
       hasCallbackWaitingSummaryFacts(payload.run_snapshot ?? null)
   );
   const recommendedNextStep = buildSensitiveAccessBlockedRecommendedNextStep({
+    currentHref,
     inboxHref,
     runId,
+    runHref: scopedRunDetailHref,
     outcomeExplanation: canonicalOutcomeExplanation,
     runSnapshot: payload.run_snapshot ?? null,
     runFollowUpExplanation: payload.run_follow_up?.explanation ?? null,
@@ -117,6 +144,7 @@ export function SensitiveAccessBlockedCard({
     sandboxReadiness
   });
   const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
+    currentHref,
     inboxHref,
     callbackWaitingAutomation,
     showSensitiveAccessInlineActions: false,
@@ -214,9 +242,11 @@ export function SensitiveAccessBlockedCard({
       {hasStructuredFollowUp ? (
         <InlineOperatorActionFeedback
           callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+          currentHref={currentHref}
           message=""
           outcomeExplanation={canonicalOutcomeExplanation}
           recommendedNextStep={recommendedNextStep}
+          resolveRunDetailHref={resolveRunDetailHref}
           runFollowUpExplanation={payload.run_follow_up?.explanation ?? null}
           runFollowUp={payload.run_follow_up ?? null}
           runId={runId}

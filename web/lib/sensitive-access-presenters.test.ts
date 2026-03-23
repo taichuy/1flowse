@@ -286,6 +286,19 @@ describe("sensitive access presenters", () => {
       href: "/runs/run-1",
       href_label: operatorSurfaceCopy.openRunLabel
     });
+
+    expect(
+      buildSensitiveAccessBlockedRecommendedNextStep({
+        currentHref:
+          "/workflows/workflow-1?needs_follow_up=true&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+        runId: "run-1",
+        runHref:
+          "/runs/run-1?needs_follow_up=true&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+      })
+    ).toMatchObject({
+      href: "/runs/run-1?needs_follow_up=true&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+      href_label: operatorSurfaceCopy.openRunLabel
+    });
   });
 
   it("没有稳定 CTA 或导航目标时，不再把 follow_up 单独投影成 next-step 卡片", () => {

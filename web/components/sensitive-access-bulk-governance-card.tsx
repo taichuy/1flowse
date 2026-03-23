@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import React from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import type {
   SensitiveAccessBulkAction,
   SensitiveAccessBulkActionResult
@@ -14,6 +16,10 @@ import {
   buildSensitiveAccessBulkResultNarrative,
   buildSensitiveAccessBulkRunSampleCards
 } from "@/lib/sensitive-access-bulk-result-presenters";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 type SensitiveAccessBulkGovernanceCardProps = {
   inScopeCount: number;
@@ -47,12 +53,34 @@ export function SensitiveAccessBulkGovernanceCard({
   messageTone,
   onAction
 }: SensitiveAccessBulkGovernanceCardProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentHref = React.useMemo(() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+  const workspaceStarterViewState = React.useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const recommendedNextStep = lastResult
-    ? buildSensitiveAccessBulkRecommendedNextStep(lastResult)
+    ? buildSensitiveAccessBulkRecommendedNextStep(lastResult, { currentHref })
     : null;
   const narrativeItems = lastResult ? buildSensitiveAccessBulkResultNarrative(lastResult) : [];
   const sampledRunCards = lastResult ? buildSensitiveAccessBulkRunSampleCards(lastResult) : [];
+  const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = React.useMemo(
+    () => ({ currentHref }),
+    [currentHref]
+  );
   const hasStructuredResultSections =
     Boolean(recommendedNextStep) || narrativeItems.length > 0 || sampledRunCards.length > 0;
   const shouldShowMessage =
@@ -197,6 +225,8 @@ export function SensitiveAccessBulkGovernanceCard({
               </p>
               <OperatorRunSampleCardList
                 cards={sampledRunCards}
+                callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+                resolveRunDetailHref={resolveRunDetailHref}
                 skillTraceDescription="批量治理结果现在也会复用 compact snapshot 里的 skill trace，方便直接确认受影响 run 的 focus node 注入来源。"
               />
             </div>

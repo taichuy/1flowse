@@ -21,8 +21,10 @@ export type SensitiveAccessBulkNarrativeItem = {
 export type SensitiveAccessBulkRunSampleCard = OperatorRunSampleCard;
 
 export function buildSensitiveAccessBulkRecommendedNextStep(
-  result: SensitiveAccessBulkActionResult
+  result: SensitiveAccessBulkActionResult,
+  options: { currentHref?: string | null } = {}
 ): OperatorRecommendedNextStep | null {
+  const { currentHref = null } = options;
   const operatorFollowUp = normalizeExplanationText(result.runFollowUpExplanation, "follow_up");
   const candidate = buildOperatorRecommendedActionCandidate({
     action: result.runFollowUp?.recommendedAction ?? null,
@@ -37,6 +39,7 @@ export function buildSensitiveAccessBulkRecommendedNextStep(
 
   return buildOperatorRecommendedNextStep({
     execution: candidate,
+    currentHref,
     operatorFollowUp,
     operatorLabel: "bulk follow-up"
   });

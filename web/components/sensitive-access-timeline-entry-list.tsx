@@ -43,6 +43,10 @@ import {
   getSensitiveAccessTimelineCanonicalOutcomeExplanation
 } from "@/lib/sensitive-access-presenters";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 type SensitiveAccessTimelineEntryListProps = {
   entries: SensitiveAccessTimelineEntry[];
@@ -206,6 +210,18 @@ export function SensitiveAccessTimelineEntryList({
     const search = searchParams?.toString();
     return search ? `${pathname}?${search}` : pathname;
   }, [pathname, searchParams]);
+  const workspaceStarterViewState = useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilterValue>("all");
   const [ticketFilter, setTicketFilter] = useState<TicketFilterValue>("all");
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilterValue>("all");
@@ -407,8 +423,10 @@ export function SensitiveAccessTimelineEntryList({
                   null
               })
             : buildSensitiveAccessBlockedRecommendedNextStep({
+                currentHref,
                 inboxHref: inboxSliceHref,
                 runId,
+                runHref: runId ? resolveRunDetailHref(runId) : null,
                 outcomeExplanation: canonicalOutcomeExplanation,
                 runSnapshot: runContext.snapshot,
                 runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null,
@@ -474,6 +492,7 @@ export function SensitiveAccessTimelineEntryList({
                   {(() => {
                     const runLink = buildOperatorRunDetailLinkSurface({
                       runId,
+                      runHref: runId ? resolveRunDetailHref(runId) : null,
                       hrefLabel: runId
                         ? formatOperatorOpenRunLinkLabel(runId, operatorSurfaceCopy)
                         : null,
@@ -530,6 +549,7 @@ export function SensitiveAccessTimelineEntryList({
                       ? null
                       : recommendedNextStep
                   }
+                  resolveRunDetailHref={resolveRunDetailHref}
                   runFollowUpExplanation={runContext.runFollowUp?.explanation ?? null}
                   runFollowUp={runContext.runFollowUp ?? null}
                   runId={runId}

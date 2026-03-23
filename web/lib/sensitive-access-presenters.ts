@@ -328,8 +328,10 @@ function sensitiveAccessNeedsSharedSandboxFollowUp({
 }
 
 export function buildSensitiveAccessBlockedRecommendedNextStep({
+  currentHref,
   inboxHref,
   runId,
+  runHref,
   outcomeExplanation,
   runSnapshot,
   runFollowUpExplanation,
@@ -338,8 +340,10 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   callbackWaitingActive = false,
   sandboxReadiness
 }: {
+  currentHref?: string | null;
   inboxHref?: string | null;
   runId?: string | null;
+  runHref?: string | null;
   outcomeExplanation?: SignalFollowUpExplanation | null;
   runSnapshot?: OperatorRunSnapshotSummary | null;
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
@@ -418,6 +422,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
     ? buildSharedOrLocalOperatorCandidate({
         sharedCandidate: canonicalCallbackCandidate ?? sharedCallbackRecoveryCandidate,
         active: Boolean(inboxHref),
+        currentHref,
         label: "approval blocker",
         detail: blockerFollowUp,
         href: inboxHref,
@@ -429,7 +434,9 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   const executionCandidate = buildSharedOrLocalOperatorCandidate({
     sharedCandidate: sharedSandboxCandidate ?? canonicalExecutionCandidate,
     active: Boolean(runId),
+    currentHref,
     runId,
+    runHref,
     detail: executionFollowUp,
     fallbackDetail:
       "当前阻断结果已经回接 canonical run snapshot；如果审批已处理，优先打开 run detail 确认 waiting 与 focus node 是否恢复。",
@@ -442,6 +449,7 @@ export function buildSensitiveAccessBlockedRecommendedNextStep({
   return buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
     execution: executionCandidate,
+    currentHref,
     operatorFollowUp: hasStableRecommendedCandidate ? blockerFollowUp : null,
     operatorLabel: "approval follow-up"
   });

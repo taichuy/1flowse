@@ -5,9 +5,17 @@ import { describe, expect, it, vi } from "vitest";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 
+let mockPathname = "/runs/run-1";
+let mockSearchParams = "";
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockPathname,
+  useSearchParams: () => new URLSearchParams(mockSearchParams)
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
@@ -453,6 +461,58 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).toContain('/runs/run-sampled-preferred');
     expect(markup).toContain('run_id=run-sampled-preferred');
     expect(markup).not.toContain('run-context-should-not-win');
+  });
+
+  it("keeps workspace starter scope on approval blocker run drilldown links", () => {
+    mockSearchParams =
+      "track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&needs_follow_up=true";
+
+    const markup = renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          buildTimelineEntry({
+            run_follow_up: {
+              affected_run_count: 1,
+              sampled_run_count: 1,
+              waiting_run_count: 1,
+              running_run_count: 0,
+              succeeded_run_count: 0,
+              failed_run_count: 0,
+              unknown_run_count: 0,
+              sampled_runs: [
+                {
+                  run_id: "run-sampled-scope",
+                  snapshot: {
+                    status: "waiting",
+                    workflowId: "workflow-1",
+                    currentNodeId: "tool_wait",
+                    waitingReason: "approval pending",
+                    executionFocusNodeId: "tool_wait",
+                    executionFocusNodeRunId: "node-run-sampled-scope",
+                    executionFocusNodeName: "Tool Wait"
+                  }
+                }
+              ],
+              explanation: {
+                primary_signal: "本次影响 1 个 run；已回读 1 个样本。",
+                follow_up: "优先留在当前 workspace starter scope。"
+              }
+            }
+          })
+        ],
+        emptyCopy: "empty",
+        defaultRunId: "run-1"
+      })
+    );
+
+    expect(markup).toContain(
+      "/runs/run-1?needs_follow_up=true&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+    expect(markup).toContain(
+      "/runs/run-sampled-scope?needs_follow_up=true&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+
+    mockSearchParams = "";
   });
 
   it("不会为已经完成且无需 follow-up 的 entry 重复渲染 callback waiting 摘要", () => {
