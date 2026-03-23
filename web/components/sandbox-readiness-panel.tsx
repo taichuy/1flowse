@@ -1,4 +1,10 @@
+import React from "react";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import Link from "next/link";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import {
   buildSandboxExecutionClassCapabilityChips,
   formatSandboxReadinessDetail,
@@ -7,6 +13,7 @@ import {
   listSandboxBlockedClasses,
   listSandboxReadinessCapabilityChips
 } from "@/lib/sandbox-readiness-presenters";
+import { buildSandboxReadinessFollowUpCandidate } from "@/lib/system-overview-follow-up-presenters";
 
 type SandboxReadinessPanelProps = {
   readiness: SandboxReadinessCheck;
@@ -18,6 +25,10 @@ export function SandboxReadinessPanel({ readiness }: SandboxReadinessPanelProps)
   const capabilityChips = listSandboxReadinessCapabilityChips(readiness);
   const readinessHeadline = formatSandboxReadinessHeadline(readiness);
   const readinessDetail = formatSandboxReadinessDetail(readiness);
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const recommendedNextStep = buildOperatorRecommendedNextStep({
+    execution: buildSandboxReadinessFollowUpCandidate(readiness, "sandbox readiness")
+  });
 
   return (
     <article className="diagnostic-panel panel-span">
@@ -64,6 +75,21 @@ export function SandboxReadinessPanel({ readiness }: SandboxReadinessPanelProps)
         <p className="section-copy entry-copy">{readinessHeadline}</p>
         {readinessDetail ? <p className="binding-meta">{readinessDetail}</p> : null}
       </article>
+
+      {recommendedNextStep ? (
+        <article className="entry-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
+            <span className="event-chip">{recommendedNextStep.label}</span>
+            {recommendedNextStep.href && recommendedNextStep.href_label ? (
+              <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                {recommendedNextStep.href_label}
+              </Link>
+            ) : null}
+          </div>
+          <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+        </article>
+      ) : null}
 
       <div className="activity-list">
         {readiness.execution_classes.map((entry) => {

@@ -1,6 +1,11 @@
 import React from "react";
+import Link from "next/link";
 
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
 import {
   formatSandboxReadinessDetail,
   formatSandboxReadinessHeadline,
@@ -8,6 +13,7 @@ import {
   listSandboxBlockedClasses,
   listSandboxReadinessCapabilityChips
 } from "@/lib/sandbox-readiness-presenters";
+import { buildSandboxReadinessFollowUpCandidate } from "@/lib/system-overview-follow-up-presenters";
 
 type SandboxReadinessOverviewCardProps = {
   readiness?: SandboxReadinessCheck | null;
@@ -53,6 +59,10 @@ export function SandboxReadinessOverviewCard({
         : "healthy";
   const statusLabel =
     blockedClasses.length > 0 ? "blocked" : hasOperationalRisk ? "degraded" : "ready";
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const recommendedNextStep = buildOperatorRecommendedNextStep({
+    execution: buildSandboxReadinessFollowUpCandidate(readiness, "sandbox readiness")
+  });
 
   return (
     <article className="payload-card compact-card">
@@ -64,6 +74,20 @@ export function SandboxReadinessOverviewCard({
       <p className="binding-meta">{formatSandboxReadinessHeadline(readiness)}</p>
       {formatSandboxReadinessDetail(readiness) ? (
         <p className="section-copy entry-copy">{formatSandboxReadinessDetail(readiness)}</p>
+      ) : null}
+      {recommendedNextStep ? (
+        <div className="entry-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
+            <span className="event-chip">{recommendedNextStep.label}</span>
+            {recommendedNextStep.href && recommendedNextStep.href_label ? (
+              <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                {recommendedNextStep.href_label}
+              </Link>
+            ) : null}
+          </div>
+          <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+        </div>
       ) : null}
       {chips.length > 0 ? (
         <div className="tool-badge-row">
