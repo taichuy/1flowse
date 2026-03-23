@@ -10,7 +10,13 @@ import {
   type WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
 
-import type { WorkspaceStarterMessageTone } from "./shared";
+import {
+  buildWorkspaceStarterMutationFallbackErrorMessage,
+  buildWorkspaceStarterMutationNetworkErrorMessage,
+  buildWorkspaceStarterMutationPendingMessage,
+  buildWorkspaceStarterMutationSuccessMessage,
+  type WorkspaceStarterMessageTone
+} from "./shared";
 
 type UseWorkspaceStarterSourceOptions = {
   selectedTemplate: WorkspaceStarterTemplateItem | null;
@@ -120,9 +126,12 @@ export function useWorkspaceStarterSource({
     setIsLoadingSourceDiff(true);
 
     try {
-      setSourceDiff(await getWorkspaceStarterSourceDiff(templateId));
+      const nextSourceDiff = await getWorkspaceStarterSourceDiff(templateId);
+      setSourceDiff(nextSourceDiff);
+      return nextSourceDiff;
     } catch {
       setSourceDiff(null);
+      return null;
     } finally {
       setIsLoadingSourceDiff(false);
     }
@@ -143,7 +152,7 @@ export function useWorkspaceStarterSource({
     }
 
     startRefreshingTransition(async () => {
-      setMessage("正在从源 workflow 刷新 starter 快照...");
+      setMessage(buildWorkspaceStarterMutationPendingMessage("refresh"));
       setMessageTone("idle");
 
       try {
@@ -159,7 +168,11 @@ export function useWorkspaceStarterSource({
           | null;
 
         if (!response.ok || !body || !("id" in body)) {
-          setMessage(body && "detail" in body ? body.detail ?? "刷新失败。" : "刷新失败。");
+          setMessage(
+            body && "detail" in body
+              ? body.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage("refresh")
+              : buildWorkspaceStarterMutationFallbackErrorMessage("refresh")
+          );
           setMessageTone("error");
           return;
         }
@@ -169,16 +182,17 @@ export function useWorkspaceStarterSource({
         );
         setSelectedTemplateId(body.id);
         await reloadHistory(body.id);
-        await reloadSourceDiff(body.id);
+        const nextSourceDiff = await reloadSourceDiff(body.id);
         setMessage(
-          `已刷新 workspace starter：${body.name}。${buildSandboxDriftSuccessSuffix(
-            sourceDiff,
-            "refresh"
-          )}`
+          buildWorkspaceStarterMutationSuccessMessage({
+            action: "refresh",
+            templateName: body.name,
+            sourceDiff: nextSourceDiff
+          })
         );
         setMessageTone("success");
       } catch {
-        setMessage("无法连接后端刷新 starter，请确认 API 已启动。");
+        setMessage(buildWorkspaceStarterMutationNetworkErrorMessage("refresh"));
         setMessageTone("error");
       }
     });
@@ -190,7 +204,7 @@ export function useWorkspaceStarterSource({
     }
 
     startRebasingTransition(async () => {
-      setMessage("正在基于 source workflow 执行 rebase...");
+      setMessage(buildWorkspaceStarterMutationPendingMessage("rebase"));
       setMessageTone("idle");
 
       try {
@@ -206,7 +220,11 @@ export function useWorkspaceStarterSource({
           | null;
 
         if (!response.ok || !body || !("id" in body)) {
-          setMessage(body && "detail" in body ? body.detail ?? "rebase 失败。" : "rebase 失败。");
+          setMessage(
+            body && "detail" in body
+              ? body.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage("rebase")
+              : buildWorkspaceStarterMutationFallbackErrorMessage("rebase")
+          );
           setMessageTone("error");
           return;
         }
@@ -216,16 +234,17 @@ export function useWorkspaceStarterSource({
         );
         setSelectedTemplateId(body.id);
         await reloadHistory(body.id);
-        await reloadSourceDiff(body.id);
+        const nextSourceDiff = await reloadSourceDiff(body.id);
         setMessage(
-          `已完成 workspace starter rebase：${body.name}。${buildSandboxDriftSuccessSuffix(
-            sourceDiff,
-            "rebase"
-          )}`
+          buildWorkspaceStarterMutationSuccessMessage({
+            action: "rebase",
+            templateName: body.name,
+            sourceDiff: nextSourceDiff
+          })
         );
         setMessageTone("success");
       } catch {
-        setMessage("无法连接后端执行 starter rebase，请确认 API 已启动。");
+        setMessage(buildWorkspaceStarterMutationNetworkErrorMessage("rebase"));
         setMessageTone("error");
       }
     });
@@ -245,23 +264,4 @@ export function useWorkspaceStarterSource({
     reloadSourceDiff,
     sourceDiff
   };
-}
-
-function buildSandboxDriftSuccessSuffix(
-  sourceDiff: WorkspaceStarterSourceDiff | null,
-  action: "refresh" | "rebase"
-) {
-  const sandboxDriftCount = sourceDiff
-    ? sourceDiff.sandbox_dependency_summary.added_count +
-      sourceDiff.sandbox_dependency_summary.removed_count +
-      sourceDiff.sandbox_dependency_summary.changed_count
-    : 0;
-
-  if (sandboxDriftCount <= 0) {
-    return "";
-  }
-
-  return action === "refresh"
-    ? ` 已同步 ${sandboxDriftCount} 个 sandbox 依赖漂移节点。`
-    : ` 已接受 ${sandboxDriftCount} 个 sandbox 依赖漂移节点的来源变更。`;
 }

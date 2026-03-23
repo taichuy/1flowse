@@ -8,6 +8,10 @@ import type {
 } from "@/lib/get-workspace-starters";
 
 import {
+  buildWorkspaceStarterMutationFallbackErrorMessage,
+  buildWorkspaceStarterMutationNetworkErrorMessage,
+  buildWorkspaceStarterMutationPendingMessage,
+  buildWorkspaceStarterMutationSuccessMessage,
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowCreateSearchParamsFromWorkspaceStarterViewState,
   buildWorkspaceStarterBulkPreviewFocusTargets,
@@ -1183,6 +1187,96 @@ describe("workspace starter source action decision", () => {
     expect(decision.recommendedAction).toBe("none");
     expect(decision.statusLabel).toBe("已对齐");
     expect(decision.summary).toContain("无需 refresh 或 rebase");
+  });
+});
+
+describe("workspace starter mutation messages", () => {
+  it("builds refresh success messages from the latest sandbox drift diff", () => {
+    expect(
+      buildWorkspaceStarterMutationSuccessMessage({
+        action: "refresh",
+        templateName: "Sandbox starter",
+        sourceDiff: {
+          template_id: "starter-a",
+          workspace_id: "default",
+          source_workflow_id: "wf-a",
+          source_workflow_name: "Sandbox authoring",
+          template_version: "0.1.0",
+          source_version: "0.2.0",
+          template_default_workflow_name: "Sandbox starter",
+          source_default_workflow_name: "Sandbox authoring",
+          workflow_name_changed: false,
+          changed: true,
+          rebase_fields: [],
+          node_summary: emptyDiffSummary(),
+          edge_summary: emptyDiffSummary(),
+          sandbox_dependency_summary: {
+            template_count: 2,
+            source_count: 3,
+            added_count: 1,
+            removed_count: 0,
+            changed_count: 2
+          },
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "当前主要是 sandbox 依赖治理漂移。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["sandbox drift 3"]
+          },
+          node_entries: [],
+          edge_entries: [],
+          sandbox_dependency_entries: []
+        }
+      })
+    ).toBe("已刷新 workspace starter：Sandbox starter。 已同步 3 个 sandbox 依赖漂移节点。");
+  });
+
+  it("omits sandbox suffix when rebase has no drift", () => {
+    expect(
+      buildWorkspaceStarterMutationSuccessMessage({
+        action: "rebase",
+        templateName: "Sandbox starter",
+        sourceDiff: {
+          template_id: "starter-a",
+          workspace_id: "default",
+          source_workflow_id: "wf-a",
+          source_workflow_name: "Sandbox authoring",
+          template_version: "0.1.0",
+          source_version: "0.2.0",
+          template_default_workflow_name: "Sandbox starter",
+          source_default_workflow_name: "Sandbox authoring",
+          workflow_name_changed: true,
+          changed: true,
+          rebase_fields: ["default_workflow_name"],
+          node_summary: emptyDiffSummary(),
+          edge_summary: emptyDiffSummary(),
+          sandbox_dependency_summary: emptyDiffSummary(),
+          action_decision: {
+            recommended_action: "rebase",
+            status_label: "建议 rebase",
+            summary: "当前只漂移默认 workflow 名称。",
+            can_refresh: false,
+            can_rebase: true,
+            fact_chips: ["name drift"]
+          },
+          node_entries: [],
+          edge_entries: [],
+          sandbox_dependency_entries: []
+        }
+      })
+    ).toBe("已完成 workspace starter rebase：Sandbox starter。");
+  });
+
+  it("builds pending and fallback messages from the shared presenter layer", () => {
+    expect(buildWorkspaceStarterMutationPendingMessage("delete")).toBe(
+      "正在永久删除 workspace starter..."
+    );
+    expect(buildWorkspaceStarterMutationFallbackErrorMessage("refresh")).toBe("刷新失败。");
+    expect(buildWorkspaceStarterMutationNetworkErrorMessage("rebase")).toBe(
+      "无法连接后端执行 starter rebase，请确认 API 已启动。"
+    );
   });
 });
 

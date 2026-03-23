@@ -28,6 +28,10 @@ import {
   buildWorkspaceStarterLibrarySearchParams,
   buildBulkActionMessage,
   buildFormState,
+  buildWorkspaceStarterMutationFallbackErrorMessage,
+  buildWorkspaceStarterMutationNetworkErrorMessage,
+  buildWorkspaceStarterMutationPendingMessage,
+  buildWorkspaceStarterMutationSuccessMessage,
   buildUpdatePayload,
   filterWorkspaceStarterTemplates,
   getWorkspaceStarterBulkActionConfirmationMessage,
@@ -352,7 +356,7 @@ export function useWorkspaceStarterLibraryState(
     }
 
     startSavingTransition(async () => {
-      setMessage("正在更新 workspace starter...");
+      setMessage(buildWorkspaceStarterMutationPendingMessage("update"));
       setMessageTone("idle");
 
       try {
@@ -365,7 +369,12 @@ export function useWorkspaceStarterLibraryState(
           current.map((template) => (template.id === body.id ? body : template))
         );
         setSelectedTemplateId(body.id);
-        setMessage(`已更新 workspace starter：${body.name}。`);
+        setMessage(
+          buildWorkspaceStarterMutationSuccessMessage({
+            action: "update",
+            templateName: body.name
+          })
+        );
         setMessageTone("success");
       } catch (error) {
         const validationSummary =
@@ -377,7 +386,7 @@ export function useWorkspaceStarterLibraryState(
             ? validationSummary
               ? `${error.message}（${validationSummary}）`
               : error.message
-            : "无法连接后端更新 workspace starter，请确认 API 已启动。"
+            : buildWorkspaceStarterMutationNetworkErrorMessage("update")
         );
         setMessageTone("error");
       }
@@ -389,11 +398,6 @@ export function useWorkspaceStarterLibraryState(
       return;
     }
 
-    const actionLabel = {
-      archive: "归档",
-      restore: "恢复",
-      delete: "永久删除"
-    }[action];
     const shouldContinue =
       action !== "delete" ||
       window.confirm(`确认永久删除模板「${selectedTemplate.name}」吗？此操作不可撤销。`);
@@ -402,7 +406,7 @@ export function useWorkspaceStarterLibraryState(
     }
 
     startMutatingTransition(async () => {
-      setMessage(`正在${actionLabel} workspace starter...`);
+      setMessage(buildWorkspaceStarterMutationPendingMessage(action));
       setMessageTone("idle");
 
       try {
@@ -419,7 +423,7 @@ export function useWorkspaceStarterLibraryState(
             const body = (await response.json().catch(() => null)) as
               | { detail?: string }
               | null;
-            setMessage(body?.detail ?? "删除失败。");
+            setMessage(body?.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage("delete"));
             setMessageTone("error");
             return;
           }
@@ -427,7 +431,12 @@ export function useWorkspaceStarterLibraryState(
           setTemplates((current) =>
             current.filter((template) => template.id !== selectedTemplate.id)
           );
-          setMessage(`已永久删除 workspace starter：${selectedTemplate.name}。`);
+          setMessage(
+            buildWorkspaceStarterMutationSuccessMessage({
+              action: "delete",
+              templateName: selectedTemplate.name
+            })
+          );
           setMessageTone("success");
           return;
         }
@@ -437,7 +446,11 @@ export function useWorkspaceStarterLibraryState(
           | { detail?: string }
           | null;
         if (!response.ok || !body || !("id" in body)) {
-          setMessage(body && "detail" in body ? body.detail ?? `${actionLabel}失败。` : `${actionLabel}失败。`);
+          setMessage(
+            body && "detail" in body
+              ? body.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage(action)
+              : buildWorkspaceStarterMutationFallbackErrorMessage(action)
+          );
           setMessageTone("error");
           return;
         }
@@ -446,10 +459,15 @@ export function useWorkspaceStarterLibraryState(
           current.map((template) => (template.id === body.id ? body : template))
         );
         setSelectedTemplateId(body.id);
-        setMessage(`已${actionLabel} workspace starter：${body.name}。`);
+        setMessage(
+          buildWorkspaceStarterMutationSuccessMessage({
+            action,
+            templateName: body.name
+          })
+        );
         setMessageTone("success");
       } catch {
-        setMessage(`无法连接后端${actionLabel} workspace starter，请确认 API 已启动。`);
+        setMessage(buildWorkspaceStarterMutationNetworkErrorMessage(action));
         setMessageTone("error");
       }
     });

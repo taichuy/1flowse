@@ -51,6 +51,8 @@ export type WorkspaceStarterFormState = {
 
 export type WorkspaceStarterMessageTone = "idle" | "success" | "error";
 
+export type WorkspaceStarterTemplateMutationAction = "update" | WorkspaceStarterBulkAction;
+
 export type WorkspaceStarterNarrativeItem = {
   label: string;
   text: string;
@@ -361,6 +363,92 @@ export function getWorkspaceStarterBulkSkipReasonLabel(reason: string) {
 
 export function getWorkspaceStarterBulkPreviewReasonLabel(reason: string) {
   return BULK_REASON_LABELS[reason as keyof typeof BULK_REASON_LABELS] ?? reason;
+}
+
+export function buildWorkspaceStarterMutationPendingMessage(
+  action: WorkspaceStarterTemplateMutationAction
+) {
+  switch (action) {
+    case "update":
+      return "正在更新 workspace starter...";
+    case "archive":
+      return "正在归档 workspace starter...";
+    case "restore":
+      return "正在恢复 workspace starter...";
+    case "delete":
+      return "正在永久删除 workspace starter...";
+    case "refresh":
+      return "正在从源 workflow 刷新 starter 快照...";
+    case "rebase":
+      return "正在基于 source workflow 执行 rebase...";
+  }
+}
+
+export function buildWorkspaceStarterMutationSuccessMessage({
+  action,
+  sourceDiff,
+  templateName
+}: {
+  action: WorkspaceStarterTemplateMutationAction;
+  sourceDiff?: WorkspaceStarterSourceDiff | null;
+  templateName: string;
+}) {
+  switch (action) {
+    case "update":
+      return `已更新 workspace starter：${templateName}。`;
+    case "archive":
+      return `已归档 workspace starter：${templateName}。`;
+    case "restore":
+      return `已恢复 workspace starter：${templateName}。`;
+    case "delete":
+      return `已永久删除 workspace starter：${templateName}。`;
+    case "refresh": {
+      const sandboxSuffix = buildWorkspaceStarterSandboxDriftSuccessSuffix(action, sourceDiff ?? null);
+      return `已刷新 workspace starter：${templateName}。${sandboxSuffix}`;
+    }
+    case "rebase": {
+      const sandboxSuffix = buildWorkspaceStarterSandboxDriftSuccessSuffix(action, sourceDiff ?? null);
+      return `已完成 workspace starter rebase：${templateName}。${sandboxSuffix}`;
+    }
+  }
+}
+
+export function buildWorkspaceStarterMutationFallbackErrorMessage(
+  action: WorkspaceStarterTemplateMutationAction
+) {
+  switch (action) {
+    case "update":
+      return "更新失败。";
+    case "archive":
+      return "归档失败。";
+    case "restore":
+      return "恢复失败。";
+    case "delete":
+      return "删除失败。";
+    case "refresh":
+      return "刷新失败。";
+    case "rebase":
+      return "rebase 失败。";
+  }
+}
+
+export function buildWorkspaceStarterMutationNetworkErrorMessage(
+  action: WorkspaceStarterTemplateMutationAction
+) {
+  switch (action) {
+    case "update":
+      return "无法连接后端更新 workspace starter，请确认 API 已启动。";
+    case "archive":
+      return "无法连接后端归档 workspace starter，请确认 API 已启动。";
+    case "restore":
+      return "无法连接后端恢复 workspace starter，请确认 API 已启动。";
+    case "delete":
+      return "无法连接后端永久删除 workspace starter，请确认 API 已启动。";
+    case "refresh":
+      return "无法连接后端刷新 starter，请确认 API 已启动。";
+    case "rebase":
+      return "无法连接后端执行 starter rebase，请确认 API 已启动。";
+  }
 }
 
 export function buildBulkActionMessage(
@@ -1543,6 +1631,23 @@ function normalizeSourceDiffSummary(value: unknown): WorkspaceStarterSourceDiffS
     removed_count: removedCount,
     changed_count: changedCount
   };
+}
+
+function buildWorkspaceStarterSandboxDriftSuccessSuffix(
+  action: Extract<WorkspaceStarterTemplateMutationAction, "refresh" | "rebase">,
+  sourceDiff: WorkspaceStarterSourceDiff | null
+) {
+  const sandboxDriftCount = countSummaryChanges(
+    normalizeSourceDiffSummary(sourceDiff?.sandbox_dependency_summary)
+  );
+
+  if (sandboxDriftCount <= 0) {
+    return "";
+  }
+
+  return action === "refresh"
+    ? ` 已同步 ${sandboxDriftCount} 个 sandbox 依赖漂移节点。`
+    : ` 已接受 ${sandboxDriftCount} 个 sandbox 依赖漂移节点的来源变更。`;
 }
 
 function normalizeSourceActionDecision(
