@@ -10,6 +10,10 @@ import {
   buildWorkflowPublishApiKeyMutationNetworkErrorMessage,
   buildWorkflowPublishApiKeyMutationSuccessMessage,
   buildWorkflowPublishApiKeyMutationValidationMessage,
+  buildWorkflowPublishLifecycleMutationFallbackErrorMessage,
+  buildWorkflowPublishLifecycleMutationNetworkErrorMessage,
+  buildWorkflowPublishLifecycleMutationSuccessMessage,
+  buildWorkflowPublishLifecycleMutationValidationMessage,
   buildWorkflowPublishApiKeySecretReceiptCopy,
   buildWorkflowPublishBindingCardSurface,
   buildWorkflowPublishLifecycleActionSurface
@@ -243,5 +247,30 @@ describe("workflow-publish-binding-presenters", () => {
     expect(surface.preflightDescription).toContain("当前 lifecycle action 只切换 binding 对外状态");
     expect(surface.preflightDescription).toContain("当前 sandbox readiness：");
     expect(surface.preflightDescription).toContain("degraded");
+  });
+
+  it("builds shared lifecycle mutation messages", () => {
+    expect(buildWorkflowPublishLifecycleMutationValidationMessage()).toBe(
+      "缺少发布 binding 信息，无法更新发布状态。"
+    );
+    expect(buildWorkflowPublishLifecycleMutationFallbackErrorMessage("published")).toBe(
+      "发布 endpoint 失败。"
+    );
+    expect(buildWorkflowPublishLifecycleMutationNetworkErrorMessage("offline")).toContain(
+      "请确认 API 已启动"
+    );
+    expect(
+      buildWorkflowPublishLifecycleMutationSuccessMessage({
+        endpointName: "Public Search",
+        nextStatus: "published"
+      })
+    ).toBe("Public Search 已发布。");
+    expect(
+      buildWorkflowPublishLifecycleMutationSuccessMessage({
+        bindingId: "binding-1",
+        lifecycleStatus: "offline",
+        nextStatus: "published"
+      })
+    ).toBe("binding-1 已下线。");
   });
 });

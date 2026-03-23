@@ -54,6 +54,8 @@ export type WorkflowPublishApiKeyManagerSurface = {
 
 export type WorkflowPublishApiKeyMutationAction = "create" | "revoke";
 
+export type WorkflowPublishLifecycleMutationStatus = "published" | "offline";
+
 function buildWorkflowPublishBindingMetaRow(
   key: string,
   label: string,
@@ -271,6 +273,65 @@ export function buildWorkflowPublishApiKeyMutationSuccessMessage({
   return action === "create"
     ? `${resolvedName} 已创建，请立即保存 secret，本页不会再次展示。`
     : `${resolvedName} 已撤销。`;
+}
+
+function resolveWorkflowPublishLifecycleMutationVerb(
+  nextStatus: WorkflowPublishLifecycleMutationStatus
+) {
+  return nextStatus === "published" ? "发布" : "下线";
+}
+
+function formatWorkflowPublishLifecycleMutationResult(
+  lifecycleStatus: string | null | undefined,
+  nextStatus: WorkflowPublishLifecycleMutationStatus
+) {
+  const resolvedStatus = lifecycleStatus?.trim() || nextStatus;
+
+  if (resolvedStatus === "published") {
+    return "已发布";
+  }
+
+  if (resolvedStatus === "offline") {
+    return "已下线";
+  }
+
+  return `状态已切换为 ${resolvedStatus}`;
+}
+
+export function buildWorkflowPublishLifecycleMutationValidationMessage() {
+  return "缺少发布 binding 信息，无法更新发布状态。";
+}
+
+export function buildWorkflowPublishLifecycleMutationFallbackErrorMessage(
+  nextStatus: WorkflowPublishLifecycleMutationStatus
+) {
+  return `${resolveWorkflowPublishLifecycleMutationVerb(nextStatus)} endpoint 失败。`;
+}
+
+export function buildWorkflowPublishLifecycleMutationNetworkErrorMessage(
+  nextStatus: WorkflowPublishLifecycleMutationStatus
+) {
+  return `无法连接后端${resolveWorkflowPublishLifecycleMutationVerb(nextStatus)} endpoint，请确认 API 已启动。`;
+}
+
+export function buildWorkflowPublishLifecycleMutationSuccessMessage({
+  endpointName,
+  bindingId,
+  lifecycleStatus,
+  nextStatus
+}: {
+  endpointName?: string | null;
+  bindingId?: string | null;
+  lifecycleStatus?: string | null;
+  nextStatus: WorkflowPublishLifecycleMutationStatus;
+}) {
+  const resolvedName = endpointName?.trim() || bindingId?.trim() || "Endpoint";
+  const result = formatWorkflowPublishLifecycleMutationResult(
+    lifecycleStatus,
+    nextStatus
+  );
+
+  return `${resolvedName} ${result}。`;
 }
 
 export function buildWorkflowPublishLifecycleActionSurface({

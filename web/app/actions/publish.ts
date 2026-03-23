@@ -7,7 +7,11 @@ import {
   buildWorkflowPublishApiKeyMutationFallbackErrorMessage,
   buildWorkflowPublishApiKeyMutationNetworkErrorMessage,
   buildWorkflowPublishApiKeyMutationSuccessMessage,
-  buildWorkflowPublishApiKeyMutationValidationMessage
+  buildWorkflowPublishApiKeyMutationValidationMessage,
+  buildWorkflowPublishLifecycleMutationFallbackErrorMessage,
+  buildWorkflowPublishLifecycleMutationNetworkErrorMessage,
+  buildWorkflowPublishLifecycleMutationSuccessMessage,
+  buildWorkflowPublishLifecycleMutationValidationMessage
 } from "@/lib/workflow-publish-binding-presenters";
 import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
@@ -52,7 +56,7 @@ export async function updatePublishedEndpointLifecycle(
   ) {
     return {
       status: "error",
-      message: "缺少发布 binding 信息，无法更新发布状态。",
+      message: buildWorkflowPublishLifecycleMutationValidationMessage(),
       workflowId,
       bindingId,
       nextStatus: nextStatus === "offline" ? "offline" : "published"
@@ -83,7 +87,7 @@ export async function updatePublishedEndpointLifecycle(
     if (!response.ok) {
       return {
         status: "error",
-        message: body?.detail ?? "更新发布状态失败。",
+        message: body?.detail ?? buildWorkflowPublishLifecycleMutationFallbackErrorMessage(nextStatus),
         workflowId,
         bindingId,
         nextStatus
@@ -93,7 +97,12 @@ export async function updatePublishedEndpointLifecycle(
     revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
-      message: `${body?.endpoint_name ?? bindingId} 已切换为 ${body?.lifecycle_status ?? nextStatus}。`,
+      message: buildWorkflowPublishLifecycleMutationSuccessMessage({
+        endpointName: body?.endpoint_name,
+        bindingId,
+        lifecycleStatus: body?.lifecycle_status,
+        nextStatus
+      }),
       workflowId,
       bindingId,
       nextStatus
@@ -101,7 +110,7 @@ export async function updatePublishedEndpointLifecycle(
   } catch {
     return {
       status: "error",
-      message: "无法连接后端更新发布状态。",
+      message: buildWorkflowPublishLifecycleMutationNetworkErrorMessage(nextStatus),
       workflowId,
       bindingId,
       nextStatus
