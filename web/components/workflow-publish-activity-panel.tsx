@@ -33,6 +33,9 @@ export function WorkflowPublishActivityPanel({
     bindingId: binding.id,
     activeInvocationFilter
   });
+  const selectedInvocationHref = selectedInvocationId
+    ? detailLinks.buildInvocationDetailHref(selectedInvocationId)
+    : null;
 
   return (
     <div className="entry-card compact-card">
@@ -74,6 +77,7 @@ export function WorkflowPublishActivityPanel({
         invocationAudit={invocationAudit}
         rateLimitWindowAudit={rateLimitWindowAudit}
         selectedInvocationId={selectedInvocationId}
+        selectedInvocationHref={selectedInvocationHref}
         selectedInvocationDetail={selectedInvocationDetail}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
@@ -84,6 +88,7 @@ export function WorkflowPublishActivityPanel({
         tools={tools}
         invocationAudit={invocationAudit}
         selectedInvocationId={selectedInvocationId}
+        selectedInvocationHref={selectedInvocationHref}
         selectedInvocationDetail={selectedInvocationDetail}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}

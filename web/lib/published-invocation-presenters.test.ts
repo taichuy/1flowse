@@ -2420,6 +2420,35 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("当 shared canonical approval action 指回当前 publish detail 时回退到本地 blocker inbox", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-approval-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: "先处理审批票据，再回来确认 execution 是否恢复。",
+          has_shared_callback_waiting_summary: false
+        },
+        canonicalRecommendedAction: {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: "/workflows/workflow-1?publish_invocation=invocation-1",
+          label: "Open current publish detail"
+        },
+        currentHref: "/workflows/workflow-1?publish_invocation=invocation-1",
+        callbackWaitingActive: true,
+        callbackWaitingFollowUp: "先处理审批票据，再观察 waiting 节点是否恢复。",
+        blockingInboxHref: "/sensitive-access?run_id=run-focus-approval-1&node_run_id=node-run-1",
+        approvalInboxHref: "/sensitive-access?run_id=run-focus-approval-1"
+      })
+    ).toEqual({
+      label: "approval blocker",
+      detail: "先处理审批票据，再观察 waiting 节点是否恢复。",
+      href: "/sensitive-access?run_id=run-focus-approval-1&node_run_id=node-run-1",
+      href_label: "open blocker inbox slice"
+    });
+  });
+
   it("在缺少 callback waiting follow-up 时回退到 shared callback recovery contract", () => {
     expect(
       buildPublishedInvocationRecommendedNextStep({

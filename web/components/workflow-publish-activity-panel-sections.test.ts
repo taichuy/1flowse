@@ -1342,6 +1342,53 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("open blocker inbox slice");
   });
 
+  it("falls back to local blocker CTA when selected invocation canonical action points to the current publish detail", () => {
+    const invocationAudit = {
+      ...buildInvocationAudit(),
+      items: [{ id: "invocation-1" } as never]
+    };
+    const currentHref = "/workflows/workflow-1?publish_invocation=invocation-1";
+    const detail = buildSelectedInvocationDetail();
+
+    detail.run_follow_up = {
+      ...detail.run_follow_up!,
+      recommended_action: {
+        kind: "approval blocker",
+        entry_key: "operatorInbox",
+        href: currentHref,
+        label: "Open current publish detail"
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit,
+        selectedInvocationId: "invocation-1",
+        selectedInvocationHref: currentHref,
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: detail
+        },
+        callbackWaitingAutomation: {
+          status: "disabled",
+          scheduler_required: false,
+          detail: "disabled in test",
+          scheduler_health_status: "idle",
+          scheduler_health_detail: "not configured",
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => currentHref,
+        clearInvocationDetailHref: "/workflows/workflow-1"
+      })
+    );
+
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("open blocker inbox slice");
+    expect(html).not.toContain("Open current publish detail");
+  });
+
   it("bridges the selected invocation CTA into the matching failure reason card when detail is open", () => {
     const invocationAudit = {
       ...buildInvocationAudit(),

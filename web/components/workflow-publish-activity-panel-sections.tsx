@@ -34,6 +34,7 @@ type WorkflowPublishActivityInsightsProps = {
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
   selectedInvocationId?: string | null;
+  selectedInvocationHref?: string | null;
   selectedInvocationDetail?: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse> | null;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
@@ -49,6 +50,7 @@ export function WorkflowPublishActivityInsights({
   invocationAudit,
   rateLimitWindowAudit,
   selectedInvocationId,
+  selectedInvocationHref,
   selectedInvocationDetail,
   callbackWaitingAutomation,
   sandboxReadiness,
@@ -60,6 +62,7 @@ export function WorkflowPublishActivityInsights({
   const selectedInvocationSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
     selectedInvocationId: selectedInvocationId ?? null,
     selectedInvocationDetail: selectedInvocationDetail ?? null,
+    currentHref: selectedInvocationHref ?? null,
     callbackWaitingAutomation,
     sandboxReadiness
   });
@@ -231,6 +234,7 @@ type WorkflowPublishActivityDetailsProps = {
   tools: PluginToolRegistryItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   selectedInvocationId: string | null;
+  selectedInvocationHref?: string | null;
   selectedInvocationDetail: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse>;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
@@ -242,6 +246,7 @@ export function WorkflowPublishActivityDetails({
   tools,
   invocationAudit,
   selectedInvocationId,
+  selectedInvocationHref,
   selectedInvocationDetail,
   callbackWaitingAutomation,
   sandboxReadiness,
@@ -256,6 +261,7 @@ export function WorkflowPublishActivityDetails({
   const selectedInvocationSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
     selectedInvocationId,
     selectedInvocationDetail,
+    currentHref: selectedInvocationHref ?? null,
     callbackWaitingAutomation,
     sandboxReadiness
   });
@@ -357,6 +363,7 @@ export function WorkflowPublishActivityDetails({
           {clearInvocationDetailHref && selectedInvocationSurface.kind === "ok" ? (
             <WorkflowPublishInvocationDetailPanel
               clearHref={clearInvocationDetailHref}
+              currentHref={selectedInvocationHref}
               detail={selectedInvocationSurface.detail}
               tools={tools}
               callbackWaitingAutomation={callbackWaitingAutomation}

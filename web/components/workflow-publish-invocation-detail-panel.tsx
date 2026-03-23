@@ -65,6 +65,7 @@ import {
 type WorkflowPublishInvocationDetailPanelProps = {
   detail: PublishedEndpointInvocationDetailResponse;
   clearHref: string;
+  currentHref?: string | null;
   tools: PluginToolRegistryItem[];
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
@@ -73,6 +74,7 @@ type WorkflowPublishInvocationDetailPanelProps = {
 export function WorkflowPublishInvocationDetailPanel({
   detail,
   clearHref,
+  currentHref = null,
   tools,
   callbackWaitingAutomation,
   sandboxReadiness,
@@ -179,6 +181,7 @@ export function WorkflowPublishInvocationDetailPanel({
     runId,
     canonicalFollowUp,
     canonicalRecommendedAction: runFollowUp?.recommended_action ?? null,
+    currentHref,
     callbackWaitingActive: Boolean(waitingLifecycle),
     callbackWaitingFollowUp: callbackWaitingExplanation?.follow_up ?? null,
     callbackWaitingAutomation,

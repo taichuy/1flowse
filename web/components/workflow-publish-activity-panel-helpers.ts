@@ -179,11 +179,13 @@ export function resolveWorkflowPublishActivityDetailLinks({
 export function resolveWorkflowPublishSelectedInvocationDetailSurface({
   selectedInvocationId,
   selectedInvocationDetail,
+  currentHref,
   callbackWaitingAutomation,
   sandboxReadiness
 }: {
   selectedInvocationId: string | null;
   selectedInvocationDetail: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse> | null;
+  currentHref?: string | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
 }): WorkflowPublishSelectedInvocationDetailSurface {
@@ -238,6 +240,7 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
       runId,
       canonicalFollowUp,
       canonicalRecommendedAction: detail.run_follow_up?.recommended_action ?? null,
+      currentHref,
       callbackWaitingActive: Boolean(detail.invocation.run_waiting_lifecycle),
       callbackWaitingFollowUp: detail.callback_waiting_explanation?.follow_up ?? null,
       callbackWaitingAutomation,

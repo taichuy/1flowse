@@ -197,6 +197,7 @@ export function WorkflowPublishInvocationEntryCard({
     runId: item.run_id ?? null,
     canonicalFollowUp,
     canonicalRecommendedAction: item.run_follow_up?.recommended_action ?? null,
+    currentHref: detailActive ? detailHref : null,
     callbackWaitingActive: Boolean(waitingLifecycle),
     callbackWaitingFollowUp: waitingLifecycle ? waitingExplanation?.follow_up ?? null : null,
     callbackWaitingAutomation,

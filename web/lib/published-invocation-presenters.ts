@@ -2420,6 +2420,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   runId,
   canonicalFollowUp,
   canonicalRecommendedAction,
+  currentHref,
   callbackWaitingActive = false,
   callbackWaitingFollowUp,
   callbackWaitingAutomation,
@@ -2437,6 +2438,7 @@ export function buildPublishedInvocationRecommendedNextStep({
     href?: string | null;
     label?: string | null;
   } | null;
+  currentHref?: string | null;
   callbackWaitingActive?: boolean;
   callbackWaitingFollowUp?: string | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
@@ -2474,6 +2476,7 @@ export function buildPublishedInvocationRecommendedNextStep({
         sharedCandidate:
           canonicalCallbackCandidate ?? sharedCallbackRecoveryCandidate,
         active: true,
+        currentHref,
         href: blockingInboxHref ?? approvalInboxHref ?? null,
         label: blockingInboxHref ? "approval blocker" : "callback waiting",
         detail: normalizedCallbackWaitingFollowUp,
@@ -2513,6 +2516,7 @@ export function buildPublishedInvocationRecommendedNextStep({
         ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
         : null),
     active: Boolean(runId || executionFocusFollowUp?.trim()),
+    currentHref,
     runId,
     label: "execution focus",
     detail: executionFocusFollowUp,
@@ -2525,7 +2529,8 @@ export function buildPublishedInvocationRecommendedNextStep({
   return buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
     execution: executionCandidate,
-    operatorFollowUp: hasStableRecommendedCandidate ? canonicalFollowUp?.follow_up ?? null : null
+    operatorFollowUp: hasStableRecommendedCandidate ? canonicalFollowUp?.follow_up ?? null : null,
+    currentHref
   });
 }
 
