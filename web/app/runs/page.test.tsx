@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import RunsPage from "@/app/runs/page";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
 import { getSystemOverview } from "@/lib/get-system-overview";
+import { buildRunLibrarySurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 Object.assign(globalThis, { React });
 
@@ -48,6 +49,8 @@ function buildSensitiveAccessInboxSnapshot() {
 
 describe("RunsPage", () => {
   it("renders recent run links and operator follow-up entry", async () => {
+    const surfaceCopy = buildRunLibrarySurfaceCopy();
+
     vi.mocked(getSystemOverview).mockResolvedValue({
       status: "ok",
       environment: "local",
@@ -133,7 +136,9 @@ describe("RunsPage", () => {
     expect(html).toContain('/workflows/workflow-1');
     expect(html).toContain("回到 workflow 编辑器");
     expect(html).toContain('/sensitive-access');
-    expect(html).toContain("打开待处理 inbox");
+    expect(html).toContain(
+      surfaceCopy.operatorEntryLinks.overrides?.operatorInbox?.label ?? "打开 sensitive access inbox"
+    );
     expect(html).toContain("callback_waiting · 1");
     expect(html).toContain("completed:1 / waiting_callback:1");
     expect(html).toContain("Live sandbox readiness");

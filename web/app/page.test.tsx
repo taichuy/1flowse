@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/page";
 import { getCredentials } from "@/lib/get-credentials";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
 import { getSystemOverview } from "@/lib/get-system-overview";
@@ -253,6 +254,8 @@ describe("HomePage", () => {
   });
 
   it("surfaces a shared cross-entry risk digest before separate operator panels", async () => {
+    const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
     vi.mocked(getSystemOverview).mockResolvedValue({
       status: "ok",
       environment: "local",
@@ -403,7 +406,8 @@ describe("HomePage", () => {
     );
 
     expect(html).toContain("Cross-entry risk digest");
-    expect(html).toContain("打开待处理 inbox");
+    expect(html).toContain('/sensitive-access?status=pending');
+    expect(html).toContain(operatorSurfaceCopy.openInboxSliceLabel);
     expect(html).toContain("Approval &amp; notification backlog");
     expect(html).toContain("2 pending / 1 waiting");
   });
