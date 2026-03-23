@@ -227,9 +227,48 @@ describe("workflow-publish-binding-presenters", () => {
     expect(surface.issueSurface).toEqual({
       title: "Publish governance blocker",
       message: "Legacy token auth is still persisted on this binding.",
-      remediation: "Switch back to api_key or internal before publishing."
+      remediation: "Switch back to api_key or internal before publishing.",
+      followUpHref: null,
+      followUpLabel: null
     });
     expect(surface.apiKeyGovernanceEmptyState).toContain("unsupported legacy auth mode");
+  });
+
+  it("uses current publish draft context to turn legacy auth blockers into actionable follow-up", () => {
+    const surface = buildWorkflowPublishBindingCardSurface(
+      {
+        ...buildBinding(),
+        auth_mode: "token",
+        issues: [
+          {
+            category: "unsupported_auth_mode",
+            message: "Legacy token auth is still persisted on this binding.",
+            field: "auth_mode",
+            remediation: "Switch back to api_key or internal before publishing.",
+            blocks_lifecycle_publish: true
+          }
+        ]
+      },
+      {
+        currentWorkflowVersion: "1.1.0",
+        currentDraftPublishEndpoints: [
+          {
+            id: "endpoint-1",
+            name: "Public Search",
+            authMode: "api_key"
+          }
+        ]
+      }
+    );
+
+    expect(surface.issueSurface).toEqual({
+      title: "Publish governance blocker",
+      message: "Legacy token auth is still persisted on this binding.",
+      remediation:
+        "当前 draft endpoint Public Search (endpoint-1) 已切回 authMode=api_key（当前 workflow 1.1.0）；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 1.0.0 legacy binding 保持 offline。",
+      followUpHref: "#workflow-editor-publish-endpoint-endpoint-1",
+      followUpLabel: "Open current draft endpoint"
+    });
   });
 
   it("maps binding lifecycle enums to shared user-facing labels", () => {

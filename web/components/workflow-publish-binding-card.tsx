@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 
 import { updatePublishedEndpointLifecycle } from "@/app/actions/publish";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
@@ -58,7 +59,10 @@ export function WorkflowPublishBindingCard({
   sandboxReadiness,
   workspaceStarterGovernanceQueryScope = null
 }: WorkflowPublishBindingCardProps) {
-  const bindingSurface = buildWorkflowPublishBindingCardSurface(binding);
+  const bindingSurface = buildWorkflowPublishBindingCardSurface(binding, {
+    currentWorkflowVersion: workflow.version,
+    currentDraftPublishEndpoints: workflow.definition.publish ?? []
+  });
   const cacheSummary = binding.cache_inventory;
   const activity = binding.activity;
   const resolvedCacheInventory = cacheInventory?.kind === "ok" ? cacheInventory.data : null;
@@ -108,6 +112,11 @@ export function WorkflowPublishBindingCard({
           <p className="section-copy entry-copy">{bindingSurface.issueSurface.message}</p>
           {bindingSurface.issueSurface.remediation ? (
             <p className="binding-meta">{bindingSurface.issueSurface.remediation}</p>
+          ) : null}
+          {bindingSurface.issueSurface.followUpHref && bindingSurface.issueSurface.followUpLabel ? (
+            <Link className="inline-link" href={bindingSurface.issueSurface.followUpHref}>
+              {bindingSurface.issueSurface.followUpLabel}
+            </Link>
           ) : null}
         </div>
       ) : null}

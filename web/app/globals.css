@@ -858,6 +858,17 @@ a {
     var(--shadow);
 }
 
+.workflow-definition-anchor-target {
+  scroll-margin-top: 88px;
+}
+
+.workflow-definition-anchor-target:target {
+  border-color: rgba(208, 99, 45, 0.4);
+  box-shadow:
+    0 0 0 2px rgba(208, 99, 45, 0.18),
+    var(--shadow);
+}
+
 .validation-issue-list {
   display: grid;
   gap: 10px;

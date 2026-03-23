@@ -14,6 +14,7 @@ import type { WorkflowPersistBlocker } from "@/components/workflow-editor-workbe
 import { summarizeWorkflowPersistBlockers } from "@/components/workflow-editor-workbench/persist-blockers";
 import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-blocker-notice";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
+import { buildWorkflowPublishDraftSectionId } from "@/lib/workflow-publish-definition-links";
 import { WorkflowEditorPublishEndpointCard } from "./workflow-editor-publish-endpoint-card";
 import { buildPublishedEndpointValidationIssues } from "./workflow-editor-publish-form-validation";
 import {
@@ -176,7 +177,10 @@ export function WorkflowEditorPublishForm({
   };
 
   return (
-    <article className="diagnostic-panel editor-panel">
+    <article
+      className="diagnostic-panel editor-panel workflow-definition-anchor-target"
+      id={buildWorkflowPublishDraftSectionId()}
+    >
       <div className="section-heading">
         <div>
           <p className="eyebrow">Workflow publish</p>

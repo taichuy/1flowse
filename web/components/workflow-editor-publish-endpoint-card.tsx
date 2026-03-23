@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { buildWorkflowPublishDraftEndpointId } from "@/lib/workflow-publish-definition-links";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 
@@ -78,7 +79,10 @@ export function WorkflowEditorPublishEndpointCard({
 
   return (
     <section
-      className={`entry-card compact-card ${highlighted ? "validation-focus-ring" : ""}`.trim()}
+      className={
+        `entry-card compact-card workflow-definition-anchor-target ${highlighted ? "validation-focus-ring" : ""}`.trim()
+      }
+      id={buildWorkflowPublishDraftEndpointId(endpoint.id)}
       ref={sectionRef}
     >
       <div className="binding-card-header">

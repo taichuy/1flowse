@@ -1,4 +1,5 @@
 import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import { buildWorkflowPublishDraftSectionHref } from "@/lib/workflow-publish-definition-links";
 import type {
   PublishedEndpointInvocationFacetItem,
   PublishedEndpointInvocationCallbackTicketItem,
@@ -4104,8 +4105,8 @@ export function buildWorkflowPublishPrimaryFollowUpSurface(
         headline: `${formatCountLabel(lifecycleBlockedBindings, "binding")} ${lifecycleBlockedBindings === 1 ? "is" : "are"} blocked by legacy unsupported auth mode governance.`,
         detail:
           "Switch these bindings back to auth_mode `api_key` or `internal`, save the workflow to resync durable bindings, then retry publish lifecycle actions from the cards below.",
-        href: null,
-        hrefLabel: null
+        href: buildWorkflowPublishDraftSectionHref(),
+        hrefLabel: "Open publish draft"
       };
     }
 

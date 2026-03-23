@@ -105,7 +105,18 @@ function buildWorkflow(): WorkflowDetail {
       nodes: [],
       edges: [],
       variables: [],
-      publish: []
+      publish: [
+        {
+          id: "endpoint-1",
+          name: "Public Search",
+          alias: "search.public",
+          path: "/search/public",
+          protocol: "openai",
+          authMode: "api_key",
+          streaming: true,
+          inputSchema: { type: "object" }
+        }
+      ]
     },
     versions: []
   };
@@ -268,7 +279,11 @@ describe("WorkflowPublishBindingCard", () => {
 
     expect(html).toContain("Publish governance blocker");
     expect(html).toContain("Legacy token auth is still persisted on this binding.");
-    expect(html).toContain("Switch back to api_key or internal before publishing.");
+    expect(html).toContain(
+      "当前 draft endpoint Public Search (endpoint-1) 已切回 authMode=api_key（当前 workflow 1.0.0）；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 1.0.0 legacy binding 保持 offline。"
+    );
+    expect(html).toContain("Open current draft endpoint");
+    expect(html).toContain("#workflow-editor-publish-endpoint-endpoint-1");
   });
 
   it("uses shared blocked surface copy for cache inventory", () => {

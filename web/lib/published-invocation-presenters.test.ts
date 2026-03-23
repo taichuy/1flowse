@@ -1305,8 +1305,8 @@ describe("published invocation presenters", () => {
       headline: "1 binding is blocked by legacy unsupported auth mode governance.",
       detail:
         "Switch these bindings back to auth_mode `api_key` or `internal`, save the workflow to resync durable bindings, then retry publish lifecycle actions from the cards below.",
-      href: null,
-      hrefLabel: null
+      href: "#workflow-editor-publish-section",
+      hrefLabel: "Open publish draft"
     });
   });
 

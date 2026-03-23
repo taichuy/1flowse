@@ -3,6 +3,10 @@ import type {
   PublishedEndpointApiKeyItem,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
+import {
+  buildWorkflowPublishDraftEndpointHref,
+  buildWorkflowPublishDraftSectionHref
+} from "@/lib/workflow-publish-definition-links";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
@@ -23,6 +27,8 @@ export type WorkflowPublishBindingIssueSurface = {
   title: string;
   message: string;
   remediation: string | null;
+  followUpHref: string | null;
+  followUpLabel: string | null;
 };
 
 export type WorkflowPublishBindingCardSurface = {
@@ -202,8 +208,120 @@ function resolveLifecycleBlockingIssue(
   );
 }
 
+function normalizeWorkflowPublishDraftString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isSupportedWorkflowPublishDraftAuthMode(value: string | null) {
+  return value === "api_key" || value === "internal";
+}
+
+type WorkflowPublishDraftEndpointReference = {
+  id: string;
+  name: string | null;
+  authMode: string | null;
+};
+
+function findMatchingWorkflowPublishDraftEndpoint(
+  publishDefinitions: Array<Record<string, unknown>>,
+  endpointId: string
+) {
+  const normalizedEndpointId = endpointId.trim();
+  if (!normalizedEndpointId) {
+    return null;
+  }
+
+  for (const publishDefinition of publishDefinitions) {
+    const draftEndpointId = normalizeWorkflowPublishDraftString(publishDefinition.id);
+    if (draftEndpointId !== normalizedEndpointId) {
+      continue;
+    }
+
+    return {
+      id: draftEndpointId,
+      name: normalizeWorkflowPublishDraftString(publishDefinition.name),
+      authMode: normalizeWorkflowPublishDraftString(publishDefinition.authMode)
+    } satisfies WorkflowPublishDraftEndpointReference;
+  }
+
+  return null;
+}
+
+function buildWorkflowPublishBindingIssueSurface(
+  binding: WorkflowPublishedEndpointItem,
+  options?: {
+    currentWorkflowVersion?: string | null;
+    currentDraftPublishEndpoints?: Array<Record<string, unknown>> | null;
+  }
+) {
+  const lifecycleBlockingIssue = resolveLifecycleBlockingIssue(binding);
+  if (!lifecycleBlockingIssue) {
+    return null;
+  }
+
+  if (!Array.isArray(options?.currentDraftPublishEndpoints)) {
+    return {
+      title: "Publish governance blocker",
+      message: lifecycleBlockingIssue.message,
+      remediation: lifecycleBlockingIssue.remediation ?? null,
+      followUpHref: null,
+      followUpLabel: null
+    } satisfies WorkflowPublishBindingIssueSurface;
+  }
+
+  const currentDraftPublishEndpoints = options.currentDraftPublishEndpoints;
+  const draftEndpoint = findMatchingWorkflowPublishDraftEndpoint(
+    currentDraftPublishEndpoints,
+    binding.endpoint_id
+  );
+  const resolvedWorkflowVersion = options?.currentWorkflowVersion?.trim() || null;
+
+  if (!draftEndpoint) {
+    return {
+      title: "Publish governance blocker",
+      message: lifecycleBlockingIssue.message,
+      remediation:
+        `当前 draft 已找不到 endpoint ${binding.endpoint_id}；先回到 publish draft 确认它是否已被移除或改名，再决定这条历史 binding 是否只保留为 offline inventory。`,
+      followUpHref: buildWorkflowPublishDraftSectionHref(),
+      followUpLabel: "Review publish draft"
+    } satisfies WorkflowPublishBindingIssueSurface;
+  }
+
+  const draftEndpointLabel = draftEndpoint.name && draftEndpoint.name !== draftEndpoint.id
+    ? `${draftEndpoint.name} (${draftEndpoint.id})`
+    : draftEndpoint.id;
+
+  if (!isSupportedWorkflowPublishDraftAuthMode(draftEndpoint.authMode)) {
+    return {
+      title: "Publish governance blocker",
+      message: lifecycleBlockingIssue.message,
+      remediation:
+        `当前 draft endpoint ${draftEndpointLabel} 仍声明 authMode=${draftEndpoint.authMode ?? "unknown"}；先在 publish draft 卡片里改成 api_key 或 internal 并保存，再回到这里重试 lifecycle。`,
+      followUpHref: buildWorkflowPublishDraftEndpointHref(draftEndpoint.id),
+      followUpLabel: "Open blocking draft endpoint"
+    } satisfies WorkflowPublishBindingIssueSurface;
+  }
+
+  const currentWorkflowVersionDetail = resolvedWorkflowVersion
+    ? `（当前 workflow ${resolvedWorkflowVersion}）`
+    : "";
+
+  return {
+    title: "Publish governance blocker",
+    message: lifecycleBlockingIssue.message,
+    remediation:
+      `当前 draft endpoint ${draftEndpointLabel} 已切回 authMode=${draftEndpoint.authMode}${currentWorkflowVersionDetail}；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 ${binding.workflow_version} legacy binding 保持 offline。`,
+    followUpHref: buildWorkflowPublishDraftEndpointHref(draftEndpoint.id),
+    followUpLabel: "Open current draft endpoint"
+  } satisfies WorkflowPublishBindingIssueSurface;
+}
+
 export function buildWorkflowPublishBindingCardSurface(
-  binding: WorkflowPublishedEndpointItem
+  binding: WorkflowPublishedEndpointItem,
+  options?: {
+    currentWorkflowVersion?: string | null;
+    currentDraftPublishEndpoints?: Array<Record<string, unknown>> | null;
+  }
 ): WorkflowPublishBindingCardSurface {
   const activity = binding.activity;
   const cacheSummary = binding.cache_inventory;
@@ -215,13 +333,7 @@ export function buildWorkflowPublishBindingCardSurface(
       ? cacheSummary.vary_by
       : ["full-payload"];
   const lifecycleBlockingIssue = resolveLifecycleBlockingIssue(binding);
-  const issueSurface = lifecycleBlockingIssue
-    ? {
-        title: "Publish governance blocker",
-        message: lifecycleBlockingIssue.message,
-        remediation: lifecycleBlockingIssue.remediation ?? null
-      }
-    : null;
+  const issueSurface = buildWorkflowPublishBindingIssueSurface(binding, options);
   const apiKeyGovernanceEmptyState = lifecycleBlockingIssue
     ? `当前 binding 仍处于 unsupported legacy auth mode：${lifecycleBlockingIssue.message}`
     : `当前 binding 使用 auth_mode=${binding.auth_mode}，不需要单独管理 published API key。`;

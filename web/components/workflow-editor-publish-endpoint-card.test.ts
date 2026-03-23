@@ -53,6 +53,7 @@ describe("WorkflowEditorPublishEndpointCard", () => {
     expect(html).toContain("Publish · Public Search · Cache varyBy");
     expect(html).toContain("去掉重复或无意义的缓存维度");
     expect(html).toContain('data-validation-field="cache.varyBy"');
+    expect(html).toContain('id="workflow-editor-publish-endpoint-public-search"');
     expect(html).toContain("validation-focus-ring");
   });
 
