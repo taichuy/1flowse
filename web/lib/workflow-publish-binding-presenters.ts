@@ -1,4 +1,5 @@
 import type {
+  PublishedEndpointInvocationExportFormat,
   PublishedEndpointApiKeyItem,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
@@ -36,6 +37,12 @@ export type WorkflowPublishLifecycleActionSurface = {
   preflightDescription: string | null;
 };
 
+export type WorkflowPublishExportActionSurface = {
+  format: PublishedEndpointInvocationExportFormat;
+  idleLabel: string;
+  pendingLabel: string;
+};
+
 export type WorkflowPublishApiKeyManagerSurface = {
   title: string;
   description: string;
@@ -55,6 +62,10 @@ export type WorkflowPublishApiKeyManagerSurface = {
 export type WorkflowPublishApiKeyMutationAction = "create" | "revoke";
 
 export type WorkflowPublishLifecycleMutationStatus = "published" | "offline";
+
+function resolveWorkflowPublishExportLabel(format: PublishedEndpointInvocationExportFormat) {
+  return format === "json" ? "导出 activity JSON" : "导出 activity JSONL";
+}
 
 function buildWorkflowPublishBindingMetaRow(
   key: string,
@@ -353,4 +364,50 @@ export function buildWorkflowPublishLifecycleActionSurface({
       ? `当前 lifecycle action 只切换 binding 对外状态；若后续 sampled run 仍依赖 strong-isolation，请先核对：${sandboxPreflightHint}`
       : null
   };
+}
+
+export function buildWorkflowPublishExportActionSurface(
+  format: PublishedEndpointInvocationExportFormat
+): WorkflowPublishExportActionSurface {
+  return {
+    format,
+    idleLabel: resolveWorkflowPublishExportLabel(format),
+    pendingLabel: `导出 ${format.toUpperCase()}...`
+  };
+}
+
+export function buildWorkflowPublishExportReadinessHint(
+  sandboxReadiness?: SandboxReadinessCheck | null
+) {
+  const sandboxPreflightHint = formatSandboxReadinessPreflightHint(sandboxReadiness);
+
+  return sandboxPreflightHint
+    ? `当前 activity export 只导出历史 invocation 事实；若要判断这个 binding 现在还能否继续承载 strong-isolation 路径，仍要回到 live readiness 对照：${sandboxPreflightHint}`
+    : null;
+}
+
+export function buildWorkflowPublishExportSuccessMessage({
+  format,
+  limit
+}: {
+  format: PublishedEndpointInvocationExportFormat;
+  limit: number;
+}) {
+  return `${resolveWorkflowPublishExportLabel(format)} 已开始下载（最多 ${limit} 条过滤后的 invocation）。`;
+}
+
+export function buildWorkflowPublishExportNetworkErrorMessage(
+  format: PublishedEndpointInvocationExportFormat
+) {
+  return `无法导出 ${format.toUpperCase()}，请确认 API 已启动。`;
+}
+
+export function buildWorkflowPublishExportFallbackErrorMessage({
+  format,
+  status
+}: {
+  format: PublishedEndpointInvocationExportFormat;
+  status: number;
+}) {
+  return `导出 ${format.toUpperCase()} 失败，API 返回 ${status}。`;
 }

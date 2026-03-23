@@ -51,6 +51,7 @@ describe("WorkflowPublishExportActions", () => {
     );
 
     expect(html).toContain("导出 activity JSON");
+    expect(html).toContain("导出 activity JSONL");
     expect(html).toContain("历史 invocation 事实");
     expect(html).toContain("当前 sandbox readiness：");
     expect(html).toContain("fail-closed");

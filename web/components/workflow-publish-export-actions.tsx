@@ -13,7 +13,6 @@ import {
   type PublishedEndpointInvocationExportFormat,
   type PublishedEndpointInvocationListOptions
 } from "@/lib/get-workflow-publish";
-import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
 import {
   resolvePublishWindowRange,
   type WorkflowPublishInvocationActiveFilter
@@ -23,6 +22,13 @@ import {
   type SensitiveAccessBlockingPayload
 } from "@/lib/sensitive-access";
 import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
+import {
+  buildWorkflowPublishExportActionSurface,
+  buildWorkflowPublishExportFallbackErrorMessage,
+  buildWorkflowPublishExportNetworkErrorMessage,
+  buildWorkflowPublishExportReadinessHint,
+  buildWorkflowPublishExportSuccessMessage
+} from "@/lib/workflow-publish-binding-presenters";
 
 type WorkflowPublishExportActionsProps = {
   workflowId: string;
@@ -36,11 +42,6 @@ type WorkflowPublishExportActionsProps = {
 
 const DEFAULT_FORMATS: PublishedEndpointInvocationExportFormat[] = ["json", "jsonl"];
 const EXPORT_LIMIT = 200;
-
-const EXPORT_LABELS: Record<PublishedEndpointInvocationExportFormat, string> = {
-  json: "导出 activity JSON",
-  jsonl: "导出 activity JSONL"
-};
 
 export function WorkflowPublishExportActions({
   workflowId,
@@ -57,7 +58,7 @@ export function WorkflowPublishExportActions({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [blockedPayload, setBlockedPayload] =
     useState<SensitiveAccessBlockingPayload | null>(null);
-  const sandboxPreflightHint = formatSandboxReadinessPreflightHint(sandboxReadiness);
+  const sandboxPreflightHint = buildWorkflowPublishExportReadinessHint(sandboxReadiness);
   const blockedCopy = blockedPayload
     ? buildSensitiveAccessBlockedSurfaceCopy({
         surfaceLabel: "Publish activity export",
@@ -120,11 +121,9 @@ export function WorkflowPublishExportActions({
         format
       );
       triggerDownload(blob, filename);
-      setSuccessMessage(
-        `${EXPORT_LABELS[format]} 已开始下载（最多 ${EXPORT_LIMIT} 条过滤后的 invocation）。`
-      );
+      setSuccessMessage(buildWorkflowPublishExportSuccessMessage({ format, limit: EXPORT_LIMIT }));
     } catch {
-      setErrorMessage(`无法导出 ${format.toUpperCase()}，请确认 API 已启动。`);
+      setErrorMessage(buildWorkflowPublishExportNetworkErrorMessage(format));
     } finally {
       setActiveFormat(null);
     }
@@ -132,22 +131,25 @@ export function WorkflowPublishExportActions({
 
   return (
     <>
-      {formats.map((format) => (
-        <button
-          className="activity-link action-link-button"
-          disabled={activeFormat !== null}
-          key={format}
-          onClick={() => void handleExport(format)}
-          type="button"
-        >
-          {activeFormat === format ? `导出 ${format.toUpperCase()}...` : EXPORT_LABELS[format]}
-        </button>
-      ))}
+      {formats.map((format) => {
+        const actionSurface = buildWorkflowPublishExportActionSurface(format);
+
+        return (
+          <button
+            className="activity-link action-link-button"
+            disabled={activeFormat !== null}
+            key={format}
+            onClick={() => void handleExport(format)}
+            type="button"
+          >
+            {activeFormat === format ? actionSurface.pendingLabel : actionSurface.idleLabel}
+          </button>
+        );
+      })}
 
       {sandboxPreflightHint ? (
         <p className="section-copy entry-copy trace-export-feedback">
-          当前 activity export 只导出历史 invocation 事实；若要判断这个 binding 现在还能否继续承载
-          strong-isolation 路径，仍要回到 live readiness 对照：{sandboxPreflightHint}
+          {sandboxPreflightHint}
         </p>
       ) : null}
 
@@ -194,7 +196,10 @@ async function buildErrorMessage(
     return text;
   }
 
-  return `导出 ${format.toUpperCase()} 失败，API 返回 ${response.status}。`;
+  return buildWorkflowPublishExportFallbackErrorMessage({
+    format,
+    status: response.status
+  });
 }
 
 function resolveFilename(

@@ -10,6 +10,11 @@ import {
   buildWorkflowPublishApiKeyMutationNetworkErrorMessage,
   buildWorkflowPublishApiKeyMutationSuccessMessage,
   buildWorkflowPublishApiKeyMutationValidationMessage,
+  buildWorkflowPublishExportActionSurface,
+  buildWorkflowPublishExportFallbackErrorMessage,
+  buildWorkflowPublishExportNetworkErrorMessage,
+  buildWorkflowPublishExportReadinessHint,
+  buildWorkflowPublishExportSuccessMessage,
   buildWorkflowPublishLifecycleMutationFallbackErrorMessage,
   buildWorkflowPublishLifecycleMutationNetworkErrorMessage,
   buildWorkflowPublishLifecycleMutationSuccessMessage,
@@ -272,5 +277,30 @@ describe("workflow-publish-binding-presenters", () => {
         nextStatus: "published"
       })
     ).toBe("binding-1 已下线。");
+  });
+
+  it("builds shared publish export feedback", () => {
+    const jsonlSurface = buildWorkflowPublishExportActionSurface("jsonl");
+
+    expect(jsonlSurface.idleLabel).toBe("导出 activity JSONL");
+    expect(jsonlSurface.pendingLabel).toBe("导出 JSONL...");
+    expect(
+      buildWorkflowPublishExportSuccessMessage({
+        format: "json",
+        limit: 200
+      })
+    ).toBe("导出 activity JSON 已开始下载（最多 200 条过滤后的 invocation）。");
+    expect(buildWorkflowPublishExportNetworkErrorMessage("jsonl")).toContain(
+      "请确认 API 已启动"
+    );
+    expect(
+      buildWorkflowPublishExportFallbackErrorMessage({
+        format: "json",
+        status: 503
+      })
+    ).toBe("导出 JSON 失败，API 返回 503。");
+    expect(buildWorkflowPublishExportReadinessHint(buildSandboxReadiness())).toContain(
+      "当前 activity export 只导出历史 invocation 事实"
+    );
   });
 });
