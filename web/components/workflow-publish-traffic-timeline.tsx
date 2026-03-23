@@ -1,15 +1,18 @@
 import React from "react";
 
+import { WorkflowPublishSelectedNextStepCard } from "@/components/workflow-publish-selected-next-step-card";
 import type { PublishedEndpointInvocationTimeBucketItem } from "@/lib/get-workflow-publish";
 import {
   buildPublishedInvocationTrafficTimelineBucketSurface,
   buildPublishedInvocationTrafficTimelineSurfaceCopy,
+  type PublishedInvocationSelectedNextStepSurface
 } from "@/lib/published-invocation-presenters";
 
 type WorkflowPublishTrafficTimelineProps = {
   timeline: PublishedEndpointInvocationTimeBucketItem[];
   timelineGranularity: "hour" | "day";
   timeWindowLabel: string;
+  selectedNextStepSurface?: PublishedInvocationSelectedNextStepSurface | null;
 };
 function formatTimelineBucketLabel(
   value: string,
@@ -32,7 +35,8 @@ function formatTimelineBucketLabel(
 export function WorkflowPublishTrafficTimeline({
   timeline,
   timelineGranularity,
-  timeWindowLabel
+  timeWindowLabel,
+  selectedNextStepSurface = null
 }: WorkflowPublishTrafficTimelineProps) {
   const surfaceCopy = buildPublishedInvocationTrafficTimelineSurfaceCopy({
     timelineGranularity,
@@ -47,6 +51,9 @@ export function WorkflowPublishTrafficTimeline({
     <div className="entry-card compact-card">
       <p className="entry-card-title">{surfaceCopy.title}</p>
       <p className="section-copy entry-copy">{surfaceCopy.description}</p>
+      {selectedNextStepSurface ? (
+        <WorkflowPublishSelectedNextStepCard surface={selectedNextStepSurface} />
+      ) : null}
 
       {timeline.length ? (
         <div className="publish-timeline">

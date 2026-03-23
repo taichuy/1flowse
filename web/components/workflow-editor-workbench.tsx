@@ -32,7 +32,10 @@ import {
   type WorkflowEditorMessageTone
 } from "@/components/workflow-editor-workbench/shared";
 import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
-import { summarizeWorkflowPersistBlockers } from "@/components/workflow-editor-workbench/persist-blockers";
+import {
+  buildWorkflowPersistBlockerRecommendedNextStep,
+  summarizeWorkflowPersistBlockers
+} from "@/components/workflow-editor-workbench/persist-blockers";
 import {
   applyRunOverlayToNodes,
   WORKFLOW_EDITOR_NODE_TYPES
@@ -145,6 +148,14 @@ export function WorkflowEditorWorkbench({
     () => summarizeWorkflowPersistBlockers(validation.persistBlockers),
     [validation.persistBlockers]
   );
+  const persistBlockerRecommendedNextStep = useMemo(
+    () =>
+      buildWorkflowPersistBlockerRecommendedNextStep(
+        validation.persistBlockers,
+        sandboxReadiness
+      ),
+    [sandboxReadiness, validation.persistBlockers]
+  );
   const persistence = useWorkflowEditorPersistence({
     workflowId: workflow.id,
     fallbackWorkflowName: workflow.name,
@@ -231,6 +242,7 @@ export function WorkflowEditorWorkbench({
           persistBlockedMessage={validation.persistBlockedMessage || null}
           persistBlockerSummary={persistBlockerSummary}
           persistBlockers={validation.persistBlockers}
+          persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
           isSaving={persistence.isSaving}
           isSavingStarter={persistence.isSavingStarter}
           createWorkflowHref={createWorkflowHref}
@@ -255,6 +267,7 @@ export function WorkflowEditorWorkbench({
             messageKind={messageKind}
             persistBlockerSummary={persistBlockerSummary}
             persistBlockers={validation.persistBlockers}
+            persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
             executionPreflightMessage={executionPreflightMessage}
             toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
             focusedValidationItem={validationFocusItem}
@@ -354,6 +367,7 @@ export function WorkflowEditorWorkbench({
               persistBlockedMessage={validation.persistBlockedMessage || null}
               persistBlockerSummary={persistBlockerSummary}
               persistBlockers={validation.persistBlockers}
+              persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
               sandboxReadiness={sandboxReadiness}
             />
           </aside>

@@ -6,6 +6,7 @@ import type {
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
+import { WorkflowPublishSelectedNextStepCard } from "@/components/workflow-publish-selected-next-step-card";
 import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
 import { WorkflowPublishInvocationDetailPanel } from "@/components/workflow-publish-invocation-detail-panel";
 import { WorkflowPublishInvocationEntryCard } from "@/components/workflow-publish-invocation-entry-card";
@@ -19,7 +20,7 @@ import {
   buildPublishedInvocationActivityInsightsSurface,
   buildPublishedInvocationApiKeyUsageCardSurface,
   buildPublishedInvocationActivityDetailsSurfaceCopy,
-  buildPublishedInvocationFailureReasonCardSurface,
+  buildPublishedInvocationFailureReasonCardSurface
 } from "@/lib/published-invocation-presenters";
 
 import {
@@ -27,45 +28,6 @@ import {
   resolveWorkflowPublishSelectedInvocationDetailSurface
 } from "@/components/workflow-publish-activity-panel-helpers";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
-
-function PublishedInvocationSelectedNextStepCard({
-  surface,
-  showTitle = true
-}: {
-  surface: {
-    title: string;
-    invocationId: string;
-    label: string;
-    detail: string;
-    href?: string | null;
-    hrefLabel?: string | null;
-  };
-  showTitle?: boolean;
-}) {
-  return (
-    <div className="entry-card compact-card">
-      <div className="payload-card-header">
-        {showTitle ? (
-          <div>
-            <p className="entry-card-title">{surface.title}</p>
-            <p className="binding-meta">{surface.invocationId}</p>
-          </div>
-        ) : (
-          <span className="status-meta">{surface.invocationId}</span>
-        )}
-        <span className="event-chip">{surface.label}</span>
-      </div>
-      <p className="section-copy entry-copy">{surface.detail}</p>
-      {surface.href && surface.hrefLabel ? (
-        <div className="tool-badge-row">
-          <Link className="event-chip inbox-filter-link" href={surface.href}>
-            {surface.hrefLabel}
-          </Link>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 type WorkflowPublishActivityInsightsProps = {
   binding: WorkflowPublishActivityPanelProps["binding"];
@@ -218,6 +180,9 @@ export function WorkflowPublishActivityInsights({
         timeline={timeline}
         timelineGranularity={timelineGranularity}
         timeWindowLabel={timeWindowLabel}
+        selectedNextStepSurface={
+          selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.nextStepSurface : null
+        }
       />
 
       {insightsSurface.issueSignalsSurface ? (
@@ -228,7 +193,7 @@ export function WorkflowPublishActivityInsights({
             <p className="section-copy entry-copy">{insightsSurface.issueSignalsSurface.insight}</p>
           ) : null}
           {insightsSurface.issueSignalsSurface.selectedNextStepSurface ? (
-            <PublishedInvocationSelectedNextStepCard
+            <WorkflowPublishSelectedNextStepCard
               surface={insightsSurface.issueSignalsSurface.selectedNextStepSurface}
             />
           ) : null}
@@ -363,7 +328,7 @@ export function WorkflowPublishActivityDetails({
                   </>
                 ) : null}
                 {cardSurface.selectedNextStepSurface ? (
-                  <PublishedInvocationSelectedNextStepCard
+                  <WorkflowPublishSelectedNextStepCard
                     surface={cardSurface.selectedNextStepSurface}
                     showTitle={false}
                   />
@@ -376,7 +341,7 @@ export function WorkflowPublishActivityDetails({
       ) : null}
 
       {selectedInvocationSurface.nextStepSurface && !clearInvocationDetailHref ? (
-        <PublishedInvocationSelectedNextStepCard surface={selectedInvocationSurface.nextStepSurface} />
+        <WorkflowPublishSelectedNextStepCard surface={selectedInvocationSurface.nextStepSurface} />
       ) : null}
 
       {items.length ? (
@@ -416,6 +381,9 @@ export function WorkflowPublishActivityDetails({
                 callbackWaitingAutomation={callbackWaitingAutomation}
                 detailActive={selectedInvocationId === item.id}
                 detailHref={buildInvocationDetailHref(item.id)}
+                hideRecommendedNextStep={
+                  selectedInvocationId === item.id && Boolean(selectedInvocationSurface.nextStepSurface)
+                }
                 item={item}
                 sandboxReadiness={sandboxReadiness}
                 key={item.id}

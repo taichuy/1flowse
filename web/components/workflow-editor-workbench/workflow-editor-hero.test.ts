@@ -53,6 +53,13 @@ describe("WorkflowEditorHero", () => {
             nextStep: "publish next step"
           }
         ],
+        persistBlockerRecommendedNextStep: {
+          label: "sandbox readiness",
+          detail:
+            "当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow；优先回到 workflow library 处理强隔离 execution class 与隔离需求。",
+          href: "/workflows?execution=sandbox",
+          href_label: "Open workflow library"
+        },
         isSaving: false,
         isSavingStarter: false,
         onSave: () => undefined,
@@ -63,6 +70,8 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain("当前保存会被 2 类问题阻断");
     expect(html).toContain("Execution capability");
     expect(html).toContain("Publish draft");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("Open workflow library");
   });
 
   it("keeps workspace starter governance scope in editor actions", () => {

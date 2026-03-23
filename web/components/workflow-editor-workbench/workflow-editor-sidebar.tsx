@@ -13,6 +13,7 @@ import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
@@ -51,6 +52,7 @@ type WorkflowEditorSidebarProps = {
   messageKind?: WorkflowEditorMessageKind;
   persistBlockerSummary: string | null;
   persistBlockers: WorkflowPersistBlocker[];
+  persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
   executionPreflightMessage: string | null;
   toolExecutionValidationIssueCount: number;
   focusedValidationItem?: WorkflowValidationNavigatorItem | null;
@@ -92,6 +94,7 @@ export function WorkflowEditorSidebar({
   messageKind = "default",
   persistBlockerSummary,
   persistBlockers,
+  persistBlockerRecommendedNextStep = null,
   executionPreflightMessage,
   toolExecutionValidationIssueCount,
   focusedValidationItem = null,
@@ -123,10 +126,9 @@ export function WorkflowEditorSidebar({
     (item) => item.bindingRequired
   ).length;
   const remediationItem = focusedValidationItem ?? preflightValidationItem;
-  const persistBlockerRecommendedNextStep = buildWorkflowPersistBlockerRecommendedNextStep(
-    persistBlockers,
-    sandboxReadiness
-  );
+  const resolvedPersistBlockerRecommendedNextStep =
+    persistBlockerRecommendedNextStep ??
+    buildWorkflowPersistBlockerRecommendedNextStep(persistBlockers, sandboxReadiness);
   const feedbackMessage =
     message ??
     (persistBlockers.length > 0
@@ -303,6 +305,7 @@ export function WorkflowEditorSidebar({
             summary={persistBlockerSummary}
             blockers={persistBlockers}
             sandboxReadiness={sandboxReadiness}
+            hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
           />
         ) : null}
 
@@ -321,7 +324,7 @@ export function WorkflowEditorSidebar({
           title="Execution preflight"
           intro={executionPreflightMessage}
           hideWhenHealthy={toolExecutionValidationIssueCount === 0}
-          hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
+          hideRecommendedNextStep={Boolean(resolvedPersistBlockerRecommendedNextStep)}
         />
 
         {remediationItem ? (

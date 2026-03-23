@@ -51,6 +51,7 @@ type WorkflowPublishInvocationEntryCardProps = {
   item: PublishedInvocationItem;
   detailHref: string;
   detailActive: boolean;
+  hideRecommendedNextStep?: boolean;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
@@ -69,6 +70,7 @@ export function WorkflowPublishInvocationEntryCard({
   item,
   detailHref,
   detailActive,
+  hideRecommendedNextStep = false,
   callbackWaitingAutomation,
   sandboxReadiness
 }: WorkflowPublishInvocationEntryCardProps) {
@@ -397,7 +399,7 @@ export function WorkflowPublishInvocationEntryCard({
           ) : null}
         </div>
       ) : null}
-      {recommendedNextStep ? (
+      {recommendedNextStep && !hideRecommendedNextStep ? (
         <div className="payload-card compact-card">
         <div className="payload-card-header">
             <span className="status-meta">{surfaceCopy.recommendedNextStepTitle}</span>

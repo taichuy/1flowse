@@ -8,6 +8,7 @@ import type {
   PluginToolRegistryItem
 } from "@/lib/get-plugin-registry";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type {
   WorkflowCanvasEdgeData,
@@ -64,6 +65,7 @@ type WorkflowEditorInspectorProps = {
   persistBlockedMessage?: string | null;
   persistBlockerSummary?: string | null;
   persistBlockers: WorkflowPersistBlocker[];
+  persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
@@ -102,6 +104,7 @@ export function WorkflowEditorInspector({
   persistBlockedMessage = null,
   persistBlockerSummary = null,
   persistBlockers,
+  persistBlockerRecommendedNextStep = null,
   sandboxReadiness
 }: WorkflowEditorInspectorProps) {
   return (
@@ -281,6 +284,7 @@ export function WorkflowEditorInspector({
             summary={persistBlockerSummary ?? persistBlockedMessage}
             blockers={persistBlockers}
             sandboxReadiness={sandboxReadiness}
+            hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
           />
         </article>
       ) : null}

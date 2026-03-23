@@ -182,6 +182,70 @@ describe("WorkflowEditorSidebar", () => {
     expect(html.match(/Recommended next step/g)).toHaveLength(1);
   });
 
+  it("hides duplicate save gate next-step when hero already projects the canonical CTA", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary:
+          "当前保存会被 2 类问题阻断：Execution capability / Publish draft。",
+        persistBlockers: [
+          {
+            id: "tool_execution",
+            label: "Execution capability",
+            detail: "当前 workflow definition 还有 execution capability 待修正问题。",
+            nextStep: "请先对齐 adapter 绑定、execution class 与 sandbox readiness，再继续保存。"
+          },
+          {
+            id: "publish_draft",
+            label: "Publish draft",
+            detail: "当前 workflow definition 还有 publish draft 待修正问题。",
+            nextStep: "请先在 publish draft 表单里修正发布标识、schema、缓存或版本设置，再继续保存。"
+          }
+        ],
+        persistBlockerRecommendedNextStep: {
+          label: "sandbox readiness",
+          detail:
+            "当前 live sandbox readiness 仍影响 4 个 run / 1 个 workflow；优先回到 workflow library 处理强隔离 execution class 与隔离需求。",
+          href: "/workflows?execution=sandbox",
+          href_label: "Open workflow library"
+        },
+        executionPreflightMessage:
+          "保存前还有 2 个 execution capability 问题；先对齐 tool binding、tool 节点 runtimePolicy / LLM Agent tool policy，以及 live sandbox readiness。",
+        toolExecutionValidationIssueCount: 2,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onWorkflowNameChange: () => undefined,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain("Save gate");
+    expect(html).toContain("当前保存会被 2 类问题阻断");
+    expect(html).not.toContain("Recommended next step");
+    expect(html).not.toContain("Open workflow library");
+  });
+
   it("shows shared starter save follow-up links after saving a workspace starter", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {

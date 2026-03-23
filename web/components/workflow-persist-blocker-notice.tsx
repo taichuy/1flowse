@@ -10,6 +10,7 @@ type WorkflowPersistBlockerNoticeProps = {
   summary?: string | null;
   blockers: WorkflowPersistBlocker[];
   sandboxReadiness?: SandboxReadinessCheck | null;
+  hideRecommendedNextStep?: boolean;
   limit?: number;
 };
 
@@ -18,6 +19,7 @@ export function WorkflowPersistBlockerNotice({
   summary = null,
   blockers,
   sandboxReadiness = null,
+  hideRecommendedNextStep = false,
   limit = 4
 }: WorkflowPersistBlockerNoticeProps) {
   if (blockers.length === 0) {
@@ -33,7 +35,9 @@ export function WorkflowPersistBlockerNotice({
     <div className="sync-message error">
       <strong>{title}</strong>
       {summary ? <p className="section-copy entry-copy">{summary}</p> : null}
-      <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
+      {hideRecommendedNextStep ? null : (
+        <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
+      )}
       <ul className="event-list compact-list">
         {blockers.slice(0, limit).map((blocker) => (
           <li key={blocker.id}>

@@ -38,9 +38,14 @@ vi.mock("@/components/sensitive-access-blocked-card", () => ({
     )
 }));
 
+const workflowPublishInvocationEntryCardProps: Array<Record<string, unknown>> = [];
+
 vi.mock("@/components/workflow-publish-invocation-entry-card", () => ({
-  WorkflowPublishInvocationEntryCard: () =>
-    createElement("div", { "data-testid": "workflow-publish-invocation-entry-card" })
+  WorkflowPublishInvocationEntryCard: (props: Record<string, unknown>) => {
+    workflowPublishInvocationEntryCardProps.push(props);
+
+    return createElement("div", { "data-testid": "workflow-publish-invocation-entry-card" });
+  }
 }));
 
 vi.mock("@/components/workflow-publish-invocation-detail-panel", () => ({
@@ -510,6 +515,7 @@ describe("WorkflowPublishActivityInsights", () => {
     );
 
     expect(html).toContain("Issue signals");
+    expect((html.match(/Selected invocation next step/g)?.length ?? 0)).toBeGreaterThan(1);
     expect(html).toContain("当前打开的 invocation-1 已对齐聚合 failure reason");
     expect(html).toContain("Selected invocation next step");
     expect(html).toContain("approval blocker");
@@ -922,6 +928,35 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("approval blocker");
     expect(html).toContain("open blocker inbox slice");
     expect(html).toContain("优先处理 blocker inbox，再观察 waiting 节点是否恢复。");
+  });
+
+  it("hides the selected entry CTA when activity details already project the same next step", () => {
+    workflowPublishInvocationEntryCardProps.length = 0;
+
+    renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit: {
+          ...buildInvocationAudit(),
+          items: [buildSelectedInvocationDetail().invocation as never]
+        },
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: buildSelectedInvocationDetail()
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: null
+      })
+    );
+
+    expect(workflowPublishInvocationEntryCardProps).toHaveLength(1);
+    expect(workflowPublishInvocationEntryCardProps[0]).toMatchObject({
+      detailActive: true,
+      hideRecommendedNextStep: true
+    });
   });
 
   it("ignores stale selected-invocation callback copy and keeps next step on execution focus", () => {

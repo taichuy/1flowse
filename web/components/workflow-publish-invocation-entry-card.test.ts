@@ -638,6 +638,32 @@ describe("WorkflowPublishInvocationEntryCard", () => {
     expect(inactiveHtml).toContain("error: sandbox backend offline during invocation");
   });
 
+  it("hides the duplicated recommended next step when an aggregate surface already projects it", () => {
+    const visibleHtml = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item: buildInvocationItem(),
+        detailHref: "/published/invocation-1",
+        detailActive: true
+      })
+    );
+
+    const hiddenHtml = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationEntryCard, {
+        item: buildInvocationItem(),
+        detailHref: "/published/invocation-1",
+        detailActive: true,
+        hideRecommendedNextStep: true
+      })
+    );
+
+    expect(visibleHtml.match(/Recommended next step/g)?.length ?? 0).toBeGreaterThan(
+      hiddenHtml.match(/Recommended next step/g)?.length ?? 0
+    );
+    expect(hiddenHtml.match(/Recommended next step/g)?.length ?? 0).toBe(1);
+    expect(hiddenHtml).toContain("查看当前详情");
+    expect(hiddenHtml).toContain("当前 waiting 节点仍在等待 callback");
+  });
+
   it("shows live sandbox readiness when the sampled run carries a blocked strong-isolation snapshot", () => {
     const item = buildInvocationItem();
     item.run_follow_up = {

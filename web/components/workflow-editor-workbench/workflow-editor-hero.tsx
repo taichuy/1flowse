@@ -2,7 +2,9 @@
 
 import React from "react";
 
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import { buildWorkflowEditorHeroSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { WorkflowPersistBlocker } from "./persist-blockers";
@@ -29,6 +31,7 @@ type WorkflowEditorHeroProps = {
   persistBlockedMessage: string | null;
   persistBlockerSummary: string | null;
   persistBlockers: WorkflowPersistBlocker[];
+  persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
   isSaving: boolean;
   isSavingStarter: boolean;
   createWorkflowHref?: string;
@@ -60,6 +63,7 @@ export function WorkflowEditorHero({
   persistBlockedMessage,
   persistBlockerSummary,
   persistBlockers,
+  persistBlockerRecommendedNextStep = null,
   isSaving,
   isSavingStarter,
   createWorkflowHref = "/workflows/new",
@@ -125,6 +129,7 @@ export function WorkflowEditorHero({
             {isSavingStarter ? "模板保存中..." : "保存为 workspace starter"}
           </button>
         </div>
+        <OperatorRecommendedNextStepCard recommendedNextStep={persistBlockerRecommendedNextStep} />
       </div>
 
       <div className="hero-panel">
