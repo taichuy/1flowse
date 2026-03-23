@@ -147,6 +147,43 @@ export type WorkspaceStarterBulkResultSurface = {
   shouldRenderStandaloneFollowUpExplanation: boolean;
 };
 
+export type WorkspaceStarterSourceDiffSummaryCard = {
+  label: string;
+  value: string;
+};
+
+export type WorkspaceStarterSourceDiffEntrySurface = {
+  key: string;
+  title: string;
+  meta: string;
+  statusLabel: string;
+  changedFields: string[];
+  templateFacts: string[];
+  sourceFacts: string[];
+};
+
+export type WorkspaceStarterSourceDiffSectionSurface = {
+  key: string;
+  title: string;
+  summary: string;
+  changeBadge: string;
+  emptyMessage: string;
+  entries: WorkspaceStarterSourceDiffEntrySurface[];
+};
+
+export type WorkspaceStarterSourceDiffSurface = {
+  summaryCards: WorkspaceStarterSourceDiffSummaryCard[];
+  rebaseCard: {
+    title: string;
+    meta: string;
+    statusLabel: string;
+    summary: string;
+    chips: string[];
+    canRebase: boolean;
+  };
+  sections: WorkspaceStarterSourceDiffSectionSurface[];
+};
+
 const WORKSPACE_STARTER_SOURCE_GOVERNANCE_FOLLOW_UP_KINDS = new Set<WorkspaceStarterSourceGovernanceKind>([
   "drifted",
   "missing_source"
@@ -1127,6 +1164,73 @@ export function buildWorkspaceStarterSourceActionDecision(
   };
 }
 
+export function buildWorkspaceStarterSourceDiffSurface(
+  sourceDiff: WorkspaceStarterSourceDiff | null
+): WorkspaceStarterSourceDiffSurface | null {
+  if (!sourceDiff) {
+    return null;
+  }
+
+  const actionDecision = buildWorkspaceStarterSourceActionDecision(sourceDiff);
+  const rebaseFieldChips =
+    sourceDiff.rebase_fields.length > 0 ? sourceDiff.rebase_fields : ["no rebase needed"];
+
+  return {
+    summaryCards: [
+      {
+        label: "Node changes",
+        value: String(countSummaryChanges(sourceDiff.node_summary))
+      },
+      {
+        label: "Edge changes",
+        value: String(countSummaryChanges(sourceDiff.edge_summary))
+      },
+      {
+        label: "Workflow name",
+        value: sourceDiff.workflow_name_changed ? "Drifted" : "Synced"
+      },
+      {
+        label: "Sandbox drift",
+        value: String(countSummaryChanges(sourceDiff.sandbox_dependency_summary))
+      },
+      {
+        label: "Rebase fields",
+        value: String(sourceDiff.rebase_fields.length)
+      }
+    ],
+    rebaseCard: {
+      title: "Suggested rebase fields",
+      meta: sourceDiff.changed
+        ? "当源 workflow 已发生演进时，rebase 会同步这些 source-derived 字段。"
+        : "当前 template snapshot 已与 source workflow 对齐。",
+      statusLabel: actionDecision.statusLabel,
+      summary: actionDecision.summary,
+      chips: Array.from(new Set([...rebaseFieldChips, ...actionDecision.factChips])),
+      canRebase: actionDecision.canRebase
+    },
+    sections: [
+      buildWorkspaceStarterSourceDiffSectionSurface({
+        key: "node-diff",
+        title: "Node diff",
+        summary: sourceDiff.node_summary,
+        entries: sourceDiff.node_entries
+      }),
+      buildWorkspaceStarterSourceDiffSectionSurface({
+        key: "edge-diff",
+        title: "Edge diff",
+        summary: sourceDiff.edge_summary,
+        entries: sourceDiff.edge_entries
+      }),
+      buildWorkspaceStarterSourceDiffSectionSurface({
+        key: "sandbox-diff",
+        title: "Sandbox dependency drift",
+        summary: sourceDiff.sandbox_dependency_summary,
+        entries: sourceDiff.sandbox_dependency_entries
+      })
+    ]
+  };
+}
+
 export function buildWorkspaceStarterHistoryMetaChips(
   item: WorkspaceStarterHistoryItem
 ) {
@@ -1354,6 +1458,40 @@ export function summarizeValidationIssues(
 
 function summarizeSourceDiffCounts(summary: WorkspaceStarterSourceDiffSummary) {
   return `新增 ${summary.added_count} / 移除 ${summary.removed_count} / 变更 ${summary.changed_count}`;
+}
+
+function buildWorkspaceStarterSourceDiffSectionSurface({
+  key,
+  title,
+  summary,
+  entries
+}: {
+  key: string;
+  title: string;
+  summary: WorkspaceStarterSourceDiffSummary;
+  entries: WorkspaceStarterSourceDiff["node_entries"];
+}): WorkspaceStarterSourceDiffSectionSurface {
+  return {
+    key,
+    title,
+    summary: `template ${summary.template_count} / source ${summary.source_count}`,
+    changeBadge: `+${summary.added_count} / -${summary.removed_count} / ~${summary.changed_count}`,
+    emptyMessage: "当前这一层没有差异。",
+    entries: entries.map((entry, index) => {
+      const id = normalizeString(entry.id) ?? `entry-${index + 1}`;
+      const statusLabel = normalizeString(entry.status) ?? "unknown";
+
+      return {
+        key: `${key}-${statusLabel}-${id}`,
+        title: normalizeString(entry.label) ?? id,
+        meta: id,
+        statusLabel,
+        changedFields: normalizeStringArray(entry.changed_fields),
+        templateFacts: normalizeStringArray(entry.template_facts),
+        sourceFacts: normalizeStringArray(entry.source_facts)
+      };
+    })
+  };
 }
 
 function countSummaryChanges(summary: WorkspaceStarterSourceDiffSummary | null) {

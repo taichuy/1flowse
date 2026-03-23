@@ -2,7 +2,10 @@
 
 import type { WorkspaceStarterSourceDiff } from "@/lib/get-workspace-starters";
 
-import { buildWorkspaceStarterSourceActionDecision } from "./shared";
+import {
+  buildWorkspaceStarterSourceDiffSurface,
+  type WorkspaceStarterSourceDiffSectionSurface
+} from "./shared";
 
 type WorkspaceStarterSourceDiffPanelProps = {
   sourceDiff: WorkspaceStarterSourceDiff | null;
@@ -17,7 +20,7 @@ export function WorkspaceStarterSourceDiffPanel({
   isRebasing,
   onRebase
 }: WorkspaceStarterSourceDiffPanelProps) {
-  const actionDecision = buildWorkspaceStarterSourceActionDecision(sourceDiff);
+  const surface = buildWorkspaceStarterSourceDiffSurface(sourceDiff);
 
   return (
     <article className="diagnostic-panel">
@@ -33,60 +36,31 @@ export function WorkspaceStarterSourceDiffPanel({
 
       {isLoading ? (
         <p className="empty-state">正在加载 source diff...</p>
-      ) : !sourceDiff ? (
+      ) : !surface ? (
         <p className="empty-state">当前模板没有可用的 source diff。</p>
       ) : (
         <>
           <div className="summary-strip compact-strip">
-            <div className="summary-card">
-              <span>Node changes</span>
-              <strong>
-                {getSummaryChangeCount(sourceDiff.node_summary)}
-              </strong>
-            </div>
-            <div className="summary-card">
-              <span>Edge changes</span>
-              <strong>{getSummaryChangeCount(sourceDiff.edge_summary)}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Workflow name</span>
-              <strong>{sourceDiff.workflow_name_changed ? "Drifted" : "Synced"}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Sandbox drift</span>
-              <strong>{getSummaryChangeCount(sourceDiff.sandbox_dependency_summary)}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Rebase fields</span>
-              <strong>{sourceDiff.rebase_fields.length}</strong>
-            </div>
+            {surface.summaryCards.map((item) => (
+              <div className="summary-card" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
           </div>
 
           <div className="binding-card compact-card">
             <div className="binding-card-header">
               <div>
-                <p className="entry-card-title">Suggested rebase fields</p>
-                <p className="binding-meta">
-                  {sourceDiff.changed
-                    ? "当源 workflow 已发生演进时，rebase 会同步这些 source-derived 字段。"
-                    : "当前 template snapshot 已与 source workflow 对齐。"}
-                </p>
+                <p className="entry-card-title">{surface.rebaseCard.title}</p>
+                <p className="binding-meta">{surface.rebaseCard.meta}</p>
               </div>
-              <span className="health-pill">{actionDecision.statusLabel}</span>
+              <span className="health-pill">{surface.rebaseCard.statusLabel}</span>
             </div>
-            <p className="section-copy starter-summary-copy">{actionDecision.summary}</p>
+            <p className="section-copy starter-summary-copy">{surface.rebaseCard.summary}</p>
             <div className="starter-tag-row">
-              {sourceDiff.rebase_fields.length > 0 ? (
-                sourceDiff.rebase_fields.map((field) => (
-                  <span className="event-chip" key={field}>
-                    {field}
-                  </span>
-                ))
-              ) : (
-                <span className="event-chip">no rebase needed</span>
-              )}
-              {actionDecision.factChips.map((item) => (
-                <span className="event-chip" key={`decision-${item}`}>
+              {surface.rebaseCard.chips.map((item) => (
+                <span className="event-chip" key={`rebase-${item}`}>
                   {item}
                 </span>
               ))}
@@ -96,96 +70,72 @@ export function WorkspaceStarterSourceDiffPanel({
                 className="sync-button secondary"
                 type="button"
                 onClick={onRebase}
-                disabled={!actionDecision.canRebase || isRebasing}
+                disabled={!surface.rebaseCard.canRebase || isRebasing}
               >
                 {isRebasing ? "Rebase 中..." : "执行 rebase"}
               </button>
             </div>
           </div>
 
-          <DiffSection
-            title="Node diff"
-            summary={sourceDiff.node_summary}
-            entries={sourceDiff.node_entries}
-          />
-          <DiffSection
-            title="Edge diff"
-            summary={sourceDiff.edge_summary}
-            entries={sourceDiff.edge_entries}
-          />
-          <DiffSection
-            title="Sandbox dependency drift"
-            summary={sourceDiff.sandbox_dependency_summary}
-            entries={sourceDiff.sandbox_dependency_entries}
-          />
+          {surface.sections.map((section) => (
+            <DiffSection key={section.key} section={section} />
+          ))}
         </>
       )}
     </article>
   );
 }
 
-function DiffSection({
-  title,
-  summary,
-  entries
-}: {
-  title: string;
-  summary: WorkspaceStarterSourceDiff["node_summary"];
-  entries: WorkspaceStarterSourceDiff["node_entries"];
-}) {
+function DiffSection({ section }: { section: WorkspaceStarterSourceDiffSectionSurface }) {
   return (
     <div className="binding-card compact-card">
       <div className="binding-card-header">
         <div>
-          <p className="entry-card-title">{title}</p>
-          <p className="binding-meta">
-            template {summary.template_count} / source {summary.source_count}
-          </p>
+          <p className="entry-card-title">{section.title}</p>
+          <p className="binding-meta">{section.summary}</p>
         </div>
-        <span className="health-pill">
-          +{summary.added_count} / -{summary.removed_count} / ~{summary.changed_count}
-        </span>
+        <span className="health-pill">{section.changeBadge}</span>
       </div>
-      {entries.length === 0 ? (
-        <p className="section-copy starter-summary-copy">当前这一层没有差异。</p>
+      {section.entries.length === 0 ? (
+        <p className="section-copy starter-summary-copy">{section.emptyMessage}</p>
       ) : (
         <div className="governance-node-list">
-          {entries.map((entry) => (
-            <div className="binding-card compact-card" key={`${entry.status}-${entry.id}`}>
+          {section.entries.map((entry) => (
+            <div className="binding-card compact-card" key={entry.key}>
               <div className="binding-card-header">
                 <div>
-                  <p className="entry-card-title">{entry.label}</p>
-                  <p className="binding-meta">{entry.id}</p>
+                  <p className="entry-card-title">{entry.title}</p>
+                  <p className="binding-meta">{entry.meta}</p>
                 </div>
-                <span className="health-pill">{entry.status}</span>
+                <span className="health-pill">{entry.statusLabel}</span>
               </div>
-              {entry.changed_fields.length > 0 ? (
+              {entry.changedFields.length > 0 ? (
                 <div className="starter-tag-row">
-                  {entry.changed_fields.map((field) => (
-                    <span className="event-chip" key={`${entry.id}-${field}`}>
+                  {entry.changedFields.map((field) => (
+                    <span className="event-chip" key={`${entry.key}-${field}`}>
                       {field}
                     </span>
                   ))}
                 </div>
               ) : null}
-              {entry.template_facts.length > 0 ? (
+              {entry.templateFacts.length > 0 ? (
                 <>
                   <p className="binding-meta">template facts</p>
                   <div className="starter-tag-row">
-                    {entry.template_facts.map((fact) => (
-                      <span className="event-chip" key={`${entry.id}-template-${fact}`}>
+                    {entry.templateFacts.map((fact) => (
+                      <span className="event-chip" key={`${entry.key}-template-${fact}`}>
                         {fact}
                       </span>
                     ))}
                   </div>
                 </>
               ) : null}
-              {entry.source_facts.length > 0 ? (
+              {entry.sourceFacts.length > 0 ? (
                 <>
                   <p className="binding-meta">source facts</p>
                   <div className="starter-tag-row">
-                    {entry.source_facts.map((fact) => (
-                      <span className="event-chip" key={`${entry.id}-source-${fact}`}>
+                    {entry.sourceFacts.map((fact) => (
+                      <span className="event-chip" key={`${entry.key}-source-${fact}`}>
                         {fact}
                       </span>
                     ))}
@@ -198,8 +148,4 @@ function DiffSection({
       )}
     </div>
   );
-}
-
-function getSummaryChangeCount(summary: WorkspaceStarterSourceDiff["node_summary"]) {
-  return summary.added_count + summary.removed_count + summary.changed_count;
 }

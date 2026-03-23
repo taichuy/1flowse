@@ -17,6 +17,7 @@ import {
   buildWorkspaceStarterBulkResultSurface,
   buildWorkspaceStarterHistoryPayloadSnapshot,
   buildWorkspaceStarterSourceActionDecision,
+  buildWorkspaceStarterSourceDiffSurface,
   buildWorkspaceStarterSourceGovernanceSurface,
   buildWorkspaceStarterSourceGovernanceFocusTargets,
   buildWorkspaceStarterSourceGovernancePrimaryFollowUp,
@@ -924,6 +925,137 @@ describe("workspace starter source action decision", () => {
       {
         label: "Rebase payload",
         text: "definition、default_workflow_name"
+      }
+    ]);
+  });
+
+  it("builds shared source diff surfaces for summary, rebase guidance and structured sections", () => {
+    const surface = buildWorkspaceStarterSourceDiffSurface({
+      template_id: "starter-a",
+      workspace_id: "default",
+      source_workflow_id: "wf-a",
+      source_workflow_name: "Sandbox authoring",
+      template_version: "0.1.0",
+      source_version: "0.2.0",
+      template_default_workflow_name: "Sandbox authoring",
+      source_default_workflow_name: "Sandbox authoring",
+      workflow_name_changed: false,
+      changed: true,
+      rebase_fields: ["definition", "created_from_workflow_version"],
+      node_summary: {
+        template_count: 1,
+        source_count: 2,
+        added_count: 1,
+        removed_count: 0,
+        changed_count: 0
+      },
+      edge_summary: emptyDiffSummary(),
+      sandbox_dependency_summary: {
+        template_count: 1,
+        source_count: 1,
+        added_count: 0,
+        removed_count: 0,
+        changed_count: 1
+      },
+      action_decision: {
+        recommended_action: "refresh",
+        status_label: "建议 refresh",
+        summary:
+          "当前主要是 sandbox 依赖治理漂移。优先 refresh 同步最新 definition / version，并重点复核 dependencyMode、builtinPackageSet、dependencyRef 与 backendExtensions。",
+        can_refresh: true,
+        can_rebase: true,
+        fact_chips: ["source 0.2.0", "sandbox drift 1", "rebase 2"]
+      },
+      node_entries: [
+        {
+          id: "node-sandbox",
+          label: "Sandbox node",
+          status: "added",
+          changed_fields: ["config.timeout"],
+          template_facts: [],
+          source_facts: ["sandbox_code", "explicit execution"]
+        }
+      ],
+      edge_entries: [],
+      sandbox_dependency_entries: [
+        {
+          id: "sandbox-node",
+          label: "sandbox_code",
+          status: "changed",
+          changed_fields: ["dependencyMode", "builtinPackageSet"],
+          template_facts: ["host execution"],
+          source_facts: ["strong isolation"]
+        }
+      ]
+    });
+
+    expect(surface).not.toBeNull();
+    expect(surface?.summaryCards).toEqual([
+      { label: "Node changes", value: "1" },
+      { label: "Edge changes", value: "0" },
+      { label: "Workflow name", value: "Synced" },
+      { label: "Sandbox drift", value: "1" },
+      { label: "Rebase fields", value: "2" }
+    ]);
+    expect(surface?.rebaseCard).toEqual({
+      title: "Suggested rebase fields",
+      meta: "当源 workflow 已发生演进时，rebase 会同步这些 source-derived 字段。",
+      statusLabel: "建议 refresh",
+      summary:
+        "当前主要是 sandbox 依赖治理漂移。优先 refresh 同步最新 definition / version，并重点复核 dependencyMode、builtinPackageSet、dependencyRef 与 backendExtensions。",
+      chips: [
+        "definition",
+        "created_from_workflow_version",
+        "source 0.2.0",
+        "sandbox drift 1",
+        "rebase 2"
+      ],
+      canRebase: true
+    });
+    expect(surface?.sections).toEqual([
+      {
+        key: "node-diff",
+        title: "Node diff",
+        summary: "template 1 / source 2",
+        changeBadge: "+1 / -0 / ~0",
+        emptyMessage: "当前这一层没有差异。",
+        entries: [
+          {
+            key: "node-diff-added-node-sandbox",
+            title: "Sandbox node",
+            meta: "node-sandbox",
+            statusLabel: "added",
+            changedFields: ["config.timeout"],
+            templateFacts: [],
+            sourceFacts: ["sandbox_code", "explicit execution"]
+          }
+        ]
+      },
+      {
+        key: "edge-diff",
+        title: "Edge diff",
+        summary: "template 0 / source 0",
+        changeBadge: "+0 / -0 / ~0",
+        emptyMessage: "当前这一层没有差异。",
+        entries: []
+      },
+      {
+        key: "sandbox-diff",
+        title: "Sandbox dependency drift",
+        summary: "template 1 / source 1",
+        changeBadge: "+0 / -0 / ~1",
+        emptyMessage: "当前这一层没有差异。",
+        entries: [
+          {
+            key: "sandbox-diff-changed-sandbox-node",
+            title: "sandbox_code",
+            meta: "sandbox-node",
+            statusLabel: "changed",
+            changedFields: ["dependencyMode", "builtinPackageSet"],
+            templateFacts: ["host execution"],
+            sourceFacts: ["strong isolation"]
+          }
+        ]
       }
     ]);
   });
