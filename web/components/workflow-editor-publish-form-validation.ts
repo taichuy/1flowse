@@ -1,4 +1,5 @@
 import {
+  isSupportedPublishedEndpointAuthMode,
   normalizePublishedEndpointAlias,
   normalizePublishedEndpointPath,
   WORKFLOW_VERSION_PATTERN,
@@ -66,14 +67,14 @@ export function buildPublishedEndpointValidationIssues(
       }
     }
 
-    if (endpoint.authMode === "token") {
+    if (!isSupportedPublishedEndpointAuthMode(endpoint.authMode)) {
       issues.push({
-        key: `${entryKey}-auth-mode-token`,
+        key: `${entryKey}-auth-mode-${endpoint.authMode}`,
         endpointKey,
         endpointId: endpoint.id,
         category: "publish_draft",
         message:
-          `${endpointLabel} 当前不能使用 authMode = token；已落地 publish gateway 只支持 internal / api_key，避免把未实现鉴权模式写进 definition。`,
+          `${endpointLabel} 当前不能使用 authMode = ${endpoint.authMode}；已落地 publish gateway 只支持 internal / api_key，避免把未实现鉴权模式写进 definition。`,
         path: `publish.${index}.authMode`,
         field: "authMode"
       });

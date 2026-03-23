@@ -7,6 +7,8 @@ import {
   AUTH_MODES,
   PUBLISH_PROTOCOLS,
   assignOptionalString,
+  formatPublishedEndpointAuthModeOptionLabel,
+  isSupportedPublishedEndpointAuthMode,
   stringifyJson,
   toEnumValue,
   type WorkflowPublishedEndpointDraft
@@ -57,6 +59,7 @@ export function WorkflowEditorPublishEndpointCard({
   const versionChip = endpoint.workflowVersion
     ? `pinned ${endpoint.workflowVersion}`
     : `tracks current ${workflowVersion}`;
+  const hasLegacyUnsupportedAuthMode = !isSupportedPublishedEndpointAuthMode(endpoint.authMode);
 
   useEffect(() => {
     if (!highlighted) {
@@ -202,9 +205,14 @@ export function WorkflowEditorPublishEndpointCard({
               })
             }
           >
+            {hasLegacyUnsupportedAuthMode ? (
+              <option value={endpoint.authMode} disabled>
+                {formatPublishedEndpointAuthModeOptionLabel(endpoint.authMode)}
+              </option>
+            ) : null}
             {AUTH_MODES.map((authMode) => (
               <option key={`${endpoint.id}-${authMode}`} value={authMode}>
-                {authMode}
+                {formatPublishedEndpointAuthModeOptionLabel(authMode)}
               </option>
             ))}
           </select>
@@ -228,6 +236,13 @@ export function WorkflowEditorPublishEndpointCard({
       <p className="section-copy entry-copy">
         `workflowVersion` 留空时会跟随当前保存出来的 workflow version；只有填写语义版本时才会把 endpoint 固定到指定版本。
       </p>
+
+      {hasLegacyUnsupportedAuthMode ? (
+        <p className="section-copy entry-copy">
+          当前 definition 里仍有历史遗留的 unsupported auth mode；请改成 `api_key` 或
+          `internal` 后再保存，避免 publish draft、workflow detail 和 gateway 事实继续分叉。
+        </p>
+      ) : null}
 
       {endpoint.workflowVersion ? (
         <div className="binding-actions">

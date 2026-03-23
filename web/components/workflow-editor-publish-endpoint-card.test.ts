@@ -55,4 +55,34 @@ describe("WorkflowEditorPublishEndpointCard", () => {
     expect(html).toContain('data-validation-field="cache.varyBy"');
     expect(html).toContain("validation-focus-ring");
   });
+
+  it("surfaces legacy unsupported auth mode without keeping it in the selectable support list", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorPublishEndpointCard, {
+        endpoint: {
+          id: "public-search",
+          name: "Public Search",
+          alias: "public-search",
+          path: "/public-search",
+          protocol: "openai",
+          authMode: "token",
+          streaming: true,
+          workflowVersion: undefined,
+          inputSchema: {}
+        },
+        endpointIndex: 0,
+        workflowVersion: "1.0.0",
+        validationMessages: [],
+        onUpdateEndpoint: () => undefined,
+        onDeleteEndpoint: () => undefined,
+        onApplySchemaField: () => undefined
+      })
+    );
+
+    expect(html).toContain("auth token");
+    expect(html).toContain("token (unsupported legacy value)");
+    expect(html).toContain("api_key");
+    expect(html).toContain("internal");
+    expect(html).toContain("当前 definition 里仍有历史遗留的 unsupported auth mode");
+  });
 });

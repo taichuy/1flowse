@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.schemas.workflow_published_endpoint import (
+    SUPPORTED_PUBLISHED_ENDPOINT_AUTH_MODES,
+)
 
-_SUPPORTED_PERSISTED_PUBLISH_AUTH_MODES = frozenset({"api_key", "internal"})
+_SUPPORTED_PERSISTED_PUBLISH_AUTH_MODES = frozenset(
+    SUPPORTED_PUBLISHED_ENDPOINT_AUTH_MODES
+)
 
 
 def collect_invalid_workflow_publish_auth_modes(
@@ -34,7 +39,7 @@ def collect_invalid_workflow_publish_auth_modes(
                 "message": (
                     f"Published endpoint '{endpoint_label}' requests auth mode '{auth_mode}', "
                     "but the current published gateway only supports durable bindings with "
-                    "authMode 'internal' or 'api_key'."
+                    "authMode 'api_key' or 'internal'."
                 ),
                 "path": f"publish.{index}.authMode",
                 "field": "authMode",

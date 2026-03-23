@@ -1,3 +1,9 @@
+export const LEGACY_AUTH_MODES = ["api_key", "internal", "token"] as const;
+export const AUTH_MODES = ["api_key", "internal"] as const;
+
+export type WorkflowPublishedEndpointSupportedAuthMode = (typeof AUTH_MODES)[number];
+export type WorkflowPublishedEndpointDraftAuthMode = (typeof LEGACY_AUTH_MODES)[number];
+
 export type WorkflowPublishedEndpointDraft = {
   id: string;
   name: string;
@@ -5,7 +11,7 @@ export type WorkflowPublishedEndpointDraft = {
   path?: string;
   protocol: "native" | "openai" | "anthropic";
   workflowVersion?: string;
-  authMode: "api_key" | "token" | "internal";
+  authMode: WorkflowPublishedEndpointDraftAuthMode;
   streaming: boolean;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
@@ -22,7 +28,6 @@ export type WorkflowPublishedEndpointDraft = {
 };
 
 export const PUBLISH_PROTOCOLS = ["native", "openai", "anthropic"] as const;
-export const AUTH_MODES = ["api_key", "token", "internal"] as const;
 export const WORKFLOW_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 const PUBLISHED_ALIAS_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -42,7 +47,7 @@ export function normalizePublishedEndpoint(
     path: toOptionalString(endpoint.path),
     protocol: toEnumValue(endpoint.protocol, PUBLISH_PROTOCOLS, "native"),
     workflowVersion: toOptionalString(endpoint.workflowVersion),
-    authMode: toEnumValue(endpoint.authMode, AUTH_MODES, "api_key"),
+    authMode: toEnumValue(endpoint.authMode, LEGACY_AUTH_MODES, "api_key"),
     streaming: typeof endpoint.streaming === "boolean" ? endpoint.streaming : true,
     inputSchema: toRecord(endpoint.inputSchema) ?? {},
     outputSchema: toRecord(endpoint.outputSchema) ?? undefined,
@@ -61,6 +66,21 @@ export function normalizePublishedEndpoint(
         }
       : undefined
   };
+}
+
+export function isSupportedPublishedEndpointAuthMode(
+  value: string
+): value is WorkflowPublishedEndpointSupportedAuthMode {
+  return AUTH_MODES.includes(value as WorkflowPublishedEndpointSupportedAuthMode);
+}
+
+export function formatPublishedEndpointAuthModeOptionLabel(
+  authMode: WorkflowPublishedEndpointDraftAuthMode
+) {
+  if (isSupportedPublishedEndpointAuthMode(authMode)) {
+    return authMode;
+  }
+  return `${authMode} (unsupported legacy value)`;
 }
 
 export function createPublishedEndpointDraft(

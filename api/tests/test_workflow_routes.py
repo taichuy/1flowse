@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.models.run import NodeRun, Run, RunEvent
 from app.models.workflow import Workflow, WorkflowVersion
 from app.schemas.plugin import PluginToolItem
+from app.schemas.workflow_published_endpoint import WorkflowPublishedEndpointDefinition
 from app.services import workflow_definitions, workflow_library, workflow_views
 from app.services.plugin_runtime import PluginRegistry, PluginToolDefinition
 from app.services.sandbox_backends import (
@@ -729,6 +730,12 @@ def test_create_workflow_rejects_unsupported_publish_auth_mode(
     assert "publish auth modes" in message
     assert any(issue["category"] == "publish_draft" for issue in issues)
     assert any(issue.get("path") == "publish.0.authMode" for issue in issues)
+
+
+def test_workflow_published_endpoint_schema_only_advertises_supported_auth_modes() -> None:
+    schema = WorkflowPublishedEndpointDefinition.model_json_schema()
+
+    assert schema["properties"]["authMode"]["enum"] == ["api_key", "internal"]
 
 
 def test_create_workflow_rejects_invalid_definition(client: TestClient) -> None:
