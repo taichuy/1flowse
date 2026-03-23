@@ -34,6 +34,7 @@ import {
   type NotificationDispatchItem,
   type SensitiveAccessRequestItem
 } from "@/lib/get-sensitive-access";
+import { buildSensitiveAccessInboxRecommendedNextStep } from "@/lib/operator-workbench-next-step";
 import { buildSensitiveAccessInboxSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
@@ -150,6 +151,25 @@ export default async function SensitiveAccessInboxPage({
     callbackWaitingAutomation: systemOverview.callback_waiting_automation,
     sensitiveAccessSummary: snapshot.summary,
     channels: snapshot.channels
+  });
+  const currentInboxHref = buildSensitiveAccessInboxHref({
+    status: filters.status,
+    waitingStatus: filters.waitingStatus,
+    requestDecision: filters.requestDecision,
+    requesterType: filters.requesterType,
+    notificationStatus: filters.notificationStatus,
+    notificationChannel: filters.notificationChannel,
+    runId: filters.runId,
+    nodeRunId: filters.nodeRunId,
+    accessRequestId: filters.accessRequestId,
+    approvalTicketId: filters.approvalTicketId
+  });
+  const recommendedNextStep = buildSensitiveAccessInboxRecommendedNextStep({
+    entries: snapshot.entries,
+    summary: snapshot.summary,
+    callbackWaitingAutomation: systemOverview.callback_waiting_automation,
+    sandboxReadiness: systemOverview.sandbox_readiness,
+    currentHref: currentInboxHref
   });
 
   return (
@@ -274,6 +294,7 @@ export default async function SensitiveAccessInboxPage({
         <article className="diagnostic-panel">
           <SandboxReadinessOverviewCard
             intro="approval / resume / notification 已经汇到同一条 operator inbox，但强隔离恢复是否真的可执行，仍要先看 live sandbox readiness，而不是只等单条票据展开后再发现 backend 仍 blocked。"
+            hideRecommendedNextStep={Boolean(recommendedNextStep)}
             readiness={systemOverview.sandbox_readiness}
             title="Live sandbox readiness"
           />
@@ -283,6 +304,7 @@ export default async function SensitiveAccessInboxPage({
           callbackWaitingAutomation={systemOverview.callback_waiting_automation}
           channels={snapshot.channels}
           entries={snapshot.entries}
+          recommendedNextStep={recommendedNextStep}
           sandboxReadiness={systemOverview.sandbox_readiness}
         />
       </section>

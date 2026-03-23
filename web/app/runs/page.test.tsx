@@ -139,6 +139,9 @@ describe("RunsPage", () => {
     expect(html).toContain(
       surfaceCopy.operatorEntryLinks.overrides?.operatorInbox?.label ?? "打开 sensitive access inbox"
     );
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("pending approval ticket");
+    expect(html).toContain('/sensitive-access?status=pending');
     expect(html).toContain("callback_waiting · 1");
     expect(html).toContain("completed:1 / waiting_callback:1");
     expect(html).toContain("Live sandbox readiness");

@@ -6,6 +6,7 @@ import {
   bulkDecideSensitiveAccessApprovalTickets,
   bulkRetrySensitiveAccessNotificationDispatches
 } from "@/app/actions/sensitive-access";
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import {
   SensitiveAccessBulkGovernanceCard,
   getSensitiveAccessBulkActionConfirmationMessage,
@@ -26,12 +27,14 @@ import type {
   SensitiveAccessBulkActionResult,
   SensitiveAccessInboxEntry
 } from "@/lib/get-sensitive-access";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import { resolveSensitiveAccessInboxEntryActionScope } from "@/lib/sensitive-access-inbox-entry-scope";
 
 type SensitiveAccessInboxPanelProps = {
   entries: SensitiveAccessInboxEntry[];
   channels?: NotificationChannelCapabilityItem[];
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  recommendedNextStep?: OperatorRecommendedNextStep | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
@@ -39,6 +42,7 @@ export function SensitiveAccessInboxPanel({
   entries,
   channels = [],
   callbackWaitingAutomation,
+  recommendedNextStep = null,
   sandboxReadiness = null
 }: SensitiveAccessInboxPanelProps) {
   const [bulkOperator, setBulkOperator] = useState(DEFAULT_OPERATOR_ID);
@@ -148,6 +152,10 @@ export function SensitiveAccessInboxPanel({
           可直接回到 run 诊断或 publish 治理继续排障。
         </p>
       </div>
+
+      {recommendedNextStep ? (
+        <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
+      ) : null}
 
       <SensitiveAccessBulkGovernanceCard
         inScopeCount={entries.length}

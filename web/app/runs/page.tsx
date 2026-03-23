@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import {
   WorkbenchEntryLink,
@@ -9,6 +10,7 @@ import {
 } from "@/components/workbench-entry-links";
 import { buildCrossEntryRiskDigest } from "@/lib/cross-entry-risk-digest";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
+import { buildRunLibraryRecommendedNextStep } from "@/lib/operator-workbench-next-step";
 import {
   buildAuthorFacingWorkflowDetailLinkSurface,
   buildAuthorFacingRunDetailLinkSurface,
@@ -41,6 +43,13 @@ export default async function RunsPage() {
     callbackWaitingAutomation: overview.callback_waiting_automation,
     sensitiveAccessSummary: sensitiveAccessInbox.summary,
     channels: sensitiveAccessInbox.channels
+  });
+  const recommendedNextStep = buildRunLibraryRecommendedNextStep({
+    runtimeActivity: overview.runtime_activity,
+    callbackWaitingAutomation: overview.callback_waiting_automation,
+    sandboxReadiness: overview.sandbox_readiness,
+    sensitiveAccessSummary: sensitiveAccessInbox.summary,
+    currentHref: "/runs"
   });
 
   return (
@@ -157,6 +166,7 @@ export default async function RunsPage() {
 
           <SandboxReadinessOverviewCard
             intro="run library 先直接暴露当前 sandbox backend 的健康度与 blocked execution class，避免 operator 还没进入 run detail 就误判强隔离链路已经恢复。"
+            hideRecommendedNextStep={Boolean(recommendedNextStep)}
             readiness={overview.sandbox_readiness}
             title="Live sandbox readiness"
           />
@@ -164,6 +174,9 @@ export default async function RunsPage() {
           <div className="entry-card">
             <p className="entry-card-title">{surfaceCopy.operatorEntryTitle}</p>
             <p className="section-copy entry-copy">{surfaceCopy.operatorEntryDescription}</p>
+            {recommendedNextStep ? (
+              <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
+            ) : null}
             <WorkbenchEntryLinks {...surfaceCopy.operatorEntryLinks} />
             {latestRunDetailLink ? (
               <Link className="inline-link secondary" href={latestRunDetailLink.href}>

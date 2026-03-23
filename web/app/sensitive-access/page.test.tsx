@@ -15,6 +15,15 @@ vi.mock("next/link", () => ({
     createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn()
+  })
+}));
+
 vi.mock("@/lib/get-sensitive-access", () => ({
   getSensitiveAccessInboxSnapshot: vi.fn()
 }));
@@ -121,5 +130,89 @@ describe("SensitiveAccessInboxPage", () => {
     );
     expect(html).toContain("Sandbox execution chain");
     expect(html).toContain("approval / resume / notification 已经汇到同一条 operator inbox");
+  });
+
+  it("surfaces a canonical inbox next step when pending approvals remain", async () => {
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue({
+      entries: [
+        {
+          ticket: {
+            id: "ticket-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1",
+            access_request_id: "request-1",
+            status: "pending",
+            waiting_status: "waiting",
+            created_at: "2026-03-23T00:00:00Z",
+            decided_at: null,
+            expires_at: null,
+            approved_by: null
+          },
+          request: {
+            id: "request-1",
+            run_id: "run-1",
+            node_run_id: "node-run-1",
+            requester_type: "workflow",
+            requester_id: "workflow-1",
+            resource_id: "resource-1",
+            action_type: "read",
+            decision: "require_approval",
+            decision_label: "require approval",
+            reason_code: "approval_required",
+            reason_label: "approval required",
+            policy_summary: null,
+            created_at: "2026-03-23T00:00:00Z",
+            decided_at: null,
+            purpose_text: null
+          },
+          resource: {
+            id: "resource-1",
+            label: "Sandbox secret",
+            description: null,
+            sensitivity_level: "L2",
+            source: "workflow_context",
+            metadata: {},
+            created_at: "2026-03-23T00:00:00Z",
+            updated_at: "2026-03-23T00:00:00Z"
+          },
+          notifications: [],
+          runSnapshot: null,
+          runFollowUp: null,
+          callbackWaitingContext: null,
+          executionContext: null
+        }
+      ],
+      channels: [],
+      resources: [],
+      requests: [],
+      notifications: [],
+      summary: {
+        ticket_count: 1,
+        pending_ticket_count: 1,
+        approved_ticket_count: 0,
+        rejected_ticket_count: 0,
+        expired_ticket_count: 0,
+        waiting_ticket_count: 1,
+        resumed_ticket_count: 0,
+        failed_ticket_count: 0,
+        pending_notification_count: 0,
+        delivered_notification_count: 0,
+        failed_notification_count: 0
+      }
+    });
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+
+    const html = renderToStaticMarkup(
+      await SensitiveAccessInboxPage({
+        searchParams: Promise.resolve({})
+      })
+    );
+
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("open exact inbox slice");
+    expect(html).toContain(
+      '/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-1&amp;node_run_id=node-run-1&amp;access_request_id=request-1&amp;approval_ticket_id=ticket-1'
+    );
   });
 });
