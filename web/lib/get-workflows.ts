@@ -7,6 +7,7 @@ export type WorkflowListItem = {
   version: string;
   status: string;
   node_count: number;
+  definition_issues?: WorkflowDefinitionPreflightIssue[];
   tool_governance: WorkflowToolGovernanceSummary;
 };
 

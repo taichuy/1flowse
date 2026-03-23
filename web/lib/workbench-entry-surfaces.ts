@@ -267,7 +267,7 @@ export function buildWorkflowLibrarySurfaceCopy({
     emptyState:
       "当前还没有可编辑的 workflow。现在可以从 workspace starter 或新建向导继续补主链，而不用再回退到 API 层手工创建。",
     governanceDescription:
-      "workflow 列表不再只是跳板；它同时提示当前还有多少 workflow 需要继续处理缺失工具、强隔离或运行 follow-up。",
+      "workflow 列表不再只是跳板；它同时提示当前还有多少 workflow 需要继续处理 publish auth 清理、缺失工具、强隔离或运行 follow-up。",
     nextStepTitle: "继续推进主链",
     nextStepDescription:
       "如果还需要补 starter 来源治理或回到 operator 收件箱，可以从这里继续进入 workspace starter library 或 sensitive access inbox。",

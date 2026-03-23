@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from app.schemas.workflow import (
     WorkflowVersionItem,
 )
 from app.services.workflow_definitions import (
+    CompatibilityAdapterRegistration,
     WorkflowDefinitionValidationError,
     WorkflowDefinitionValidationIssue,
     build_workflow_adapter_reference_list,
@@ -130,6 +132,7 @@ def serialize_workflow_list_item(
     workflow: Workflow,
     *,
     tool_index: dict[str, PluginToolItem] | None = None,
+    definition_issues: list[WorkflowDefinitionPreflightIssue] | None = None,
 ) -> WorkflowListItem:
     tool_index = tool_index or {}
     return WorkflowListItem(
@@ -142,6 +145,7 @@ def serialize_workflow_list_item(
             workflow.definition,
             tool_index=tool_index,
         ),
+        definition_issues=definition_issues or [],
     )
 
 
@@ -183,14 +187,21 @@ def _serialize_definition_issue(
 def build_workflow_definition_issues(
     db: Session,
     workflow: Workflow,
+    *,
+    tool_index: dict[str, PluginToolItem] | None = None,
+    adapters: list[CompatibilityAdapterRegistration] | None = None,
+    skill_index: dict[str, Any] | None = None,
+    skill_reference_ids_index: dict[str, Any] | None = None,
 ) -> list[WorkflowDefinitionPreflightIssue]:
     try:
         validate_persistable_workflow_definition(
             workflow.definition,
-            tool_index=build_workflow_tool_reference_index(db),
-            adapters=build_workflow_adapter_reference_list(db),
-            skill_index=build_workflow_skill_reference_index(db),
-            skill_reference_ids_index=build_workflow_skill_reference_ids_index(db),
+            tool_index=tool_index or build_workflow_tool_reference_index(db),
+            adapters=adapters or build_workflow_adapter_reference_list(db),
+            skill_index=skill_index or build_workflow_skill_reference_index(db),
+            skill_reference_ids_index=(
+                skill_reference_ids_index or build_workflow_skill_reference_ids_index(db)
+            ),
             allowed_publish_versions=build_allowed_publish_workflow_versions(
                 db,
                 workflow_id=workflow.id,
@@ -200,6 +211,33 @@ def build_workflow_definition_issues(
     except WorkflowDefinitionValidationError as exc:
         return [_serialize_definition_issue(issue) for issue in exc.issues]
     return []
+
+
+def list_workflow_items(db: Session) -> list[WorkflowListItem]:
+    workflows = db.scalars(select(Workflow).order_by(Workflow.name.asc())).all()
+    if not workflows:
+        return []
+
+    tool_index = load_workflow_view_tool_index(db)
+    adapters = build_workflow_adapter_reference_list(db)
+    skill_index = build_workflow_skill_reference_index(db)
+    skill_reference_ids_index = build_workflow_skill_reference_ids_index(db)
+
+    return [
+        serialize_workflow_list_item(
+            workflow,
+            tool_index=tool_index,
+            definition_issues=build_workflow_definition_issues(
+                db,
+                workflow,
+                tool_index=tool_index,
+                adapters=adapters,
+                skill_index=skill_index,
+                skill_reference_ids_index=skill_reference_ids_index,
+            ),
+        )
+        for workflow in workflows
+    ]
 
 
 def list_workflow_version_items(db: Session, workflow_id: str) -> list[WorkflowVersionItem]:

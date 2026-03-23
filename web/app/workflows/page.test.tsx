@@ -235,6 +235,61 @@ describe("WorkflowsPage", () => {
     expect(html).toContain("回到 workflow 编辑器");
   });
 
+  it("prioritizes legacy publish auth cleanup in workflow library governance", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshot()
+    );
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshot());
+    vi.mocked(getWorkflows).mockResolvedValue([
+      {
+        id: "workflow-legacy-auth",
+        name: "Legacy Auth workflow",
+        version: "1.2.0",
+        status: "draft",
+        node_count: 5,
+        definition_issues: [
+          {
+            category: "publish_draft",
+            message: "Public Search 当前不能使用 authMode = token。",
+            path: "publish.0.authMode",
+            field: "authMode"
+          }
+        ],
+        tool_governance: {
+          referenced_tool_ids: ["tool-1"],
+          missing_tool_ids: [],
+          governed_tool_count: 1,
+          strong_isolation_tool_count: 0
+        }
+      },
+      {
+        id: "workflow-missing-tool",
+        name: "Tooling workflow",
+        version: "1.0.0",
+        status: "published",
+        node_count: 2,
+        tool_governance: {
+          referenced_tool_ids: ["tool-2"],
+          missing_tool_ids: ["tool-missing"],
+          governed_tool_count: 1,
+          strong_isolation_tool_count: 0
+        }
+      }
+    ]);
+
+    const html = renderToStaticMarkup(await WorkflowsPage());
+
+    expect(html).toContain("Publish auth workflows");
+    expect(html).toContain("Legacy Auth workflow · publish auth blocker");
+    expect(html).toContain("1 publish auth blocker");
+    expect(html).toContain("publish auth cleanup");
+    expect(html).toContain(
+      "优先回到 Legacy Auth workflow 把 1 个 publish draft 的 authMode 切回 api_key / internal"
+    );
+    expect(html).toContain('/workflows/workflow-legacy-auth');
+  });
+
   it("routes the empty state back to starter governance when the first active starter still needs follow-up", async () => {
     vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(

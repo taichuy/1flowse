@@ -19,6 +19,7 @@ import {
 import { getSystemOverview, type SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { getWorkflows, type WorkflowListItem } from "@/lib/get-workflows";
 import { formatCountMap } from "@/lib/runtime-presenters";
+import { getWorkflowLegacyPublishAuthIssues } from "@/lib/workflow-definition-governance";
 import {
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
@@ -160,7 +161,7 @@ export default async function WorkflowsPage({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Governance</p>
-              <h2>工具与隔离信号</h2>
+              <h2>治理与隔离信号</h2>
             </div>
             <p className="section-copy">{surfaceCopy.governanceDescription}</p>
           </div>
@@ -171,6 +172,10 @@ export default async function WorkflowsPage({
               <strong>{summary.governedToolCount}</strong>
             </article>
             <article className="summary-card">
+              <span>Publish auth workflows</span>
+              <strong>{summary.workflowLegacyPublishAuthCount}</strong>
+            </article>
+            <article className="summary-card">
               <span>Strong isolation</span>
               <strong>{summary.strongIsolationToolCount}</strong>
             </article>
@@ -178,6 +183,20 @@ export default async function WorkflowsPage({
               <span>Missing tool workflows</span>
               <strong>{summary.workflowMissingToolCount}</strong>
             </article>
+          </div>
+
+          <div className="event-type-strip">
+            {summary.workflowsWithLegacyPublishAuth.length === 0 ? (
+              <p className="empty-state compact">
+                当前 workflow 列表里没有 legacy publish auth blocker。
+              </p>
+            ) : (
+              summary.workflowsWithLegacyPublishAuth.map((workflow) => (
+                <span className="event-chip" key={`${workflow.id}-publish-auth`}>
+                  {workflow.name} · publish auth blocker
+                </span>
+              ))
+            )}
           </div>
 
           <div className="event-type-strip">
@@ -220,6 +239,7 @@ function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
   let totalNodeCount = 0;
   let governedToolCount = 0;
   let strongIsolationToolCount = 0;
+  const workflowsWithLegacyPublishAuth: WorkflowListItem[] = [];
   const workflowsWithMissingTools: WorkflowListItem[] = [];
   const workflowsWithStrongIsolation: WorkflowListItem[] = [];
 
@@ -229,6 +249,9 @@ function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
     governedToolCount += workflow.tool_governance?.governed_tool_count ?? 0;
     strongIsolationToolCount += workflow.tool_governance?.strong_isolation_tool_count ?? 0;
 
+    if (getWorkflowLegacyPublishAuthIssues(workflow).length > 0) {
+      workflowsWithLegacyPublishAuth.push(workflow);
+    }
     if ((workflow.tool_governance?.missing_tool_ids.length ?? 0) > 0) {
       workflowsWithMissingTools.push(workflow);
     }
@@ -242,6 +265,8 @@ function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
     totalNodeCount,
     governedToolCount,
     strongIsolationToolCount,
+    workflowLegacyPublishAuthCount: workflowsWithLegacyPublishAuth.length,
+    workflowsWithLegacyPublishAuth,
     workflowMissingToolCount: workflowsWithMissingTools.length,
     workflowsWithMissingTools,
     workflowsWithStrongIsolation,
@@ -262,6 +287,27 @@ function buildWorkflowLibraryRecommendedNextStep({
     typeof buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState
   >[0]["viewState"];
 }): OperatorRecommendedNextStep | null {
+  const workflowLegacyPublishAuth = summary.workflowsWithLegacyPublishAuth[0] ?? null;
+  if (workflowLegacyPublishAuth) {
+    const workflowLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+      workflowId: workflowLegacyPublishAuth.id,
+      viewState: workspaceStarterViewState,
+      variant: "editor"
+    });
+    const publishAuthIssueCount = getWorkflowLegacyPublishAuthIssues(
+      workflowLegacyPublishAuth
+    ).length;
+
+    return {
+      label: "publish auth cleanup",
+      detail:
+        `当前 ${summary.workflowLegacyPublishAuthCount} 个 workflow 仍带着 legacy publish auth blocker；` +
+        `优先回到 ${workflowLegacyPublishAuth.name} 把 ${publishAuthIssueCount} 个 publish draft 的 authMode 切回 api_key / internal，保存后再回 publish 面板补发新版 binding。`,
+      href: workflowLink.href,
+      href_label: workflowLink.label
+    };
+  }
+
   const workflowMissingTools = summary.workflowsWithMissingTools[0] ?? null;
   if (workflowMissingTools) {
     const workflowLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({

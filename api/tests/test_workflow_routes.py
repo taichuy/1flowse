@@ -2421,6 +2421,39 @@ def test_get_workflow_detail_surfaces_definition_issues_for_persisted_publish_au
     )
 
 
+def test_list_workflows_surfaces_definition_issues_for_persisted_publish_auth_mode_gap(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Auth Inventory Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    workflow = sqlite_session.get(Workflow, workflow_id)
+    assert workflow is not None
+    workflow.definition = _unsupported_publish_auth_mode_definition()
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.get("/api/workflows")
+
+    assert response.status_code == 200
+    body = response.json()
+    workflow_item = next(item for item in body if item["id"] == workflow_id)
+    assert any(
+        issue.get("category") == "publish_draft"
+        and issue.get("path") == "publish.0.authMode"
+        and issue.get("field") == "authMode"
+        for issue in workflow_item["definition_issues"]
+    )
+
+
 def test_validate_workflow_definition_preflight_rejects_invalid_publish_reference(
     client: TestClient,
 ) -> None:
