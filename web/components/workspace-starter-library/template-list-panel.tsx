@@ -103,7 +103,14 @@ export function WorkspaceStarterTemplateListPanel({
   const sourceGovernancePrimaryFollowUp = buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
     sourceGovernanceScope,
     templates,
-    createWorkflowHref
+    createWorkflowHref,
+    workspaceStarterGovernanceQueryScope: {
+      activeTrack,
+      sourceGovernanceKind,
+      needsFollowUp,
+      searchQuery,
+      selectedTemplateId
+    }
   });
   const surfaceCopy = buildWorkspaceStarterTemplateListSurfaceCopy({ createWorkflowHref });
 
@@ -247,6 +254,13 @@ export function WorkspaceStarterTemplateListPanel({
           previewFocusTargets={previewFocusTargets}
           resultFocusTargets={resultFocusTargets}
           selectedTemplateId={selectedTemplateId}
+          workspaceStarterGovernanceQueryScope={{
+            activeTrack,
+            sourceGovernanceKind,
+            needsFollowUp,
+            searchQuery,
+            selectedTemplateId
+          }}
           onSelectQueuedTemplate={onSelectTemplate}
           onFocusTemplate={onFocusTemplate}
           onAction={onBulkAction}

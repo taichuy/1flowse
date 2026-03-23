@@ -170,4 +170,139 @@ describe("WorkspaceStarterTemplateListPanel", () => {
       '/workflows/new?needs_follow_up=true&amp;q=sandbox&amp;source_governance_kind=drifted'
     );
   });
+
+  it("projects the queued starter create CTA into the primary follow-up instead of reusing the current selection", () => {
+    const templates: WorkspaceStarterTemplateItem[] = [
+      {
+        id: "starter-selected",
+        workspace_id: "default",
+        name: "Selected starter",
+        description: "Currently selected starter.",
+        business_track: "应用新建编排",
+        default_workflow_name: "Selected starter",
+        workflow_focus: "Keep the current selection stable.",
+        recommended_next_step: "Keep reviewing the selected starter.",
+        tags: ["selected"],
+        definition: {
+          nodes: [],
+          edges: []
+        },
+        created_from_workflow_id: "wf-selected",
+        created_from_workflow_version: "0.1.0",
+        archived: false,
+        archived_at: null,
+        created_at: "2026-03-21T10:00:00Z",
+        updated_at: "2026-03-21T10:10:00Z",
+        source_governance: {
+          kind: "synced",
+          status_label: "已对齐",
+          summary: "当前 starter 与来源 workflow 已对齐。",
+          source_workflow_id: "wf-selected",
+          source_workflow_name: "Selected workflow",
+          template_version: "0.1.0",
+          source_version: "0.1.0",
+          action_decision: {
+            recommended_action: "none",
+            status_label: "已对齐",
+            summary: "当前无需额外治理。",
+            can_refresh: false,
+            can_rebase: false,
+            fact_chips: []
+          },
+          outcome_explanation: {
+            primary_signal: "当前 starter 与来源 workflow 已对齐。",
+            follow_up: null
+          }
+        }
+      },
+      {
+        id: "starter-missing-source",
+        workspace_id: "default",
+        name: "Missing source starter",
+        description: "Starter with an unavailable source workflow.",
+        business_track: "应用新建编排",
+        default_workflow_name: "Missing source starter",
+        workflow_focus: "Keep authoring unblocked.",
+        recommended_next_step: "Confirm the template is still reusable.",
+        tags: ["missing-source"],
+        definition: {
+          nodes: [],
+          edges: []
+        },
+        created_from_workflow_id: "wf-missing",
+        created_from_workflow_version: "0.4.0",
+        archived: false,
+        archived_at: null,
+        created_at: "2026-03-21T12:00:00Z",
+        updated_at: "2026-03-21T12:30:00Z",
+        source_governance: {
+          kind: "missing_source",
+          status_label: "来源缺失",
+          summary: "记录中的来源 workflow 已不存在或当前不可访问。",
+          source_workflow_id: "wf-missing",
+          source_workflow_name: null,
+          template_version: "0.4.0",
+          source_version: null,
+          action_decision: null,
+          outcome_explanation: {
+            primary_signal: "当前 starter 记录的来源 workflow 已不可用。",
+            follow_up: "先在当前库里确认模板仍可复用，再从创建页继续创建。"
+          }
+        }
+      }
+    ];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceStarterTemplateListPanel, {
+        templates,
+        filteredTemplates: templates,
+        selectedTemplateId: "starter-selected",
+        activeTrack: "应用新建编排",
+        archiveFilter: "active",
+        sourceGovernanceKind: "missing_source",
+        needsFollowUp: true,
+        searchQuery: "source",
+        createWorkflowHref:
+          "/workflows/new?needs_follow_up=true&q=source&source_governance_kind=missing_source&starter=starter-selected&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+        activeTemplateCount: 2,
+        archivedTemplateCount: 0,
+        templateToolGovernanceById: new Map(),
+        bulkPreview: null,
+        bulkPreviewNotice: null,
+        isBulkMutating: false,
+        isLoadingBulkPreview: false,
+        isLoadingSourceGovernanceScope: false,
+        lastBulkResult: null,
+        sourceGovernanceScope: {
+          workspace_id: "default",
+          total_count: 2,
+          attention_count: 1,
+          counts: {
+            drifted: 0,
+            missing_source: 1,
+            no_source: 0,
+            synced: 1
+          },
+          chips: ["来源缺失 1", "已对齐 1"],
+          summary: "当前筛选范围 2 个 starter 中，来源缺失 1 个；可以直接处理共享 follow-up。",
+          follow_up_template_ids: ["starter-missing-source"]
+        },
+        onTrackChange: () => {},
+        onArchiveFilterChange: () => {},
+        onSourceGovernanceKindChange: () => {},
+        onNeedsFollowUpChange: () => {},
+        onSearchQueryChange: () => {},
+        onSelectTemplate: () => {},
+        onFocusTemplate: () => {},
+        onBulkAction: () => {}
+      })
+    );
+
+    expect(html).toContain("Missing source starter 当前是共享来源治理队列的首个待处理 starter。");
+    expect(html).toContain("确认模板后带此 starter 回到创建页");
+    expect(html).toContain(
+      '/workflows/new?needs_follow_up=true&amp;q=source&amp;source_governance_kind=missing_source&amp;starter=starter-missing-source&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
+    );
+    expect(html).not.toContain("starter-selected&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92");
+  });
 });

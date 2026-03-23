@@ -21,12 +21,18 @@ import type {
   WorkspaceStarterTemplateItem,
   WorkspaceStarterValidationIssue
 } from "@/lib/get-workspace-starters";
+import type {
+  WorkbenchEntryLinkKey,
+  WorkbenchEntryLinkOverride
+} from "@/lib/workbench-entry-links";
 import {
   DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE,
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   readWorkspaceStarterLibraryViewState,
   type ArchiveFilter,
   type SourceGovernanceFilter,
   type TrackFilter,
+  type WorkspaceStarterGovernanceQueryScope,
   type WorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
 
@@ -143,6 +149,8 @@ export type WorkspaceStarterGovernanceRecommendedNextStep = {
   detail: string;
   focusTemplateId: string | null;
   focusLabel: string | null;
+  entryKey?: WorkbenchEntryLinkKey;
+  entryOverride?: WorkbenchEntryLinkOverride;
 };
 
 export type WorkspaceStarterSourceGovernanceSurface = {
@@ -169,6 +177,8 @@ export type WorkspaceStarterSourceGovernancePrimaryFollowUp = {
   detail: string;
   focusTemplateId: string | null;
   focusLabel: string | null;
+  entryKey?: WorkbenchEntryLinkKey;
+  entryOverride?: WorkbenchEntryLinkOverride;
 };
 
 export type WorkspaceStarterSourceGovernanceScopeSummary = {
@@ -449,6 +459,53 @@ export function resolveWorkspaceStarterCreateWorkflowActionLabel({
   return null;
 }
 
+function buildWorkspaceStarterCreateWorkflowEntry({
+  createWorkflowHref,
+  label
+}: {
+  createWorkflowHref?: string | null;
+  label: string;
+}) {
+  const normalizedHref = normalizeString(createWorkflowHref);
+  if (!normalizedHref) {
+    return null;
+  }
+
+  return {
+    entryKey: "createWorkflow" as const,
+    entryOverride: {
+      href: normalizedHref,
+      label
+    }
+  };
+}
+
+function resolveWorkspaceStarterScopedCreateWorkflowHref({
+  workspaceStarterGovernanceQueryScope,
+  templateId,
+  archived,
+  fallbackCreateWorkflowHref = null
+}: {
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
+  templateId?: string | null;
+  archived?: boolean;
+  fallbackCreateWorkflowHref?: string | null;
+}) {
+  if (archived) {
+    return null;
+  }
+
+  const normalizedTemplateId = normalizeString(templateId);
+  if (workspaceStarterGovernanceQueryScope && normalizedTemplateId) {
+    return buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+      ...workspaceStarterGovernanceQueryScope,
+      selectedTemplateId: normalizedTemplateId
+    });
+  }
+
+  return normalizeString(fallbackCreateWorkflowHref);
+}
+
 export function buildWorkspaceStarterSourceGovernanceRecommendedNextStep({
   template,
   sourceGovernance,
@@ -473,6 +530,11 @@ export function buildWorkspaceStarterSourceGovernanceRecommendedNextStep({
   const governanceSummary = normalizeString(sourceGovernance?.summary);
 
   if (createWorkflowActionLabel) {
+    const createWorkflowEntry = buildWorkspaceStarterCreateWorkflowEntry({
+      createWorkflowHref,
+      label: createWorkflowActionLabel
+    });
+
     return {
       action: "create_workflow",
       label: createWorkflowActionLabel,
@@ -482,7 +544,8 @@ export function buildWorkspaceStarterSourceGovernanceRecommendedNextStep({
           ? "优先确认来源 workflow 是否仍可访问；如需继续推进，带此 starter 回到创建页重新建立治理链路。"
           : "带此 starter 回到创建页继续创建 workflow，并保留当前模板上下文。"),
       focusTemplateId: null,
-      focusLabel: null
+      focusLabel: null,
+      ...(createWorkflowEntry ?? {})
     };
   }
 
@@ -648,11 +711,13 @@ export function buildWorkspaceStarterSourceGovernanceFocusTargets(
 export function buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
   sourceGovernanceScope,
   templates,
-  createWorkflowHref
+  createWorkflowHref,
+  workspaceStarterGovernanceQueryScope
 }: {
   sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummaryPayload | null;
   templates: WorkspaceStarterTemplateItem[];
   createWorkflowHref?: string | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 }): WorkspaceStarterSourceGovernancePrimaryFollowUp | null {
   if (!sourceGovernanceScope) {
     return null;
@@ -694,9 +759,16 @@ export function buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
     };
   }
 
+  const primaryCreateWorkflowHref = resolveWorkspaceStarterScopedCreateWorkflowHref({
+    workspaceStarterGovernanceQueryScope,
+    templateId: primaryTemplate.id,
+    archived: primaryTemplate.archived,
+    fallbackCreateWorkflowHref: createWorkflowHref
+  });
+
   const { presenter, recommendedNextStep } = buildWorkspaceStarterSourceGovernanceSurface({
     template: primaryTemplate,
-    createWorkflowHref
+    createWorkflowHref: primaryCreateWorkflowHref
   });
   const focusTemplateName = normalizeString(primaryTemplate.name) ?? primaryTemplate.id;
   const queueLeadDetail =
@@ -716,7 +788,9 @@ export function buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
     headline: `${focusTemplateName} 当前是共享来源治理队列的首个待处理 starter。`,
     detail: detailParts.join(" "),
     focusTemplateId: primaryTemplate.id,
-    focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null
+    focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null,
+    entryKey: recommendedNextStep?.entryKey,
+    entryOverride: recommendedNextStep?.entryOverride
   };
 }
 
@@ -885,11 +959,30 @@ function resolveWorkspaceStarterBulkResultNextStepLabel(
   return "查看 result receipt";
 }
 
+function resolveWorkspaceStarterBulkResultCreateWorkflowActionLabel(
+  reason?: WorkspaceStarterBulkReceiptItem["reason"] | null
+) {
+  if (reason === "source_workflow_missing" || reason === "source_workflow_invalid") {
+    return "确认模板后带此 starter 回到创建页";
+  }
+
+  if (reason === "no_source_workflow") {
+    return "带此 starter 回到创建页";
+  }
+
+  return null;
+}
+
 export function buildWorkspaceStarterBulkResultRecommendedNextStep(
   result: Pick<
     WorkspaceStarterBulkActionResult,
     "action" | "receipt_items" | "follow_up_template_ids" | "outcome_explanation"
-  >
+  >,
+  {
+    workspaceStarterGovernanceQueryScope = null
+  }: {
+    workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
+  } = {}
 ): WorkspaceStarterGovernanceRecommendedNextStep | null {
   const prioritizedTemplateIds = Array.from(
     new Set((result.follow_up_template_ids ?? []).map((templateId) => templateId.trim()).filter(Boolean))
@@ -925,6 +1018,35 @@ export function buildWorkspaceStarterBulkResultRecommendedNextStep(
 
   const actionDecision = normalizeSourceActionDecision(primaryReceiptItem.action_decision);
   const focusTemplateName = normalizeString(primaryReceiptItem.name) ?? primaryReceiptItem.template_id;
+  const createWorkflowHref = resolveWorkspaceStarterScopedCreateWorkflowHref({
+    workspaceStarterGovernanceQueryScope,
+    templateId: primaryReceiptItem.template_id,
+    archived: primaryReceiptItem.archived
+  });
+  const createWorkflowActionLabel = resolveWorkspaceStarterBulkResultCreateWorkflowActionLabel(
+    primaryReceiptItem.reason
+  );
+  const recommendedDetail =
+    actionDecision?.summary ??
+    buildWorkspaceStarterBulkReceiptRecommendedDetail(result.action, primaryReceiptItem) ??
+    outcomeFollowUp ??
+    "优先聚焦本轮 result receipt 里最先需要处理的 starter，再决定后续治理动作。";
+
+  if (createWorkflowActionLabel && createWorkflowHref) {
+    const createWorkflowEntry = buildWorkspaceStarterCreateWorkflowEntry({
+      createWorkflowHref,
+      label: createWorkflowActionLabel
+    });
+
+    return {
+      action: "create_workflow",
+      label: createWorkflowActionLabel,
+      detail: recommendedDetail,
+      focusTemplateId: primaryReceiptItem.template_id,
+      focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null,
+      ...(createWorkflowEntry ?? {})
+    };
+  }
 
   return {
     action:
@@ -936,20 +1058,23 @@ export function buildWorkspaceStarterBulkResultRecommendedNextStep(
     label:
       actionDecision?.statusLabel ??
       resolveWorkspaceStarterBulkResultNextStepLabel(result.action, primaryReceiptItem),
-    detail:
-      actionDecision?.summary ??
-      buildWorkspaceStarterBulkReceiptRecommendedDetail(result.action, primaryReceiptItem) ??
-      outcomeFollowUp ??
-      "优先聚焦本轮 result receipt 里最先需要处理的 starter，再决定后续治理动作。",
+    detail: recommendedDetail,
     focusTemplateId: primaryReceiptItem.template_id,
     focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null
   };
 }
 
 export function buildWorkspaceStarterBulkResultSurface(
-  result: WorkspaceStarterBulkActionResult
+  result: WorkspaceStarterBulkActionResult,
+  {
+    workspaceStarterGovernanceQueryScope = null
+  }: {
+    workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
+  } = {}
 ): WorkspaceStarterBulkResultSurface {
-  const recommendedNextStep = buildWorkspaceStarterBulkResultRecommendedNextStep(result);
+  const recommendedNextStep = buildWorkspaceStarterBulkResultRecommendedNextStep(result, {
+    workspaceStarterGovernanceQueryScope
+  });
   const primarySignal =
     normalizeString(result.outcome_explanation?.primary_signal) ??
     buildWorkspaceStarterBulkResultNarrative(result)[0]?.text ??

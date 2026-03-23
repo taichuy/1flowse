@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { WorkbenchEntryLink } from "@/components/workbench-entry-links";
 
 import type {
   WorkspaceStarterSourceDiff,
@@ -57,8 +57,7 @@ export function WorkspaceStarterSourceCard({
   const shouldShowSourceActions = isLoadingSourceDiff || canRefresh || canRebase;
   const templateNextStep = template.recommended_next_step.trim();
   const recommendedNextStep = sourceGovernanceSurface.recommendedNextStep;
-  const createWorkflowActionLabel =
-    recommendedNextStep?.action === "create_workflow" ? recommendedNextStep.label : null;
+  const recommendedNextStepEntryKey = recommendedNextStep?.entryKey;
   const governanceFollowUp = presenter.followUp;
   const shouldRenderStandaloneGovernanceFollowUp =
     Boolean(governanceFollowUp) && governanceFollowUp !== recommendedNextStep?.detail;
@@ -114,7 +113,7 @@ export function WorkspaceStarterSourceCard({
               <strong>Template note:</strong> {templateNextStep}
             </p>
           ) : null}
-          {shouldShowSourceActions || createWorkflowActionLabel ? (
+          {shouldShowSourceActions || recommendedNextStepEntryKey ? (
             <div className="binding-actions">
               {shouldShowSourceActions ? (
                 <>
@@ -144,20 +143,24 @@ export function WorkspaceStarterSourceCard({
                   </button>
                 </>
               ) : null}
-              {createWorkflowActionLabel && createWorkflowHref ? (
-                <Link className="inline-link secondary" href={createWorkflowHref}>
-                  {createWorkflowActionLabel}
-                </Link>
+              {recommendedNextStepEntryKey ? (
+                <WorkbenchEntryLink
+                  className="inline-link secondary"
+                  linkKey={recommendedNextStepEntryKey}
+                  override={recommendedNextStep?.entryOverride}
+                />
               ) : null}
             </div>
           ) : null}
         </>
       ) : null}
-      {!hasSourceBinding && createWorkflowActionLabel && createWorkflowHref ? (
+      {!hasSourceBinding && recommendedNextStepEntryKey ? (
         <div className="binding-actions">
-          <Link className="inline-link secondary" href={createWorkflowHref}>
-            {createWorkflowActionLabel}
-          </Link>
+          <WorkbenchEntryLink
+            className="inline-link secondary"
+            linkKey={recommendedNextStepEntryKey}
+            override={recommendedNextStep?.entryOverride}
+          />
         </div>
       ) : null}
       {shouldRenderGovernanceSummaryStrip ? (

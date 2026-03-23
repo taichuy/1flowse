@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import WorkflowsPage from "@/app/workflows/page";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
+import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflows } from "@/lib/get-workflows";
 
@@ -26,6 +27,10 @@ vi.mock("@/lib/get-system-overview", () => ({
 
 vi.mock("@/lib/get-sensitive-access", () => ({
   getSensitiveAccessInboxSnapshot: vi.fn()
+}));
+
+vi.mock("@/lib/get-workflow-library", () => ({
+  getWorkflowLibrarySnapshot: vi.fn()
 }));
 
 function buildSensitiveAccessInboxSnapshot() {
@@ -111,12 +116,75 @@ function buildSystemOverview() {
   };
 }
 
+function buildWorkflowLibrarySnapshot(
+  overrides: Partial<Awaited<ReturnType<typeof getWorkflowLibrarySnapshot>>> = {}
+) {
+  return {
+    nodes: [],
+    starters: [],
+    starterSourceLanes: [],
+    nodeSourceLanes: [],
+    toolSourceLanes: [],
+    tools: [],
+    ...overrides
+  } as Awaited<ReturnType<typeof getWorkflowLibrarySnapshot>>;
+}
+
+function buildStarter(
+  overrides: Partial<Awaited<ReturnType<typeof getWorkflowLibrarySnapshot>>["starters"][number]> = {}
+) {
+  return {
+    id: "starter-openclaw",
+    origin: "workspace",
+    workspaceId: "default",
+    name: "OpenClaw starter",
+    description: "Starter for the first workflow draft.",
+    businessTrack: "应用新建编排",
+    defaultWorkflowName: "OpenClaw Workflow",
+    workflowFocus: "Author entry",
+    recommendedNextStep: "Create the first workflow draft.",
+    tags: ["starter"],
+    definition: {
+      nodes: [],
+      edges: []
+    },
+    source: {
+      kind: "starter",
+      scope: "workspace",
+      status: "available",
+      governance: "workspace",
+      ecosystem: "7flows",
+      label: "Workspace starter",
+      shortLabel: "workspace",
+      summary: "Workspace maintained starter"
+    },
+    createdFromWorkflowId: null,
+    createdFromWorkflowVersion: null,
+    archived: false,
+    createdAt: "2026-03-23T19:45:00Z",
+    updatedAt: "2026-03-23T19:45:00Z",
+    sourceGovernance: {
+      kind: "no_source",
+      statusLabel: "无来源",
+      summary: "No upstream source is required.",
+      sourceWorkflowId: null,
+      sourceWorkflowName: null,
+      templateVersion: "0.1.0",
+      sourceVersion: null,
+      actionDecision: null,
+      outcomeExplanation: null
+    },
+    ...overrides
+  } as Awaited<ReturnType<typeof getWorkflowLibrarySnapshot>>["starters"][number];
+}
+
 describe("WorkflowsPage", () => {
   it("renders workflow chips and governance summary", async () => {
     vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
       buildSensitiveAccessInboxSnapshot()
     );
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshot());
     vi.mocked(getWorkflows).mockResolvedValue([
       {
         id: "workflow-1",
@@ -160,19 +228,68 @@ describe("WorkflowsPage", () => {
     expect(html).toContain("Sandbox execution chain");
     expect(html).toContain("Live sandbox readiness");
     expect(html).toContain("强隔离路径会按 execution class fail-closed：sandbox 当前 blocked。");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("tool governance");
+    expect(html).toContain("优先回到 Alpha workflow 补齐 1 个 missing tool");
+    expect(html).toContain('/workflows/workflow-1');
+    expect(html).toContain("回到 workflow 编辑器");
   });
 
-  it("shows a create entry when no workflows exist", async () => {
+  it("routes the empty state back to starter governance when the first active starter still needs follow-up", async () => {
     vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
       buildSensitiveAccessInboxSnapshot()
     );
     vi.mocked(getWorkflows).mockResolvedValue([]);
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(
+      buildWorkflowLibrarySnapshot({
+        starters: [
+          buildStarter({
+            id: "starter-governed",
+            name: "Governed starter",
+            sourceGovernance: {
+              kind: "missing_source",
+              statusLabel: "来源缺失",
+              summary: "The source workflow is missing.",
+              sourceWorkflowId: "source-workflow",
+              sourceWorkflowName: "Source workflow",
+              templateVersion: "0.1.0",
+              sourceVersion: null,
+              actionDecision: null,
+              outcomeExplanation: null
+            }
+          })
+        ]
+      })
+    );
 
     const html = renderToStaticMarkup(await WorkflowsPage());
 
     expect(html).toContain("当前还没有可编辑的 workflow");
-    expect(html).toContain('/workflows/new');
+    expect(html).toContain("starter governance");
+    expect(html).toContain("仍处于来源缺失");
+    expect(html).toContain("回到治理页");
+    expect(html).toContain("/workspace-starters?needs_follow_up=true&amp;source_governance_kind=missing_source&amp;starter=starter-governed");
     expect(html).toContain("没有缺失 catalog tool");
+  });
+
+  it("prefers a starter-scoped create entry when the workflow library is empty but an active starter is ready", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshot()
+    );
+    vi.mocked(getWorkflows).mockResolvedValue([]);
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(
+      buildWorkflowLibrarySnapshot({
+        starters: [buildStarter()]
+      })
+    );
+
+    const html = renderToStaticMarkup(await WorkflowsPage());
+
+    expect(html).toContain("first workflow");
+    expect(html).toContain("优先从 starter OpenClaw starter 创建首个草稿");
+    expect(html).toContain("用这个 starter 创建 workflow");
+    expect(html).toContain("/workflows/new?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92");
   });
 });

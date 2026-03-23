@@ -1,6 +1,7 @@
-import { createElement } from "react";
+import * as React from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type {
   WorkspaceStarterBulkPreview,
@@ -18,6 +19,13 @@ import {
   buildWorkspaceStarterSourceGovernanceFocusTargets,
   buildWorkspaceStarterSourceGovernancePrimaryFollowUp
 } from "./shared";
+
+Object.assign(globalThis, { React });
+
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
+}));
 
 describe("WorkspaceStarterBulkGovernanceCard", () => {
   it("renders sandbox dependency drift narrative for the latest bulk run", () => {
@@ -334,6 +342,13 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
         previewFocusTargets: buildWorkspaceStarterBulkPreviewFocusTargets(preview, templates),
         resultFocusTargets: buildWorkspaceStarterBulkResultFocusTargets(lastResult, templates),
         selectedTemplateId: "starter-sandbox",
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "all",
+          sourceGovernanceKind: "all",
+          needsFollowUp: false,
+          searchQuery: "",
+          selectedTemplateId: "starter-sandbox"
+        },
         onSelectQueuedTemplate: () => {},
         onFocusTemplate: () => {},
         onAction: () => {}
@@ -369,10 +384,12 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(html).toContain(
       "同一份 result receipt 现在会先投影稳定的 next-step presenter；`follow_up` 只保留为解释文本"
     );
-    expect(html).toContain("修复来源绑定");
+    expect(html).toContain("带此 starter 回到创建页");
     expect(html).toContain(
       "当前 starter 缺少可用来源绑定；先补来源 workflow 或确认来源仍可访问，再重新执行批量刷新。"
     );
+    expect(html).toContain("带此 starter 回到创建页");
+    expect(html).toContain('/workflows/new?starter=starter-manual');
     expect(html).toContain("先修复来源 workflow 的缺失或无效问题，再重新执行批量刷新。");
     expect(html).toContain("优先聚焦 starter：Manual starter");
     expect(html).toContain("Result receipt focus");

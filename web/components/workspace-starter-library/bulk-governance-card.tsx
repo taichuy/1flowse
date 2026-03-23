@@ -2,12 +2,14 @@
 
 import React from "react";
 
+import { WorkbenchEntryLink } from "@/components/workbench-entry-links";
 import type {
   WorkspaceStarterBulkAction,
   WorkspaceStarterBulkActionResult,
   WorkspaceStarterBulkPreview,
   WorkspaceStarterSourceGovernanceScopeSummary
 } from "@/lib/get-workspace-starters";
+import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 import {
   buildWorkspaceStarterBulkResultSurfaceCopy,
   getWorkspaceStarterBulkActionButtonLabel,
@@ -39,6 +41,7 @@ type WorkspaceStarterBulkGovernanceCardProps = {
   previewFocusTargets: WorkspaceStarterBulkPreviewFocusTarget[];
   resultFocusTargets: WorkspaceStarterBulkResultFocusTarget[];
   selectedTemplateId: string | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   onSelectQueuedTemplate: (templateId: string) => void;
   onFocusTemplate: (templateId: string) => void;
   onAction: (action: WorkspaceStarterBulkAction) => void;
@@ -66,6 +69,7 @@ export function WorkspaceStarterBulkGovernanceCard({
   previewFocusTargets,
   resultFocusTargets,
   selectedTemplateId,
+  workspaceStarterGovernanceQueryScope = null,
   onSelectQueuedTemplate,
   onFocusTemplate,
   onAction
@@ -73,7 +77,11 @@ export function WorkspaceStarterBulkGovernanceCard({
   const previewNarrativeItems = buildWorkspaceStarterBulkPreviewNarrative(preview);
   const narrativeItems = lastResult ? buildWorkspaceStarterBulkResultNarrative(lastResult) : [];
   const primaryResultFocusTarget = resultFocusTargets[0] ?? null;
-  const resultSurface = lastResult ? buildWorkspaceStarterBulkResultSurface(lastResult) : null;
+  const resultSurface = lastResult
+    ? buildWorkspaceStarterBulkResultSurface(lastResult, {
+        workspaceStarterGovernanceQueryScope
+      })
+    : null;
   const resultSurfaceCopy = buildWorkspaceStarterBulkResultSurfaceCopy();
   const recommendedNextStep = resultSurface?.recommendedNextStep ?? null;
 
@@ -136,19 +144,30 @@ export function WorkspaceStarterBulkGovernanceCard({
               <p className="section-copy starter-summary-copy">
                 {sourceGovernancePrimaryFollowUp.detail}
               </p>
-              {sourceGovernancePrimaryFollowUp.focusTemplateId &&
-              sourceGovernancePrimaryFollowUp.focusLabel ? (
+              {sourceGovernancePrimaryFollowUp.entryKey ||
+              (sourceGovernancePrimaryFollowUp.focusTemplateId &&
+                sourceGovernancePrimaryFollowUp.focusLabel) ? (
                 <div className="binding-actions">
-                  <button
-                    className="sync-button secondary"
-                    type="button"
-                    onClick={() =>
-                      onSelectQueuedTemplate(sourceGovernancePrimaryFollowUp.focusTemplateId!)
-                    }
-                    disabled={isMutating}
-                  >
-                    {sourceGovernancePrimaryFollowUp.focusLabel}
-                  </button>
+                  {sourceGovernancePrimaryFollowUp.entryKey ? (
+                    <WorkbenchEntryLink
+                      className="inline-link secondary"
+                      linkKey={sourceGovernancePrimaryFollowUp.entryKey}
+                      override={sourceGovernancePrimaryFollowUp.entryOverride}
+                    />
+                  ) : null}
+                  {sourceGovernancePrimaryFollowUp.focusTemplateId &&
+                  sourceGovernancePrimaryFollowUp.focusLabel ? (
+                    <button
+                      className="sync-button secondary"
+                      type="button"
+                      onClick={() =>
+                        onSelectQueuedTemplate(sourceGovernancePrimaryFollowUp.focusTemplateId!)
+                      }
+                      disabled={isMutating}
+                    >
+                      {sourceGovernancePrimaryFollowUp.focusLabel}
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -291,27 +310,36 @@ export function WorkspaceStarterBulkGovernanceCard({
               {resultSurface?.shouldRenderStandaloneFollowUpExplanation ? (
                 <p className="binding-meta">{resultSurface.followUpExplanation}</p>
               ) : null}
-              {recommendedNextStep?.focusTemplateId && recommendedNextStep.focusLabel ? (
+              {recommendedNextStep?.entryKey ||
+              (recommendedNextStep?.focusTemplateId && recommendedNextStep.focusLabel) ||
+              primaryResultFocusTarget ? (
                 <div className="binding-actions">
-                  <button
-                    className="sync-button secondary"
-                    type="button"
-                    onClick={() => onFocusTemplate(recommendedNextStep.focusTemplateId!)}
-                    disabled={isMutating}
-                  >
-                    {recommendedNextStep.focusLabel}
-                  </button>
-                </div>
-              ) : primaryResultFocusTarget ? (
-                <div className="binding-actions">
-                  <button
-                    className="sync-button secondary"
-                    type="button"
-                    onClick={() => onFocusTemplate(primaryResultFocusTarget.templateId)}
-                    disabled={isMutating}
-                  >
-                    {`优先聚焦 starter：${primaryResultFocusTarget.name}`}
-                  </button>
+                  {recommendedNextStep?.entryKey ? (
+                    <WorkbenchEntryLink
+                      className="inline-link secondary"
+                      linkKey={recommendedNextStep.entryKey}
+                      override={recommendedNextStep.entryOverride}
+                    />
+                  ) : null}
+                  {recommendedNextStep?.focusTemplateId && recommendedNextStep.focusLabel ? (
+                    <button
+                      className="sync-button secondary"
+                      type="button"
+                      onClick={() => onFocusTemplate(recommendedNextStep.focusTemplateId!)}
+                      disabled={isMutating}
+                    >
+                      {recommendedNextStep.focusLabel}
+                    </button>
+                  ) : primaryResultFocusTarget ? (
+                    <button
+                      className="sync-button secondary"
+                      type="button"
+                      onClick={() => onFocusTemplate(primaryResultFocusTarget.templateId)}
+                      disabled={isMutating}
+                    >
+                      {`优先聚焦 starter：${primaryResultFocusTarget.name}`}
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>

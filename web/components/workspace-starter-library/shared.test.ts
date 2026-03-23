@@ -579,7 +579,12 @@ describe("workspace starter source action decision", () => {
       label: "确认模板后带此 starter 回到创建页",
       detail: "优先确认来源是否迁移；如需继续推进，回到创建页重建治理链路。",
       focusTemplateId: null,
-      focusLabel: null
+      focusLabel: null,
+      entryKey: "createWorkflow",
+      entryOverride: {
+        href: "/workflows/new?starter=starter-active-a",
+        label: "确认模板后带此 starter 回到创建页"
+      }
     });
   });
 
@@ -608,7 +613,79 @@ describe("workspace starter source action decision", () => {
       label: "带此 starter 回到创建页",
       detail: "带此 starter 回到创建页继续创建 workflow，并保留当前模板上下文。",
       focusTemplateId: null,
-      focusLabel: null
+      focusLabel: null,
+      entryKey: "createWorkflow",
+      entryOverride: {
+        href: "/workflows/new?starter=starter-active-a",
+        label: "带此 starter 回到创建页"
+      }
+    });
+  });
+
+  it("builds a scoped create CTA for the primary follow-up starter instead of reusing the current selection", () => {
+    const scopedTemplates: WorkspaceStarterTemplateItem[] = [
+      templates[0],
+      {
+        ...templates[0],
+        id: "starter-active-b",
+        name: "Active starter B",
+        created_from_workflow_id: "wf-b",
+        created_from_workflow_version: "0.3.0",
+        source_governance: {
+          kind: "missing_source",
+          status_label: "来源缺失",
+          summary: "当前 starter 绑定的来源 workflow 已缺失。",
+          source_workflow_id: "wf-b",
+          source_workflow_name: "Workflow B",
+          template_version: "0.3.0",
+          source_version: null,
+          action_decision: null,
+          outcome_explanation: {
+            primary_signal: "当前 starter 绑定的来源 workflow 已缺失。",
+            follow_up: "来源 workflow 当前不可访问。"
+          }
+        }
+      }
+    ];
+
+    const primaryFollowUp = buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+      sourceGovernanceScope: {
+        workspace_id: "default",
+        total_count: 2,
+        attention_count: 1,
+        counts: {
+          drifted: 0,
+          missing_source: 1,
+          no_source: 0,
+          synced: 1
+        },
+        chips: ["来源缺失 1", "已对齐 1"],
+        summary: "当前筛选范围 2 个 starter 中，来源缺失 1 个；可以直接处理共享 follow-up。",
+        follow_up_template_ids: ["starter-active-b"]
+      },
+      templates: scopedTemplates,
+      workspaceStarterGovernanceQueryScope: {
+        activeTrack: "应用新建编排",
+        sourceGovernanceKind: "missing_source",
+        needsFollowUp: true,
+        searchQuery: "source",
+        selectedTemplateId: "starter-active-a"
+      }
+    });
+
+    expect(primaryFollowUp).toEqual({
+      label: "确认模板后带此 starter 回到创建页",
+      headline: "Active starter B 当前是共享来源治理队列的首个待处理 starter。",
+      detail:
+        "后端 follow-up queue 已把 Active starter B 排在当前范围的首位。 来源 workflow 当前不可访问。 当前 starter 绑定的来源 workflow 已缺失。",
+      focusTemplateId: "starter-active-b",
+      focusLabel: "优先聚焦 starter：Active starter B",
+      entryKey: "createWorkflow",
+      entryOverride: {
+        href:
+          "/workflows/new?needs_follow_up=true&q=source&source_governance_kind=missing_source&starter=starter-active-b&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+        label: "确认模板后带此 starter 回到创建页"
+      }
     });
   });
 
