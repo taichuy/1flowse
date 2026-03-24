@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import React, { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import type { UpdatePublishedEndpointLifecycleState } from "@/app/actions/publish";
