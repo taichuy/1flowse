@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildCrossEntryRiskDigest } from "@/lib/cross-entry-risk-digest";
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
 import {
   buildCallbackWaitingAutomationFixture,
   buildCallbackWaitingAutomationStepFixture,
@@ -17,6 +18,8 @@ import {
   buildSensitiveAccessSummaryFixture,
   buildSensitiveAccessTicketFixture
 } from "@/lib/workbench-page-test-fixtures";
+
+const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
 
 function buildFocusedBacklogEntry(): SensitiveAccessInboxEntry {
   return buildSensitiveAccessInboxEntryFixture({
@@ -266,7 +269,7 @@ describe("buildCrossEntryRiskDigest", () => {
       entryKey: "runLibrary",
       entryOverride: {
         href: "/runs/run-focus?node_run_id=node-focus#run-diagnostics-execution-timeline",
-        label: "jump to focused trace slice"
+        label: operatorSurfaceCopy.focusedTraceSliceLinkLabel
       }
     });
     expect(digest.entryOverrides?.operatorInbox).toEqual({
@@ -277,11 +280,14 @@ describe("buildCrossEntryRiskDigest", () => {
       entryKey: "runLibrary",
       entryOverride: {
         href: "/runs/run-focus?node_run_id=node-focus#run-diagnostics-execution-timeline",
-        label: "jump to focused trace slice"
+        label: operatorSurfaceCopy.focusedTraceSliceLinkLabel
       }
     });
     expect(digest.focusAreas.find((area) => area.id === "operator")?.nextStep).toContain(
       "Prod secret"
+    );
+    expect(digest.focusAreas.find((area) => area.id === "operator")?.nextStep).toContain(
+      operatorSurfaceCopy.focusedTraceSliceLinkLabel
     );
   });
 

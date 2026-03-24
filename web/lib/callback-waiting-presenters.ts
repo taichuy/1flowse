@@ -126,6 +126,7 @@ export type CallbackWaitingInlineActionPreference = "resume" | "cleanup" | null;
 export type CallbackWaitingSummarySurfaceCopy = {
   recommendedNextStepTitle: string;
   defaultInboxLinkLabel: string;
+  callbackFollowUpLabel: string;
   defaultInlineActionTitle: string;
   optionalInlineActionTitle: string;
   monitorCallbackStatusHint: string;
@@ -146,6 +147,7 @@ export type CallbackWaitingSummarySurfaceCopy = {
   injectedReferencesTitle: string;
   injectedReferencesDescription: string;
   terminatedLabel: string;
+  reviewTimelineFallbackDetail: string;
 };
 
 const CALLBACK_WAITING_RECOMMENDED_ACTIONS_WITH_INBOX_CTA = new Set<
@@ -158,6 +160,7 @@ export function buildCallbackWaitingSummarySurfaceCopy(): CallbackWaitingSummary
   return {
     recommendedNextStepTitle: operatorSurfaceCopy.recommendedNextStepTitle,
     defaultInboxLinkLabel: operatorSurfaceCopy.openInboxSliceLabel,
+    callbackFollowUpLabel: operatorSurfaceCopy.callbackFollowUpLabel,
     defaultInlineActionTitle: "Callback actions",
     optionalInlineActionTitle: "Optional callback override",
     monitorCallbackStatusHint:
@@ -184,7 +187,9 @@ export function buildCallbackWaitingSummarySurfaceCopy(): CallbackWaitingSummary
     injectedReferencesTitle: operatorSurfaceCopy.injectedReferencesTitle,
     injectedReferencesDescription:
       "当前 callback waiting、operator inbox 和 publish detail 现在围绕同一份 skill trace / load 事实解释 agent 注入来源。",
-    terminatedLabel: "callback waiting terminated"
+    terminatedLabel: "callback waiting terminated",
+    reviewTimelineFallbackDetail:
+      "Review the callback waiting timeline before forcing another resume."
   };
 }
 
@@ -274,7 +279,7 @@ export function buildCallbackWaitingRecommendedNextStep({
   return buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
     operatorFollowUp,
-    operatorLabel: "callback waiting follow-up"
+    operatorLabel: surfaceCopy.callbackFollowUpLabel
   });
 }
 

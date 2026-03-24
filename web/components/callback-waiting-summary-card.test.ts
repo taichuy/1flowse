@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { buildCallbackWaitingSummarySurfaceCopy } from "@/lib/callback-waiting-presenters";
 import type { CallbackWaitingLifecycleSummary } from "@/lib/get-run-views";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 
@@ -321,6 +322,25 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(html).toContain("approval blocker");
     expect(html).toContain("Open the approval inbox first, then retry the callback path.");
     expect(html).not.toContain("Open approval inbox</a>");
+  });
+
+  it("falls back to the shared callback timeline review copy for canonical follow-up", () => {
+    const html = renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        callbackWaitingExplanation: {
+          primary_signal: "当前 callback waiting 仍需继续观察。"
+        },
+        preferCanonicalRecommendedNextStep: true,
+        recommendedAction: {
+          kind: "callback waiting"
+        },
+        showInlineActions: false
+      })
+    );
+
+    expect(html).toContain(
+      buildCallbackWaitingSummarySurfaceCopy().reviewTimelineFallbackDetail
+    );
   });
 
   it("passes shared callback waiting context into inline actions feedback", () => {

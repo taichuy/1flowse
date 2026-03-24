@@ -234,7 +234,7 @@ export function CallbackWaitingSummaryCard({
       recommendedAction?.detail ??
       callbackFollowUp ??
       operatorFollowUp ??
-      "Review the callback waiting timeline before forcing another resume.",
+      surfaceCopy.reviewTimelineFallbackDetail,
     scope: "callback"
   });
   const canonicalRecommendedNextStep =
@@ -243,7 +243,7 @@ export function CallbackWaitingSummaryCard({
           callback: canonicalRecommendedActionCandidate,
           currentHref,
           operatorFollowUp: callbackFollowUp ?? operatorFollowUp,
-          operatorLabel: "callback waiting follow-up"
+          operatorLabel: surfaceCopy.callbackFollowUpLabel
         })
       : null;
   const recommendedNextStep = canonicalRecommendedNextStep ?? localRecommendedNextStep;

@@ -20,6 +20,7 @@ export type OperatorFollowUpSurfaceCopy = {
   operatorFollowUpTitle: string;
   canonicalOperatorFollowUpTitle: string;
   operatorFollowUpLabel: string;
+  callbackFollowUpLabel: string;
   executionFocusTitle: string;
   recommendedNextStepTitle: string;
   openInboxSliceLabel: string;
@@ -150,6 +151,7 @@ export function buildOperatorFollowUpSurfaceCopy(): OperatorFollowUpSurfaceCopy 
     operatorFollowUpTitle: "Operator follow-up",
     canonicalOperatorFollowUpTitle: "Canonical operator follow-up",
     operatorFollowUpLabel: "operator follow-up",
+    callbackFollowUpLabel: "callback waiting follow-up",
     executionFocusTitle: "Execution focus",
     recommendedNextStepTitle: "Recommended next step",
     openInboxSliceLabel: "open inbox slice",

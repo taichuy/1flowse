@@ -23,6 +23,7 @@ describe("operator follow-up presenters", () => {
       operatorFollowUpTitle: "Operator follow-up",
       canonicalOperatorFollowUpTitle: "Canonical operator follow-up",
       operatorFollowUpLabel: "operator follow-up",
+      callbackFollowUpLabel: "callback waiting follow-up",
       executionFocusTitle: "Execution focus",
       recommendedNextStepTitle: "Recommended next step",
       openInboxSliceLabel: "open inbox slice",

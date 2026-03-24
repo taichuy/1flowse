@@ -120,11 +120,14 @@ describe("callback waiting presenters", () => {
     expect(buildCallbackWaitingSummarySurfaceCopy()).toMatchObject({
       recommendedNextStepTitle: "Recommended next step",
       defaultInboxLinkLabel: "open inbox slice",
+      callbackFollowUpLabel: "callback waiting follow-up",
       manualOverrideOptionalLabel: "manual override optional",
       waitingNodeFocusEvidenceTitle: "Waiting node focus evidence",
       focusedSkillTraceTitle: "Focused skill trace",
       injectedReferencesTitle: "Injected references",
-      terminatedLabel: "callback waiting terminated"
+      terminatedLabel: "callback waiting terminated",
+      reviewTimelineFallbackDetail:
+        "Review the callback waiting timeline before forcing another resume."
     });
   });
 
