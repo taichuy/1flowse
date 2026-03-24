@@ -43,8 +43,8 @@ node scripts/check-dependabot-drift.js
 3. 如果脚本显示 `dependencyGraphManifests` 为空，或 `graph coverage 缺口` 仍覆盖本地 manifest roots：
    - 到仓库 `Settings -> Security & analysis` 检查 `Dependency graph` 是否开启。
    - 如仓库策略允许，再检查 `Automatic dependency submission` 是否已配置并正常跑在默认分支。
-   - 再检查 `.github/workflows/dependency-graph-submission.yml` 是否已在默认分支成功提交 `web/pnpm-lock.yaml` 的手工 snapshot；该 workflow 只用 `github.token + contents:write` 和本地 `pnpm list --lockfile-only` 构建事实，不依赖第三方 action 或远程脚本。
-   - 当前 `uv` roots 不再计入“原生 graph coverage 缺口”；如果后续确实希望 Python `uv` 目录也进入 GitHub dependency graph / alert drift 对照，应另行补 dependency submission API，而不是继续把它误判成管理员开关问题。
+   - 再检查 `.github/workflows/dependency-graph-submission.yml` 是否已在默认分支成功提交 `web/pnpm-lock.yaml`、`api/uv.lock` 与 `services/compat-dify/uv.lock` 的手工 snapshot；该 workflow 只用 `github.token + contents:write` 和本地锁文件 / 依赖树构建事实，不依赖第三方 action 或远程脚本。
+   - `uv` roots 不计入 GitHub 原生 graph coverage 缺口，但现在已由仓库内显式 dependency submission workflow 接手；若这些目录仍缺席，优先检查 workflow run 证据与平台刷新延迟，而不是继续误判成管理员开关问题。
 4. 不要因为 UI 暂时没刷新就直接 dismiss alert；应先保留命令输出、锁文件事实和结论，再等待依赖图恢复或补管理员侧操作。
 
 ## 仓库自动复验
@@ -64,12 +64,14 @@ node scripts/check-dependabot-drift.js
 
 ## 显式 dependency submission
 
-- 仓库新增 `.github/workflows/dependency-graph-submission.yml`，会在 `workflow_dispatch`、每日定时和 `taichuy_dev` 上的 `package.json` / `pnpm-lock.yaml` 变更时执行。
-- 当前它使用 `scripts/submit-dependency-snapshots.js` 为所有 pnpm roots 提交手工 snapshot；按当前代码事实，实际命中的 root 是 `web`。
-- 该脚本直接调用 GitHub dependency submission REST API，提交 `web/pnpm-lock.yaml` 的 runtime resolved tree，并保留 `direct|indirect` 关系事实；这已经足以覆盖当前 `next` / `flatted` 这类 default branch runtime 告警主线。
-- 当前 `pnpm list --lockfile-only` 在本仓库下还不能稳定暴露 development roots，所以 workflow summary 会显式提示这仍是“先收口 runtime dependency graph 覆盖”的中间态，不要误以为 devDependencies 已全部进入 GitHub graph。
-- 这样做的目标不是替代 `github-security-drift` 的告警比对，而是把 `web` 的 dependency graph 覆盖从“依赖平台自动识别是否稳定”收口成“仓库自己显式提交一份最高优先级 runtime snapshot”。
-- 如果 workflow 成功但 `dependencyGraphManifests` 仍长期缺少 `web/pnpm-lock.yaml`，说明平台侧仍可能存在刷新延迟或权限异常，应优先保留该 workflow run 证据，再继续管理员侧排查。
+- 仓库新增 `.github/workflows/dependency-graph-submission.yml`，会在 `workflow_dispatch`、每日定时和 `taichuy_dev` 上的 `package.json` / `pnpm-lock.yaml` / `pyproject.toml` / `uv.lock` 变更时执行。
+- 当前它使用 `scripts/submit-dependency-snapshots.js` 为所有已跟踪的 submission roots 提交手工 snapshot；按当前代码事实，命中的 roots 是 `web`（pnpm）、`api`（uv）和 `services/compat-dify`（uv）。
+- 该脚本直接调用 GitHub dependency submission REST API：
+  - `web` 侧通过 `pnpm list --lockfile-only` 提交 resolved tree，并保留 `direct|indirect`、`runtime|development` 关系事实；这足以覆盖当前 `next` / `flatted` 这类 default branch runtime 告警主线。
+  - `uv` 侧直接解析 `uv.lock` 中的 editable root、runtime direct deps、optional `dev` group 与 transitive dependency tree，把 `api/uv.lock`、`services/compat-dify/uv.lock` 也纳入 GitHub graph / drift 对照入口。
+- 当前 `pnpm list --lockfile-only` 在本仓库下还不能稳定暴露 development roots，所以 workflow summary 仍会显式提示这只是“先收口 runtime dependency graph 覆盖”的中间态，不要误以为 pnpm devDependencies 已全部进入 GitHub graph。
+- 这样做的目标不是替代 `github-security-drift` 的告警比对，而是把跨 `pnpm + uv` 的最高优先级 runtime / governance roots 都收口到“仓库自己显式提交 dependency snapshot”的稳定链路上。
+- 如果 workflow 成功但 `dependencyGraphManifests` 仍长期缺少这些 lockfile，说明平台侧仍可能存在刷新延迟或权限异常，应优先保留该 workflow run 证据，再继续管理员侧排查。
 
 ## 当前仓库已验证的信号
 
@@ -79,10 +81,10 @@ node scripts/check-dependabot-drift.js
 
 因此，当 GitHub 仍报告这两个依赖的 open alert 时，应优先按“平台状态漂移”而不是“本地锁文件仍未修复”处理。
 
-当前脚本已把 `uv` 根从“应出现在 GitHub 原生 dependency graph 里的 coverage 缺口”里剥离，只把它保留为本地告警版本解析能力。换句话说：
+当前脚本仍把 `uv` 根从“原生 graph coverage 缺口”里剥离，但不再只停留在本地告警版本解析。换句话说：
 
 - `web` 的 `pnpm` 根仍应作为 GitHub 原生 dependency graph / automatic dependency submission 的事实来源；如果它缺席，优先排查管理员设置或工作流侧 submission。
-- `api/`、`services/compat-dify/` 的 `uv` 根默认不会被脚本误报成“管理员没开 dependency graph”；若后续确实需要它们出现在 GitHub graph / alert drift 视图中，应新增显式 dependency submission 流程。
+- `api/`、`services/compat-dify/` 的 `uv` 根通过显式 dependency submission workflow 进入 graph / alert drift 对照；若它们缺席，优先检查 workflow 证据与平台刷新，而不是误报成管理员开关未开启。
 
 如果后续 GitHub 开始返回 Python 生态告警，脚本也会优先使用对应目录下的 `uv.lock` 解析实际版本，并回看 `pyproject.toml` 中的声明 specifier；不要再把 Python 告警手动降级为“脚本不支持”。
 

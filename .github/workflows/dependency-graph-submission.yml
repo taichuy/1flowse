@@ -10,12 +10,14 @@ on:
     paths:
       - '**/package.json'
       - '**/pnpm-lock.yaml'
+      - '**/pyproject.toml'
+      - '**/uv.lock'
       - 'scripts/submit-dependency-snapshots.js'
       - 'scripts/submit-dependency-snapshots.test.js'
       - '.github/workflows/dependency-graph-submission.yml'
 
 jobs:
-  submit-pnpm-snapshots:
+  submit-dependency-snapshots:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -32,7 +34,7 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - name: Submit pnpm dependency snapshots
+      - name: Submit dependency snapshots
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/submit-dependency-snapshots.js

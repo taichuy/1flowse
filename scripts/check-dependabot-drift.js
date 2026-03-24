@@ -544,7 +544,7 @@ function buildMarkdownSummary({
       lines.push('- GitHub 依赖图仍未覆盖本地 manifest roots，优先检查 `Security & analysis` 中的 `Dependency graph` 与 `Automatic dependency submission`。');
     }
     if (dependencySubmissionRoots.length > 0) {
-      lines.push('- `uv` roots 当前不计入 GitHub 原生 dependency graph coverage；若后续希望这些目录也进入 graph / alert drift 对照，请另行补 dependency submission API。');
+      lines.push('- `uv` roots 依赖显式 dependency submission workflow 进入 GitHub graph；若仍缺席，优先检查 `.github/workflows/dependency-graph-submission.yml` 是否成功提交 `uv.lock` snapshots。');
     }
     return lines.join('\n');
   }
@@ -560,7 +560,7 @@ function buildMarkdownSummary({
       lines.push('- GitHub dependency graph 仍少于本地 manifest inventory；优先处理 graph coverage 缺口，再等待告警自动收口。');
     }
     if (dependencySubmissionRoots.length > 0) {
-      lines.push('- `uv` roots 需要额外 dependency submission 才会进入 dependency graph coverage 预期，不应再把它们误判成管理员开关未开启。');
+      lines.push('- `uv` roots 通过显式 dependency submission workflow 进入 graph coverage 预期；若仍缺席，优先检查 `dependency-graph-submission.yml` 是否成功提交，而不是误判成管理员开关未开启。');
     }
     lines.push('- 建议保留证据，不要直接 dismiss alert；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
     return lines.join('\n');

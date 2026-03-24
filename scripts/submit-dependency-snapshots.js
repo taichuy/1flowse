@@ -5,11 +5,13 @@ const { execFileSync } = require('child_process');
 const {
   buildWorkspaceManifestInventory,
   collectTrackedFiles,
+  normalizePythonPackageName,
 } = require('./check-dependabot-drift');
 
 const repoRoot = path.resolve(__dirname, '..');
-const detectorName = '7flows-pnpm-dependency-submission';
-const detectorVersion = '0.1.0';
+const detectorName = '7flows-dependency-submission';
+const detectorVersion = '0.2.0';
+const developmentOptionalDependencyGroups = new Set(['ci', 'dev', 'docs', 'lint', 'test', 'tests']);
 
 function run(command, args, baseRepoRoot = repoRoot) {
   return execFileSync(command, args, {
@@ -74,8 +76,202 @@ function buildNpmPackageUrl(packageName, version) {
   return `pkg:/npm/${encodeNpmPackageName(packageName)}@${version}`;
 }
 
+function buildPythonPackageUrl(packageName, version) {
+  return `pkg:pypi/${normalizePythonPackageName(packageName)}@${version}`;
+}
+
 function buildDependencyKey(packageName, version) {
   return `${packageName}@${version}`;
+}
+
+function collectInlineTableDependencyNames(blockText) {
+  return [...String(blockText || '').matchAll(/\{\s*name\s*=\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
+function extractArrayBody(blockText, key) {
+  const pattern = new RegExp(`^${key}\\s*=\\s*\\[([\\s\\S]*?)^\\]`, 'm');
+  const match = String(blockText || '').match(pattern);
+  return match ? match[1] : '';
+}
+
+function parseUvOptionalDependencyGroups(blockText) {
+  const groups = new Map();
+  const lines = String(blockText || '').replace(/\r\n/g, '\n').split('\n');
+  let insideOptionalDependencies = false;
+  let currentGroup = null;
+  let currentBody = '';
+
+  function flushGroup() {
+    if (!currentGroup) {
+      return;
+    }
+    groups.set(currentGroup, collectInlineTableDependencyNames(currentBody));
+    currentGroup = null;
+    currentBody = '';
+  }
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim();
+
+    if (!insideOptionalDependencies) {
+      if (trimmedLine === '[package.optional-dependencies]') {
+        insideOptionalDependencies = true;
+      }
+      return;
+    }
+
+    if (!trimmedLine) {
+      return;
+    }
+
+    if (trimmedLine.startsWith('[')) {
+      flushGroup();
+      insideOptionalDependencies = false;
+      return;
+    }
+
+    const groupMatch = trimmedLine.match(/^([A-Za-z0-9_.-]+)\s*=\s*\[(.*)$/);
+    if (groupMatch) {
+      flushGroup();
+      currentGroup = groupMatch[1];
+      currentBody = groupMatch[2];
+      if (trimmedLine.includes(']')) {
+        flushGroup();
+      }
+      return;
+    }
+
+    if (!currentGroup) {
+      return;
+    }
+
+    currentBody = `${currentBody}\n${trimmedLine}`;
+    if (trimmedLine.includes(']')) {
+      flushGroup();
+    }
+  });
+
+  flushGroup();
+  return groups;
+}
+
+function parseUvLockPackages(lockfileText) {
+  const blocks = String(lockfileText || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n[[package]]\n')
+    .map((block, index) => (index === 0 ? block.replace(/^\[\[package\]\]\n/, '') : block))
+    .filter((block) => block.includes('name = '));
+
+  const packages = new Map();
+  let editableRoot = null;
+
+  blocks.forEach((block) => {
+    const nameMatch = block.match(/^name = "([^"]+)"$/m);
+    const versionMatch = block.match(/^version = "([^"]+)"$/m);
+
+    if (!nameMatch || !versionMatch) {
+      return;
+    }
+
+    const packageName = nameMatch[1];
+    const normalizedName = normalizePythonPackageName(packageName);
+    const dependencyKey = buildDependencyKey(normalizedName, versionMatch[1]);
+    const dependencies = collectInlineTableDependencyNames(extractArrayBody(block, 'dependencies')).map(
+      normalizePythonPackageName,
+    );
+    const optionalDependencies = new Map(
+      [...parseUvOptionalDependencyGroups(block).entries()].map(([groupName, dependencyNames]) => [
+        groupName,
+        dependencyNames.map(normalizePythonPackageName),
+      ]),
+    );
+    const entry = {
+      name: packageName,
+      normalizedName,
+      version: versionMatch[1],
+      dependencyKey,
+      packageUrl: buildPythonPackageUrl(packageName, versionMatch[1]),
+      dependencies,
+      optionalDependencies,
+      editable: /^source = \{ editable = "\." \}$/m.test(block),
+    };
+
+    packages.set(normalizedName, entry);
+    if (entry.editable) {
+      editableRoot = entry;
+    }
+  });
+
+  return { packages, editableRoot };
+}
+
+function resolveUvOptionalDependencyScope(groupName) {
+  return developmentOptionalDependencyGroups.has(String(groupName || '').toLowerCase())
+    ? 'development'
+    : 'runtime';
+}
+
+function registerUvDependency({ packageName, packageMap, scope, relationship, state }) {
+  const normalizedName = normalizePythonPackageName(packageName);
+  const packageEntry = packageMap.get(normalizedName);
+
+  if (!packageEntry) {
+    throw new Error(`uv lock 缺少依赖 ${packageName} 的 package block，无法构建 dependency snapshot。`);
+  }
+
+  const childDependencyKeys = packageEntry.dependencies
+    .map((childName) =>
+      registerUvDependency({
+        packageName: childName,
+        packageMap,
+        scope,
+        relationship: 'indirect',
+        state,
+      }),
+    )
+    .filter(Boolean);
+
+  upsertResolvedDependency(state, packageEntry.dependencyKey, {
+    package_url: packageEntry.packageUrl,
+    relationship,
+    scope,
+    dependencies: [...new Set(childDependencyKeys)].sort(),
+  });
+
+  return packageEntry.dependencyKey;
+}
+
+function buildUvResolvedDependencies(lockfileText) {
+  const { packages, editableRoot } = parseUvLockPackages(lockfileText);
+  if (!editableRoot) {
+    throw new Error('uv lock 缺少 editable root package，无法识别 direct dependencies。');
+  }
+
+  const state = new Map();
+  editableRoot.dependencies.forEach((dependencyName) => {
+    registerUvDependency({
+      packageName: dependencyName,
+      packageMap: packages,
+      scope: 'runtime',
+      relationship: 'direct',
+      state,
+    });
+  });
+
+  editableRoot.optionalDependencies.forEach((dependencyNames, groupName) => {
+    const scope = resolveUvOptionalDependencyScope(groupName);
+    dependencyNames.forEach((dependencyName) => {
+      registerUvDependency({
+        packageName: dependencyName,
+        packageMap: packages,
+        scope,
+        relationship: 'direct',
+        state,
+      });
+    });
+  });
+
+  return finalizeResolvedDependencies(state);
 }
 
 function mergeDependencyScope(currentScope, nextScope) {
@@ -243,16 +439,59 @@ function loadScopedPnpmDependencyTrees(rootDir) {
 }
 
 function discoverPnpmRoots() {
+  return discoverDependencySubmissionRoots().filter((item) => item.ecosystem === 'pnpm');
+}
+
+function discoverDependencySubmissionRoots() {
   return buildWorkspaceManifestInventory(collectTrackedFiles()).filter(
-    (item) => item.ecosystem === 'pnpm' && item.manifestPath && item.lockfilePath,
+    (item) => ['pnpm', 'uv'].includes(item.ecosystem) && item.manifestPath && item.lockfilePath,
   );
 }
 
-function buildSnapshotPayload({ root, runtimeTree, developmentTree, repository, sha, ref }) {
-  const resolved = buildScopedPnpmResolvedDependencies([
-    { tree: runtimeTree, scope: 'runtime' },
-    { tree: developmentTree, scope: 'development' },
-  ]);
+function loadResolvedDependenciesForRoot(root) {
+  if (root.ecosystem === 'pnpm') {
+    const packageJson = readJson(path.join(repoRoot, root.manifestPath));
+    const { runtimeTree, developmentTree } = loadScopedPnpmDependencyTrees(root.rootDir);
+    return {
+      resolved: buildScopedPnpmResolvedDependencies([
+        { tree: runtimeTree, scope: 'runtime' },
+        { tree: developmentTree, scope: 'development' },
+      ]),
+      metadata: {
+        packageJson,
+      },
+    };
+  }
+
+  if (root.ecosystem === 'uv') {
+    return {
+      resolved: buildUvResolvedDependencies(fs.readFileSync(path.join(repoRoot, root.lockfilePath), 'utf8')),
+      metadata: {},
+    };
+  }
+
+  throw new Error(`暂不支持 ${root.ecosystem} root 的 dependency snapshot。`);
+}
+
+function buildRootWarning(root, counters, metadata) {
+  if (
+    root.ecosystem === 'pnpm' &&
+    Object.keys(metadata.packageJson?.devDependencies || {}).length > 0 &&
+    counters.developmentCount === 0
+  ) {
+    return '当前 pnpm lockfile-only snapshot 仍未暴露 development roots；本 workflow 先优先保障 runtime dependency graph 覆盖。';
+  }
+
+  return null;
+}
+
+function buildSnapshotPayload({ root, resolved, runtimeTree, developmentTree, repository, sha, ref }) {
+  const resolvedDependencies =
+    resolved ||
+    buildScopedPnpmResolvedDependencies([
+      { tree: runtimeTree, scope: 'runtime' },
+      { tree: developmentTree, scope: 'development' },
+    ]);
   const rootLabel = root.rootLabel || root.rootDir || '.';
   const repositoryUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${repository.owner}/${repository.repo}`;
 
@@ -276,7 +515,7 @@ function buildSnapshotPayload({ root, runtimeTree, developmentTree, repository, 
         file: {
           source_location: root.lockfilePath,
         },
-        resolved,
+        resolved: resolvedDependencies,
       },
     },
   };
@@ -297,6 +536,7 @@ function buildSubmissionSummary(items, dryRun) {
 
   items.forEach((item) => {
     lines.push(`- root: \`${item.rootLabel}\``);
+    lines.push(`  - ecosystem: \`${item.ecosystem}\``);
     lines.push(`  - manifest: \`${item.manifestPath}\``);
     lines.push(`  - lockfile: \`${item.lockfilePath}\``);
     lines.push(`  - resolved packages: \`${item.resolvedCount}\``);
@@ -390,7 +630,7 @@ function selectRoots(availableRoots, requestedRoots) {
       (item) => item.rootDir === requestedRoot || item.rootLabel === requestedRoot,
     );
     if (!matchedRoot) {
-      throw new Error(`未找到 pnpm root: ${requestedRoot}`);
+      throw new Error(`未找到 dependency submission root: ${requestedRoot}`);
     }
     return matchedRoot;
   });
@@ -410,10 +650,10 @@ function summarizeResolvedDependencies(resolved) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const roots = selectRoots(discoverPnpmRoots(), options.requestedRoots);
+  const roots = selectRoots(discoverDependencySubmissionRoots(), options.requestedRoots);
 
   if (roots.length === 0) {
-    console.log('当前仓库没有可提交的 pnpm dependency snapshot roots。');
+    console.log('当前仓库没有可提交的 dependency snapshot roots。');
     return;
   }
 
@@ -422,30 +662,24 @@ async function main() {
   const ref = resolveRef();
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   const summaries = [];
+  const outputPayloads = {};
 
   for (const root of roots) {
-    const packageJson = readJson(path.join(repoRoot, root.manifestPath));
-    const { runtimeTree, developmentTree } = loadScopedPnpmDependencyTrees(root.rootDir);
+    const { resolved, metadata } = loadResolvedDependenciesForRoot(root);
     const payload = buildSnapshotPayload({
       root,
-      runtimeTree,
-      developmentTree,
+      resolved,
       repository,
       sha,
       ref,
     });
     const manifest = payload.manifests[root.lockfilePath];
-    const resolved = manifest.resolved;
-    const counters = summarizeResolvedDependencies(resolved);
-    const warning =
-      Object.keys(packageJson.devDependencies || {}).length > 0 && counters.developmentCount === 0
-        ? '当前 pnpm lockfile-only snapshot 仍未暴露 development roots；本 workflow 先优先保障 runtime dependency graph 覆盖。'
-        : null;
+    const resolvedDependencies = manifest.resolved;
+    const counters = summarizeResolvedDependencies(resolvedDependencies);
+    const warning = buildRootWarning(root, counters, metadata);
 
     if (options.outputPath) {
-      const outputPath = path.resolve(repoRoot, options.outputPath);
-      const outputValue = roots.length === 1 ? payload : { [root.rootLabel]: payload };
-      fs.writeFileSync(outputPath, JSON.stringify(outputValue, null, 2));
+      outputPayloads[root.rootLabel] = payload;
     }
 
     if (options.dryRun) {
@@ -454,6 +688,7 @@ async function main() {
       );
       summaries.push({
         rootLabel: root.rootLabel,
+        ecosystem: root.ecosystem,
         manifestPath: root.manifestPath,
         lockfilePath: root.lockfilePath,
         warning,
@@ -473,12 +708,19 @@ async function main() {
     );
     summaries.push({
       rootLabel: root.rootLabel,
+      ecosystem: root.ecosystem,
       manifestPath: root.manifestPath,
       lockfilePath: root.lockfilePath,
       snapshotId,
       warning,
       ...counters,
     });
+  }
+
+  if (options.outputPath) {
+    const outputPath = path.resolve(repoRoot, options.outputPath);
+    const outputValue = roots.length === 1 ? outputPayloads[roots[0].rootLabel] : outputPayloads;
+    fs.writeFileSync(outputPath, JSON.stringify(outputValue, null, 2));
   }
 
   const summaryLines = buildSubmissionSummary(summaries, options.dryRun);
@@ -490,7 +732,9 @@ module.exports = {
   buildPnpmResolvedDependencies,
   buildScopedPnpmResolvedDependencies,
   buildSnapshotPayload,
+  buildUvResolvedDependencies,
   collectDirectDependencyScopes,
+  discoverDependencySubmissionRoots,
   discoverPnpmRoots,
   parseArgs,
   selectRoots,
