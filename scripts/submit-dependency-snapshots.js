@@ -12,6 +12,19 @@ const repoRoot = path.resolve(__dirname, '..');
 const detectorName = '7flows-dependency-submission';
 const detectorVersion = '0.2.0';
 const developmentOptionalDependencyGroups = new Set(['ci', 'dev', 'docs', 'lint', 'test', 'tests']);
+const dependencyGraphDisabledPattern = /dependency graph is disabled/i;
+const dependencyGraphSettingsHint =
+  'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时再检查 `Automatic dependency submission`。';
+
+class DependencySubmissionError extends Error {
+  constructor({ kind, status, message, hint = null }) {
+    super(message);
+    this.name = 'DependencySubmissionError';
+    this.kind = kind;
+    this.status = status;
+    this.hint = hint;
+  }
+}
 
 function run(command, args, baseRepoRoot = repoRoot) {
   return execFileSync(command, args, {
@@ -533,9 +546,20 @@ function writeStepSummary(lines) {
 function buildSubmissionSummary(items, dryRun) {
   const header = dryRun ? '## Dependency snapshot dry run' : '## Dependency snapshot submission';
   const lines = [header, ''];
+  const blockedItems = items.filter((item) => item.status === 'blocked');
+
+  if (blockedItems.length > 0) {
+    lines.push(
+      '- repository blocker: GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+    );
+    lines.push('');
+  }
 
   items.forEach((item) => {
     lines.push(`- root: \`${item.rootLabel}\``);
+    if (item.status) {
+      lines.push(`  - status: \`${item.status}\``);
+    }
     lines.push(`  - ecosystem: \`${item.ecosystem}\``);
     lines.push(`  - manifest: \`${item.manifestPath}\``);
     lines.push(`  - lockfile: \`${item.lockfilePath}\``);
@@ -545,6 +569,9 @@ function buildSubmissionSummary(items, dryRun) {
     lines.push(`  - development packages: \`${item.developmentCount}\``);
     if (item.snapshotId) {
       lines.push(`  - snapshot id: \`${item.snapshotId}\``);
+    }
+    if (item.blockedReason) {
+      lines.push(`  - blocked reason: ${item.blockedReason}`);
     }
     if (item.warning) {
       lines.push(`  - warning: ${item.warning}`);
@@ -571,9 +598,22 @@ async function submitSnapshot(repository, payload, token) {
 
   const responseBody = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(
-      `dependency snapshot 提交失败（HTTP ${response.status}）：${responseBody.message || 'unknown error'}`,
-    );
+    const responseMessage = responseBody.message || 'unknown error';
+
+    if (response.status === 404 && dependencyGraphDisabledPattern.test(responseMessage)) {
+      throw new DependencySubmissionError({
+        kind: 'dependency_graph_disabled',
+        status: response.status,
+        message: `dependency snapshot 提交被仓库设置阻塞（HTTP ${response.status}）：${responseMessage}`,
+        hint: dependencyGraphSettingsHint,
+      });
+    }
+
+    throw new DependencySubmissionError({
+      kind: 'request_failed',
+      status: response.status,
+      message: `dependency snapshot 提交失败（HTTP ${response.status}）：${responseMessage}`,
+    });
   }
 
   return responseBody;
@@ -663,6 +703,7 @@ async function main() {
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   const summaries = [];
   const outputPayloads = {};
+  let hasRepositoryBlockers = false;
 
   for (const root of roots) {
     const { resolved, metadata } = loadResolvedDependenciesForRoot(root);
@@ -701,20 +742,41 @@ async function main() {
       throw new Error('缺少 GITHUB_TOKEN 或 GH_TOKEN，无法提交 dependency snapshot。');
     }
 
-    const responseBody = await submitSnapshot(repository, payload, token);
-    const snapshotId = responseBody.id || responseBody.snapshot_id || 'unknown';
-    console.log(
-      `已提交 ${root.rootLabel} dependency snapshot（resolved=${counters.resolvedCount}，direct=${counters.directCount}，snapshot=${snapshotId}）。`,
-    );
-    summaries.push({
-      rootLabel: root.rootLabel,
-      ecosystem: root.ecosystem,
-      manifestPath: root.manifestPath,
-      lockfilePath: root.lockfilePath,
-      snapshotId,
-      warning,
-      ...counters,
-    });
+    try {
+      const responseBody = await submitSnapshot(repository, payload, token);
+      const snapshotId = responseBody.id || responseBody.snapshot_id || 'unknown';
+      console.log(
+        `已提交 ${root.rootLabel} dependency snapshot（resolved=${counters.resolvedCount}，direct=${counters.directCount}，snapshot=${snapshotId}）。`,
+      );
+      summaries.push({
+        rootLabel: root.rootLabel,
+        status: 'submitted',
+        ecosystem: root.ecosystem,
+        manifestPath: root.manifestPath,
+        lockfilePath: root.lockfilePath,
+        snapshotId,
+        warning,
+        ...counters,
+      });
+    } catch (error) {
+      if (error instanceof DependencySubmissionError && error.kind === 'dependency_graph_disabled') {
+        hasRepositoryBlockers = true;
+        console.warn(`warning: ${root.rootLabel} dependency snapshot 提交被仓库设置阻塞。${error.hint}`);
+        summaries.push({
+          rootLabel: root.rootLabel,
+          status: 'blocked',
+          ecosystem: root.ecosystem,
+          manifestPath: root.manifestPath,
+          lockfilePath: root.lockfilePath,
+          blockedReason: error.hint,
+          warning,
+          ...counters,
+        });
+        continue;
+      }
+
+      throw error;
+    }
   }
 
   if (options.outputPath) {
@@ -726,10 +788,16 @@ async function main() {
   const summaryLines = buildSubmissionSummary(summaries, options.dryRun);
   console.log(summaryLines.join('\n'));
   writeStepSummary(summaryLines);
+
+  if (hasRepositoryBlockers) {
+    process.exitCode = 2;
+  }
 }
 
 module.exports = {
+  DependencySubmissionError,
   buildPnpmResolvedDependencies,
+  buildSubmissionSummary,
   buildScopedPnpmResolvedDependencies,
   buildSnapshotPayload,
   buildUvResolvedDependencies,
@@ -738,6 +806,7 @@ module.exports = {
   discoverPnpmRoots,
   parseArgs,
   selectRoots,
+  submitSnapshot,
 };
 
 if (require.main === module) {

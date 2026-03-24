@@ -2,12 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  DependencySubmissionError,
   buildPnpmResolvedDependencies,
+  buildSubmissionSummary,
   buildSnapshotPayload,
   buildUvResolvedDependencies,
   collectDirectDependencyScopes,
   parseArgs,
   selectRoots,
+  submitSnapshot,
 } = require('./submit-dependency-snapshots');
 
 test('collectDirectDependencyScopes prefers runtime over development for duplicated names', () => {
@@ -270,4 +273,63 @@ source = { registry = "https://pypi.org/simple" }
     scope: 'development',
     dependencies: [],
   });
+});
+
+test('submitSnapshot classifies disabled dependency graph as repository blocker', async () => {
+  const originalFetch = global.fetch;
+
+  global.fetch = async () => ({
+    ok: false,
+    status: 404,
+    json: async () => ({
+      message: 'The Dependency graph is disabled for this repository. Please enable it before submitting snapshots.',
+    }),
+  });
+
+  await assert.rejects(
+    submitSnapshot(
+      {
+        owner: 'taichuy',
+        repo: '7flows',
+      },
+      {
+        version: 0,
+      },
+      'token',
+    ),
+    (error) => {
+      assert.ok(error instanceof DependencySubmissionError);
+      assert.equal(error.kind, 'dependency_graph_disabled');
+      assert.match(error.message, /HTTP 404/);
+      assert.match(error.hint, /Dependency graph/);
+      return true;
+    },
+  );
+
+  global.fetch = originalFetch;
+});
+
+test('buildSubmissionSummary surfaces blocked repository settings explicitly', () => {
+  const summary = buildSubmissionSummary(
+    [
+      {
+        rootLabel: 'web',
+        status: 'blocked',
+        ecosystem: 'pnpm',
+        manifestPath: 'web/package.json',
+        lockfilePath: 'web/pnpm-lock.yaml',
+        resolvedCount: 12,
+        directCount: 3,
+        runtimeCount: 10,
+        developmentCount: 2,
+        blockedReason:
+          'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+      },
+    ],
+    false,
+  );
+
+  assert.match(summary.join('\n'), /repository blocker: GitHub `Dependency graph` 未开启/);
+  assert.match(summary.join('\n'), /status: `blocked`/);
+  assert.match(summary.join('\n'), /blocked reason: GitHub 仓库当前未开启/);
 });
