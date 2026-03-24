@@ -11,6 +11,10 @@ import { getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflows } from "@/lib/get-workflows";
 import {
+  buildSensitiveAccessInboxSnapshotFixture,
+  buildSystemOverviewFixture
+} from "@/lib/workbench-page-test-fixtures";
+import {
   buildLegacyAuthGovernanceBindingFixture,
   buildLegacyAuthGovernanceSnapshotFixture,
   buildLegacyAuthGovernanceWorkflowFixture,
@@ -46,45 +50,11 @@ vi.mock("@/lib/get-workflow-publish", () => ({
 function buildSensitiveAccessInboxSnapshot(
   overrides: Partial<Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>> = {}
 ) {
-  const defaultSnapshot = {
-    channels: [],
-    resources: [],
-    requests: [],
-    notifications: [],
-    summary: {
-      ticket_count: 0,
-      pending_ticket_count: 0,
-      approved_ticket_count: 0,
-      rejected_ticket_count: 0,
-      expired_ticket_count: 0,
-      waiting_ticket_count: 0,
-      resumed_ticket_count: 0,
-      failed_ticket_count: 0,
-      pending_notification_count: 0,
-      delivered_notification_count: 0,
-      failed_notification_count: 0
-    },
-    entries: []
-  } satisfies Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>;
-
-  return {
-    ...defaultSnapshot,
-    ...overrides,
-    summary: {
-      ...defaultSnapshot.summary,
-      ...overrides.summary
-    }
-  } as Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>;
+  return buildSensitiveAccessInboxSnapshotFixture(overrides);
 }
 
 function buildSystemOverview() {
-  return {
-    status: "ok",
-    environment: "local",
-    services: [],
-    capabilities: [],
-    plugin_adapters: [],
-    sandbox_backends: [],
+  return buildSystemOverviewFixture({
     sandbox_readiness: {
       enabled_backend_count: 1,
       healthy_backend_count: 0,
@@ -114,27 +84,8 @@ function buildSystemOverview() {
       supports_backend_extensions: false,
       supports_network_policy: false,
       supports_filesystem_policy: false
-    },
-    plugin_tools: [],
-    runtime_activity: {
-      summary: {
-        recent_run_count: 0,
-        recent_event_count: 0,
-        run_statuses: {},
-        event_types: {}
-      },
-      recent_runs: [],
-      recent_events: []
-    },
-    callback_waiting_automation: {
-      status: "configured",
-      scheduler_required: true,
-      detail: "healthy",
-      scheduler_health_status: "healthy",
-      scheduler_health_detail: "healthy",
-      steps: []
     }
-  };
+  });
 }
 
 function buildWorkflowLibrarySnapshot(

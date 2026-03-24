@@ -7,6 +7,16 @@ import { describe, expect, it, vi } from "vitest";
 import RunsPage from "@/app/runs/page";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
 import { getSystemOverview } from "@/lib/get-system-overview";
+import {
+  buildSensitiveAccessExecutionContextFixture,
+  buildSensitiveAccessExecutionFocusNodeFixture,
+  buildSensitiveAccessInboxEntryFixture,
+  buildSensitiveAccessInboxSnapshotFixture,
+  buildSensitiveAccessRequestFixture,
+  buildSensitiveAccessResourceFixture,
+  buildSensitiveAccessTicketFixture,
+  buildSystemOverviewFixture
+} from "@/lib/workbench-page-test-fixtures";
 import { buildRunLibrarySurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 Object.assign(globalThis, { React });
@@ -24,177 +34,95 @@ vi.mock("@/lib/get-sensitive-access", () => ({
   getSensitiveAccessInboxSnapshot: vi.fn()
 }));
 
-function buildSensitiveAccessInboxSnapshot(
-  overrides: Partial<Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>> = {}
-) {
-  const defaultSnapshot = {
-    channels: [],
-    resources: [],
-    requests: [],
-    notifications: [],
-    summary: {
-      ticket_count: 0,
-      pending_ticket_count: 0,
-      approved_ticket_count: 0,
-      rejected_ticket_count: 0,
-      expired_ticket_count: 0,
-      waiting_ticket_count: 0,
-      resumed_ticket_count: 0,
-      failed_ticket_count: 0,
-      pending_notification_count: 0,
-      delivered_notification_count: 0,
-      failed_notification_count: 0
-    },
-    entries: []
-  } satisfies Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>;
-
-  return {
-    ...defaultSnapshot,
-    ...overrides,
-    summary: {
-      ...defaultSnapshot.summary,
-      ...overrides.summary
-    }
-  } as Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>;
-}
-
 describe("RunsPage", () => {
   it("renders recent run links and operator follow-up entry", async () => {
     const surfaceCopy = buildRunLibrarySurfaceCopy();
 
-    vi.mocked(getSystemOverview).mockResolvedValue({
-      status: "ok",
-      environment: "local",
-      services: [],
-      capabilities: [],
-      plugin_adapters: [],
-      sandbox_backends: [],
-      sandbox_readiness: {
-        enabled_backend_count: 0,
-        healthy_backend_count: 0,
-        degraded_backend_count: 0,
-        offline_backend_count: 0,
-        execution_classes: [],
-        supported_languages: [],
-        supported_profiles: [],
-        supported_dependency_modes: [],
-        supports_tool_execution: false,
-        supports_builtin_package_sets: false,
-        supports_backend_extensions: false,
-        supports_network_policy: false,
-        supports_filesystem_policy: false
-      },
-      plugin_tools: [],
-      callback_waiting_automation: {
-        status: "configured",
-        scheduler_required: true,
-        detail: "healthy",
-        scheduler_health_status: "healthy",
-        scheduler_health_detail: "healthy",
-        steps: []
-      },
-      runtime_activity: {
-        summary: {
-          recent_run_count: 2,
-          recent_event_count: 5,
-          run_statuses: {
-            completed: 1,
-            waiting_callback: 1
+    vi.mocked(getSystemOverview).mockResolvedValue(
+      buildSystemOverviewFixture({
+        runtime_activity: {
+          summary: {
+            recent_run_count: 2,
+            recent_event_count: 5,
+            run_statuses: {
+              completed: 1,
+              waiting_callback: 1
+            },
+            event_types: {
+              node_completed: 2,
+              callback_waiting: 1
+            }
           },
-          event_types: {
-            node_completed: 2,
-            callback_waiting: 1
-          }
-        },
-        recent_runs: [
-          {
-            id: "run-1",
-            workflow_id: "workflow-1",
-            workflow_version: "1.0.0",
-            status: "waiting_callback",
-            created_at: "2026-03-22T08:00:00Z",
-            finished_at: null,
-            event_count: 3
-          },
-          {
-            id: "run-2",
-            workflow_id: "workflow-2",
-            workflow_version: "2.0.0",
-            status: "completed",
-            created_at: "2026-03-22T07:00:00Z",
-            finished_at: "2026-03-22T07:30:00Z",
-            event_count: 2
-          }
-        ],
-        recent_events: []
-      }
-    });
-    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue({
-      ...buildSensitiveAccessInboxSnapshot({
+          recent_runs: [
+            {
+              id: "run-1",
+              workflow_id: "workflow-1",
+              workflow_version: "1.0.0",
+              status: "waiting_callback",
+              created_at: "2026-03-22T08:00:00Z",
+              finished_at: null,
+              event_count: 3
+            },
+            {
+              id: "run-2",
+              workflow_id: "workflow-2",
+              workflow_version: "2.0.0",
+              status: "completed",
+              created_at: "2026-03-22T07:00:00Z",
+              finished_at: "2026-03-22T07:30:00Z",
+              event_count: 2
+            }
+          ]
+        }
+      })
+    );
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshotFixture({
         summary: {
-          ...buildSensitiveAccessInboxSnapshot().summary,
           ticket_count: 1,
           pending_ticket_count: 1,
           waiting_ticket_count: 1
         },
         entries: [
-          {
-            ticket: {
+          buildSensitiveAccessInboxEntryFixture({
+            ticket: buildSensitiveAccessTicketFixture({
               id: "ticket-run-1",
               access_request_id: "request-run-1",
               run_id: "run-library-entry",
               node_run_id: "node-library-entry",
-              status: "pending",
-              waiting_status: "waiting",
               created_at: "2026-03-22T10:00:00Z"
-            },
-            request: {
+            }),
+            request: buildSensitiveAccessRequestFixture({
               id: "request-run-1",
               run_id: "run-library-entry",
               node_run_id: "node-library-entry",
               requester_type: "ai",
               requester_id: "agent-run",
               resource_id: "resource-run-secret",
-              action_type: "read",
               created_at: "2026-03-22T09:59:00Z"
-            },
-            resource: {
+            }),
+            resource: buildSensitiveAccessResourceFixture({
               id: "resource-run-secret",
               label: "Run secret",
               sensitivity_level: "L3",
               source: "credential",
-              metadata: {},
               created_at: "2026-03-22T09:00:00Z",
               updated_at: "2026-03-22T09:30:00Z"
-            },
-            notifications: [],
-            callbackWaitingContext: null,
-            executionContext: {
+            }),
+            executionContext: buildSensitiveAccessExecutionContextFixture({
               runId: "run-library-focus",
-              focusNode: {
+              focusNode: buildSensitiveAccessExecutionFocusNodeFixture({
                 node_run_id: "node-library-focus",
                 node_id: "run-approval-node",
-                node_name: "Run Approval",
-                node_type: "tool",
-                callback_tickets: [],
-                sensitive_access_entries: [],
-                execution_fallback_count: 0,
-                execution_blocked_count: 0,
-                execution_unavailable_count: 0,
-                artifact_refs: [],
-                artifacts: [],
-                tool_calls: []
-              },
-              focusReason: "current_node",
-              focusExplanation: null,
+                node_name: "Run Approval"
+              }),
               focusMatchesEntry: false,
-              entryNodeRunId: "node-library-entry",
-              skillTrace: null
-            }
-          }
+              entryNodeRunId: "node-library-entry"
+            })
+          })
         ]
       })
-    });
+    );
 
     const html = renderToStaticMarkup(await RunsPage());
 
@@ -221,50 +149,9 @@ describe("RunsPage", () => {
   });
 
   it("shows a workflow fallback when there are no recent runs", async () => {
-    vi.mocked(getSystemOverview).mockResolvedValue({
-      status: "ok",
-      environment: "local",
-      services: [],
-      capabilities: [],
-      plugin_adapters: [],
-      sandbox_backends: [],
-      sandbox_readiness: {
-        enabled_backend_count: 0,
-        healthy_backend_count: 0,
-        degraded_backend_count: 0,
-        offline_backend_count: 0,
-        execution_classes: [],
-        supported_languages: [],
-        supported_profiles: [],
-        supported_dependency_modes: [],
-        supports_tool_execution: false,
-        supports_builtin_package_sets: false,
-        supports_backend_extensions: false,
-        supports_network_policy: false,
-        supports_filesystem_policy: false
-      },
-      plugin_tools: [],
-      callback_waiting_automation: {
-        status: "configured",
-        scheduler_required: true,
-        detail: "healthy",
-        scheduler_health_status: "healthy",
-        scheduler_health_detail: "healthy",
-        steps: []
-      },
-      runtime_activity: {
-        summary: {
-          recent_run_count: 0,
-          recent_event_count: 0,
-          run_statuses: {},
-          event_types: {}
-        },
-        recent_runs: [],
-        recent_events: []
-      }
-    });
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverviewFixture());
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
-      buildSensitiveAccessInboxSnapshot()
+      buildSensitiveAccessInboxSnapshotFixture()
     );
 
     const html = renderToStaticMarkup(await RunsPage());
@@ -274,75 +161,47 @@ describe("RunsPage", () => {
   });
 
   it("preserves workspace starter scope across run and workflow links", async () => {
-    vi.mocked(getSystemOverview).mockResolvedValue({
-      status: "ok",
-      environment: "local",
-      services: [],
-      capabilities: [],
-      plugin_adapters: [],
-      sandbox_backends: [],
-      sandbox_readiness: {
-        enabled_backend_count: 0,
-        healthy_backend_count: 0,
-        degraded_backend_count: 0,
-        offline_backend_count: 0,
-        execution_classes: [],
-        supported_languages: [],
-        supported_profiles: [],
-        supported_dependency_modes: [],
-        supports_tool_execution: false,
-        supports_builtin_package_sets: false,
-        supports_backend_extensions: false,
-        supports_network_policy: false,
-        supports_filesystem_policy: false
-      },
-      plugin_tools: [],
-      callback_waiting_automation: {
-        status: "configured",
-        scheduler_required: true,
-        detail: "healthy",
-        scheduler_health_status: "healthy",
-        scheduler_health_detail: "healthy",
-        steps: []
-      },
-      runtime_activity: {
-        summary: {
-          recent_run_count: 1,
-          recent_event_count: 1,
-          run_statuses: {
-            waiting_callback: 1
+    vi.mocked(getSystemOverview).mockResolvedValue(
+      buildSystemOverviewFixture({
+        runtime_activity: {
+          summary: {
+            recent_run_count: 1,
+            recent_event_count: 1,
+            run_statuses: {
+              waiting_callback: 1
+            },
+            event_types: {
+              callback_waiting: 1
+            }
           },
-          event_types: {
-            callback_waiting: 1
-          }
-        },
-        recent_runs: [
-          {
-            id: "run-1",
-            workflow_id: "workflow-1",
-            workflow_version: "1.0.0",
-            status: "waiting_callback",
-            created_at: "2026-03-22T08:00:00Z",
-            finished_at: null,
-            event_count: 1
-          }
-        ],
-        recent_events: [
-          {
-            id: 42,
-            run_id: "run-1",
-            node_run_id: "node-run-1",
-            event_type: "callback_waiting",
-            payload_keys: ["reason"],
-            payload_preview: "callback pending",
-            payload_size: 32,
-            created_at: "2026-03-22T08:01:00Z"
-          }
-        ]
-      }
-    });
+          recent_runs: [
+            {
+              id: "run-1",
+              workflow_id: "workflow-1",
+              workflow_version: "1.0.0",
+              status: "waiting_callback",
+              created_at: "2026-03-22T08:00:00Z",
+              finished_at: null,
+              event_count: 1
+            }
+          ],
+          recent_events: [
+            {
+              id: 42,
+              run_id: "run-1",
+              node_run_id: "node-run-1",
+              event_type: "callback_waiting",
+              payload_keys: ["reason"],
+              payload_preview: "callback pending",
+              payload_size: 32,
+              created_at: "2026-03-22T08:01:00Z"
+            }
+          ]
+        }
+      })
+    );
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
-      buildSensitiveAccessInboxSnapshot()
+      buildSensitiveAccessInboxSnapshotFixture()
     );
 
     const html = renderToStaticMarkup(
