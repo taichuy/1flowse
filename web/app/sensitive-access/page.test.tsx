@@ -142,6 +142,7 @@ describe("SensitiveAccessInboxPage", () => {
 
     expect(html).toContain("Recommended next step");
     expect(html).toContain("approval blocker");
+    expect(html).toContain("Primary governed resource: Sandbox secret.");
     expect(html).toContain("open exact inbox slice");
     expect(html).toContain(
       '/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-1&amp;node_run_id=node-run-1&amp;access_request_id=request-1&amp;approval_ticket_id=ticket-1'

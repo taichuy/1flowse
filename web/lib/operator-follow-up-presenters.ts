@@ -9,6 +9,7 @@ export type OperatorRecommendedNextStep = {
   detail: string;
   href: string | null;
   href_label: string | null;
+  primaryResourceSummary?: string | null;
 };
 
 export type OperatorFollowUpLinkSurface = {
@@ -50,6 +51,7 @@ export type OperatorRecommendedNextStepCandidate = {
   href?: string | null;
   href_label?: string | null;
   fallback_detail: string;
+  primaryResourceSummary?: string | null;
 };
 
 export type OperatorRecommendedActionLike = {
@@ -217,6 +219,7 @@ export function buildOperatorRunDetailCandidate({
   label = "run detail",
   detail,
   fallbackDetail,
+  primaryResourceSummary,
   hrefLabel,
   surfaceCopy = buildOperatorFollowUpSurfaceCopy()
 }: {
@@ -226,6 +229,7 @@ export function buildOperatorRunDetailCandidate({
   label?: string;
   detail?: string | null;
   fallbackDetail: string;
+  primaryResourceSummary?: string | null;
   hrefLabel?: string | null;
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
 }): OperatorRecommendedNextStepCandidate {
@@ -241,7 +245,8 @@ export function buildOperatorRunDetailCandidate({
       normalizedRunId || normalizeHref(runHref)
         ? hrefLabel?.trim() || surfaceCopy.openRunLabel
         : null,
-    fallback_detail: fallbackDetail
+    fallback_detail: fallbackDetail,
+    primaryResourceSummary
   };
 }
 
@@ -251,6 +256,7 @@ export function buildOperatorInboxSliceCandidate({
   label = "approval blocker",
   detail,
   fallbackDetail,
+  primaryResourceSummary,
   hrefLabel,
   surfaceCopy = buildOperatorFollowUpSurfaceCopy()
 }: {
@@ -259,6 +265,7 @@ export function buildOperatorInboxSliceCandidate({
   label?: string;
   detail?: string | null;
   fallbackDetail: string;
+  primaryResourceSummary?: string | null;
   hrefLabel?: string | null;
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
 }): OperatorRecommendedNextStepCandidate {
@@ -270,7 +277,8 @@ export function buildOperatorInboxSliceCandidate({
     detail,
     href: normalizedHref,
     href_label: normalizedHref ? hrefLabel?.trim() || surfaceCopy.openInboxSliceLabel : null,
-    fallback_detail: fallbackDetail
+    fallback_detail: fallbackDetail,
+    primaryResourceSummary
   };
 }
 
@@ -282,6 +290,7 @@ export function buildOperatorNavigationCandidate({
   label,
   detail,
   fallbackDetail,
+  primaryResourceSummary,
   hrefLabel,
   surfaceCopy = buildOperatorFollowUpSurfaceCopy()
 }: {
@@ -292,6 +301,7 @@ export function buildOperatorNavigationCandidate({
   label?: string;
   detail?: string | null;
   fallbackDetail: string;
+  primaryResourceSummary?: string | null;
   hrefLabel?: string | null;
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
 }): OperatorRecommendedNextStepCandidate {
@@ -304,6 +314,7 @@ export function buildOperatorNavigationCandidate({
         label,
         detail,
         fallbackDetail,
+        primaryResourceSummary,
         hrefLabel,
         surfaceCopy
       })
@@ -314,6 +325,7 @@ export function buildOperatorNavigationCandidate({
         label,
         detail,
         fallbackDetail,
+        primaryResourceSummary,
         hrefLabel,
         surfaceCopy
       });
@@ -329,6 +341,7 @@ export function buildSharedOrLocalOperatorCandidate({
   label,
   detail,
   fallbackDetail,
+  primaryResourceSummary,
   hrefLabel,
   surfaceCopy = buildOperatorFollowUpSurfaceCopy()
 }: {
@@ -341,6 +354,7 @@ export function buildSharedOrLocalOperatorCandidate({
   label?: string;
   detail?: string | null;
   fallbackDetail: string;
+  primaryResourceSummary?: string | null;
   hrefLabel?: string | null;
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
 }): OperatorRecommendedNextStepCandidate {
@@ -352,6 +366,7 @@ export function buildSharedOrLocalOperatorCandidate({
     label,
     detail,
     fallbackDetail,
+    primaryResourceSummary,
     hrefLabel,
     surfaceCopy
   });
@@ -378,6 +393,7 @@ export function buildOperatorRecommendedActionCandidate({
   detail,
   fallbackDetail,
   active,
+  primaryResourceSummary,
   scope = "any",
   surfaceCopy = buildOperatorFollowUpSurfaceCopy()
 }: {
@@ -385,6 +401,7 @@ export function buildOperatorRecommendedActionCandidate({
   detail?: string | null;
   fallbackDetail: string;
   active?: boolean;
+  primaryResourceSummary?: string | null;
   scope?: "callback" | "execution" | "any";
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
 }): OperatorRecommendedNextStepCandidate | null {
@@ -412,6 +429,7 @@ export function buildOperatorRecommendedActionCandidate({
     label: kind ?? (callbackLike ? "approval blocker" : "run detail"),
     detail,
     fallbackDetail,
+    primaryResourceSummary,
     hrefLabel,
     surfaceCopy
   });
@@ -616,6 +634,8 @@ function resolveCandidate(
     return null;
   }
 
+  const primaryResourceSummary = normalizeFollowUpCopy(candidate.primaryResourceSummary);
+
   return {
     label: candidate.label,
     detail:
@@ -623,7 +643,8 @@ function resolveCandidate(
       normalizeFollowUpCopy(operatorFollowUp) ??
       candidate.fallback_detail,
     href: candidate.href?.trim() || null,
-    href_label: candidate.href?.trim() ? candidate.href_label?.trim() || null : null
+    href_label: candidate.href?.trim() ? candidate.href_label?.trim() || null : null,
+    ...(primaryResourceSummary ? { primaryResourceSummary } : {})
   };
 }
 

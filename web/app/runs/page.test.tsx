@@ -172,6 +172,7 @@ describe("RunsPage", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("approval blocker");
     expect(html).toContain("Run secret · L3 治理 · 生效中");
+    expect(html).toContain("Primary governed resource: Run secret · L3 治理 · 生效中.");
     expect(html).toContain(
       '/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-library-entry&amp;node_run_id=node-library-entry&amp;access_request_id=request-run-1&amp;approval_ticket_id=ticket-run-1'
     );

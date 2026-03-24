@@ -10,11 +10,13 @@ import {
 type OperatorRecommendedNextStepCardProps = {
   recommendedNextStep?: OperatorRecommendedNextStep | null;
   surfaceCopy?: OperatorFollowUpSurfaceCopy;
+  hidePrimaryResourceSummary?: boolean;
 };
 
 export function OperatorRecommendedNextStepCard({
   recommendedNextStep,
-  surfaceCopy = buildOperatorFollowUpSurfaceCopy()
+  surfaceCopy = buildOperatorFollowUpSurfaceCopy(),
+  hidePrimaryResourceSummary = false
 }: OperatorRecommendedNextStepCardProps) {
   if (!recommendedNextStep) {
     return null;
@@ -32,6 +34,11 @@ export function OperatorRecommendedNextStepCard({
         ) : null}
       </div>
       <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+      {!hidePrimaryResourceSummary && recommendedNextStep.primaryResourceSummary ? (
+        <p className="binding-meta">
+          {`Primary governed resource: ${recommendedNextStep.primaryResourceSummary}.`}
+        </p>
+      ) : null}
     </div>
   );
 }

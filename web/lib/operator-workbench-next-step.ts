@@ -102,6 +102,7 @@ function rehomeSelfHrefToRunDetail(
     label: candidate.label,
     detail: candidate.detail,
     fallbackDetail: candidate.fallback_detail,
+    primaryResourceSummary: candidate.primaryResourceSummary,
     hrefLabel: traceSliceLink?.label ?? null
   });
 }
@@ -163,7 +164,8 @@ function buildRunLibraryBacklogCandidate(
       href: backlog.href,
       label: backlog.countLabel,
       detail,
-      fallbackDetail: detail
+      fallbackDetail: detail,
+      primaryResourceSummary
     }),
     currentHref
   );
@@ -290,6 +292,7 @@ function buildSensitiveAccessInboxEntryCandidate({
   const actionScope = resolveSensitiveAccessInboxEntryActionScope(entry);
   const detail = buildInboxEntryBacklogDetail(entry, backlogKind);
   const label = buildInboxEntryBacklogLabel(backlogKind);
+  const primaryResourceSummary = formatSensitiveResourceGovernanceSummary(entry.resource ?? null);
   const specificInboxHref = buildSensitiveAccessInboxHref({
     status: entry.ticket.status,
     waitingStatus: entry.ticket.waiting_status,
@@ -312,6 +315,7 @@ function buildSensitiveAccessInboxEntryCandidate({
       label,
       detail,
       fallbackDetail: detail,
+      primaryResourceSummary,
       hrefLabel: "open exact inbox slice"
     }),
     {
@@ -371,7 +375,8 @@ export function buildSensitiveAccessInboxRecommendedNextStep({
             ? `当前 ${summaryPrimaryResource} 仍是 operator inbox 的首要治理资源；优先收掉对应 backlog，再回到 run 诊断或 workflow 列表继续排障。`
             : `当前 ${backlog.count} 条 ${backlog.countLabel} 仍在 operator inbox；优先收掉这批 backlog，再回到 run 诊断或 workflow 列表继续排障。`,
           fallbackDetail:
-            "优先收掉当前 operator backlog，再回到 run 诊断或 workflow 列表继续排障。"
+            "优先收掉当前 operator backlog，再回到 run 诊断或 workflow 列表继续排障。",
+          primaryResourceSummary: summaryPrimaryResource
         }),
         currentHref
       )

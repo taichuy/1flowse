@@ -319,6 +319,7 @@ describe("WorkflowsPage", () => {
 
     expect(html).toContain("pending approval ticket");
     expect(html).toContain("当前 Workflow secret 仍是 operator inbox 的首要治理资源");
+    expect(html).toContain("Primary governed resource: Workflow secret.");
     expect(html).toContain('/sensitive-access?status=pending');
     expect(html).not.toContain("publish auth cleanup");
   });

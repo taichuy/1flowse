@@ -222,6 +222,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           ) : null}
 
           <OperatorRecommendedNextStepCard
+            hidePrimaryResourceSummary
             recommendedNextStep={sensitiveAccessRecommendedNextStep}
           />
 
