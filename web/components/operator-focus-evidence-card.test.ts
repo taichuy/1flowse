@@ -30,4 +30,21 @@ describe("OperatorFocusEvidenceCard", () => {
     expect(html.match(/执行链：/g)).toHaveLength(1);
     expect(html).toContain("raw_ref artifact://tool-call-raw");
   });
+
+  it("renders a shared execution timeline drilldown when provided", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorFocusEvidenceCard, {
+        artifactSummary: "callback payload 已落到 artifact。",
+        artifacts: [],
+        drilldownLink: {
+          href: "/runs/run-1#run-diagnostics-execution-timeline",
+          label: "jump to execution timeline"
+        },
+        toolCallSummaries: []
+      })
+    );
+
+    expect(html).toContain('href="/runs/run-1#run-diagnostics-execution-timeline"');
+    expect(html).toContain("jump to execution timeline");
+  });
 });

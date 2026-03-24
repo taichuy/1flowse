@@ -43,6 +43,7 @@ import {
 } from "@/lib/callback-waiting-presenters";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import {
+  type OperatorFollowUpLinkSurface,
   buildOperatorRecommendedActionCandidate,
   buildOperatorRecommendedNextStep,
   type OperatorRecommendedActionLike
@@ -91,6 +92,7 @@ type CallbackWaitingSummaryCardProps = {
   focusSkillReferenceCount?: number | null;
   focusSkillReferenceNodeId?: string | null;
   focusSkillReferenceNodeName?: string | null;
+  focusEvidenceDrilldownLink?: OperatorFollowUpLinkSurface | null;
   showFocusExecutionFacts?: boolean;
   showInlineActions?: boolean;
   showSensitiveAccessInlineActions?: boolean;
@@ -129,6 +131,7 @@ export function CallbackWaitingSummaryCard({
   focusSkillReferenceCount = null,
   focusSkillReferenceNodeId = null,
   focusSkillReferenceNodeName = null,
+  focusEvidenceDrilldownLink = null,
   showFocusExecutionFacts = false,
   showInlineActions = true,
   showSensitiveAccessInlineActions,
@@ -422,6 +425,7 @@ export function CallbackWaitingSummaryCard({
           artifactRefCount={focusNodeEvidence.artifact_refs.length}
           artifactSummary={focusArtifactSummary}
           artifacts={focusArtifacts}
+          drilldownLink={focusEvidenceDrilldownLink}
           toolCallCount={focusNodeEvidence.tool_calls.length}
           toolCallSummaries={focusToolCallSummaries}
         />

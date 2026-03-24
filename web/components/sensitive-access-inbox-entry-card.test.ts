@@ -327,6 +327,13 @@ describe("SensitiveAccessInboxEntryCard", () => {
     expect(html).toContain("open run 12345678");
   });
 
+  it("adds execution timeline drilldown to compact focus evidence", () => {
+    const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry: buildEntry() }));
+
+    expect(html).toContain('href="/runs/run-1#run-diagnostics-execution-timeline"');
+    expect(html).toContain("jump to execution timeline");
+  });
+
   it("keeps inline approval actions at run-level when only callback waiting exposes a display node scope", () => {
     const entry = buildEntry();
     entry.ticket.run_id = null;

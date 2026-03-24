@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildOperatorExecutionTimelineLinkSurface,
   buildOperatorRecommendedActionCandidate,
   buildOperatorNavigationCandidate,
   buildOperatorInboxSliceLinkSurface,
@@ -100,6 +101,26 @@ describe("operator follow-up presenters", () => {
       href_label: "open inbox slice",
       fallback_detail: "fallback"
     });
+  });
+
+  it("为 compact evidence 复用 execution timeline 深链", () => {
+    expect(
+      buildOperatorExecutionTimelineLinkSurface({
+        runId: "run-123456789"
+      })
+    ).toEqual({
+      href: "/runs/run-123456789#run-diagnostics-execution-timeline",
+      label: "jump to execution timeline"
+    });
+  });
+
+  it("在 execution timeline 已是当前锚点时移除重复深链", () => {
+    expect(
+      buildOperatorExecutionTimelineLinkSurface({
+        runId: "run-123456789",
+        currentHref: "/runs/run-123456789#run-diagnostics-execution-timeline"
+      })
+    ).toBeNull();
   });
 
   it("在存在 inbox href 时优先构建 inbox slice candidate", () => {

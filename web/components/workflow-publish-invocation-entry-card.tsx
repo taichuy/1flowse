@@ -36,6 +36,7 @@ import {
   resolvePublishedInvocationExecutionFocusExplanation
 } from "@/lib/published-invocation-presenters";
 import {
+  buildOperatorExecutionTimelineLinkSurface,
   buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import {
@@ -151,6 +152,17 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpSampleInboxHref = buildPublishedInvocationRunFollowUpSampleInboxHref(
     runFollowUpSample
   );
+  const scopedRunFollowUpSampleHref =
+    runFollowUpSample?.run_id && workspaceStarterGovernanceQueryScope
+      ? buildRunDetailHrefFromWorkspaceStarterViewState(
+          runFollowUpSample.run_id,
+          workspaceStarterGovernanceQueryScope
+        )
+      : null;
+  const runFollowUpSampleExecutionTimelineLink = buildOperatorExecutionTimelineLinkSurface({
+    runId: runFollowUpSample?.run_id ?? null,
+    runHref: scopedRunFollowUpSampleHref
+  });
   const runFollowUpSampleApprovalInboxHref = buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(
     runFollowUpSample
   );
@@ -365,6 +377,7 @@ export function WorkflowPublishInvocationEntryCard({
                   nodeRunId={runFollowUpSample.run_snapshot.executionFocusNodeRunId ?? null}
                   operatorFollowUp={runFollowUp?.explanation?.follow_up ?? null}
                   recommendedAction={runFollowUp?.recommended_action ?? null}
+                  focusEvidenceDrilldownLink={runFollowUpSampleExecutionTimelineLink}
                   preferCanonicalRecommendedNextStep
                   runId={runFollowUpSample.run_id}
                   scheduledResumeDelaySeconds={
@@ -400,6 +413,7 @@ export function WorkflowPublishInvocationEntryCard({
                     artifactRefCount={runFollowUpSample.execution_focus_artifact_ref_count}
                     artifactSummary={runFollowUpSample.focus_artifact_summary}
                     artifacts={runFollowUpSample.focus_artifacts}
+                    drilldownLink={runFollowUpSampleExecutionTimelineLink}
                     toolCallCount={runFollowUpSample.execution_focus_tool_call_count}
                     toolCallSummaries={runFollowUpSample.focus_tool_call_summaries}
                   />

@@ -22,6 +22,7 @@ import type {
 } from "@/lib/get-sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
+  buildOperatorExecutionTimelineLinkSurface,
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorInboxSliceLinkSurface,
   buildOperatorRecommendedNextStep,
@@ -130,6 +131,10 @@ export function SensitiveAccessInboxEntryCard({
   const focusRunLink = buildOperatorRunDetailLinkSurface({
     runId: executionContext?.runId,
     surfaceCopy: operatorSurfaceCopy
+  });
+  const focusExecutionTimelineLink = buildOperatorExecutionTimelineLinkSurface({
+    runId: executionContext?.runId,
+    currentHref
   });
   const focusInboxLink = buildOperatorInboxSliceLinkSurface({
     href: resolvedFocusInboxHref,
@@ -298,6 +303,7 @@ export function SensitiveAccessInboxEntryCard({
               artifactRefCount={executionContext.focusNode.artifact_refs.length}
               artifactSummary={focusArtifactSummary}
               artifacts={focusArtifacts}
+              drilldownLink={focusExecutionTimelineLink}
               toolCallCount={executionContext.focusNode.tool_calls.length}
               toolCallSummaries={focusToolCallSummaries}
             />
@@ -328,6 +334,7 @@ export function SensitiveAccessInboxEntryCard({
             focusNodeEvidence={executionContext?.focusNode ?? null}
             focusSkillReferenceLoads={focusSkillTraceReferenceLoads}
             focusSkillReferenceCount={focusSkillTraceReferenceCount}
+            focusEvidenceDrilldownLink={focusExecutionTimelineLink}
             lifecycle={callbackWaitingContext.lifecycle}
             nodeRunId={callbackWaitingContext.displayNodeRunId}
             actionNodeRunId={callbackWaitingContext.actionNodeRunId ?? actionScope.nodeRunId}

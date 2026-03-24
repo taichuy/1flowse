@@ -19,6 +19,7 @@ import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workfl
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
+  buildOperatorExecutionTimelineLinkSurface,
   buildOperatorRecommendedNextStep,
   buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
@@ -397,6 +398,17 @@ export function WorkflowPublishInvocationDetailPanel({
                   sample,
                   detailSurfaceCopy
                 );
+                const scopedSampleRunHref = workspaceStarterGovernanceQueryScope
+                  ? buildRunDetailHrefFromWorkspaceStarterViewState(
+                      sample.run_id,
+                      workspaceStarterGovernanceQueryScope
+                    )
+                  : null;
+                const sampleExecutionTimelineLink = buildOperatorExecutionTimelineLinkSurface({
+                  runId: sample.run_id,
+                  runHref: scopedSampleRunHref,
+                  currentHref
+                });
 
                 return (
                   <div className="payload-card compact-card" key={sample.run_id}>
@@ -406,13 +418,6 @@ export function WorkflowPublishInvocationDetailPanel({
                           runId: sample.run_id,
                           hrefLabel: sample.run_id
                         });
-
-                        const scopedSampleRunHref = workspaceStarterGovernanceQueryScope
-                          ? buildRunDetailHrefFromWorkspaceStarterViewState(
-                              sample.run_id,
-                              workspaceStarterGovernanceQueryScope
-                            )
-                          : null;
 
                         return sampleRunLink ? (
                           <Link className="inline-link" href={scopedSampleRunHref ?? sampleRunLink.href}>
@@ -506,6 +511,7 @@ export function WorkflowPublishInvocationDetailPanel({
                         nodeRunId={sample.run_snapshot.executionFocusNodeRunId ?? null}
                         operatorFollowUp={runFollowUp?.explanation?.follow_up ?? null}
                         recommendedAction={runFollowUp?.recommended_action ?? null}
+                        focusEvidenceDrilldownLink={sampleExecutionTimelineLink}
                         preferCanonicalRecommendedNextStep
                         runId={sample.run_id}
                         showFocusExecutionFacts
@@ -540,6 +546,7 @@ export function WorkflowPublishInvocationDetailPanel({
                         artifactRefCount={sample.execution_focus_artifact_ref_count}
                         artifactSummary={sample.focus_artifact_summary}
                         artifacts={sample.focus_artifacts}
+                        drilldownLink={sampleExecutionTimelineLink}
                         toolCallCount={sample.execution_focus_tool_call_count}
                         toolCallSummaries={sample.focus_tool_call_summaries}
                       />

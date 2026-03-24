@@ -1,3 +1,7 @@
+import {
+  buildRunDiagnosticsExecutionTimelineHref,
+  RUN_DIAGNOSTICS_EXECUTION_TIMELINE_SECTION_ID
+} from "@/lib/run-diagnostics-links";
 import { buildRunDetailHref } from "@/lib/workbench-links";
 
 export type OperatorRecommendedNextStep = {
@@ -83,6 +87,14 @@ function normalizeRelativeHref(href?: string | null) {
   const baseHref = query ? `${url.pathname}?${query}` : url.pathname;
 
   return hash ? `${baseHref}${hash}` : baseHref;
+}
+
+function appendSectionHash(href: string, sectionId: string) {
+  const url = new URL(href, "https://sevenflows.local");
+  const query = url.searchParams.toString();
+  const baseHref = query ? `${url.pathname}?${query}` : url.pathname;
+
+  return `${baseHref}#${sectionId}`;
 }
 
 function isSelfHref(href?: string | null, currentHref?: string | null) {
@@ -465,6 +477,36 @@ export function buildRequiredOperatorRunDetailLinkSurface({
   }
 
   return linkSurface;
+}
+
+export function buildOperatorExecutionTimelineLinkSurface({
+  runId,
+  runHref,
+  currentHref,
+  hrefLabel = "jump to execution timeline"
+}: {
+  runId?: string | null;
+  runHref?: string | null;
+  currentHref?: string | null;
+  hrefLabel?: string | null;
+}): OperatorFollowUpLinkSurface | null {
+  const normalizedHrefLabel = normalizeFollowUpCopy(hrefLabel) ?? "jump to execution timeline";
+  const normalizedRunHref = normalizeHref(runHref);
+  const normalizedRunId = normalizeFollowUpCopy(runId);
+  const href = normalizedRunHref
+    ? appendSectionHash(normalizedRunHref, RUN_DIAGNOSTICS_EXECUTION_TIMELINE_SECTION_ID)
+    : normalizedRunId
+      ? buildRunDiagnosticsExecutionTimelineHref(normalizedRunId)
+      : null;
+
+  if (!href || isSelfHref(href, currentHref)) {
+    return null;
+  }
+
+  return {
+    href,
+    label: normalizedHrefLabel
+  };
 }
 
 export function buildOperatorInboxSliceLinkSurface({

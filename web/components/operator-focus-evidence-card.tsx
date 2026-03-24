@@ -1,5 +1,6 @@
 import React from "react";
 
+import type { OperatorFollowUpLinkSurface } from "@/lib/operator-follow-up-presenters";
 import type {
   ExecutionFocusArtifactPreview,
   ExecutionFocusToolCallSummary
@@ -11,6 +12,7 @@ type OperatorFocusEvidenceCardProps = {
   artifactCount?: number;
   artifactRefCount?: number;
   toolCallCount?: number;
+  drilldownLink?: OperatorFollowUpLinkSurface | null;
   toolCallSummaries: ExecutionFocusToolCallSummary[];
   artifacts: ExecutionFocusArtifactPreview[];
 };
@@ -21,6 +23,7 @@ export function OperatorFocusEvidenceCard({
   artifactCount,
   artifactRefCount = 0,
   toolCallCount,
+  drilldownLink = null,
   toolCallSummaries,
   artifacts
 }: OperatorFocusEvidenceCardProps) {
@@ -47,6 +50,13 @@ export function OperatorFocusEvidenceCard({
           ) : null}
         </div>
         {artifactSummary ? <p className="section-copy entry-copy">{artifactSummary}</p> : null}
+        {drilldownLink ? (
+          <div className="tool-badge-row">
+            <a className="event-chip inbox-filter-link" href={drilldownLink.href}>
+              {drilldownLink.label}
+            </a>
+          </div>
+        ) : null}
         {toolCallSummaries.length > 0 ? (
           <div className="event-list">
             {toolCallSummaries.map((toolCall) => (
