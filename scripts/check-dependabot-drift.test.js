@@ -87,6 +87,7 @@ test('buildWorkspaceManifestInventory groups pnpm and uv roots', () => {
     inventory.map((item) => ({
       rootLabel: item.rootLabel,
       ecosystem: item.ecosystem,
+      dependencyGraphSupport: item.dependencyGraphSupport,
       manifestPath: item.manifestPath,
       lockfilePath: item.lockfilePath,
     })),
@@ -94,14 +95,55 @@ test('buildWorkspaceManifestInventory groups pnpm and uv roots', () => {
       {
         rootLabel: 'api',
         ecosystem: 'uv',
+        dependencyGraphSupport: 'dependency_submission',
         manifestPath: 'api/pyproject.toml',
         lockfilePath: 'api/uv.lock',
       },
       {
         rootLabel: 'web',
         ecosystem: 'pnpm',
+        dependencyGraphSupport: 'native',
         manifestPath: 'web/package.json',
         lockfilePath: 'web/pnpm-lock.yaml',
+      },
+    ],
+  );
+});
+
+test('buildWorkspaceManifestCoverage distinguishes native and submission-only graph roots', () => {
+  const inventory = buildWorkspaceManifestInventory([
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ]);
+  const manifestCoverage = buildWorkspaceManifestCoverage(inventory, [
+    {
+      filename: 'web/package.json',
+      dependenciesCount: 10,
+      parseable: true,
+    },
+  ]);
+
+  assert.deepEqual(
+    manifestCoverage.map((item) => ({
+      rootLabel: item.rootLabel,
+      dependencyGraphSupport: item.dependencyGraphSupport,
+      dependencyGraphSupported: item.dependencyGraphSupported,
+      graphVisible: item.graphVisible,
+    })),
+    [
+      {
+        rootLabel: 'api',
+        dependencyGraphSupport: 'dependency_submission',
+        dependencyGraphSupported: false,
+        graphVisible: false,
+      },
+      {
+        rootLabel: 'web',
+        dependencyGraphSupport: 'native',
+        dependencyGraphSupported: true,
+        graphVisible: true,
       },
     ],
   );
@@ -244,5 +286,6 @@ test('buildMarkdownSummary highlights local roots missing from dependency graph'
   });
 
   assert.match(summary, /本地 manifest roots：`3`/);
-  assert.match(summary, /graph coverage 缺口：`api`（uv）；`services\/compat-dify`（uv）；`web`（pnpm）/);
+  assert.match(summary, /graph coverage 缺口：`web`（pnpm）/);
+  assert.match(summary, /需 dependency submission 才能纳入 graph：`api`（uv）；`services\/compat-dify`（uv）/);
 });

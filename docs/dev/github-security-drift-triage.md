@@ -20,7 +20,7 @@ node scripts/check-dependabot-drift.js
 - 默认分支
 - GraphQL `dependencyGraphManifests`
 - Dependabot open alerts
-- 本地 manifest inventory（当前覆盖 `web` 的 `package.json + pnpm-lock.yaml`，以及 `api/`、`services/compat-dify/` 的 `pyproject.toml + uv.lock`）
+- 本地 manifest inventory（当前原生 dependency graph coverage 根是 `web` 的 `package.json + pnpm-lock.yaml`；本地 drift 解析仍额外覆盖 `api/`、`services/compat-dify/` 的 `pyproject.toml + uv.lock`）
 - 与本地 `pnpm-lock.yaml` / `uv.lock` 和对应 `package.json` / `pyproject.toml` 的版本对比
 
 如果在 GitHub Actions 中运行，脚本还会把结论写入 `GITHUB_STEP_SUMMARY`，方便在 workflow 页面直接查看证据。
@@ -43,6 +43,7 @@ node scripts/check-dependabot-drift.js
 3. 如果脚本显示 `dependencyGraphManifests` 为空，或 `graph coverage 缺口` 仍覆盖本地 manifest roots：
    - 到仓库 `Settings -> Security & analysis` 检查 `Dependency graph` 是否开启。
    - 如仓库策略允许，再检查 `Automatic dependency submission` 是否已配置并正常跑在默认分支。
+   - 当前 `uv` roots 不再计入“原生 graph coverage 缺口”；如果后续确实希望 Python `uv` 目录也进入 GitHub dependency graph / alert drift 对照，应另行补 dependency submission API，而不是继续把它误判成管理员开关问题。
 4. 不要因为 UI 暂时没刷新就直接 dismiss alert；应先保留命令输出、锁文件事实和结论，再等待依赖图恢复或补管理员侧操作。
 
 ## 仓库自动复验
@@ -50,7 +51,7 @@ node scripts/check-dependabot-drift.js
 - 仓库提供 `.github/workflows/github-security-drift.yml`，会在以下时机自动复验：
   - 手动 `workflow_dispatch`
   - 每日定时 `schedule`
-  - `taichuy_dev` 上任意受支持 manifest（`**/package.json`、`**/pnpm-lock.yaml`、`**/pyproject.toml`、`**/uv.lock`）或 `scripts/check-dependabot-drift.js` 的 push
+  - `taichuy_dev` 上任意受脚本监控的 manifest（`**/package.json`、`**/pnpm-lock.yaml`、`**/pyproject.toml`、`**/uv.lock`）或 `scripts/check-dependabot-drift.js` 的 push
 - 工作流会上传 `dependabot-drift-report` artifact，并把摘要写入 workflow summary。
 - 工作流会优先读取仓库 secret `DEPENDABOT_ALERTS_TOKEN`；如果未配置，则退回 `github.token`，并在无法读取 Dependabot alerts 时输出降级 warning，而不是把整条自动复验链直接打断。
 - exit code 解释与本地一致：
@@ -67,6 +68,11 @@ node scripts/check-dependabot-drift.js
 - `web/pnpm-lock.yaml` 已解析到 `next@15.5.14` 与 `flatted@3.4.2`。
 
 因此，当 GitHub 仍报告这两个依赖的 open alert 时，应优先按“平台状态漂移”而不是“本地锁文件仍未修复”处理。
+
+当前脚本已把 `uv` 根从“应出现在 GitHub 原生 dependency graph 里的 coverage 缺口”里剥离，只把它保留为本地告警版本解析能力。换句话说：
+
+- `web` 的 `pnpm` 根仍应作为 GitHub 原生 dependency graph / automatic dependency submission 的事实来源；如果它缺席，优先排查管理员设置或工作流侧 submission。
+- `api/`、`services/compat-dify/` 的 `uv` 根默认不会被脚本误报成“管理员没开 dependency graph”；若后续确实需要它们出现在 GitHub graph / alert drift 视图中，应新增显式 dependency submission 流程。
 
 如果后续 GitHub 开始返回 Python 生态告警，脚本也会优先使用对应目录下的 `uv.lock` 解析实际版本，并回看 `pyproject.toml` 中的声明 specifier；不要再把 Python 告警手动降级为“脚本不支持”。
 

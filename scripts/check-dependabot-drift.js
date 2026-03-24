@@ -4,6 +4,25 @@ const { execFileSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
 const trackedManifestFiles = new Set(['package.json', 'pnpm-lock.yaml', 'pyproject.toml', 'uv.lock']);
+const dependencyGraphSupportByEcosystem = {
+  pnpm: 'native',
+  uv: 'dependency_submission',
+};
+
+function resolveDependencyGraphSupport(ecosystem) {
+  return dependencyGraphSupportByEcosystem[ecosystem] || 'unknown';
+}
+
+function buildGraphCoverageBuckets(manifestCoverage) {
+  return {
+    missingNativeGraphRoots: manifestCoverage.filter(
+      (item) => item.dependencyGraphSupported && !item.graphVisible,
+    ),
+    dependencySubmissionRoots: manifestCoverage.filter(
+      (item) => item.dependencyGraphSupport === 'dependency_submission',
+    ),
+  };
+}
 
 function run(command, args, baseRepoRoot = repoRoot) {
   return execFileSync(command, args, {
@@ -119,6 +138,7 @@ function buildWorkspaceManifestInventory(trackedFiles) {
           rootDir: normalizedRootDir,
           rootLabel: normalizedRootDir || '.',
           ecosystem: 'pnpm',
+          dependencyGraphSupport: resolveDependencyGraphSupport('pnpm'),
           manifestPath: files.has('package.json') ? joinTrackedPath(normalizedRootDir, 'package.json') : null,
           lockfilePath: files.has('pnpm-lock.yaml')
             ? joinTrackedPath(normalizedRootDir, 'pnpm-lock.yaml')
@@ -131,6 +151,7 @@ function buildWorkspaceManifestInventory(trackedFiles) {
           rootDir: normalizedRootDir,
           rootLabel: normalizedRootDir || '.',
           ecosystem: 'uv',
+          dependencyGraphSupport: resolveDependencyGraphSupport('uv'),
           manifestPath: files.has('pyproject.toml')
             ? joinTrackedPath(normalizedRootDir, 'pyproject.toml')
             : null,
@@ -154,8 +175,12 @@ function buildWorkspaceManifestCoverage(workspaceManifestInventory, manifestNode
         return !filename.includes('/');
       });
 
+    const dependencyGraphSupport = item.dependencyGraphSupport || resolveDependencyGraphSupport(item.ecosystem);
+
     return {
       ...item,
+      dependencyGraphSupport,
+      dependencyGraphSupported: dependencyGraphSupport === 'native',
       graphVisible: matchedGraphFilenames.length > 0,
       matchedGraphFilenames,
     };
@@ -436,7 +461,9 @@ function buildMarkdownSummary({
   actionableAlerts,
   alertsUnavailable = false,
 }) {
-  const missingGraphRoots = manifestCoverage.filter((item) => !item.graphVisible);
+  const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
+    manifestCoverage,
+  );
   const lines = [
     '## GitHub 安全告警漂移检查',
     '',
@@ -451,7 +478,7 @@ function buildMarkdownSummary({
       `- 本地清单：${workspaceManifestInventory
         .map(
           (item) =>
-            `\`${item.rootLabel}\`（${item.ecosystem}；manifest=${item.manifestPath || 'none'}；lock=${item.lockfilePath || 'none'}）`,
+            `\`${item.rootLabel}\`（${item.ecosystem}；manifest=${item.manifestPath || 'none'}；lock=${item.lockfilePath || 'none'}；graph=${item.dependencyGraphSupport}）`,
         )
         .join('；')}`,
     );
@@ -468,9 +495,17 @@ function buildMarkdownSummary({
     );
   }
 
-  if (missingGraphRoots.length > 0) {
+  if (missingNativeGraphRoots.length > 0) {
     lines.push(
-      `- graph coverage 缺口：${missingGraphRoots
+      `- graph coverage 缺口：${missingNativeGraphRoots
+        .map((item) => `\`${item.rootLabel}\`（${item.ecosystem}）`)
+        .join('；')}`,
+    );
+  }
+
+  if (dependencySubmissionRoots.length > 0) {
+    lines.push(
+      `- 需 dependency submission 才能纳入 graph：${dependencySubmissionRoots
         .map((item) => `\`${item.rootLabel}\`（${item.ecosystem}）`)
         .join('；')}`,
     );
@@ -505,8 +540,11 @@ function buildMarkdownSummary({
   if (alertsUnavailable) {
     lines.push('- 当前 workflow token 只能继续复验 `dependencyGraphManifests` 等仓库事实，无法直接比较 Dependabot open alerts。');
     lines.push('- 若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 `DEPENDABOT_ALERTS_TOKEN`。');
-    if (missingGraphRoots.length > 0) {
+    if (missingNativeGraphRoots.length > 0) {
       lines.push('- GitHub 依赖图仍未覆盖本地 manifest roots，优先检查 `Security & analysis` 中的 `Dependency graph` 与 `Automatic dependency submission`。');
+    }
+    if (dependencySubmissionRoots.length > 0) {
+      lines.push('- `uv` roots 当前不计入 GitHub 原生 dependency graph coverage；若后续希望这些目录也进入 graph / alert drift 对照，请另行补 dependency submission API。');
     }
     return lines.join('\n');
   }
@@ -518,8 +556,11 @@ function buildMarkdownSummary({
 
   if (actionableAlerts.length === 0) {
     lines.push('- 所有 open alerts 都已经被当前锁文件修复，本地事实与 GitHub 告警状态发生漂移。');
-    if (missingGraphRoots.length > 0) {
+    if (missingNativeGraphRoots.length > 0) {
       lines.push('- GitHub dependency graph 仍少于本地 manifest inventory；优先处理 graph coverage 缺口，再等待告警自动收口。');
+    }
+    if (dependencySubmissionRoots.length > 0) {
+      lines.push('- `uv` roots 需要额外 dependency submission 才会进入 dependency graph coverage 预期，不应再把它们误判成管理员开关未开启。');
     }
     lines.push('- 建议保留证据，不要直接 dismiss alert；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
     return lines.join('\n');
@@ -582,7 +623,9 @@ function main() {
         }),
       );
   const actionableAlerts = results.filter((result) => result.state !== 'patched-locally');
-  const missingGraphRoots = manifestCoverage.filter((item) => !item.graphVisible);
+  const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
+    manifestCoverage,
+  );
 
   printSection('仓库事实');
   console.log(`repo: ${repository.owner}/${repository.repo}`);
@@ -590,7 +633,7 @@ function main() {
   console.log(`Local manifest roots: ${workspaceManifestInventory.length}`);
   manifestCoverage.forEach((item) => {
     console.log(
-      `- ${item.rootLabel} | ecosystem=${item.ecosystem} | manifest=${item.manifestPath || 'none'} | lock=${item.lockfilePath || 'none'} | graphVisible=${item.graphVisible ? 'yes' : 'no'}`,
+      `- ${item.rootLabel} | ecosystem=${item.ecosystem} | manifest=${item.manifestPath || 'none'} | lock=${item.lockfilePath || 'none'} | graphSupport=${item.dependencyGraphSupport} | graphVisible=${item.graphVisible ? 'yes' : 'no'}`,
     );
     if (item.graphVisible) {
       console.log(`  graph nodes: ${item.matchedGraphFilenames.join(', ')}`);
@@ -618,9 +661,12 @@ function main() {
     });
     printSection('结论');
     console.log('当前 workflow token 只能继续复验 dependencyGraphManifests 等仓库事实，无法直接比较 Dependabot open alerts。');
-    if (missingGraphRoots.length > 0) {
-      console.log(`GitHub 依赖图尚未覆盖这些本地 manifest roots: ${missingGraphRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
+    if (missingNativeGraphRoots.length > 0) {
+      console.log(`GitHub 依赖图尚未覆盖这些原生支持的 manifest roots: ${missingNativeGraphRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
       console.log('优先检查仓库 Settings -> Security & analysis 中的 Dependency graph 与 Automatic dependency submission。');
+    }
+    if (dependencySubmissionRoots.length > 0) {
+      console.log(`这些 roots 当前需要额外 dependency submission 才会进入 graph coverage: ${dependencySubmissionRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
     }
     console.log('若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 DEPENDABOT_ALERTS_TOKEN。');
     process.exit(3);
@@ -655,9 +701,12 @@ function main() {
   printSection('结论');
   if (actionableAlerts.length === 0) {
     console.log('所有 open alerts 都已经被当前锁文件修复，本地事实与 GitHub 告警状态发生漂移。');
-    if (missingGraphRoots.length > 0) {
-      console.log(`GitHub 依赖图仍缺少这些本地 manifest roots: ${missingGraphRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
+    if (missingNativeGraphRoots.length > 0) {
+      console.log(`GitHub 依赖图仍缺少这些原生支持的 manifest roots: ${missingNativeGraphRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
       console.log('优先检查仓库 Settings -> Security & analysis 中的 Dependency graph 与 Automatic dependency submission。');
+    }
+    if (dependencySubmissionRoots.length > 0) {
+      console.log(`这些 roots 当前需要额外 dependency submission 才会进入 graph coverage: ${dependencySubmissionRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
     }
     console.log('建议保留证据，不要直接 dismiss 告警；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
     writeMarkdownSummary({
