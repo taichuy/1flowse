@@ -13,21 +13,13 @@ def _build_base_payload(
     requested_execution_class = trace_payload.get("requested_execution_class")
     effective_execution_class = trace_payload.get("effective_execution_class")
     executor_ref = trace_payload.get("executor_ref")
-    if not all(
-        isinstance(value, str) and value.strip()
-        for value in (
-            requested_execution_class,
-            effective_execution_class,
-            executor_ref,
-        )
-    ):
+    if not isinstance(requested_execution_class, str) or not requested_execution_class.strip():
         return None
     payload: dict[str, object] = {
         "node_id": node_id,
         "tool_id": tool_id,
         "tool_name": tool_name,
         "requested_execution_class": requested_execution_class,
-        "effective_execution_class": effective_execution_class,
         "execution_source": trace_payload.get("execution_source"),
         "requested_execution_profile": trace_payload.get("requested_execution_profile"),
         "requested_execution_timeout_ms": trace_payload.get("requested_execution_timeout_ms"),
@@ -37,6 +29,7 @@ def _build_base_payload(
         "requested_builtin_package_set": trace_payload.get("requested_builtin_package_set"),
         "requested_dependency_ref": trace_payload.get("requested_dependency_ref"),
         "requested_backend_extensions": trace_payload.get("requested_backend_extensions"),
+        "effective_execution_class": effective_execution_class,
         "executor_ref": executor_ref,
     }
     sandbox_backend_id = trace_payload.get("sandbox_backend_id")
@@ -70,7 +63,15 @@ def build_tool_execution_error_events(
     if base_payload is None:
         return []
 
-    events = [RuntimeEvent("tool.execution.dispatched", dict(base_payload))]
+    events: list[RuntimeEvent] = []
+
+    if (
+        isinstance(base_payload.get("effective_execution_class"), str)
+        and str(base_payload["effective_execution_class"]).strip()
+        and isinstance(base_payload.get("executor_ref"), str)
+        and str(base_payload["executor_ref"]).strip()
+    ):
+        events.append(RuntimeEvent("tool.execution.dispatched", dict(base_payload)))
 
     blocked_reason = trace_payload.get("blocked_reason")
     if isinstance(blocked_reason, str) and blocked_reason.strip():

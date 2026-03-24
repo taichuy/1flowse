@@ -144,6 +144,15 @@ class PluginExecutionDispatchPlanner:
                             execution_class=effective_execution_class,
                             backend_selection=backend_selection,
                         )
+            effective_execution_class, executor_ref = self._resolve_execution_trace_facts(
+                effective_execution_class=effective_execution_class,
+                executor_ref=(
+                    f"tool:native-{effective_execution_class}"
+                    if effective_execution_class != "inline"
+                    else "tool:native-inline"
+                ),
+                blocked_reason=blocked_reason,
+            )
             return PluginExecutionDispatchPlan(
                 requested_execution_class=requested_execution_class,
                 effective_execution_class=effective_execution_class,
@@ -160,11 +169,7 @@ class PluginExecutionDispatchPlanner:
                 requested_builtin_package_set=requested_builtin_package_set,
                 requested_dependency_ref=requested_dependency_ref,
                 requested_backend_extensions=requested_backend_extensions,
-                executor_ref=(
-                    f"tool:native-{effective_execution_class}"
-                    if effective_execution_class != "inline"
-                    else "tool:native-inline"
-                ),
+                executor_ref=executor_ref,
                 effective_execution=self._build_effective_execution_payload(
                     requested_execution=requested_execution,
                     effective_execution_class=effective_execution_class,
@@ -247,6 +252,11 @@ class PluginExecutionDispatchPlanner:
                         execution_class=effective_execution_class,
                         backend_selection=backend_selection,
                     )
+        effective_execution_class, executor_ref = self._resolve_execution_trace_facts(
+            effective_execution_class=effective_execution_class,
+            executor_ref=f"tool:compat-adapter:{resolved_adapter.id}",
+            blocked_reason=blocked_reason,
+        )
         return PluginExecutionDispatchPlan(
             requested_execution_class=requested_execution_class,
             effective_execution_class=effective_execution_class,
@@ -263,7 +273,7 @@ class PluginExecutionDispatchPlanner:
             requested_builtin_package_set=requested_builtin_package_set,
             requested_dependency_ref=requested_dependency_ref,
             requested_backend_extensions=requested_backend_extensions,
-            executor_ref=f"tool:compat-adapter:{resolved_adapter.id}",
+            executor_ref=executor_ref,
             effective_execution=self._build_effective_execution_payload(
                 requested_execution=requested_execution,
                 effective_execution_class=effective_execution_class,
@@ -315,10 +325,21 @@ class PluginExecutionDispatchPlanner:
         return None
 
     @staticmethod
+    def _resolve_execution_trace_facts(
+        *,
+        effective_execution_class: str,
+        executor_ref: str,
+        blocked_reason: str | None,
+    ) -> tuple[str | None, str | None]:
+        if blocked_reason:
+            return None, None
+        return effective_execution_class, executor_ref
+
+    @staticmethod
     def _build_effective_execution_payload(
         *,
         requested_execution: dict[str, object],
-        effective_execution_class: str,
+        effective_execution_class: str | None,
         execution_source: str,
         requested_dependency_mode: str | None,
         requested_builtin_package_set: str | None,
@@ -327,6 +348,8 @@ class PluginExecutionDispatchPlanner:
         sandbox_backend_id: str | None,
         sandbox_backend_executor_ref: str | None,
     ) -> dict[str, object]:
+        if effective_execution_class is None:
+            return {}
         effective_execution = dict(requested_execution)
         effective_execution["class"] = effective_execution_class
         effective_execution["source"] = execution_source

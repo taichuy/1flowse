@@ -255,26 +255,7 @@ def test_llm_agent_tool_policy_execution_fail_closes_explicit_native_isolation(
         .order_by(RunEvent.id.asc())
     ).all()
 
-    dispatched_event = next(
-        event for event in events if event.event_type == "tool.execution.dispatched"
-    )
-    assert dispatched_event.payload == {
-        "node_id": "agent",
-        "tool_id": "native.search",
-        "tool_name": "native.search",
-        "requested_execution_class": "sandbox",
-        "effective_execution_class": "inline",
-        "execution_source": "tool_policy",
-        "requested_execution_profile": "risk-reviewed",
-        "requested_execution_timeout_ms": 15000,
-        "requested_network_policy": None,
-        "requested_filesystem_policy": None,
-        "requested_dependency_mode": None,
-        "requested_builtin_package_set": None,
-        "requested_dependency_ref": None,
-        "requested_backend_extensions": None,
-        "executor_ref": "tool:native-inline",
-    }
+    assert not any(event.event_type == "tool.execution.dispatched" for event in events)
 
     blocked_event = next(
         event for event in events if event.event_type == "tool.execution.blocked"
@@ -284,7 +265,7 @@ def test_llm_agent_tool_policy_execution_fail_closes_explicit_native_isolation(
         "tool_id": "native.search",
         "tool_name": "native.search",
         "requested_execution_class": "sandbox",
-        "effective_execution_class": "inline",
+        "effective_execution_class": None,
         "execution_source": "tool_policy",
         "requested_execution_profile": "risk-reviewed",
         "requested_execution_timeout_ms": 15000,
@@ -294,7 +275,7 @@ def test_llm_agent_tool_policy_execution_fail_closes_explicit_native_isolation(
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:native-inline",
+        "executor_ref": None,
         "reason": (
             "Native tool 'native.search' does not support requested execution class "
             "'sandbox'. Supported classes: inline."
@@ -396,26 +377,7 @@ def test_llm_agent_tool_call_execution_override_fail_closes_native_isolation(
         .order_by(RunEvent.id.asc())
     ).all()
 
-    dispatched_event = next(
-        event for event in events if event.event_type == "tool.execution.dispatched"
-    )
-    assert dispatched_event.payload == {
-        "node_id": "agent",
-        "tool_id": "native.search",
-        "tool_name": "native.search",
-        "requested_execution_class": "microvm",
-        "effective_execution_class": "inline",
-        "execution_source": "tool_call",
-        "requested_execution_profile": "per-call-override",
-        "requested_execution_timeout_ms": 5000,
-        "requested_network_policy": "isolated",
-        "requested_filesystem_policy": "ephemeral",
-        "requested_dependency_mode": None,
-        "requested_builtin_package_set": None,
-        "requested_dependency_ref": None,
-        "requested_backend_extensions": None,
-        "executor_ref": "tool:native-inline",
-    }
+    assert not any(event.event_type == "tool.execution.dispatched" for event in events)
 
     blocked_event = next(
         event for event in events if event.event_type == "tool.execution.blocked"
@@ -425,7 +387,7 @@ def test_llm_agent_tool_call_execution_override_fail_closes_native_isolation(
         "tool_id": "native.search",
         "tool_name": "native.search",
         "requested_execution_class": "microvm",
-        "effective_execution_class": "inline",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "per-call-override",
         "requested_execution_timeout_ms": 5000,
@@ -435,7 +397,7 @@ def test_llm_agent_tool_call_execution_override_fail_closes_native_isolation(
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:native-inline",
+        "executor_ref": None,
         "reason": (
             "Native tool 'native.search' does not support requested execution class "
             "'microvm'. Supported classes: inline."
@@ -572,26 +534,7 @@ def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_comp
         .order_by(RunEvent.id.asc())
     ).all()
 
-    dispatched_event = next(
-        event for event in events if event.event_type == "tool.execution.dispatched"
-    )
-    assert dispatched_event.payload == {
-        "node_id": "agent",
-        "tool_id": "compat:dify:plugin:demo/search",
-        "tool_name": "compat:dify:plugin:demo/search",
-        "requested_execution_class": "microvm",
-        "effective_execution_class": "subprocess",
-        "execution_source": "tool_call",
-        "requested_execution_profile": "per-call-compat",
-        "requested_execution_timeout_ms": 4000,
-        "requested_network_policy": "isolated",
-        "requested_filesystem_policy": "ephemeral",
-        "requested_dependency_mode": None,
-        "requested_builtin_package_set": None,
-        "requested_dependency_ref": None,
-        "requested_backend_extensions": None,
-        "executor_ref": "tool:compat-adapter:dify-default",
-    }
+    assert not any(event.event_type == "tool.execution.dispatched" for event in events)
 
     blocked_event = next(
         event for event in events if event.event_type == "tool.execution.blocked"
@@ -601,7 +544,7 @@ def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_comp
         "tool_id": "compat:dify:plugin:demo/search",
         "tool_name": "compat:dify:plugin:demo/search",
         "requested_execution_class": "microvm",
-        "effective_execution_class": "subprocess",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "per-call-compat",
         "requested_execution_timeout_ms": 4000,
@@ -611,7 +554,7 @@ def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_comp
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:compat-adapter:dify-default",
+        "executor_ref": None,
         "reason": (
             "Compatibility adapter 'dify-default' does not support requested execution class "
             "'microvm'. Supported classes: subprocess."

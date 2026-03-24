@@ -162,13 +162,13 @@ class PluginCallRequest:
 @dataclass(frozen=True)
 class PluginExecutionDispatchPlan:
     requested_execution_class: str
-    effective_execution_class: str
+    effective_execution_class: str | None
     execution_source: str
     requested_execution_profile: str | None
     requested_execution_timeout_ms: int | None
     requested_network_policy: str | None
     requested_filesystem_policy: str | None
-    executor_ref: str
+    executor_ref: str | None
     requested_dependency_mode: str | None = None
     requested_builtin_package_set: str | None = None
     requested_dependency_ref: str | None = None

@@ -408,7 +408,7 @@ def test_plugin_call_proxy_fail_closes_explicit_strong_isolation_for_compat_adap
     dispatch = proxy.describe_execution_dispatch(request)
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "microvm",
-        "effective_execution_class": "microvm",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "compat-isolation",
         "requested_execution_timeout_ms": 4000,
@@ -418,7 +418,7 @@ def test_plugin_call_proxy_fail_closes_explicit_strong_isolation_for_compat_adap
         "requested_builtin_package_set": "py-data-basic",
         "requested_dependency_ref": None,
         "requested_backend_extensions": {"mountPreset": "analytics"},
-        "executor_ref": "tool:compat-adapter:dify-default",
+        "executor_ref": None,
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
         "sandbox_runner_kind": "compat-adapter",
@@ -501,14 +501,14 @@ def test_plugin_call_proxy_fail_closes_backend_extension_request_without_backend
 
     payload = dispatch.as_trace_payload()
     assert payload["requested_execution_class"] == "microvm"
-    assert payload["effective_execution_class"] == "microvm"
+    assert payload["effective_execution_class"] is None
     assert payload["execution_source"] == "tool_call"
     assert payload["requested_execution_profile"] == "compat-isolation"
     assert payload["requested_execution_timeout_ms"] == 4000
     assert payload["requested_network_policy"] == "isolated"
     assert payload["requested_filesystem_policy"] == "ephemeral"
     assert payload["requested_backend_extensions"] == {"mountPreset": "analytics"}
-    assert payload["executor_ref"] == "tool:compat-adapter:dify-default"
+    assert payload["executor_ref"] is None
     assert payload["sandbox_runner_kind"] == "compat-adapter"
     assert payload["fallback_reason"] is None
     assert payload["blocked_reason"] is not None
@@ -596,7 +596,7 @@ def test_plugin_call_proxy_blocks_explicit_unsupported_execution_class_for_compa
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "microvm",
-        "effective_execution_class": "subprocess",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "compat-isolation",
         "requested_execution_timeout_ms": 4000,
@@ -606,7 +606,7 @@ def test_plugin_call_proxy_blocks_explicit_unsupported_execution_class_for_compa
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:compat-adapter:dify-default",
+        "executor_ref": None,
         "sandbox_backend_id": None,
         "sandbox_backend_executor_ref": None,
         "fallback_reason": None,
@@ -757,7 +757,7 @@ def test_plugin_call_proxy_fail_closes_tool_default_strong_execution_for_compat_
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "microvm",
-        "effective_execution_class": "subprocess",
+        "effective_execution_class": None,
         "execution_source": "tool_default",
         "requested_execution_profile": None,
         "requested_execution_timeout_ms": None,
@@ -767,7 +767,7 @@ def test_plugin_call_proxy_fail_closes_tool_default_strong_execution_for_compat_
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:compat-adapter:dify-default",
+        "executor_ref": None,
         "sandbox_backend_id": None,
         "sandbox_backend_executor_ref": None,
         "fallback_reason": None,
@@ -817,7 +817,7 @@ def test_plugin_call_proxy_fail_closes_explicit_native_isolation_request() -> No
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "sandbox",
-        "effective_execution_class": "inline",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "risk-reviewed",
         "requested_execution_timeout_ms": 3000,
@@ -827,7 +827,7 @@ def test_plugin_call_proxy_fail_closes_explicit_native_isolation_request() -> No
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:native-inline",
+        "executor_ref": None,
         "sandbox_backend_id": None,
         "sandbox_backend_executor_ref": None,
         "fallback_reason": None,
@@ -883,7 +883,7 @@ def test_plugin_call_proxy_fail_closes_tool_sensitivity_isolation_request() -> N
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "sandbox",
-        "effective_execution_class": "inline",
+        "effective_execution_class": None,
         "execution_source": "tool_sensitivity",
         "requested_execution_profile": "risk-reviewed",
         "requested_execution_timeout_ms": 3000,
@@ -893,7 +893,7 @@ def test_plugin_call_proxy_fail_closes_tool_sensitivity_isolation_request() -> N
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:native-inline",
+        "executor_ref": None,
         "sandbox_backend_id": None,
         "sandbox_backend_executor_ref": None,
         "fallback_reason": None,
@@ -968,7 +968,7 @@ def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_native_too
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "sandbox",
-        "effective_execution_class": "sandbox",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "risk-reviewed",
         "requested_execution_timeout_ms": 3000,
@@ -978,7 +978,7 @@ def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_native_too
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:native-sandbox",
+        "executor_ref": None,
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
         "sandbox_runner_kind": "native-tool",
@@ -1278,11 +1278,11 @@ def test_plugin_call_proxy_fail_closes_native_builtin_package_request() -> None:
 
     payload = dispatch.as_trace_payload()
     assert payload["requested_execution_class"] == "sandbox"
-    assert payload["effective_execution_class"] == "sandbox"
+    assert payload["effective_execution_class"] is None
     assert payload["execution_source"] == "tool_call"
     assert payload["requested_dependency_mode"] == "builtin"
     assert payload["requested_builtin_package_set"] == "py-data-basic"
-    assert payload["executor_ref"] == "tool:native-sandbox"
+    assert payload["executor_ref"] is None
     assert payload["sandbox_runner_kind"] == "native-tool"
     assert payload["fallback_reason"] is None
     assert payload["blocked_reason"] is not None
@@ -1346,8 +1346,8 @@ def test_plugin_call_proxy_surfaces_backend_readiness_for_native_strong_isolatio
 
     payload = dispatch.as_trace_payload()
     assert payload["requested_execution_class"] == "sandbox"
-    assert payload["effective_execution_class"] == "sandbox"
-    assert payload["executor_ref"] == "tool:native-sandbox"
+    assert payload["effective_execution_class"] is None
+    assert payload["executor_ref"] is None
     assert payload["sandbox_runner_kind"] == "native-tool"
     assert payload["blocked_reason"] is not None
     assert "no compatible sandbox backend is currently available" in str(
@@ -1409,7 +1409,7 @@ def test_plugin_call_proxy_fail_closes_default_strong_isolation_for_native_tool(
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "sandbox",
-        "effective_execution_class": "sandbox",
+        "effective_execution_class": None,
         "execution_source": "tool_default",
         "requested_execution_profile": None,
         "requested_execution_timeout_ms": None,
@@ -1419,7 +1419,7 @@ def test_plugin_call_proxy_fail_closes_default_strong_isolation_for_native_tool(
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:native-sandbox",
+        "executor_ref": None,
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
         "sandbox_runner_kind": "native-tool",
@@ -1493,8 +1493,8 @@ def test_plugin_call_proxy_surfaces_backend_readiness_for_compat_strong_isolatio
 
     payload = dispatch.as_trace_payload()
     assert payload["requested_execution_class"] == "microvm"
-    assert payload["effective_execution_class"] == "microvm"
-    assert payload["executor_ref"] == "tool:compat-adapter:dify-microvm"
+    assert payload["effective_execution_class"] is None
+    assert payload["executor_ref"] is None
     assert payload["sandbox_runner_kind"] == "compat-adapter"
     assert payload["blocked_reason"] is not None
     assert "no compatible sandbox backend is currently available" in str(
@@ -1579,7 +1579,7 @@ def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_compat_ada
 
     assert dispatch.as_trace_payload() == {
         "requested_execution_class": "microvm",
-        "effective_execution_class": "microvm",
+        "effective_execution_class": None,
         "execution_source": "tool_call",
         "requested_execution_profile": "compat-isolation",
         "requested_execution_timeout_ms": 4000,
@@ -1589,7 +1589,7 @@ def test_plugin_call_proxy_fail_closes_supported_strong_isolation_for_compat_ada
         "requested_builtin_package_set": None,
         "requested_dependency_ref": None,
         "requested_backend_extensions": None,
-        "executor_ref": "tool:compat-adapter:dify-microvm",
+        "executor_ref": None,
         "sandbox_backend_id": "sandbox-default",
         "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
         "sandbox_runner_kind": "compat-adapter",
