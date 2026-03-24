@@ -601,13 +601,7 @@ def test_tool_node_sensitive_credential_waits_for_approval_and_resumes(
             name="Sensitive Tool Key",
             credential_type="api_key",
             data={"api_key": "sk-sensitive"},
-        )
-        sensitive_access.create_resource(
-            sqlite_session,
-            label="Production Tool Credential",
             sensitivity_level="L3",
-            source="credential",
-            metadata={"credential_id": cred.id},
         )
         sqlite_session.commit()
         cred_id = cred.id
@@ -697,13 +691,7 @@ def test_tool_node_sensitive_l2_credential_uses_masked_handle_and_still_invokes(
             name="Moderate Tool Key",
             credential_type="api_key",
             data={"api_key": "sk-moderate"},
-        )
-        sensitive_access.create_resource(
-            sqlite_session,
-            label="Moderate Tool Credential",
             sensitivity_level="L2",
-            source="credential",
-            metadata={"credential_id": cred.id},
         )
         sqlite_session.commit()
         cred_id = cred.id
@@ -765,13 +753,7 @@ def test_llm_agent_sensitive_l2_credential_uses_masked_handle_and_still_calls_pr
             name="Moderate LLM Key",
             credential_type="api_key",
             data={"apiKey": "sk-llm-moderate"},
-        )
-        sensitive_access.create_resource(
-            sqlite_session,
-            label="Moderate LLM Credential",
             sensitivity_level="L2",
-            source="credential",
-            metadata={"credential_id": cred.id},
         )
         sqlite_session.commit()
         cred_id = cred.id

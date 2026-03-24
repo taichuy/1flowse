@@ -18,13 +18,17 @@ router = APIRouter(prefix="/credentials", tags=["credentials"])
 credential_store = CredentialStore()
 
 
-def _serialize_item(record) -> CredentialItem:
+def _serialize_item(record, *, sensitive_resource=None) -> CredentialItem:
     return CredentialItem(
         id=record.id,
         name=record.name,
         credential_type=record.credential_type,
         description=record.description,
         status=record.status,
+        sensitivity_level=(
+            sensitive_resource.sensitivity_level if sensitive_resource is not None else None
+        ),
+        sensitive_resource_id=(sensitive_resource.id if sensitive_resource is not None else None),
         last_used_at=record.last_used_at,
         revoked_at=record.revoked_at,
         created_at=record.created_at,
@@ -32,11 +36,15 @@ def _serialize_item(record) -> CredentialItem:
     )
 
 
-def _serialize_detail(record, data_keys: list[str]) -> CredentialDetail:
+def _serialize_detail(record, data_keys: list[str], *, sensitive_resource=None) -> CredentialDetail:
     return CredentialDetail(
-        **_serialize_item(record).model_dump(),
+        **_serialize_item(record, sensitive_resource=sensitive_resource).model_dump(),
         data_keys=data_keys,
     )
+
+
+def _load_sensitive_resource_map(db: Session, *, credential_ids: list[str]) -> dict[str, object]:
+    return credential_store.list_sensitive_resources(db, credential_ids=credential_ids)
 
 
 def _format_audit_actor(actor_type: str, actor_id: str | None) -> str:
@@ -129,7 +137,14 @@ def list_credentials(
     db: Session = Depends(get_db),
 ) -> list[CredentialItem]:
     items = credential_store.list_credentials(db, include_revoked=include_revoked)
-    return [_serialize_item(item) for item in items]
+    resource_map = _load_sensitive_resource_map(
+        db,
+        credential_ids=[item.id for item in items],
+    )
+    return [
+        _serialize_item(item, sensitive_resource=resource_map.get(item.id))
+        for item in items
+    ]
 
 
 @router.get("/activity", response_model=list[CredentialAuditItem])
@@ -158,13 +173,21 @@ def create_credential(
             credential_type=payload.credential_type,
             data=payload.data,
             description=payload.description,
+            sensitivity_level=payload.sensitivity_level,
         )
     except (CredentialStoreError, CredentialEncryptionError) as exc:
         _raise_credential_error(exc)
     db.commit()
     db.refresh(record)
     data_keys = credential_store.get_data_keys(record)
-    return _serialize_detail(record, data_keys)
+    return _serialize_detail(
+        record,
+        data_keys,
+        sensitive_resource=credential_store.get_sensitive_resource(
+            db,
+            credential_id=record.id,
+        ),
+    )
 
 
 @router.get("/{credential_id}", response_model=CredentialDetail)
@@ -177,7 +200,14 @@ def get_credential(
     except CredentialStoreError as exc:
         _raise_credential_error(exc)
     data_keys = credential_store.get_data_keys(record)
-    return _serialize_detail(record, data_keys)
+    return _serialize_detail(
+        record,
+        data_keys,
+        sensitive_resource=credential_store.get_sensitive_resource(
+            db,
+            credential_id=record.id,
+        ),
+    )
 
 
 @router.put("/{credential_id}", response_model=CredentialDetail)
@@ -193,13 +223,21 @@ def update_credential(
             name=payload.name,
             data=payload.data,
             description=payload.description,
+            sensitivity_level=payload.sensitivity_level,
         )
     except (CredentialStoreError, CredentialEncryptionError) as exc:
         _raise_credential_error(exc)
     db.commit()
     db.refresh(record)
     data_keys = credential_store.get_data_keys(record)
-    return _serialize_detail(record, data_keys)
+    return _serialize_detail(
+        record,
+        data_keys,
+        sensitive_resource=credential_store.get_sensitive_resource(
+            db,
+            credential_id=record.id,
+        ),
+    )
 
 
 @router.delete("/{credential_id}", response_model=CredentialItem)
@@ -213,4 +251,10 @@ def revoke_credential(
         _raise_credential_error(exc)
     db.commit()
     db.refresh(record)
-    return _serialize_item(record)
+    return _serialize_item(
+        record,
+        sensitive_resource=credential_store.get_sensitive_resource(
+            db,
+            credential_id=record.id,
+        ),
+    )

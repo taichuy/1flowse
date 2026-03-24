@@ -144,6 +144,18 @@ class TestCredentialStore:
         fetched = store.get(sqlite_session, credential_id=record.id)
         assert fetched.id == record.id
 
+        resource = store.get_sensitive_resource(sqlite_session, credential_id=record.id)
+        assert resource is not None
+        assert resource.sensitivity_level == "L2"
+        assert resource.label == "Credential · OpenAI Key"
+        assert resource.metadata_payload == {
+            "credential_id": record.id,
+            "credential_name": "OpenAI Key",
+            "credential_type": "api_key",
+            "credential_status": "active",
+            "credential_ref": f"credential://{record.id}",
+        }
+
     def test_list_credentials_excludes_revoked(self, sqlite_session: Session) -> None:
         store = CredentialStore()
         store.create(sqlite_session, name="Active", credential_type="t", data={"k": "v"})
@@ -180,6 +192,36 @@ class TestCredentialStore:
         decrypted = store.decrypt_data(sqlite_session, credential_id=record.id)
         assert decrypted == {"k": "new"}
 
+        resource = store.get_sensitive_resource(sqlite_session, credential_id=record.id)
+        assert resource is not None
+        assert resource.label == "Credential · New"
+        assert resource.description == "Updated"
+        assert resource.sensitivity_level == "L2"
+
+    def test_update_can_raise_credential_sensitivity_level(
+        self,
+        sqlite_session: Session,
+    ) -> None:
+        store = CredentialStore()
+        record = store.create(
+            sqlite_session,
+            name="Ops Key",
+            credential_type="api_key",
+            data={"api_key": "sk-ops"},
+        )
+        sqlite_session.commit()
+
+        store.update(
+            sqlite_session,
+            credential_id=record.id,
+            sensitivity_level="L3",
+        )
+        sqlite_session.commit()
+
+        resource = store.get_sensitive_resource(sqlite_session, credential_id=record.id)
+        assert resource is not None
+        assert resource.sensitivity_level == "L3"
+
     def test_update_revoked_raises(self, sqlite_session: Session) -> None:
         store = CredentialStore()
         record = store.create(sqlite_session, name="C", credential_type="t", data={"k": "v"})
@@ -201,6 +243,10 @@ class TestCredentialStore:
 
         assert record.status == "revoked"
         assert record.revoked_at is not None
+
+        resource = store.get_sensitive_resource(sqlite_session, credential_id=record.id)
+        assert resource is not None
+        assert resource.metadata_payload["credential_status"] == "revoked"
 
     def test_revoke_idempotent(self, sqlite_session: Session) -> None:
         store = CredentialStore()
@@ -281,13 +327,7 @@ class TestCredentialStore:
             name="Masked Credential",
             credential_type="api_key",
             data={"api_key": "sk-masked", "region": "us-east-1"},
-        )
-        sensitive_access.create_resource(
-            sqlite_session,
-            label="Moderate Credential",
             sensitivity_level="L2",
-            source="credential",
-            metadata={"credential_id": record.id},
         )
         sqlite_session.commit()
 
@@ -349,13 +389,7 @@ class TestCredentialStore:
             name="High Sensitivity Credential",
             credential_type="api_key",
             data={"api_key": "sk-sensitive"},
-        )
-        sensitive_access.create_resource(
-            sqlite_session,
-            label="High Sensitivity Credential",
             sensitivity_level="L3",
-            source="credential",
-            metadata={"credential_id": record.id},
         )
         sqlite_session.commit()
 
@@ -398,13 +432,7 @@ class TestCredentialStore:
             name="High Sensitivity Export Credential",
             credential_type="api_key",
             data={"api_key": "sk-sensitive-export"},
-        )
-        sensitive_access.create_resource(
-            sqlite_session,
-            label="High Sensitivity Export Credential",
             sensitivity_level="L3",
-            source="credential",
-            metadata={"credential_id": record.id},
         )
         sqlite_session.commit()
 
@@ -458,7 +486,7 @@ class TestCredentialRoutes:
         ):
             yield
 
-    def test_create_credential(self, client: TestClient) -> None:
+    def test_create_credential(self, client: TestClient, sqlite_session: Session) -> None:
         resp = client.post(
             "/api/credentials",
             json={
@@ -475,6 +503,32 @@ class TestCredentialRoutes:
         assert body["status"] == "active"
         assert "data_keys" in body
         assert body["data_keys"] == ["api_key"]
+        assert body["sensitivity_level"] == "L2"
+        assert body["sensitive_resource_id"]
+
+        resource = CredentialStore().get_sensitive_resource(
+            sqlite_session,
+            credential_id=body["id"],
+        )
+        assert resource is not None
+        assert resource.sensitivity_level == "L2"
+
+    def test_create_credential_accepts_explicit_sensitivity_level(
+        self,
+        client: TestClient,
+    ) -> None:
+        resp = client.post(
+            "/api/credentials",
+            json={
+                "name": "Privileged Key",
+                "credential_type": "api_key",
+                "data": {"api_key": "sk-privileged"},
+                "sensitivity_level": "L3",
+            },
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()["sensitivity_level"] == "L3"
 
     def test_list_credentials(self, client: TestClient) -> None:
         client.post(
@@ -520,6 +574,24 @@ class TestCredentialRoutes:
         assert resp.status_code == 200
         assert resp.json()["name"] == "New"
         assert resp.json()["data_keys"] == ["new_key"]
+
+    def test_update_credential_can_change_sensitivity_level(
+        self,
+        client: TestClient,
+    ) -> None:
+        create_resp = client.post(
+            "/api/credentials",
+            json={"name": "Ops", "credential_type": "t", "data": {"k": "v"}},
+        )
+        cid = create_resp.json()["id"]
+
+        resp = client.put(
+            f"/api/credentials/{cid}",
+            json={"sensitivity_level": "L3"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["sensitivity_level"] == "L3"
 
     def test_revoke_credential(self, client: TestClient) -> None:
         create_resp = client.post(

@@ -20,6 +20,8 @@ function buildCredential(overrides: Partial<CredentialItem> = {}): CredentialIte
     credential_type: "api_key",
     description: "Runtime credential",
     status: "active",
+    sensitivity_level: "L2",
+    sensitive_resource_id: "resource-1",
     last_used_at: "2026-03-24T18:00:00Z",
     revoked_at: null,
     created_at: "2026-03-24T17:00:00Z",
@@ -56,6 +58,7 @@ describe("CredentialStorePanel", () => {
     );
 
     expect(html).toContain("最近审计活动");
+    expect(html).toContain("L2 治理");
     expect(html).toContain("tool:search-tool 在运行时解密了字段 api_key。");
     expect(html).toContain("run run-1");
     expect(html).toContain("解密");

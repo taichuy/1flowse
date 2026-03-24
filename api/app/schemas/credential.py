@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.sensitive_access import SensitivityLevel
 
 CredentialStatus = Literal["active", "revoked"]
 CredentialAuditAction = Literal[
@@ -25,6 +26,7 @@ class CredentialCreateRequest(BaseModel):
     credential_type: str = Field(min_length=1, max_length=64)
     data: dict[str, str] = Field(min_length=1)
     description: str = Field(default="", max_length=512)
+    sensitivity_level: SensitivityLevel = "L2"
 
 
 class CredentialUpdateRequest(BaseModel):
@@ -33,6 +35,7 @@ class CredentialUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     data: dict[str, str] | None = Field(default=None, min_length=1)
     description: str | None = Field(default=None, max_length=512)
+    sensitivity_level: SensitivityLevel | None = None
 
 
 class CredentialItem(BaseModel):
@@ -41,6 +44,8 @@ class CredentialItem(BaseModel):
     credential_type: str
     description: str
     status: CredentialStatus
+    sensitivity_level: SensitivityLevel | None = None
+    sensitive_resource_id: str | None = None
     last_used_at: datetime | None = None
     revoked_at: datetime | None = None
     created_at: datetime

@@ -118,6 +118,7 @@ export function CredentialStorePanel({ credentials, activity }: Props) {
             <tr>
               <th>名称</th>
               <th>类型</th>
+              <th>治理</th>
               <th>状态</th>
               <th>最后使用</th>
               <th>创建时间</th>
@@ -147,6 +148,13 @@ export function CredentialStorePanel({ credentials, activity }: Props) {
                 </td>
                 <td>
                   <code>{cred.credential_type}</code>
+                </td>
+                <td>
+                  <span
+                    className={`health-pill ${cred.sensitivity_level ? "" : "warning"}`.trim()}
+                  >
+                    {formatCredentialGovernanceLabel(cred)}
+                  </span>
                 </td>
                 <td>
                   <span
@@ -277,6 +285,13 @@ function formatAuditActionLabel(action: CredentialAuditItem["action"]) {
   }
 }
 
+function formatCredentialGovernanceLabel(cred: CredentialItem) {
+  if (!cred.sensitivity_level) {
+    return "未声明";
+  }
+  return `${cred.sensitivity_level} 治理`;
+}
+
 function CreateCredentialForm({
   state,
   action,
@@ -342,6 +357,19 @@ function CreateCredentialForm({
         />
       </label>
       <label style={{ display: "block", marginTop: "0.75rem" }}>
+        <span style={{ fontSize: "0.85em" }}>敏感级别</span>
+        <select
+          name="sensitivityLevel"
+          defaultValue="L2"
+          className="input"
+          style={{ width: "100%" }}
+        >
+          <option value="L1">L1 · 低风险共享凭证</option>
+          <option value="L2">L2 · 默认运行时凭证</option>
+          <option value="L3">L3 · 高敏凭证，访问需审批</option>
+        </select>
+      </label>
+      <label style={{ display: "block", marginTop: "0.75rem" }}>
         <span style={{ fontSize: "0.85em" }}>
           数据 (JSON key-value，值将加密存储)
         </span>
@@ -367,6 +395,9 @@ function CreateCredentialForm({
       )}
 
       <div style={{ marginTop: "0.75rem" }}>
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8em", opacity: 0.7 }}>
+          新建后会自动注册为 Sensitive Resource，runtime / operator 入口共享同一份治理事实。
+        </p>
         <button
           className="btn btn-primary"
           type="submit"

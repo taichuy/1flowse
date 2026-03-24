@@ -6,6 +6,8 @@ export type CredentialItem = {
   credential_type: string;
   description: string;
   status: "active" | "revoked";
+  sensitivity_level: "L0" | "L1" | "L2" | "L3" | null;
+  sensitive_resource_id: string | null;
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;

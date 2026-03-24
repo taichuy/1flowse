@@ -25,6 +25,7 @@ export async function createCredential(
     formData.get("credentialType") ?? ""
   ).trim();
   const description = String(formData.get("description") ?? "").trim();
+  const sensitivityLevel = String(formData.get("sensitivityLevel") ?? "L2").trim() || "L2";
   const dataJson = String(formData.get("data") ?? "").trim();
 
   if (!name || !credentialType || !dataJson) {
@@ -55,6 +56,7 @@ export async function createCredential(
         name,
         credential_type: credentialType,
         description,
+        sensitivity_level: sensitivityLevel,
         data,
       }),
     });
@@ -72,7 +74,7 @@ export async function createCredential(
     revalidatePath("/");
     return {
       status: "success",
-      message: `凭证 "${result.name}" 已创建。引用格式: credential://${result.id}`,
+      message: `凭证 "${result.name}" 已创建，并纳入 ${result.sensitivity_level ?? sensitivityLevel} 治理。引用格式: credential://${result.id}`,
       credentialId: result.id,
     };
   } catch (err) {

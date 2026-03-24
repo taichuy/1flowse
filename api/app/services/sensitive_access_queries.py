@@ -136,8 +136,13 @@ def find_credential_resource(
     *,
     credential_id: str,
 ) -> SensitiveResourceRecord | None:
-    statement = select(SensitiveResourceRecord).where(
-        SensitiveResourceRecord.source == "credential"
+    statement = (
+        select(SensitiveResourceRecord)
+        .where(SensitiveResourceRecord.source == "credential")
+        .order_by(
+            SensitiveResourceRecord.updated_at.desc(),
+            SensitiveResourceRecord.created_at.desc(),
+        )
     )
     for record in db.scalars(statement):
         metadata_payload = record.metadata_payload or {}

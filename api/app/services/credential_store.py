@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import quote, unquote
 from uuid import uuid4
 
@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.credential import Credential, CredentialAuditRecord
+from app.models.sensitive_access import SensitiveResourceRecord
 from app.services.credential_encryption import (
     CredentialEncryptionError,
     CredentialEncryptionService,
@@ -39,6 +40,31 @@ class CredentialAccessPendingError(CredentialStoreError):
 
 
 _MASKED_CREDENTIAL_HANDLE_PREFIX = "credential+masked://"
+_DEFAULT_CREDENTIAL_SENSITIVITY = "L2"
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _build_credential_resource_label(record: Credential) -> str:
+    return f"Credential · {record.name}"
+
+
+def _build_credential_resource_description(record: Credential) -> str:
+    if record.description:
+        return record.description
+    return f"Runtime credential for {record.credential_type}."
+
+
+def _build_credential_resource_metadata(record: Credential) -> dict[str, str]:
+    return {
+        "credential_id": record.id,
+        "credential_name": record.name,
+        "credential_type": record.credential_type,
+        "credential_status": record.status,
+        "credential_ref": f"credential://{record.id}",
+    }
 
 
 class CredentialStore:
@@ -63,6 +89,7 @@ class CredentialStore:
         credential_type: str,
         data: dict[str, str],
         description: str = "",
+        sensitivity_level: str | None = None,
     ) -> Credential:
         encrypted = self._encryption.encrypt(data)
         record = Credential(
@@ -82,6 +109,11 @@ class CredentialStore:
             actor_type="control_plane",
             actor_id="credentials_api",
             metadata={"data_keys": sorted(data.keys())},
+        )
+        self._upsert_sensitive_resource(
+            db,
+            record=record,
+            sensitivity_level=sensitivity_level,
         )
         return record
 
@@ -107,6 +139,7 @@ class CredentialStore:
         name: str | None = None,
         data: dict[str, str] | None = None,
         description: str | None = None,
+        sensitivity_level: str | None = None,
     ) -> Credential:
         record = self.get(db, credential_id=credential_id)
         if record.status == "revoked":
@@ -134,13 +167,18 @@ class CredentialStore:
                 "data_keys": sorted(data.keys()) if data is not None else [],
             },
         )
+        self._upsert_sensitive_resource(
+            db,
+            record=record,
+            sensitivity_level=sensitivity_level,
+        )
         return record
 
     def revoke(self, db: Session, *, credential_id: str) -> Credential:
         record = self.get(db, credential_id=credential_id)
         if record.status != "revoked":
             record.status = "revoked"
-            record.revoked_at = datetime.now(UTC)
+            record.revoked_at = _utcnow()
             db.add(record)
             db.flush()
             self._record_audit_event(
@@ -150,6 +188,7 @@ class CredentialStore:
                 actor_type="control_plane",
                 actor_id="credentials_api",
             )
+            self._upsert_sensitive_resource(db, record=record)
         return record
 
     def decrypt_data(
@@ -167,7 +206,7 @@ class CredentialStore:
         if record.status == "revoked":
             raise CredentialStoreError("Cannot decrypt a revoked credential.")
         result = self._encryption.decrypt(record.encrypted_data)
-        record.last_used_at = datetime.now(UTC)
+        record.last_used_at = _utcnow()
         db.add(record)
         db.flush()
         self._record_audit_event(
@@ -295,13 +334,10 @@ class CredentialStore:
                 continue
             access_checked.add(cred_id)
             credential_records[cred_id] = self.get(db, credential_id=cred_id)
-            resource = self._sensitive_access.find_credential_resource(
+            resource = self._upsert_sensitive_resource(
                 db,
-                credential_id=cred_id,
+                record=credential_records[cred_id],
             )
-            if resource is None:
-                access_decisions[cred_id] = "allow"
-                continue
             bundle = self._sensitive_access.ensure_access(
                 db,
                 run_id=run_id,
@@ -408,6 +444,91 @@ class CredentialStore:
             stmt = stmt.where(CredentialAuditRecord.credential_id == credential_id)
         stmt = stmt.limit(limit)
         return list(db.scalars(stmt).all())
+
+    def get_sensitive_resource(
+        self,
+        db: Session,
+        *,
+        credential_id: str,
+    ) -> SensitiveResourceRecord | None:
+        return self._sensitive_access.find_credential_resource(
+            db,
+            credential_id=credential_id,
+        )
+
+    def list_sensitive_resources(
+        self,
+        db: Session,
+        *,
+        credential_ids: list[str],
+    ) -> dict[str, SensitiveResourceRecord]:
+        normalized_ids = {
+            str(credential_id).strip()
+            for credential_id in credential_ids
+            if str(credential_id).strip()
+        }
+        if not normalized_ids:
+            return {}
+
+        resources = db.scalars(
+            select(SensitiveResourceRecord)
+            .where(SensitiveResourceRecord.source == "credential")
+            .order_by(
+                SensitiveResourceRecord.updated_at.desc(),
+                SensitiveResourceRecord.created_at.desc(),
+            )
+        ).all()
+        index: dict[str, SensitiveResourceRecord] = {}
+        for resource in resources:
+            metadata_payload = (
+                resource.metadata_payload
+                if isinstance(resource.metadata_payload, dict)
+                else {}
+            )
+            credential_id = str(metadata_payload.get("credential_id") or "").strip()
+            if credential_id not in normalized_ids or credential_id in index:
+                continue
+            index[credential_id] = resource
+        return index
+
+    def _upsert_sensitive_resource(
+        self,
+        db: Session,
+        *,
+        record: Credential,
+        sensitivity_level: str | None = None,
+    ) -> SensitiveResourceRecord:
+        resource = self._sensitive_access.find_credential_resource(
+            db,
+            credential_id=record.id,
+        )
+        resolved_sensitivity = (
+            (sensitivity_level or "").strip()
+            or (resource.sensitivity_level if resource is not None else "")
+            or _DEFAULT_CREDENTIAL_SENSITIVITY
+        )
+        label = _build_credential_resource_label(record)
+        description = _build_credential_resource_description(record)
+        metadata = _build_credential_resource_metadata(record)
+
+        if resource is None:
+            return self._sensitive_access.create_resource(
+                db,
+                label=label,
+                description=description,
+                sensitivity_level=resolved_sensitivity,
+                source="credential",
+                metadata=metadata,
+            )
+
+        resource.label = label
+        resource.description = description
+        resource.sensitivity_level = resolved_sensitivity
+        resource.metadata_payload = metadata
+        resource.updated_at = _utcnow()
+        db.add(resource)
+        db.flush()
+        return resource
 
     def _record_audit_event(
         self,
