@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildAuthorFacingFollowUpSurfaceCopy,
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface,
   buildRunDetailExecutionFocusSurfaceCopy,
@@ -18,6 +19,13 @@ import {
 } from "@/lib/workbench-entry-surfaces";
 
 describe("workbench entry surface copy", () => {
+  it("centralizes author-facing follow-up card titles", () => {
+    expect(buildAuthorFacingFollowUpSurfaceCopy()).toEqual({
+      primaryFollowUpTitle: "Primary follow-up",
+      canonicalFollowUpTitle: "Canonical follow-up"
+    });
+  });
+
   it("reuses the operator run-detail contract for author-facing run links", () => {
     expect(buildAuthorFacingRunDetailLinkSurface({ runId: "run-1" })).toEqual({
       href: "/runs/run-1",

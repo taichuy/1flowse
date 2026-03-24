@@ -69,6 +69,11 @@ export type RunDiagnosticsOperatorFollowUpSurfaceCopy = {
   callbackFallbackDetail: string;
 };
 
+export type AuthorFacingFollowUpSurfaceCopy = {
+  primaryFollowUpTitle: string;
+  canonicalFollowUpTitle: string;
+};
+
 export type WorkflowEditorHeroSurfaceCopy = {
   heroLinks: WorkbenchEntryLinksConfig;
   saveChainValue: string;
@@ -172,6 +177,13 @@ export function buildWorkspaceStarterTemplateListSurfaceCopy({
       primaryKey: "createWorkflow",
       variant: "inline"
     }
+  };
+}
+
+export function buildAuthorFacingFollowUpSurfaceCopy(): AuthorFacingFollowUpSurfaceCopy {
+  return {
+    primaryFollowUpTitle: "Primary follow-up",
+    canonicalFollowUpTitle: "Canonical follow-up"
   };
 }
 
@@ -461,12 +473,14 @@ export function buildWorkflowPublishPanelSurfaceCopy({
 }: {
   workflowLibraryHref?: string;
 } = {}): WorkflowPublishPanelSurfaceCopy {
+  const followUpSurfaceCopy = buildAuthorFacingFollowUpSurfaceCopy();
+
   return {
     eyebrow: "Publish",
     title: "Endpoint governance",
     description:
       "工作流页现在直接消费 publish binding、activity、rate-limit window 与 cache inventory 事实层，不再让开放 API 能力只停留在后端可用、前端不可见。",
-    primaryFollowUpTitle: "Primary follow-up",
+    primaryFollowUpTitle: followUpSurfaceCopy.primaryFollowUpTitle,
     sandboxReadinessTitle: "Live sandbox readiness",
     sandboxReadinessDescription:
       "Publish summary 先直接对齐当前 live sandbox readiness；进入 invocation entry/detail 前，就能先判断强隔离 execution class 是已 ready、正在 degraded，还是仍会 fail-closed。",

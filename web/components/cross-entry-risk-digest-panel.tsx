@@ -5,6 +5,7 @@ import type {
   CrossEntryRiskDigest,
   CrossEntryRiskDigestTone
 } from "@/lib/cross-entry-risk-digest";
+import { buildAuthorFacingFollowUpSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 type CrossEntryRiskDigestPanelProps = {
   digest: CrossEntryRiskDigest;
@@ -43,6 +44,8 @@ export function CrossEntryRiskDigestPanel({
   intro,
   currentHref = null
 }: CrossEntryRiskDigestPanelProps) {
+  const followUpSurfaceCopy = buildAuthorFacingFollowUpSurfaceCopy();
+
   return (
     <article className="diagnostic-panel panel-span">
       <div className="section-heading">
@@ -73,7 +76,7 @@ export function CrossEntryRiskDigestPanel({
 
       <article className="payload-card compact-card">
         <div className="payload-card-header">
-          <span className="status-meta">Primary follow-up</span>
+          <span className="status-meta">{followUpSurfaceCopy.primaryFollowUpTitle}</span>
           <span className={`health-pill ${getToneClassName(digest.tone)}`}>
             {getToneLabel(digest.tone)}
           </span>

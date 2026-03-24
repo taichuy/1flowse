@@ -32,7 +32,10 @@ import {
   buildRunDetailHrefFromWorkspaceStarterViewState,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
-import { buildAuthorFacingRunDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import {
+  buildAuthorFacingFollowUpSurfaceCopy,
+  buildAuthorFacingRunDetailLinkSurface
+} from "@/lib/workbench-entry-surfaces";
 
 function normalizeApprovalStatus(value?: string | null) {
   return value === "pending" || value === "approved" || value === "rejected" || value === "expired"
@@ -63,6 +66,7 @@ export function SensitiveAccessBlockedCard({
 }: SensitiveAccessBlockedCardProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const followUpSurfaceCopy = buildAuthorFacingFollowUpSurfaceCopy();
   const runId = resolveSensitiveAccessBlockingRunId(payload);
   const currentHref = React.useMemo(() => {
     const search = searchParams?.toString();
@@ -254,7 +258,7 @@ export function SensitiveAccessBlockedCard({
           runSnapshot={payload.run_snapshot ?? null}
           sandboxReadiness={sandboxReadiness}
           status="success"
-          title="Canonical follow-up"
+          title={followUpSurfaceCopy.canonicalFollowUpTitle}
         />
       ) : null}
 

@@ -72,7 +72,10 @@ import {
   buildSensitiveAccessBlockedSurfaceCopy,
   buildSensitiveAccessTimelineSurfaceCopy
 } from "@/lib/sensitive-access-presenters";
-import { buildRunDetailExecutionFocusSurfaceCopy } from "@/lib/workbench-entry-surfaces";
+import {
+  buildAuthorFacingFollowUpSurfaceCopy,
+  buildRunDetailExecutionFocusSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
 
 type PublishedInvocationWaitingOverview = {
   activeWaitingCount: number;
@@ -584,6 +587,7 @@ export function buildPublishedInvocationDetailSurfaceCopy({
   focusSkillTraceNodeRunId?: string | null;
 } = {}): PublishedInvocationDetailSurfaceCopy {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const followUpSurfaceCopy = buildAuthorFacingFollowUpSurfaceCopy();
   const blockingApprovalTimelineCopy = buildSensitiveAccessTimelineSurfaceCopy({
     surface: "publish_blocking_invocation",
     blockingNodeRunId
@@ -613,7 +617,7 @@ export function buildPublishedInvocationDetailSurfaceCopy({
     cacheExpiresLabel: "Expires",
     requestPreviewTitle: "Request preview",
     responsePreviewTitle: "Response preview",
-    canonicalFollowUpTitle: "Canonical follow-up",
+    canonicalFollowUpTitle: followUpSurfaceCopy.canonicalFollowUpTitle,
     canonicalFollowUpDescription:
       "publish invocation detail 现在直接复用 operator follow-up 的后端事实链，不再只给局部 waiting / execution 片段，方便从发布入口直接判断下一步该回看 run 还是 inbox。",
     legacyAuthGovernanceTitle: "Legacy publish auth handoff",
@@ -756,9 +760,11 @@ export function buildPublishedInvocationTrafficTimelineBucketSurface({
 
 export function buildPublishedInvocationEntrySurfaceCopy(): PublishedInvocationEntrySurfaceCopy {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const followUpSurfaceCopy = buildAuthorFacingFollowUpSurfaceCopy();
+
   return {
     waitingOverviewTitle: "Waiting overview",
-    canonicalFollowUpTitle: "Canonical follow-up",
+    canonicalFollowUpTitle: followUpSurfaceCopy.canonicalFollowUpTitle,
     canonicalFollowUpFallbackHeadline: "当前 invocation 已接入 canonical follow-up 事实链。",
     apiKeyLabel: "API key",
     requestKeysLabel: "Request keys",
