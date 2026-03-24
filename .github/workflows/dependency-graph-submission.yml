@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          node scripts/submit-dependency-snapshots.js | tee dependency-submission.txt
+          node scripts/submit-dependency-snapshots.js --report-output dependency-submission.json | tee dependency-submission.txt
           status=${PIPESTATUS[0]}
           echo "status=${status}" >> "$GITHUB_OUTPUT"
 
@@ -63,4 +63,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dependency-submission-report
-          path: dependency-submission.txt
+          path: |
+            dependency-submission.txt
+            dependency-submission.json

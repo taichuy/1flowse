@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   DependencySubmissionError,
   buildPnpmResolvedDependencies,
+  buildSubmissionReport,
   buildSubmissionSummary,
   buildSnapshotPayload,
   buildUvResolvedDependencies,
@@ -156,9 +157,18 @@ test('buildSnapshotPayload uses lockfile manifest and stable correlator', () => 
 });
 
 test('parseArgs and selectRoots support explicit root selection', () => {
-  const options = parseArgs(['--root', 'web', '--dry-run', '--output', 'tmp/snapshot.json']);
+  const options = parseArgs([
+    '--root',
+    'web',
+    '--dry-run',
+    '--output',
+    'tmp/snapshot.json',
+    '--report-output',
+    'tmp/report.json',
+  ]);
   assert.equal(options.dryRun, true);
   assert.equal(options.outputPath, 'tmp/snapshot.json');
+  assert.equal(options.reportOutputPath, 'tmp/report.json');
   assert.deepEqual(options.requestedRoots, ['web']);
 
   const selected = selectRoots(
@@ -332,4 +342,82 @@ test('buildSubmissionSummary surfaces blocked repository settings explicitly', (
   assert.match(summary.join('\n'), /repository blocker: GitHub `Dependency graph` 未开启/);
   assert.match(summary.join('\n'), /status: `blocked`/);
   assert.match(summary.join('\n'), /blocked reason: GitHub 仓库当前未开启/);
+});
+
+test('buildSubmissionReport keeps machine-readable root evidence stable', () => {
+  const report = buildSubmissionReport(
+    [
+      {
+        rootLabel: 'web',
+        status: 'submitted',
+        ecosystem: 'pnpm',
+        manifestPath: 'web/package.json',
+        lockfilePath: 'web/pnpm-lock.yaml',
+        resolvedCount: 12,
+        directCount: 3,
+        runtimeCount: 10,
+        developmentCount: 2,
+        snapshotId: 'snapshot-123',
+        warning: '当前 pnpm lockfile-only snapshot 仍未暴露 development roots。',
+      },
+      {
+        rootLabel: 'api',
+        status: 'blocked',
+        ecosystem: 'uv',
+        manifestPath: 'api/pyproject.toml',
+        lockfilePath: 'api/uv.lock',
+        resolvedCount: 18,
+        directCount: 5,
+        runtimeCount: 12,
+        developmentCount: 6,
+        blockedReason:
+          'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+      },
+    ],
+    {
+      repository: {
+        owner: 'taichuy',
+        repo: '7flows',
+      },
+      sha: 'abc123',
+      ref: 'refs/heads/taichuy_dev',
+    },
+  );
+
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.mode, 'submission');
+  assert.equal(report.repository.owner, 'taichuy');
+  assert.equal(report.sha, 'abc123');
+  assert.match(report.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(report.roots, [
+    {
+      rootLabel: 'web',
+      status: 'submitted',
+      ecosystem: 'pnpm',
+      manifestPath: 'web/package.json',
+      lockfilePath: 'web/pnpm-lock.yaml',
+      resolvedCount: 12,
+      directCount: 3,
+      runtimeCount: 10,
+      developmentCount: 2,
+      snapshotId: 'snapshot-123',
+      blockedReason: null,
+      warning: '当前 pnpm lockfile-only snapshot 仍未暴露 development roots。',
+    },
+    {
+      rootLabel: 'api',
+      status: 'blocked',
+      ecosystem: 'uv',
+      manifestPath: 'api/pyproject.toml',
+      lockfilePath: 'api/uv.lock',
+      resolvedCount: 18,
+      directCount: 5,
+      runtimeCount: 12,
+      developmentCount: 6,
+      snapshotId: null,
+      blockedReason:
+        'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+      warning: null,
+    },
+  ]);
 });

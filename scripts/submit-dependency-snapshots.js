@@ -15,6 +15,8 @@ const developmentOptionalDependencyGroups = new Set(['ci', 'dev', 'docs', 'lint'
 const dependencyGraphDisabledPattern = /dependency graph is disabled/i;
 const dependencyGraphSettingsHint =
   'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时再检查 `Automatic dependency submission`。';
+const repositoryBlockerSummary =
+  'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。';
 
 class DependencySubmissionError extends Error {
   constructor({ kind, status, message, hint = null }) {
@@ -549,9 +551,7 @@ function buildSubmissionSummary(items, dryRun) {
   const blockedItems = items.filter((item) => item.status === 'blocked');
 
   if (blockedItems.length > 0) {
-    lines.push(
-      '- repository blocker: GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
-    );
+    lines.push(`- repository blocker: ${repositoryBlockerSummary}`);
     lines.push('');
   }
 
@@ -579,6 +579,34 @@ function buildSubmissionSummary(items, dryRun) {
   });
 
   return lines;
+}
+
+function buildSubmissionReport(items, { dryRun = false, repository = null, sha = null, ref = null } = {}) {
+  const blockedItems = items.filter((item) => item.status === 'blocked');
+
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    mode: dryRun ? 'dry-run' : 'submission',
+    repository,
+    sha,
+    ref,
+    repositoryBlocker: blockedItems.length > 0 ? repositoryBlockerSummary : null,
+    roots: items.map((item) => ({
+      rootLabel: item.rootLabel,
+      status: item.status || (dryRun ? 'dry-run' : null),
+      ecosystem: item.ecosystem,
+      manifestPath: item.manifestPath,
+      lockfilePath: item.lockfilePath,
+      resolvedCount: item.resolvedCount,
+      directCount: item.directCount,
+      runtimeCount: item.runtimeCount,
+      developmentCount: item.developmentCount,
+      snapshotId: item.snapshotId || null,
+      blockedReason: item.blockedReason || null,
+      warning: item.warning || null,
+    })),
+  };
 }
 
 async function submitSnapshot(repository, payload, token) {
@@ -623,6 +651,7 @@ function parseArgs(argv) {
   const options = {
     dryRun: false,
     outputPath: null,
+    reportOutputPath: null,
     requestedRoots: [],
   };
 
@@ -640,6 +669,16 @@ function parseArgs(argv) {
         throw new Error('--output 需要路径参数。');
       }
       options.outputPath = outputPath;
+      index += 1;
+      continue;
+    }
+
+    if (argument === '--report-output') {
+      const reportOutputPath = argv[index + 1];
+      if (!reportOutputPath) {
+        throw new Error('--report-output 需要路径参数。');
+      }
+      options.reportOutputPath = reportOutputPath;
       index += 1;
       continue;
     }
@@ -786,6 +825,16 @@ async function main() {
   }
 
   const summaryLines = buildSubmissionSummary(summaries, options.dryRun);
+  if (options.reportOutputPath) {
+    const reportPath = path.resolve(repoRoot, options.reportOutputPath);
+    const report = buildSubmissionReport(summaries, {
+      dryRun: options.dryRun,
+      repository,
+      sha,
+      ref,
+    });
+    fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  }
   console.log(summaryLines.join('\n'));
   writeStepSummary(summaryLines);
 
@@ -797,6 +846,7 @@ async function main() {
 module.exports = {
   DependencySubmissionError,
   buildPnpmResolvedDependencies,
+  buildSubmissionReport,
   buildSubmissionSummary,
   buildScopedPnpmResolvedDependencies,
   buildSnapshotPayload,

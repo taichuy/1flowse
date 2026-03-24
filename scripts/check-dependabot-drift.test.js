@@ -9,6 +9,7 @@ const {
   buildWorkspaceManifestCoverage,
   buildWorkspaceManifestInventory,
   evaluateAlert,
+  parseDependencySubmissionJsonReport,
   parseDependencySubmissionReport,
 } = require('./check-dependabot-drift.js');
 
@@ -331,6 +332,50 @@ test('parseDependencySubmissionReport extracts repository blocker evidence', () 
   );
 });
 
+test('parseDependencySubmissionJsonReport extracts submitted and blocked roots', () => {
+  const parsed = parseDependencySubmissionJsonReport(
+    JSON.stringify({
+      schemaVersion: 1,
+      repositoryBlocker:
+        'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+      roots: [
+        {
+          rootLabel: 'web',
+          status: 'submitted',
+          snapshotId: 'snapshot-123',
+        },
+        {
+          rootLabel: 'api',
+          status: 'blocked',
+          blockedReason:
+            'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+        },
+      ],
+    }),
+  );
+
+  assert.match(parsed.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(parsed.submittedRoots, [
+    {
+      rootLabel: 'web',
+      status: 'submitted',
+      blockedReason: null,
+      warning: null,
+      snapshotId: 'snapshot-123',
+    },
+  ]);
+  assert.deepEqual(parsed.blockedRoots, [
+    {
+      rootLabel: 'api',
+      status: 'blocked',
+      blockedReason:
+        'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+      warning: null,
+      snapshotId: null,
+    },
+  ]);
+});
+
 test('buildMarkdownSummary surfaces latest dependency submission blocker evidence', () => {
   const inventory = buildWorkspaceManifestInventory([
     'api/pyproject.toml',
@@ -362,10 +407,16 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
       report: {
         repositoryBlocker:
           'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+        roots: [
+          { rootLabel: 'services/compat-dify', status: 'submitted', snapshotId: 'snapshot-compat' },
+          { rootLabel: 'api', status: 'blocked' },
+          { rootLabel: 'web', status: 'blocked' },
+        ],
         blockedRoots: [
           { rootLabel: 'api', status: 'blocked' },
           { rootLabel: 'web', status: 'blocked' },
         ],
+        submittedRoots: [{ rootLabel: 'services/compat-dify', status: 'submitted', snapshotId: 'snapshot-compat' }],
       },
     },
   });
@@ -374,4 +425,5 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
   assert.match(summary, /23504251554/);
   assert.match(summary, /repository blocker: GitHub `Dependency graph` 未开启/);
   assert.match(summary, /blocked roots: `api`、`web`/);
+  assert.match(summary, /submitted roots: `services\/compat-dify`（snapshot: `snapshot-compat`）/);
 });

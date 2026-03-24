@@ -25,7 +25,7 @@ node scripts/check-dependabot-drift.js
 
 如果在 GitHub Actions 中运行，脚本还会把结论写入 `GITHUB_STEP_SUMMARY`，方便在 workflow 页面直接查看证据。
 
-如果仓库内已存在 `.github/workflows/dependency-graph-submission.yml`，脚本还会顺带查询默认分支最新一条 `Dependency Graph Submission` run，并尽量把它的 `dependency-submission-report` artifact 摘要串进当前结论里，避免 `GitHub Security Drift` 只停留在“manifests 还是 0”而说不清到底是平台设置阻塞还是刷新延迟。
+如果仓库内已存在 `.github/workflows/dependency-graph-submission.yml`，脚本还会顺带查询默认分支最新一条 `Dependency Graph Submission` run，并优先读取其中的 `dependency-submission-report` artifact（`dependency-submission.json`，必要时回退到 `dependency-submission.txt`）把摘要串进当前结论里，避免 `GitHub Security Drift` 只停留在“manifests 还是 0”而说不清到底是平台设置阻塞、部分 root 已提交，还是平台刷新延迟。
 
 ## 结果解释
 
@@ -69,6 +69,9 @@ node scripts/check-dependabot-drift.js
 
 - 仓库新增 `.github/workflows/dependency-graph-submission.yml`，会在 `workflow_dispatch`、每日定时和 `taichuy_dev` 上的 `package.json` / `pnpm-lock.yaml` / `pyproject.toml` / `uv.lock` 变更时执行。
 - 当前它使用 `scripts/submit-dependency-snapshots.js` 为所有已跟踪的 submission roots 提交手工 snapshot；按当前代码事实，命中的 roots 是 `web`（pnpm）、`api`（uv）和 `services/compat-dify`（uv）。
+- workflow artifact 现在会同时保留：
+  - `dependency-submission.txt`：给人读的摘要
+  - `dependency-submission.json`：给 `check-dependabot-drift` 与后续自动化复验消费的机器可读报告，包含 root 级 `status`、`snapshotId`、`blockedReason` 与 `warning`
 - 当仓库级 `Dependency graph` 尚未开启时，该 workflow 现在会把 run 收口为“保留 summary + artifact 证据并输出 warning”的平台阻塞态，而不是继续把每次 push 打成无法区分真伪的红灯；此时优先处理仓库 `Settings -> Security & analysis`，不要误判成锁文件解析或本地脚本失效。
 - 该脚本直接调用 GitHub dependency submission REST API：
   - `web` 侧通过 `pnpm list --lockfile-only` 提交 resolved tree，并保留 `direct|indirect`、`runtime|development` 关系事实；这足以覆盖当前 `next` / `flatted` 这类 default branch runtime 告警主线。

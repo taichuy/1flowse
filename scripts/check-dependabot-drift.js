@@ -105,15 +105,38 @@ function normalizeManifestPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/');
 }
 
+function normalizeDependencySubmissionReport(report) {
+  const roots = (Array.isArray(report?.roots) ? report.roots : Array.isArray(report?.blockedRoots) ? report.blockedRoots : [])
+    .map((item) => ({
+      rootLabel: item.rootLabel,
+      status: item.status || null,
+      blockedReason: item.blockedReason || null,
+      warning: item.warning || null,
+      snapshotId: item.snapshotId || null,
+    }))
+    .filter((item) => item.rootLabel);
+
+  return {
+    repositoryBlocker: report?.repositoryBlocker || null,
+    roots,
+    blockedRoots: roots.filter((item) => item.status === 'blocked'),
+    submittedRoots: roots.filter((item) => item.status === 'submitted'),
+  };
+}
+
+function parseDependencySubmissionJsonReport(reportText) {
+  return normalizeDependencySubmissionReport(JSON.parse(String(reportText || '{}')));
+}
+
 function parseDependencySubmissionReport(reportText) {
   const lines = String(reportText || '').split(/\r?\n/);
-  const blockedRoots = [];
+  const roots = [];
   let repositoryBlocker = null;
   let currentRoot = null;
 
   function flushCurrentRoot() {
     if (currentRoot) {
-      blockedRoots.push(currentRoot);
+      roots.push(currentRoot);
       currentRoot = null;
     }
   }
@@ -161,10 +184,10 @@ function parseDependencySubmissionReport(reportText) {
 
   flushCurrentRoot();
 
-  return {
+  return normalizeDependencySubmissionReport({
     repositoryBlocker,
-    blockedRoots,
-  };
+    roots,
+  });
 }
 
 function fetchLatestDependencySubmissionEvidence(repository, defaultBranch) {
@@ -207,8 +230,11 @@ function fetchLatestDependencySubmissionEvidence(repository, defaultBranch) {
     const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dependency-submission-report-'));
     try {
       run('gh', ['run', 'download', String(latestRun.id), '-n', 'dependency-submission-report', '-D', artifactDir]);
+      const reportJsonPath = path.join(artifactDir, 'dependency-submission.json');
       const reportPath = path.join(artifactDir, 'dependency-submission.txt');
-      if (fs.existsSync(reportPath)) {
+      if (fs.existsSync(reportJsonPath)) {
+        evidence.report = parseDependencySubmissionJsonReport(fs.readFileSync(reportJsonPath, 'utf8'));
+      } else if (fs.existsSync(reportPath)) {
         evidence.report = parseDependencySubmissionReport(fs.readFileSync(reportPath, 'utf8'));
       }
     } catch (error) {
@@ -253,6 +279,17 @@ function buildDependencySubmissionEvidenceLines(evidence) {
   if (blockedRoots.length > 0) {
     lines.push(
       `- blocked roots: ${blockedRoots.map((item) => `\`${item.rootLabel}\``).join('、')}`,
+    );
+  }
+
+  const submittedRoots = evidence.report?.submittedRoots || [];
+  if (submittedRoots.length > 0) {
+    lines.push(
+      `- submitted roots: ${submittedRoots
+        .map((item) =>
+          item.snapshotId ? `\`${item.rootLabel}\`（snapshot: \`${item.snapshotId}\`）` : `\`${item.rootLabel}\``,
+        )
+        .join('、')}`,
     );
   }
 
@@ -967,6 +1004,7 @@ module.exports = {
   fetchLatestDependencySubmissionEvidence,
   normalizePythonPackageName,
   normalizeVersion,
+  parseDependencySubmissionJsonReport,
   parseDependencySubmissionReport,
   parsePythonDependencyName,
   resolveAlertEvaluationSource,
