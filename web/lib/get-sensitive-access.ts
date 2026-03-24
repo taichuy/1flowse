@@ -275,6 +275,7 @@ export type SensitiveAccessBulkActionResult = {
   outcomeExplanation?: SignalFollowUpExplanation | null;
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
   runFollowUp?: NonNullable<ReturnType<typeof normalizeOperatorRunFollowUp>> | null;
+  legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   blockerDeltaSummary?: string | null;
   requestedCount: number;
   updatedCount: number;

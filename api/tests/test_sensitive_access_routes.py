@@ -85,6 +85,103 @@ def _assert_single_sensitive_access_focus_entry(
     } == notification_status_by_id
 
 
+def _seed_legacy_auth_binding(
+    sqlite_session: Session,
+    workflow: Workflow,
+    *,
+    binding_id: str,
+    endpoint_id: str,
+    endpoint_name: str,
+    endpoint_alias: str,
+    lifecycle_status: str = "published",
+) -> None:
+    sqlite_session.add(
+        WorkflowPublishedEndpoint(
+            id=binding_id,
+            workflow_id=workflow.id,
+            workflow_version_id=f"{binding_id}-workflow-version",
+            workflow_version=workflow.version,
+            target_workflow_version_id=f"{binding_id}-target-version",
+            target_workflow_version=workflow.version,
+            compiled_blueprint_id=f"{binding_id}-blueprint",
+            endpoint_id=endpoint_id,
+            endpoint_name=endpoint_name,
+            endpoint_alias=endpoint_alias,
+            route_path=f"/published/{endpoint_alias}",
+            protocol="native",
+            auth_mode="token",
+            streaming=False,
+            lifecycle_status=lifecycle_status,
+            input_schema={},
+            output_schema=None,
+            rate_limit_policy=None,
+            cache_policy=None,
+            created_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+        )
+    )
+
+
+def _assert_legacy_auth_governance_snapshot(
+    snapshot: dict,
+    *,
+    workflow: Workflow,
+    binding_id: str,
+    endpoint_id: str,
+    endpoint_name: str,
+) -> None:
+    assert snapshot == {
+        "generated_at": snapshot["generated_at"],
+        "workflow_count": 1,
+        "binding_count": 1,
+        "summary": {
+            "draft_candidate_count": 0,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 0,
+        },
+        "checklist": [
+            {
+                "key": "published_follow_up",
+                "title": "再补发支持鉴权的 replacement bindings",
+                "tone": "manual",
+                "tone_label": "人工跟进",
+                "count": 1,
+                "detail": (
+                    "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
+                    "endpoint 把 authMode 切回 api_key/internal，并发布新版 "
+                    "binding，再决定历史版本是否下线。"
+                ),
+            }
+        ],
+        "workflows": [
+            {
+                "workflow_id": workflow.id,
+                "workflow_name": workflow.name,
+                "binding_count": 1,
+                "draft_candidate_count": 0,
+                "published_blocker_count": 1,
+                "offline_inventory_count": 0,
+            }
+        ],
+        "buckets": {
+            "draft_candidates": [],
+            "published_blockers": [
+                {
+                    "workflow_id": workflow.id,
+                    "workflow_name": workflow.name,
+                    "binding_id": binding_id,
+                    "workflow_version": workflow.version,
+                    "endpoint_id": endpoint_id,
+                    "endpoint_name": endpoint_name,
+                    "lifecycle_status": "published",
+                    "auth_mode": "token",
+                }
+            ],
+            "offline_inventory": [],
+        },
+    }
+
+
 def test_create_sensitive_resource_and_list_it(
     client: TestClient,
     sqlite_session: Session,
@@ -214,6 +311,14 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
         created_at=datetime.now(UTC),
     )
     sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-approval-handoff",
+        endpoint_id="endpoint-approval-handoff",
+        endpoint_name="Approval Handoff Endpoint",
+        endpoint_alias="approval-handoff-endpoint",
+    )
     sqlite_session.commit()
 
     resource_response = client.post(
@@ -440,6 +545,13 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
         request_decision="allow",
         request_reason_code="approved_after_review",
     )
+    _assert_legacy_auth_governance_snapshot(
+        decision_body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-approval-handoff",
+        endpoint_id="endpoint-approval-handoff",
+        endpoint_name="Approval Handoff Endpoint",
+    )
 
     stored_request = sqlite_session.get(
         SensitiveAccessRequestRecord,
@@ -496,6 +608,14 @@ def test_request_high_sensitivity_access_resolves_run_context_from_node_run_id(
         created_at=datetime.now(UTC),
     )
     sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+        endpoint_alias="bulk-approval-handoff-endpoint",
+    )
     sqlite_session.commit()
 
     resource_response = client.post(
@@ -575,6 +695,14 @@ def test_decide_expired_approval_ticket_marks_ticket_expired_and_returns_error(
         created_at=datetime.now(UTC),
     )
     sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+        endpoint_alias="bulk-approval-handoff-endpoint",
+    )
     sqlite_session.commit()
 
     resource_response = client.post(
@@ -832,6 +960,14 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
         created_at=datetime.now(UTC),
     )
     sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+        endpoint_alias="bulk-approval-handoff-endpoint",
+    )
     sqlite_session.commit()
 
     resource_response = client.post(
@@ -969,6 +1105,13 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
         request_decision="allow",
         request_reason_code="approved_after_review",
     )
+    _assert_legacy_auth_governance_snapshot(
+        body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+    )
 
     stored_ticket = sqlite_session.get(ApprovalTicketRecord, ticket_id)
     assert stored_ticket is not None
@@ -1010,6 +1153,14 @@ def test_retry_notification_dispatch_creates_new_attempt(
         created_at=datetime.now(UTC),
     )
     sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-notification-retry-handoff",
+        endpoint_id="endpoint-notification-retry-handoff",
+        endpoint_name="Notification Retry Handoff Endpoint",
+        endpoint_alias="notification-retry-handoff-endpoint",
+    )
     sqlite_session.commit()
     monkeypatch.setattr(
         sensitive_access_routes,
@@ -1154,6 +1305,13 @@ def test_retry_notification_dispatch_creates_new_attempt(
         request_decision="require_approval",
         request_reason_code="approval_required_high_sensitive_access",
     )
+    _assert_legacy_auth_governance_snapshot(
+        retry_body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-notification-retry-handoff",
+        endpoint_id="endpoint-notification-retry-handoff",
+        endpoint_name="Notification Retry Handoff Endpoint",
+    )
 
     assert len(scheduled_dispatches) == 2
     assert scheduled_dispatches[0].dispatch_id == first_notification["id"]
@@ -1201,6 +1359,14 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
         created_at=datetime.now(UTC),
     )
     sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-retry-handoff",
+        endpoint_id="endpoint-bulk-retry-handoff",
+        endpoint_name="Bulk Retry Handoff Endpoint",
+        endpoint_alias="bulk-retry-handoff-endpoint",
+    )
     sqlite_session.commit()
     monkeypatch.setattr(
         sensitive_access_routes,
@@ -1369,6 +1535,13 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
         },
         request_decision="require_approval",
         request_reason_code="approval_required_high_sensitive_access",
+    )
+    _assert_legacy_auth_governance_snapshot(
+        body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-bulk-retry-handoff",
+        endpoint_id="endpoint-bulk-retry-handoff",
+        endpoint_name="Bulk Retry Handoff Endpoint",
     )
 
     assert len(scheduled_dispatches) == 2

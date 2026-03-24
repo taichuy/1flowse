@@ -34,6 +34,9 @@ from app.schemas.sensitive_access import (
     SensitiveResourceCreateRequest,
     SensitiveResourceItem,
 )
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
 from app.services.callback_blocker_deltas import (
     CallbackBlockerScopedSnapshot,
     build_bulk_callback_blocker_delta_summary,
@@ -80,6 +83,11 @@ from app.services.workflow_publish import WorkflowPublishBindingService
 router = APIRouter(prefix="/sensitive-access", tags=["sensitive-access"])
 service = SensitiveAccessControlService()
 workflow_publish_service = WorkflowPublishBindingService()
+LEGACY_AUTH_CHECKLIST_ORDER = (
+    "draft_cleanup",
+    "published_follow_up",
+    "offline_inventory",
+)
 
 def _resolve_single_run_follow_up(
     db: Session,
@@ -146,6 +154,10 @@ def _serialize_approval_bundle(
         run_id=bundle.approval_ticket.run_id,
         node_run_id=bundle.approval_ticket.node_run_id,
     )
+    legacy_auth_governance = _build_sensitive_access_legacy_auth_governance_snapshot(
+        db,
+        workflow_ids=[run_snapshot.workflow_id if run_snapshot is not None else None],
+    )
     return ApprovalTicketDecisionResponse(
         request=serialize_sensitive_access_request(bundle.access_request),
         approval_ticket=serialize_approval_ticket(bundle.approval_ticket),
@@ -156,6 +168,7 @@ def _serialize_approval_bundle(
         callback_blocker_delta=callback_blocker_delta,
         run_snapshot=run_snapshot,
         run_follow_up=run_follow_up,
+        legacy_auth_governance=legacy_auth_governance,
     )
 
 
@@ -170,6 +183,10 @@ def _serialize_notification_retry_bundle(
         run_id=bundle.approval_ticket.run_id,
         node_run_id=bundle.approval_ticket.node_run_id,
     )
+    legacy_auth_governance = _build_sensitive_access_legacy_auth_governance_snapshot(
+        db,
+        workflow_ids=[run_snapshot.workflow_id if run_snapshot is not None else None],
+    )
     return NotificationDispatchRetryResponse(
         approval_ticket=serialize_approval_ticket(bundle.approval_ticket),
         notification=serialize_notification_dispatch(bundle.notification),
@@ -177,6 +194,7 @@ def _serialize_notification_retry_bundle(
         callback_blocker_delta=callback_blocker_delta,
         run_snapshot=run_snapshot,
         run_follow_up=run_follow_up,
+        legacy_auth_governance=legacy_auth_governance,
     )
 
 
@@ -503,6 +521,122 @@ def _load_inbox_entry_legacy_auth_governance(
         snapshot_cache[workflow_id] = snapshot if snapshot.binding_count > 0 else None
 
     return snapshot_cache[workflow_id]
+
+
+def _resolve_legacy_auth_workflow_ids_for_run_ids(
+    db: Session,
+    *,
+    run_ids: list[str],
+) -> list[str]:
+    resolved_workflow_ids: list[str] = []
+    seen_workflow_ids: set[str] = set()
+    for run_id in run_ids:
+        normalized_run_id = str(run_id or "").strip()
+        if not normalized_run_id:
+            continue
+        run_snapshot = load_operator_run_snapshot(db, normalized_run_id)
+        workflow_id = str(
+            run_snapshot.workflow_id if run_snapshot is not None else ""
+        ).strip()
+        if workflow_id and workflow_id not in seen_workflow_ids:
+            seen_workflow_ids.add(workflow_id)
+            resolved_workflow_ids.append(workflow_id)
+    return resolved_workflow_ids
+
+
+def _build_sensitive_access_legacy_auth_governance_snapshot(
+    db: Session,
+    *,
+    workflow_ids: list[str | None],
+    snapshot_cache: dict[str, object | None] | None = None,
+) -> WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None:
+    cache = snapshot_cache if snapshot_cache is not None else {}
+    normalized_workflow_ids: list[str] = []
+    seen_workflow_ids: set[str] = set()
+    for workflow_id in workflow_ids:
+        normalized = str(workflow_id or "").strip()
+        if normalized and normalized not in seen_workflow_ids:
+            seen_workflow_ids.add(normalized)
+            normalized_workflow_ids.append(normalized)
+
+    snapshots = [
+        snapshot
+        for workflow_id in normalized_workflow_ids
+        for snapshot in [
+            _load_inbox_entry_legacy_auth_governance(
+                db,
+                workflow_id=workflow_id,
+                snapshot_cache=cache,
+            )
+        ]
+        if snapshot is not None
+    ]
+    if not snapshots:
+        return None
+
+    checklist_by_key = {}
+    workflows = []
+    draft_candidates = []
+    published_blockers = []
+    offline_inventory = []
+    binding_count = 0
+    draft_candidate_count = 0
+    published_blocker_count = 0
+    offline_inventory_count = 0
+    generated_at = snapshots[0].generated_at
+
+    for snapshot in snapshots:
+        binding_count += snapshot.binding_count
+        draft_candidate_count += snapshot.summary.draft_candidate_count
+        published_blocker_count += snapshot.summary.published_blocker_count
+        offline_inventory_count += snapshot.summary.offline_inventory_count
+        workflows.extend(
+            workflow.model_copy(deep=True) for workflow in snapshot.workflows
+        )
+        draft_candidates.extend(
+            item.model_copy(deep=True)
+            for item in snapshot.buckets.draft_candidates
+        )
+        published_blockers.extend(
+            item.model_copy(deep=True) for item in snapshot.buckets.published_blockers
+        )
+        offline_inventory.extend(
+            item.model_copy(deep=True) for item in snapshot.buckets.offline_inventory
+        )
+        if snapshot.generated_at > generated_at:
+            generated_at = snapshot.generated_at
+
+        for item in snapshot.checklist:
+            existing = checklist_by_key.get(item.key)
+            if existing is None:
+                checklist_by_key[item.key] = item.model_copy(deep=True)
+                continue
+            checklist_by_key[item.key] = existing.model_copy(
+                update={"count": existing.count + item.count}
+            )
+
+    workflows.sort(key=lambda item: item.workflow_name)
+    return WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot(
+        generated_at=generated_at,
+        workflow_count=len(workflows),
+        binding_count=binding_count,
+        summary={
+            "draft_candidate_count": draft_candidate_count,
+            "published_blocker_count": published_blocker_count,
+            "offline_inventory_count": offline_inventory_count,
+        },
+        checklist=[
+            checklist_by_key[key]
+            for key in LEGACY_AUTH_CHECKLIST_ORDER
+            if key in checklist_by_key
+        ],
+        workflows=workflows,
+        buckets={
+            "draft_candidates": draft_candidates,
+            "published_blockers": published_blockers,
+            "offline_inventory": offline_inventory,
+        },
+    )
 
 
 @router.get("/inbox", response_model=SensitiveAccessInboxResponse)
@@ -841,6 +975,10 @@ def bulk_decide_approval_tickets(
         if resolved_run_id
         and (resolved_run_id, item.node_run_id) in before_blockers_by_scope
     ]
+    affected_run_ids = collect_sensitive_access_run_ids(
+        db,
+        scopes=[(item.run_id, item.node_run_id) for item in decided_items],
+    )
     return ApprovalTicketBulkDecisionResult(
         status=payload.status,
         requested_count=len(payload.ticket_ids),
@@ -858,11 +996,12 @@ def bulk_decide_approval_tickets(
             before_blockers,
             after_blockers,
         ),
-        run_follow_up=build_operator_run_follow_up_summary(
+        run_follow_up=build_operator_run_follow_up_summary(db, affected_run_ids),
+        legacy_auth_governance=_build_sensitive_access_legacy_auth_governance_snapshot(
             db,
-            collect_sensitive_access_run_ids(
+            workflow_ids=_resolve_legacy_auth_workflow_ids_for_run_ids(
                 db,
-                scopes=[(item.run_id, item.node_run_id) for item in decided_items],
+                run_ids=affected_run_ids,
             ),
         ),
     )
@@ -1054,6 +1193,13 @@ def bulk_retry_notification_dispatches(
         if resolved_run_id
         and (resolved_run_id, item.approval_ticket.node_run_id) in before_blockers_by_scope
     ]
+    affected_run_ids = collect_sensitive_access_run_ids(
+        db,
+        scopes=[
+            (item.approval_ticket.run_id, item.approval_ticket.node_run_id)
+            for item in retried_items
+        ],
+    )
     return NotificationDispatchBulkRetryResult(
         requested_count=len(payload.dispatch_ids),
         retried_count=len(retried_items),
@@ -1071,14 +1217,12 @@ def bulk_retry_notification_dispatches(
             before_blockers,
             after_blockers,
         ),
-        run_follow_up=build_operator_run_follow_up_summary(
+        run_follow_up=build_operator_run_follow_up_summary(db, affected_run_ids),
+        legacy_auth_governance=_build_sensitive_access_legacy_auth_governance_snapshot(
             db,
-            collect_sensitive_access_run_ids(
+            workflow_ids=_resolve_legacy_auth_workflow_ids_for_run_ids(
                 db,
-                scopes=[
-                    (item.approval_ticket.run_id, item.approval_ticket.node_run_id)
-                    for item in retried_items
-                ],
+                run_ids=affected_run_ids,
             ),
         ),
     )

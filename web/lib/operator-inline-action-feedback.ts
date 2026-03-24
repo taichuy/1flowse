@@ -5,6 +5,7 @@ import type {
   SkillReferenceLoadItem,
   ToolCallItem
 } from "@/lib/get-run-views";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 import {
   buildOperatorRunFollowUpSampleInboxContext,
   type OperatorRunFollowUpSampleInboxContext
@@ -28,6 +29,7 @@ export type OperatorInlineActionResultState = {
   runFollowUp?: OperatorRunFollowUpSummary | null;
   blockerDeltaSummary?: string | null;
   runSnapshot?: RunSnapshot | null;
+  legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
 };
 
 export type OperatorInlineActionFeedbackModel = {

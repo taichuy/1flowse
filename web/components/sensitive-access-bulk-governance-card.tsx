@@ -5,6 +5,7 @@ import React from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
+import { SensitiveAccessLegacyAuthGovernanceCompactCard } from "@/components/sensitive-access-legacy-auth-governance-card";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import type {
   SensitiveAccessBulkAction,
@@ -231,6 +232,15 @@ export function SensitiveAccessBulkGovernanceCard({
                 skillTraceDescription="批量治理结果现在也会复用 compact snapshot 里的 skill trace，方便直接确认受影响 run 的 focus node 注入来源。"
               />
             </div>
+          ) : null}
+
+          {lastResult.legacyAuthGovernance ? (
+            <SensitiveAccessLegacyAuthGovernanceCompactCard
+              snapshot={lastResult.legacyAuthGovernance}
+              description="本次 bulk 回执会直接附带 workflow 级 legacy publish auth handoff，避免 operator 在批量审批/重试之后还要回页面顶部补 draft cleanup / published blocker 上下文。"
+              checklistDescription="先处理 draft cleanup，再推进 published replacement，最后把只剩 offline inventory 的历史条目留给交接与审计；当前 bulk 结果与 inbox 顶部 summary 继续共享同一份 workflow handoff。"
+              workflowDescription="如果本次批量动作已经清掉 waiting blocker，但 workflow 侧仍有 legacy binding backlog，可直接沿这里的 workflow follow-up 继续收口。"
+            />
           ) : null}
         </>
       ) : null}

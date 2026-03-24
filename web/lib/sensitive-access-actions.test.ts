@@ -153,6 +153,56 @@ function jsonResponse(body: unknown, ok = true) {
   });
 }
 
+function buildLegacyAuthGovernanceSnapshot() {
+  return {
+    generated_at: "2026-03-24T08:49:00Z",
+    workflow_count: 1,
+    binding_count: 1,
+    summary: {
+      draft_candidate_count: 0,
+      published_blocker_count: 1,
+      offline_inventory_count: 0
+    },
+    checklist: [
+      {
+        key: "published_follow_up" as const,
+        title: "再补发支持鉴权的 replacement bindings",
+        tone: "manual" as const,
+        tone_label: "人工跟进",
+        count: 1,
+        detail:
+          "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft endpoint 把 authMode 切回 api_key/internal，并发布新版 binding，再决定历史版本是否下线。"
+      }
+    ],
+    workflows: [
+      {
+        workflow_id: "wf-1",
+        workflow_name: "Demo Workflow",
+        binding_count: 1,
+        draft_candidate_count: 0,
+        published_blocker_count: 1,
+        offline_inventory_count: 0
+      }
+    ],
+    buckets: {
+      draft_candidates: [],
+      published_blockers: [
+        {
+          workflow_id: "wf-1",
+          workflow_name: "Demo Workflow",
+          binding_id: "binding-1",
+          endpoint_id: "endpoint-1",
+          endpoint_name: "Demo Endpoint",
+          workflow_version: "v1",
+          lifecycle_status: "published" as const,
+          auth_mode: "token"
+        }
+      ],
+      offline_inventory: []
+    }
+  };
+}
+
 describe("sensitive access actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -166,6 +216,7 @@ describe("sensitive access actions", () => {
           primary_signal: "审批已通过。",
           follow_up: "后端已把 waiting blocker 重新交回 runtime。"
         },
+        legacy_auth_governance: buildLegacyAuthGovernanceSnapshot(),
         callback_blocker_delta: {
           sampled_scope_count: 1,
           changed_scope_count: 1,
@@ -267,6 +318,7 @@ describe("sensitive access actions", () => {
       status: "running",
       currentNodeId: "review"
     });
+    expect(result.legacyAuthGovernance).toEqual(buildLegacyAuthGovernanceSnapshot());
     expect(result.message).toContain("审批已通过。");
     expect(result.message).toContain("后端已把 waiting blocker 重新交回 runtime。");
     expect(result.message).toContain(
@@ -521,6 +573,7 @@ describe("sensitive access actions", () => {
           primary_signal: "批量审批已通过。",
           follow_up: "继续观察 waiting 与 callback 后续推进。"
         },
+        legacy_auth_governance: buildLegacyAuthGovernanceSnapshot(),
         callback_blocker_delta: {
           sampled_scope_count: 1,
           changed_scope_count: 1,
@@ -598,6 +651,7 @@ describe("sensitive access actions", () => {
     expect(result.message).toContain("继续观察 waiting 与 callback 后续推进。");
     expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
     expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
+    expect(result.legacyAuthGovernance).toEqual(buildLegacyAuthGovernanceSnapshot());
     expect(revalidateOperatorFollowUpByRunIds).toHaveBeenCalledWith(
       ["run-1"],
       expect.objectContaining({

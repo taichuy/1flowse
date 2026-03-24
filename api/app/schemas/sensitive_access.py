@@ -176,6 +176,7 @@ class NotificationDispatchRetryResponse(BaseModel):
     callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
     run_snapshot: OperatorRunSnapshot | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class NotificationDispatchRetryRequest(BaseModel):
@@ -262,6 +263,7 @@ class ApprovalTicketDecisionResponse(BaseModel):
     callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
     run_snapshot: OperatorRunSnapshot | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class ApprovalTicketBulkDecisionRequest(BaseModel):
@@ -312,6 +314,7 @@ class ApprovalTicketBulkDecisionResult(BaseModel):
     outcome_explanation: SignalFollowUpExplanation | None = None
     callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class NotificationDispatchBulkRetryRequest(BaseModel):
@@ -361,3 +364,4 @@ class NotificationDispatchBulkRetryResult(BaseModel):
     outcome_explanation: SignalFollowUpExplanation | None = None
     callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None

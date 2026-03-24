@@ -6,6 +6,7 @@ import type {
   SensitiveAccessBulkActionResult,
   SensitiveAccessBulkSkipSummary
 } from "@/lib/get-sensitive-access";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 import {
   formatBulkOperatorOutcomeExplanationMessage,
   formatBulkApprovalDecisionBaseMessage,
@@ -68,6 +69,7 @@ type ApprovalDecisionResponseBody = {
   detail?: string;
   outcome_explanation?: OutcomeExplanationBody | null;
   callback_blocker_delta?: CallbackBlockerDeltaResponseBody | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   request?: {
     decision_label?: string | null;
     reason_label?: string | null;
@@ -84,6 +86,7 @@ type NotificationRetryResponseBody = {
   detail?: string;
   outcome_explanation?: OutcomeExplanationBody | null;
   callback_blocker_delta?: CallbackBlockerDeltaResponseBody | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   approval_ticket?: {
     waiting_status?: "waiting" | "resumed" | "failed";
   };
@@ -102,6 +105,7 @@ type ApprovalTicketBulkDecisionResponseBody = {
   skipped_count: number;
   outcome_explanation?: OutcomeExplanationBody | null;
   callback_blocker_delta?: CallbackBlockerDeltaResponseBody | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   decided_items: Array<{
     id: string;
     run_id?: string | null;
@@ -117,6 +121,7 @@ type NotificationDispatchBulkRetryResponseBody = {
   skipped_count: number;
   outcome_explanation?: OutcomeExplanationBody | null;
   callback_blocker_delta?: CallbackBlockerDeltaResponseBody | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   retried_items: Array<{
     approval_ticket: {
       id: string;
@@ -330,6 +335,7 @@ export async function decideSensitiveAccessApprovalTicket(
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
+      legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary,
       runSnapshot,
       ticketId
@@ -433,6 +439,7 @@ export async function retrySensitiveAccessNotificationDispatch(
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
+      legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary,
       runSnapshot,
       dispatchId,
@@ -552,6 +559,7 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
+      legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary: blockerDelta?.summary ?? null,
       requestedCount: body?.requested_count ?? ticketIds.length,
       updatedCount,
@@ -674,6 +682,7 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
+      legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary: blockerDelta?.summary ?? null,
       requestedCount: body?.requested_count ?? dispatchIds.length,
       updatedCount,

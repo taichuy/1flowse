@@ -8,6 +8,56 @@ import {
 } from "@/components/sensitive-access-bulk-governance-card";
 import type { SensitiveAccessBulkActionResult } from "@/lib/get-sensitive-access";
 
+function buildLegacyAuthGovernanceSnapshot() {
+  return {
+    generated_at: "2026-03-24T08:49:00Z",
+    workflow_count: 1,
+    binding_count: 1,
+    summary: {
+      draft_candidate_count: 0,
+      published_blocker_count: 1,
+      offline_inventory_count: 0
+    },
+    checklist: [
+      {
+        key: "published_follow_up" as const,
+        title: "再补发支持鉴权的 replacement bindings",
+        tone: "manual" as const,
+        tone_label: "人工跟进",
+        count: 1,
+        detail:
+          "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft endpoint 把 authMode 切回 api_key/internal，并发布新版 binding，再决定历史版本是否下线。"
+      }
+    ],
+    workflows: [
+      {
+        workflow_id: "wf-demo",
+        workflow_name: "Demo Workflow",
+        binding_count: 1,
+        draft_candidate_count: 0,
+        published_blocker_count: 1,
+        offline_inventory_count: 0
+      }
+    ],
+    buckets: {
+      draft_candidates: [],
+      published_blockers: [
+        {
+          workflow_id: "wf-demo",
+          workflow_name: "Demo Workflow",
+          binding_id: "binding-demo",
+          endpoint_id: "endpoint-demo",
+          endpoint_name: "Demo Endpoint",
+          workflow_version: "v1",
+          lifecycle_status: "published" as const,
+          auth_mode: "token"
+        }
+      ],
+      offline_inventory: []
+    }
+  };
+}
+
 let mockPathname = "/sensitive-access";
 let mockSearchParams = "";
 
@@ -376,5 +426,50 @@ describe("SensitiveAccessBulkGovernanceCard", () => {
     expect(html.match(new RegExp(followUp, "g"))?.length ?? 0).toBe(1);
     expect(html).not.toContain(message);
     expect(html).not.toContain("Next step");
+  });
+
+  it("renders workflow handoff when the bulk result carries legacy auth governance", () => {
+    const lastResult: SensitiveAccessBulkActionResult = {
+      action: "approved",
+      status: "success",
+      message: "批量审批已通过。",
+      requestedCount: 1,
+      updatedCount: 1,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 1,
+      sampledRunCount: 0,
+      waitingRunCount: 0,
+      runningRunCount: 1,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      legacyAuthGovernance: buildLegacyAuthGovernanceSnapshot()
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBulkGovernanceCard, {
+        inScopeCount: 1,
+        decisionCandidateCount: 1,
+        retryCandidateCount: 0,
+        operatorValue: "ops-reviewer",
+        onOperatorChange: () => {},
+        isMutating: false,
+        lastResult,
+        message: lastResult.message,
+        messageTone: "success",
+        onAction: () => {}
+      })
+    );
+
+    expect(html).toContain("Workflow handoff");
+    expect(html).toContain("published blockers 1");
+    expect(html).toContain("再补发支持鉴权的 replacement bindings");
+    expect(html).toContain("Demo Workflow");
   });
 });

@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
@@ -6,6 +7,99 @@ import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entr
 type SensitiveAccessLegacyAuthGovernanceCardProps = {
   snapshot: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
 };
+
+type SensitiveAccessLegacyAuthGovernanceCompactCardProps =
+  SensitiveAccessLegacyAuthGovernanceCardProps & {
+    description?: string;
+    checklistDescription?: string;
+    workflowDescription?: string;
+  };
+
+function renderWorkflowFollowUpCards(
+  snapshot: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot
+) {
+  return snapshot.workflows.map((workflow) => {
+    const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
+      workflowId: workflow.workflow_id,
+      variant: "editor"
+    });
+
+    return (
+      <article className="payload-card compact-card" key={workflow.workflow_id}>
+        <div className="payload-card-header">
+          <span className="status-meta">{workflow.binding_count} legacy bindings</span>
+          <Link className="event-chip inbox-filter-link" href={workflowDetailLink.href}>
+            {workflowDetailLink.label}
+          </Link>
+        </div>
+        <p className="binding-meta">{workflow.workflow_name}</p>
+        <p className="section-copy entry-copy">
+          draft cleanup {workflow.draft_candidate_count} 条，published blocker{" "}
+          {workflow.published_blocker_count} 条，offline inventory{" "}
+          {workflow.offline_inventory_count} 条。
+        </p>
+      </article>
+    );
+  });
+}
+
+export function SensitiveAccessLegacyAuthGovernanceCompactCard({
+  snapshot,
+  description =
+    "当前 operator 结果会直接回带 workflow 级 legacy publish auth handoff，处理完审批或通知动作后，不必再回页面顶部补 draft cleanup / published blocker 上下文。",
+  checklistDescription =
+    "先处理 draft cleanup，再推进 published replacement，最后把只剩 offline inventory 的历史条目留给交接与审计；当前结果卡片与 inbox 顶部 summary 继续共享同一份 workflow handoff。",
+  workflowDescription =
+    "本次动作影响到的 workflow 会保留各自 legacy binding backlog 计数；如需继续收口，可直接回到 workflow detail 处理 replacement 或 offline inventory。"
+}: SensitiveAccessLegacyAuthGovernanceCompactCardProps) {
+  if (!snapshot || snapshot.binding_count <= 0) {
+    return null;
+  }
+
+  return (
+    <div className="entry-card compact-card">
+      <div className="payload-card-header">
+        <span className="status-meta">Workflow handoff</span>
+        <span className="event-chip">workflows {snapshot.workflow_count}</span>
+      </div>
+      <div className="starter-tag-row">
+        <span className="event-chip">draft cleanup {snapshot.summary.draft_candidate_count}</span>
+        <span className="event-chip">published blockers {snapshot.summary.published_blocker_count}</span>
+        <span className="event-chip">offline inventory {snapshot.summary.offline_inventory_count}</span>
+      </div>
+      <p className="section-copy entry-copy">{description}</p>
+
+      {snapshot.checklist.length > 0 ? (
+        <div className="publish-key-list">
+          <div>
+            <p className="entry-card-title">Operator checklist</p>
+            <p className="section-copy entry-copy">{checklistDescription}</p>
+          </div>
+
+          {snapshot.checklist.map((item) => (
+            <article className="payload-card compact-card" key={item.key}>
+              <div className="payload-card-header">
+                <span className="status-meta">{item.tone_label}</span>
+                <span className="event-chip">{item.count} items</span>
+              </div>
+              <p className="binding-meta">{item.title}</p>
+              <p className="section-copy entry-copy">{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="publish-key-list">
+        <div>
+          <p className="entry-card-title">Workflow follow-up</p>
+          <p className="section-copy entry-copy">{workflowDescription}</p>
+        </div>
+
+        {renderWorkflowFollowUpCards(snapshot)}
+      </div>
+    </div>
+  );
+}
 
 export function SensitiveAccessLegacyAuthGovernanceCard({
   snapshot
@@ -80,29 +174,7 @@ export function SensitiveAccessLegacyAuthGovernanceCard({
           </p>
         </div>
 
-        {snapshot.workflows.map((workflow) => {
-          const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
-            workflowId: workflow.workflow_id,
-            variant: "editor"
-          });
-
-          return (
-            <article className="payload-card compact-card" key={workflow.workflow_id}>
-              <div className="payload-card-header">
-                <span className="status-meta">{workflow.binding_count} legacy bindings</span>
-                <Link className="event-chip inbox-filter-link" href={workflowDetailLink.href}>
-                  {workflowDetailLink.label}
-                </Link>
-              </div>
-              <p className="binding-meta">{workflow.workflow_name}</p>
-              <p className="section-copy entry-copy">
-                draft cleanup {workflow.draft_candidate_count} 条，published blocker{" "}
-                {workflow.published_blocker_count} 条，offline inventory{" "}
-                {workflow.offline_inventory_count} 条。
-              </p>
-            </article>
-          );
-        })}
+        {renderWorkflowFollowUpCards(snapshot)}
       </div>
     </article>
   );
