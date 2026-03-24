@@ -85,7 +85,6 @@ export function RunDiagnosticsOverviewSections({
             callbackWaitingAutomation={callbackWaitingAutomation}
             sandboxReadiness={sandboxReadiness}
             recommendedNextStepHref={buildRunDiagnosticsExecutionViewHref(run.id)}
-            recommendedNextStepHrefLabel="jump to execution facts"
           />
         </article>
 

@@ -36,8 +36,7 @@ import {
   resolvePublishedInvocationExecutionFocusExplanation
 } from "@/lib/published-invocation-presenters";
 import {
-  buildOperatorTraceSliceLinkSurface,
-  buildOperatorRunDetailLinkSurface
+  buildOperatorTraceSliceLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import {
   formatMetricSummary,
@@ -49,6 +48,7 @@ import {
   buildRunDetailHrefFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
+import { buildAuthorFacingRunDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 type PublishedInvocationItem = PublishedEndpointInvocationListResponse["items"][number];
 
@@ -302,11 +302,6 @@ export function WorkflowPublishInvocationEntryCard({
               <dt>{surfaceCopy.canonicalFollowUpSampleFocusLabel}</dt>
               <dd>
                 {(() => {
-                  const runLink = buildOperatorRunDetailLinkSurface({
-                    runId: runFollowUpSample?.run_id,
-                    hrefLabel: runFollowUpSample?.run_id ?? null
-                  });
-
                   const scopedRunHref =
                     runFollowUpSample?.run_id && workspaceStarterGovernanceQueryScope
                       ? buildRunDetailHrefFromWorkspaceStarterViewState(
@@ -314,9 +309,16 @@ export function WorkflowPublishInvocationEntryCard({
                           workspaceStarterGovernanceQueryScope
                         )
                       : null;
+                  const runLink = runFollowUpSample?.run_id
+                    ? buildAuthorFacingRunDetailLinkSurface({
+                        runId: runFollowUpSample.run_id,
+                        runHref: scopedRunHref,
+                        hrefLabel: runFollowUpSample.run_id
+                      })
+                    : null;
 
                   return runLink ? (
-                    <Link className="inline-link" href={scopedRunHref ?? runLink.href}>
+                    <Link className="inline-link" href={runLink.href}>
                       {runLink.label}
                     </Link>
                   ) : (

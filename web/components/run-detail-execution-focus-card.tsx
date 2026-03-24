@@ -60,7 +60,7 @@ export function RunDetailExecutionFocusCard({
   const currentRunHref = buildRunDetailHref(run.id);
   const localRecommendedNextStepHref = recommendedNextStepHref ?? buildRunDiagnosticsExecutionViewHref(run.id);
   const localRecommendedNextStepHrefLabel =
-    recommendedNextStepHrefLabel ?? "jump to execution facts";
+    recommendedNextStepHrefLabel ?? executionSurfaceCopy.executionFactsLinkLabel;
   const focus = buildRunDetailExecutionFocusViewModel(run);
   if (!focus) {
     return null;

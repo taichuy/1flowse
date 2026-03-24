@@ -25,14 +25,14 @@ import {
 } from "@/lib/sensitive-access-presenters";
 import {
   buildOperatorFollowUpSurfaceCopy,
-  buildOperatorInboxSliceLinkSurface,
-  buildOperatorRunDetailLinkSurface
+  buildOperatorInboxSliceLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
   buildRunDetailHrefFromWorkspaceStarterViewState,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
+import { buildAuthorFacingRunDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 function normalizeApprovalStatus(value?: string | null) {
   return value === "pending" || value === "approved" || value === "rejected" || value === "expired"
@@ -94,12 +94,13 @@ export function SensitiveAccessBlockedCard({
     href: inboxHref,
     surfaceCopy: operatorSurfaceCopy
   });
-  const runLink = buildOperatorRunDetailLinkSurface({
-    runId,
-    runHref: scopedRunDetailHref,
-    hrefLabel: runId,
-    surfaceCopy: operatorSurfaceCopy
-  });
+  const runLink = runId
+    ? buildAuthorFacingRunDetailLinkSurface({
+        runId,
+        runHref: scopedRunDetailHref,
+        hrefLabel: runId
+      })
+    : null;
   const hasStructuredFollowUp = Boolean(
       payload.outcome_explanation?.primary_signal?.trim() ||
       payload.outcome_explanation?.follow_up?.trim() ||

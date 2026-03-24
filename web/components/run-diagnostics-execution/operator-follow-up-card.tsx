@@ -154,7 +154,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
       href: executionTimelineHref,
       label: "observe waiting",
       detail: callbackFollowUp ?? followUp?.explanation?.follow_up ?? null,
-      hrefLabel: "jump to execution timeline",
+      hrefLabel: surfaceCopy.executionTimelineLinkLabel,
       fallbackDetail: diagnosticsSurfaceCopy.callbackFallbackDetail,
       surfaceCopy
     }),
@@ -165,7 +165,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
       href: executionTimelineHref,
       label: "inspect execution focus",
       detail: executionFollowUp ?? followUp?.explanation?.follow_up ?? null,
-      hrefLabel: "jump to execution timeline",
+      hrefLabel: surfaceCopy.executionTimelineLinkLabel,
       fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
       surfaceCopy
     }),

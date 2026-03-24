@@ -634,7 +634,7 @@ export function buildPublishedInvocationDetailSurfaceCopy({
     sampledRunCurrentNodeLabel: "Current node",
     sampledRunWaitingReasonLabel: "Waiting reason",
     recommendedNextStepTitle: operatorSurfaceCopy.recommendedNextStepTitle,
-    executionFocusTitle: "Execution focus",
+    executionFocusTitle: operatorSurfaceCopy.executionFocusTitle,
     liveSandboxReadinessTitle: "Live sandbox readiness",
     skillTraceTitle: "Skill trace",
     injectedReferencesTitle: operatorSurfaceCopy.injectedReferencesTitle,

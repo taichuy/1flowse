@@ -41,6 +41,16 @@ describe("workbench entry surface copy", () => {
       href: "/runs/run-1",
       label: "打开最新 run 诊断面板"
     });
+    expect(
+      buildAuthorFacingRunDetailLinkSurface({
+        runId: "run-1",
+        runHref: "/runs/run-1?needs_follow_up=true",
+        hrefLabel: "run-1"
+      })
+    ).toEqual({
+      href: "/runs/run-1?needs_follow_up=true",
+      label: "run-1"
+    });
   });
 
   it("keeps author-facing workflow entry labels on the shared workflow detail contract", () => {
@@ -215,6 +225,7 @@ describe("workbench entry surface copy", () => {
     expect(surfaceCopy.recommendedNextStepFallbackDetail).toContain(
       "canonical execution focus"
     );
+    expect(surfaceCopy.executionFactsLinkLabel).toBe("jump to execution facts");
     expect(surfaceCopy.focusedSkillTraceDescription).toContain(
       "execution focus skill trace"
     );

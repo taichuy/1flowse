@@ -60,6 +60,7 @@ export type SensitiveAccessInboxEntryExecutionSurfaceCopy = {
 
 export type RunDetailExecutionFocusSurfaceCopy = {
   recommendedNextStepFallbackDetail: string;
+  executionFactsLinkLabel: string;
   focusedSkillTraceDescription: string;
 };
 
@@ -218,16 +219,18 @@ export function buildRunLibrarySurfaceCopy({
 export function buildAuthorFacingRunDetailLinkSurface({
   runId,
   runHref,
+  hrefLabel,
   variant = "activity"
 }: {
   runId: string;
   runHref?: string | null;
+  hrefLabel?: string | null;
   variant?: AuthorFacingRunDetailLinkVariant;
 }): OperatorFollowUpLinkSurface {
   return buildRequiredOperatorRunDetailLinkSurface({
     runId,
     runHref,
-    hrefLabel: authorFacingRunDetailLinkLabels[variant]
+    hrefLabel: hrefLabel?.trim() || authorFacingRunDetailLinkLabels[variant]
   });
 }
 
@@ -352,6 +355,7 @@ export function buildRunDetailExecutionFocusSurfaceCopy(): RunDetailExecutionFoc
   return {
     recommendedNextStepFallbackDetail:
       "当前 run 已回接 canonical execution focus；优先继续检查 focus node、runtime evidence 和 execution fallback / blocking 原因。",
+    executionFactsLinkLabel: "jump to execution facts",
     focusedSkillTraceDescription:
       "当前 diagnostics / overlay 已直接消费 run detail 里的 execution focus skill trace，不必再等 execution view 才知道当前聚焦节点注入了哪些参考资料。"
   };

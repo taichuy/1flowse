@@ -20,8 +20,7 @@ import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-wait
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
   buildOperatorTraceSliceLinkSurface,
-  buildOperatorRecommendedNextStep,
-  buildOperatorRunDetailLinkSurface
+  buildOperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
 import {
   buildPublishedInvocationDetailSurfaceCopy,
@@ -68,7 +67,10 @@ import {
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
-import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import {
+  buildAuthorFacingRunDetailLinkSurface,
+  buildAuthorFacingWorkflowDetailLinkSurface
+} from "@/lib/workbench-entry-surfaces";
 
 type WorkflowPublishInvocationDetailPanelProps = {
   detail: PublishedEndpointInvocationDetailResponse;
@@ -183,10 +185,6 @@ export function WorkflowPublishInvocationDetailPanel({
     focusSkillTraceNodeRunId:
       skillTrace?.scope === "execution_focus_node" ? skillTrace.nodes[0]?.node_run_id ?? null : null
   });
-  const runDrilldownLink = buildOperatorRunDetailLinkSurface({
-    runId: run?.id,
-    hrefLabel: detailSurfaceCopy.openRunLabel
-  });
   const scopedRunDrilldownHref =
     run?.id && workspaceStarterGovernanceQueryScope
       ? buildRunDetailHrefFromWorkspaceStarterViewState(
@@ -194,6 +192,12 @@ export function WorkflowPublishInvocationDetailPanel({
           workspaceStarterGovernanceQueryScope
         )
       : null;
+  const runDrilldownLink = run?.id
+    ? buildAuthorFacingRunDetailLinkSurface({
+        runId: run.id,
+        runHref: scopedRunDrilldownHref
+      })
+    : null;
   const skillTraceSurface = skillTrace ? buildPublishedInvocationSkillTraceSurface(skillTrace) : null;
   const legacyAuthWorkflowSummary =
     legacyAuthSnapshot?.workflows.find((item) => item.workflow_id === invocation.workflow_id) ??
@@ -274,7 +278,7 @@ export function WorkflowPublishInvocationDetailPanel({
           <div className="payload-card-header">
             <span className="status-meta">{detailSurfaceCopy.runDrilldownTitle}</span>
             {runDrilldownLink ? (
-              <Link className="inline-link" href={scopedRunDrilldownHref ?? runDrilldownLink.href}>
+              <Link className="inline-link" href={runDrilldownLink.href}>
                 {runDrilldownLink.label}
               </Link>
             ) : null}
@@ -415,13 +419,14 @@ export function WorkflowPublishInvocationDetailPanel({
                   <div className="payload-card compact-card" key={sample.run_id}>
                     <div className="payload-card-header">
                       {(() => {
-                        const sampleRunLink = buildOperatorRunDetailLinkSurface({
+                        const sampleRunLink = buildAuthorFacingRunDetailLinkSurface({
                           runId: sample.run_id,
+                          runHref: scopedSampleRunHref,
                           hrefLabel: sample.run_id
                         });
 
                         return sampleRunLink ? (
-                          <Link className="inline-link" href={scopedSampleRunHref ?? sampleRunLink.href}>
+                          <Link className="inline-link" href={sampleRunLink.href}>
                             {sampleRunLink.label}
                           </Link>
                         ) : null;
