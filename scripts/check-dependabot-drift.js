@@ -847,6 +847,7 @@ function buildMarkdownSummary({
     actionsReadPermissionMissing:
       isActionsReadPermissionError(dependencySubmissionEvidence?.fetchError) ||
       isActionsReadPermissionError(dependencySubmissionEvidence?.reportDownloadError),
+    repository,
   });
   const lines = [
     '## GitHub 安全告警漂移检查',
@@ -1068,6 +1069,7 @@ function buildDriftReport({
     actionsReadPermissionMissing:
       isActionsReadPermissionError(dependencySubmissionEvidence?.fetchError) ||
       isActionsReadPermissionError(dependencySubmissionEvidence?.reportDownloadError),
+    repository,
   });
 
   return {

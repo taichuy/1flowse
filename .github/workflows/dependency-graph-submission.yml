@@ -25,6 +25,8 @@ jobs:
       recommended_actions_count: ${{ steps.submit.outputs.recommended_actions_count }}
       primary_recommended_action_code: ${{ steps.submit.outputs.primary_recommended_action_code }}
       primary_recommended_action_audience: ${{ steps.submit.outputs.primary_recommended_action_audience }}
+      primary_recommended_action_href: ${{ steps.submit.outputs.primary_recommended_action_href }}
+      primary_recommended_action_href_label: ${{ steps.submit.outputs.primary_recommended_action_href_label }}
       repository_blocker_kind: ${{ steps.submit.outputs.repository_blocker_kind }}
       dependency_graph_missing_roots_json: ${{ steps.submit.outputs.dependency_graph_missing_roots_json }}
     permissions:

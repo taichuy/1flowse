@@ -27,6 +27,8 @@ jobs:
       recommended_actions_count: ${{ steps.drift.outputs.recommended_actions_count }}
       primary_recommended_action_code: ${{ steps.drift.outputs.primary_recommended_action_code }}
       primary_recommended_action_audience: ${{ steps.drift.outputs.primary_recommended_action_audience }}
+      primary_recommended_action_href: ${{ steps.drift.outputs.primary_recommended_action_href }}
+      primary_recommended_action_href_label: ${{ steps.drift.outputs.primary_recommended_action_href_label }}
       repository_blocker_kind: ${{ steps.drift.outputs.repository_blocker_kind }}
       dependency_graph_missing_roots_json: ${{ steps.drift.outputs.dependency_graph_missing_roots_json }}
     permissions:

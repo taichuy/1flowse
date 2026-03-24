@@ -26,6 +26,8 @@ test('buildRecommendedActionsOutputs keeps priority order and top action stable'
       summary: '启用 Dependency graph。',
       rationale: '仓库设置阻塞。',
       roots: ['api', 'web'],
+      href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+      hrefLabel: '打开仓库安全设置',
     },
   ]);
 
@@ -36,6 +38,11 @@ test('buildRecommendedActionsOutputs keeps priority order and top action stable'
   assert.equal(outputs.primary_recommended_action_summary, '启用 Dependency graph。');
   assert.equal(outputs.primary_recommended_action_rationale, '仓库设置阻塞。');
   assert.equal(outputs.primary_recommended_action_roots_json, JSON.stringify(['api', 'web']));
+  assert.equal(
+    outputs.primary_recommended_action_href,
+    'https://github.com/taichuy/7flows/settings/security_analysis',
+  );
+  assert.equal(outputs.primary_recommended_action_href_label, '打开仓库安全设置');
   assert.deepEqual(JSON.parse(outputs.recommended_actions_json), [
     {
       priority: 1,
@@ -44,6 +51,8 @@ test('buildRecommendedActionsOutputs keeps priority order and top action stable'
       summary: '启用 Dependency graph。',
       rationale: '仓库设置阻塞。',
       roots: ['api', 'web'],
+      href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+      hrefLabel: '打开仓库安全设置',
     },
     {
       priority: 2,

@@ -679,6 +679,7 @@ function buildSubmissionSummary(
   dryRun,
   dependencyGraphVisibility = null,
   repositoryBlockerEvidence = buildRepositoryBlockerEvidence(items),
+  repository = null,
 ) {
   const header = dryRun ? '## Dependency snapshot dry run' : '## Dependency snapshot submission';
   const lines = [header, ''];
@@ -687,6 +688,7 @@ function buildSubmissionSummary(
     items,
     dependencyGraphVisibility,
     repositoryBlockerEvidence,
+    repository,
   });
 
   if (blockedItems.length > 0) {
@@ -793,6 +795,7 @@ function buildSubmissionReport(
     items,
     dependencyGraphVisibility,
     repositoryBlockerEvidence,
+    repository,
   });
 
   return {
@@ -1101,6 +1104,8 @@ async function main() {
     summaries,
     options.dryRun,
     dependencyGraphVisibility,
+    undefined,
+    repository,
   );
   const report = buildSubmissionReport(summaries, {
     dryRun: options.dryRun,

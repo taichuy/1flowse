@@ -707,6 +707,8 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       rationale:
         '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误。',
       roots: ['api', 'web'],
+      href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+      hrefLabel: '打开仓库安全设置',
     },
     {
       priority: 2,
@@ -717,6 +719,8 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       rationale:
         '只有新的 submission run 才能证明 roots 是否开始在 GitHub dependency graph 中可见。',
       roots: ['api', 'web'],
+      href: 'https://github.com/taichuy/7flows/actions/workflows/dependency-graph-submission.yml',
+      hrefLabel: '打开 Dependency Graph Submission workflow',
     },
     {
       priority: 3,
@@ -727,6 +731,8 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       rationale:
         'drift 结论需要依赖最新 submission artifact 与 dependencyGraphManifests visibility。',
       roots: [],
+      href: 'https://github.com/taichuy/7flows/actions/workflows/github-security-drift.yml',
+      hrefLabel: '打开 GitHub Security Drift workflow',
     },
     {
       priority: 4,
@@ -782,6 +788,8 @@ test('buildDriftReport keeps actions read blockers machine-readable', () => {
       rationale:
         '当前读取 workflow run 或 artifact 时出现 `Resource not accessible by integration`，这会切断 drift 与 submission 的证据链。',
       roots: [],
+      href: 'https://github.com/taichuy/7flows/actions/workflows/github-security-drift.yml',
+      hrefLabel: '打开 GitHub Security Drift workflow',
     },
   ]);
 });
@@ -915,6 +923,11 @@ test('buildDriftStepOutputs expose top follow-up and blocker facts', () => {
   assert.equal(outputs.recommended_actions_count, '4');
   assert.equal(outputs.primary_recommended_action_code, 'enable_dependency_graph');
   assert.equal(outputs.primary_recommended_action_audience, 'repository_admin');
+  assert.equal(
+    outputs.primary_recommended_action_href,
+    'https://github.com/taichuy/7flows/settings/security_analysis',
+  );
+  assert.equal(outputs.primary_recommended_action_href_label, '打开仓库安全设置');
   assert.equal(outputs.repository_blocker_kind, 'dependency_graph_disabled');
   assert.equal(outputs.repository_blocker_status, '404');
   assert.equal(outputs.dependency_submission_run_available, 'true');

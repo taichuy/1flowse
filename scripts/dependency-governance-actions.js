@@ -2,14 +2,26 @@ const fs = require('fs');
 
 function normalizeRecommendedActions(actions) {
   return (Array.isArray(actions) ? actions : [])
-    .map((action) => ({
-      priority: Number.isInteger(action?.priority) ? action.priority : null,
-      audience: typeof action?.audience === 'string' ? action.audience : null,
-      code: typeof action?.code === 'string' ? action.code : null,
-      summary: typeof action?.summary === 'string' ? action.summary : null,
-      rationale: typeof action?.rationale === 'string' ? action.rationale : null,
-      roots: Array.isArray(action?.roots) ? action.roots.filter(Boolean) : [],
-    }))
+    .map((action) => {
+      const normalizedAction = {
+        priority: Number.isInteger(action?.priority) ? action.priority : null,
+        audience: typeof action?.audience === 'string' ? action.audience : null,
+        code: typeof action?.code === 'string' ? action.code : null,
+        summary: typeof action?.summary === 'string' ? action.summary : null,
+        rationale: typeof action?.rationale === 'string' ? action.rationale : null,
+        roots: Array.isArray(action?.roots) ? action.roots.filter(Boolean) : [],
+      };
+
+      if (typeof action?.href === 'string' && action.href.trim()) {
+        normalizedAction.href = action.href.trim();
+      }
+
+      if (typeof action?.hrefLabel === 'string' && action.hrefLabel.trim()) {
+        normalizedAction.hrefLabel = action.hrefLabel.trim();
+      }
+
+      return normalizedAction;
+    })
     .filter((action) => action.priority !== null && action.audience && action.code && action.summary)
     .sort((left, right) => left.priority - right.priority || left.code.localeCompare(right.code));
 }
@@ -29,8 +41,16 @@ function dedupeRecommendedActions(actions) {
   });
 }
 
-function createRecommendedAction(priority, audience, code, summary, rationale = null, roots = []) {
-  return {
+function createRecommendedAction(
+  priority,
+  audience,
+  code,
+  summary,
+  rationale = null,
+  roots = [],
+  options = {},
+) {
+  const action = {
     priority,
     audience,
     code,
@@ -38,6 +58,67 @@ function createRecommendedAction(priority, audience, code, summary, rationale = 
     rationale,
     roots: Array.isArray(roots) ? roots.filter(Boolean) : [],
   };
+
+  if (typeof options?.href === 'string' && options.href.trim()) {
+    action.href = options.href.trim();
+  }
+
+  if (typeof options?.hrefLabel === 'string' && options.hrefLabel.trim()) {
+    action.hrefLabel = options.hrefLabel.trim();
+  }
+
+  return action;
+}
+
+function normalizeRepositoryCoordinates(repository) {
+  if (!repository || typeof repository !== 'object') {
+    return null;
+  }
+
+  const owner = typeof repository.owner === 'string' ? repository.owner.trim() : '';
+  const repo = typeof repository.repo === 'string' ? repository.repo.trim() : '';
+  if (!owner || !repo) {
+    return null;
+  }
+
+  return { owner, repo };
+}
+
+function buildRepositoryWebUrl(repository) {
+  const normalizedRepository = normalizeRepositoryCoordinates(repository);
+  if (!normalizedRepository) {
+    return null;
+  }
+
+  const serverUrl = (process.env.GITHUB_SERVER_URL || 'https://github.com').replace(/\/$/, '');
+  return `${serverUrl}/${encodeURIComponent(normalizedRepository.owner)}/${encodeURIComponent(
+    normalizedRepository.repo,
+  )}`;
+}
+
+function buildSecuritySettingsHref(repository) {
+  const repositoryUrl = buildRepositoryWebUrl(repository);
+  return repositoryUrl ? `${repositoryUrl}/settings/security_analysis` : null;
+}
+
+function buildActionsSecretsHref(repository) {
+  const repositoryUrl = buildRepositoryWebUrl(repository);
+  return repositoryUrl ? `${repositoryUrl}/settings/secrets/actions` : null;
+}
+
+function buildDependabotAlertsHref(repository) {
+  const repositoryUrl = buildRepositoryWebUrl(repository);
+  return repositoryUrl ? `${repositoryUrl}/security/dependabot` : null;
+}
+
+function buildWorkflowHref(repository, workflowFile) {
+  const repositoryUrl = buildRepositoryWebUrl(repository);
+  const normalizedWorkflowFile = typeof workflowFile === 'string' ? workflowFile.trim().split('/').pop() : '';
+  if (!repositoryUrl || !normalizedWorkflowFile) {
+    return null;
+  }
+
+  return `${repositoryUrl}/actions/workflows/${encodeURIComponent(normalizedWorkflowFile)}`;
 }
 
 function buildRecommendedActionsMarkdownLines(actions) {
@@ -54,6 +135,10 @@ function buildRecommendedActionsMarkdownLines(actions) {
     }
     if (action.roots.length > 0) {
       lines.push(`  - roots: ${action.roots.map((item) => `\`${item}\``).join('、')}`);
+    }
+    if (action.href) {
+      const label = action.hrefLabel || action.code;
+      lines.push(`  - link: [${label}](${action.href})`);
     }
   });
 
@@ -73,6 +158,8 @@ function buildRecommendedActionsOutputs(actions) {
     primary_recommended_action_summary: primaryAction?.summary || '',
     primary_recommended_action_rationale: primaryAction?.rationale || '',
     primary_recommended_action_roots_json: JSON.stringify(primaryAction?.roots || []),
+    primary_recommended_action_href: primaryAction?.href || '',
+    primary_recommended_action_href_label: primaryAction?.hrefLabel || '',
   };
 }
 
@@ -118,6 +205,7 @@ function buildSubmissionRecommendedActions({
   items,
   dependencyGraphVisibility = null,
   repositoryBlockerEvidence = null,
+  repository = null,
 }) {
   const actions = [];
   let priority = 1;
@@ -141,6 +229,10 @@ function buildSubmissionRecommendedActions({
         '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
         'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
         blockedRoots,
+        {
+          href: buildSecuritySettingsHref(repository),
+          hrefLabel: '打开仓库安全设置',
+        },
       ),
     );
     actions.push(
@@ -151,6 +243,10 @@ function buildSubmissionRecommendedActions({
         '仓库设置更新后手动重跑 `Dependency Graph Submission` workflow，确认 `repositoryBlockerEvidence` 消失并刷新 `dependencyGraphVisibility`。',
         '只有重新提交 snapshot，才能验证 GitHub 是否开始接受当前 roots 并把 manifests 写入 dependency graph。',
         blockedRoots,
+        {
+          href: buildWorkflowHref(repository, 'dependency-graph-submission.yml'),
+          hrefLabel: '打开 Dependency Graph Submission workflow',
+        },
       ),
     );
     actions.push(
@@ -160,6 +256,11 @@ function buildSubmissionRecommendedActions({
         'rerun_github_security_drift',
         '待 submission 重新成功后重跑 `GitHub Security Drift`，确认 `dependabot-drift.json` 是否收口到最新 graph 事实。',
         'security drift 需要消费最新 dependency submission evidence，才能区分平台刷新延迟与真实依赖问题。',
+        [],
+        {
+          href: buildWorkflowHref(repository, 'github-security-drift.yml'),
+          hrefLabel: '打开 GitHub Security Drift workflow',
+        },
       ),
     );
     return dedupeRecommendedActions(actions);
@@ -199,6 +300,7 @@ function buildDriftRecommendedActions({
   openAlertCount = 0,
   actionableAlertCount = 0,
   actionsReadPermissionMissing = false,
+  repository = null,
 }) {
   const actions = [];
   let priority = 1;
@@ -214,6 +316,11 @@ function buildDriftRecommendedActions({
         'fix_actionable_dependabot_alerts',
         '继续修复仍 actionable 的 Dependabot alerts，并在锁文件更新后重跑 `GitHub Security Drift`。',
         '当前至少有一个告警尚未被本地锁文件事实修复，不能把结果归因于平台漂移。',
+        [],
+        {
+          href: buildDependabotAlertsHref(repository),
+          hrefLabel: '打开 Dependabot alerts',
+        },
       ),
     );
   }
@@ -226,6 +333,11 @@ function buildDriftRecommendedActions({
         'grant_actions_read',
         '为 `GitHub Security Drift` workflow 保留 `actions: read`，确保能读取最新 dependency submission run / artifact。',
         '当前读取 workflow run 或 artifact 时出现 `Resource not accessible by integration`，这会切断 drift 与 submission 的证据链。',
+        [],
+        {
+          href: buildWorkflowHref(repository, 'github-security-drift.yml'),
+          hrefLabel: '打开 GitHub Security Drift workflow',
+        },
       ),
     );
   }
@@ -238,6 +350,11 @@ function buildDriftRecommendedActions({
         'configure_dependabot_alerts_token',
         '为仓库 secret 配置 `DEPENDABOT_ALERTS_TOKEN`，或使用具备告警读取权限的 `gh` 凭证重跑 `check-dependabot-drift`。',
         '当前 workflow token 只能读取 dependency graph 事实，无法对比 Dependabot open alerts。',
+        [],
+        {
+          href: buildActionsSecretsHref(repository),
+          hrefLabel: '打开 Actions secrets',
+        },
       ),
     );
   }
@@ -263,6 +380,10 @@ function buildDriftRecommendedActions({
         '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
         '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误。',
         roots,
+        {
+          href: buildSecuritySettingsHref(repository),
+          hrefLabel: '打开仓库安全设置',
+        },
       ),
     );
     actions.push(
@@ -273,6 +394,10 @@ function buildDriftRecommendedActions({
         '仓库设置更新后重跑 `Dependency Graph Submission` workflow，确认 blocker evidence 是否消失并刷新 manifests。',
         '只有新的 submission run 才能证明 roots 是否开始在 GitHub dependency graph 中可见。',
         roots,
+        {
+          href: buildWorkflowHref(repository, 'dependency-graph-submission.yml'),
+          hrefLabel: '打开 Dependency Graph Submission workflow',
+        },
       ),
     );
     actions.push(
@@ -282,6 +407,11 @@ function buildDriftRecommendedActions({
         'rerun_github_security_drift',
         'submission evidence 刷新后重跑 `GitHub Security Drift`，确认 `dependabot-drift.json` 是否开始收口到最新 graph / alert 事实。',
         'drift 结论需要依赖最新 submission artifact 与 dependencyGraphManifests visibility。',
+        [],
+        {
+          href: buildWorkflowHref(repository, 'github-security-drift.yml'),
+          hrefLabel: '打开 GitHub Security Drift workflow',
+        },
       ),
     );
   } else {
@@ -303,12 +433,16 @@ function buildDriftRecommendedActions({
         createRecommendedAction(
           priority++,
           'workflow_maintainer',
-          'run_dependency_graph_submission',
-          '手动重跑 `Dependency Graph Submission` workflow，确保依赖显式 submission 的 roots 至少有最新 artifact 可复验。',
-          'drift 已确认部分 roots 依赖额外 submission，但默认分支当前还没有可引用的最新 submission run。',
-          dependencySubmissionRoots.map((item) => item.rootLabel),
-        ),
-      );
+        'run_dependency_graph_submission',
+        '手动重跑 `Dependency Graph Submission` workflow，确保依赖显式 submission 的 roots 至少有最新 artifact 可复验。',
+        'drift 已确认部分 roots 依赖额外 submission，但默认分支当前还没有可引用的最新 submission run。',
+        dependencySubmissionRoots.map((item) => item.rootLabel),
+        {
+          href: buildWorkflowHref(repository, 'dependency-graph-submission.yml'),
+          hrefLabel: '打开 Dependency Graph Submission workflow',
+        },
+      ),
+    );
     } else if (
       Array.isArray(dependencyGraphVisibility?.missingRoots) &&
       dependencyGraphVisibility.missingRoots.length > 0

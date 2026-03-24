@@ -418,6 +418,8 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       rationale:
         'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
       roots: ['api'],
+      href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+      hrefLabel: '打开仓库安全设置',
     },
     {
       priority: 2,
@@ -428,6 +430,8 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       rationale:
         '只有重新提交 snapshot，才能验证 GitHub 是否开始接受当前 roots 并把 manifests 写入 dependency graph。',
       roots: ['api'],
+      href: 'https://github.com/taichuy/7flows/actions/workflows/dependency-graph-submission.yml',
+      hrefLabel: '打开 Dependency Graph Submission workflow',
     },
     {
       priority: 3,
@@ -438,6 +442,8 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       rationale:
         'security drift 需要消费最新 dependency submission evidence，才能区分平台刷新延迟与真实依赖问题。',
       roots: [],
+      href: 'https://github.com/taichuy/7flows/actions/workflows/github-security-drift.yml',
+      hrefLabel: '打开 GitHub Security Drift workflow',
     },
   ]);
   assert.deepEqual(report.roots, [
@@ -672,6 +678,11 @@ test('buildSubmissionStepOutputs expose stable blocker and follow-up fields', ()
   assert.equal(outputs.recommended_actions_count, '3');
   assert.equal(outputs.primary_recommended_action_code, 'enable_dependency_graph');
   assert.equal(outputs.primary_recommended_action_audience, 'repository_admin');
+  assert.equal(
+    outputs.primary_recommended_action_href,
+    'https://github.com/taichuy/7flows/settings/security_analysis',
+  );
+  assert.equal(outputs.primary_recommended_action_href_label, '打开仓库安全设置');
   assert.equal(outputs.repository_blocker_kind, 'dependency_graph_disabled');
   assert.equal(outputs.repository_blocker_status, '404');
   assert.equal(outputs.repository_blocker_roots_json, JSON.stringify(['api']));
