@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   DependencySubmissionError,
+  buildDependencyGraphVisibilityReport,
   buildPnpmResolvedDependencies,
   buildSubmissionReport,
   buildSubmissionSummary,
@@ -420,4 +421,130 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       warning: null,
     },
   ]);
+});
+
+test('buildDependencyGraphVisibilityReport maps visible and missing roots after submission', () => {
+  const visibility = buildDependencyGraphVisibilityReport(
+    [
+      {
+        rootDir: 'api',
+        rootLabel: 'api',
+        ecosystem: 'uv',
+        dependencyGraphSupport: 'dependency_submission',
+        manifestPath: 'api/pyproject.toml',
+        lockfilePath: 'api/uv.lock',
+      },
+      {
+        rootDir: 'web',
+        rootLabel: 'web',
+        ecosystem: 'pnpm',
+        dependencyGraphSupport: 'native',
+        manifestPath: 'web/package.json',
+        lockfilePath: 'web/pnpm-lock.yaml',
+      },
+    ],
+    [
+      {
+        filename: 'web/package.json',
+        dependenciesCount: 17,
+        parseable: true,
+        exceedsMaxSize: false,
+      },
+    ],
+    'taichuy_dev',
+  );
+
+  assert.equal(visibility.defaultBranch, 'taichuy_dev');
+  assert.equal(visibility.manifestCount, 1);
+  assert.deepEqual(visibility.visibleRoots, ['web']);
+  assert.deepEqual(visibility.missingRoots, ['api']);
+  assert.deepEqual(visibility.coverage, [
+    {
+      rootLabel: 'api',
+      ecosystem: 'uv',
+      manifestPath: 'api/pyproject.toml',
+      lockfilePath: 'api/uv.lock',
+      dependencyGraphSupport: 'dependency_submission',
+      graphVisible: false,
+      matchedGraphFilenames: [],
+    },
+    {
+      rootLabel: 'web',
+      ecosystem: 'pnpm',
+      manifestPath: 'web/package.json',
+      lockfilePath: 'web/pnpm-lock.yaml',
+      dependencyGraphSupport: 'native',
+      graphVisible: true,
+      matchedGraphFilenames: ['web/package.json'],
+    },
+  ]);
+});
+
+test('buildSubmissionSummary and report include dependency graph visibility evidence', () => {
+  const dependencyGraphVisibility = {
+    checkedAt: '2026-03-25T02:30:00.000Z',
+    defaultBranch: 'taichuy_dev',
+    manifestCount: 1,
+    manifests: [
+      {
+        filename: 'web/package.json',
+        dependenciesCount: 17,
+        parseable: true,
+        exceedsMaxSize: false,
+      },
+    ],
+    coverage: [],
+    visibleRoots: ['web'],
+    missingRoots: ['api'],
+  };
+
+  const summary = buildSubmissionSummary(
+    [
+      {
+        rootLabel: 'web',
+        status: 'submitted',
+        ecosystem: 'pnpm',
+        manifestPath: 'web/package.json',
+        lockfilePath: 'web/pnpm-lock.yaml',
+        resolvedCount: 17,
+        directCount: 3,
+        runtimeCount: 11,
+        developmentCount: 6,
+        snapshotId: 'snapshot-web',
+      },
+    ],
+    false,
+    dependencyGraphVisibility,
+  ).join('\n');
+
+  assert.match(summary, /Dependency graph manifest visibility/);
+  assert.match(summary, /visible roots now: `web`/);
+  assert.match(summary, /roots not yet visible: `api`/);
+
+  const report = buildSubmissionReport(
+    [
+      {
+        rootLabel: 'web',
+        status: 'submitted',
+        ecosystem: 'pnpm',
+        manifestPath: 'web/package.json',
+        lockfilePath: 'web/pnpm-lock.yaml',
+        resolvedCount: 17,
+        directCount: 3,
+        runtimeCount: 11,
+        developmentCount: 6,
+        snapshotId: 'snapshot-web',
+      },
+    ],
+    {
+      repository: { owner: 'taichuy', repo: '7flows' },
+      sha: 'abc123',
+      ref: 'refs/heads/taichuy_dev',
+      dependencyGraphVisibility,
+    },
+  );
+
+  assert.equal(report.dependencyGraphVisibility.manifestCount, 1);
+  assert.deepEqual(report.dependencyGraphVisibility.visibleRoots, ['web']);
+  assert.deepEqual(report.dependencyGraphVisibility.missingRoots, ['api']);
 });

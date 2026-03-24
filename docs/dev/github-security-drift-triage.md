@@ -74,12 +74,13 @@ node scripts/check-dependabot-drift.js
 - 当前它使用 `scripts/submit-dependency-snapshots.js` 为所有已跟踪的 submission roots 提交手工 snapshot；按当前代码事实，命中的 roots 是 `web`（pnpm）、`api`（uv）和 `services/compat-dify`（uv）。
 - workflow artifact 现在会同时保留：
   - `dependency-submission.txt`：给人读的摘要
-  - `dependency-submission.json`：给 `check-dependabot-drift` 与后续自动化复验消费的机器可读报告，包含 root 级 `status`、`snapshotId`、`blockedReason` 与 `warning`
+  - `dependency-submission.json`：给 `check-dependabot-drift` 与后续自动化复验消费的机器可读报告，包含 root 级 `status`、`snapshotId`、`blockedReason`、`warning`，以及一次“提交后立即回看 `dependencyGraphManifests`”的 `dependencyGraphVisibility` 结构化证据
 - 当仓库级 `Dependency graph` 尚未开启时，该 workflow 现在会把 run 收口为“保留 summary + artifact 证据并输出 warning”的平台阻塞态，而不是继续把每次 push 打成无法区分真伪的红灯；此时优先处理仓库 `Settings -> Security & analysis`，不要误判成锁文件解析或本地脚本失效。
 - 该脚本直接调用 GitHub dependency submission REST API：
   - `web` 侧通过 `pnpm list --lockfile-only` 提交 resolved tree，并保留 `direct|indirect`、`runtime|development` 关系事实；这足以覆盖当前 `next` / `flatted` 这类 default branch runtime 告警主线。
   - `uv` 侧直接解析 `uv.lock` 中的 editable root、runtime direct deps、optional `dev` group 与 transitive dependency tree，把 `api/uv.lock`、`services/compat-dify/uv.lock` 也纳入 GitHub graph / drift 对照入口。
 - 当前 `pnpm list --lockfile-only` 在本仓库下还不能稳定暴露 development roots，所以 workflow summary 仍会显式提示这只是“先收口 runtime dependency graph 覆盖”的中间态，不要误以为 pnpm devDependencies 已全部进入 GitHub graph。
+- workflow summary / artifact 现在还会显式给出“当前哪些 roots 已经在 GitHub graph 里可见、哪些 roots 提交后仍暂未可见”；这一步只表达 submission 之后的即时观测，不直接等价于最终失败，便于把“仓库设置阻塞”“平台刷新延迟”“部分 root 已经出现”区分开。
 - 这样做的目标不是替代 `github-security-drift` 的告警比对，而是把跨 `pnpm + uv` 的最高优先级 runtime / governance roots 都收口到“仓库自己显式提交 dependency snapshot”的稳定链路上。
 - workflow 的 exit code 现约定为：`0` = snapshot 已提交；`2` = 被仓库 `Dependency graph` 设置阻塞、需管理员处理但代码事实已保留；其它非零 = 本地脚本、权限或 API 合约异常，需继续修实现。
 - 如果 workflow 成功但 `dependencyGraphManifests` 仍长期缺少这些 lockfile，说明平台侧仍可能存在刷新延迟或权限异常，应优先保留该 workflow run 证据，再继续管理员侧排查。

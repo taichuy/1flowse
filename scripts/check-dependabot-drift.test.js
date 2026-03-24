@@ -541,3 +541,79 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
   assert.equal(report.conclusion.exitCode, 2);
   assert.equal(report.conclusion.kind, 'platform_drift');
 });
+
+test('parseDependencySubmissionJsonReport keeps dependency graph visibility evidence', () => {
+  const parsed = parseDependencySubmissionJsonReport(
+    JSON.stringify({
+      repositoryBlocker: null,
+      roots: [
+        {
+          rootLabel: 'web',
+          status: 'submitted',
+          snapshotId: 'snapshot-web',
+        },
+      ],
+      dependencyGraphVisibility: {
+        checkedAt: '2026-03-25T02:30:00.000Z',
+        defaultBranch: 'taichuy_dev',
+        manifestCount: 1,
+        visibleRoots: ['web'],
+        missingRoots: ['api'],
+      },
+    }),
+  );
+
+  assert.equal(parsed.dependencyGraphVisibility.defaultBranch, 'taichuy_dev');
+  assert.equal(parsed.dependencyGraphVisibility.manifestCount, 1);
+  assert.deepEqual(parsed.dependencyGraphVisibility.visibleRoots, ['web']);
+  assert.deepEqual(parsed.dependencyGraphVisibility.missingRoots, ['api']);
+});
+
+test('buildMarkdownSummary surfaces submission-time manifest visibility evidence', () => {
+  const inventory = buildWorkspaceManifestInventory([
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ]);
+  const manifestCoverage = buildWorkspaceManifestCoverage(inventory, []);
+  const summary = buildMarkdownSummary({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: 'taichuy_dev',
+    manifestNodes: [],
+    workspaceManifestInventory: inventory,
+    manifestCoverage,
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    dependencySubmissionEvidence: {
+      workflowConfigured: true,
+      runAvailable: true,
+      runId: 23509999999,
+      status: 'completed',
+      conclusion: 'success',
+      event: 'workflow_dispatch',
+      htmlUrl: 'https://github.com/taichuy/7flows/actions/runs/23509999999',
+      report: {
+        repositoryBlocker: null,
+        roots: [{ rootLabel: 'web', status: 'submitted', snapshotId: 'snapshot-web' }],
+        blockedRoots: [],
+        submittedRoots: [{ rootLabel: 'web', status: 'submitted', snapshotId: 'snapshot-web' }],
+        dependencyGraphVisibility: {
+          checkedAt: '2026-03-25T02:30:00.000Z',
+          defaultBranch: 'taichuy_dev',
+          manifestCount: 1,
+          visibleRoots: ['web'],
+          missingRoots: ['api'],
+        },
+      },
+    },
+  });
+
+  assert.match(summary, /manifests observed after submission: `1`/);
+  assert.match(summary, /visible roots now: `web`/);
+  assert.match(summary, /roots not yet visible: `api`/);
+});

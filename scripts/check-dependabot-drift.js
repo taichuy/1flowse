@@ -116,11 +116,30 @@ function normalizeDependencySubmissionReport(report) {
     }))
     .filter((item) => item.rootLabel);
 
+  const dependencyGraphVisibility = report?.dependencyGraphVisibility
+    ? {
+        checkedAt: report.dependencyGraphVisibility.checkedAt || null,
+        defaultBranch: report.dependencyGraphVisibility.defaultBranch || null,
+        manifestCount:
+          typeof report.dependencyGraphVisibility.manifestCount === 'number'
+            ? report.dependencyGraphVisibility.manifestCount
+            : null,
+        checkError: report.dependencyGraphVisibility.checkError || null,
+        visibleRoots: Array.isArray(report.dependencyGraphVisibility.visibleRoots)
+          ? report.dependencyGraphVisibility.visibleRoots.filter(Boolean)
+          : [],
+        missingRoots: Array.isArray(report.dependencyGraphVisibility.missingRoots)
+          ? report.dependencyGraphVisibility.missingRoots.filter(Boolean)
+          : [],
+      }
+    : null;
+
   return {
     repositoryBlocker: report?.repositoryBlocker || null,
     roots,
     blockedRoots: roots.filter((item) => item.status === 'blocked'),
     submittedRoots: roots.filter((item) => item.status === 'submitted'),
+    dependencyGraphVisibility,
   };
 }
 
@@ -291,6 +310,29 @@ function buildDependencySubmissionEvidenceLines(evidence) {
         )
         .join('、')}`,
     );
+  }
+
+  const dependencyGraphVisibility = evidence.report?.dependencyGraphVisibility;
+  if (dependencyGraphVisibility?.checkError) {
+    lines.push(`- latest graph visibility check failed: ${dependencyGraphVisibility.checkError}`);
+  } else if (dependencyGraphVisibility) {
+    if (dependencyGraphVisibility.manifestCount !== null) {
+      lines.push(`- manifests observed after submission: \`${dependencyGraphVisibility.manifestCount}\``);
+    }
+    if (dependencyGraphVisibility.visibleRoots.length > 0) {
+      lines.push(
+        `- visible roots now: ${dependencyGraphVisibility.visibleRoots
+          .map((item) => `\`${item}\``)
+          .join('、')}`,
+      );
+    }
+    if (dependencyGraphVisibility.missingRoots.length > 0) {
+      lines.push(
+        `- roots not yet visible: ${dependencyGraphVisibility.missingRoots
+          .map((item) => `\`${item}\``)
+          .join('、')}`,
+      );
+    }
   }
 
   if (evidence.reportDownloadError) {

@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
+const { buildWorkspaceManifestCoverage } = require('./check-dependabot-drift');
+
 const {
   buildWorkspaceManifestInventory,
   collectTrackedFiles,
@@ -545,7 +547,99 @@ function writeStepSummary(lines) {
   fs.appendFileSync(summaryPath, `${lines.join('\n')}\n`, 'utf8');
 }
 
-function buildSubmissionSummary(items, dryRun) {
+function resolveGitHubGraphqlUrl() {
+  const explicitGraphqlUrl = String(process.env.GITHUB_GRAPHQL_URL || '').trim();
+  if (explicitGraphqlUrl) {
+    return explicitGraphqlUrl;
+  }
+
+  const apiUrl = String(process.env.GITHUB_API_URL || 'https://api.github.com').replace(/\/$/, '');
+  if (apiUrl === 'https://api.github.com') {
+    return `${apiUrl}/graphql`;
+  }
+  if (apiUrl.endsWith('/api/v3')) {
+    return `${apiUrl.slice(0, -3)}graphql`;
+  }
+  if (apiUrl.endsWith('/api')) {
+    return `${apiUrl}/graphql`;
+  }
+  return `${apiUrl}/graphql`;
+}
+
+async function fetchDependencyGraphManifests(repository, token) {
+  const response = await fetch(resolveGitHubGraphqlUrl(), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    body: JSON.stringify({
+      query:
+        'query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { defaultBranchRef { name } dependencyGraphManifests(first: 100) { nodes { filename dependenciesCount parseable exceedsMaxSize } } } }',
+      variables: {
+        owner: repository.owner,
+        name: repository.repo,
+      },
+    }),
+  });
+
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const responseMessage = responseBody.message || 'unknown error';
+    throw new Error(`读取 dependency graph manifests 失败（HTTP ${response.status}）：${responseMessage}`);
+  }
+
+  if (Array.isArray(responseBody.errors) && responseBody.errors.length > 0) {
+    throw new Error(
+      `读取 dependency graph manifests 失败：${responseBody.errors
+        .map((item) => item.message || 'unknown graphql error')
+        .join('; ')}`,
+    );
+  }
+
+  const repositoryNode = responseBody?.data?.repository;
+  if (!repositoryNode) {
+    throw new Error('读取 dependency graph manifests 失败：响应里缺少 repository 节点。');
+  }
+
+  return {
+    defaultBranch: repositoryNode.defaultBranchRef?.name || null,
+    manifests: Array.isArray(repositoryNode.dependencyGraphManifests?.nodes)
+      ? repositoryNode.dependencyGraphManifests.nodes
+      : [],
+  };
+}
+
+function buildDependencyGraphVisibilityReport(roots, manifestNodes, defaultBranch = null) {
+  const coverage = buildWorkspaceManifestCoverage(roots, manifestNodes);
+
+  return {
+    checkedAt: new Date().toISOString(),
+    defaultBranch: defaultBranch || null,
+    manifestCount: manifestNodes.length,
+    manifests: manifestNodes.map((node) => ({
+      filename: node.filename,
+      dependenciesCount: node.dependenciesCount,
+      parseable: Boolean(node.parseable),
+      exceedsMaxSize: Boolean(node.exceedsMaxSize),
+    })),
+    coverage: coverage.map((item) => ({
+      rootLabel: item.rootLabel,
+      ecosystem: item.ecosystem,
+      manifestPath: item.manifestPath || null,
+      lockfilePath: item.lockfilePath || null,
+      dependencyGraphSupport: item.dependencyGraphSupport,
+      graphVisible: item.graphVisible,
+      matchedGraphFilenames: item.matchedGraphFilenames,
+    })),
+    visibleRoots: coverage.filter((item) => item.graphVisible).map((item) => item.rootLabel),
+    missingRoots: coverage.filter((item) => !item.graphVisible).map((item) => item.rootLabel),
+  };
+}
+
+function buildSubmissionSummary(items, dryRun, dependencyGraphVisibility = null) {
   const header = dryRun ? '## Dependency snapshot dry run' : '## Dependency snapshot submission';
   const lines = [header, ''];
   const blockedItems = items.filter((item) => item.status === 'blocked');
@@ -578,10 +672,43 @@ function buildSubmissionSummary(items, dryRun) {
     }
   });
 
+  if (dependencyGraphVisibility) {
+    lines.push('');
+    lines.push('### Dependency graph manifest visibility');
+    lines.push('');
+    lines.push(`- checked at: \`${dependencyGraphVisibility.checkedAt}\``);
+    if (dependencyGraphVisibility.defaultBranch) {
+      lines.push(`- default branch: \`${dependencyGraphVisibility.defaultBranch}\``);
+    }
+    if (dependencyGraphVisibility.checkError) {
+      lines.push(`- check error: ${dependencyGraphVisibility.checkError}`);
+    } else {
+      lines.push(`- manifest count: \`${dependencyGraphVisibility.manifestCount}\``);
+      if (dependencyGraphVisibility.visibleRoots?.length > 0) {
+        lines.push(
+          `- visible roots now: ${dependencyGraphVisibility.visibleRoots
+            .map((item) => `\`${item}\``)
+            .join('、')}`,
+        );
+      }
+      if (dependencyGraphVisibility.missingRoots?.length > 0) {
+        lines.push(
+          `- roots not yet visible: ${dependencyGraphVisibility.missingRoots
+            .map((item) => `\`${item}\``)
+            .join('、')}`,
+        );
+        lines.push('- 这表示 workflow 已保留“提交完成后的即时可见性”证据；若稍后仍缺席，再结合平台刷新延迟或仓库设置继续排查。');
+      }
+    }
+  }
+
   return lines;
 }
 
-function buildSubmissionReport(items, { dryRun = false, repository = null, sha = null, ref = null } = {}) {
+function buildSubmissionReport(
+  items,
+  { dryRun = false, repository = null, sha = null, ref = null, dependencyGraphVisibility = null } = {},
+) {
   const blockedItems = items.filter((item) => item.status === 'blocked');
 
   return {
@@ -592,6 +719,7 @@ function buildSubmissionReport(items, { dryRun = false, repository = null, sha =
     sha,
     ref,
     repositoryBlocker: blockedItems.length > 0 ? repositoryBlockerSummary : null,
+    dependencyGraphVisibility,
     roots: items.map((item) => ({
       rootLabel: item.rootLabel,
       status: item.status || (dryRun ? 'dry-run' : null),
@@ -743,6 +871,7 @@ async function main() {
   const summaries = [];
   const outputPayloads = {};
   let hasRepositoryBlockers = false;
+  let dependencyGraphVisibility = null;
 
   for (const root of roots) {
     const { resolved, metadata } = loadResolvedDependenciesForRoot(root);
@@ -824,7 +953,34 @@ async function main() {
     fs.writeFileSync(outputPath, JSON.stringify(outputValue, null, 2));
   }
 
-  const summaryLines = buildSubmissionSummary(summaries, options.dryRun);
+  if (!options.dryRun && token) {
+    try {
+      const manifestState = await fetchDependencyGraphManifests(repository, token);
+      dependencyGraphVisibility = buildDependencyGraphVisibilityReport(
+        roots,
+        manifestState.manifests,
+        manifestState.defaultBranch,
+      );
+    } catch (error) {
+      dependencyGraphVisibility = {
+        checkedAt: new Date().toISOString(),
+        defaultBranch: null,
+        manifestCount: null,
+        manifests: [],
+        coverage: [],
+        visibleRoots: [],
+        missingRoots: [],
+        checkError: error.message,
+      };
+      console.warn(`warning: 无法读取 dependency graph manifests：${error.message}`);
+    }
+  }
+
+  const summaryLines = buildSubmissionSummary(
+    summaries,
+    options.dryRun,
+    dependencyGraphVisibility,
+  );
   if (options.reportOutputPath) {
     const reportPath = path.resolve(repoRoot, options.reportOutputPath);
     const report = buildSubmissionReport(summaries, {
@@ -832,6 +988,7 @@ async function main() {
       repository,
       sha,
       ref,
+      dependencyGraphVisibility,
     });
     fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   }
@@ -846,6 +1003,7 @@ async function main() {
 module.exports = {
   DependencySubmissionError,
   buildPnpmResolvedDependencies,
+  buildDependencyGraphVisibilityReport,
   buildSubmissionReport,
   buildSubmissionSummary,
   buildScopedPnpmResolvedDependencies,
