@@ -225,7 +225,12 @@ export function WorkflowPublishInvocationDetailPanel({
     executionSnapshot: recommendedNextStepSample?.run_snapshot ?? runSnapshot,
     sandboxReadiness,
     blockingInboxHref: recommendedNextStepBlockingInboxHref,
-    approvalInboxHref: recommendedNextStepWaitingInboxHref
+    approvalInboxHref: recommendedNextStepWaitingInboxHref,
+    primarySensitiveResource:
+      waitingLifecycle?.sensitive_access_summary?.primary_resource ??
+      blockingSensitiveAccessEntries[0]?.resource ??
+      sensitiveAccessEntries[0]?.resource ??
+      null
   });
   const resolvedNextStepSurface =
     selectedNextStepSurface ??
@@ -662,6 +667,11 @@ export function WorkflowPublishInvocationDetailPanel({
             ) : null}
           </div>
           <p className="section-copy entry-copy">{resolvedNextStepSurface.detail}</p>
+          {resolvedNextStepSurface.primaryResourceSummary ? (
+            <p className="binding-meta">
+              {`Primary governed resource: ${resolvedNextStepSurface.primaryResourceSummary}.`}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

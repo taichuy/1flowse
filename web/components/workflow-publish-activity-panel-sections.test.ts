@@ -495,6 +495,60 @@ describe("WorkflowPublishActivityInsights", () => {
   });
 
   it("bridges selected invocation next step into issue signals when failure matches", () => {
+    const selectedDetail = buildSelectedInvocationDetail();
+    selectedDetail.invocation.run_waiting_lifecycle = {
+      node_run_id: "node-run-tool-wait",
+      node_status: "waiting_callback",
+      waiting_reason: "callback pending",
+      callback_ticket_count: 1,
+      callback_ticket_status_counts: { pending: 1 },
+      callback_waiting_lifecycle: null,
+      callback_waiting_explanation: {
+        primary_signal: "当前 waiting 节点仍在等待 callback。",
+        follow_up: "优先处理 blocker inbox，再观察 waiting 节点是否恢复。"
+      },
+      sensitive_access_summary: {
+        request_count: 1,
+        approval_ticket_count: 1,
+        pending_approval_count: 1,
+        approved_approval_count: 0,
+        rejected_approval_count: 0,
+        expired_approval_count: 0,
+        pending_notification_count: 0,
+        delivered_notification_count: 0,
+        failed_notification_count: 0,
+        primary_resource: {
+          id: "resource-credential-1",
+          label: "OpenAI Prod Key",
+          description: "Primary credential blocker",
+          sensitivity_level: "L3",
+          source: "credential",
+          metadata: {},
+          credential_governance: {
+            credential_id: "credential-1",
+            credential_name: "OpenAI Prod Key",
+            credential_type: "openai_api_key",
+            credential_status: "active",
+            sensitivity_level: "L3",
+            sensitive_resource_id: "resource-credential-1",
+            sensitive_resource_label: "OpenAI Prod Key",
+            credential_ref: "credential://openai/prod",
+            summary: "本次命中的凭据是 OpenAI Prod Key（openai_api_key）；当前治理级别 L3，状态 生效中。"
+          },
+          created_at: "2026-03-20T10:00:00Z",
+          updated_at: "2026-03-20T10:00:00Z"
+        }
+      },
+      scheduled_resume_delay_seconds: null,
+      scheduled_resume_reason: null,
+      scheduled_resume_source: null,
+      scheduled_waiting_status: null,
+      scheduled_resume_scheduled_at: null,
+      scheduled_resume_due_at: null,
+      scheduled_resume_requeued_at: null,
+      scheduled_resume_requeue_source: null
+    };
+
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishActivityInsights, {
         binding: {
@@ -508,7 +562,7 @@ describe("WorkflowPublishActivityInsights", () => {
         selectedInvocationId: "invocation-1",
         selectedInvocationDetail: {
           kind: "ok",
-          data: buildSelectedInvocationDetail()
+          data: selectedDetail
         },
         callbackWaitingAutomation: buildCallbackWaitingAutomation(),
         sandboxReadiness: buildSandboxReadiness(),
@@ -522,6 +576,7 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("Selected invocation next step");
     expect(html).toContain("approval blocker");
     expect(html).toContain("优先处理 blocker inbox，再观察 waiting 节点是否恢复。");
+    expect(html).toContain("Primary governed resource: OpenAI Prod Key · L3 治理 · 生效中.");
     expect(html).toContain("open blocker inbox slice");
   });
 

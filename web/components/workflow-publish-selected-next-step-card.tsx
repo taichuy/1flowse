@@ -26,6 +26,11 @@ export function WorkflowPublishSelectedNextStepCard({
         <span className="event-chip">{surface.label}</span>
       </div>
       <p className="section-copy entry-copy">{surface.detail}</p>
+      {surface.primaryResourceSummary ? (
+        <p className="binding-meta">
+          {`Primary governed resource: ${surface.primaryResourceSummary}.`}
+        </p>
+      ) : null}
       {surface.href && surface.hrefLabel ? (
         <div className="tool-badge-row">
           <Link className="event-chip inbox-filter-link" href={surface.href}>

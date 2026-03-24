@@ -224,7 +224,11 @@ export function WorkflowPublishInvocationEntryCard({
     executionSnapshot: runFollowUpSample?.run_snapshot ?? runSnapshot,
     sandboxReadiness,
     blockingInboxHref: preferredBlockingInboxHref,
-    approvalInboxHref: preferredWaitingInboxHref
+    approvalInboxHref: preferredWaitingInboxHref,
+    primarySensitiveResource:
+      item.run_waiting_lifecycle?.sensitive_access_summary?.primary_resource ??
+      runFollowUpSample?.sensitive_access_entries?.[0]?.resource ??
+      null
   });
 
   return (
@@ -434,11 +438,16 @@ export function WorkflowPublishInvocationEntryCard({
       ) : null}
       {recommendedNextStep && !hideRecommendedNextStep ? (
         <div className="payload-card compact-card">
-        <div className="payload-card-header">
+          <div className="payload-card-header">
             <span className="status-meta">{surfaceCopy.recommendedNextStepTitle}</span>
             <span className="event-chip">{recommendedNextStep.label}</span>
           </div>
           <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+          {recommendedNextStep.primaryResourceSummary ? (
+            <p className="binding-meta">
+              {`Primary governed resource: ${recommendedNextStep.primaryResourceSummary}.`}
+            </p>
+          ) : null}
           {recommendedNextStep.href && recommendedNextStep.href_label ? (
             <div className="tool-badge-row">
               <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>

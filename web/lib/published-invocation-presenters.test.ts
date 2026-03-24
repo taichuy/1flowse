@@ -2877,6 +2877,56 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("在 approval blocker next step 里保留 primary governed resource", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-approval-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: "先处理审批票据，再回来确认 execution 是否恢复。",
+          has_shared_callback_waiting_summary: false
+        },
+        canonicalRecommendedAction: {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: "/sensitive-access?run_id=run-focus-approval-1&node_run_id=node-run-1",
+          label: "open approval inbox slice"
+        },
+        callbackWaitingFollowUp: null,
+        executionFocusFollowUp: null,
+        blockingInboxHref: null,
+        approvalInboxHref: null,
+        primarySensitiveResource: {
+          id: "resource-credential-1",
+          label: "OpenAI Prod Key",
+          description: "Primary credential blocker",
+          sensitivity_level: "L3",
+          source: "credential",
+          metadata: {},
+          credential_governance: {
+            credential_id: "credential-1",
+            credential_name: "OpenAI Prod Key",
+            credential_type: "openai_api_key",
+            credential_status: "active",
+            sensitivity_level: "L3",
+            sensitive_resource_id: "resource-credential-1",
+            sensitive_resource_label: "OpenAI Prod Key",
+            credential_ref: "credential://openai/prod",
+            summary: "本次命中的凭据是 OpenAI Prod Key（openai_api_key）；当前治理级别 L3，状态 生效中。"
+          },
+          created_at: "2026-03-20T10:00:00Z",
+          updated_at: "2026-03-20T10:00:00Z"
+        }
+      })
+    ).toEqual({
+      label: "approval blocker",
+      detail: "先处理审批票据，再回来确认 execution 是否恢复。",
+      href: "/sensitive-access?run_id=run-focus-approval-1&node_run_id=node-run-1",
+      href_label: "open approval inbox slice",
+      primaryResourceSummary: "OpenAI Prod Key · L3 治理 · 生效中"
+    });
+  });
+
   it("当 shared canonical approval action 指回当前 publish detail 时回退到本地 blocker inbox", () => {
     expect(
       buildPublishedInvocationRecommendedNextStep({

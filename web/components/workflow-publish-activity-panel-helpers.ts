@@ -257,7 +257,12 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
         normalizePublishedInvocationRunSnapshot(detail.run_snapshot ?? detail.invocation.run_snapshot ?? null),
       sandboxReadiness,
       blockingInboxHref: recommendedNextStepBlockingInboxHref,
-      approvalInboxHref: recommendedNextStepApprovalInboxHref
+      approvalInboxHref: recommendedNextStepApprovalInboxHref,
+      primarySensitiveResource:
+        detail.invocation.run_waiting_lifecycle?.sensitive_access_summary?.primary_resource ??
+        detail.blocking_sensitive_access_entries[0]?.resource ??
+        detail.sensitive_access_entries[0]?.resource ??
+        null
     });
 
     return {

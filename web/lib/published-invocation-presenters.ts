@@ -203,6 +203,7 @@ export type PublishedInvocationRecommendedNextStep = {
   detail: string;
   href: string | null;
   href_label: string | null;
+  primaryResourceSummary?: string | null;
 };
 
 export type PublishedInvocationInboxLinkSurface = {
@@ -544,6 +545,7 @@ export type PublishedInvocationSelectedNextStepSurface = {
   detail: string;
   href: string | null;
   hrefLabel: string | null;
+  primaryResourceSummary?: string | null;
 };
 
 type PublishedInvocationFailureReasonItem = {
@@ -1155,7 +1157,10 @@ export function buildPublishedInvocationActivityPrimaryFollowUpSurface({
       headline: `Issue signals already align with ${selectedNextStepSurface.invocationId}.`,
       detail: joinFragments([
         `Keep the aggregate diagnosis anchored to the selected invocation next step (${selectedNextStepSurface.label}).`,
-        selectedNextStepSurface.detail
+        selectedNextStepSurface.detail,
+        formatPublishedInvocationSelectedNextStepPrimaryResourceDetail(
+          selectedNextStepSurface.primaryResourceSummary
+        )
       ]) ?? selectedNextStepSurface.detail,
       href: selectedNextStepSurface.href ?? null,
       hrefLabel: selectedNextStepSurface.hrefLabel ?? null
@@ -1761,7 +1766,10 @@ export function buildPublishedInvocationSelectedNextStepSurface({
     label: nextStep.label,
     detail: nextStep.detail,
     href: nextStep.href,
-    hrefLabel: nextStep.href_label
+    hrefLabel: nextStep.href_label,
+    ...(nextStep.primaryResourceSummary
+      ? { primaryResourceSummary: nextStep.primaryResourceSummary }
+      : {})
   };
 }
 
@@ -2664,7 +2672,8 @@ export function buildPublishedInvocationRecommendedNextStep({
   executionSnapshot,
   sandboxReadiness,
   blockingInboxHref,
-  approvalInboxHref
+  approvalInboxHref,
+  primarySensitiveResource
 }: {
   runId?: string | null;
   canonicalFollowUp?: PublishedInvocationCanonicalFollowUpCopy | null;
@@ -2683,6 +2692,7 @@ export function buildPublishedInvocationRecommendedNextStep({
   sandboxReadiness?: SandboxReadinessCheck | null;
   blockingInboxHref?: string | null;
   approvalInboxHref?: string | null;
+  primarySensitiveResource?: SensitiveResourceItem | null;
 }): PublishedInvocationRecommendedNextStep | null {
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
   const normalizedCallbackWaitingFollowUp = callbackWaitingFollowUp?.trim() || null;
@@ -2771,12 +2781,25 @@ export function buildPublishedInvocationRecommendedNextStep({
     callbackCandidate?.active || executionCandidate.active
   );
 
-  return buildOperatorRecommendedNextStep({
+  const nextStep = buildOperatorRecommendedNextStep({
     callback: callbackCandidate,
     execution: executionCandidate,
     operatorFollowUp: hasStableRecommendedCandidate ? canonicalFollowUp?.follow_up ?? null : null,
     currentHref
   });
+
+  if (!nextStep) {
+    return null;
+  }
+
+  const primaryResourceSummary = shouldSurfacePublishedInvocationNextStepPrimaryResource(nextStep)
+    ? formatPublishedInvocationSensitiveAccessPrimaryResourceSummary(primarySensitiveResource)
+    : null;
+
+  return {
+    ...nextStep,
+    ...(primaryResourceSummary ? { primaryResourceSummary } : {})
+  };
 }
 
 export function resolvePublishedInvocationRecommendedNextStepInboxHrefs({
@@ -3794,6 +3817,20 @@ function formatPublishedInvocationSensitiveAccessPrimaryResourceChineseDetail(
 ) {
   const summary = formatPublishedInvocationSensitiveAccessPrimaryResourceSummary(resource);
   return summary ? `当前命中的治理资源：${summary}。` : null;
+}
+
+function formatPublishedInvocationSelectedNextStepPrimaryResourceDetail(
+  summary?: string | null
+) {
+  const normalizedSummary = summary?.trim();
+  return normalizedSummary ? `Primary governed resource: ${normalizedSummary}.` : null;
+}
+
+function shouldSurfacePublishedInvocationNextStepPrimaryResource(
+  nextStep: Pick<PublishedInvocationRecommendedNextStep, "label">
+) {
+  const normalizedLabel = nextStep.label.trim().toLowerCase();
+  return normalizedLabel === "approval blocker" || normalizedLabel === "callback waiting";
 }
 
 function formatPublishedInvocationWaitingSensitiveAccessBacklogDetail(

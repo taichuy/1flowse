@@ -787,7 +787,8 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
           label: "approval blocker",
           detail: "优先处理 blocker inbox，再观察 waiting 节点是否恢复。",
           href: "/sensitive-access?run_id=run-callback-1&waiting_status=waiting",
-          hrefLabel: "open blocker inbox slice"
+          hrefLabel: "open blocker inbox slice",
+          primaryResourceSummary: "OpenAI Prod Key · L3 治理 · 生效中"
         }
       })
     );
@@ -795,6 +796,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("Selected invocation next step");
     expect(html.match(/Selected invocation next step/g)?.length ?? 0).toBe(1);
     expect(html).toContain("approval blocker");
+    expect(html).toContain("Primary governed resource: OpenAI Prod Key · L3 治理 · 生效中.");
     expect(html).toContain("open blocker inbox slice");
   });
 
