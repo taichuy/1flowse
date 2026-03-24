@@ -298,6 +298,8 @@ test('parseDependencySubmissionReport extracts repository blocker evidence', () 
   const report = `## Dependency snapshot submission
 
 - repository blocker: GitHub \`Dependency graph\` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。
+- blocker evidence: kind=\`dependency_graph_disabled\`, status=\`404\`, roots=\`api\`、\`web\`
+- blocker message: Dependency graph is disabled for this repository.
 
 - root: \`api\`
   - status: \`blocked\`
@@ -309,6 +311,13 @@ test('parseDependencySubmissionReport extracts repository blocker evidence', () 
   const parsed = parseDependencySubmissionReport(report);
 
   assert.match(parsed.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(parsed.repositoryBlockerEvidence, {
+    kind: 'dependency_graph_disabled',
+    status: 404,
+    message: 'Dependency graph is disabled for this repository.',
+    rootLabels: ['api', 'web'],
+    consistentAcrossRoots: true,
+  });
   assert.deepEqual(
     parsed.blockedRoots.map((item) => ({
       rootLabel: item.rootLabel,
@@ -340,6 +349,13 @@ test('parseDependencySubmissionJsonReport extracts submitted and blocked roots',
       schemaVersion: 1,
       repositoryBlocker:
         'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+      repositoryBlockerEvidence: {
+        kind: 'dependency_graph_disabled',
+        status: 404,
+        message: 'Dependency graph is disabled for this repository.',
+        rootLabels: ['api'],
+        consistentAcrossRoots: true,
+      },
       roots: [
         {
           rootLabel: 'web',
@@ -351,17 +367,30 @@ test('parseDependencySubmissionJsonReport extracts submitted and blocked roots',
           status: 'blocked',
           blockedReason:
             'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+          blockedKind: 'dependency_graph_disabled',
+          blockedStatus: 404,
+          blockedMessage: 'Dependency graph is disabled for this repository.',
         },
       ],
     }),
   );
 
   assert.match(parsed.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(parsed.repositoryBlockerEvidence, {
+    kind: 'dependency_graph_disabled',
+    status: 404,
+    message: 'Dependency graph is disabled for this repository.',
+    rootLabels: ['api'],
+    consistentAcrossRoots: true,
+  });
   assert.deepEqual(parsed.submittedRoots, [
     {
       rootLabel: 'web',
       status: 'submitted',
       blockedReason: null,
+      blockedKind: null,
+      blockedStatus: null,
+      blockedMessage: null,
       warning: null,
       snapshotId: 'snapshot-123',
     },
@@ -372,6 +401,9 @@ test('parseDependencySubmissionJsonReport extracts submitted and blocked roots',
       status: 'blocked',
       blockedReason:
         'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+      blockedKind: 'dependency_graph_disabled',
+      blockedStatus: 404,
+      blockedMessage: 'Dependency graph is disabled for this repository.',
       warning: null,
       snapshotId: null,
     },
@@ -409,6 +441,13 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
       report: {
         repositoryBlocker:
           'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+        repositoryBlockerEvidence: {
+          kind: 'dependency_graph_disabled',
+          status: 404,
+          message: 'Dependency graph is disabled for this repository.',
+          rootLabels: ['api', 'web'],
+          consistentAcrossRoots: true,
+        },
         roots: [
           { rootLabel: 'services/compat-dify', status: 'submitted', snapshotId: 'snapshot-compat' },
           { rootLabel: 'api', status: 'blocked' },
@@ -426,6 +465,8 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
   assert.match(summary, /Latest dependency submission evidence/);
   assert.match(summary, /23504251554/);
   assert.match(summary, /repository blocker: GitHub `Dependency graph` 未开启/);
+  assert.match(summary, /repository blocker API evidence: kind: `dependency_graph_disabled`，status: `404`，roots: `api`、`web`/);
+  assert.match(summary, /repository blocker API message: Dependency graph is disabled for this repository\./);
   assert.match(summary, /blocked roots: `api`、`web`/);
   assert.match(summary, /submitted roots: `services\/compat-dify`（snapshot: `snapshot-compat`）/);
 });
@@ -526,13 +567,44 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       report: {
         repositoryBlocker:
           'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+        repositoryBlockerEvidence: {
+          kind: 'dependency_graph_disabled',
+          status: 404,
+          message: 'Dependency graph is disabled for this repository.',
+          rootLabels: ['api', 'web'],
+          consistentAcrossRoots: true,
+        },
         roots: [
-          { rootLabel: 'api', status: 'blocked' },
-          { rootLabel: 'web', status: 'blocked' },
+          {
+            rootLabel: 'api',
+            status: 'blocked',
+            blockedKind: 'dependency_graph_disabled',
+            blockedStatus: 404,
+            blockedMessage: 'Dependency graph is disabled for this repository.',
+          },
+          {
+            rootLabel: 'web',
+            status: 'blocked',
+            blockedKind: 'dependency_graph_disabled',
+            blockedStatus: 404,
+            blockedMessage: 'Dependency graph is disabled for this repository.',
+          },
         ],
         blockedRoots: [
-          { rootLabel: 'api', status: 'blocked' },
-          { rootLabel: 'web', status: 'blocked' },
+          {
+            rootLabel: 'api',
+            status: 'blocked',
+            blockedKind: 'dependency_graph_disabled',
+            blockedStatus: 404,
+            blockedMessage: 'Dependency graph is disabled for this repository.',
+          },
+          {
+            rootLabel: 'web',
+            status: 'blocked',
+            blockedKind: 'dependency_graph_disabled',
+            blockedStatus: 404,
+            blockedMessage: 'Dependency graph is disabled for this repository.',
+          },
         ],
         submittedRoots: [],
         dependencyGraphVisibility: {
@@ -574,6 +646,13 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
   assert.equal(report.dependencySubmissionEvidence.runId, 23505567063);
   assert.equal(report.dependencySubmissionEvidence.createdAt, '2026-03-25T02:45:00.000Z');
   assert.match(report.dependencySubmissionEvidence.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(report.dependencySubmissionEvidence.repositoryBlockerEvidence, {
+    kind: 'dependency_graph_disabled',
+    status: 404,
+    message: 'Dependency graph is disabled for this repository.',
+    rootLabels: ['api', 'web'],
+    consistentAcrossRoots: true,
+  });
   assert.deepEqual(
     report.dependencySubmissionEvidence.blockedRoots.map((item) => item.rootLabel),
     ['api', 'web'],

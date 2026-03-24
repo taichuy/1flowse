@@ -127,12 +127,31 @@ function normalizeDependencyGraphVisibilityEvidence(dependencyGraphVisibility) {
   };
 }
 
+function normalizeRepositoryBlockerEvidence(repositoryBlockerEvidence) {
+  if (!repositoryBlockerEvidence) {
+    return null;
+  }
+
+  return {
+    kind: repositoryBlockerEvidence.kind || null,
+    status: Number.isInteger(repositoryBlockerEvidence.status) ? repositoryBlockerEvidence.status : null,
+    message: repositoryBlockerEvidence.message || null,
+    rootLabels: Array.isArray(repositoryBlockerEvidence.rootLabels)
+      ? repositoryBlockerEvidence.rootLabels.filter(Boolean)
+      : [],
+    consistentAcrossRoots: repositoryBlockerEvidence.consistentAcrossRoots !== false,
+  };
+}
+
 function normalizeDependencySubmissionReport(report) {
   const roots = (Array.isArray(report?.roots) ? report.roots : Array.isArray(report?.blockedRoots) ? report.blockedRoots : [])
     .map((item) => ({
       rootLabel: item.rootLabel,
       status: item.status || null,
       blockedReason: item.blockedReason || null,
+      blockedKind: item.blockedKind || null,
+      blockedStatus: Number.isInteger(item.blockedStatus) ? item.blockedStatus : null,
+      blockedMessage: item.blockedMessage || null,
       warning: item.warning || null,
       snapshotId: item.snapshotId || null,
     }))
@@ -141,9 +160,13 @@ function normalizeDependencySubmissionReport(report) {
   const dependencyGraphVisibility = normalizeDependencyGraphVisibilityEvidence(
     report?.dependencyGraphVisibility,
   );
+  const repositoryBlockerEvidence = normalizeRepositoryBlockerEvidence(
+    report?.repositoryBlockerEvidence,
+  );
 
   return {
     repositoryBlocker: report?.repositoryBlocker || null,
+    repositoryBlockerEvidence,
     roots,
     blockedRoots: roots.filter((item) => item.status === 'blocked'),
     submittedRoots: roots.filter((item) => item.status === 'submitted'),
@@ -159,6 +182,7 @@ function parseDependencySubmissionReport(reportText) {
   const lines = String(reportText || '').split(/\r?\n/);
   const roots = [];
   let repositoryBlocker = null;
+  let repositoryBlockerEvidence = null;
   let currentRoot = null;
 
   function flushCurrentRoot() {
@@ -172,6 +196,35 @@ function parseDependencySubmissionReport(reportText) {
     const repositoryBlockerMatch = line.match(/^- repository blocker: (.+)$/);
     if (repositoryBlockerMatch) {
       repositoryBlocker = repositoryBlockerMatch[1];
+      return;
+    }
+
+    const blockerEvidenceMatch = line.match(/^- blocker evidence: (.+)$/);
+    if (blockerEvidenceMatch) {
+      const value = blockerEvidenceMatch[1];
+      repositoryBlockerEvidence = {
+        kind: value.match(/kind=`([^`]+)`/)?.[1] || null,
+        status: Number.parseInt(value.match(/status=`(\d+)`/)?.[1] || '', 10) || null,
+        rootLabels: [...value.matchAll(/roots=([^,]+)$/g)]
+          .flatMap((match) => [...match[1].matchAll(/`([^`]+)`/g)].map((rootMatch) => rootMatch[1]))
+          .filter(Boolean),
+        message: null,
+        consistentAcrossRoots: true,
+      };
+      return;
+    }
+
+    const blockerMessageMatch = line.match(/^- blocker message: (.+)$/);
+    if (blockerMessageMatch) {
+      repositoryBlockerEvidence = {
+        ...(repositoryBlockerEvidence || {
+          kind: null,
+          status: null,
+          rootLabels: [],
+          consistentAcrossRoots: true,
+        }),
+        message: blockerMessageMatch[1],
+      };
       return;
     }
 
@@ -213,6 +266,7 @@ function parseDependencySubmissionReport(reportText) {
 
   return normalizeDependencySubmissionReport({
     repositoryBlocker,
+    repositoryBlockerEvidence,
     roots,
   });
 }
@@ -306,6 +360,29 @@ function buildDependencySubmissionEvidenceLines(evidence) {
 
   if (evidence.report?.repositoryBlocker) {
     lines.push(`- repository blocker: ${evidence.report.repositoryBlocker}`);
+  }
+
+  const repositoryBlockerEvidence = evidence.report?.repositoryBlockerEvidence;
+  if (
+    repositoryBlockerEvidence &&
+    (repositoryBlockerEvidence.kind || repositoryBlockerEvidence.status !== null)
+  ) {
+    const evidenceParts = [];
+    if (repositoryBlockerEvidence.kind) {
+      evidenceParts.push(`kind: \`${repositoryBlockerEvidence.kind}\``);
+    }
+    if (repositoryBlockerEvidence.status !== null) {
+      evidenceParts.push(`status: \`${repositoryBlockerEvidence.status}\``);
+    }
+    if (repositoryBlockerEvidence.rootLabels?.length > 0) {
+      evidenceParts.push(
+        `roots: ${repositoryBlockerEvidence.rootLabels.map((item) => `\`${item}\``).join('、')}`,
+      );
+    }
+    lines.push(`- repository blocker API evidence: ${evidenceParts.join('，')}`);
+  }
+  if (repositoryBlockerEvidence?.message) {
+    lines.push(`- repository blocker API message: ${repositoryBlockerEvidence.message}`);
   }
 
   const blockedRoots = evidence.report?.blockedRoots?.filter((item) => item.status === 'blocked') || [];
@@ -911,6 +988,9 @@ function buildDependencySubmissionEvidenceReport(dependencySubmissionEvidence) {
     reportDownloadBlockedByActionsReadPermission:
       Boolean(reportDownloadError) && isActionsReadPermissionError(reportDownloadError),
     repositoryBlocker: dependencySubmissionEvidence.report?.repositoryBlocker || null,
+    repositoryBlockerEvidence: normalizeRepositoryBlockerEvidence(
+      dependencySubmissionEvidence.report?.repositoryBlockerEvidence,
+    ),
     roots: dependencySubmissionEvidence.report?.roots || [],
     blockedRoots: dependencySubmissionEvidence.report?.blockedRoots || [],
     submittedRoots: dependencySubmissionEvidence.report?.submittedRoots || [],

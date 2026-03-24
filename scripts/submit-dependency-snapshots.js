@@ -21,13 +21,41 @@ const repositoryBlockerSummary =
   'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。';
 
 class DependencySubmissionError extends Error {
-  constructor({ kind, status, message, hint = null }) {
+  constructor({ kind, status, message, hint = null, responseMessage = null }) {
     super(message);
     this.name = 'DependencySubmissionError';
     this.kind = kind;
     this.status = status;
     this.hint = hint;
+    this.responseMessage = responseMessage;
   }
+}
+
+function buildRepositoryBlockerEvidence(items) {
+  const blockedItems = items.filter(
+    (item) => item.status === 'blocked' && (item.blockedKind || item.blockedStatus || item.blockedMessage),
+  );
+  if (blockedItems.length === 0) {
+    return null;
+  }
+
+  const rootLabels = blockedItems.map((item) => item.rootLabel).filter(Boolean);
+  const firstItem = blockedItems[0];
+  const consistentAcrossRoots = blockedItems.every(
+    (item) =>
+      item.blockedKind === firstItem.blockedKind &&
+      item.blockedStatus === firstItem.blockedStatus &&
+      item.blockedMessage === firstItem.blockedMessage,
+  );
+
+  return {
+    kind: consistentAcrossRoots ? firstItem.blockedKind || null : null,
+    status:
+      consistentAcrossRoots && Number.isInteger(firstItem.blockedStatus) ? firstItem.blockedStatus : null,
+    message: consistentAcrossRoots ? firstItem.blockedMessage || null : null,
+    rootLabels,
+    consistentAcrossRoots,
+  };
 }
 
 function run(command, args, baseRepoRoot = repoRoot) {
@@ -639,13 +667,39 @@ function buildDependencyGraphVisibilityReport(roots, manifestNodes, defaultBranc
   };
 }
 
-function buildSubmissionSummary(items, dryRun, dependencyGraphVisibility = null) {
+function buildSubmissionSummary(
+  items,
+  dryRun,
+  dependencyGraphVisibility = null,
+  repositoryBlockerEvidence = buildRepositoryBlockerEvidence(items),
+) {
   const header = dryRun ? '## Dependency snapshot dry run' : '## Dependency snapshot submission';
   const lines = [header, ''];
   const blockedItems = items.filter((item) => item.status === 'blocked');
 
   if (blockedItems.length > 0) {
     lines.push(`- repository blocker: ${repositoryBlockerSummary}`);
+    if (
+      repositoryBlockerEvidence &&
+      (repositoryBlockerEvidence.kind || repositoryBlockerEvidence.status !== null)
+    ) {
+      const evidenceParts = [];
+      if (repositoryBlockerEvidence.kind) {
+        evidenceParts.push(`kind=\`${repositoryBlockerEvidence.kind}\``);
+      }
+      if (repositoryBlockerEvidence.status !== null) {
+        evidenceParts.push(`status=\`${repositoryBlockerEvidence.status}\``);
+      }
+      if (repositoryBlockerEvidence.rootLabels?.length > 0) {
+        evidenceParts.push(
+          `roots=${repositoryBlockerEvidence.rootLabels.map((item) => `\`${item}\``).join('、')}`,
+        );
+      }
+      lines.push(`- blocker evidence: ${evidenceParts.join(', ')}`);
+    }
+    if (repositoryBlockerEvidence?.message) {
+      lines.push(`- blocker message: ${repositoryBlockerEvidence.message}`);
+    }
     lines.push('');
   }
 
@@ -707,7 +761,14 @@ function buildSubmissionSummary(items, dryRun, dependencyGraphVisibility = null)
 
 function buildSubmissionReport(
   items,
-  { dryRun = false, repository = null, sha = null, ref = null, dependencyGraphVisibility = null } = {},
+  {
+    dryRun = false,
+    repository = null,
+    sha = null,
+    ref = null,
+    dependencyGraphVisibility = null,
+    repositoryBlockerEvidence = buildRepositoryBlockerEvidence(items),
+  } = {},
 ) {
   const blockedItems = items.filter((item) => item.status === 'blocked');
 
@@ -719,6 +780,7 @@ function buildSubmissionReport(
     sha,
     ref,
     repositoryBlocker: blockedItems.length > 0 ? repositoryBlockerSummary : null,
+    repositoryBlockerEvidence,
     dependencyGraphVisibility,
     roots: items.map((item) => ({
       rootLabel: item.rootLabel,
@@ -732,6 +794,9 @@ function buildSubmissionReport(
       developmentCount: item.developmentCount,
       snapshotId: item.snapshotId || null,
       blockedReason: item.blockedReason || null,
+      blockedKind: item.blockedKind || null,
+      blockedStatus: Number.isInteger(item.blockedStatus) ? item.blockedStatus : null,
+      blockedMessage: item.blockedMessage || null,
       warning: item.warning || null,
     })),
   };
@@ -762,6 +827,7 @@ async function submitSnapshot(repository, payload, token) {
         status: response.status,
         message: `dependency snapshot 提交被仓库设置阻塞（HTTP ${response.status}）：${responseMessage}`,
         hint: dependencyGraphSettingsHint,
+        responseMessage,
       });
     }
 
@@ -769,6 +835,7 @@ async function submitSnapshot(repository, payload, token) {
       kind: 'request_failed',
       status: response.status,
       message: `dependency snapshot 提交失败（HTTP ${response.status}）：${responseMessage}`,
+      responseMessage,
     });
   }
 
@@ -937,6 +1004,9 @@ async function main() {
           manifestPath: root.manifestPath,
           lockfilePath: root.lockfilePath,
           blockedReason: error.hint,
+          blockedKind: error.kind,
+          blockedStatus: error.status,
+          blockedMessage: error.responseMessage || error.message,
           warning,
           ...counters,
         });
@@ -1004,6 +1074,7 @@ module.exports = {
   DependencySubmissionError,
   buildPnpmResolvedDependencies,
   buildDependencyGraphVisibilityReport,
+  buildRepositoryBlockerEvidence,
   buildSubmissionReport,
   buildSubmissionSummary,
   buildScopedPnpmResolvedDependencies,

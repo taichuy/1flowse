@@ -335,12 +335,17 @@ test('buildSubmissionSummary surfaces blocked repository settings explicitly', (
         developmentCount: 2,
         blockedReason:
           'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+        blockedKind: 'dependency_graph_disabled',
+        blockedStatus: 404,
+        blockedMessage: 'Dependency graph is disabled for this repository.',
       },
     ],
     false,
   );
 
   assert.match(summary.join('\n'), /repository blocker: GitHub `Dependency graph` 未开启/);
+  assert.match(summary.join('\n'), /blocker evidence: kind=`dependency_graph_disabled`, status=`404`, roots=`web`/);
+  assert.match(summary.join('\n'), /blocker message: Dependency graph is disabled for this repository\./);
   assert.match(summary.join('\n'), /status: `blocked`/);
   assert.match(summary.join('\n'), /blocked reason: GitHub 仓库当前未开启/);
 });
@@ -373,6 +378,9 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
         developmentCount: 6,
         blockedReason:
           'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+        blockedKind: 'dependency_graph_disabled',
+        blockedStatus: 404,
+        blockedMessage: 'Dependency graph is disabled for this repository.',
       },
     ],
     {
@@ -390,6 +398,13 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
   assert.equal(report.repository.owner, 'taichuy');
   assert.equal(report.sha, 'abc123');
   assert.match(report.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(report.repositoryBlockerEvidence, {
+    kind: 'dependency_graph_disabled',
+    status: 404,
+    message: 'Dependency graph is disabled for this repository.',
+    rootLabels: ['api'],
+    consistentAcrossRoots: true,
+  });
   assert.deepEqual(report.roots, [
     {
       rootLabel: 'web',
@@ -403,6 +418,9 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       developmentCount: 2,
       snapshotId: 'snapshot-123',
       blockedReason: null,
+      blockedKind: null,
+      blockedStatus: null,
+      blockedMessage: null,
       warning: '当前 pnpm lockfile-only snapshot 仍未暴露 development roots。',
     },
     {
@@ -418,6 +436,9 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       snapshotId: null,
       blockedReason:
         'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+      blockedKind: 'dependency_graph_disabled',
+      blockedStatus: 404,
+      blockedMessage: 'Dependency graph is disabled for this repository.',
       warning: null,
     },
   ]);

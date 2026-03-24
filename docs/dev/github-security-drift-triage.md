@@ -59,7 +59,7 @@ node scripts/check-dependabot-drift.js
 - 由于该 workflow 需要查询 `Dependency Graph Submission` 的最新 run 并下载其 artifact，`.github/workflows/github-security-drift.yml` 现在显式声明 `actions: read`、`contents: read` 与 `security-events: read`；若后续复制或裁剪该 workflow，请不要丢掉 `actions: read`。
 - artifact 现在会同时保留：
   - `dependabot-drift.txt`：给人读的命令输出
-  - `dependabot-drift.json`：给后续自动化 / agent 复验消费的机器可读报告，包含 manifest coverage、告警 verdict、最新 dependency submission evidence、submission-time `dependencyGraphVisibility`，以及 `actions: read` 权限阻塞标记与最终 exit code / conclusion
+  - `dependabot-drift.json`：给后续自动化 / agent 复验消费的机器可读报告，包含 manifest coverage、告警 verdict、最新 dependency submission evidence、submission-time `dependencyGraphVisibility`、dependency submission API 返回的原始 blocker evidence（`kind/status/message`），以及 `actions: read` 权限阻塞标记与最终 exit code / conclusion
 - 当默认分支仍存在 `graph coverage` 缺口时，summary / artifact 现在会额外串上最新 `Dependency Graph Submission` run 证据；如果 submission workflow 已明确给出 `repository blocker`，优先按仓库设置阻塞处理，而不是继续怀疑本地 inventory 或 snapshot 覆盖面。
 - 工作流会优先读取仓库 secret `DEPENDABOT_ALERTS_TOKEN`；如果未配置，则退回 `github.token`，并在无法读取 Dependabot alerts 时输出降级 warning，而不是把整条自动复验链直接打断。
 - exit code 解释与本地一致：
@@ -75,8 +75,9 @@ node scripts/check-dependabot-drift.js
 - 当前它使用 `scripts/submit-dependency-snapshots.js` 为所有已跟踪的 submission roots 提交手工 snapshot；按当前代码事实，命中的 roots 是 `web`（pnpm）、`api`（uv）和 `services/compat-dify`（uv）。
 - workflow artifact 现在会同时保留：
   - `dependency-submission.txt`：给人读的摘要
-  - `dependency-submission.json`：给 `check-dependabot-drift` 与后续自动化复验消费的机器可读报告，包含 root 级 `status`、`snapshotId`、`blockedReason`、`warning`，以及一次“提交后立即回看 `dependencyGraphManifests`”的 `dependencyGraphVisibility` 结构化证据
+  - `dependency-submission.json`：给 `check-dependabot-drift` 与后续自动化复验消费的机器可读报告，包含 root 级 `status`、`snapshotId`、`blockedReason`、`warning`、`blockedKind/blockedStatus/blockedMessage`，以及一次“提交后立即回看 `dependencyGraphManifests`”的 `dependencyGraphVisibility` 结构化证据；当多个 blocked roots 来自同一仓库级设置阻塞时，还会额外汇总为顶层 `repositoryBlockerEvidence`
 - 当仓库级 `Dependency graph` 尚未开启时，该 workflow 现在会把 run 收口为“保留 summary + artifact 证据并输出 warning”的平台阻塞态，而不是继续把每次 push 打成无法区分真伪的红灯；此时优先处理仓库 `Settings -> Security & analysis`，不要误判成锁文件解析或本地脚本失效。
+- 如果 artifact 中已经出现 `repositoryBlockerEvidence.kind=dependency_graph_disabled` 且 `status=404`，说明阻塞来自 GitHub dependency submission API 的直接返回，而不是本地 inventory / lock 解析错误；管理员侧应优先处理仓库 `Dependency graph` 设置，再决定是否需要重跑 workflow。
 - 该脚本直接调用 GitHub dependency submission REST API：
   - `web` 侧通过 `pnpm list --lockfile-only` 提交 resolved tree，并保留 `direct|indirect`、`runtime|development` 关系事实；这足以覆盖当前 `next` / `flatted` 这类 default branch runtime 告警主线。
   - `uv` 侧直接解析 `uv.lock` 中的 editable root、runtime direct deps、optional `dev` group 与 transitive dependency tree，把 `api/uv.lock`、`services/compat-dify/uv.lock` 也纳入 GitHub graph / drift 对照入口。
