@@ -9,9 +9,11 @@ from app.services.runtime import RuntimeService, WorkflowExecutionError
 from app.services.sandbox_backends import (
     SandboxBackendCapability,
     SandboxBackendClient,
+    SandboxBackendRegistry,
     SandboxBackendSelection,
     SandboxExecutionRequest,
     SandboxExecutionResponse,
+    SandboxToolExecutionRequest,
 )
 
 
@@ -80,8 +82,8 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
                     "config": {"mock_output": {"answer": "done"}},
                     "runtimePolicy": {
                         "execution": {
-                            "class": "sandbox",
-                            "profile": "browser-safe",
+                            "class": "subprocess",
+                            "profile": "host-fallback",
                             "timeoutMs": 30000,
                             "networkPolicy": "restricted",
                         }
@@ -113,9 +115,9 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
         "source": "default",
     }
     assert tool_run.input_payload["execution"] == {
-        "class": "sandbox",
+        "class": "subprocess",
         "source": "runtime_policy",
-        "profile": "browser-safe",
+        "profile": "host-fallback",
         "timeoutMs": 30000,
         "networkPolicy": "restricted",
     }
@@ -126,6 +128,537 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
         if event.event_type == "node.started" and event.payload.get("node", {}).get("id") == "tool"
     )
     assert tool_started.payload["execution"] == tool_run.input_payload["execution"]
+
+
+def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
+    sqlite_session: Session,
+) -> None:
+    registry = PluginRegistry()
+    invoked = False
+
+    def invoker(_request):
+        nonlocal invoked
+        invoked = True
+        return {"documents": ["doc-1"]}
+
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Risk Search",
+            supported_execution_classes=("inline", "sandbox"),
+        ),
+        invoker=invoker,
+    )
+
+    workflow = Workflow(
+        id="wf-tool-strong-isolation-blocked",
+        name="Tool Strong Isolation Blocked Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "tool",
+                    "type": "tool",
+                    "name": "Tool",
+                    "config": {
+                        "tool": {
+                            "toolId": "native.risk-search",
+                            "ecosystem": "native",
+                        }
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "profile": "risk-reviewed",
+                            "timeoutMs": 3000,
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="No sandbox backend is registered",
+    ):
+        RuntimeService(
+            plugin_call_proxy=PluginCallProxy(
+                registry,
+                sandbox_backend_client=SandboxBackendClient(SandboxBackendRegistry()),
+            ),
+            sandbox_backend_client=SandboxBackendClient(SandboxBackendRegistry()),
+        ).execute_workflow(
+            sqlite_session,
+            workflow,
+            {"topic": "blocked"},
+        )
+
+    run = sqlite_session.scalars(
+        select(Run).where(Run.workflow_id == workflow.id).order_by(Run.created_at.desc())
+    ).first()
+    assert run is not None
+    assert run.status == "failed"
+
+    tool_run = sqlite_session.scalars(
+        select(NodeRun)
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "tool")
+        .order_by(NodeRun.started_at.desc())
+    ).first()
+    assert tool_run is not None
+    assert tool_run.status == "blocked"
+    assert "No sandbox backend is registered" in (tool_run.error_message or "")
+    assert invoked is False
+
+    events = sqlite_session.scalars(
+        select(RunEvent)
+        .where(RunEvent.run_id == run.id, RunEvent.node_run_id == tool_run.id)
+        .order_by(RunEvent.id.asc())
+    ).all()
+    unavailable_event = next(
+        event for event in events if event.event_type == "node.execution.unavailable"
+    )
+    assert unavailable_event.payload["node_id"] == "tool"
+    assert unavailable_event.payload["node_type"] == "tool"
+    assert unavailable_event.payload["requested_execution_class"] == "sandbox"
+    assert "No sandbox backend is registered" in str(unavailable_event.payload["reason"])
+
+
+def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-generic-subprocess-blocked",
+        name="Generic Subprocess Blocked Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {
+                    "id": "trigger",
+                    "type": "trigger",
+                    "name": "Trigger",
+                    "config": {},
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "subprocess",
+                            "profile": "host-reviewed",
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="does not implement requested execution class 'subprocess'",
+    ):
+        RuntimeService().execute_workflow(
+            sqlite_session,
+            workflow,
+            {"topic": "blocked"},
+        )
+
+    run = sqlite_session.scalars(
+        select(Run).where(Run.workflow_id == workflow.id).order_by(Run.created_at.desc())
+    ).first()
+    assert run is not None
+    assert run.status == "failed"
+
+    branch_run = sqlite_session.scalars(
+        select(NodeRun)
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "trigger")
+        .order_by(NodeRun.started_at.desc())
+    ).first()
+    assert branch_run is not None
+    assert branch_run.status == "blocked"
+    assert "does not implement requested execution class 'subprocess'" in (
+        branch_run.error_message or ""
+    )
+
+    events = sqlite_session.scalars(
+        select(RunEvent)
+        .where(RunEvent.run_id == run.id, RunEvent.node_run_id == branch_run.id)
+        .order_by(RunEvent.id.asc())
+    ).all()
+    unavailable_event = next(
+        event for event in events if event.event_type == "node.execution.unavailable"
+    )
+    assert unavailable_event.payload["node_id"] == "trigger"
+    assert unavailable_event.payload["node_type"] == "trigger"
+    assert unavailable_event.payload["requested_execution_class"] == "subprocess"
+    assert "does not implement requested execution class 'subprocess'" in str(
+        unavailable_event.payload["reason"]
+    )
+
+
+def test_runtime_service_executes_condition_node_via_host_subprocess(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-condition-subprocess",
+        name="Condition Subprocess Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "branch",
+                    "type": "condition",
+                    "name": "Branch",
+                    "config": {
+                        "expression": "trigger_input.priority == 'high'",
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "subprocess",
+                            "profile": "host-reviewed",
+                        }
+                    },
+                },
+                {
+                    "id": "true_path",
+                    "type": "tool",
+                    "name": "True Path",
+                    "config": {"mock_output": {"answer": "expedite"}},
+                },
+                {
+                    "id": "false_path",
+                    "type": "tool",
+                    "name": "False Path",
+                    "config": {"mock_output": {"answer": "queue"}},
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {
+                    "id": "e2",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "true_path",
+                    "condition": "true",
+                },
+                {
+                    "id": "e3",
+                    "sourceNodeId": "branch",
+                    "targetNodeId": "false_path",
+                    "condition": "false",
+                },
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"priority": "high"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {"true_path": {"answer": "expedite"}}
+
+    branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
+    assert branch_run.status == "succeeded"
+    assert branch_run.output_payload["selected"] == "true"
+    assert branch_run.output_payload["expression"]["value"] is True
+
+    branch_events = [
+        event
+        for event in artifacts.events
+        if event.node_run_id == branch_run.id and event.event_type == "node.execution.dispatched"
+    ]
+    assert len(branch_events) == 1
+    assert branch_events[0].payload == {
+        "node_id": "branch",
+        "node_type": "condition",
+        "requested_execution_class": "subprocess",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "host-reviewed",
+        "effective_execution_class": "subprocess",
+        "executor_ref": "runtime:host-subprocess-branch",
+    }
+
+
+def test_runtime_service_executes_native_tool_via_sandbox_runner(
+    sqlite_session: Session,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Risk Search",
+            ecosystem="native",
+            input_schema={
+                "type": "object",
+                "properties": {"trigger": {"type": "object"}},
+                "required": ["trigger"],
+                "additionalProperties": False,
+            },
+            supported_execution_classes=("inline", "sandbox"),
+        )
+    )
+
+    workflow = Workflow(
+        id="wf-tool-strong-isolation-runner",
+        name="Tool Strong Isolation Runner Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "tool",
+                    "type": "tool",
+                    "name": "Tool",
+                    "config": {
+                        "tool": {
+                            "toolId": "native.risk-search",
+                            "ecosystem": "native",
+                        }
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "profile": "risk-reviewed",
+                            "timeoutMs": 3000,
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _SandboxBackendClientStub()
+    artifacts = RuntimeService(
+        plugin_call_proxy=PluginCallProxy(
+            registry,
+            sandbox_backend_client=sandbox_backend_client,
+        ),
+        sandbox_backend_client=sandbox_backend_client,
+    ).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "runner"},
+    )
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {
+        "tool": {
+            "documents": ["RUNNER"],
+            "requested": "sandbox",
+        }
+    }
+    assert len(sandbox_backend_client.tool_requests) == 1
+    assert sandbox_backend_client.tool_requests[0].runner_kind == "native-tool"
+    assert sandbox_backend_client.tool_requests[0].profile == "risk-reviewed"
+
+    tool_call = artifacts.tool_calls[0]
+    assert tool_call.execution_trace == {
+        "requested_execution_class": "sandbox",
+        "effective_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "risk-reviewed",
+        "requested_execution_timeout_ms": 3000,
+        "requested_network_policy": None,
+        "requested_filesystem_policy": None,
+        "requested_dependency_mode": None,
+        "requested_builtin_package_set": None,
+        "requested_dependency_ref": None,
+        "requested_backend_extensions": None,
+        "executor_ref": "tool:native-sandbox",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default:tool-runner",
+        "sandbox_runner_kind": "native-tool",
+        "fallback_reason": None,
+        "blocked_reason": None,
+    }
+
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    assert tool_run.input_payload["execution"] == {
+        "class": "sandbox",
+        "source": "runtime_policy",
+        "profile": "risk-reviewed",
+        "timeoutMs": 3000,
+    }
+    assert tool_run.output_payload == {
+        "documents": ["RUNNER"],
+        "requested": "sandbox",
+    }
+
+    dispatched_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == tool_run.id and event.event_type == "tool.execution.dispatched"
+    )
+    assert dispatched_event.payload == {
+        "node_id": "tool",
+        "tool_id": "native.risk-search",
+        "tool_name": "native.risk-search",
+        "requested_execution_class": "sandbox",
+        "effective_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "risk-reviewed",
+        "requested_execution_timeout_ms": 3000,
+        "requested_network_policy": None,
+        "requested_filesystem_policy": None,
+        "requested_dependency_mode": None,
+        "requested_builtin_package_set": None,
+        "requested_dependency_ref": None,
+        "requested_backend_extensions": None,
+        "executor_ref": "tool:native-sandbox",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default:tool-runner",
+        "sandbox_runner_kind": "native-tool",
+    }
+
+
+def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
+    sqlite_session: Session,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Risk Search",
+            ecosystem="native",
+            input_schema={
+                "type": "object",
+                "properties": {"trigger": {"type": "object"}},
+                "required": ["trigger"],
+                "additionalProperties": False,
+            },
+            supported_execution_classes=("inline", "sandbox"),
+        )
+    )
+
+    workflow = Workflow(
+        id="wf-tool-strong-isolation-normalized-runner",
+        name="Tool Strong Isolation Normalized Runner Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "tool",
+                    "type": "tool",
+                    "name": "Tool",
+                    "config": {
+                        "tool": {
+                            "toolId": "native.risk-search",
+                            "ecosystem": "native",
+                        }
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "profile": "risk-reviewed",
+                            "timeoutMs": 3000,
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _SandboxBackendClientNormalizedToolResultStub()
+    artifacts = RuntimeService(
+        plugin_call_proxy=PluginCallProxy(
+            registry,
+            sandbox_backend_client=sandbox_backend_client,
+        ),
+        sandbox_backend_client=sandbox_backend_client,
+    ).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "runner"},
+    )
+
+    assert artifacts.run.status == "succeeded"
+    tool_call = artifacts.tool_calls[0]
+    assert tool_call.raw_artifact_id == "tool-result-normalized"
+    assert tool_call.response_content_type == "json"
+    assert tool_call.response_meta["runner"] == "sandbox-tool-runner"
+    assert tool_call.response_meta["tool_name"] == "native.risk-search"
+    assert tool_call.response_meta["tool_id"] == "native.risk-search"
+    assert tool_call.response_meta["latency_ms"] == 19
+    assert tool_call.response_meta["requested_execution_class"] == "sandbox"
+    assert tool_call.response_meta["effective_execution_class"] == "sandbox"
+    assert tool_call.response_meta["execution_source"] == "runtime_policy"
+    assert tool_call.response_meta["requested_execution_profile"] == "risk-reviewed"
+    assert tool_call.response_meta["requested_execution_timeout_ms"] == 3000
+    assert tool_call.response_meta["executor_ref"] == "tool:native-sandbox"
+    assert tool_call.response_meta["sandbox_backend_id"] == "sandbox-default"
+    assert (
+        tool_call.response_meta["sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default:tool-runner"
+    )
+    assert tool_call.response_meta["sandbox_runner_kind"] == "native-tool"
+    assert tool_call.response_meta["tool_call_id"] == tool_call.id
+    assert tool_call.response_meta["runner_logs"] == ["sandbox stdout"]
+    assert tool_call.execution_trace["sandbox_backend_executor_ref"] == (
+        "sandbox-backend:sandbox-default:tool-runner"
+    )
+
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    assert tool_run.output_payload == {
+        "documents": ["RUNNER"],
+        "requested": "sandbox",
+    }
+    assert list(tool_run.artifact_refs or []) == ["artifact://tool-result-normalized"]
+
+    completed_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == tool_run.id and event.event_type == "tool.completed"
+    )
+    dispatched_event = next(
+        event
+        for event in artifacts.events
+        if event.node_run_id == tool_run.id and event.event_type == "tool.execution.dispatched"
+    )
+    assert (
+        dispatched_event.payload["sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default:tool-runner"
+    )
+    assert completed_event.payload == {
+        "node_id": "tool",
+        "tool_id": "native.risk-search",
+        "summary": "sandbox runner normalized result",
+        "raw_ref": "artifact://tool-result-normalized",
+        "content_type": "json",
+    }
 
 
 def test_runtime_service_blocks_sandbox_code_without_registered_backend(
@@ -197,6 +730,7 @@ def test_runtime_service_blocks_sandbox_code_without_registered_backend(
         "node_id": "sandbox",
         "node_type": "sandbox_code",
         "requested_execution_class": "sandbox",
+        "execution_source": "default",
         "reason": sandbox_run.error_message,
     }
 
@@ -274,6 +808,7 @@ def test_runtime_service_executes_sandbox_code_via_explicit_subprocess_mvp(
 class _SandboxBackendClientStub(SandboxBackendClient):
     def __init__(self) -> None:
         self.requests: list[SandboxExecutionRequest] = []
+        self.tool_requests: list[SandboxToolExecutionRequest] = []
 
     def describe_execution_backend(
         self,
@@ -303,6 +838,78 @@ class _SandboxBackendClientStub(SandboxBackendClient):
             result={
                 "answer": request.node_input["trigger_input"]["topic"].upper(),
                 "requested": request.execution_class,
+            },
+            stdout="sandbox stdout",
+            stderr="",
+        )
+
+    def describe_tool_execution_backend(
+        self,
+        *,
+        execution_class: str,
+        profile: str | None = None,
+        dependency_mode: str | None = None,
+        builtin_package_set: str | None = None,
+        network_policy: str | None = None,
+        filesystem_policy: str | None = None,
+        backend_extensions: dict | None = None,
+    ) -> SandboxBackendSelection:
+        return SandboxBackendSelection(
+            available=True,
+            backend_id="sandbox-default",
+            executor_ref="sandbox-backend:sandbox-default",
+            capability=SandboxBackendCapability(
+                supported_execution_classes=(execution_class,),
+                supported_profiles=((profile,) if profile is not None else ()),
+                supported_dependency_modes=(
+                    (dependency_mode,) if dependency_mode is not None else ()
+                ),
+                supports_tool_execution=True,
+                supports_builtin_package_sets=True,
+                supports_network_policy=True,
+                supports_filesystem_policy=True,
+            ),
+            health_status="healthy",
+        )
+
+    def execute_tool(self, request: SandboxToolExecutionRequest) -> SandboxExecutionResponse:
+        self.tool_requests.append(request)
+        return SandboxExecutionResponse(
+            backend_id="sandbox-default",
+            executor_ref="sandbox-backend:sandbox-default:tool-runner",
+            effective_execution_class=request.execution_class,
+            result={
+                "status": "success",
+                "output": {
+                    "documents": [request.inputs["trigger"]["topic"].upper()],
+                    "requested": request.execution_class,
+                },
+                "logs": ["sandbox tool runner invoked"],
+                "durationMs": 19,
+            },
+            stdout="",
+            stderr="",
+        )
+
+
+class _SandboxBackendClientNormalizedToolResultStub(_SandboxBackendClientStub):
+    def execute_tool(self, request: SandboxToolExecutionRequest) -> SandboxExecutionResponse:
+        self.tool_requests.append(request)
+        return SandboxExecutionResponse(
+            backend_id="sandbox-default",
+            executor_ref="sandbox-backend:sandbox-default:tool-runner",
+            effective_execution_class=request.execution_class,
+            result={
+                "status": "success",
+                "structured": {
+                    "documents": [request.inputs["trigger"]["topic"].upper()],
+                    "requested": request.execution_class,
+                },
+                "contentType": "json",
+                "summary": "sandbox runner normalized result",
+                "rawRef": "artifact://tool-result-normalized",
+                "durationMs": 19,
+                "meta": {"runner": "sandbox-tool-runner"},
             },
             stdout="sandbox stdout",
             stderr="",
@@ -381,8 +988,17 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
         "node_id": "sandbox",
         "node_type": "sandbox_code",
         "requested_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_execution_profile": "python-safe",
+        "requested_execution_timeout_ms": 15000,
+        "requested_network_policy": "restricted",
+        "requested_filesystem_policy": "ephemeral",
+        "requested_dependency_mode": "builtin",
+        "requested_builtin_package_set": "py-data-basic",
         "effective_execution_class": "sandbox",
         "executor_ref": "sandbox-backend:sandbox-default",
+        "sandbox_backend_id": "sandbox-default",
+        "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
     }
 
     sandbox_artifact = next(
@@ -399,6 +1015,62 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
         "backendId": "sandbox-default",
         "dependencyMode": "builtin",
         "builtinPackageSet": "py-data-basic",
+    }
+
+
+def test_runtime_service_sandbox_code_uses_runtime_policy_dependency_contract(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-sandbox-runtime-policy-deps",
+        name="Sandbox Runtime Policy Dependency Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "name": "Sandbox",
+                    "config": {
+                        "language": "python",
+                        "code": 'result = {"answer": "remote"}',
+                    },
+                    "runtimePolicy": {
+                        "execution": {
+                            "class": "sandbox",
+                            "dependencyMode": "builtin",
+                            "builtinPackageSet": "py-data-basic",
+                            "backendExtensions": {
+                                "mountPreset": "analytics",
+                            },
+                        }
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    sandbox_backend_client = _SandboxBackendClientStub()
+    RuntimeService(sandbox_backend_client=sandbox_backend_client).execute_workflow(
+        sqlite_session,
+        workflow,
+        {"topic": "remote"},
+    )
+
+    assert len(sandbox_backend_client.requests) == 1
+    assert sandbox_backend_client.requests[0].dependency_mode == "builtin"
+    assert sandbox_backend_client.requests[0].builtin_package_set == "py-data-basic"
+    assert sandbox_backend_client.requests[0].backend_extensions == {
+        "mountPreset": "analytics"
     }
 
 
@@ -479,6 +1151,40 @@ def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
     assert describe_request.execution_class == "sandbox"
     assert describe_request.dependency_mode == "dependency_ref"
     assert describe_request.dependency_ref == "bundle:finance-safe-v1"
+
+    run = sqlite_session.scalars(
+        select(Run).where(Run.workflow_id == workflow.id).order_by(Run.created_at.desc())
+    ).first()
+    assert run is not None
+    assert run.status == "failed"
+
+    sandbox_run = sqlite_session.scalars(
+        select(NodeRun)
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "sandbox")
+        .order_by(NodeRun.started_at.desc())
+    ).first()
+    assert sandbox_run is not None
+    assert sandbox_run.status == "blocked"
+
+    unavailable_event = sqlite_session.scalars(
+        select(RunEvent)
+        .where(
+            RunEvent.run_id == run.id,
+            RunEvent.node_run_id == sandbox_run.id,
+            RunEvent.event_type == "node.execution.unavailable",
+        )
+        .order_by(RunEvent.id.asc())
+    ).first()
+    assert unavailable_event is not None
+    assert unavailable_event.payload == {
+        "node_id": "sandbox",
+        "node_type": "sandbox_code",
+        "requested_execution_class": "sandbox",
+        "execution_source": "runtime_policy",
+        "requested_dependency_mode": "dependency_ref",
+        "requested_dependency_ref": "bundle:finance-safe-v1",
+        "reason": sandbox_run.error_message,
+    }
 
 
 class _BackendExtensionsMismatchSandboxBackendClientStub:
@@ -612,11 +1318,19 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         },
     )
 
+    sandbox_backend_client = SandboxBackendClient(SandboxBackendRegistry())
+
     with pytest.raises(
         WorkflowExecutionError,
-        match="does not support requested execution class 'microvm'",
+        match="No sandbox backend is registered",
     ):
-        RuntimeService(plugin_call_proxy=PluginCallProxy(registry)).execute_workflow(
+        RuntimeService(
+            plugin_call_proxy=PluginCallProxy(
+                registry,
+                sandbox_backend_client=sandbox_backend_client,
+            ),
+            sandbox_backend_client=sandbox_backend_client,
+        ).execute_workflow(
             sqlite_session,
             workflow,
             {"topic": "fallback"},
@@ -641,41 +1355,18 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         .order_by(RunEvent.id.asc())
     ).all()
 
-    tool_execution_dispatched_event = next(
-        event for event in events if event.event_type == "tool.execution.dispatched"
+    unavailable_event = next(
+        event for event in events if event.event_type == "node.execution.unavailable"
     )
-    assert tool_execution_dispatched_event.payload == {
+    assert unavailable_event.payload == {
         "node_id": "tool",
-        "tool_id": "native.inline-test",
-        "tool_name": "native.inline-test",
+        "node_type": "tool",
         "requested_execution_class": "microvm",
-        "effective_execution_class": "inline",
         "execution_source": "runtime_policy",
         "requested_execution_profile": "strict",
-        "requested_execution_timeout_ms": None,
-        "requested_network_policy": None,
-        "requested_filesystem_policy": None,
-        "executor_ref": "tool:native-inline",
-    }
-
-    tool_execution_blocked_event = next(
-        event for event in events if event.event_type == "tool.execution.blocked"
-    )
-    assert tool_execution_blocked_event.payload == {
-        "node_id": "tool",
-        "tool_id": "native.inline-test",
-        "tool_name": "native.inline-test",
-        "requested_execution_class": "microvm",
-        "effective_execution_class": "inline",
-        "execution_source": "runtime_policy",
-        "requested_execution_profile": "strict",
-        "requested_execution_timeout_ms": None,
-        "requested_network_policy": None,
-        "requested_filesystem_policy": None,
-        "executor_ref": "tool:native-inline",
         "reason": (
-            "Native tool 'native.inline-test' does not support requested execution class "
-            "'microvm'. Supported classes: inline."
+            "No sandbox backend is registered. Strong-isolation paths must fail closed until "
+            "a compatible backend is available."
         ),
     }
 
@@ -1744,4 +2435,3 @@ def test_runtime_service_rejects_loop_nodes(sqlite_session: Session) -> None:
 
     with pytest.raises(WorkflowExecutionError):
         service.execute_workflow(sqlite_session, workflow, {})
-

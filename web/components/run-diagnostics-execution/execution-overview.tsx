@@ -1,12 +1,22 @@
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { RunExecutionView } from "@/lib/get-run-views";
 
+import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics-execution/operator-follow-up-card";
 import { RunDiagnosticsExecutionOverviewBlockers } from "@/components/run-diagnostics-execution/execution-overview-blockers";
+import { RunDiagnosticsLegacyAuthGovernanceCard } from "@/components/run-diagnostics-execution/legacy-auth-governance-card";
 import { MetricChipRow, SummaryCard } from "@/components/run-diagnostics-execution/shared";
 
 export function RunDiagnosticsExecutionOverview({
-  executionView
+  executionView,
+  callbackWaitingAutomation,
+  sandboxReadiness = null
 }: {
   executionView: RunExecutionView | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 }) {
   if (!executionView) {
     return <p className="empty-state">Execution view is unavailable for this run.</p>;
@@ -80,10 +90,22 @@ export function RunDiagnosticsExecutionOverview({
           <SummaryCard label="Callback waits" value={callbackWaiting.node_count} />
           <SummaryCard label="Expired tickets" value={callbackWaiting.expired_ticket_count} />
           <SummaryCard label="Resume schedules" value={callbackWaiting.resume_schedule_count} />
+          <SummaryCard
+            label="Scheduled resumes pending"
+            value={callbackWaiting.scheduled_resume_pending_node_count}
+          />
           <SummaryCard label="Late callbacks" value={callbackWaiting.late_callback_count} />
           <SummaryCard label="Terminated waits" value={callbackWaiting.terminated_node_count} />
         </div>
       ) : null}
+
+      <RunDiagnosticsOperatorFollowUpCard
+        executionView={executionView}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
+      />
+
+      <RunDiagnosticsLegacyAuthGovernanceCard executionView={executionView} />
 
       <MetricChipRow
         title="Ticket statuses"
@@ -160,15 +182,25 @@ export function RunDiagnosticsExecutionOverview({
         </>
       ) : null}
 
+      <RunDiagnosticsExecutionOverviewBlockers
+        executionView={executionView}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
+      />
+
       {callbackWaiting.node_count > 0 ? (
         <>
-          <RunDiagnosticsExecutionOverviewBlockers executionView={executionView} />
-
           <MetricChipRow
             title="Resume sources"
             emptyCopy="No callback resumes have been scheduled yet."
             metrics={callbackWaiting.resume_source_counts}
             prefix="resume-source"
+          />
+          <MetricChipRow
+            title="Pending scheduled resume sources"
+            emptyCopy="No callback waiting nodes currently have a scheduled resume queued."
+            metrics={callbackWaiting.scheduled_resume_source_counts}
+            prefix="scheduled-resume-source"
           />
           <MetricChipRow
             title="Termination reasons"

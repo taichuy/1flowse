@@ -1,7 +1,14 @@
+import React from "react";
 import Link from "next/link";
 
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import { DEFAULT_RUN_TRACE_LIMIT, type RunTraceQuery } from "@/lib/get-run-trace";
+import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
+import { buildRunDiagnosticsTraceSurfaceCopy } from "@/lib/run-diagnostics-presenters";
 
 import { TRACE_LIMIT_OPTIONS } from "@/components/run-diagnostics-panel/shared";
 
@@ -11,6 +18,9 @@ type RunDiagnosticsTraceFiltersSectionProps = {
   eventTypeOptions: string[];
   nodeRunOptions: string[];
   activeFilters: string[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  runDetailHref?: string | null;
 };
 
 export function RunDiagnosticsTraceFiltersSection({
@@ -18,8 +28,20 @@ export function RunDiagnosticsTraceFiltersSection({
   activeTraceQuery,
   eventTypeOptions,
   nodeRunOptions,
-  activeFilters
+  activeFilters,
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null,
+  runDetailHref = null
 }: RunDiagnosticsTraceFiltersSectionProps) {
+  const surfaceCopy = buildRunDiagnosticsTraceSurfaceCopy({
+    defaultLimit: DEFAULT_RUN_TRACE_LIMIT
+  });
+  const resetRunLink = buildRequiredOperatorRunDetailLinkSurface({
+    runId,
+    hrefLabel: surfaceCopy.resetFiltersLabel
+  });
+  const resetRunHref = runDetailHref ?? resetRunLink.href;
+
   return (
     <section className="diagnostics-layout">
       <article className="diagnostic-panel">
@@ -28,12 +50,10 @@ export function RunDiagnosticsTraceFiltersSection({
             <p className="eyebrow">Trace</p>
             <h2>Trace filters & export</h2>
           </div>
-          <p className="section-copy">
-            这里直接消费 `/trace`，用于人类排障；AI 和自动化仍应优先直连机器接口。
-          </p>
+          <p className="section-copy">{surfaceCopy.sectionDescription}</p>
         </div>
 
-        <form className="trace-filter-form" action={`/runs/${runId}`} method="get">
+        <form className="trace-filter-form" action={resetRunHref} method="get">
           <label className="binding-field">
             <span className="binding-label">Event type</span>
             <select
@@ -124,29 +144,30 @@ export function RunDiagnosticsTraceFiltersSection({
 
           <div className="trace-filter-actions trace-field-span">
             <button className="sync-button" type="submit">
-              应用过滤
+              {surfaceCopy.applyFiltersLabel}
             </button>
-            <Link className="inline-link" href={`/runs/${runId}`}>
-              重置过滤
+            <Link className="inline-link" href={resetRunHref}>
+              {resetRunLink.label}
             </Link>
             <RunTraceExportActions
-              blockedSummary="当前 diagnostics trace export 已接入统一敏感访问控制；可先查看审批票据和关联 run，再决定是否继续申请导出。"
+              callbackWaitingAutomation={callbackWaitingAutomation}
               query={activeTraceQuery}
               requesterId="run-diagnostics-trace-export"
               runId={runId}
+              sandboxReadiness={sandboxReadiness}
             />
           </div>
         </form>
 
         <div className="trace-filter-hints">
-          <span className="event-chip">默认 limit {DEFAULT_RUN_TRACE_LIMIT}</span>
-          <span className="event-chip">时间窗输入按 UTC ISO 传给 API</span>
-          <span className="event-chip">翻页通过 opaque cursor 保持当前过滤条件</span>
+          <span className="event-chip">{surfaceCopy.defaultLimitHint}</span>
+          <span className="event-chip">{surfaceCopy.utcTimeWindowHint}</span>
+          <span className="event-chip">{surfaceCopy.cursorPaginationHint}</span>
         </div>
 
         <div className="trace-active-filter-row">
           {activeFilters.length === 0 ? (
-            <p className="empty-state compact">当前是默认 trace 视图，没有额外过滤条件。</p>
+            <p className="empty-state compact">{surfaceCopy.emptyState}</p>
           ) : (
             activeFilters.map((filter) => (
               <span className="event-chip" key={filter}>

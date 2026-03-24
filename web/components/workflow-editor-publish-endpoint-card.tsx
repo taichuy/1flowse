@@ -1,9 +1,16 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { buildWorkflowPublishDraftEndpointId } from "@/lib/workflow-publish-definition-links";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
+import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 
 import {
   AUTH_MODES,
   PUBLISH_PROTOCOLS,
   assignOptionalString,
+  formatPublishedEndpointAuthModeOptionLabel,
+  isSupportedPublishedEndpointAuthMode,
   stringifyJson,
   toEnumValue,
   type WorkflowPublishedEndpointDraft
@@ -18,6 +25,9 @@ type WorkflowEditorPublishEndpointCardProps = {
   endpointIndex: number;
   workflowVersion: string;
   validationMessages: string[];
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
+  currentHref?: string | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
   highlighted?: boolean;
   highlightedFieldPath?: string | null;
   onUpdateEndpoint: (
@@ -37,6 +47,9 @@ export function WorkflowEditorPublishEndpointCard({
   endpointIndex,
   workflowVersion,
   validationMessages,
+  focusedValidationItem = null,
+  currentHref = null,
+  sandboxReadiness = null,
   highlighted = false,
   highlightedFieldPath = null,
   onUpdateEndpoint,
@@ -44,29 +57,33 @@ export function WorkflowEditorPublishEndpointCard({
   onApplySchemaField
 }: WorkflowEditorPublishEndpointCardProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
+  const normalizedHighlightedField = normalizePublishFieldKey(highlightedFieldPath);
   const versionChip = endpoint.workflowVersion
     ? `pinned ${endpoint.workflowVersion}`
     : `tracks current ${workflowVersion}`;
+  const hasLegacyUnsupportedAuthMode = !isSupportedPublishedEndpointAuthMode(endpoint.authMode);
 
   useEffect(() => {
     if (!highlighted) {
       return;
     }
 
-    const fieldKey = normalizePublishFieldKey(highlightedFieldPath);
     const target = sectionRef.current?.querySelector<HTMLElement>(
-      `[data-validation-field="${fieldKey}"] input, ` +
-        `[data-validation-field="${fieldKey}"] select, ` +
-        `[data-validation-field="${fieldKey}"] textarea`
+      `[data-validation-field="${normalizedHighlightedField}"] input, ` +
+        `[data-validation-field="${normalizedHighlightedField}"] select, ` +
+        `[data-validation-field="${normalizedHighlightedField}"] textarea`
     );
 
     target?.scrollIntoView({ block: "center", behavior: "smooth" });
     target?.focus();
-  }, [highlighted, highlightedFieldPath]);
+  }, [highlighted, normalizedHighlightedField]);
 
   return (
     <section
-      className={`entry-card compact-card ${highlighted ? "validation-focus-ring" : ""}`.trim()}
+      className={
+        `entry-card compact-card workflow-definition-anchor-target ${highlighted ? "validation-focus-ring" : ""}`.trim()
+      }
+      id={buildWorkflowPublishDraftEndpointId(endpoint.id)}
       ref={sectionRef}
     >
       <div className="binding-card-header">
@@ -83,6 +100,14 @@ export function WorkflowEditorPublishEndpointCard({
         <span className="event-chip">{endpoint.streaming ? "streaming" : "non-streaming"}</span>
         <span className="event-chip">{versionChip}</span>
       </div>
+
+      {focusedValidationItem && normalizedHighlightedField ? (
+        <WorkflowValidationRemediationCard
+          currentHref={currentHref}
+          item={focusedValidationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
 
       {validationMessages.length > 0 ? (
         <div className="sync-message error">
@@ -185,9 +210,14 @@ export function WorkflowEditorPublishEndpointCard({
               })
             }
           >
+            {hasLegacyUnsupportedAuthMode ? (
+              <option value={endpoint.authMode} disabled>
+                {formatPublishedEndpointAuthModeOptionLabel(endpoint.authMode)}
+              </option>
+            ) : null}
             {AUTH_MODES.map((authMode) => (
               <option key={`${endpoint.id}-${authMode}`} value={authMode}>
-                {authMode}
+                {formatPublishedEndpointAuthModeOptionLabel(authMode)}
               </option>
             ))}
           </select>
@@ -211,6 +241,8 @@ export function WorkflowEditorPublishEndpointCard({
       <p className="section-copy entry-copy">
         `workflowVersion` 留空时会跟随当前保存出来的 workflow version；只有填写语义版本时才会把 endpoint 固定到指定版本。
       </p>
+
+      {hasLegacyUnsupportedAuthMode ? <LegacyPublishAuthContractCard /> : null}
 
       {endpoint.workflowVersion ? (
         <div className="binding-actions">
@@ -311,6 +343,9 @@ function normalizePublishFieldKey(fieldPath: string | null | undefined) {
   }
   if (fieldPath.startsWith("cache.maxEntries")) {
     return "cache.maxEntries";
+  }
+  if (fieldPath.startsWith("cache.varyBy")) {
+    return "cache.varyBy";
   }
 
   return fieldPath;

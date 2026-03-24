@@ -29,6 +29,7 @@ class PluginAdapterRegistrationItem(BaseModel):
     supported_execution_classes: list[str] = Field(default_factory=list)
     status: str
     detail: str | None = None
+    mode: str | None = None
 
 
 class PluginToolRegistrationCreate(BaseModel):

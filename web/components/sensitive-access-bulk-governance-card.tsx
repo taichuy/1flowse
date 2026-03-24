@@ -1,9 +1,26 @@
 "use client";
 
+import Link from "next/link";
+import React from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+
+import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
+import { SensitiveAccessLegacyAuthGovernanceCompactCard } from "@/components/sensitive-access-legacy-auth-governance-card";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import type {
   SensitiveAccessBulkAction,
   SensitiveAccessBulkActionResult
 } from "@/lib/get-sensitive-access";
+import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
+import {
+  buildSensitiveAccessBulkRecommendedNextStep,
+  buildSensitiveAccessBulkResultNarrative,
+  buildSensitiveAccessBulkRunSampleCards
+} from "@/lib/sensitive-access-bulk-result-presenters";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 type SensitiveAccessBulkGovernanceCardProps = {
   inScopeCount: number;
@@ -20,6 +37,11 @@ type SensitiveAccessBulkGovernanceCardProps = {
 
 const ACTIONS: SensitiveAccessBulkAction[] = ["approved", "rejected", "retry"];
 
+type SensitiveAccessBulkScopeSummary = Pick<
+  SensitiveAccessBulkGovernanceCardProps,
+  "inScopeCount" | "decisionCandidateCount" | "retryCandidateCount"
+>;
+
 export function SensitiveAccessBulkGovernanceCard({
   inScopeCount,
   decisionCandidateCount,
@@ -32,6 +54,40 @@ export function SensitiveAccessBulkGovernanceCard({
   messageTone,
   onAction
 }: SensitiveAccessBulkGovernanceCardProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentHref = React.useMemo(() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+  const workspaceStarterViewState = React.useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const recommendedNextStep = lastResult
+    ? buildSensitiveAccessBulkRecommendedNextStep(lastResult, { currentHref })
+    : null;
+  const narrativeItems = lastResult ? buildSensitiveAccessBulkResultNarrative(lastResult) : [];
+  const sampledRunCards = lastResult ? buildSensitiveAccessBulkRunSampleCards(lastResult) : [];
+  const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = React.useMemo(
+    () => ({ currentHref }),
+    [currentHref]
+  );
+  const hasStructuredResultSections =
+    Boolean(recommendedNextStep) || narrativeItems.length > 0 || sampledRunCards.length > 0;
+  const shouldShowMessage =
+    Boolean(message) &&
+    (isMutating || !lastResult || lastResult.status === "error" || !hasStructuredResultSections);
+
   return (
     <div className="binding-card compact-card">
       <div className="binding-card-header">
@@ -45,9 +101,24 @@ export function SensitiveAccessBulkGovernanceCard({
       </div>
 
       <div className="starter-tag-row">
-        <span className="event-chip">approve/reject {decisionCandidateCount}</span>
-        <span className="event-chip">retry latest {retryCandidateCount}</span>
+        <span className="event-chip">
+          {getSensitiveAccessBulkCandidateCountLabel(
+            "decision",
+            decisionCandidateCount,
+            inScopeCount
+          )}
+        </span>
+        <span className="event-chip">
+          {getSensitiveAccessBulkCandidateCountLabel("retry", retryCandidateCount, inScopeCount)}
+        </span>
       </div>
+      <p className="section-copy entry-copy">
+        {getSensitiveAccessBulkScopeSummary({
+          inScopeCount,
+          decisionCandidateCount,
+          retryCandidateCount
+        })}
+      </p>
 
       <label className="status-meta" htmlFor="bulk-sensitive-access-operator">
         Operator
@@ -121,10 +192,60 @@ export function SensitiveAccessBulkGovernanceCard({
               ) : null}
             </div>
           ) : null}
+
+          {recommendedNextStep ? (
+            <div className="binding-section">
+              <div className="starter-tag-row">
+                <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
+                <span className="event-chip">{recommendedNextStep.label}</span>
+                {recommendedNextStep.href && recommendedNextStep.href_label ? (
+                  <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                    {recommendedNextStep.href_label}
+                  </Link>
+                ) : null}
+              </div>
+              <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+            </div>
+          ) : null}
+
+          {narrativeItems.length > 0 ? (
+            <div className="binding-section">
+              {narrativeItems.map((item) => (
+                <p className="binding-meta" key={`${item.label}-${item.text}`}>
+                  <strong>{item.label}：</strong>
+                  {item.text}
+                </p>
+              ))}
+            </div>
+          ) : null}
+
+          {sampledRunCards.length > 0 ? (
+            <div className="binding-section">
+              <p className="section-copy entry-copy">
+                Sampled run 卡片现在会一起复用 runtime 返回的 compact snapshot，既保留 execution focus evidence，也保留 callback waiting / scheduled resume 的 follow-up 事实，避免批量治理后还要回到 run detail 二次排障。
+              </p>
+              <OperatorRunSampleCardList
+                cards={sampledRunCards}
+                callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+                currentHref={currentHref}
+                resolveRunDetailHref={resolveRunDetailHref}
+                skillTraceDescription="批量治理结果现在也会复用 compact snapshot 里的 skill trace，方便直接确认受影响 run 的 focus node 注入来源。"
+              />
+            </div>
+          ) : null}
+
+          {lastResult.legacyAuthGovernance ? (
+            <SensitiveAccessLegacyAuthGovernanceCompactCard
+              snapshot={lastResult.legacyAuthGovernance}
+              description="本次 bulk 回执会直接附带 workflow 级 legacy publish auth handoff，避免 operator 在批量审批/重试之后还要回页面顶部补 draft cleanup / published blocker 上下文。"
+              checklistDescription="先处理 draft cleanup，再推进 published replacement，最后把只剩 offline inventory 的历史条目留给交接与审计；当前 bulk 结果与 inbox 顶部 summary 继续共享同一份 workflow handoff。"
+              workflowDescription="如果本次批量动作已经清掉 waiting blocker，但 workflow 侧仍有 legacy binding backlog，可直接沿这里的 workflow follow-up 继续收口。"
+            />
+          ) : null}
         </>
       ) : null}
 
-      {message ? <p className={`sync-message ${messageTone}`}>{message}</p> : null}
+      {shouldShowMessage ? <p className={`sync-message ${messageTone}`}>{message}</p> : null}
 
       <div className="binding-actions">
         {ACTIONS.map((action) => {
@@ -169,13 +290,35 @@ export function getSensitiveAccessBulkActionButtonLabel(action: SensitiveAccessB
 
 export function getSensitiveAccessBulkActionConfirmationMessage(
   action: SensitiveAccessBulkAction,
-  count: number
+  count: number,
+  inScopeCount: number
 ) {
   return {
-    approved: `确认批量批准当前筛选结果中的 ${count} 条票据吗？`,
-    rejected: `确认批量拒绝当前筛选结果中的 ${count} 条票据吗？`,
-    retry: `确认批量重试当前筛选结果中的 ${count} 条最新通知吗？`
+    approved: `确认批量批准当前筛选范围内可执行的 ${count} / ${inScopeCount} 条 pending + waiting 票据吗？`,
+    rejected: `确认批量拒绝当前筛选范围内可执行的 ${count} / ${inScopeCount} 条 pending + waiting 票据吗？`,
+    retry:
+      `确认批量重试当前筛选范围内可执行的 ${count} / ${inScopeCount} 条最新且仍未投递成功的通知吗？`
   }[action];
+}
+
+export function getSensitiveAccessBulkCandidateCountLabel(
+  kind: "decision" | "retry",
+  candidateCount: number,
+  inScopeCount: number
+) {
+  if (kind === "decision") {
+    return `approve/reject pending+waiting ${candidateCount} / ${inScopeCount}`;
+  }
+
+  return `retry latest pending/failed ${candidateCount} / ${inScopeCount}`;
+}
+
+export function getSensitiveAccessBulkScopeSummary({
+  inScopeCount,
+  decisionCandidateCount,
+  retryCandidateCount
+}: SensitiveAccessBulkScopeSummary) {
+  return `当前筛选范围命中 ${inScopeCount} 条票据；其中 ${decisionCandidateCount} 条 pending + waiting 票据可执行 approve / reject，${retryCandidateCount} 条最新且仍未投递成功的通知可执行 retry。`;
 }
 
 export function getSensitiveAccessBulkSkipReasonLabel(reason: string) {

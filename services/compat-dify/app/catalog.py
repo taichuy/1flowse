@@ -17,6 +17,9 @@ from app.schemas import (
 )
 
 _SERVICE_ROOT = Path(__file__).resolve().parents[1]
+_TOOL_EXECUTION_CLASSES = {"inline", "subprocess", "sandbox", "microvm"}
+_DEFAULT_TOOL_SUPPORTED_EXECUTION_CLASSES = ("subprocess",)
+_DEFAULT_TOOL_EXECUTION_CLASS = "subprocess"
 
 
 def list_catalog_tools(settings: Settings) -> list[AdapterToolItem]:
@@ -127,6 +130,9 @@ def _translate_tool_definition(
         author=author,
         tool_name=name,
     )
+    supported_execution_classes, default_execution_class = _resolve_tool_execution_defaults(
+        definition
+    )
 
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -191,6 +197,8 @@ def _translate_tool_definition(
         name=translated_name,
         description=description,
         source="plugin",
+        supported_execution_classes=list(supported_execution_classes),
+        default_execution_class=default_execution_class,
         input_schema=input_schema,
         output_schema=None,
         input_contract=input_contract,
@@ -212,6 +220,8 @@ def _translate_tool_definition(
         input_schema=input_schema,
         output_schema=None,
         source="plugin",
+        supported_execution_classes=list(supported_execution_classes),
+        default_execution_class=default_execution_class,
         plugin_meta=plugin_meta,
         constrained_ir=constrained_ir,
     )
@@ -290,6 +300,64 @@ def _infer_runtime_binding(
         "provider": provider,
         "tool_name": resolved_tool_name,
     }
+
+
+def _resolve_tool_execution_defaults(definition: dict[str, Any]) -> tuple[tuple[str, ...], str]:
+    extra = definition.get("extra") if isinstance(definition.get("extra"), dict) else {}
+    execution = {}
+    if isinstance(extra, dict):
+        candidate = extra.get("sevenflows_execution") or extra.get("sevenflowsExecution")
+        if isinstance(candidate, dict):
+            execution = candidate
+
+    supported_execution_classes = _normalize_supported_execution_classes(
+        execution.get("supported_execution_classes")
+        or execution.get("supportedExecutionClasses")
+    )
+    default_execution_class = _normalize_default_execution_class(
+        execution.get("default_execution_class") or execution.get("defaultExecutionClass"),
+        supported_execution_classes=supported_execution_classes,
+    )
+    if default_execution_class is None:
+        default_execution_class = _DEFAULT_TOOL_EXECUTION_CLASS
+    return supported_execution_classes, default_execution_class
+
+
+def _normalize_supported_execution_classes(value: Any) -> tuple[str, ...]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            candidate = item.strip().lower()
+            if candidate not in _TOOL_EXECUTION_CLASSES or candidate in seen:
+                continue
+            normalized.append(candidate)
+            seen.add(candidate)
+    if not normalized:
+        return _DEFAULT_TOOL_SUPPORTED_EXECUTION_CLASSES
+    return tuple(normalized)
+
+
+def _normalize_default_execution_class(
+    value: Any,
+    *,
+    supported_execution_classes: tuple[str, ...],
+) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in _TOOL_EXECUTION_CLASSES:
+        raise ValueError(f"Unsupported default execution class '{value}'.")
+    if normalized not in supported_execution_classes:
+        supported_summary = ", ".join(supported_execution_classes)
+        raise ValueError(
+            f"Default execution class '{normalized}' must be included in supported execution classes: {supported_summary}."
+        )
+    return normalized
 
 
 def _pick_localized_text(value: Any, *, fallback: str) -> str:

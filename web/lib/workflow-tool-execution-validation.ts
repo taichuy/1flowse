@@ -2,17 +2,24 @@ import type {
   PluginAdapterRegistryItem,
   PluginToolRegistryItem
 } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
+import { resolveDefaultExecutionClass } from "@/lib/workflow-runtime-policy";
 import {
+  buildSandboxReadinessCapabilityIssue,
   buildDefaultExecutionCapabilityIssue,
   buildExecutionCapabilityIssue,
+  describeSandboxBackendCompatibility,
   extractExplicitExecutionClass,
   isAdapterVisible,
   validateExplicitAdapterBinding
 } from "@/lib/workflow-tool-execution-validation-helpers";
 import type {
   WorkflowToolExecutionValidationContext,
+  WorkflowToolExecutionValidationRuntimeOptions,
   WorkflowToolExecutionValidationIssue
 } from "@/lib/workflow-tool-execution-validation-types";
 
@@ -22,15 +29,16 @@ export function buildWorkflowToolExecutionValidationIssues(
   definition: WorkflowDefinition,
   tools: PluginToolRegistryItem[],
   adapters: PluginAdapterRegistryItem[],
-  sandboxReadiness?: SandboxReadinessCheck | null,
-  workspaceId = "default"
+  runtimeOptions: WorkflowToolExecutionValidationRuntimeOptions = {}
 ): WorkflowToolExecutionValidationIssue[] {
-  if (!Array.isArray(definition?.nodes) || tools.length === 0) {
+  if (!Array.isArray(definition?.nodes)) {
     return [];
   }
 
   const toolIndex = new Map(tools.map((tool) => [tool.id, tool]));
-  const visibleAdapters = adapters.filter((adapter) => isAdapterVisible(adapter, workspaceId));
+  const visibleAdapters = adapters.filter((adapter) =>
+    isAdapterVisible(adapter, runtimeOptions.workspaceId ?? "default")
+  );
   const issues: WorkflowToolExecutionValidationIssue[] = [];
 
   definition.nodes.forEach((node, nodeIndex) => {
@@ -52,7 +60,25 @@ export function buildWorkflowToolExecutionValidationIssues(
           config,
           toolIndex,
           adapters: visibleAdapters,
-          sandboxReadiness
+          sandboxReadiness: runtimeOptions.sandboxReadiness,
+          sandboxBackends: runtimeOptions.sandboxBackends
+        })
+      );
+      return;
+    }
+
+    if (node?.type === "sandbox_code") {
+      issues.push(
+        ...buildSandboxCodeExecutionIssues({
+          node,
+          nodeId,
+          nodeName,
+          nodeIndex,
+          config,
+          toolIndex,
+          adapters: visibleAdapters,
+          sandboxReadiness: runtimeOptions.sandboxReadiness,
+          sandboxBackends: runtimeOptions.sandboxBackends
         })
       );
       return;
@@ -67,19 +93,250 @@ export function buildWorkflowToolExecutionValidationIssues(
           config,
           toolIndex,
           adapters: visibleAdapters,
-          sandboxReadiness
+          sandboxReadiness: runtimeOptions.sandboxReadiness,
+          sandboxBackends: runtimeOptions.sandboxBackends
         })
       );
     }
   });
 
-  const dedupedIssues: WorkflowToolExecutionValidationIssue[] = [];
-  issues.forEach((issue) => {
-    if (!dedupedIssues.some((candidate) => candidate.message === issue.message)) {
-      dedupedIssues.push(issue);
+  return dedupeExecutionValidationIssues(issues);
+}
+
+export function buildWorkflowNodeExecutionValidationIssues(
+  definition: WorkflowDefinition
+): WorkflowToolExecutionValidationIssue[] {
+  if (!Array.isArray(definition?.nodes)) {
+    return [];
+  }
+
+  const issues: WorkflowToolExecutionValidationIssue[] = [];
+
+  definition.nodes.forEach((node, nodeIndex) => {
+    const nodeType = normalizeString(node?.type) ?? "unknown";
+    if (nodeType === "tool" || nodeType === "sandbox_code") {
+      return;
     }
+
+    const requestedExecutionClass = extractExplicitExecutionClass(
+      toRecord(node?.runtimePolicy)?.execution
+    );
+    if (!requestedExecutionClass || requestedExecutionClass === "inline") {
+      return;
+    }
+
+    const nodeId = typeof node?.id === "string" && node.id.trim() ? node.id.trim() : "unknown-node";
+    const nodeName =
+      typeof node?.name === "string" && node.name.trim() ? node.name.trim() : nodeId;
+    const context = `节点 ${nodeName} (${nodeId})`;
+    const path = `nodes.${nodeIndex}.runtimePolicy.execution`;
+
+    if (requestedExecutionClass === "subprocess") {
+      if (nodeType === "condition" || nodeType === "router") {
+        return;
+      }
+
+      issues.push({
+        nodeId,
+        nodeName,
+        message:
+          `${context} 请求 execution class 'subprocess'，但节点类型 '${nodeType}' 还没有实现专用 ` +
+          "subprocess execution adapter。请先保持 'inline'，直到兼容 adapter 真正落地。",
+        path,
+        field: "execution"
+      });
+      return;
+    }
+
+    if (requestedExecutionClass === "sandbox" || requestedExecutionClass === "microvm") {
+      issues.push({
+        nodeId,
+        nodeName,
+        message:
+          `${context} 请求强隔离 execution class '${requestedExecutionClass}'，但节点类型 ` +
+          `'${nodeType}' 还没有兼容的 execution adapter。强隔离路径在适配器落地前必须 fail-closed。`,
+        path,
+        field: "execution"
+      });
+      return;
+    }
+
+    issues.push({
+      nodeId,
+      nodeName,
+      message:
+        `${context} 请求了不受支持的 execution class '${requestedExecutionClass}'。请先保持 ` +
+        "'inline'，直到兼容 execution adapter 可用。",
+      path,
+      field: "execution"
+    });
   });
-  return dedupedIssues;
+
+  return dedupeExecutionValidationIssues(issues);
+}
+
+function buildSandboxCodeExecutionIssues({
+  node,
+  nodeId,
+  nodeName,
+  nodeIndex,
+  config,
+  sandboxReadiness,
+  sandboxBackends
+}: WorkflowToolExecutionValidationContext & {
+  node: { runtimePolicy?: unknown };
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
+}): WorkflowToolExecutionValidationIssue[] {
+  const execution = toRecord(toRecord(node?.runtimePolicy)?.execution);
+  const requestedExecutionClass =
+    extractExplicitExecutionClass(execution) ?? resolveDefaultExecutionClass("sandbox_code");
+  const context = `Sandbox code 节点 ${nodeName} (${nodeId})`;
+  const executionPath = `nodes.${nodeIndex}.runtimePolicy.execution`;
+  const issues: WorkflowToolExecutionValidationIssue[] = [];
+  const code = normalizeString(config.code);
+  const configDependencyMode = normalizeDependencyMode(config.dependencyMode);
+  const configBuiltinPackageSet = normalizeString(config.builtinPackageSet);
+  const configDependencyRef = normalizeString(config.dependencyRef);
+
+  if (!code) {
+    issues.push({
+      nodeId,
+      nodeName,
+      message: `${context} 需要非空的 code 才能进入 sandbox / subprocess 执行链。`,
+      path: `nodes.${nodeIndex}.config.code`,
+      field: "code"
+    });
+  }
+
+  if (configBuiltinPackageSet && configDependencyMode !== "builtin") {
+    issues.push({
+      nodeId,
+      nodeName,
+      message: `${context} 的 config.builtinPackageSet 需要 config.dependencyMode = 'builtin'。`,
+      path: `nodes.${nodeIndex}.config.builtinPackageSet`,
+      field: "builtinPackageSet"
+    });
+  }
+
+  if (configDependencyRef && configDependencyMode !== "dependency_ref") {
+    issues.push({
+      nodeId,
+      nodeName,
+      message: `${context} 的 config.dependencyRef 需要 config.dependencyMode = 'dependency_ref'。`,
+      path: `nodes.${nodeIndex}.config.dependencyRef`,
+      field: "dependencyRef"
+    });
+  }
+
+  if (requestedExecutionClass === "subprocess") {
+    return issues;
+  }
+
+  if (requestedExecutionClass === "inline") {
+    issues.push({
+      nodeId,
+      nodeName,
+      message:
+        `${context} 不能使用 execution class 'inline'。当前 host-controlled MVP 路径请显式改用 ` +
+        `'subprocess'，或先为 'sandbox' / 'microvm' 准备兼容 backend。`,
+      path: executionPath,
+      field: "execution"
+    });
+    return issues;
+  }
+
+  if (requestedExecutionClass !== "sandbox" && requestedExecutionClass !== "microvm") {
+    issues.push({
+      nodeId,
+      nodeName,
+      message:
+        `${context} 请求了不受支持的 execution class '${requestedExecutionClass}'。强隔离路径在 ` +
+        "兼容 sandbox backend 就绪前必须 fail-closed。",
+      path: executionPath,
+      field: "execution"
+    });
+    return issues;
+  }
+
+  if (!sandboxReadiness) {
+    return issues;
+  }
+
+  const language = normalizeString(config.language)?.toLowerCase() ?? "python";
+  const profile = normalizeString(execution?.profile);
+  const dependencyMode = resolveSandboxDependencyMode({ config, execution });
+  const builtinPackageSet =
+    dependencyMode === "builtin"
+      ? normalizeString(execution?.builtinPackageSet) ?? normalizeString(config.builtinPackageSet)
+      : null;
+  const dependencyRef =
+    dependencyMode === "dependency_ref"
+      ? normalizeString(execution?.dependencyRef) ?? normalizeString(config.dependencyRef)
+      : null;
+  const backendExtensions =
+    toRecord(execution?.backendExtensions) ?? toRecord(config.backendExtensions);
+  const networkPolicy = normalizeString(execution?.networkPolicy);
+  const filesystemPolicy = normalizeString(execution?.filesystemPolicy);
+  const capabilityIssue = buildSandboxReadinessCapabilityIssue({
+    context,
+    nodeId,
+    nodeName,
+    requestedExecutionClass,
+    executionPayload: {
+      ...(execution ?? {}),
+      ...(profile ? { profile } : {}),
+      ...(dependencyMode ? { dependencyMode } : {}),
+      ...(builtinPackageSet ? { builtinPackageSet } : {}),
+      ...(dependencyRef ? { dependencyRef } : {}),
+      ...(backendExtensions && Object.keys(backendExtensions).length > 0
+        ? { backendExtensions }
+        : {}),
+      ...(networkPolicy ? { networkPolicy } : {}),
+      ...(filesystemPolicy ? { filesystemPolicy } : {})
+    },
+    sandboxReadiness,
+    path: executionPath,
+    field: "execution"
+  });
+  if (capabilityIssue) {
+    issues.push(capabilityIssue);
+    return issues;
+  }
+
+  const compatibility = describeSandboxBackendCompatibility({
+    requestedExecutionClass,
+    executionPayload: {
+      ...(execution ?? {}),
+      ...(profile ? { profile } : {}),
+      ...(dependencyMode ? { dependencyMode } : {}),
+      ...(builtinPackageSet ? { builtinPackageSet } : {}),
+      ...(dependencyRef ? { dependencyRef } : {}),
+      ...(backendExtensions && Object.keys(backendExtensions).length > 0
+        ? { backendExtensions }
+        : {}),
+      ...(networkPolicy ? { networkPolicy } : {}),
+      ...(filesystemPolicy ? { filesystemPolicy } : {})
+    },
+    sandboxReadiness,
+    sandboxBackends,
+    language
+  });
+
+  if (compatibility.available) {
+    return issues;
+  }
+
+  issues.push({
+    nodeId,
+    nodeName,
+    message:
+      `${context} 请求 execution class '${requestedExecutionClass}'，但当前没有兼容的 sandbox backend 可用。` +
+      `${compatibility.reason ? ` ${compatibility.reason}` : ""}`,
+    path: executionPath,
+    field: "execution"
+  });
+  return issues;
 }
 
 function buildToolNodeExecutionIssues({
@@ -90,7 +347,8 @@ function buildToolNodeExecutionIssues({
   config,
   toolIndex,
   adapters,
-  sandboxReadiness
+  sandboxReadiness,
+  sandboxBackends
 }: WorkflowToolExecutionValidationContext & {
   node: { runtimePolicy?: unknown };
   sandboxReadiness?: SandboxReadinessCheck | null;
@@ -141,6 +399,7 @@ function buildToolNodeExecutionIssues({
       adapterId,
       adapters,
       sandboxReadiness,
+      sandboxBackends,
       path: `nodes.${nodeIndex}.config.tool.toolId`,
       field: "toolId"
     });
@@ -159,8 +418,10 @@ function buildToolNodeExecutionIssues({
     ecosystem,
     adapterId,
     requestedExecutionClass,
+    executionPayload: toRecord(toRecord(node?.runtimePolicy)?.execution),
     adapters,
     sandboxReadiness,
+    sandboxBackends,
     path: `nodes.${nodeIndex}.runtimePolicy.execution`,
     field: "execution"
   });
@@ -177,7 +438,8 @@ function buildAgentExecutionIssues({
   config,
   toolIndex,
   adapters,
-  sandboxReadiness
+  sandboxReadiness,
+  sandboxBackends
 }: WorkflowToolExecutionValidationContext): WorkflowToolExecutionValidationIssue[] {
   const issues: WorkflowToolExecutionValidationIssue[] = [];
   const toolPolicy = toRecord(config.toolPolicy);
@@ -199,8 +461,10 @@ function buildAgentExecutionIssues({
           ecosystem: tool.ecosystem,
           adapterId: null,
           requestedExecutionClass: policyExecutionClass,
+          executionPayload: toRecord(toolPolicy?.execution),
           adapters,
           sandboxReadiness,
+          sandboxBackends,
           path: `nodes.${nodeIndex}.config.toolPolicy.execution`,
           field: "execution"
         });
@@ -219,7 +483,7 @@ function buildAgentExecutionIssues({
     }
   }
 
-  if (toolPolicy && policyExecutionClass && normalizedAllowedToolIds.length > 0) {
+  if (toolPolicy && normalizedAllowedToolIds.length > 0) {
     const seen = new Set<string>();
     normalizedAllowedToolIds.forEach((toolId) => {
       if (seen.has(toolId)) {
@@ -243,6 +507,7 @@ function buildAgentExecutionIssues({
           adapterId: null,
           adapters,
           sandboxReadiness,
+          sandboxBackends,
           path: `nodes.${nodeIndex}.config.toolPolicy.allowedToolIds`,
           field: "allowedToolIds"
         });
@@ -261,8 +526,10 @@ function buildAgentExecutionIssues({
         ecosystem: tool.ecosystem,
         adapterId: null,
         requestedExecutionClass: policyExecutionClass,
+        executionPayload: toRecord(toolPolicy?.execution),
         adapters,
         sandboxReadiness,
+        sandboxBackends,
         path: `nodes.${nodeIndex}.config.toolPolicy.execution`,
         field: "execution"
       });
@@ -321,6 +588,7 @@ function buildAgentExecutionIssues({
           adapterId,
           adapters,
           sandboxReadiness,
+          sandboxBackends,
           path: `nodes.${nodeIndex}.config.mockPlan.toolCalls.${index}.toolId`,
           field: "toolId"
         });
@@ -339,8 +607,10 @@ function buildAgentExecutionIssues({
         ecosystem,
         adapterId,
         requestedExecutionClass,
+        executionPayload: toRecord(toolCall.execution),
         adapters,
         sandboxReadiness,
+        sandboxBackends,
         path: `nodes.${nodeIndex}.config.mockPlan.toolCalls.${index}.execution`,
         field: "execution"
       });
@@ -355,6 +625,34 @@ function buildAgentExecutionIssues({
 
 function normalizeString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function dedupeExecutionValidationIssues(issues: WorkflowToolExecutionValidationIssue[]) {
+  const dedupedIssues: WorkflowToolExecutionValidationIssue[] = [];
+  issues.forEach((issue) => {
+    if (!dedupedIssues.some((candidate) => candidate.message === issue.message)) {
+      dedupedIssues.push(issue);
+    }
+  });
+  return dedupedIssues;
+}
+
+function normalizeDependencyMode(value: unknown) {
+  const normalized = normalizeString(value)?.toLowerCase();
+  if (!normalized || !["builtin", "dependency_ref", "backend_managed"].includes(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function resolveSandboxDependencyMode({
+  config,
+  execution
+}: {
+  config: Record<string, unknown>;
+  execution: Record<string, unknown> | null;
+}) {
+  return normalizeDependencyMode(execution?.dependencyMode) ?? normalizeDependencyMode(config.dependencyMode);
 }
 
 function normalizeToolIdList(value: unknown) {

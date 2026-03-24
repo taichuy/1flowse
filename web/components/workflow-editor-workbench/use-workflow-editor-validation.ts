@@ -3,19 +3,24 @@
 import { useMemo } from "react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
+import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type { WorkflowDefinitionPreflightIssue, WorkflowDetail } from "@/lib/get-workflows";
 import type { WorkspaceStarterValidationIssue } from "@/lib/get-workspace-starters";
+import {
+  buildLegacyPublishAuthModeContractSummary,
+} from "@/lib/legacy-publish-auth-contract";
+import { isLegacyPublishAuthModeIssue } from "@/lib/workflow-definition-governance";
 import { buildWorkflowDefinitionContractValidationIssues } from "@/lib/workflow-contract-schema-validation";
+import { buildAllowedPublishWorkflowVersions } from "@/lib/workflow-publish-version-validation";
 import {
-  buildWorkflowPublishIdentityValidationIssues,
-} from "@/lib/workflow-publish-identity-validation";
-import {
-  buildAllowedPublishWorkflowVersions,
-  buildWorkflowPublishVersionValidationIssues
-} from "@/lib/workflow-publish-version-validation";
-import { buildWorkflowToolExecutionValidationIssues } from "@/lib/workflow-tool-execution-validation";
+  buildWorkflowNodeExecutionValidationIssues,
+  buildWorkflowToolExecutionValidationIssues
+} from "@/lib/workflow-tool-execution-validation";
 import { buildWorkflowToolReferenceValidationIssues } from "@/lib/workflow-tool-reference-validation";
 import {
   buildWorkflowValidationNavigatorItems,
@@ -26,12 +31,20 @@ import {
   formatUnsupportedWorkflowNodes,
   summarizeUnsupportedWorkflowNodes
 } from "@/lib/workflow-node-catalog";
+import { buildPublishedEndpointValidationIssues } from "@/components/workflow-editor-publish-form-validation";
+import { normalizePublishedEndpoint } from "@/components/workflow-editor-publish-form-shared";
+import {
+  buildWorkflowPersistBlockers,
+  formatWorkflowPersistBlockedMessage
+} from "./persist-blockers";
 
 const PREFLIGHT_CATEGORY_LABELS: Record<string, string> = {
   schema: "contract/schema",
   node_support: "node support",
+  node_execution: "node execution",
   tool_reference: "tool reference",
-  tool_execution: "tool execution",
+  tool_execution: "execution capability",
+  publish_draft: "publish draft",
   publish_identity: "publish identity",
   publish_version: "publish version",
   starter_portability: "starter portability",
@@ -95,13 +108,21 @@ export function summarizePreflightIssues(
   return Array.from(grouped.entries())
     .map(([category, categoryIssues]) => {
       const label = PREFLIGHT_CATEGORY_LABELS[category] ?? category;
-      const head = categoryIssues
+      const descriptions = Array.from(
+        new Set(
+          categoryIssues.map((issue) =>
+            isLegacyPublishAuthModeIssue(issue)
+              ? buildLegacyPublishAuthModeContractSummary()
+              : issue.path ?? issue.field ?? issue.message
+          )
+        )
+      );
+      const head = descriptions
         .slice(0, 2)
-        .map((issue) => issue.path ?? issue.field ?? issue.message)
         .join("；");
       const suffix =
-        categoryIssues.length > 2
-          ? `；另有 ${categoryIssues.length - 2} 项同类问题`
+        categoryIssues.length > descriptions.slice(0, 2).length
+          ? `；另有 ${categoryIssues.length - descriptions.slice(0, 2).length} 项同类问题`
           : "";
       return head ? `${label}：${head}${suffix}` : `${label} ${categoryIssues.length} 项`;
     })
@@ -116,8 +137,31 @@ type UseWorkflowEditorValidationOptions = {
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   serverValidationIssues: WorkflowDefinitionPreflightIssue[];
 };
+
+export function buildWorkflowEditorPublishDraftIssues(
+  definition: WorkflowDetail["definition"],
+  allowedWorkflowVersions: string[]
+) {
+  if (!Array.isArray(definition.publish)) {
+    return [] as WorkflowDefinitionPreflightIssue[];
+  }
+
+  const normalizedEndpoints = definition.publish.map((endpoint, index) =>
+    normalizePublishedEndpoint(toRecord(endpoint), index)
+  );
+
+  return buildPublishedEndpointValidationIssues(normalizedEndpoints, {
+    allowedWorkflowVersions
+  }).map((issue) => ({
+    category: issue.category,
+    message: issue.message,
+    path: issue.path,
+    field: issue.field
+  }));
+}
 
 export function useWorkflowEditorValidation({
   currentDefinition,
@@ -127,8 +171,13 @@ export function useWorkflowEditorValidation({
   tools,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   serverValidationIssues
 }: UseWorkflowEditorValidationOptions) {
+  const sandboxReadinessPreflightHint = useMemo(
+    () => formatSandboxReadinessPreflightHint(sandboxReadiness),
+    [sandboxReadiness]
+  );
   const unsupportedNodes = useMemo(
     () => summarizeUnsupportedWorkflowNodes(nodeCatalog, currentDefinition.nodes ?? []),
     [currentDefinition.nodes, nodeCatalog]
@@ -167,29 +216,44 @@ export function useWorkflowEditorValidation({
         currentDefinition,
         tools,
         adapters,
-        sandboxReadiness
+        {
+          sandboxReadiness,
+          sandboxBackends
+        }
       ),
-    [adapters, currentDefinition, sandboxReadiness, tools]
+    [adapters, currentDefinition, sandboxBackends, sandboxReadiness, tools]
   );
   const toolExecutionValidationSummary = useMemo(
     () => summarizeIssueMessages(toolExecutionValidationIssues),
     [toolExecutionValidationIssues]
   );
-  const publishVersionValidationIssues = useMemo(
-    () => buildWorkflowPublishVersionValidationIssues(currentDefinition, availableWorkflowVersions),
-    [availableWorkflowVersions, currentDefinition]
-  );
-  const publishVersionValidationSummary = useMemo(
-    () => summarizeIssueMessages(publishVersionValidationIssues),
-    [publishVersionValidationIssues]
-  );
-  const publishIdentityValidationIssues = useMemo(
-    () => buildWorkflowPublishIdentityValidationIssues(currentDefinition),
+  const nodeExecutionValidationIssues = useMemo(
+    () => buildWorkflowNodeExecutionValidationIssues(currentDefinition),
     [currentDefinition]
   );
-  const publishIdentityValidationSummary = useMemo(
-    () => summarizeIssueMessages(publishIdentityValidationIssues),
-    [publishIdentityValidationIssues]
+  const nodeExecutionValidationSummary = useMemo(
+    () => summarizeIssueMessages(nodeExecutionValidationIssues),
+    [nodeExecutionValidationIssues]
+  );
+  const publishDraftValidationIssues = useMemo(
+    () => buildWorkflowEditorPublishDraftIssues(currentDefinition, availableWorkflowVersions),
+    [availableWorkflowVersions, currentDefinition]
+  );
+  const publishDraftValidationSummary = useMemo(
+    () => summarizeIssueMessages(publishDraftValidationIssues),
+    [publishDraftValidationIssues]
+  );
+  const hasPublishVersionValidationIssues = useMemo(
+    () =>
+      publishDraftValidationIssues.some(
+        (issue) =>
+          issue.category === "publish_version" || issue.field === "workflowVersion"
+      ),
+    [publishDraftValidationIssues]
+  );
+  const hasLegacyPublishAuthModeIssues = useMemo(
+    () => publishDraftValidationIssues.some((issue) => isLegacyPublishAuthModeIssue(issue)),
+    [publishDraftValidationIssues]
   );
   const variableValidationIssues = useMemo(
     () => buildWorkflowVariableValidationIssues(currentDefinition),
@@ -198,6 +262,18 @@ export function useWorkflowEditorValidation({
   const variableValidationSummary = useMemo(
     () => summarizeIssueMessages(variableValidationIssues),
     [variableValidationIssues]
+  );
+  const serverValidationSummary = useMemo(
+    () => summarizeIssueMessages(serverValidationIssues),
+    [serverValidationIssues]
+  );
+  const hasServerToolExecutionIssues = useMemo(
+    () => serverValidationIssues.some((issue) => issue.category === "tool_execution"),
+    [serverValidationIssues]
+  );
+  const hasServerNodeExecutionIssues = useMemo(
+    () => serverValidationIssues.some((issue) => issue.category === "node_execution"),
+    [serverValidationIssues]
   );
   const validationNavigatorItems = useMemo<WorkflowValidationNavigatorItem[]>(() => {
     const localIssues: WorkflowDefinitionPreflightIssue[] = [
@@ -213,20 +289,20 @@ export function useWorkflowEditorValidation({
         path: issue.path,
         field: issue.field
       })),
+      ...nodeExecutionValidationIssues.map((issue) => ({
+        category: "node_execution",
+        message: issue.message,
+        path: issue.path,
+        field: issue.field
+      })),
       ...toolExecutionValidationIssues.map((issue) => ({
         category: "tool_execution",
         message: issue.message,
         path: issue.path,
         field: issue.field
       })),
-      ...publishVersionValidationIssues.map((issue) => ({
-        category: "publish_version",
-        message: issue.message,
-        path: issue.path,
-        field: issue.field
-      })),
-      ...publishIdentityValidationIssues.map((issue) => ({
-        category: "publish_identity",
+      ...publishDraftValidationIssues.map((issue) => ({
+        category: issue.category,
         message: issue.message,
         path: issue.path,
         field: issue.field
@@ -238,45 +314,42 @@ export function useWorkflowEditorValidation({
   }, [
     contractValidationIssues,
     currentDefinition,
-    publishIdentityValidationIssues,
-    publishVersionValidationIssues,
+    nodeExecutionValidationIssues,
+    publishDraftValidationIssues,
     serverValidationIssues,
     toolExecutionValidationIssues,
     toolReferenceValidationIssues,
     variableValidationIssues
   ]);
 
-  const persistBlockedMessage = useMemo(
+  const persistBlockers = useMemo(
     () =>
-      [
-        unsupportedNodes.length > 0
-          ? `当前 workflow 包含未进入执行主链的节点，暂不能保存或沉淀为 workspace starter：${unsupportedNodeSummary}。请先移除或替换这些节点，再继续保存。`
-          : null,
-        contractValidationSummary
-          ? `当前 workflow definition 还有 contract schema 待修正问题：${contractValidationSummary}${contractValidationSummary.endsWith("。") ? "" : "。"}请先在 Node contract / publish draft 中修正后再保存。`
-          : null,
-        toolReferenceValidationSummary
-          ? `当前 workflow definition 还有 tool catalog 引用待修正问题：${toolReferenceValidationSummary}${toolReferenceValidationSummary.endsWith("。") ? "" : "。"}请先修正 tool binding / LLM Agent tool policy 后再保存。`
-          : null,
-        toolExecutionValidationSummary
-          ? `当前 workflow definition 还有 tool execution capability 待修正问题：${toolExecutionValidationSummary}${toolExecutionValidationSummary.endsWith("。") ? "" : "。"}请先对齐 adapter 绑定、execution class 与 sandbox readiness，再继续保存。`
-          : null,
-        publishVersionValidationSummary
-          ? `当前 workflow definition 还有 publish version 引用待修正问题：${publishVersionValidationSummary}${publishVersionValidationSummary.endsWith("。") ? "" : "。"}如果 endpoint 要跟随本次保存版本，请把 workflowVersion 留空。`
-          : null,
-        publishIdentityValidationSummary
-          ? `当前 workflow definition 还有 publish identity 待修正问题：${publishIdentityValidationSummary}${publishIdentityValidationSummary.endsWith("。") ? "" : "。"}请先调整 endpoint id / alias / path，避免发布标识冲突。`
-          : null,
-        variableValidationSummary
-          ? `当前 workflow definition 还有 variables 待修正问题：${variableValidationSummary}${variableValidationSummary.endsWith("。") ? "" : "。"}请先修正变量名，再继续保存。`
-          : null
-      ]
-        .filter(Boolean)
-        .join(" "),
+      buildWorkflowPersistBlockers({
+        unsupportedNodeCount: unsupportedNodes.length,
+        unsupportedNodeSummary,
+        contractValidationSummary,
+        toolReferenceValidationSummary,
+        nodeExecutionValidationSummary,
+        toolExecutionValidationSummary,
+        publishDraftValidationSummary,
+        hasPublishVersionValidationIssues,
+        hasLegacyPublishAuthModeIssues,
+        variableValidationSummary,
+        serverValidationSummary,
+        hasServerToolExecutionIssues,
+        hasServerNodeExecutionIssues,
+        sandboxReadinessPreflightHint
+      }),
     [
       contractValidationSummary,
-      publishIdentityValidationSummary,
-      publishVersionValidationSummary,
+      hasPublishVersionValidationIssues,
+      hasLegacyPublishAuthModeIssues,
+      hasServerNodeExecutionIssues,
+      hasServerToolExecutionIssues,
+      nodeExecutionValidationSummary,
+      publishDraftValidationSummary,
+      sandboxReadinessPreflightHint,
+      serverValidationSummary,
       toolExecutionValidationSummary,
       toolReferenceValidationSummary,
       unsupportedNodeSummary,
@@ -284,17 +357,28 @@ export function useWorkflowEditorValidation({
       variableValidationSummary
     ]
   );
+  const persistBlockedMessage = useMemo(
+    () => formatWorkflowPersistBlockedMessage(persistBlockers),
+    [persistBlockers]
+  );
 
   return {
     availableWorkflowVersions,
     contractValidationIssues,
-    publishIdentityValidationIssues,
+    nodeExecutionValidationIssues,
+    persistBlockers,
+    publishDraftValidationIssues,
     persistBlockedMessage,
-    publishVersionValidationIssues,
     toolExecutionValidationIssues,
     toolReferenceValidationIssues,
     unsupportedNodes,
     validationNavigatorItems,
     variableValidationIssues
   };
+}
+
+function toRecord(value: unknown) {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

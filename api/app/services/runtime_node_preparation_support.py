@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.run import NodeRun, Run, RunEvent
+from app.services.runtime_execution_adapters import build_node_execution_signal_payload
 from app.services.runtime_execution_policy import resolve_execution_policy
 from app.services.runtime_types import (
     AuthorizedContextRefs,
@@ -137,9 +138,14 @@ class RuntimeNodePreparationSupportMixin:
                     blocked_node_run.id,
                     "node.execution.unavailable",
                     {
-                        "node_id": node["id"],
-                        "node_type": node.get("type", "unknown"),
-                        "requested_execution_class": execution_policy.execution_class,
+                        **build_node_execution_signal_payload(
+                            node=node,
+                            execution_policy=execution_policy,
+                            sandbox_backend_id=availability.sandbox_backend_id,
+                            sandbox_backend_executor_ref=(
+                                availability.sandbox_backend_executor_ref
+                            ),
+                        ),
                         "reason": blocked_node_run.error_message,
                     },
                 )
@@ -149,7 +155,17 @@ class RuntimeNodePreparationSupportMixin:
                     run.id,
                     blocked_node_run.id,
                     "node.blocked",
-                    {"node_id": node["id"], "reason": blocked_node_run.error_message},
+                    {
+                        **build_node_execution_signal_payload(
+                            node=node,
+                            execution_policy=execution_policy,
+                            sandbox_backend_id=availability.sandbox_backend_id,
+                            sandbox_backend_executor_ref=(
+                                availability.sandbox_backend_executor_ref
+                            ),
+                        ),
+                        "reason": blocked_node_run.error_message,
+                    },
                 )
             )
             raise WorkflowExecutionError(

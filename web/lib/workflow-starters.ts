@@ -10,6 +10,10 @@ import type {
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
+import {
+  summarizeWorkflowDefinitionSandboxGovernance,
+  type WorkflowDefinitionSandboxGovernance
+} from "@/lib/workflow-definition-sandbox-governance";
 import { summarizeWorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
 export type WorkflowStarterTemplateId = string;
@@ -25,6 +29,7 @@ export type WorkflowStarterTemplate = {
   trackFocus: string;
   defaultWorkflowName: string;
   source: WorkflowLibraryStarterItem["source"];
+  createdFromWorkflowId: string | null;
   workflowFocus: string;
   recommendedNextStep: string;
   nodeCount: number;
@@ -33,6 +38,9 @@ export type WorkflowStarterTemplate = {
   missingToolIds: string[];
   governedToolCount: number;
   strongIsolationToolCount: number;
+  sandboxGovernance: WorkflowDefinitionSandboxGovernance;
+  sourceGovernance: WorkflowLibraryStarterItem["sourceGovernance"];
+  archived: boolean;
   tags: string[];
   definition: WorkflowDefinition;
 };
@@ -99,6 +107,7 @@ export function inferWorkflowBusinessTrack(
 
   if (
     nodeTypes.has("llm_agent") ||
+    nodeTypes.has("sandbox_code") ||
     nodeTypes.has("mcp_query") ||
     nodeTypes.has("condition") ||
     nodeTypes.has("router")
@@ -118,6 +127,7 @@ function buildWorkflowStarterTemplate(
   const definition = normalizeWorkflowDefinition(starter.definition);
   const nodeTypes = (definition.nodes ?? []).map((node) => node.type);
   const toolGovernance = summarizeWorkflowDefinitionToolGovernance(definition, tools);
+  const sandboxGovernance = summarizeWorkflowDefinitionSandboxGovernance(definition);
 
   return {
     id: starter.id,
@@ -130,6 +140,7 @@ function buildWorkflowStarterTemplate(
     trackFocus: track.focus,
     defaultWorkflowName: starter.defaultWorkflowName,
     source: starter.source,
+    createdFromWorkflowId: starter.createdFromWorkflowId ?? null,
     workflowFocus: starter.workflowFocus,
     recommendedNextStep: starter.recommendedNextStep,
     nodeCount: definition.nodes?.length ?? 0,
@@ -141,6 +152,9 @@ function buildWorkflowStarterTemplate(
     missingToolIds: toolGovernance.missingToolIds,
     governedToolCount: toolGovernance.governedToolCount,
     strongIsolationToolCount: toolGovernance.strongIsolationToolCount,
+    sandboxGovernance,
+    sourceGovernance: starter.sourceGovernance ?? null,
+    archived: starter.archived,
     tags: starter.tags,
     definition
   };

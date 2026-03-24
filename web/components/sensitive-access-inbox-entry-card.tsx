@@ -1,164 +1,191 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
-import { useActionState } from "react";
-import { useFormStatus } from "react-dom";
-
-import {
-  decideSensitiveAccessApprovalTicket,
-  retrySensitiveAccessNotificationDispatch,
-  type DecideSensitiveAccessApprovalTicketState,
-  type RetrySensitiveAccessNotificationDispatchState
-} from "@/app/actions/sensitive-access";
 import {
   ACTION_TYPE_LABELS,
   APPROVAL_STATUS_LABELS,
-  DEFAULT_OPERATOR_ID,
   NOTIFICATION_STATUS_LABELS,
   REQUESTER_TYPE_LABELS,
   WAITING_STATUS_LABELS,
-  isPendingWaitingTicket,
-  pickLatestNotification,
-  pickRetriableNotification
+  pickLatestNotification
 } from "@/components/sensitive-access-inbox-panel-helpers";
-import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
+import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  NotificationChannelCapabilityItem,
+  SensitiveAccessInboxEntry
+} from "@/lib/get-sensitive-access";
+import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorInboxSliceLinkSurface,
+  buildOperatorRecommendedNextStep,
+  buildOperatorRunDetailLinkSurface,
+  formatOperatorOpenRunLinkLabel
+} from "@/lib/operator-follow-up-presenters";
+import { buildOperatorRunFollowUpSampleInboxContext } from "@/lib/operator-run-follow-up-samples";
+import {
+  formatExecutionFocusArtifactSummary,
+  formatExecutionFocusFollowUp,
+  formatExecutionFocusReasonLabel,
+  formatExecutionFocusPrimarySignal,
+  listExecutionFocusRuntimeFactBadges,
+  listExecutionFocusArtifactPreviews,
+  listExecutionFocusToolCallSummaries
+} from "@/lib/run-execution-focus-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
+import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
+import {
+  buildSandboxReadinessFollowUpCandidate,
+  shouldPreferSharedSandboxReadinessFollowUp
+} from "@/lib/system-overview-follow-up-presenters";
+import { resolveSensitiveAccessInboxEntryScopes } from "@/lib/sensitive-access-inbox-entry-scope";
+import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 import {
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
   getSensitiveAccessPolicySummary
 } from "@/lib/sensitive-access-presenters";
+import { buildSensitiveAccessInboxEntryExecutionSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 type SensitiveAccessInboxEntryCardProps = {
   entry: SensitiveAccessInboxEntry;
+  notificationChannels?: NotificationChannelCapabilityItem[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  currentHref?: string | null;
 };
-
-type SensitiveAccessTicketDecisionFormProps = {
-  entry: SensitiveAccessInboxEntry;
-};
-
-const initialDecisionState: DecideSensitiveAccessApprovalTicketState = {
-  status: "idle",
-  message: "",
-  ticketId: ""
-};
-
-const initialRetryState: RetrySensitiveAccessNotificationDispatchState = {
-  status: "idle",
-  message: "",
-  dispatchId: "",
-  target: ""
-};
-
-function DecisionSubmitButton({
-  label,
-  value,
-  variant = "primary"
-}: {
-  label: string;
-  value: "approved" | "rejected";
-  variant?: "primary" | "secondary";
-}) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      className={variant === "secondary" ? "action-link-button" : "sync-button"}
-      disabled={pending}
-      name="status"
-      type="submit"
-      value={value}
-    >
-      {pending ? "提交中..." : label}
-    </button>
-  );
-}
-
-function SensitiveAccessTicketDecisionForm({
-  entry
-}: SensitiveAccessTicketDecisionFormProps) {
-  const [state, formAction] = useActionState(
-    decideSensitiveAccessApprovalTicket,
-    initialDecisionState
-  );
-
-  if (!isPendingWaitingTicket(entry)) {
-    return null;
-  }
-
-  return (
-    <form action={formAction} className="inbox-decision-form">
-      <input type="hidden" name="ticketId" value={entry.ticket.id} />
-      <input type="hidden" name="runId" value={entry.ticket.run_id ?? ""} />
-      <label className="status-meta" htmlFor={`approvedBy-${entry.ticket.id}`}>
-        Operator
-      </label>
-      <input
-        className="inbox-operator-input"
-        defaultValue={DEFAULT_OPERATOR_ID}
-        id={`approvedBy-${entry.ticket.id}`}
-        name="approvedBy"
-        placeholder="输入审批人标识"
-        type="text"
-      />
-      <div className="binding-actions">
-        <DecisionSubmitButton label="批准并恢复" value="approved" />
-        <DecisionSubmitButton label="拒绝访问" value="rejected" variant="secondary" />
-      </div>
-      {state.message && state.ticketId === entry.ticket.id ? (
-        <p className={`sync-message ${state.status}`}>{state.message}</p>
-      ) : null}
-    </form>
-  );
-}
-
-function SensitiveAccessNotificationRetryForm({
-  entry
-}: SensitiveAccessTicketDecisionFormProps) {
-  const [state, formAction] = useActionState(
-    retrySensitiveAccessNotificationDispatch,
-    initialRetryState
-  );
-  const notification = pickRetriableNotification(entry);
-
-  if (!notification) {
-    return null;
-  }
-
-  return (
-    <form action={formAction} className="inbox-decision-form">
-      <input type="hidden" name="dispatchId" value={notification.id} />
-      <input type="hidden" name="runId" value={entry.ticket.run_id ?? ""} />
-      <label className="status-meta" htmlFor={`notificationTarget-${notification.id}`}>
-        Notification target
-      </label>
-      <input
-        className="inbox-operator-input"
-        defaultValue={notification.target}
-        id={`notificationTarget-${notification.id}`}
-        name="target"
-        placeholder="输入新的通知目标；留空则沿用当前目标"
-        type="text"
-      />
-      <div className="binding-actions">
-        <button className="action-link-button" type="submit">
-          改派目标并重试
-        </button>
-      </div>
-      {notification.error ? <p className="empty-state compact">{notification.error}</p> : null}
-      {state.message && state.dispatchId === notification.id ? (
-        <p className={`sync-message ${state.status}`}>{state.message}</p>
-      ) : null}
-    </form>
-  );
-}
 
 export function SensitiveAccessInboxEntryCard({
-  entry
+  entry,
+  notificationChannels = [],
+  callbackWaitingAutomation,
+  sandboxReadiness = null,
+  currentHref = null
 }: SensitiveAccessInboxEntryCardProps) {
   const request = entry.request;
   const resource = entry.resource;
+  const scopes = resolveSensitiveAccessInboxEntryScopes(entry);
+  const displayScope = scopes.display;
+  const actionScope = scopes.action;
   const latestNotification = pickLatestNotification(entry);
+  const callbackWaitingContext = entry.callbackWaitingContext;
+  const executionContext = entry.executionContext;
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const executionFocusPrimarySignal = executionContext
+    ? executionContext.focusExplanation?.primary_signal ??
+      formatExecutionFocusPrimarySignal(executionContext.focusNode)
+    : null;
+  const executionFocusFollowUp = executionContext
+    ? executionContext.focusExplanation?.follow_up ??
+      formatExecutionFocusFollowUp(executionContext.focusNode)
+    : null;
+  const focusToolCallSummaries = executionContext
+    ? listExecutionFocusToolCallSummaries(executionContext.focusNode)
+    : [];
+  const focusArtifactSummary = executionContext
+    ? formatExecutionFocusArtifactSummary(executionContext.focusNode)
+    : null;
+  const focusArtifacts = executionContext
+    ? listExecutionFocusArtifactPreviews(executionContext.focusNode)
+    : [];
+  const executionFactBadges = executionContext
+    ? listExecutionFocusRuntimeFactBadges(executionContext.focusNode)
+    : [];
+  const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(entry.runSnapshot);
+  const focusInboxHref = executionContext
+    ? buildSensitiveAccessInboxHref({
+        runId: executionContext.runId,
+        nodeRunId: executionContext.focusNode.node_run_id
+      })
+    : null;
+  const sampledFocusInboxContext =
+    executionContext && entry.runFollowUp?.recommendedAction == null
+      ? buildOperatorRunFollowUpSampleInboxContext({
+          runFollowUp: entry.runFollowUp,
+          runId: executionContext.runId
+        })
+      : null;
+  const shouldPreferSampledFocusInboxContext = Boolean(
+    sampledFocusInboxContext && sampledFocusInboxContext.href !== focusInboxHref
+  );
+  const resolvedFocusInboxHref = shouldPreferSampledFocusInboxContext
+    ? sampledFocusInboxContext?.href ?? focusInboxHref
+    : focusInboxHref;
+  const resolvedFocusInboxHrefLabel = shouldPreferSampledFocusInboxContext
+    ? sampledFocusInboxContext?.hrefLabel ?? null
+    : null;
+  const displayRunLink = buildOperatorRunDetailLinkSurface({
+    runId: displayScope.runId,
+    hrefLabel: displayScope.runId
+      ? formatOperatorOpenRunLinkLabel(displayScope.runId, operatorSurfaceCopy)
+      : null,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const focusRunLink = buildOperatorRunDetailLinkSurface({
+    runId: executionContext?.runId,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const focusInboxLink = buildOperatorInboxSliceLinkSurface({
+    href: resolvedFocusInboxHref,
+    hrefLabel: resolvedFocusInboxHrefLabel,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const executionSurfaceCopy = executionContext
+    ? buildSensitiveAccessInboxEntryExecutionSurfaceCopy({
+        focusMatchesEntry: executionContext.focusMatchesEntry,
+        entryNodeRunId: executionContext.entryNodeRunId,
+        focusNodeName: executionContext.focusNode.node_name,
+        focusInboxHref: resolvedFocusInboxHref,
+        focusInboxHrefLabel: resolvedFocusInboxHrefLabel,
+        runId: executionContext.runId
+      })
+    : null;
+  const executionNeedsSharedSandboxFollowUp = shouldPreferSharedSandboxReadinessFollowUp({
+    blockedExecution: executionContext?.focusReason === "blocked_execution",
+    signals: [
+      executionFocusPrimarySignal,
+      executionFocusFollowUp,
+      executionContext?.focusNode.node_type
+    ]
+  });
+  const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
+    ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
+    : null;
+  const shouldDeferToSharedCallbackWaitingSummary =
+    hasCallbackWaitingSummaryFacts({
+      callbackWaitingExplanation: callbackWaitingContext?.callbackWaitingExplanation,
+      callbackWaitingLifecycle: callbackWaitingContext?.lifecycle,
+      waitingReason: callbackWaitingContext?.waitingReason,
+      scheduledResumeDelaySeconds: callbackWaitingContext?.scheduledResumeDelaySeconds,
+      scheduledResumeSource: callbackWaitingContext?.scheduledResumeSource,
+      scheduledWaitingStatus: callbackWaitingContext?.scheduledWaitingStatus,
+      scheduledResumeScheduledAt: callbackWaitingContext?.scheduledResumeScheduledAt,
+      scheduledResumeDueAt: callbackWaitingContext?.scheduledResumeDueAt,
+      scheduledResumeRequeuedAt: callbackWaitingContext?.scheduledResumeRequeuedAt,
+      scheduledResumeRequeueSource: callbackWaitingContext?.scheduledResumeRequeueSource
+    }) && !sharedSandboxCandidate;
+  const focusSkillTraceReferenceLoads = executionContext?.skillTrace?.loads ?? [];
+  const focusSkillTraceReferenceCount = executionContext?.skillTrace?.reference_count ?? null;
+  const recommendedNextStep = !shouldDeferToSharedCallbackWaitingSummary && executionSurfaceCopy
+    ? buildOperatorRecommendedNextStep({
+        execution:
+          sharedSandboxCandidate ?? {
+            active: true,
+            label: executionSurfaceCopy.recommendedNextStepLabel,
+            detail: executionFocusFollowUp,
+            href: executionSurfaceCopy.recommendedNextStepHref,
+            href_label: executionSurfaceCopy.recommendedNextStepHrefLabel,
+            fallback_detail: executionSurfaceCopy.recommendedNextStepFallbackDetail
+          },
+        currentHref
+      })
+    : null;
 
   return (
     <article className="activity-row">
@@ -193,9 +220,9 @@ export function SensitiveAccessInboxEntryCard({
         {request && formatSensitiveAccessReasonLabel(request) ? (
           <span className="event-chip">reason {formatSensitiveAccessReasonLabel(request)}</span>
         ) : null}
-        {entry.ticket.run_id ? (
-          <Link className="event-chip inbox-filter-link" href={`/runs/${entry.ticket.run_id}`}>
-            run {entry.ticket.run_id.slice(0, 8)}
+        {displayRunLink ? (
+          <Link className="event-chip inbox-filter-link" href={displayRunLink.href}>
+            {displayRunLink.label}
           </Link>
         ) : null}
         <span className="event-chip">created {formatTimestamp(entry.ticket.created_at)}</span>
@@ -214,6 +241,113 @@ export function SensitiveAccessInboxEntryCard({
         <div className="entry-card compact-card">
           <p className="entry-card-title">Policy summary</p>
           <p className="section-copy entry-copy">{getSensitiveAccessPolicySummary(request)}</p>
+        </div>
+      ) : null}
+
+      {executionContext ? (
+        <div className="entry-card compact-card">
+          <p className="entry-card-title">Execution focus</p>
+          <div className="tool-badge-row">
+            <span className="event-chip">
+              {formatExecutionFocusReasonLabel(executionContext.focusReason)}
+            </span>
+            <span className="event-chip">node run {executionContext.focusNode.node_run_id}</span>
+          </div>
+          <p className="section-copy entry-copy">{executionSurfaceCopy?.focusDescription}</p>
+          <p className="binding-meta">
+            {executionContext.focusNode.node_type} · focus node {executionContext.focusNode.node_id}
+          </p>
+          {recommendedNextStep ? (
+            <div className="entry-card compact-card">
+              <div className="payload-card-header">
+                <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
+                <span className="event-chip">{recommendedNextStep.label}</span>
+                {recommendedNextStep.href && recommendedNextStep.href_label ? (
+                  <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                    {recommendedNextStep.href_label}
+                  </Link>
+                ) : null}
+              </div>
+              <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+            </div>
+          ) : null}
+          {executionFactBadges.length > 0 && !shouldDeferToSharedCallbackWaitingSummary ? (
+            <div className="tool-badge-row">
+              {executionFactBadges.map((badge) => (
+                <span className="event-chip" key={`${executionContext.runId}-${badge}`}>
+                  {badge}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {sandboxReadinessNode ? (
+            <SandboxExecutionReadinessCard
+              node={sandboxReadinessNode}
+              readiness={sandboxReadiness}
+            />
+          ) : null}
+          {executionFocusPrimarySignal && !shouldDeferToSharedCallbackWaitingSummary ? (
+            <p className="section-copy entry-copy">{executionFocusPrimarySignal}</p>
+          ) : null}
+          {executionFocusFollowUp && !shouldDeferToSharedCallbackWaitingSummary ? (
+            <p className="binding-meta">{executionFocusFollowUp}</p>
+          ) : null}
+          {!shouldDeferToSharedCallbackWaitingSummary ? (
+            <OperatorFocusEvidenceCard
+              artifactCount={executionContext.focusNode.artifacts.length}
+              artifactRefCount={executionContext.focusNode.artifact_refs.length}
+              artifactSummary={focusArtifactSummary}
+              artifacts={focusArtifacts}
+              toolCallCount={executionContext.focusNode.tool_calls.length}
+              toolCallSummaries={focusToolCallSummaries}
+            />
+          ) : null}
+          <div className="tool-badge-row">
+            {focusRunLink ? (
+              <Link className="event-chip inbox-filter-link" href={focusRunLink.href}>
+                {focusRunLink.label}
+              </Link>
+            ) : null}
+            {focusInboxLink ? (
+              <Link className="event-chip inbox-filter-link" href={focusInboxLink.href}>
+                {focusInboxLink.label}
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {callbackWaitingContext ? (
+        <div className="entry-card compact-card">
+          <p className="entry-card-title">Callback waiting follow-up</p>
+          <CallbackWaitingSummaryCard
+            currentHref={currentHref}
+            callbackTickets={callbackWaitingContext.callbackTickets}
+            callbackWaitingAutomation={callbackWaitingAutomation}
+            callbackWaitingExplanation={callbackWaitingContext.callbackWaitingExplanation}
+            focusNodeEvidence={executionContext?.focusNode ?? null}
+            focusSkillReferenceLoads={focusSkillTraceReferenceLoads}
+            focusSkillReferenceCount={focusSkillTraceReferenceCount}
+            lifecycle={callbackWaitingContext.lifecycle}
+            nodeRunId={callbackWaitingContext.displayNodeRunId}
+            actionNodeRunId={callbackWaitingContext.actionNodeRunId ?? actionScope.nodeRunId}
+            recommendedAction={entry.runFollowUp?.recommendedAction ?? null}
+            preferCanonicalRecommendedNextStep={Boolean(entry.runFollowUp?.recommendedAction)}
+            runId={callbackWaitingContext.runId}
+            scheduledResumeDelaySeconds={callbackWaitingContext.scheduledResumeDelaySeconds}
+            scheduledResumeSource={callbackWaitingContext.scheduledResumeSource}
+            scheduledWaitingStatus={callbackWaitingContext.scheduledWaitingStatus}
+            scheduledResumeScheduledAt={callbackWaitingContext.scheduledResumeScheduledAt}
+            scheduledResumeDueAt={callbackWaitingContext.scheduledResumeDueAt}
+            scheduledResumeRequeuedAt={callbackWaitingContext.scheduledResumeRequeuedAt}
+            scheduledResumeRequeueSource={callbackWaitingContext.scheduledResumeRequeueSource}
+            sensitiveAccessEntries={callbackWaitingContext.sensitiveAccessEntries}
+            showFocusExecutionFacts={shouldDeferToSharedCallbackWaitingSummary}
+            showSensitiveAccessInlineActions={false}
+            waitingReason={callbackWaitingContext.waitingReason}
+            focusSkillReferenceNodeId={executionContext?.focusNode.node_id ?? null}
+            focusSkillReferenceNodeName={executionContext?.focusNode.node_name ?? null}
+          />
         </div>
       ) : null}
 
@@ -238,8 +372,15 @@ export function SensitiveAccessInboxEntryCard({
         </div>
       ) : null}
 
-      <SensitiveAccessTicketDecisionForm entry={entry} />
-      <SensitiveAccessNotificationRetryForm entry={entry} />
+      <SensitiveAccessInlineActions
+        compact
+        nodeRunId={actionScope.nodeRunId}
+        notifications={entry.notifications}
+        notificationChannels={notificationChannels}
+        runId={actionScope.runId}
+        sandboxReadiness={sandboxReadiness}
+        ticket={entry.ticket}
+      />
     </article>
   );
 }

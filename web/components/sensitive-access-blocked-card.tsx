@@ -1,15 +1,38 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
-import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
+import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import {
+  resolveSensitiveAccessBlockingRunId,
+  type SensitiveAccessBlockingPayload
+} from "@/lib/sensitive-access";
+import {
+  buildSensitiveAccessBlockedRecommendedNextStep,
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
+  getSensitiveAccessCanonicalOutcomeExplanation,
   getSensitiveAccessBlockedPolicySummary
 } from "@/lib/sensitive-access-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorInboxSliceLinkSurface,
+  buildOperatorRunDetailLinkSurface
+} from "@/lib/operator-follow-up-presenters";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 function normalizeApprovalStatus(value?: string | null) {
   return value === "pending" || value === "approved" || value === "rejected" || value === "expired"
@@ -26,15 +49,39 @@ type SensitiveAccessBlockedCardProps = {
   payload: SensitiveAccessBlockingPayload;
   clearHref?: string | null;
   summary?: string;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function SensitiveAccessBlockedCard({
   title,
   payload,
   clearHref = null,
-  summary
+  summary,
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: SensitiveAccessBlockedCardProps) {
-  const runId = payload.access_request.run_id ?? payload.approval_ticket?.run_id ?? null;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const runId = resolveSensitiveAccessBlockingRunId(payload);
+  const currentHref = React.useMemo(() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+  const workspaceStarterViewState = React.useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
+  const scopedRunDetailHref = runId ? resolveRunDetailHref(runId) : null;
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const inboxHref = buildSensitiveAccessInboxHref({
     runId,
     nodeRunId: payload.access_request.node_run_id ?? payload.approval_ticket?.node_run_id ?? null,
@@ -43,6 +90,68 @@ export function SensitiveAccessBlockedCard({
     accessRequestId: payload.access_request.id,
     approvalTicketId: payload.approval_ticket?.id ?? null
   });
+  const inboxLink = buildOperatorInboxSliceLinkSurface({
+    href: inboxHref,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const runLink = buildOperatorRunDetailLinkSurface({
+    runId,
+    runHref: scopedRunDetailHref,
+    hrefLabel: runId,
+    surfaceCopy: operatorSurfaceCopy
+  });
+  const hasStructuredFollowUp = Boolean(
+      payload.outcome_explanation?.primary_signal?.trim() ||
+      payload.outcome_explanation?.follow_up?.trim() ||
+      payload.run_follow_up?.explanation?.primary_signal?.trim() ||
+      payload.run_follow_up?.explanation?.follow_up?.trim() ||
+      (payload.run_follow_up?.sampledRuns.length ?? 0) > 0 ||
+      payload.run_snapshot
+  );
+  const canonicalOutcomeExplanation = getSensitiveAccessCanonicalOutcomeExplanation({
+    outcomeExplanation: payload.outcome_explanation ?? null,
+    runSnapshot: payload.run_snapshot ?? null,
+    runFollowUpExplanation: payload.run_follow_up?.explanation ?? null
+  });
+  const canonicalCallbackRecommendedAction =
+    payload.run_follow_up?.recommendedAction ??
+    (payload.approval_ticket?.status === "pending" && inboxHref
+      ? {
+          kind: "approval blocker",
+          entry_key: "operatorInbox",
+          href: inboxHref,
+          label: "Open approval inbox"
+        }
+      : null);
+  const callbackWaitingActive = Boolean(
+    payload.access_request.decision === "require_approval" ||
+      payload.approval_ticket?.status === "pending" ||
+      payload.approval_ticket?.status === "expired" ||
+      payload.approval_ticket?.waiting_status === "waiting" ||
+      hasCallbackWaitingSummaryFacts(payload.run_snapshot ?? null)
+  );
+  const recommendedNextStep = buildSensitiveAccessBlockedRecommendedNextStep({
+    currentHref,
+    inboxHref,
+    runId,
+    runHref: scopedRunDetailHref,
+    outcomeExplanation: canonicalOutcomeExplanation,
+    runSnapshot: payload.run_snapshot ?? null,
+    runFollowUpExplanation: payload.run_follow_up?.explanation ?? null,
+    recommendedAction: canonicalCallbackRecommendedAction,
+    callbackWaitingAutomation,
+    callbackWaitingActive,
+    sandboxReadiness
+  });
+  const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
+    currentHref,
+    inboxHref,
+    callbackWaitingAutomation,
+    showSensitiveAccessInlineActions: false,
+    recommendedAction: canonicalCallbackRecommendedAction,
+    operatorFollowUp: payload.run_follow_up?.explanation?.follow_up ?? null,
+    preferCanonicalRecommendedNextStep: true
+  };
 
   return (
     <article className="entry-card compact-card">
@@ -68,9 +177,11 @@ export function SensitiveAccessBlockedCard({
         <span className="event-chip">{payload.resource.sensitivity_level}</span>
         <span className="event-chip">{payload.access_request.action_type}</span>
         <span className="event-chip">{payload.resource.source}</span>
-        <Link className="event-chip inbox-filter-link" href={inboxHref}>
-          open inbox slice
-        </Link>
+        {inboxLink ? (
+          <Link className="event-chip inbox-filter-link" href={inboxLink.href}>
+            {inboxLink.label}
+          </Link>
+        ) : null}
       </div>
 
       <dl className="compact-meta-list">
@@ -90,15 +201,7 @@ export function SensitiveAccessBlockedCard({
         </div>
         <div>
           <dt>Run</dt>
-          <dd>
-            {runId ? (
-              <Link className="inline-link" href={`/runs/${encodeURIComponent(runId)}`}>
-                {runId}
-              </Link>
-            ) : (
-              "n/a"
-            )}
-          </dd>
+          <dd>{runLink ? <Link className="inline-link" href={runLink.href}>{runLink.label}</Link> : "n/a"}</dd>
         </div>
         <div>
           <dt>Node run</dt>
@@ -136,13 +239,33 @@ export function SensitiveAccessBlockedCard({
         </div>
       ) : null}
 
+      {hasStructuredFollowUp ? (
+        <InlineOperatorActionFeedback
+          callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+          currentHref={currentHref}
+          message=""
+          outcomeExplanation={canonicalOutcomeExplanation}
+          recommendedNextStep={recommendedNextStep}
+          resolveRunDetailHref={resolveRunDetailHref}
+          runFollowUpExplanation={payload.run_follow_up?.explanation ?? null}
+          runFollowUp={payload.run_follow_up ?? null}
+          runId={runId}
+          runSnapshot={payload.run_snapshot ?? null}
+          sandboxReadiness={sandboxReadiness}
+          status="success"
+          title="Canonical follow-up"
+        />
+      ) : null}
+
       <SensitiveAccessInlineActions
+        callbackWaitingSummaryProps={callbackWaitingSummaryProps}
         compact
         nodeRunId={
           payload.approval_ticket?.node_run_id ?? payload.access_request.node_run_id ?? null
         }
         notifications={payload.notifications}
         runId={runId}
+        sandboxReadiness={sandboxReadiness}
         ticket={payload.approval_ticket}
       />
     </article>

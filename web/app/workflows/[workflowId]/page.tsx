@@ -6,50 +6,32 @@ import { WorkflowPublishPanel } from "@/components/workflow-publish-panel";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
-import {
-  type PublishedEndpointInvocationCacheStatus,
-  type PublishedEndpointInvocationRequestSurface,
-  type PublishedEndpointInvocationRequestSource,
-  type PublishedEndpointInvocationStatus,
-  getWorkflowPublishedEndpoints
-} from "@/lib/get-workflow-publish";
+import { getWorkflowPublishedEndpoints } from "@/lib/get-workflow-publish";
 import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
-import type {
-  WorkflowPublishInvocationActiveFilter
-} from "@/lib/workflow-publish-governance";
 import {
-  resolvePublishTimeWindow,
-  resolvePublishWindowRange
-} from "@/lib/workflow-publish-governance";
+  appendWorkflowLibraryViewState,
+  readWorkflowLibraryViewState
+} from "@/lib/workflow-library-query";
 import {
-  PUBLISHED_INVOCATION_CACHE_STATUSES,
-  PUBLISHED_INVOCATION_REASON_CODES,
-  PUBLISHED_INVOCATION_REQUEST_SURFACES
-} from "@/lib/published-invocation-presenters";
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  buildWorkflowEditorHrefFromWorkspaceStarterViewState,
+  buildWorkflowLibraryHrefFromWorkspaceStarterViewState,
+  buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
+  hasScopedWorkspaceStarterGovernanceFilters,
+  pickWorkspaceStarterGovernanceQueryScope,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
+import {
+  readWorkflowPublishActivityQueryScope,
+  resolveWorkflowPublishActivityFilters
+} from "@/lib/workflow-publish-activity-query";
 import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 
 type WorkflowEditorPageProps = {
   params: Promise<{ workflowId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-const PUBLISH_STATUSES: PublishedEndpointInvocationStatus[] = [
-  "succeeded",
-  "failed",
-  "rejected"
-];
-const PUBLISH_REQUEST_SOURCES: PublishedEndpointInvocationRequestSource[] = [
-  "workflow",
-  "alias",
-  "path"
-];
-
-function firstSearchValue(
-  value: string | string[] | undefined
-) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 export async function generateMetadata({
   params
@@ -83,66 +65,43 @@ export default async function WorkflowEditorPage({
     notFound();
   }
 
-  const activeBindingId = firstSearchValue(resolvedSearchParams.publish_binding);
-  const requestedStatus = firstSearchValue(resolvedSearchParams.publish_status);
-  const requestedRequestSource = firstSearchValue(
-    resolvedSearchParams.publish_request_source
+  const workspaceStarterViewState = readWorkspaceStarterLibraryViewState(
+    resolvedSearchParams
   );
-  const requestedRequestSurface = firstSearchValue(
-    resolvedSearchParams.publish_request_surface
+  const workflowLibraryViewState = readWorkflowLibraryViewState(resolvedSearchParams);
+  const workflowLibraryHref = appendWorkflowLibraryViewState(
+    buildWorkflowLibraryHrefFromWorkspaceStarterViewState(
+      workspaceStarterViewState
+    ),
+    workflowLibraryViewState
   );
-  const requestedCacheStatus = firstSearchValue(
-    resolvedSearchParams.publish_cache_status
+  const createWorkflowHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState(
+    workspaceStarterViewState
   );
-  const requestedRunStatus = firstSearchValue(
-    resolvedSearchParams.publish_run_status
+  const currentEditorHref = appendWorkflowLibraryViewState(
+    buildWorkflowEditorHrefFromWorkspaceStarterViewState(
+      workflow.id,
+      workspaceStarterViewState
+    ),
+    workflowLibraryViewState
   );
-  const requestedApiKeyId = firstSearchValue(resolvedSearchParams.publish_api_key_id);
-  const requestedReasonCode = firstSearchValue(
-    resolvedSearchParams.publish_reason_code
+  const workspaceStarterLibraryHref =
+    buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+      workspaceStarterViewState
+    );
+  const workspaceStarterGovernanceQueryScope = pickWorkspaceStarterGovernanceQueryScope(
+    workspaceStarterViewState
   );
-  const requestedInvocationId = firstSearchValue(
-    resolvedSearchParams.publish_invocation
+  const hasScopedWorkspaceStarterFilters = hasScopedWorkspaceStarterGovernanceFilters(
+    workspaceStarterViewState
   );
-  const publishTimeWindow = resolvePublishTimeWindow(
-    firstSearchValue(resolvedSearchParams.publish_window)
+  const publishActivityQueryScope = readWorkflowPublishActivityQueryScope(
+    resolvedSearchParams
   );
-  const selectedRequestSurface = PUBLISHED_INVOCATION_REQUEST_SURFACES.includes(
-    requestedRequestSurface as PublishedEndpointInvocationRequestSurface
-  )
-    ? (requestedRequestSurface as PublishedEndpointInvocationRequestSurface)
-    : null;
-  const selectedCacheStatus = PUBLISHED_INVOCATION_CACHE_STATUSES.includes(
-    requestedCacheStatus as PublishedEndpointInvocationCacheStatus
-  )
-    ? (requestedCacheStatus as PublishedEndpointInvocationCacheStatus)
-    : null;
-  const activeInvocationFilter =
-    activeBindingId && publishedEndpoints.some((binding) => binding.id === activeBindingId)
-      ? {
-          bindingId: activeBindingId,
-          status: PUBLISH_STATUSES.includes(
-            requestedStatus as PublishedEndpointInvocationStatus
-          )
-            ? (requestedStatus as PublishedEndpointInvocationStatus)
-            : undefined,
-          requestSource: PUBLISH_REQUEST_SOURCES.includes(
-            requestedRequestSource as PublishedEndpointInvocationRequestSource
-          )
-            ? (requestedRequestSource as PublishedEndpointInvocationRequestSource)
-            : undefined,
-          requestSurface: selectedRequestSurface ?? undefined,
-          cacheStatus: selectedCacheStatus ?? undefined,
-          runStatus: requestedRunStatus?.trim() ? requestedRunStatus.trim() : undefined,
-          apiKeyId: requestedApiKeyId?.trim() ? requestedApiKeyId.trim() : undefined,
-          reasonCode: PUBLISHED_INVOCATION_REASON_CODES.includes(
-            requestedReasonCode as (typeof PUBLISHED_INVOCATION_REASON_CODES)[number]
-          )
-            ? requestedReasonCode
-            : undefined,
-          ...resolvePublishWindowRange(publishTimeWindow)
-        }
-      : null;
+  const publishActivityFilters = resolveWorkflowPublishActivityFilters(
+    publishActivityQueryScope,
+    publishedEndpoints
+  );
 
   const {
     cacheInventories,
@@ -151,12 +110,7 @@ export default async function WorkflowEditorPage({
     invocationDetailsByBinding,
     rateLimitWindowAuditsByBinding
   } = await getWorkflowPublishGovernanceSnapshot(workflow.id, publishedEndpoints, {
-    activeInvocationFilter: activeInvocationFilter
-      ? {
-          ...activeInvocationFilter,
-          invocationId: requestedInvocationId?.trim() ? requestedInvocationId.trim() : undefined
-        }
-      : null
+    activeInvocationFilter: publishActivityFilters.governanceFetchFilter
   });
 
   return (
@@ -169,8 +123,16 @@ export default async function WorkflowEditorPage({
         toolSourceLanes={workflowLibrary.toolSourceLanes}
         tools={workflowLibrary.tools}
         adapters={pluginRegistry.adapters}
+        callbackWaitingAutomation={systemOverview.callback_waiting_automation}
         sandboxReadiness={systemOverview.sandbox_readiness}
+        sandboxBackends={systemOverview.sandbox_backends}
         recentRuns={recentRuns}
+        currentEditorHref={currentEditorHref}
+        workflowLibraryHref={workflowLibraryHref}
+        createWorkflowHref={createWorkflowHref}
+        workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+        hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
+        workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
       />
       <WorkflowPublishPanel
         workflow={workflow}
@@ -180,19 +142,13 @@ export default async function WorkflowEditorPage({
         apiKeysByBinding={apiKeysByBinding}
         invocationAuditsByBinding={invocationAuditsByBinding}
         invocationDetailsByBinding={invocationDetailsByBinding}
-        selectedInvocationId={requestedInvocationId?.trim() ? requestedInvocationId.trim() : null}
+        selectedInvocationId={publishActivityFilters.selectedInvocationId}
         rateLimitWindowAuditsByBinding={rateLimitWindowAuditsByBinding}
-        activeInvocationFilter={{
-          bindingId: activeInvocationFilter?.bindingId ?? null,
-          status: activeInvocationFilter?.status ?? null,
-          requestSource: activeInvocationFilter?.requestSource ?? null,
-          requestSurface: activeInvocationFilter?.requestSurface ?? selectedRequestSurface,
-          cacheStatus: activeInvocationFilter?.cacheStatus ?? selectedCacheStatus,
-          runStatus: activeInvocationFilter?.runStatus ?? requestedRunStatus?.trim() ?? null,
-          apiKeyId: activeInvocationFilter?.apiKeyId ?? null,
-          reasonCode: activeInvocationFilter?.reasonCode ?? null,
-          timeWindow: publishTimeWindow
-        } satisfies WorkflowPublishInvocationActiveFilter}
+        callbackWaitingAutomation={systemOverview.callback_waiting_automation}
+        sandboxReadiness={systemOverview.sandbox_readiness}
+        activeInvocationFilter={publishActivityFilters.panelActiveFilter}
+        workflowLibraryHref={workflowLibraryHref}
+        workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
       />
     </>
   );

@@ -1,44 +1,34 @@
+import React from "react";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import Link from "next/link";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRecommendedNextStep
+} from "@/lib/operator-follow-up-presenters";
+import {
+  buildSandboxExecutionClassCapabilityChips,
+  formatSandboxReadinessDetail,
+  formatSandboxReadinessHeadline,
+  listSandboxAvailableClasses,
+  listSandboxBlockedClasses,
+  listSandboxReadinessCapabilityChips
+} from "@/lib/sandbox-readiness-presenters";
+import { buildSandboxReadinessFollowUpCandidate } from "@/lib/system-overview-follow-up-presenters";
 
 type SandboxReadinessPanelProps = {
   readiness: SandboxReadinessCheck;
 };
 
-const capabilityLabels = [
-  {
-    enabled: "supports_builtin_package_sets",
-    label: "builtin package sets"
-  },
-  {
-    enabled: "supports_backend_extensions",
-    label: "backend extensions"
-  },
-  {
-    enabled: "supports_network_policy",
-    label: "network policy"
-  },
-  {
-    enabled: "supports_filesystem_policy",
-    label: "filesystem policy"
-  }
-] as const satisfies Array<{
-  enabled: keyof Pick<
-    SandboxReadinessCheck,
-    | "supports_builtin_package_sets"
-    | "supports_backend_extensions"
-    | "supports_network_policy"
-    | "supports_filesystem_policy"
-  >;
-  label: string;
-}>;
-
 export function SandboxReadinessPanel({ readiness }: SandboxReadinessPanelProps) {
-  const availableClasses = readiness.execution_classes
-    .filter((entry) => entry.available)
-    .map((entry) => entry.execution_class);
-  const capabilityChips = capabilityLabels
-    .filter((entry) => readiness[entry.enabled])
-    .map((entry) => entry.label);
+  const availableClasses = listSandboxAvailableClasses(readiness);
+  const blockedClasses = listSandboxBlockedClasses(readiness);
+  const capabilityChips = listSandboxReadinessCapabilityChips(readiness);
+  const readinessHeadline = formatSandboxReadinessHeadline(readiness);
+  const readinessDetail = formatSandboxReadinessDetail(readiness);
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const recommendedNextStep = buildOperatorRecommendedNextStep({
+    execution: buildSandboxReadinessFollowUpCandidate(readiness, "sandbox readiness")
+  });
 
   return (
     <article className="diagnostic-panel panel-span">
@@ -59,35 +49,82 @@ export function SandboxReadinessPanel({ readiness }: SandboxReadinessPanelProps)
           <strong>{readiness.enabled_backend_count}</strong>
         </article>
         <article className="summary-card">
-          <span>Healthy / degraded</span>
+          <span>Healthy / degraded / offline</span>
           <strong>
-            {readiness.healthy_backend_count} / {readiness.degraded_backend_count}
+            {readiness.healthy_backend_count} / {readiness.degraded_backend_count} / {readiness.offline_backend_count}
           </strong>
         </article>
         <article className="summary-card">
           <span>Available classes</span>
           <strong>{availableClasses.length ? availableClasses.join(" / ") : "none"}</strong>
         </article>
+        <article className="summary-card">
+          <span>Blocked classes</span>
+          <strong>
+            {blockedClasses.length
+              ? blockedClasses.map((entry) => entry.execution_class).join(" / ")
+              : "none"}
+          </strong>
+        </article>
       </div>
 
+      <article className="payload-card compact-card">
+        <div className="payload-card-header">
+          <span className="status-meta">Fail-closed signal</span>
+        </div>
+        <p className="section-copy entry-copy">{readinessHeadline}</p>
+        {readinessDetail ? <p className="binding-meta">{readinessDetail}</p> : null}
+      </article>
+
+      {recommendedNextStep ? (
+        <article className="entry-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
+            <span className="event-chip">{recommendedNextStep.label}</span>
+            {recommendedNextStep.href && recommendedNextStep.href_label ? (
+              <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                {recommendedNextStep.href_label}
+              </Link>
+            ) : null}
+          </div>
+          <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+        </article>
+      ) : null}
+
       <div className="activity-list">
-        {readiness.execution_classes.map((entry) => (
-          <article className="activity-row" key={entry.execution_class}>
-            <div className="activity-header">
-              <div>
-                <h3>{entry.execution_class}</h3>
-                <p>
-                  {entry.available
-                    ? `ready via ${entry.backend_ids.join(", ")}`
-                    : entry.reason || "No compatible backend is currently ready."}
-                </p>
+        {readiness.execution_classes.map((entry) => {
+          const classCapabilityChips = buildSandboxExecutionClassCapabilityChips(entry);
+
+          return (
+            <article className="activity-row" key={entry.execution_class}>
+              <div className="activity-header">
+                <div>
+                  <h3>{entry.execution_class}</h3>
+                  <p>
+                    {entry.available
+                      ? `ready via ${entry.backend_ids.join(", ")}`
+                      : entry.reason || "No compatible backend is currently ready."}
+                  </p>
+                </div>
+                <span className={`health-pill ${entry.available ? "healthy" : "failed"}`}>
+                  {entry.available ? "ready" : "blocked"}
+                </span>
               </div>
-              <span className={`health-pill ${entry.available ? "healthy" : "failed"}`}>
-                {entry.available ? "ready" : "blocked"}
-              </span>
-            </div>
-          </article>
-        ))}
+              {classCapabilityChips.length > 0 ? (
+                <div className="event-type-strip">
+                  {classCapabilityChips.map((capability) => (
+                    <span
+                      className="event-chip"
+                      key={`${entry.execution_class}-capability-${capability}`}
+                    >
+                      {capability}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
       </div>
 
       <div className="event-type-strip">

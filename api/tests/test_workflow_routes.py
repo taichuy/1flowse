@@ -3,7 +3,10 @@
 from fastapi.testclient import TestClient
 
 from app.models.run import NodeRun, Run, RunEvent
-from app.services import workflow_definitions, workflow_library
+from app.models.workflow import Workflow, WorkflowVersion
+from app.schemas.plugin import PluginToolItem
+from app.schemas.workflow_published_endpoint import WorkflowPublishedEndpointDefinition
+from app.services import workflow_definitions, workflow_library, workflow_views
 from app.services.plugin_runtime import PluginRegistry, PluginToolDefinition
 from app.services.sandbox_backends import (
     SandboxBackendCapability,
@@ -15,7 +18,14 @@ from app.services.sandbox_backends import (
 )
 
 
-def _sandbox_backend_client(*, execution_classes: tuple[str, ...]) -> SandboxBackendClient:
+def _sandbox_backend_client(
+    *,
+    execution_classes: tuple[str, ...],
+    dependency_modes: tuple[str, ...] = (),
+    supports_tool_execution: bool = False,
+    supports_builtin_package_sets: bool = False,
+    supports_backend_extensions: bool = False,
+) -> SandboxBackendClient:
     registry = SandboxBackendRegistry()
     registry.register_backend(
         SandboxBackendRegistration(
@@ -35,6 +45,10 @@ def _sandbox_backend_client(*, execution_classes: tuple[str, ...]) -> SandboxBac
             status="healthy",
             capability=SandboxBackendCapability(
                 supported_execution_classes=execution_classes,
+                supported_dependency_modes=dependency_modes,
+                supports_tool_execution=supports_tool_execution,
+                supports_builtin_package_sets=supports_builtin_package_sets,
+                supports_backend_extensions=supports_backend_extensions,
             ),
         )
     ]
@@ -54,6 +68,15 @@ def _workflow_detail_issues(response) -> list[dict]:
     if isinstance(detail, dict) and isinstance(detail.get("issues"), list):
         return [issue for issue in detail["issues"] if isinstance(issue, dict)]
     return []
+
+
+class _FakeWorkflowLibraryService:
+    def __init__(self, tools: list[PluginToolItem]) -> None:
+        self._tools = tools
+
+    def list_tool_items(self, _db, *, workspace_id: str) -> list[PluginToolItem]:
+        assert workspace_id == "default"
+        return self._tools
 
 
 def _valid_definition(answer: str = "done", runtime_policy: dict | None = None) -> dict:
@@ -119,6 +142,51 @@ def _bound_tool_definition(
         "edges": [
             {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
             {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+        ],
+    }
+
+
+def _condition_definition(*, runtime_policy: dict | None = None) -> dict:
+    return {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "branch",
+                "type": "condition",
+                "name": "Branch",
+                "config": {"selected": "true"},
+                "runtimePolicy": runtime_policy,
+            },
+            {
+                "id": "true_path",
+                "type": "tool",
+                "name": "True Path",
+                "config": {"mock_output": {"answer": "yes"}},
+            },
+            {
+                "id": "false_path",
+                "type": "tool",
+                "name": "False Path",
+                "config": {"mock_output": {"answer": "no"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {
+                "id": "e2",
+                "sourceNodeId": "branch",
+                "targetNodeId": "true_path",
+                "condition": "true",
+            },
+            {
+                "id": "e3",
+                "sourceNodeId": "branch",
+                "targetNodeId": "false_path",
+                "condition": "false",
+            },
+            {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
+            {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
         ],
     }
 
@@ -586,6 +654,12 @@ def _invalid_publish_identity_definition() -> dict:
     return definition
 
 
+def _unsupported_publish_auth_mode_definition() -> dict:
+    definition = _valid_publish_definition()
+    definition["publish"][0]["authMode"] = "token"
+    return definition
+
+
 def test_create_workflow_persists_initial_version(client: TestClient) -> None:
     response = client.post(
         "/api/workflows",
@@ -637,6 +711,31 @@ def test_create_workflow_rejects_duplicate_publish_identities(client: TestClient
     assert any(issue.get("path") == "publish.0.id" for issue in issues)
     assert any(issue.get("path") == "publish.1.alias" for issue in issues)
     assert any(issue.get("path") == "publish.1.path" for issue in issues)
+
+
+def test_create_workflow_rejects_unsupported_publish_auth_mode(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Invalid Publish Auth Workflow",
+            "definition": _unsupported_publish_auth_mode_definition(),
+        },
+    )
+
+    assert response.status_code == 422
+    message = _workflow_detail_message(response)
+    issues = _workflow_detail_issues(response)
+    assert "publish auth modes" in message
+    assert any(issue["category"] == "publish_draft" for issue in issues)
+    assert any(issue.get("path") == "publish.0.authMode" for issue in issues)
+
+
+def test_workflow_published_endpoint_schema_only_advertises_supported_auth_modes() -> None:
+    schema = WorkflowPublishedEndpointDefinition.model_json_schema()
+
+    assert schema["properties"]["authMode"]["enum"] == ["api_key", "internal"]
 
 
 def test_create_workflow_rejects_invalid_definition(client: TestClient) -> None:
@@ -992,6 +1091,126 @@ def test_create_workflow_rejects_dependency_ref_without_dependency_ref_mode(
     assert "config.dependencyRef requires config.dependencyMode = 'dependency_ref'" in detail
 
 
+def test_create_workflow_rejects_default_sandbox_code_when_backend_unavailable(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Blocked Sandbox Code Workflow",
+            "definition": _sandbox_code_definition(),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "Sandbox code node 'sandbox:Sandbox'" in detail
+    assert "execution class 'sandbox'" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
+
+
+def test_create_workflow_accepts_subprocess_sandbox_code_without_ready_backend(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Host Sandbox Code Workflow",
+            "definition": _sandbox_code_definition(
+                runtime_policy={"execution": {"class": "subprocess"}}
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["definition"]["nodes"][1]["runtimePolicy"]["execution"] == {
+        "class": "subprocess"
+    }
+
+
+def test_create_workflow_rejects_sandbox_code_dependency_contract_without_backend_support(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            dependency_modes=("builtin",),
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Sandbox Code Dependency Workflow",
+            "definition": _sandbox_code_definition(
+                config={
+                    "dependencyMode": "builtin",
+                    "builtinPackageSet": "py-data-basic",
+                },
+                runtime_policy={"execution": {"class": "microvm", "dependencyMode": "builtin"}},
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "Sandbox code node 'sandbox:Sandbox'" in detail
+    assert "builtin package set" in detail.lower()
+
+
+def test_create_workflow_rejects_sandbox_code_runtime_policy_deps_without_backend_support(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            dependency_modes=("builtin",),
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Sandbox Code Runtime Policy Dependency Workflow",
+            "definition": _sandbox_code_definition(
+                runtime_policy={
+                    "execution": {
+                        "class": "microvm",
+                        "dependencyMode": "builtin",
+                        "builtinPackageSet": "py-data-basic",
+                    }
+                }
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "Sandbox code node 'sandbox:Sandbox'" in detail
+    assert "builtin package set" in detail.lower()
+
+
 def test_create_workflow_rejects_unsupported_tool_execution_class(client: TestClient) -> None:
     adapter_response = client.post(
         "/api/plugins/adapters",
@@ -1073,7 +1292,7 @@ def test_create_workflow_rejects_unscoped_agent_tool_execution_target(client: Te
     assert "execution-incompatible tools:" in detail
 
 
-def test_create_workflow_accepts_supported_tool_execution_class(
+def test_create_workflow_rejects_supported_tool_execution_class_until_tool_runner_exists(
     client: TestClient,
     monkeypatch,
 ) -> None:
@@ -1119,7 +1338,189 @@ def test_create_workflow_accepts_supported_tool_execution_class(
         },
     )
 
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "sandbox-backed tool execution" in detail
+    assert "must fail closed" in detail
+
+
+def test_create_workflow_allows_compat_tool_execution_when_backend_supports_tool_runner(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-microvm-runner-ready",
+            "ecosystem": "compat:dify-runner-ready",
+            "endpoint": "http://adapter.local/dify-microvm-runner-ready",
+            "supported_execution_classes": ["subprocess", "microvm"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-runner-ready:plugin:demo/search",
+            "name": "Runner Ready Search",
+            "ecosystem": "compat:dify-runner-ready",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        },
+    )
+    assert tool_response.status_code == 201
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            supports_tool_execution=True,
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Runner Ready Tool Execution Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="compat:dify-runner-ready:plugin:demo/search",
+                ecosystem="compat:dify-runner-ready",
+                adapter_id="dify-microvm-runner-ready",
+                runtime_policy={"execution": {"class": "microvm"}},
+            ),
+        },
+    )
+
     assert response.status_code == 201
+    assert response.json()["definition_issues"] == []
+
+
+def test_create_workflow_rejects_tool_execution_dependency_contract_without_backend_support(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-microvm-deps",
+            "ecosystem": "compat:dify-deps",
+            "endpoint": "http://adapter.local/dify-deps",
+            "supported_execution_classes": ["subprocess", "microvm"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-deps:plugin:demo/search",
+            "name": "Demo Search Deps",
+            "ecosystem": "compat:dify-deps",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        },
+    )
+    assert tool_response.status_code == 201
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            dependency_modes=("builtin",),
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Dependency Contract Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="compat:dify-deps:plugin:demo/search",
+                ecosystem="compat:dify-deps",
+                adapter_id="dify-microvm-deps",
+                runtime_policy={
+                    "execution": {
+                        "class": "microvm",
+                        "dependencyMode": "builtin",
+                        "builtinPackageSet": "py-data-basic",
+                    }
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "tool execution capabilities" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
+    assert "does not support builtin package set hints" in detail
+
+
+def test_create_workflow_rejects_tool_execution_dependency_contract_until_tool_runner_exists(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-microvm-ready-deps",
+            "ecosystem": "compat:dify-ready-deps",
+            "endpoint": "http://adapter.local/dify-ready-deps",
+            "supported_execution_classes": ["subprocess", "microvm"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify-ready-deps:plugin:demo/search",
+            "name": "Demo Search Ready Deps",
+            "ecosystem": "compat:dify-ready-deps",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        },
+    )
+    assert tool_response.status_code == 201
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("microvm",),
+            dependency_modes=("builtin",),
+            supports_builtin_package_sets=True,
+            supports_backend_extensions=True,
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Dependency Contract Ready Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="compat:dify-ready-deps:plugin:demo/search",
+                ecosystem="compat:dify-ready-deps",
+                adapter_id="dify-microvm-ready-deps",
+                runtime_policy={
+                    "execution": {
+                        "class": "microvm",
+                        "dependencyMode": "builtin",
+                        "builtinPackageSet": "py-data-basic",
+                        "backendExtensions": {"mountPreset": "analytics"},
+                    }
+                },
+            ),
+        },
+    )
+
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "sandbox-backed tool execution" in detail
+    assert "must fail closed" in detail
 
 
 def test_create_workflow_rejects_sensitivity_driven_default_execution_when_adapter_not_ready(
@@ -1183,7 +1584,7 @@ def test_create_workflow_rejects_sensitivity_driven_default_execution_when_adapt
     assert "dify-sensitive-default" in detail
 
 
-def test_create_workflow_accepts_native_tool_declared_sandbox_execution(
+def test_create_workflow_rejects_native_tool_declared_sandbox_execution_until_tool_runner_exists(
     client: TestClient,
     monkeypatch,
 ) -> None:
@@ -1219,7 +1620,49 @@ def test_create_workflow_accepts_native_tool_declared_sandbox_execution(
         },
     )
 
+    assert response.status_code == 422
+    detail = _workflow_detail_message(response)
+    assert "sandbox-backed tool execution" in detail
+    assert "must fail closed" in detail
+
+
+def test_create_workflow_allows_native_tool_execution_when_backend_supports_tool_runner(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search-runner-ready",
+            name="Risk Search Runner Ready",
+            supported_execution_classes=("inline", "sandbox"),
+        )
+    )
+    monkeypatch.setattr(workflow_library, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(workflow_definitions, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("sandbox",),
+            supports_tool_execution=True,
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Native Runner Ready Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="native.risk-search-runner-ready",
+                ecosystem="native",
+                runtime_policy={"execution": {"class": "sandbox"}},
+            ),
+        },
+    )
+
     assert response.status_code == 201
+    assert response.json()["definition_issues"] == []
 
 
 def test_create_workflow_rejects_tool_default_sandbox_when_backend_unavailable(
@@ -1261,7 +1704,46 @@ def test_create_workflow_rejects_tool_default_sandbox_when_backend_unavailable(
     assert response.status_code == 422
     detail = _workflow_detail_message(response)
     assert "default execution class 'sandbox'" in detail
-    assert "no compatible sandbox backend is currently available" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
+
+
+def test_create_workflow_allows_native_tool_default_sandbox_when_backend_supports_tool_runner(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search-default-runner-ready",
+            name="Risk Search Default Runner Ready",
+            supported_execution_classes=("inline", "sandbox"),
+            default_execution_class="sandbox",
+        )
+    )
+    monkeypatch.setattr(workflow_library, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(workflow_definitions, "get_plugin_registry", lambda: registry)
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(
+            execution_classes=("sandbox",),
+            supports_tool_execution=True,
+        ),
+    )
+
+    response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Native Default Runner Ready Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="native.risk-search-default-runner-ready",
+                ecosystem="native",
+            ),
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["definition_issues"] == []
 
 
 def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unavailable(
@@ -1331,7 +1813,16 @@ def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unava
     detail = _workflow_detail_message(response)
     assert "toolPolicy.allowedToolIds" in detail
     assert "default execution class 'microvm'" in detail
-    assert "no compatible sandbox backend is currently available" in detail
+    assert "no compatible sandbox backend is currently available" in detail.lower()
+    issues = _workflow_detail_issues(response)
+    assert any(
+        issue.get("category") == "tool_execution"
+        and issue.get("path") == "nodes.1.config.toolPolicy.allowedToolIds"
+        and issue.get("field") == "allowedToolIds"
+        and "no compatible sandbox backend is currently available"
+        in issue.get("message", "").lower()
+        for issue in issues
+    )
 
 
 def test_create_workflow_accepts_authorized_context_mcp_query(client: TestClient) -> None:
@@ -1732,6 +2223,279 @@ def test_validate_workflow_definition_preflight_returns_normalized_definition(
     assert body["issues"] == []
 
 
+def test_validate_workflow_definition_preflight_rejects_unsupported_condition_execution_class(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Condition Execution Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={
+            "definition": _condition_definition(
+                runtime_policy={"execution": {"class": "microvm"}}
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "node execution capabilities" in detail["message"]
+    assert any(
+        issue["category"] == "node_execution"
+        and issue["path"] == "nodes.1.runtimePolicy.execution"
+        and issue["field"] == "execution"
+        and "strong-isolation execution class 'microvm'" in issue["message"]
+        for issue in detail["issues"]
+    )
+
+
+def test_validate_workflow_definition_preflight_accepts_condition_subprocess_execution(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Condition Subprocess Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={
+            "definition": _condition_definition(
+                runtime_policy={"execution": {"class": "subprocess"}}
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["issues"] == []
+    assert (
+        body["definition"]["nodes"][1]["runtimePolicy"]["execution"]["class"] == "subprocess"
+    )
+
+
+def test_get_workflow_detail_surfaces_definition_issues_for_persisted_tool_runner_gap(
+    client: TestClient,
+    sqlite_session,
+    monkeypatch,
+) -> None:
+    adapter_response = client.post(
+        "/api/plugins/adapters",
+        json={
+            "id": "dify-microvm-detail",
+            "ecosystem": "compat:dify",
+            "endpoint": "http://adapter.local/dify-microvm-detail",
+            "supported_execution_classes": ["subprocess", "microvm"],
+        },
+    )
+    assert adapter_response.status_code == 201
+
+    tool_response = client.post(
+        "/api/plugins/tools",
+        json={
+            "id": "compat:dify:plugin:demo/detail-search",
+            "name": "Detail Search",
+            "ecosystem": "compat:dify",
+            "description": "Search via adapter",
+            "input_schema": {"type": "object"},
+            "output_schema": {"type": "object"},
+        },
+    )
+    assert tool_response.status_code == 201
+
+    monkeypatch.setattr(
+        workflow_definitions,
+        "get_sandbox_backend_client",
+        lambda: _sandbox_backend_client(execution_classes=("microvm",)),
+    )
+
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Detail Execution Drift Workflow",
+            "definition": _bound_tool_definition(
+                tool_id="compat:dify:plugin:demo/detail-search",
+                ecosystem="compat:dify",
+                adapter_id="dify-microvm-detail",
+                runtime_policy={"execution": {"class": "subprocess"}},
+            ),
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["definition_issues"] == []
+    workflow_id = created.json()["id"]
+
+    workflow = sqlite_session.get(Workflow, workflow_id)
+    assert workflow is not None
+    workflow.definition = _bound_tool_definition(
+        tool_id="compat:dify:plugin:demo/detail-search",
+        ecosystem="compat:dify",
+        adapter_id="dify-microvm-detail",
+        runtime_policy={"execution": {"class": "microvm"}},
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.get(f"/api/workflows/{workflow_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert any(
+        issue.get("category") == "tool_execution"
+        and issue.get("path") == "nodes.1.runtimePolicy.execution"
+        and issue.get("field") == "execution"
+        and "sandbox-backed tool execution" in issue.get("message", "")
+        for issue in body["definition_issues"]
+    )
+
+
+def test_get_workflow_detail_accepts_persisted_condition_subprocess_execution(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Condition Execution Drift Workflow",
+            "definition": _condition_definition(),
+        },
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    workflow = sqlite_session.get(Workflow, workflow_id)
+    assert workflow is not None
+    workflow.definition = _condition_definition(
+        runtime_policy={"execution": {"class": "subprocess"}}
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.get(f"/api/workflows/{workflow_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert not any(
+        issue.get("category") == "node_execution"
+        and issue.get("path") == "nodes.1.runtimePolicy.execution"
+        for issue in body["definition_issues"]
+    )
+
+
+def test_get_workflow_detail_surfaces_definition_issues_for_persisted_publish_auth_mode_gap(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Auth Drift Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    workflow = sqlite_session.get(Workflow, workflow_id)
+    assert workflow is not None
+    workflow.definition = _unsupported_publish_auth_mode_definition()
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.get(f"/api/workflows/{workflow_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert any(
+        issue.get("category") == "publish_draft"
+        and issue.get("path") == "publish.0.authMode"
+        and issue.get("field") == "authMode"
+        for issue in body["definition_issues"]
+    )
+
+
+def test_list_workflows_surfaces_definition_issues_for_persisted_publish_auth_mode_gap(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Auth Inventory Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    workflow = sqlite_session.get(Workflow, workflow_id)
+    assert workflow is not None
+    workflow.definition = _unsupported_publish_auth_mode_definition()
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    response = client.get("/api/workflows")
+
+    assert response.status_code == 200
+    body = response.json()
+    workflow_item = next(item for item in body if item["id"] == workflow_id)
+    assert any(
+        issue.get("category") == "publish_draft"
+        and issue.get("path") == "publish.0.authMode"
+        and issue.get("field") == "authMode"
+        for issue in workflow_item["definition_issues"]
+    )
+
+
+def test_list_workflows_can_filter_legacy_publish_auth_definition_issues(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    blocked = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Auth Cleanup Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert blocked.status_code == 201
+    blocked_workflow_id = blocked.json()["id"]
+
+    clean = client.post(
+        "/api/workflows",
+        json={
+            "name": "Clean Publish Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert clean.status_code == 201
+
+    blocked_workflow = sqlite_session.get(Workflow, blocked_workflow_id)
+    assert blocked_workflow is not None
+    blocked_workflow.definition = _unsupported_publish_auth_mode_definition()
+    sqlite_session.add(blocked_workflow)
+    sqlite_session.commit()
+
+    response = client.get("/api/workflows?definition_issue=legacy_publish_auth")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body] == [blocked_workflow_id]
+    assert any(
+        issue.get("category") == "publish_draft"
+        and issue.get("path") == "publish.0.authMode"
+        and issue.get("field") == "authMode"
+        for issue in body[0]["definition_issues"]
+    )
+
+
 def test_validate_workflow_definition_preflight_rejects_invalid_publish_reference(
     client: TestClient,
 ) -> None:
@@ -1776,6 +2540,41 @@ def test_validate_workflow_definition_preflight_rejects_duplicate_publish_identi
     detail = response.json()["detail"]
     assert "publish endpoint identities" in detail["message"]
     assert any(issue["category"] == "publish_identity" for issue in detail["issues"])
+
+
+def test_validate_workflow_definition_preflight_rejects_unsupported_publish_auth_mode(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Publish Auth Preflight Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={"definition": _unsupported_publish_auth_mode_definition()},
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "publish auth modes" in detail["message"]
+    assert "Publish auth contract: supported api_key / internal; legacy token." in detail[
+        "message"
+    ]
+    assert "先把 workflow draft endpoint 切回 api_key/internal 并保存" in detail["message"]
+    assert any(
+        issue["category"] == "publish_draft"
+        and issue["path"] == "publish.0.authMode"
+        and issue["field"] == "authMode"
+        for issue in detail["issues"]
+    )
+    assert any(
+        "Publish auth contract: supported api_key / internal; legacy token."
+        in issue["message"]
+        for issue in detail["issues"]
+    )
 
 
 def test_create_workflow_rejects_invalid_publish_contract_schema(
@@ -1904,3 +2703,106 @@ def test_create_workflow_rejects_non_branch_custom_edge_condition(client: TestCl
 
     assert response.status_code == 422
     assert "uses unsupported condition" in _workflow_detail_message(response)
+
+
+def test_workflow_routes_expose_tool_governance_summary(
+    client: TestClient,
+    sqlite_session,
+    monkeypatch,
+) -> None:
+    definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "tool",
+                "type": "tool",
+                "name": "Risk Search",
+                "config": {
+                    "tool": {
+                        "toolId": "native.risk-search",
+                        "ecosystem": "native",
+                    }
+                },
+            },
+            {
+                "id": "agent",
+                "type": "llm_agent",
+                "name": "Agent",
+                "config": {
+                    "toolPolicy": {
+                        "allowedToolIds": [
+                            "native.risk-search",
+                            "native.catalog-gap",
+                        ]
+                    }
+                },
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
+            {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "output"},
+        ],
+    }
+    workflow = Workflow(
+        id="wf-governance",
+        name="Governance Workflow",
+        version="0.1.0",
+        status="draft",
+        definition=definition,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    workflow_version = WorkflowVersion(
+        id="wf-governance-v1",
+        workflow_id=workflow.id,
+        version=workflow.version,
+        definition=definition,
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(workflow_version)
+    sqlite_session.commit()
+
+    monkeypatch.setattr(
+        workflow_views,
+        "get_workflow_library_service",
+        lambda: _FakeWorkflowLibraryService(
+            [
+                PluginToolItem(
+                    id="native.risk-search",
+                    name="Risk Search",
+                    ecosystem="native",
+                    description="Governed native tool.",
+                    source="native",
+                    callable=True,
+                    supported_execution_classes=["inline", "sandbox"],
+                    default_execution_class="sandbox",
+                    sensitivity_level="L2",
+                )
+            ]
+        ),
+    )
+
+    list_response = client.get("/api/workflows")
+
+    assert list_response.status_code == 200
+    list_body = list_response.json()
+    assert len(list_body) == 1
+    assert list_body[0]["id"] == workflow.id
+    assert list_body[0]["node_count"] == 4
+    assert list_body[0]["tool_governance"] == {
+        "referenced_tool_ids": ["native.risk-search", "native.catalog-gap"],
+        "missing_tool_ids": ["native.catalog-gap"],
+        "governed_tool_count": 1,
+        "strong_isolation_tool_count": 1,
+    }
+
+    detail_response = client.get(f"/api/workflows/{workflow.id}")
+
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["node_count"] == 4
+    assert detail_body["tool_governance"] == list_body[0]["tool_governance"]
+    assert len(detail_body["versions"]) == 1

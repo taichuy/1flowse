@@ -1,22 +1,60 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
+import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
+import type { RunCallbackTicketItem } from "@/lib/get-run-views";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
 import {
+  buildCallbackWaitingApprovalRecommendedAction,
+  buildCallbackWaitingRecommendedNextStep,
+  getCallbackWaitingRecommendedAction,
+  pickCallbackWaitingInlineSensitiveAccessEntry
+} from "@/lib/callback-waiting-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorRunDetailLinkSurface,
+  formatOperatorOpenRunLinkLabel
+} from "@/lib/operator-follow-up-presenters";
+import {
+  buildOperatorRunFollowUpSampleInboxContext,
+  resolveOperatorRunFollowUpSample
+} from "@/lib/operator-run-follow-up-samples";
+import {
+  resolveSensitiveAccessTimelineEntryRunContext
+} from "@/lib/sensitive-access";
+import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import {
   formatSensitiveAccessDecisionLabel,
   formatSensitiveAccessReasonLabel,
-  getSensitiveAccessPolicySummary
+  buildSensitiveAccessBlockedRecommendedNextStep,
+  getSensitiveAccessPolicySummary,
+  getSensitiveAccessTimelineCanonicalOutcomeExplanation
 } from "@/lib/sensitive-access-presenters";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 
 type SensitiveAccessTimelineEntryListProps = {
   entries: SensitiveAccessTimelineEntry[];
   emptyCopy: string;
   defaultRunId?: string | null;
+  callbackTickets?: RunCallbackTicketItem[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 type DecisionFilterValue =
@@ -109,11 +147,16 @@ function matchesNotificationFilter(
   return entry.notifications.some((notification) => notification.status === filterValue);
 }
 
-function resolveRunId(
-  entry: SensitiveAccessTimelineEntry,
-  defaultRunId?: string | null
-): string | null {
-  return entry.request.run_id ?? entry.approval_ticket?.run_id ?? defaultRunId ?? null;
+function shouldSurfaceCallbackWaitingSummary(entry: SensitiveAccessTimelineEntry) {
+  if (entry.request.decision === "require_approval") {
+    return true;
+  }
+
+  if (entry.approval_ticket?.status === "expired") {
+    return true;
+  }
+
+  return pickCallbackWaitingInlineSensitiveAccessEntry([entry]) !== null;
 }
 
 function renderFilterStrip<T extends string>({
@@ -155,8 +198,30 @@ function renderFilterStrip<T extends string>({
 export function SensitiveAccessTimelineEntryList({
   entries,
   emptyCopy,
-  defaultRunId
+  defaultRunId,
+  callbackTickets = [],
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: SensitiveAccessTimelineEntryListProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const currentHref = useMemo(() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+  const workspaceStarterViewState = useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilterValue>("all");
   const [ticketFilter, setTicketFilter] = useState<TicketFilterValue>("all");
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilterValue>("all");
@@ -283,8 +348,117 @@ export function SensitiveAccessTimelineEntryList({
 
       <div className="event-list">
         {filteredEntries.map((entry) => {
-          const runId = resolveRunId(entry, defaultRunId);
+          const runContext = resolveSensitiveAccessTimelineEntryRunContext(entry, defaultRunId);
+          const runId = runContext.runId;
+          const canonicalOutcomeExplanation = getSensitiveAccessTimelineCanonicalOutcomeExplanation({
+            outcomeExplanation: entry.outcome_explanation ?? null,
+            runSnapshot: runContext.snapshot,
+            runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null
+          });
           const inboxSliceHref = buildSensitiveAccessTimelineInboxHref(entry, defaultRunId);
+          const shouldSurfaceCallbackSummary = shouldSurfaceCallbackWaitingSummary(entry);
+          const hasStructuredCallbackWaitingSummary = hasCallbackWaitingSummaryFacts(
+            runContext.snapshot
+          );
+          const callbackWaitingRecommendedAction = shouldSurfaceCallbackSummary
+            ? getCallbackWaitingRecommendedAction({
+                sensitiveAccessEntries: [entry]
+              })
+            : null;
+          const canonicalCallbackRecommendedAction =
+            runContext.runFollowUp?.recommendedAction ??
+            buildCallbackWaitingApprovalRecommendedAction({
+              action: callbackWaitingRecommendedAction,
+              inboxHref: inboxSliceHref,
+              surfaceCopy: operatorSurfaceCopy
+            });
+          const sampledFollowUp = resolveOperatorRunFollowUpSample(runContext.runFollowUp, runId);
+          const sampledSensitiveAccessEntry =
+            sampledFollowUp?.sensitiveAccessEntries?.find(
+              (sampledEntry) =>
+                Boolean(sampledEntry.approval_ticket?.node_run_id || sampledEntry.request.node_run_id)
+            ) ?? null;
+          const sampledCallbackContext =
+            runContext.runFollowUp?.recommendedAction == null
+              ? buildOperatorRunFollowUpSampleInboxContext({
+                  runFollowUp: runContext.runFollowUp,
+                  runId
+                })
+              : null;
+          const sampledCallbackRecommendedAction = sampledCallbackContext
+            ? {
+                kind: sampledCallbackContext.kind,
+                entry_key:
+                  sampledCallbackContext.kind === "approval blocker"
+                    ? "operatorInbox"
+                    : "callbackInbox",
+                href: sampledCallbackContext.href,
+                label: sampledCallbackContext.hrefLabel
+              }
+            : null;
+          const shouldPreferSampledCallbackContext = Boolean(
+            sampledCallbackContext &&
+              (canonicalCallbackRecommendedAction == null || sampledCallbackContext.href !== inboxSliceHref)
+          );
+          const callbackSummaryInboxHref = shouldPreferSampledCallbackContext
+            ? sampledCallbackContext?.href ?? inboxSliceHref
+            : inboxSliceHref;
+          const callbackSummaryCallbackTickets =
+            callbackTickets.length > 0 ? callbackTickets : sampledFollowUp?.callbackTickets ?? [];
+          const shouldRenderCallbackWaitingSummary =
+            shouldSurfaceCallbackSummary && !hasStructuredCallbackWaitingSummary;
+          const hasStructuredOperatorFeedback = Boolean(
+            runContext.snapshot ||
+              runContext.runFollowUp?.explanation ||
+              (runContext.runFollowUp?.sampledRuns.length ?? 0) > 0
+          );
+          const nodeRunId = entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null;
+          const recommendedNextStep = shouldRenderCallbackWaitingSummary
+            ? buildCallbackWaitingRecommendedNextStep({
+                action: callbackWaitingRecommendedAction,
+                inboxHref: inboxSliceHref,
+                operatorFollowUp:
+                  runContext.runFollowUp?.explanation?.follow_up ??
+                  canonicalOutcomeExplanation?.follow_up ??
+                  null
+              })
+            : buildSensitiveAccessBlockedRecommendedNextStep({
+                currentHref,
+                inboxHref: inboxSliceHref,
+                runId,
+                runHref: runId ? resolveRunDetailHref(runId) : null,
+                outcomeExplanation: canonicalOutcomeExplanation,
+                runSnapshot: runContext.snapshot,
+                runFollowUpExplanation: runContext.runFollowUp?.explanation ?? null,
+                recommendedAction: runContext.runFollowUp?.recommendedAction ?? null,
+                callbackWaitingAutomation,
+                callbackWaitingActive: shouldSurfaceCallbackSummary,
+                sandboxReadiness
+              });
+          const inboxLinkLabel =
+            recommendedNextStep?.href === inboxSliceHref && recommendedNextStep.href_label
+              ? recommendedNextStep.href_label
+              : operatorSurfaceCopy.openInboxSliceLabel;
+          const shouldRenderStandaloneRecommendedNextStep =
+            !shouldRenderCallbackWaitingSummary && !hasStructuredOperatorFeedback && recommendedNextStep;
+          const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
+            inboxHref: callbackSummaryInboxHref,
+            callbackTickets: callbackSummaryCallbackTickets,
+            callbackWaitingAutomation,
+            sensitiveAccessEntries: [entry],
+            suppressSensitiveAccessContextRows: true,
+            showSensitiveAccessInlineActions: false,
+            recommendedAction:
+              runContext.runFollowUp?.recommendedAction ??
+              (shouldPreferSampledCallbackContext
+                ? sampledCallbackRecommendedAction
+                : canonicalCallbackRecommendedAction ?? sampledCallbackRecommendedAction),
+            operatorFollowUp:
+              runContext.runFollowUp?.explanation?.follow_up ??
+              canonicalOutcomeExplanation?.follow_up ??
+              null,
+            preferCanonicalRecommendedNextStep: true
+          };
 
           return (
             <article className="event-row compact-card" key={entry.request.id}>
@@ -315,14 +489,25 @@ export function SensitiveAccessTimelineEntryList({
 
               {runId || inboxSliceHref ? (
                 <div className="tool-badge-row">
-                  {runId ? (
-                    <Link className="event-chip inbox-filter-link" href={`/runs/${encodeURIComponent(runId)}`}>
-                      open run {runId.slice(0, 8)}
-                    </Link>
-                  ) : null}
+                  {(() => {
+                    const runLink = buildOperatorRunDetailLinkSurface({
+                      runId,
+                      runHref: runId ? resolveRunDetailHref(runId) : null,
+                      hrefLabel: runId
+                        ? formatOperatorOpenRunLinkLabel(runId, operatorSurfaceCopy)
+                        : null,
+                      surfaceCopy: operatorSurfaceCopy
+                    });
+
+                    return runLink ? (
+                      <Link className="event-chip inbox-filter-link" href={runLink.href}>
+                        {runLink.label}
+                      </Link>
+                    ) : null;
+                  })()}
                   {inboxSliceHref ? (
                     <Link className="event-chip inbox-filter-link" href={inboxSliceHref}>
-                      open inbox slice
+                      {inboxLinkLabel}
                     </Link>
                   ) : null}
                 </div>
@@ -336,6 +521,85 @@ export function SensitiveAccessTimelineEntryList({
                 <p className="section-copy entry-copy">
                   policy: {getSensitiveAccessPolicySummary(entry.request)}
                 </p>
+              ) : null}
+
+              {shouldRenderStandaloneRecommendedNextStep ? (
+                <div className="entry-card compact-card">
+                  <div className="payload-card-header">
+                    <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
+                    <span className="event-chip">{recommendedNextStep.label}</span>
+                    {recommendedNextStep.href && recommendedNextStep.href_label ? (
+                      <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
+                        {recommendedNextStep.href_label}
+                      </Link>
+                    ) : null}
+                  </div>
+                  <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+                </div>
+              ) : null}
+
+              {hasStructuredOperatorFeedback ? (
+                <InlineOperatorActionFeedback
+                  callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+                  currentHref={currentHref}
+                  message=""
+                  outcomeExplanation={shouldRenderCallbackWaitingSummary ? null : canonicalOutcomeExplanation}
+                  recommendedNextStep={
+                    shouldRenderCallbackWaitingSummary || hasStructuredCallbackWaitingSummary
+                      ? null
+                      : recommendedNextStep
+                  }
+                  resolveRunDetailHref={resolveRunDetailHref}
+                  runFollowUpExplanation={runContext.runFollowUp?.explanation ?? null}
+                  runFollowUp={runContext.runFollowUp ?? null}
+                  runId={runId}
+                  runSnapshot={runContext.snapshot}
+                  sandboxReadiness={sandboxReadiness}
+                  status="success"
+                  title="Operator follow-up"
+                />
+              ) : (
+                <>
+                  {canonicalOutcomeExplanation?.primary_signal ? (
+                    <p className="section-copy entry-copy">
+                      {canonicalOutcomeExplanation.primary_signal}
+                    </p>
+                  ) : null}
+
+                  {canonicalOutcomeExplanation?.follow_up ? (
+                    <p className="binding-meta">{canonicalOutcomeExplanation.follow_up}</p>
+                  ) : null}
+                </>
+              )}
+
+              {shouldRenderCallbackWaitingSummary ? (
+                <CallbackWaitingSummaryCard
+                  currentHref={currentHref}
+                  callbackWaitingExplanation={entry.outcome_explanation ?? null}
+                  callbackTickets={callbackSummaryCallbackTickets}
+                  callbackWaitingAutomation={callbackWaitingAutomation}
+                  className="payload-card compact-card"
+                  inboxHref={callbackSummaryInboxHref}
+                  nodeRunId={
+                    nodeRunId ??
+                    sampledFollowUp?.snapshot?.executionFocusNodeRunId ??
+                    sampledSensitiveAccessEntry?.approval_ticket?.node_run_id ??
+                    sampledSensitiveAccessEntry?.request.node_run_id ??
+                    sampledFollowUp?.callbackTickets?.[0]?.node_run_id ??
+                    null
+                  }
+                  operatorFollowUp={runContext.runFollowUp?.explanation?.follow_up ?? null}
+                  recommendedAction={
+                    runContext.runFollowUp?.recommendedAction ??
+                    (shouldPreferSampledCallbackContext
+                      ? sampledCallbackRecommendedAction
+                      : canonicalCallbackRecommendedAction ?? sampledCallbackRecommendedAction)
+                  }
+                  preferCanonicalRecommendedNextStep
+                  runId={runId}
+                  sensitiveAccessEntries={[entry]}
+                  showInlineActions={false}
+                />
               ) : null}
 
               <dl className="compact-meta-list">
@@ -396,8 +660,9 @@ export function SensitiveAccessTimelineEntryList({
               ) : null}
 
               <SensitiveAccessInlineActions
+                callbackWaitingSummaryProps={callbackWaitingSummaryProps}
                 compact
-                nodeRunId={entry.approval_ticket?.node_run_id ?? entry.request.node_run_id ?? null}
+                nodeRunId={nodeRunId}
                 notifications={entry.notifications}
                 runId={runId}
                 ticket={entry.approval_ticket}

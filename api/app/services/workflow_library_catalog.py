@@ -128,18 +128,24 @@ def build_node_catalog_items(
         WorkflowNodeCatalogItem(
             type="sandbox_code",
             label="Sandbox Code",
-            description="为高风险代码执行预留的隔离节点，后续会挂到真实 sandbox / microvm 执行边界。",
+            description="高风险代码执行节点，当前已接入 runtime / persistence 主链，并沿 execution readiness 诚实校验。",
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
             capability_group="integration",
             business_track="编排节点能力",
-            tags=["sandbox", "code", "planned"],
-            palette=_build_palette(enabled=False, order=25, x=500, y=420),
-            defaults=_build_defaults(name="Sandbox Code"),
-            support_status="planned",
+            tags=["sandbox", "code", "runtime-ready"],
+            palette=_build_palette(enabled=True, order=25, x=500, y=420),
+            defaults=_build_defaults(
+                name="Sandbox Code",
+                config={
+                    "language": "python",
+                    "code": "result = {'ok': True}",
+                },
+            ),
+            support_status="available",
             support_summary=(
-                "真实 sandbox / microvm adapter 仍在推进；当前 catalog 仅保留类型占位，"
-                "不开放进 editor palette 或 runtime 主链。"
+                "当前已进入 editor / persistence / runtime 主链，并会在保存时按 sandbox readiness fail-closed；"
+                "默认仍走强隔离 execution class，若当前只想走 host-controlled MVP 路径，请在 runtime policy 中显式改成 subprocess。"
             ),
         ),
         WorkflowNodeCatalogItem(
@@ -309,6 +315,30 @@ def build_builtin_starters(
             edges=[
                 create_edge("edge_trigger_agent", "trigger", "agent"),
                 create_edge("edge_agent_output", "agent", "output"),
+            ],
+        ),
+        _build_builtin_starter_item(
+            catalog_by_type,
+            id="sandbox-code",
+            name="Sandbox Code Draft",
+            description="预留一个 Sandbox Code 节点，方便把高风险代码执行链路直接从创建入口接回 editor / runtime 主线。",
+            business_track="编排节点能力",
+            default_workflow_name="Sandbox Code Workflow",
+            workflow_focus="先把受控代码执行节点放进真实 workflow，再继续补代码、依赖策略与输出结构。",
+            recommended_next_step="优先补全 code、dependencyMode 和 runtimePolicy，确认当前 sandbox readiness 后再继续扩展上下游节点。",
+            tags=["sandbox_code", "代码执行", "runtime-ready"],
+            nodes=[
+                {"id": "trigger", "type": "trigger", "position": {"x": 80, "y": 220}},
+                {
+                    "id": "sandbox",
+                    "type": "sandbox_code",
+                    "position": {"x": 420, "y": 220},
+                },
+                {"id": "output", "type": "output", "position": {"x": 780, "y": 220}},
+            ],
+            edges=[
+                create_edge("edge_trigger_sandbox", "trigger", "sandbox"),
+                create_edge("edge_sandbox_output", "sandbox", "output"),
             ],
         ),
         _build_builtin_starter_item(

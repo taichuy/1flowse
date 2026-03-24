@@ -8,6 +8,8 @@ class AdapterHealthResponse(BaseModel):
     adapter_id: str
     ecosystem: str
     mode: str
+    detail: str | None = None
+    supported_execution_classes: list[str] = Field(default_factory=lambda: ["subprocess"])
 
 
 class ConstrainedToolInputField(BaseModel):
@@ -33,6 +35,8 @@ class ConstrainedToolIR(BaseModel):
     name: str
     description: str = ""
     source: str = "plugin"
+    supported_execution_classes: list[str] = Field(default_factory=list)
+    default_execution_class: Literal["inline", "subprocess", "sandbox", "microvm"] | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     output_schema: dict[str, Any] | None = None
     input_contract: list[ConstrainedToolInputField] = Field(default_factory=list)
@@ -48,6 +52,8 @@ class AdapterToolItem(BaseModel):
     input_schema: dict[str, Any] = Field(default_factory=dict)
     output_schema: dict[str, Any] | None = None
     source: str = "plugin"
+    supported_execution_classes: list[str] = Field(default_factory=list)
+    default_execution_class: Literal["inline", "subprocess", "sandbox", "microvm"] | None = None
     plugin_meta: dict[str, Any] | None = None
     constrained_ir: ConstrainedToolIR
 
@@ -93,7 +99,17 @@ class AdapterInvokeRequest(BaseModel):
     credentials: dict[str, str] = Field(default_factory=dict)
     timeout: int = Field(default=30_000, ge=1, le=600_000)
     traceId: str = ""
+    execution: dict[str, Any] = Field(default_factory=dict)
     executionContract: AdapterExecutionContract
+
+
+class AdapterInvokeRequestMeta(BaseModel):
+    toolId: str
+    adapterId: str
+    ecosystem: str
+    traceId: str = ""
+    execution: dict[str, Any] = Field(default_factory=dict)
+    executionContract: dict[str, Any] = Field(default_factory=dict)
 
 
 class AdapterInvokeResponse(BaseModel):
@@ -101,3 +117,4 @@ class AdapterInvokeResponse(BaseModel):
     output: dict[str, Any] = Field(default_factory=dict)
     logs: list[str] = Field(default_factory=list)
     durationMs: int = Field(default=0, ge=0)
+    requestMeta: AdapterInvokeRequestMeta | None = None

@@ -1,7 +1,16 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+
+from app.schemas.explanations import SignalFollowUpExplanation
+from app.schemas.operator_follow_up import (
+    OperatorRunFollowUpSummary,
+    OperatorRunSnapshot,
+)
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
 
 SensitivityLevel = Literal["L0", "L1", "L2", "L3"]
 AccessDecision = Literal["allow", "deny", "require_approval", "allow_masked"]
@@ -22,6 +31,13 @@ NotificationChannelDeliveryMode = Literal["inline", "worker"]
 NotificationChannelHealthStatus = Literal["ready", "degraded"]
 NotificationChannelTargetKind = Literal["in_app", "http_url", "email_list"]
 NotificationChannelConfigFactStatus = Literal["configured", "missing", "info"]
+SensitiveAccessInboxBlockerKind = Literal[
+    "pending_approval",
+    "waiting_resume",
+    "failed_notification",
+    "pending_notification",
+]
+SensitiveAccessInboxBlockerTone = Literal["blocked", "degraded"]
 ApprovalTicketBulkSkipReason = Literal["not_found", "not_pending", "invalid_state"]
 NotificationDispatchBulkSkipReason = Literal[
     "not_found",
@@ -144,9 +160,23 @@ class NotificationChannelCapabilityItem(BaseModel):
     dispatch_summary: NotificationChannelDispatchSummaryItem
 
 
+class CallbackBlockerDeltaSummary(BaseModel):
+    sampled_scope_count: int = 0
+    changed_scope_count: int = 0
+    cleared_scope_count: int = 0
+    fully_cleared_scope_count: int = 0
+    still_blocked_scope_count: int = 0
+    summary: str | None = None
+
+
 class NotificationDispatchRetryResponse(BaseModel):
     approval_ticket: ApprovalTicketItem
     notification: NotificationDispatchItem
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class NotificationDispatchRetryRequest(BaseModel):
@@ -165,6 +195,55 @@ class SensitiveAccessTimelineEntryItem(BaseModel):
     resource: SensitiveResourceItem
     approval_ticket: ApprovalTicketItem | None = None
     notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+
+
+class SensitiveAccessInboxEntryItem(BaseModel):
+    ticket: ApprovalTicketItem
+    request: SensitiveAccessRequestItem | None = None
+    resource: SensitiveResourceItem | None = None
+    notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
+
+
+class SensitiveAccessInboxBlockerSummary(BaseModel):
+    kind: SensitiveAccessInboxBlockerKind
+    tone: SensitiveAccessInboxBlockerTone
+    item_count: int = 0
+    affected_run_count: int = 0
+    affected_workflow_count: int = 0
+
+
+class SensitiveAccessInboxSummary(BaseModel):
+    ticket_count: int = 0
+    pending_ticket_count: int = 0
+    approved_ticket_count: int = 0
+    rejected_ticket_count: int = 0
+    expired_ticket_count: int = 0
+    waiting_ticket_count: int = 0
+    resumed_ticket_count: int = 0
+    failed_ticket_count: int = 0
+    pending_notification_count: int = 0
+    delivered_notification_count: int = 0
+    failed_notification_count: int = 0
+    affected_run_count: int = 0
+    affected_workflow_count: int = 0
+    primary_blocker_kind: SensitiveAccessInboxBlockerKind | None = None
+    blockers: list[SensitiveAccessInboxBlockerSummary] = Field(default_factory=list)
+
+
+class SensitiveAccessInboxResponse(BaseModel):
+    entries: list[SensitiveAccessInboxEntryItem] = Field(default_factory=list)
+    channels: list[NotificationChannelCapabilityItem] = Field(default_factory=list)
+    resources: list[SensitiveResourceItem] = Field(default_factory=list)
+    requests: list[SensitiveAccessRequestItem] = Field(default_factory=list)
+    notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+    execution_views: list[dict[str, Any]] = Field(default_factory=list)
+    summary: SensitiveAccessInboxSummary = Field(default_factory=SensitiveAccessInboxSummary)
 
 
 class SensitiveAccessRequestResponse(SensitiveAccessTimelineEntryItem):
@@ -180,6 +259,11 @@ class ApprovalTicketDecisionResponse(BaseModel):
     request: SensitiveAccessRequestItem
     approval_ticket: ApprovalTicketItem
     notifications: list[NotificationDispatchItem] = Field(default_factory=list)
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class ApprovalTicketBulkDecisionRequest(BaseModel):
@@ -227,6 +311,10 @@ class ApprovalTicketBulkDecisionResult(BaseModel):
     skipped_reason_summary: list[ApprovalTicketBulkSkippedSummary] = Field(
         default_factory=list
     )
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class NotificationDispatchBulkRetryRequest(BaseModel):
@@ -273,3 +361,7 @@ class NotificationDispatchBulkRetryResult(BaseModel):
     skipped_reason_summary: list[NotificationDispatchBulkSkippedSummary] = Field(
         default_factory=list
     )
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None

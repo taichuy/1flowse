@@ -3,6 +3,10 @@
 import { useState } from "react";
 
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import {
   buildRunTraceExportUrl,
   type RunTraceQuery
@@ -11,6 +15,7 @@ import {
   parseSensitiveAccessBlockingResponse,
   type SensitiveAccessBlockingPayload
 } from "@/lib/sensitive-access";
+import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
 
 type RunTraceExportFormat = "json" | "jsonl";
 
@@ -19,8 +24,8 @@ type RunTraceExportActionsProps = {
   query: RunTraceQuery;
   formats?: RunTraceExportFormat[];
   requesterId?: string;
-  blockedTitle?: string;
-  blockedSummary?: string;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 const DEFAULT_FORMATS: RunTraceExportFormat[] = ["json", "jsonl"];
@@ -35,15 +40,20 @@ export function RunTraceExportActions({
   query,
   formats = DEFAULT_FORMATS,
   requesterId = "run-diagnostics-export-ui",
-  blockedTitle = "Trace export access blocked",
-  blockedSummary =
-    "当前 trace export 已接入统一敏感访问控制；可先查看审批票据和关联 run，再决定是否继续申请导出。"
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: RunTraceExportActionsProps) {
   const [activeFormat, setActiveFormat] = useState<RunTraceExportFormat | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [blockedPayload, setBlockedPayload] =
     useState<SensitiveAccessBlockingPayload | null>(null);
+  const blockedCopy = blockedPayload
+    ? buildSensitiveAccessBlockedSurfaceCopy({
+        surfaceLabel: "Trace export",
+        payload: blockedPayload
+      })
+    : null;
 
   async function handleExport(format: RunTraceExportFormat) {
     setActiveFormat(format);
@@ -110,9 +120,11 @@ export function RunTraceExportActions({
       {blockedPayload ? (
         <div className="trace-export-blocked">
           <SensitiveAccessBlockedCard
+            callbackWaitingAutomation={callbackWaitingAutomation}
             payload={blockedPayload}
-            summary={blockedSummary}
-            title={blockedTitle}
+            sandboxReadiness={sandboxReadiness}
+            summary={blockedCopy?.summary}
+            title={blockedCopy?.title ?? "Trace export access blocked"}
           />
         </div>
       ) : null}

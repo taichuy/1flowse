@@ -4,32 +4,48 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import {
   bulkUpdateWorkspaceStarters,
+  getWorkspaceStarterSourceGovernanceScopeSummary,
+  previewWorkspaceStarterBulkActions,
   updateWorkspaceStarterTemplate,
   type WorkspaceStarterBulkAction,
+  type WorkspaceStarterBulkPreview,
   type WorkspaceStarterBulkActionResult,
+  type WorkspaceStarterSourceGovernanceScopeSummary,
   WorkspaceStarterValidationError,
   type WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import {
+  summarizeWorkflowDefinitionSandboxGovernance,
+  type WorkflowDefinitionSandboxGovernance
+} from "@/lib/workflow-definition-sandbox-governance";
 import {
   summarizeWorkflowDefinitionToolGovernance,
   type WorkflowDefinitionToolGovernance
 } from "@/lib/workflow-definition-tool-governance";
 import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
-import { summarizeWorkspaceStarterSourceStatus } from "@/lib/workspace-starter-source-status";
-import {
-  getWorkspaceStarterBulkActionConfirmationMessage,
-  getWorkspaceStarterBulkActionLabel
-} from "@/components/workspace-starter-library/bulk-governance-card";
 
 import {
+  buildWorkspaceStarterBulkActionErrorMessage,
+  buildWorkspaceStarterBulkActionPendingMessage,
+  buildWorkspaceStarterMutationFallbackErrorMessage,
+  buildWorkspaceStarterMutationNetworkErrorMessage,
+  buildWorkspaceStarterMutationPendingMessage,
+  buildWorkspaceStarterMutationSuccessMessage,
+  getWorkspaceStarterBulkActionConfirmationMessage,
+  type WorkspaceStarterMessageTone
+} from "@/lib/workspace-starter-mutation-presenters";
+import {
+  buildWorkspaceStarterLibrarySearchParams,
   buildBulkActionMessage,
   buildFormState,
   buildUpdatePayload,
+  filterWorkspaceStarterTemplates,
   summarizeValidationIssues,
   type ArchiveFilter,
+  type SourceGovernanceFilter,
   type TrackFilter,
   type WorkspaceStarterFormState,
-  type WorkspaceStarterMessageTone
+  type WorkspaceStarterLibraryViewState
 } from "./shared";
 import { useWorkspaceStarterSource } from "./use-workspace-starter-source";
 
@@ -41,19 +57,48 @@ const EMPTY_TEMPLATE_TOOL_GOVERNANCE: WorkflowDefinitionToolGovernance = {
   strongIsolationToolCount: 0
 };
 
+const EMPTY_TEMPLATE_SANDBOX_GOVERNANCE: WorkflowDefinitionSandboxGovernance = {
+  sandboxNodeCount: 0,
+  explicitExecutionCount: 0,
+  executionClasses: [],
+  dependencyModes: [],
+  dependencyModeCounts: {},
+  builtinPackageSets: [],
+  dependencyRefs: [],
+  backendExtensionNodeCount: 0,
+  backendExtensionKeys: [],
+  nodes: []
+};
+
+const WORKSPACE_STARTER_BULK_MAX_TEMPLATES = 100;
+
 export function useWorkspaceStarterLibraryState(
   initialTemplates: WorkspaceStarterTemplateItem[],
-  tools: PluginToolRegistryItem[]
+  tools: PluginToolRegistryItem[],
+  initialViewState: WorkspaceStarterLibraryViewState
 ) {
+  const resolvedInitialViewState = initialViewState satisfies WorkspaceStarterLibraryViewState;
+  const initialSelectedTemplate = resolvedInitialViewState.selectedTemplateId
+    ? initialTemplates.find((template) => template.id === resolvedInitialViewState.selectedTemplateId) ??
+      null
+    : null;
   const [templates, setTemplates] = useState(initialTemplates);
-  const [activeTrack, setActiveTrack] = useState<TrackFilter>("all");
-  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("active");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [bulkPreview, setBulkPreview] = useState<WorkspaceStarterBulkPreview | null>(null);
+  const [bulkPreviewNotice, setBulkPreviewNotice] = useState<string | null>(null);
+  const [activeTrack, setActiveTrack] = useState<TrackFilter>(resolvedInitialViewState.activeTrack);
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>(
+    resolvedInitialViewState.archiveFilter
+  );
+  const [sourceGovernanceKind, setSourceGovernanceKind] = useState<SourceGovernanceFilter>(
+    resolvedInitialViewState.sourceGovernanceKind
+  );
+  const [needsFollowUp, setNeedsFollowUp] = useState(resolvedInitialViewState.needsFollowUp);
+  const [searchQuery, setSearchQuery] = useState(resolvedInitialViewState.searchQuery);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
-    initialTemplates[0]?.id ?? null
+    resolvedInitialViewState.selectedTemplateId
   );
   const [formState, setFormState] = useState<WorkspaceStarterFormState | null>(
-    initialTemplates[0] ? buildFormState(initialTemplates[0]) : null
+    initialSelectedTemplate ? buildFormState(initialSelectedTemplate) : null
   );
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] =
@@ -63,37 +108,21 @@ export function useWorkspaceStarterLibraryState(
   const [isBulkMutating, startBulkMutatingTransition] = useTransition();
   const [lastBulkResult, setLastBulkResult] =
     useState<WorkspaceStarterBulkActionResult | null>(null);
+  const [isLoadingBulkPreview, setIsLoadingBulkPreview] = useState(false);
+  const [sourceGovernanceScope, setSourceGovernanceScope] =
+    useState<WorkspaceStarterSourceGovernanceScopeSummary | null>(null);
+  const [isLoadingSourceGovernanceScope, setIsLoadingSourceGovernanceScope] =
+    useState(false);
 
   const filteredTemplates = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    return templates.filter((template) => {
-      if (archiveFilter === "active" && template.archived) {
-        return false;
-      }
-      if (archiveFilter === "archived" && !template.archived) {
-        return false;
-      }
-      if (activeTrack !== "all" && template.business_track !== activeTrack) {
-        return false;
-      }
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      const haystack = [
-        template.name,
-        template.description,
-        template.workflow_focus,
-        template.default_workflow_name,
-        template.recommended_next_step,
-        template.tags.join(" ")
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(normalizedSearch);
+    return filterWorkspaceStarterTemplates(templates, {
+      activeTrack,
+      archiveFilter,
+      sourceGovernanceKind,
+      needsFollowUp,
+      searchQuery
     });
-  }, [activeTrack, archiveFilter, searchQuery, templates]);
+  }, [activeTrack, archiveFilter, sourceGovernanceKind, needsFollowUp, searchQuery, templates]);
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) ?? null,
@@ -109,6 +138,13 @@ export function useWorkspaceStarterLibraryState(
   const selectedTemplateToolGovernance = selectedTemplate
     ? templateToolGovernanceById.get(selectedTemplate.id) ?? EMPTY_TEMPLATE_TOOL_GOVERNANCE
     : EMPTY_TEMPLATE_TOOL_GOVERNANCE;
+  const selectedTemplateSandboxGovernance = useMemo(
+    () =>
+      selectedTemplate
+        ? summarizeWorkflowDefinitionSandboxGovernance(selectedTemplate.definition)
+        : EMPTY_TEMPLATE_SANDBOX_GOVERNANCE,
+    [selectedTemplate]
+  );
 
   const {
     clearSelectionArtifacts,
@@ -118,14 +154,11 @@ export function useWorkspaceStarterLibraryState(
     historyItems,
     isLoadingHistory,
     isLoadingSourceDiff,
-    isLoadingSourceWorkflow,
     isRebasing,
     isRefreshing,
     reloadHistory,
     reloadSourceDiff,
-    sourceDiff,
-    sourceStatusMessage,
-    sourceWorkflow
+    sourceDiff
   } = useWorkspaceStarterSource({
     selectedTemplate,
     setMessage,
@@ -174,36 +207,103 @@ export function useWorkspaceStarterLibraryState(
       JSON.stringify(buildUpdatePayload(buildFormState(selectedTemplate)))
       ? false
       : Boolean(selectedTemplate && formState);
-  const sourceStatus = useMemo(
-    () =>
-      selectedTemplate
-        ? summarizeWorkspaceStarterSourceStatus(selectedTemplate, sourceWorkflow)
-        : null,
-    [selectedTemplate, sourceWorkflow]
-  );
+  const sourceGovernance = selectedTemplate?.source_governance ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingSourceGovernanceScope(true);
+
+    void getWorkspaceStarterSourceGovernanceScopeSummary({
+      businessTrack: activeTrack === "all" ? undefined : activeTrack,
+      search: searchQuery,
+      includeArchived: archiveFilter === "all",
+      archivedOnly: archiveFilter === "archived",
+      sourceGovernanceKind:
+        sourceGovernanceKind === "all" ? undefined : sourceGovernanceKind,
+      needsFollowUp
+    })
+      .then((summary) => {
+        if (!cancelled) {
+          setSourceGovernanceScope(summary);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingSourceGovernanceScope(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTrack, archiveFilter, sourceGovernanceKind, needsFollowUp, searchQuery, templates]);
+
+  useEffect(() => {
+    const templateIds = filteredTemplates.map((template) => template.id);
+    if (templateIds.length === 0) {
+      setBulkPreview(null);
+      setBulkPreviewNotice(null);
+      setIsLoadingBulkPreview(false);
+      return;
+    }
+
+    if (templateIds.length > WORKSPACE_STARTER_BULK_MAX_TEMPLATES) {
+      setBulkPreview(null);
+      setBulkPreviewNotice(
+        `当前筛选结果有 ${templateIds.length} 个 starter，超过批量治理上限 ${WORKSPACE_STARTER_BULK_MAX_TEMPLATES}，请继续收窄范围。`
+      );
+      setIsLoadingBulkPreview(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingBulkPreview(true);
+    setBulkPreviewNotice(null);
+
+    void previewWorkspaceStarterBulkActions({ templateIds })
+      .then((preview) => {
+        if (cancelled) {
+          return;
+        }
+
+        setBulkPreview(preview);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setBulkPreview(null);
+        setBulkPreviewNotice(error instanceof Error ? error.message : "批量预检失败。");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingBulkPreview(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredTemplates]);
+
   const bulkActionCandidates = useMemo(
     () => ({
-      archive: filteredTemplates
-        .filter((template) => !template.archived)
-        .map((template) => template.id),
-      restore: filteredTemplates
-        .filter((template) => template.archived)
-        .map((template) => template.id),
-      refresh: filteredTemplates
-        .filter((template) => Boolean(template.created_from_workflow_id))
-        .map((template) => template.id),
-      rebase: filteredTemplates
-        .filter((template) => Boolean(template.created_from_workflow_id))
-        .map((template) => template.id),
-      delete: filteredTemplates
-        .filter((template) => template.archived)
-        .map((template) => template.id)
+      archive: bulkPreview?.previews.archive.candidate_items.map((item) => item.template_id) ?? [],
+      restore: bulkPreview?.previews.restore.candidate_items.map((item) => item.template_id) ?? [],
+      refresh: bulkPreview?.previews.refresh.candidate_items.map((item) => item.template_id) ?? [],
+      rebase: bulkPreview?.previews.rebase.candidate_items.map((item) => item.template_id) ?? [],
+      delete: bulkPreview?.previews.delete.candidate_items.map((item) => item.template_id) ?? []
     }),
-    [filteredTemplates]
+    [bulkPreview]
   );
 
   useEffect(() => {
-    if (selectedTemplateId && templates.some((template) => template.id === selectedTemplateId)) {
+    if (selectedTemplateId === null) {
+      return;
+    }
+
+    if (templates.some((template) => template.id === selectedTemplateId)) {
       return;
     }
 
@@ -212,6 +312,9 @@ export function useWorkspaceStarterLibraryState(
 
   useEffect(() => {
     if (!filteredTemplates.length) {
+      if (selectedTemplateId !== null) {
+        setSelectedTemplateId(null);
+      }
       return;
     }
 
@@ -226,6 +329,27 @@ export function useWorkspaceStarterLibraryState(
   }, [filteredTemplates, selectedTemplateId]);
 
   useEffect(() => {
+    const nextSearchParams = buildWorkspaceStarterLibrarySearchParams({
+      activeTrack,
+      archiveFilter,
+      sourceGovernanceKind,
+      needsFollowUp,
+      searchQuery,
+      selectedTemplateId
+    });
+    const nextSearch = nextSearchParams.toString();
+    const currentSearch = window.location.search.startsWith("?")
+      ? window.location.search.slice(1)
+      : window.location.search;
+    if (nextSearch === currentSearch) {
+      return;
+    }
+
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }, [activeTrack, archiveFilter, sourceGovernanceKind, needsFollowUp, searchQuery, selectedTemplateId]);
+
+  useEffect(() => {
     setFormState(selectedTemplate ? buildFormState(selectedTemplate) : null);
   }, [selectedTemplate]);
 
@@ -235,7 +359,7 @@ export function useWorkspaceStarterLibraryState(
     }
 
     startSavingTransition(async () => {
-      setMessage("正在更新 workspace starter...");
+      setMessage(buildWorkspaceStarterMutationPendingMessage("update"));
       setMessageTone("idle");
 
       try {
@@ -248,7 +372,12 @@ export function useWorkspaceStarterLibraryState(
           current.map((template) => (template.id === body.id ? body : template))
         );
         setSelectedTemplateId(body.id);
-        setMessage(`已更新 workspace starter：${body.name}。`);
+        setMessage(
+          buildWorkspaceStarterMutationSuccessMessage({
+            action: "update",
+            templateName: body.name
+          })
+        );
         setMessageTone("success");
       } catch (error) {
         const validationSummary =
@@ -260,7 +389,7 @@ export function useWorkspaceStarterLibraryState(
             ? validationSummary
               ? `${error.message}（${validationSummary}）`
               : error.message
-            : "无法连接后端更新 workspace starter，请确认 API 已启动。"
+            : buildWorkspaceStarterMutationNetworkErrorMessage("update")
         );
         setMessageTone("error");
       }
@@ -272,11 +401,6 @@ export function useWorkspaceStarterLibraryState(
       return;
     }
 
-    const actionLabel = {
-      archive: "归档",
-      restore: "恢复",
-      delete: "永久删除"
-    }[action];
     const shouldContinue =
       action !== "delete" ||
       window.confirm(`确认永久删除模板「${selectedTemplate.name}」吗？此操作不可撤销。`);
@@ -285,7 +409,7 @@ export function useWorkspaceStarterLibraryState(
     }
 
     startMutatingTransition(async () => {
-      setMessage(`正在${actionLabel} workspace starter...`);
+      setMessage(buildWorkspaceStarterMutationPendingMessage(action));
       setMessageTone("idle");
 
       try {
@@ -302,7 +426,7 @@ export function useWorkspaceStarterLibraryState(
             const body = (await response.json().catch(() => null)) as
               | { detail?: string }
               | null;
-            setMessage(body?.detail ?? "删除失败。");
+            setMessage(body?.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage("delete"));
             setMessageTone("error");
             return;
           }
@@ -310,7 +434,12 @@ export function useWorkspaceStarterLibraryState(
           setTemplates((current) =>
             current.filter((template) => template.id !== selectedTemplate.id)
           );
-          setMessage(`已永久删除 workspace starter：${selectedTemplate.name}。`);
+          setMessage(
+            buildWorkspaceStarterMutationSuccessMessage({
+              action: "delete",
+              templateName: selectedTemplate.name
+            })
+          );
           setMessageTone("success");
           return;
         }
@@ -320,7 +449,11 @@ export function useWorkspaceStarterLibraryState(
           | { detail?: string }
           | null;
         if (!response.ok || !body || !("id" in body)) {
-          setMessage(body && "detail" in body ? body.detail ?? `${actionLabel}失败。` : `${actionLabel}失败。`);
+          setMessage(
+            body && "detail" in body
+              ? body.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage(action)
+              : buildWorkspaceStarterMutationFallbackErrorMessage(action)
+          );
           setMessageTone("error");
           return;
         }
@@ -329,10 +462,15 @@ export function useWorkspaceStarterLibraryState(
           current.map((template) => (template.id === body.id ? body : template))
         );
         setSelectedTemplateId(body.id);
-        setMessage(`已${actionLabel} workspace starter：${body.name}。`);
+        setMessage(
+          buildWorkspaceStarterMutationSuccessMessage({
+            action,
+            templateName: body.name
+          })
+        );
         setMessageTone("success");
       } catch {
-        setMessage(`无法连接后端${actionLabel} workspace starter，请确认 API 已启动。`);
+        setMessage(buildWorkspaceStarterMutationNetworkErrorMessage(action));
         setMessageTone("error");
       }
     });
@@ -344,7 +482,6 @@ export function useWorkspaceStarterLibraryState(
       return;
     }
 
-    const actionLabel = getWorkspaceStarterBulkActionLabel(action);
     const requiresConfirmation = action === "rebase" || action === "delete";
     const shouldContinue =
       !requiresConfirmation ||
@@ -354,7 +491,7 @@ export function useWorkspaceStarterLibraryState(
     }
 
     startBulkMutatingTransition(async () => {
-      setMessage(`正在对当前筛选结果批量${actionLabel}...`);
+      setMessage(buildWorkspaceStarterBulkActionPendingMessage(action));
       setMessageTone("idle");
 
       try {
@@ -394,10 +531,26 @@ export function useWorkspaceStarterLibraryState(
         setMessage(buildBulkActionMessage(result));
         setMessageTone(result.updated_count > 0 ? "success" : "idle");
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : `批量${actionLabel}失败。`);
+        setMessage(
+          error instanceof Error ? error.message : buildWorkspaceStarterBulkActionErrorMessage(action)
+        );
         setMessageTone("error");
       }
     });
+  };
+
+  const focusTemplateFromBulkResult = (templateId: string) => {
+    const targetTemplate = templates.find((template) => template.id === templateId);
+    if (!targetTemplate) {
+      return;
+    }
+
+    setSearchQuery("");
+    setActiveTrack(targetTemplate.business_track);
+    setArchiveFilter(targetTemplate.archived ? "archived" : "active");
+    setSourceGovernanceKind("all");
+    setNeedsFollowUp(false);
+    setSelectedTemplateId(targetTemplate.id);
   };
 
   return {
@@ -406,6 +559,8 @@ export function useWorkspaceStarterLibraryState(
     archiveFilter,
     archivedTemplateCount,
     bulkActionCandidates,
+    bulkPreview,
+    bulkPreviewNotice,
     filteredTemplates,
     formState,
     governedTemplateCount,
@@ -417,9 +572,10 @@ export function useWorkspaceStarterLibraryState(
     hasPendingChanges,
     historyItems,
     isBulkMutating,
+    isLoadingBulkPreview,
+    isLoadingSourceGovernanceScope,
     isLoadingHistory,
     isLoadingSourceDiff,
-    isLoadingSourceWorkflow,
     isMutating,
     isRebasing,
     isRefreshing,
@@ -428,19 +584,25 @@ export function useWorkspaceStarterLibraryState(
     message,
     messageTone,
     missingToolTemplateCount,
+    needsFollowUp,
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    sourceGovernanceKind,
+    sourceGovernanceScope,
+    selectedTemplateSandboxGovernance,
     selectedTemplateToolGovernance,
     selectedTrackMeta,
+    focusTemplateFromBulkResult,
     setActiveTrack,
     setArchiveFilter,
     setFormState,
+    setNeedsFollowUp,
     setSearchQuery,
     setSelectedTemplateId,
+    setSourceGovernanceKind,
     sourceDiff,
-    sourceStatus,
-    sourceStatusMessage,
+    sourceGovernance,
     strongIsolationTemplateCount,
     templateToolGovernanceById,
     templates

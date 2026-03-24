@@ -4,29 +4,53 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { buildWorkspaceStarterSourceGovernanceSurface } from "@/components/workspace-starter-library/shared";
+import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
+import {
+  getWorkflowBusinessTrack,
+  WORKFLOW_BUSINESS_TRACKS
+} from "@/lib/workflow-business-tracks";
+import {
+  buildWorkflowDefinitionSandboxGovernanceBadges,
+  describeWorkflowDefinitionSandboxDependency
+} from "@/lib/workflow-definition-sandbox-governance";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowLibraryStarterItem,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
 import {
+  buildWorkflowCreateWizardSurfaceCopy,
+  type WorkflowCreateWizardSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
+import {
   createWorkflow,
   type WorkflowListItem,
   WorkflowDefinitionValidationError
 } from "@/lib/get-workflows";
 import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  buildWorkflowEditorHrefFromWorkspaceStarterViewState,
+  buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
+  hasScopedWorkspaceStarterGovernanceFilters,
+  pickWorkspaceStarterGovernanceQueryScope,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
+import {
   buildWorkflowStarterTemplates,
   buildWorkflowStarterTracks,
+  type WorkflowStarterTemplate,
   type WorkflowStarterTemplateId
 } from "@/lib/workflow-starters";
 
 type WorkflowCreateWizardProps = {
   catalogToolCount: number;
-  preferredStarterId?: string;
+  governanceQueryScope: WorkspaceStarterGovernanceQueryScope;
   workflows: WorkflowListItem[];
   starters: WorkflowLibraryStarterItem[];
   starterSourceLanes: WorkflowLibrarySourceLane[];
@@ -36,7 +60,7 @@ type WorkflowCreateWizardProps = {
 
 export function WorkflowCreateWizard({
   catalogToolCount,
-  preferredStarterId,
+  governanceQueryScope,
   workflows,
   starters,
   starterSourceLanes,
@@ -44,6 +68,13 @@ export function WorkflowCreateWizard({
   tools
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
+  const preferredStarterId = governanceQueryScope.selectedTemplateId ?? undefined;
+  const searchQuery = governanceQueryScope.searchQuery;
+  const sourceGovernanceKind =
+    governanceQueryScope.sourceGovernanceKind === "all"
+      ? undefined
+      : governanceQueryScope.sourceGovernanceKind;
+  const needsFollowUp = governanceQueryScope.needsFollowUp;
   const starterTemplates = useMemo(
     () => buildWorkflowStarterTemplates(starters, nodeCatalog, tools),
     [nodeCatalog, starters, tools]
@@ -54,24 +85,108 @@ export function WorkflowCreateWizard({
   );
   const defaultStarter =
     starterTemplates.find((starter) => starter.id === preferredStarterId) ??
-    starterTemplates[0];
-  const [activeTrack, setActiveTrack] = useState(defaultStarter.businessTrack);
+    starterTemplates[0] ??
+    null;
+  const [activeTrack, setActiveTrack] = useState(
+    governanceQueryScope.activeTrack === "all"
+      ? (defaultStarter?.businessTrack ?? WORKFLOW_BUSINESS_TRACKS[0].id)
+      : governanceQueryScope.activeTrack
+  );
+  const [governanceActiveTrack, setGovernanceActiveTrack] = useState(
+    governanceQueryScope.activeTrack
+  );
   const [selectedStarterId, setSelectedStarterId] =
-    useState<WorkflowStarterTemplateId>(defaultStarter.id);
-  const [workflowName, setWorkflowName] = useState(defaultStarter.defaultWorkflowName);
+    useState<WorkflowStarterTemplateId | null>(defaultStarter?.id ?? null);
+  const [workflowName, setWorkflowName] = useState(defaultStarter?.defaultWorkflowName ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [isCreating, startCreateTransition] = useTransition();
 
   const selectedStarter = useMemo(
     () =>
-      starterTemplates.find((starter) => starter.id === selectedStarterId) ??
-      defaultStarter,
+      (selectedStarterId
+        ? starterTemplates.find((starter) => starter.id === selectedStarterId)
+        : null) ?? defaultStarter,
     [defaultStarter, selectedStarterId, starterTemplates]
   );
   const activeTrackMeta = useMemo(
     () => getWorkflowBusinessTrack(activeTrack),
     [activeTrack]
+  );
+  const selectedStarterSandboxBadges = useMemo(
+    () =>
+      selectedStarter
+        ? buildWorkflowDefinitionSandboxGovernanceBadges(selectedStarter.sandboxGovernance)
+        : [],
+    [selectedStarter]
+  );
+  const selectedStarterSourceGovernance = selectedStarter?.sourceGovernance ?? null;
+  const selectedStarterSourceGovernanceSurface = useMemo(
+    () =>
+      selectedStarter
+        ? buildWorkspaceStarterSourceGovernanceSurface({
+            template: toWorkspaceStarterSourceGovernanceTemplate(selectedStarter)
+          })
+        : null,
+    [selectedStarter]
+  );
+  const selectedStarterSourcePresenter =
+    selectedStarterSourceGovernanceSurface?.presenter ?? null;
+  const selectedStarterSourceChips = selectedStarterSourcePresenter?.factChips ?? [];
+  const shouldRenderSelectedStarterSourceGovernance = Boolean(
+    selectedStarter &&
+      (selectedStarter.origin === "workspace" ||
+        selectedStarter.createdFromWorkflowId ||
+        selectedStarterSourceGovernance)
+  );
+  const workspaceStarterGovernanceScope = useMemo<WorkspaceStarterGovernanceQueryScope>(
+    () =>
+      pickWorkspaceStarterGovernanceQueryScope({
+        activeTrack: governanceActiveTrack,
+        sourceGovernanceKind: sourceGovernanceKind ?? "all",
+        needsFollowUp,
+        searchQuery,
+        selectedTemplateId:
+          selectedStarter?.origin === "workspace"
+            ? selectedStarter.id
+            : governanceQueryScope.selectedTemplateId
+      }),
+    [
+      governanceActiveTrack,
+      governanceQueryScope.selectedTemplateId,
+      needsFollowUp,
+      searchQuery,
+      selectedStarter,
+      sourceGovernanceKind
+    ]
+  );
+  const starterGovernanceHref = buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+    workspaceStarterGovernanceScope
+  );
+  const recentWorkflowLink = workflows[0]
+    ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+        workflowId: workflows[0].id,
+        viewState: workspaceStarterGovernanceScope,
+        variant: "recent"
+      })
+    : null;
+  const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
+    starterGovernanceHref
+  });
+  const selectedStarterNextStepSurface = selectedStarter
+    ? buildWorkflowCreateStarterNextStepSurface({
+        starter: selectedStarter,
+        sourceGovernanceSurface: selectedStarterSourceGovernanceSurface,
+        starterGovernanceHref,
+        surfaceCopy
+      })
+    : null;
+  const selectedStarterSandboxDependencySummary = useMemo(
+    () =>
+      selectedStarter
+        ? describeWorkflowDefinitionSandboxDependency(selectedStarter.sandboxGovernance)
+        : null,
+    [selectedStarter]
   );
   const visibleStarters = useMemo(
     () =>
@@ -83,17 +198,24 @@ export function WorkflowCreateWizard({
 
   const applyStarterSelection = (
     nextStarterId: WorkflowStarterTemplateId,
-    currentStarterId: WorkflowStarterTemplateId = selectedStarterId
+    currentStarterId: WorkflowStarterTemplateId | null = selectedStarterId
   ) => {
     const currentStarter =
-      starterTemplates.find((starter) => starter.id === currentStarterId) ??
-      defaultStarter;
+      (currentStarterId
+        ? starterTemplates.find((starter) => starter.id === currentStarterId)
+        : null) ?? defaultStarter;
     const nextStarter =
       starterTemplates.find((starter) => starter.id === nextStarterId) ?? defaultStarter;
 
+    if (!nextStarter) {
+      return;
+    }
+
     if (
       !workflowName.trim() ||
-      workflowName.trim() === currentStarter.defaultWorkflowName
+      (currentStarter
+        ? workflowName.trim() === currentStarter.defaultWorkflowName
+        : false)
     ) {
       setWorkflowName(nextStarter.defaultWorkflowName);
     }
@@ -106,6 +228,7 @@ export function WorkflowCreateWizard({
 
   const handleTrackSelect = (trackId: (typeof starterTracks)[number]["id"]) => {
     setActiveTrack(trackId);
+    setGovernanceActiveTrack(trackId);
 
     const nextVisibleStarters = starterTemplates.filter(
       (starter) => starter.businessTrack === trackId
@@ -121,6 +244,10 @@ export function WorkflowCreateWizard({
 
   const handleCreateWorkflow = () => {
     startCreateTransition(async () => {
+      if (!selectedStarter) {
+        return;
+      }
+
       const normalizedName = workflowName.trim() || selectedStarter.defaultWorkflowName;
       setMessage("正在创建 workflow 草稿...");
       setMessageTone("idle");
@@ -133,7 +260,12 @@ export function WorkflowCreateWizard({
 
         setMessage(`已创建 ${normalizedName}，正在进入编辑器...`);
         setMessageTone("success");
-        router.push(`/workflows/${encodeURIComponent(body.id)}`);
+        router.push(
+          buildWorkflowEditorHrefFromWorkspaceStarterViewState(
+            body.id,
+            workspaceStarterGovernanceScope
+          )
+        );
         router.refresh();
       } catch (error) {
         setMessage(
@@ -145,6 +277,46 @@ export function WorkflowCreateWizard({
       }
     });
   };
+
+  const hasScopedWorkspaceStarterFilters = hasScopedWorkspaceStarterGovernanceFilters(
+    workspaceStarterGovernanceScope
+  );
+
+  if (!selectedStarter) {
+    return (
+      <main className="editor-shell">
+        <section className="hero creation-hero">
+          <div className="hero-copy">
+            <p className="eyebrow">Starter scope</p>
+            <h1>当前筛选范围里没有可复用的 active workspace starter</h1>
+            <p className="hero-text">
+              {surfaceCopy.emptyStateDescription}
+            </p>
+            <div className="hero-actions">
+              <WorkbenchEntryLinks {...surfaceCopy.emptyStateLinks} />
+            </div>
+          </div>
+
+          <div className="hero-panel">
+            <div className="panel-label">Current track</div>
+            <div className="panel-value">{activeTrackMeta.priority}</div>
+            <p className="panel-text">
+              当前业务线：<strong>{activeTrackMeta.id}</strong>
+            </p>
+            <p className="panel-text">
+              搜索：<strong>{searchQuery.trim() || "未设置"}</strong>
+            </p>
+            <p className="panel-text">
+              来源治理：<strong>{sourceGovernanceKind ?? "全部"}</strong>
+            </p>
+            <p className="panel-text">
+              follow-up queue：<strong>{needsFollowUp ? "仅关注热点" : "未启用"}</strong>
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="editor-shell">
@@ -164,18 +336,10 @@ export function WorkflowCreateWizard({
             <span className="pill">{workflows.length} existing workflows</span>
           </div>
           <div className="hero-actions">
-            <Link className="inline-link" href="/">
-              返回系统首页
-            </Link>
-            <Link className="inline-link secondary" href="/workspace-starters">
-              管理 workspace starters
-            </Link>
-            {workflows[0] ? (
-              <Link
-                className="inline-link secondary"
-                href={`/workflows/${encodeURIComponent(workflows[0].id)}`}
-              >
-                打开最近 workflow
+            <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
+            {recentWorkflowLink ? (
+              <Link className="inline-link secondary" href={recentWorkflowLink.href}>
+                {recentWorkflowLink.label}
               </Link>
             ) : null}
           </div>
@@ -221,11 +385,25 @@ export function WorkflowCreateWizard({
               先按主业务线选入口，再用最小骨架进入编排。后续 workspace 级模板治理，也继续沿着
               这套 starter library 演进。
             </p>
+            {hasScopedWorkspaceStarterFilters ? (
+              <p className="binding-meta">
+                {surfaceCopy.scopedGovernanceDescription}
+                {" "}
+                <WorkbenchEntryLink
+                  className="inline-link secondary"
+                  linkKey="workspaceStarterLibrary"
+                  override={{ href: starterGovernanceHref }}
+                >
+                  {surfaceCopy.scopedGovernanceBackLinkLabel}
+                </WorkbenchEntryLink>
+                。
+              </p>
+            ) : null}
           </div>
 
           <WorkflowStarterBrowser
             activeTrack={activeTrack}
-            selectedStarterId={selectedStarterId}
+            selectedStarterId={selectedStarter.id}
             starters={visibleStarters}
             tracks={starterTracks}
             sourceLanes={starterSourceLanes}
@@ -285,9 +463,59 @@ export function WorkflowCreateWizard({
               </div>
               <p className="starter-focus-copy">{selectedStarter.trackSummary}</p>
               <p className="starter-focus-copy">{selectedStarter.source.summary}</p>
-              <p className="starter-focus-copy">
-                下一步：{selectedStarter.recommendedNextStep}
-              </p>
+              {selectedStarterNextStepSurface ? (
+                <div className="entry-card compact-card">
+                  <div className="payload-card-header">
+                    <span className="status-meta">{surfaceCopy.recommendedNextStepTitle}</span>
+                    <span className="event-chip">{selectedStarterNextStepSurface.label}</span>
+                    {selectedStarterNextStepSurface.href &&
+                    selectedStarterNextStepSurface.hrefLabel ? (
+                      <WorkbenchEntryLink
+                        className="inline-link secondary"
+                        linkKey="workspaceStarterLibrary"
+                        override={{ href: selectedStarterNextStepSurface.href }}
+                      >
+                        {selectedStarterNextStepSurface.hrefLabel}
+                      </WorkbenchEntryLink>
+                    ) : null}
+                  </div>
+                  <p className="section-copy starter-summary-copy">
+                    {selectedStarterNextStepSurface.detail}
+                  </p>
+                </div>
+              ) : null}
+              {shouldRenderSelectedStarterSourceGovernance && selectedStarterSourcePresenter ? (
+                <div className="binding-form">
+                  <p className="binding-label">Source governance</p>
+                  <p className="binding-meta">{surfaceCopy.sourceGovernanceDescription}</p>
+                  <div className="summary-strip compact-strip">
+                    <div className="summary-card">
+                      <span>Status</span>
+                      <strong>{selectedStarterSourcePresenter.statusLabel}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Template</span>
+                      <strong>{selectedStarterSourceGovernance?.templateVersion ?? "未记录"}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Source</span>
+                      <strong>{selectedStarterSourcePresenter.sourceVersion ?? "不可用"}</strong>
+                    </div>
+                  </div>
+                  <p className="section-copy starter-summary-copy">
+                    {selectedStarterSourcePresenter.summary}
+                  </p>
+                  {selectedStarterSourceChips.length > 0 ? (
+                    <div className="starter-tag-row">
+                      {selectedStarterSourceChips.map((chip) => (
+                        <span className="event-chip" key={`${selectedStarter.id}-${chip}`}>
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {selectedStarter.referencedTools.length > 0 ? (
                 <div className="binding-form">
                   <p className="binding-label">Tool governance in this starter</p>
@@ -307,6 +535,48 @@ export function WorkflowCreateWizard({
                       还有 {selectedStarter.referencedTools.length - 2} 个引用工具会在进入编辑器后继续沿同一治理规则展示。
                     </p>
                   ) : null}
+                </div>
+              ) : null}
+              {selectedStarter.sandboxGovernance.sandboxNodeCount > 0 ? (
+                <div className="binding-form">
+                  <p className="binding-label">Sandbox dependency in this starter</p>
+                  <p className="binding-meta">
+                    创建前先确认 `sandbox_code` 节点已经记录的 execution、dependencyMode 和
+                    backendExtensions 与当前 sandbox readiness 一致，避免进入画布后才发现依赖约束漂移。
+                  </p>
+                  <div className="summary-strip compact-strip">
+                    <div className="summary-card">
+                      <span>Sandbox nodes</span>
+                      <strong>{selectedStarter.sandboxGovernance.sandboxNodeCount}</strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Execution</span>
+                      <strong>
+                        {selectedStarter.sandboxGovernance.executionClasses.join(" / ") || "-"}
+                      </strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Dependency mode</span>
+                      <strong>
+                        {selectedStarter.sandboxGovernance.dependencyModes.join(" / ") || "未声明"}
+                      </strong>
+                    </div>
+                    <div className="summary-card">
+                      <span>Extensions</span>
+                      <strong>{selectedStarter.sandboxGovernance.backendExtensionNodeCount}</strong>
+                    </div>
+                  </div>
+                  <div className="starter-tag-row">
+                    {selectedStarterSandboxBadges.map((badge) => (
+                      <span className="event-chip" key={`${selectedStarter.id}-${badge}`}>
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="binding-meta">
+                    {selectedStarterSandboxDependencySummary ??
+                      "当前 starter 已含 sandbox_code 节点，但还没有显式 dependencyMode；进入画布后优先补齐依赖策略与 runtime policy。"}
+                  </p>
                 </div>
               ) : null}
               {selectedStarter.missingToolIds.length > 0 ? (
@@ -363,22 +633,116 @@ export function WorkflowCreateWizard({
             </p>
           ) : (
             <div className="workflow-chip-row">
-              {workflows.map((workflow) => (
-                <Link
-                  key={workflow.id}
-                  className="workflow-chip"
-                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
-                >
-                  <span>{workflow.name}</span>
-                  <small>
-                    {workflow.version} · {workflow.status}
-                  </small>
-                </Link>
-              ))}
+              {workflows.map((workflow) => {
+                const workflowDetailLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                  workflowId: workflow.id,
+                  viewState: workspaceStarterGovernanceScope
+                });
+
+                return (
+                  <WorkflowChipLink
+                    key={workflow.id}
+                    workflow={workflow}
+                    href={workflowDetailLink.href}
+                  />
+                );
+              })}
             </div>
           )}
         </article>
       </section>
     </main>
   );
+}
+
+type WorkspaceStarterSourceGovernanceSurfaceTemplate = Parameters<
+  typeof buildWorkspaceStarterSourceGovernanceSurface
+>[0]["template"];
+
+type WorkspaceStarterSourceGovernanceSurface = ReturnType<
+  typeof buildWorkspaceStarterSourceGovernanceSurface
+>;
+
+type WorkflowCreateStarterNextStepSurface = {
+  label: string;
+  detail: string;
+  href: string | null;
+  hrefLabel: string | null;
+};
+
+function toWorkspaceStarterSourceGovernanceTemplate(
+  starter: WorkflowStarterTemplate
+): WorkspaceStarterSourceGovernanceSurfaceTemplate {
+  const governance = starter.sourceGovernance;
+
+  return {
+    archived: starter.archived,
+    created_from_workflow_id: starter.createdFromWorkflowId,
+    source_governance: governance
+      ? {
+          kind: governance.kind,
+          status_label: governance.statusLabel,
+          summary: governance.summary,
+          source_workflow_id: governance.sourceWorkflowId ?? null,
+          source_workflow_name: governance.sourceWorkflowName ?? null,
+          template_version: governance.templateVersion ?? null,
+          source_version: governance.sourceVersion ?? null,
+          action_decision: governance.actionDecision ?? null,
+          outcome_explanation: governance.outcomeExplanation ?? null
+        }
+      : null
+  };
+}
+
+function buildWorkflowCreateStarterNextStepSurface({
+  starter,
+  sourceGovernanceSurface,
+  starterGovernanceHref,
+  surfaceCopy
+}: {
+  starter: WorkflowStarterTemplate;
+  sourceGovernanceSurface: WorkspaceStarterSourceGovernanceSurface | null;
+  starterGovernanceHref: string;
+  surfaceCopy: WorkflowCreateWizardSurfaceCopy;
+}): WorkflowCreateStarterNextStepSurface {
+  const presenter = sourceGovernanceSurface?.presenter ?? null;
+  const recommendedNextStep = sourceGovernanceSurface?.recommendedNextStep ?? null;
+  const shouldLinkToStarterGovernance =
+    starter.origin === "workspace" ||
+    Boolean(starter.createdFromWorkflowId) ||
+    Boolean(starter.sourceGovernance);
+
+  if (
+    recommendedNextStep &&
+    (recommendedNextStep.action === "refresh" || recommendedNextStep.action === "rebase")
+  ) {
+    return {
+      label: recommendedNextStep.label,
+      detail: recommendedNextStep.detail,
+      href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
+      hrefLabel: shouldLinkToStarterGovernance
+        ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
+        : null
+    };
+  }
+
+  if (presenter?.needsAttention) {
+    return {
+      label: presenter.actionStatusLabel ?? presenter.statusLabel,
+      detail: presenter.followUp ?? presenter.summary,
+      href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
+      hrefLabel: shouldLinkToStarterGovernance
+        ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
+        : null
+    };
+  }
+
+  return {
+    label: surfaceCopy.createWorkflowRecommendedNextStepLabel,
+    detail: starter.recommendedNextStep,
+    href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
+    hrefLabel: shouldLinkToStarterGovernance
+      ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
+      : null
+  };
 }

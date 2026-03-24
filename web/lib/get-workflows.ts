@@ -1,4 +1,8 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import {
+  buildWorkflowLibrarySearchParams,
+  type WorkflowListDefinitionIssueFilter
+} from "@/lib/workflow-library-query";
 import type { WorkflowNodeRuntimePolicy } from "@/lib/workflow-runtime-policy";
 
 export type WorkflowListItem = {
@@ -6,6 +10,16 @@ export type WorkflowListItem = {
   name: string;
   version: string;
   status: string;
+  node_count: number;
+  definition_issues?: WorkflowDefinitionPreflightIssue[];
+  tool_governance: WorkflowToolGovernanceSummary;
+};
+
+export type WorkflowToolGovernanceSummary = {
+  referenced_tool_ids: string[];
+  missing_tool_ids: string[];
+  governed_tool_count: number;
+  strong_isolation_tool_count: number;
 };
 
 export type WorkflowNodeItem = {
@@ -37,6 +51,7 @@ export type WorkflowDetail = WorkflowListItem & {
     variables?: Array<Record<string, unknown>>;
     publish?: Array<Record<string, unknown>>;
   };
+  definition_issues?: WorkflowDefinitionPreflightIssue[];
   created_at: string;
   updated_at: string;
   versions: Array<{
@@ -57,6 +72,7 @@ export type WorkflowDefinitionPreflightIssue = {
   category:
     | "schema"
     | "node_support"
+    | "node_execution"
     | "tool_reference"
     | "tool_execution"
     | "publish_version"
@@ -156,9 +172,15 @@ export async function updateWorkflow(
   return body as WorkflowDetail;
 }
 
-export async function getWorkflows(): Promise<WorkflowListItem[]> {
+export async function getWorkflows(options?: {
+  definitionIssue?: WorkflowListDefinitionIssueFilter | null;
+}): Promise<WorkflowListItem[]> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/workflows`, {
+    const searchParams = buildWorkflowLibrarySearchParams({
+      definitionIssue: options?.definitionIssue ?? null
+    });
+    const query = searchParams.toString();
+    const response = await fetch(`${getApiBaseUrl()}/api/workflows${query ? `?${query}` : ""}`, {
       cache: "no-store"
     });
 

@@ -2,13 +2,22 @@
 
 import type { Node } from "@xyflow/react";
 
-import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type {
+  PluginAdapterRegistryItem,
+  PluginToolRegistryItem
+} from "@/lib/get-plugin-registry";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 
 export type WorkflowNodeConfigFormProps = {
   node: Node<WorkflowCanvasNodeData>;
   nodes: Array<Node<WorkflowCanvasNodeData>>;
   tools: PluginToolRegistryItem[];
+  adapters: PluginAdapterRegistryItem[];
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  highlightedFieldPath?: string | null;
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
   onChange: (nextConfig: Record<string, unknown>) => void;
 };
 
@@ -316,6 +325,47 @@ export function parseNumericFieldValue(value: string) {
 
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function formatJsonObjectFieldValue(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  return JSON.stringify(value, null, 2);
+}
+
+export function parseJsonObjectFieldValue(
+  value: string,
+  fieldLabel: string
+): { value?: Record<string, unknown>; error: string | null } {
+  const normalized = value.trim();
+  if (!normalized) {
+    return {
+      value: undefined,
+      error: null
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        value: undefined,
+        error: `${fieldLabel} 必须是 JSON object。`
+      };
+    }
+
+    return {
+      value: parsed as Record<string, unknown>,
+      error: null
+    };
+  } catch {
+    return {
+      value: undefined,
+      error: `${fieldLabel} 必须是有效的 JSON object。`
+    };
+  }
 }
 
 export function dedupeStrings(values: string[]) {

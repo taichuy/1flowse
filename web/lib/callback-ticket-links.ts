@@ -10,8 +10,8 @@ export function buildCallbackTicketInboxHref(
   ticket: Pick<RunCallbackTicketItem, "run_id" | "node_run_id">,
   options: CallbackTicketInboxHrefOptions = {}
 ) {
-  const runId = ticket.run_id ?? options.runId ?? null;
-  const nodeRunId = ticket.node_run_id ?? options.nodeRunId ?? null;
+  const runId = options.runId ?? ticket.run_id ?? null;
+  const nodeRunId = options.nodeRunId ?? ticket.node_run_id ?? null;
 
   if (!runId && !nodeRunId) {
     return null;

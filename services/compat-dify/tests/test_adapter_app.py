@@ -5,17 +5,47 @@ from app.config import Settings, get_settings
 from app.main import create_app
 
 
-def test_healthz_reports_stub_identity() -> None:
+def test_healthz_reports_adapter_identity_and_mode() -> None:
     client = TestClient(create_app())
 
     response = client.get("/healthz")
 
     assert response.status_code == 200
     assert response.json() == {
-        "status": "ok",
+        "status": "up",
         "adapter_id": "dify-default",
         "ecosystem": "compat:dify",
         "mode": "translate",
+        "detail": None,
+        "supported_execution_classes": ["subprocess"],
+    }
+
+
+def test_healthz_marks_proxy_mode_without_daemon_config_as_degraded(monkeypatch) -> None:
+    from app import main as main_module
+
+    settings = Settings(
+        invoke_mode="proxy",
+        plugin_daemon_url="",
+        plugin_daemon_api_key="",
+    )
+    monkeypatch.setattr(main_module, "get_settings", lambda: settings)
+
+    client = TestClient(create_app())
+
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "degraded",
+        "adapter_id": "dify-default",
+        "ecosystem": "compat:dify",
+        "mode": "proxy",
+        "detail": (
+            "Proxy mode requires SEVENFLOWS_COMPAT_DIFY_PLUGIN_DAEMON_URL and "
+            "SEVENFLOWS_COMPAT_DIFY_PLUGIN_DAEMON_API_KEY."
+        ),
+        "supported_execution_classes": ["subprocess"],
     }
 
 
@@ -30,6 +60,8 @@ def test_tools_lists_translated_catalog() -> None:
     assert body["ecosystem"] == "compat:dify"
     assert len(body["tools"]) == 2
     assert body["tools"][0]["id"] == "compat:dify:plugin:demo/search"
+    assert body["tools"][0]["supported_execution_classes"] == ["subprocess"]
+    assert body["tools"][0]["default_execution_class"] == "subprocess"
     assert body["tools"][0]["input_schema"] == {
         "type": "object",
         "properties": {
@@ -58,6 +90,8 @@ def test_tools_lists_translated_catalog() -> None:
         "name": "Demo Search",
         "description": "Search the demo corpus.",
         "source": "plugin",
+        "supported_execution_classes": ["subprocess"],
+        "default_execution_class": "subprocess",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -160,6 +194,14 @@ def test_invoke_returns_translated_payload_preview() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "success"
+    assert body["requestMeta"] == {
+        "toolId": "compat:dify:plugin:demo/search",
+        "adapterId": "dify-default",
+        "ecosystem": "compat:dify",
+        "traceId": "trace-demo",
+        "execution": {},
+        "executionContract": build_execution_contract(tool).model_dump(),
+    }
     assert body["output"] == {
         "toolId": "compat:dify:plugin:demo/search",
         "adapterId": "dify-default",
@@ -198,6 +240,50 @@ def test_invoke_returns_translated_payload_preview() -> None:
         == "compat:dify translated tool 'compat:dify:plugin:demo/search' into Dify invoke payload"
     )
     assert body["logs"][1] == "mode=translate"
+
+
+def test_invoke_preserves_runtime_execution_request_meta() -> None:
+    client = TestClient(create_app())
+    tool = get_catalog_tool(get_settings(), "compat:dify:plugin:demo/search")
+    assert tool is not None
+
+    response = client.post(
+        "/invoke",
+        headers={"x-sevenflows-adapter-id": "dify-default"},
+        json={
+            "toolId": "compat:dify:plugin:demo/search",
+            "ecosystem": "compat:dify",
+            "adapterId": "dify-default",
+            "inputs": {"query": "sevenflows"},
+            "credentials": {},
+            "timeout": 30000,
+            "traceId": "trace-execution",
+            "execution": {
+                "class": "subprocess",
+                "source": "runtime_policy",
+                "timeoutMs": 25000,
+                "networkPolicy": "restricted",
+                "filesystemPolicy": "readonly_tmp",
+            },
+            "executionContract": build_execution_contract(tool).model_dump(),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["requestMeta"] == {
+        "toolId": "compat:dify:plugin:demo/search",
+        "adapterId": "dify-default",
+        "ecosystem": "compat:dify",
+        "traceId": "trace-execution",
+        "execution": {
+            "class": "subprocess",
+            "source": "runtime_policy",
+            "timeoutMs": 25000,
+            "networkPolicy": "restricted",
+            "filesystemPolicy": "readonly_tmp",
+        },
+        "executionContract": build_execution_contract(tool).model_dump(),
+    }
 
 
 def test_invoke_rejects_wrong_ecosystem() -> None:
@@ -407,6 +493,14 @@ def test_invoke_proxies_translated_payload_to_dify_daemon(monkeypatch) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "success"
+    assert body["requestMeta"] == {
+        "toolId": "compat:dify:plugin:demo/search",
+        "adapterId": "dify-default",
+        "ecosystem": "compat:dify",
+        "traceId": "trace-proxy",
+        "execution": {},
+        "executionContract": build_execution_contract(tool).model_dump(),
+    }
     assert body["output"] == {
         "text": "result text",
         "json": {"documents": ["doc-1"]},

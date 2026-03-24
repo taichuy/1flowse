@@ -1,23 +1,35 @@
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { RunEvidenceView, RunExecutionView } from "@/lib/get-run-views";
 
 import { EvidenceNodeCard } from "@/components/run-diagnostics-execution/evidence-node-card";
 import { ExecutionNodeCard } from "@/components/run-diagnostics-execution/execution-node-card";
 import { RunDiagnosticsEvidenceOverview } from "@/components/run-diagnostics-execution/evidence-overview";
 import { RunDiagnosticsExecutionOverview } from "@/components/run-diagnostics-execution/execution-overview";
+import {
+  RUN_DIAGNOSTICS_EXECUTION_TIMELINE_SECTION_ID,
+  RUN_DIAGNOSTICS_EXECUTION_VIEW_SECTION_ID
+} from "@/lib/run-diagnostics-links";
 
 type RunDiagnosticsExecutionSectionsProps = {
   executionView: RunExecutionView | null;
   evidenceView: RunEvidenceView | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function RunDiagnosticsExecutionSections({
   executionView,
-  evidenceView
+  evidenceView,
+  callbackWaitingAutomation,
+  sandboxReadiness = null
 }: RunDiagnosticsExecutionSectionsProps) {
   return (
     <>
       <section className="diagnostics-layout">
-        <article className="diagnostic-panel">
+        <article className="diagnostic-panel" id={RUN_DIAGNOSTICS_EXECUTION_VIEW_SECTION_ID}>
           <div className="section-heading">
             <div>
               <p className="eyebrow">Execution View</p>
@@ -29,7 +41,11 @@ export function RunDiagnosticsExecutionSections({
             </p>
           </div>
 
-          <RunDiagnosticsExecutionOverview executionView={executionView} />
+          <RunDiagnosticsExecutionOverview
+            executionView={executionView}
+            callbackWaitingAutomation={callbackWaitingAutomation}
+            sandboxReadiness={sandboxReadiness}
+          />
         </article>
 
         <article className="diagnostic-panel">
@@ -49,7 +65,7 @@ export function RunDiagnosticsExecutionSections({
       </section>
 
       <section className="diagnostics-layout">
-        <article className="diagnostic-panel">
+        <article className="diagnostic-panel" id={RUN_DIAGNOSTICS_EXECUTION_TIMELINE_SECTION_ID}>
           <div className="section-heading">
             <div>
               <p className="eyebrow">Execution Timeline</p>
@@ -68,7 +84,14 @@ export function RunDiagnosticsExecutionSections({
           ) : (
             <div className="timeline-list">
               {executionView.nodes.map((node) => (
-                <ExecutionNodeCard key={node.node_run_id} node={node} runId={executionView.run_id} />
+                <ExecutionNodeCard
+                  key={node.node_run_id}
+                  node={node}
+                  runId={executionView.run_id}
+                  callbackWaitingAutomation={callbackWaitingAutomation}
+                  sandboxReadiness={sandboxReadiness}
+                  skillTrace={executionView.skill_trace ?? null}
+                />
               ))}
             </div>
           )}

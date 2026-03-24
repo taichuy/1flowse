@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -10,9 +11,20 @@ import type {
 } from "@/lib/get-run-views";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { listCallbackTicketDetailRows } from "@/lib/callback-waiting-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorInboxSliceLinkSurface
+} from "@/lib/operator-follow-up-presenters";
+import {
+  formatExecutionBlockingReasonCopy,
+  formatExecutionFallbackReasonCopy,
+  listCompatAdapterRequestSummaryLines
+} from "@/lib/run-execution-focus-presenters";
 import { formatDurationMs, formatJsonPayload } from "@/lib/runtime-presenters";
+import { buildSensitiveAccessTimelineSurfaceCopy } from "@/lib/sensitive-access-presenters";
 
 import { ArtifactPreviewList } from "@/components/run-diagnostics-execution/shared";
+import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
   return (
@@ -27,6 +39,31 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
   );
 }
 
+function buildToolExecutionBadges(toolCall: ToolCallItem): string[] {
+  const badges: string[] = [];
+
+  if (toolCall.requested_execution_class) {
+    badges.push(`requested ${toolCall.requested_execution_class}`);
+  }
+  if (toolCall.effective_execution_class) {
+    badges.push(`effective ${toolCall.effective_execution_class}`);
+  }
+  if (toolCall.execution_sandbox_runner_kind) {
+    badges.push(`runner ${toolCall.execution_sandbox_runner_kind}`);
+  }
+  if (toolCall.execution_sandbox_backend_id) {
+    badges.push(`backend ${toolCall.execution_sandbox_backend_id}`);
+  }
+  if (toolCall.execution_fallback_reason) {
+    badges.push("fallback");
+  }
+  if (toolCall.execution_blocking_reason) {
+    badges.push("blocked");
+  }
+
+  return badges;
+}
+
 export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallItem[] }) {
   if (toolCalls.length === 0) {
     return null;
@@ -36,24 +73,56 @@ export function ExecutionNodeToolCallList({ toolCalls }: { toolCalls: ToolCallIt
     <section>
       <SectionHeader title="Tool calls" count={toolCalls.length} />
       <div className="event-list">
-        {toolCalls.map((toolCall) => (
-          <article className="event-row compact-card" key={toolCall.id}>
-            <div className="event-meta">
-              <span>{toolCall.tool_name}</span>
-              <span>{toolCall.status}</span>
-            </div>
-            <p className="event-run">
-              {toolCall.phase} · {formatDurationMs(toolCall.latency_ms)} · tool {toolCall.tool_id}
-            </p>
-            <pre>
-              {formatJsonPayload({
-                request_summary: toolCall.request_summary,
-                response_summary: toolCall.response_summary,
-                raw_ref: toolCall.raw_ref
-              })}
-            </pre>
-          </article>
-        ))}
+        {toolCalls.map((toolCall) => {
+          const executionBadges = buildToolExecutionBadges(toolCall);
+          const compatRequestSummaryLines = listCompatAdapterRequestSummaryLines(toolCall);
+
+          return (
+            <article className="event-row compact-card" key={toolCall.id}>
+              <div className="event-meta">
+                <span>{toolCall.tool_name}</span>
+                <span>{toolCall.status}</span>
+              </div>
+              <p className="event-run">
+                {toolCall.phase} · {formatDurationMs(toolCall.latency_ms)} · tool {toolCall.tool_id}
+              </p>
+              {executionBadges.length > 0 ? (
+                <div className="tool-badge-row">
+                  {executionBadges.map((badge) => (
+                    <span className="event-chip" key={`${toolCall.id}:${badge}`}>
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {toolCall.execution_blocking_reason ? (
+                <p className="section-copy entry-copy">
+                  {formatExecutionBlockingReasonCopy(toolCall.execution_blocking_reason)}
+                </p>
+              ) : null}
+              {toolCall.execution_fallback_reason ? (
+                <p className="section-copy entry-copy">
+                  {formatExecutionFallbackReasonCopy(toolCall.execution_fallback_reason)}
+                </p>
+              ) : null}
+              {compatRequestSummaryLines.map((line) => (
+                <p className="section-copy entry-copy" key={`${toolCall.id}:${line}`}>
+                  {line}
+                </p>
+              ))}
+              <pre>
+                {formatJsonPayload({
+                  request_summary: toolCall.request_summary,
+                  response_summary: toolCall.response_summary,
+                  response_content_type: toolCall.response_content_type,
+                  response_meta: toolCall.response_meta,
+                  raw_ref: toolCall.raw_ref,
+                  execution_trace: toolCall.execution_trace
+                })}
+              </pre>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -97,69 +166,7 @@ export function ExecutionNodeSkillReferenceLoadList({
 }: {
   skillReferenceLoads: SkillReferenceLoadItem[];
 }) {
-  if (skillReferenceLoads.length === 0) {
-    return null;
-  }
-
-  return (
-    <section>
-      <SectionHeader
-        title="Skill references"
-        count={skillReferenceLoads.reduce((total, item) => total + item.references.length, 0)}
-      />
-      <p className="section-copy entry-copy">
-        These are the skill reference bodies actually injected into the agent phase, so operator
-        debugging can distinguish fixed bindings, heuristic matches, and explicit model requests.
-      </p>
-      <div className="event-list">
-        {skillReferenceLoads.map((load, index) => (
-          <article className="event-row compact-card" key={`${load.phase}-${index}`}>
-            <div className="event-meta">
-              <span>{load.phase}</span>
-              <span>{load.references.length} loaded</span>
-            </div>
-            <div className="event-list">
-              {load.references.map((reference) => (
-                <article
-                  className="event-row compact-card"
-                  key={`${reference.skill_id}:${reference.reference_id}:${reference.load_source}`}
-                >
-                  <div className="event-meta">
-                    <span>{reference.reference_name ?? reference.reference_id}</span>
-                    <span>{reference.load_source}</span>
-                  </div>
-                  <p className="event-run">
-                    {reference.skill_name ?? reference.skill_id} · ref {reference.reference_id}
-                  </p>
-                  {reference.fetch_reason ? (
-                    <p className="section-copy entry-copy">Reason: {reference.fetch_reason}</p>
-                  ) : null}
-                  {reference.fetch_request_index ? (
-                    <p className="section-copy entry-copy">
-                      Request round {reference.fetch_request_index}
-                      {reference.fetch_request_total
-                        ? ` / ${reference.fetch_request_total}`
-                        : ""}
-                    </p>
-                  ) : null}
-                  <pre>
-                    {formatJsonPayload({
-                      fetch_reason: reference.fetch_reason,
-                      fetch_request_index: reference.fetch_request_index,
-                      fetch_request_total: reference.fetch_request_total,
-                      retrieval_http_path: reference.retrieval_http_path,
-                      retrieval_mcp_method: reference.retrieval_mcp_method,
-                      retrieval_mcp_params: reference.retrieval_mcp_params
-                    })}
-                  </pre>
-                </article>
-              ))}
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+  return <SkillReferenceLoadList skillReferenceLoads={skillReferenceLoads} />;
 }
 
 export function ExecutionNodeCallbackTicketList({
@@ -167,6 +174,8 @@ export function ExecutionNodeCallbackTicketList({
 }: {
   callbackTickets: RunCallbackTicketItem[];
 }) {
+  const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+
   if (callbackTickets.length === 0) {
     return null;
   }
@@ -177,6 +186,10 @@ export function ExecutionNodeCallbackTicketList({
       <div className="event-list">
         {callbackTickets.map((ticket) => {
           const inboxHref = buildCallbackTicketInboxHref(ticket);
+          const inboxLink = buildOperatorInboxSliceLinkSurface({
+            href: inboxHref,
+            surfaceCopy: operatorSurfaceCopy
+          });
           const detailRows = listCallbackTicketDetailRows(ticket, { mode: "compact" });
           return (
             <article className="event-row compact-card" key={ticket.ticket}>
@@ -187,10 +200,10 @@ export function ExecutionNodeCallbackTicketList({
               <p className="event-run">
                 ticket {ticket.ticket} · tool {ticket.tool_id ?? "n/a"}
               </p>
-              {inboxHref ? (
+              {inboxLink ? (
                 <div className="tool-badge-row">
-                  <Link className="event-chip inbox-filter-link" href={inboxHref}>
-                    open inbox slice
+                  <Link className="event-chip inbox-filter-link" href={inboxLink.href}>
+                    {inboxLink.label}
                   </Link>
                 </div>
               ) : null}
@@ -237,13 +250,14 @@ export function ExecutionNodeSensitiveAccessSection({
     return null;
   }
 
+  const surfaceCopy = buildSensitiveAccessTimelineSurfaceCopy({
+    surface: "execution_node"
+  });
+
   return (
     <section>
       <SectionHeader title="Sensitive access timeline" count={count} />
-      <p className="section-copy entry-copy">
-        Approval tickets, notification delivery and policy decisions stay grouped here so operator
-        triage can continue without leaving the execution node.
-      </p>
+      <p className="section-copy entry-copy">{surfaceCopy.description}</p>
       {children}
     </section>
   );

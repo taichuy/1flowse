@@ -24,7 +24,7 @@ export const WORKFLOW_BUSINESS_TRACKS: WorkflowBusinessTrackDefinition[] = [
     id: "编排节点能力",
     priority: "P1",
     summary: "继续补高频节点的结构化配置，让画布真正承载主业务表达。",
-    focus: "优先围绕 LLM Agent、条件分支、上下文授权和输出结构推进。"
+    focus: "优先围绕 LLM Agent、Sandbox Code、条件分支、上下文授权和输出结构推进。"
   },
   {
     id: "Dify 插件兼容",

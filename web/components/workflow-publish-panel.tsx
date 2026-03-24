@@ -1,4 +1,24 @@
+import React from "react";
+import Link from "next/link";
+
+import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
+import { WorkflowPublishLegacyAuthCleanupCard } from "@/components/workflow-publish-legacy-auth-cleanup-card";
+import {
+  buildWorkflowPublishLegacyAuthCleanupSurface,
+  buildWorkflowPublishLegacyAuthExportHint,
+} from "@/lib/workflow-publish-legacy-auth-cleanup";
+import {
+  buildWorkflowPublishPrimaryFollowUpToneSurface,
+  buildWorkflowPublishPrimaryFollowUpSurface,
+  buildWorkflowPublishSummaryCardSurfaces,
+} from "@/lib/published-invocation-presenters";
+import { buildWorkflowPublishPanelSurfaceCopy } from "@/lib/workbench-entry-surfaces";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type {
   PublishedEndpointApiKeyItem,
@@ -10,6 +30,7 @@ import type {
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import type { WorkflowDetail } from "@/lib/get-workflows";
+import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 type WorkflowPublishPanelProps = {
   workflow: WorkflowDetail;
@@ -28,6 +49,10 @@ type WorkflowPublishPanelProps = {
     PublishedEndpointInvocationListResponse | null
   >;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowLibraryHref?: string;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 };
 
 export function WorkflowPublishPanel({
@@ -40,66 +65,86 @@ export function WorkflowPublishPanel({
   invocationDetailsByBinding,
   selectedInvocationId,
   rateLimitWindowAuditsByBinding,
-  activeInvocationFilter
+  activeInvocationFilter,
+  callbackWaitingAutomation,
+  sandboxReadiness,
+  workflowLibraryHref,
+  workspaceStarterGovernanceQueryScope = null
 }: WorkflowPublishPanelProps) {
-  const publishedCount = bindings.filter(
-    (binding) => binding.lifecycle_status === "published"
-  ).length;
-  const cacheEnabledCount = bindings.filter(
-    (binding) => binding.cache_inventory?.enabled
-  ).length;
-  const cacheEntryCount = bindings.reduce(
-    (count, binding) => count + (binding.cache_inventory?.active_entry_count ?? 0),
-    0
+  const surfaceCopy = buildWorkflowPublishPanelSurfaceCopy({ workflowLibraryHref });
+  const primaryFollowUp = buildWorkflowPublishPrimaryFollowUpSurface(bindings);
+  const primaryFollowUpToneSurface = buildWorkflowPublishPrimaryFollowUpToneSurface(
+    primaryFollowUp.tone
   );
-  const rejectedCount = bindings.reduce(
-    (count, binding) => count + (binding.activity?.rejected_count ?? 0),
-    0
-  );
+  const legacyAuthCleanupSurface = buildWorkflowPublishLegacyAuthCleanupSurface(bindings);
+  const legacyAuthExportHint = buildWorkflowPublishLegacyAuthExportHint(legacyAuthCleanupSurface);
+  const summaryCards = buildWorkflowPublishSummaryCardSurfaces({
+    bindings,
+    primaryFollowUp
+  });
 
   return (
     <section className="shell workflow-management-shell">
       <article className="diagnostic-panel panel-span">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Publish</p>
-            <h2>Endpoint governance</h2>
+            <p className="eyebrow">{surfaceCopy.eyebrow}</p>
+            <h2>{surfaceCopy.title}</h2>
           </div>
-          <p className="section-copy">
-            工作流页现在直接消费 publish binding、activity、rate-limit window 与 cache inventory
-            事实层，不再让开放 API 能力只停留在后端可用、前端不可见。
-          </p>
+          <p className="section-copy">{surfaceCopy.description}</p>
         </div>
 
+        <WorkbenchEntryLinks {...surfaceCopy.headerLinks} />
+
         <div className="summary-strip">
-          <article className="summary-card">
-            <span>Bindings</span>
-            <strong>{bindings.length}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Published</span>
-            <strong>{publishedCount}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Rejected calls</span>
-            <strong>{rejectedCount}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Active cache entries</span>
-            <strong>{cacheEntryCount}</strong>
-          </article>
-          <article className="summary-card">
-            <span>Cache enabled</span>
-            <strong>{cacheEnabledCount}</strong>
-          </article>
+          {summaryCards.map((card) => (
+            <article className="summary-card" key={card.key}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              {card.detail ? <p className="binding-meta">{card.detail}</p> : null}
+              {card.href && card.hrefLabel ? (
+                <Link className="inline-link" href={card.href}>
+                  {card.hrefLabel}
+                </Link>
+              ) : null}
+            </article>
+          ))}
         </div>
+
+        <article className="payload-card compact-card">
+          <div className="payload-card-header">
+            <span className="status-meta">{surfaceCopy.primaryFollowUpTitle}</span>
+            <span className={`health-pill ${primaryFollowUpToneSurface.toneClassName}`}>
+              {primaryFollowUpToneSurface.label}
+            </span>
+            {primaryFollowUp.href && primaryFollowUp.hrefLabel ? (
+              <Link className="event-chip inbox-filter-link" href={primaryFollowUp.href}>
+                {primaryFollowUp.hrefLabel}
+              </Link>
+            ) : null}
+          </div>
+          <p className="binding-meta">{primaryFollowUp.headline}</p>
+          <p className="section-copy entry-copy">{primaryFollowUp.detail}</p>
+        </article>
+
+        <SandboxReadinessOverviewCard
+          readiness={sandboxReadiness}
+          title={surfaceCopy.sandboxReadinessTitle}
+          intro={surfaceCopy.sandboxReadinessDescription}
+        />
+
+        {bindings.length > 0 ? (
+          <WorkflowPublishLegacyAuthCleanupCard
+            workflowId={workflow.id}
+            workflowName={workflow.name}
+            bindings={bindings}
+          />
+        ) : null}
 
         {bindings.length === 0 ? (
           <div className="entry-card">
             <p className="entry-card-title">{workflow.name}</p>
-            <p className="section-copy entry-copy">
-              当前 workflow definition 还没有声明 `publish`，因此没有可治理的开放 API endpoint。
-            </p>
+            <p className="section-copy entry-copy">{surfaceCopy.emptyStateDescription}</p>
           </div>
         ) : (
           <div className="publish-card-grid">
@@ -109,6 +154,7 @@ export function WorkflowPublishPanel({
                 workflow={workflow}
                 tools={tools}
                 binding={binding}
+                legacyAuthExportHint={legacyAuthExportHint}
                 cacheInventory={cacheInventories[binding.id] ?? null}
                 apiKeys={apiKeysByBinding[binding.id] ?? []}
                 invocationAudit={invocationAuditsByBinding[binding.id] ?? null}
@@ -117,11 +163,14 @@ export function WorkflowPublishPanel({
                 }
                 selectedInvocationDetail={invocationDetailsByBinding[binding.id] ?? null}
                 rateLimitWindowAudit={rateLimitWindowAuditsByBinding[binding.id] ?? null}
+                callbackWaitingAutomation={callbackWaitingAutomation}
+                sandboxReadiness={sandboxReadiness}
                 activeInvocationFilter={
                   activeInvocationFilter.bindingId === binding.id
                     ? activeInvocationFilter
                     : null
                 }
+                workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
               />
             ))}
           </div>

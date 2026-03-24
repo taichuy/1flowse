@@ -1,19 +1,31 @@
 import Link from "next/link";
 
+import { CallbackWaitingAutomationPanel } from "@/components/callback-waiting-automation-panel";
+import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
 import { CredentialStorePanel } from "@/components/credential-store-panel";
 import { PluginRegistryPanel } from "@/components/plugin-registry-panel";
 import { SandboxReadinessPanel } from "@/components/sandbox-readiness-panel";
 import { StatusCard } from "@/components/status-card";
+import {
+  WorkbenchEntryLink,
+  WorkbenchEntryLinks
+} from "@/components/workbench-entry-links";
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowToolBindingPanel } from "@/components/workflow-tool-binding-panel";
 import { getCredentials } from "@/lib/get-credentials";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
+import { buildCrossEntryRiskDigest } from "@/lib/cross-entry-risk-digest";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 import {
   formatCountMap,
   formatTimestamp
 } from "@/lib/runtime-presenters";
+import {
+  buildAuthorFacingRunDetailLinkSurface,
+  buildAuthorFacingWorkflowDetailLinkSurface
+} from "@/lib/workbench-entry-surfaces";
 
 const highlights = [
   "Dify 风格的本地源码开发路径",
@@ -39,9 +51,21 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const recentRuns = overview.runtime_activity.recent_runs;
   const activitySummary = overview.runtime_activity.summary;
   const latestRun = recentRuns[0];
+  const latestRunDetailLink = latestRun
+    ? buildAuthorFacingRunDetailLinkSurface({
+        runId: latestRun.id,
+        variant: "latest"
+      })
+    : null;
   const pendingSensitiveEntries = sensitiveAccessInbox.entries
     .filter((entry) => entry.ticket.status === "pending")
     .slice(0, 3);
+  const crossEntryRiskDigest = buildCrossEntryRiskDigest({
+    sandboxReadiness: overview.sandbox_readiness,
+    callbackWaitingAutomation: overview.callback_waiting_automation,
+    sensitiveAccessSummary: sensitiveAccessInbox.summary,
+    channels: sensitiveAccessInbox.channels
+  });
   const selectedWorkflowId = requestedWorkflowId || workflows[0]?.id || "";
   const selectedWorkflow = await getWorkflowDetail(selectedWorkflowId);
 
@@ -63,6 +87,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </span>
             ))}
           </div>
+          <WorkbenchEntryLinks keys={["workflowLibrary", "runLibrary", "operatorInbox"]} />
         </div>
         <div className="hero-panel">
           <div className="panel-label">Environment</div>
@@ -92,6 +117,20 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         {overview.services.map((service) => (
           <StatusCard key={service.name} service={service} />
         ))}
+      </section>
+
+      <section className="diagnostics-layout">
+        <CrossEntryRiskDigestPanel
+          digest={crossEntryRiskDigest}
+          eyebrow="Workspace overview"
+          intro="把 live sandbox readiness、callback waiting automation 和 approval / notification backlog 收成一处，作者与 operator 进入工作台时先知道最阻塞主链的是哪一段，而不是先在多张卡片之间自己拼恢复事实。"
+        />
+      </section>
+
+      <section className="diagnostics-layout">
+        <CallbackWaitingAutomationPanel
+          automation={overview.callback_waiting_automation}
+        />
       </section>
 
       <section className="diagnostics-layout">
@@ -178,9 +217,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="section-copy entry-copy">
               审批、拒绝和通知状态复盘现在有了统一收件箱，不必再只靠 blocked-card 或后端接口列表排查。
             </p>
-            <Link className="inline-link" href="/sensitive-access?status=pending">
-              打开敏感访问收件箱
-            </Link>
+            <WorkbenchEntryLinks
+              keys={["operatorInbox"]}
+              overrides={{
+                operatorInbox: {
+                  href: "/sensitive-access?status=pending",
+                  label: "打开待处理收件箱"
+                }
+              }}
+              primaryKey="operatorInbox"
+              variant="inline"
+            />
           </div>
         </article>
       </section>
@@ -197,12 +244,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 最小 `xyflow` 编辑器已经接上 workflow definition，可直接进入画布编辑节点、
                 连线和基础 metadata，再保存回后端版本链路。
               </p>
-              <Link className="inline-link" href="/workflows/new">
-                新建 workflow
-              </Link>
-              <Link className="inline-link secondary" href="/workspace-starters">
-                管理 workspace starters
-              </Link>
+              <WorkbenchEntryLinks
+                keys={["workflowLibrary", "createWorkflow", "workspaceStarterLibrary"]}
+                primaryKey="workflowLibrary"
+                variant="inline"
+              />
             </div>
           </div>
 
@@ -211,24 +257,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <p className="empty-state">
                 当前还没有可编辑的 workflow。现在可以直接从新建向导创建 starter，而不用再先手动调用 API。
               </p>
-              <Link className="inline-link" href="/workflows/new">
+              <WorkbenchEntryLink className="inline-link" linkKey="createWorkflow">
                 进入新建向导
-              </Link>
+              </WorkbenchEntryLink>
             </div>
           ) : (
             <div className="workflow-chip-row">
-              {workflows.map((workflow) => (
-                <Link
-                  className="workflow-chip"
-                  href={`/workflows/${encodeURIComponent(workflow.id)}`}
-                  key={`editor-${workflow.id}`}
-                >
-                  <span>{workflow.name}</span>
-                  <small>
-                    {workflow.version} · {workflow.status}
-                  </small>
-                </Link>
-              ))}
+              {workflows.map((workflow) => {
+                const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
+                  workflowId: workflow.id
+                });
+
+                return (
+                  <WorkflowChipLink
+                    key={`editor-${workflow.id}`}
+                    workflow={workflow}
+                    href={workflowDetailLink.href}
+                  />
+                );
+              })}
             </div>
           )}
         </article>
@@ -265,25 +312,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {recentRuns.length === 0 ? (
               <p className="empty-state">还没有历史 run，可先通过运行接口触发一次工作流执行。</p>
             ) : (
-              recentRuns.map((run) => (
-                <article className="activity-row" key={run.id}>
-                  <div className="activity-header">
-                    <div>
-                      <h3>{run.workflow_id}</h3>
-                      <p>
-                        run {run.id} · version {run.workflow_version}
-                      </p>
+              recentRuns.map((run) => {
+                const runDetailLink = buildAuthorFacingRunDetailLinkSurface({
+                  runId: run.id
+                });
+
+                return (
+                  <article className="activity-row" key={run.id}>
+                    <div className="activity-header">
+                      <div>
+                        <h3>{run.workflow_id}</h3>
+                        <p>
+                          run {run.id} · version {run.workflow_version}
+                        </p>
+                      </div>
+                      <span className={`health-pill ${run.status}`}>{run.status}</span>
                     </div>
-                    <span className={`health-pill ${run.status}`}>{run.status}</span>
-                  </div>
-                  <p className="activity-copy">
-                    Created {formatTimestamp(run.created_at)} · events {run.event_count}
-                  </p>
-                  <Link className="activity-link" href={`/runs/${run.id}`}>
-                    查看 run 诊断面板
-                  </Link>
-                </article>
-              ))
+                    <p className="activity-copy">
+                      Created {formatTimestamp(run.created_at)} · events {run.event_count}
+                    </p>
+                    <Link className="activity-link" href={runDetailLink.href}>
+                      {runDetailLink.label}
+                    </Link>
+                  </article>
+                );
+              })
             )}
           </div>
         </article>
@@ -328,9 +381,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="section-copy entry-copy">
               从最近 run 进入独立诊断页后，可以继续看节点输入输出、错误信息和完整事件 payload。
             </p>
-            {latestRun ? (
-              <Link className="inline-link" href={`/runs/${latestRun.id}`}>
-                打开最新 run 诊断面板
+            {latestRunDetailLink ? (
+              <Link className="inline-link" href={latestRunDetailLink.href}>
+                {latestRunDetailLink.label}
               </Link>
             ) : (
               <p className="empty-state compact">当前还没有可打开的 run 诊断记录。</p>

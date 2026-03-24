@@ -1,16 +1,27 @@
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 
+import { WorkbenchEntryLink } from "@/components/workbench-entry-links";
 import {
   WORKFLOW_BUSINESS_TRACKS,
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import {
+  buildWorkspaceStarterMetadataIdleMessage,
+  type WorkspaceStarterMessageTone
+} from "@/lib/workspace-starter-mutation-presenters";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
+import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
-import type {
-  WorkspaceStarterFormState,
-  WorkspaceStarterMessageTone
+import {
+  buildWorkspaceStarterSourceGovernancePresenter,
+  resolveWorkspaceStarterCreateWorkflowActionLabel
 } from "./shared";
+import type { WorkspaceStarterFormState } from "./shared";
 
 type WorkspaceStarterMetadataPanelProps = {
   selectedTemplate: WorkspaceStarterTemplateItem | null;
@@ -21,6 +32,8 @@ type WorkspaceStarterMetadataPanelProps = {
   isMutating: boolean;
   message: string | null;
   messageTone: WorkspaceStarterMessageTone;
+  createWorkflowHref: string | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   setFormState: Dispatch<SetStateAction<WorkspaceStarterFormState | null>>;
   onSave: () => void;
   onTemplateMutation: (action: "archive" | "restore" | "delete") => void;
@@ -35,10 +48,35 @@ export function WorkspaceStarterMetadataPanel({
   isMutating,
   message,
   messageTone,
+  createWorkflowHref,
+  workspaceStarterGovernanceQueryScope = null,
   setFormState,
   onSave,
   onTemplateMutation
 }: WorkspaceStarterMetadataPanelProps) {
+  const sourceGovernanceKind = selectedTemplate
+    ? buildWorkspaceStarterSourceGovernancePresenter(selectedTemplate).kind
+    : null;
+  const createWorkflowActionLabel = selectedTemplate
+    ? resolveWorkspaceStarterCreateWorkflowActionLabel({
+        governanceKind: sourceGovernanceKind,
+        createWorkflowHref,
+        archived: selectedTemplate.archived
+      }) ?? "带此 starter 回到创建页"
+    : "带此 starter 回到创建页";
+  const sourceWorkflowLink = selectedTemplate?.created_from_workflow_id
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+          workflowId: selectedTemplate.created_from_workflow_id,
+          viewState: workspaceStarterGovernanceQueryScope,
+          variant: "source"
+        })
+      : buildAuthorFacingWorkflowDetailLinkSurface({
+          workflowId: selectedTemplate.created_from_workflow_id,
+          variant: "source"
+        })
+    : null;
+
   return (
     <article className="diagnostic-panel">
       <div className="section-heading">
@@ -203,20 +241,24 @@ export function WorkspaceStarterMetadataPanel({
                   >
                     {isMutating ? "处理中..." : "归档模板"}
                   </button>
-                  <Link
-                    className="inline-link secondary"
-                    href={`/workflows/new?starter=${encodeURIComponent(selectedTemplate.id)}`}
-                  >
-                    带此 starter 回到创建页
-                  </Link>
+                  {createWorkflowHref ? (
+                    <WorkbenchEntryLink
+                      className="inline-link secondary"
+                      linkKey="createWorkflow"
+                      override={{ href: createWorkflowHref }}
+                    >
+                      {createWorkflowActionLabel}
+                    </WorkbenchEntryLink>
+                  ) : (
+                    <span className="binding-meta">
+                      当前 starter 已归档；恢复后才会重新出现在创建页。
+                    </span>
+                  )}
                 </>
               )}
-              {selectedTemplate.created_from_workflow_id ? (
-                <Link
-                  className="inline-link secondary"
-                  href={`/workflows/${encodeURIComponent(selectedTemplate.created_from_workflow_id)}`}
-                >
-                  打开源 workflow
+              {sourceWorkflowLink ? (
+                <Link className="inline-link secondary" href={sourceWorkflowLink.href}>
+                  {sourceWorkflowLink.label}
                 </Link>
               ) : null}
               <button
@@ -230,8 +272,7 @@ export function WorkspaceStarterMetadataPanel({
             </div>
 
             <p className={`sync-message ${messageTone}`}>
-              {message ??
-                "更新后会直接写回 workspace starter library，创建页会立刻复用最新元数据。"}
+              {message ?? buildWorkspaceStarterMetadataIdleMessage()}
             </p>
           </div>
         </>

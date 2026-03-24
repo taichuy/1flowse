@@ -1,21 +1,32 @@
 import { formatDuration, formatTimestamp } from "@/lib/runtime-presenters";
 import type { RunDetail } from "@/lib/get-run-detail";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { RunTraceQuery } from "@/lib/get-run-trace";
 
+import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
 import { PayloadCard, countErroredNodes } from "@/components/run-diagnostics-panel/shared";
+import { buildRunDiagnosticsExecutionViewHref } from "@/lib/run-diagnostics-links";
+import { buildExecutionFocusSurfaceDescription } from "@/lib/run-execution-focus-presenters";
 
 type RunDiagnosticsOverviewSectionsProps = {
   run: RunDetail;
   eventTypes: Record<string, number>;
   activeFilters: string[];
   activeTraceQuery: RunTraceQuery;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function RunDiagnosticsOverviewSections({
   run,
   eventTypes,
   activeFilters,
-  activeTraceQuery
+  activeTraceQuery,
+  callbackWaitingAutomation = null,
+  sandboxReadiness = null
 }: RunDiagnosticsOverviewSectionsProps) {
   return (
     <>
@@ -67,6 +78,15 @@ export function RunDiagnosticsOverviewSections({
               <pre>{run.error_message}</pre>
             </div>
           ) : null}
+
+          <RunDetailExecutionFocusCard
+            run={run}
+            description={buildExecutionFocusSurfaceDescription("diagnostics")}
+            callbackWaitingAutomation={callbackWaitingAutomation}
+            sandboxReadiness={sandboxReadiness}
+            recommendedNextStepHref={buildRunDiagnosticsExecutionViewHref(run.id)}
+            recommendedNextStepHrefLabel="jump to execution facts"
+          />
         </article>
 
         <article className="diagnostic-panel">

@@ -1,14 +1,30 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 
+import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
+import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import type { RunDetail } from "@/lib/get-run-detail";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import {
   DEFAULT_RUN_TRACE_LIMIT,
   type RunTrace
 } from "@/lib/get-run-trace";
 import type { WorkflowRunListItem } from "@/lib/get-workflow-runs";
+import { buildOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
+import { buildOperatorRunSampleInboxHref } from "@/lib/operator-run-sample-cards";
+import { buildExecutionFocusSurfaceDescription } from "@/lib/run-execution-focus-presenters";
+import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 import {
   formatDuration,
   formatDurationMs,
@@ -19,9 +35,13 @@ type WorkflowRunOverlayPanelProps = {
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
   run: RunDetail | null;
+  runSnapshot: RunSnapshotWithId | null;
   trace: RunTrace | null;
   traceError?: string | null;
   selectedNodeId?: string | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   isLoading: boolean;
   isRefreshingRuns: boolean;
   onSelectRunId: (runId: string) => void;
@@ -32,19 +52,51 @@ export function WorkflowRunOverlayPanel({
   runs,
   selectedRunId,
   run,
+  runSnapshot,
   trace,
   traceError,
   selectedNodeId,
+  callbackWaitingAutomation,
+  sandboxReadiness,
+  workspaceStarterGovernanceQueryScope = null,
   isLoading,
   isRefreshingRuns,
   onSelectRunId,
   onRefreshRuns
 }: WorkflowRunOverlayPanelProps) {
+  const runSnapshotModel = runSnapshot?.snapshot ?? null;
   const selectedNodeRun =
     selectedNodeId && run
       ? run.node_runs.find((nodeRun) => nodeRun.node_id === selectedNodeId) ?? null
       : null;
   const tracePreview = trace?.events.slice(-6) ?? [];
+  const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshotModel);
+  const callbackWaitingSummaryProps = runSnapshot
+    ? {
+        inboxHref: buildOperatorRunSampleInboxHref(runSnapshot),
+        callbackTickets: runSnapshot.callbackTickets ?? [],
+        callbackWaitingAutomation,
+        sensitiveAccessEntries: runSnapshot.sensitiveAccessEntries ?? [],
+        showSensitiveAccessInlineActions: false
+      }
+    : undefined;
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      workspaceStarterGovernanceQueryScope
+        ? buildRunDetailHrefFromWorkspaceStarterViewState(
+            candidateRunId,
+            workspaceStarterGovernanceQueryScope
+          )
+        : null,
+    [workspaceStarterGovernanceQueryScope]
+  );
+  const runDrilldownLink = run
+    ? buildOperatorRunDetailLinkSurface({
+        runId: run.id,
+        runHref: resolveRunDetailHref(run.id),
+        hrefLabel: "打开 run diagnostics"
+      })
+    : null;
 
   return (
     <article className="diagnostic-panel editor-panel">
@@ -112,11 +164,13 @@ export function WorkflowRunOverlayPanel({
               </p>
 
               <div className="hero-actions">
-                <Link className="inline-link" href={`/runs/${encodeURIComponent(run.id)}`}>
-                  打开 run diagnostics
-                </Link>
+                {runDrilldownLink ? (
+                  <Link className="inline-link" href={runDrilldownLink.href}>
+                    {runDrilldownLink.label}
+                  </Link>
+                ) : null}
                 <RunTraceExportActions
-                  blockedSummary="当前 overlay trace export 已接入统一敏感访问控制；可先查看审批票据和关联 run，再决定是否继续申请导出。"
+                  callbackWaitingAutomation={callbackWaitingAutomation}
                   formats={["json"]}
                   query={{
                     limit: DEFAULT_RUN_TRACE_LIMIT,
@@ -124,6 +178,7 @@ export function WorkflowRunOverlayPanel({
                   }}
                   requesterId="workflow-run-overlay-export"
                   runId={run.id}
+                  sandboxReadiness={sandboxReadiness}
                 />
               </div>
 
@@ -148,6 +203,34 @@ export function WorkflowRunOverlayPanel({
                   ) : null}
                 </div>
               ) : null}
+
+              {runSnapshotModel ? (
+                <div className="runtime-overlay-focus-card">
+                  <p className="section-copy entry-copy">
+                    {buildExecutionFocusSurfaceDescription("overlay")}
+                  </p>
+                  <InlineOperatorActionFeedback
+                    status="success"
+                    message=""
+                    resolveRunDetailHref={resolveRunDetailHref}
+                    runId={run.id}
+                    runSnapshot={runSnapshotModel}
+                    callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+                    sandboxReadiness={sandboxReadiness}
+                    title="Execution focus"
+                  />
+                  {sandboxReadinessNode ? (
+                    <SandboxExecutionReadinessCard
+                      node={sandboxReadinessNode}
+                      readiness={sandboxReadiness}
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <p className="empty-state compact">
+                  当前 run 还没有可复用的 canonical execution focus snapshot。
+                </p>
+              )}
 
               <div className="timeline-list runtime-overlay-timeline">
                 {run.node_runs.length === 0 ? (

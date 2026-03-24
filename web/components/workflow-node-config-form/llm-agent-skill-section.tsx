@@ -1,26 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { dedupeStrings } from "@/components/workflow-node-config-form/shared";
+import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import {
   getSkillCatalog,
   getSkillDetail,
   type SkillCatalogDetail,
   type SkillCatalogListItem
 } from "@/lib/get-skills";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 
 type LlmAgentSkillSectionProps = {
   skillIds: string[];
   onChange: (nextSkillIds: string[]) => void;
   workspaceId?: string;
+  highlightedFieldKey?: string | null;
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
 };
 
 export function LlmAgentSkillSection({
   skillIds,
   onChange,
-  workspaceId = "default"
+  workspaceId = "default",
+  highlightedFieldKey = null,
+  focusedValidationItem = null
 }: LlmAgentSkillSectionProps) {
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const [catalog, setCatalog] = useState<SkillCatalogListItem[]>([]);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
@@ -142,6 +149,25 @@ export function LlmAgentSkillSection({
     });
   }, [catalog, searchQuery]);
   const activeSkillDetail = activeSkillId ? detailById[activeSkillId] ?? null : null;
+  const highlightSkillIds = highlightedFieldKey === "skillIds";
+
+  useEffect(() => {
+    if (!highlightedFieldKey) {
+      return;
+    }
+
+    const container = sectionRef.current?.querySelector(
+      `[data-validation-field="${highlightedFieldKey}"] textarea, ` +
+        `[data-validation-field="${highlightedFieldKey}"] input`
+    );
+
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+
+    container.scrollIntoView({ block: "center", behavior: "smooth" });
+    container.focus();
+  }, [highlightedFieldKey]);
 
   const updateRawSkillIds = (rawValue: string) => {
     onChange(
@@ -169,12 +195,16 @@ export function LlmAgentSkillSection({
   };
 
   return (
-    <div className="binding-field">
+    <div className="binding-field" ref={sectionRef}>
       <span className="binding-label">Skill catalog</span>
       <small className="section-copy">
         这里绑定 service-hosted `SkillDoc`，用于 `llm_agent` 的认知注入与 reference 摘要预览；
         不接管本地执行。
       </small>
+
+      {focusedValidationItem && highlightSkillIds ? (
+        <WorkflowValidationRemediationCard item={focusedValidationItem} />
+      ) : null}
 
       <label className="binding-field">
         <span className="binding-label">Search skills</span>
@@ -233,7 +263,10 @@ export function LlmAgentSkillSection({
         </div>
       )}
 
-      <label className="binding-field">
+      <label
+        className={`binding-field ${highlightSkillIds ? "validation-focus-ring" : ""}`.trim()}
+        data-validation-field="skillIds"
+      >
         <span className="binding-label">Selected skill IDs</span>
         <textarea
           className="editor-json-area"

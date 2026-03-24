@@ -3,6 +3,24 @@
 import { revalidatePath } from "next/cache";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import {
+  buildWorkflowPublishApiKeyMutationFallbackErrorMessage,
+  buildWorkflowPublishApiKeyMutationNetworkErrorMessage,
+  buildWorkflowPublishApiKeyMutationSuccessMessage,
+  buildWorkflowPublishApiKeyMutationValidationMessage,
+  buildWorkflowPublishLifecycleMutationFallbackErrorMessage,
+  buildWorkflowPublishLifecycleMutationNetworkErrorMessage,
+  buildWorkflowPublishLifecycleMutationSuccessMessage,
+  buildWorkflowPublishLifecycleMutationValidationMessage
+} from "@/lib/workflow-publish-binding-presenters";
+import type { WorkflowPublishedEndpointLegacyAuthCleanupResult } from "@/lib/get-workflow-publish";
+import {
+  buildWorkflowPublishLegacyAuthCleanupFallbackErrorMessage,
+  buildWorkflowPublishLegacyAuthCleanupNetworkErrorMessage,
+  buildWorkflowPublishLegacyAuthCleanupSuccessMessage,
+  buildWorkflowPublishLegacyAuthCleanupValidationMessage,
+} from "@/lib/workflow-publish-legacy-auth-cleanup";
+import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 export type UpdatePublishedEndpointLifecycleState = {
   status: "idle" | "success" | "error";
@@ -30,6 +48,13 @@ export type RevokePublishedEndpointApiKeyState = {
   keyId: string;
 };
 
+export type CleanupLegacyPublishedEndpointBindingsState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  workflowId: string;
+  bindingIds: string[];
+};
+
 export async function updatePublishedEndpointLifecycle(
   _: UpdatePublishedEndpointLifecycleState,
   formData: FormData
@@ -45,7 +70,7 @@ export async function updatePublishedEndpointLifecycle(
   ) {
     return {
       status: "error",
-      message: "缺少发布 binding 信息，无法更新发布状态。",
+      message: buildWorkflowPublishLifecycleMutationValidationMessage(),
       workflowId,
       bindingId,
       nextStatus: nextStatus === "offline" ? "offline" : "published"
@@ -76,17 +101,22 @@ export async function updatePublishedEndpointLifecycle(
     if (!response.ok) {
       return {
         status: "error",
-        message: body?.detail ?? "更新发布状态失败。",
+        message: body?.detail ?? buildWorkflowPublishLifecycleMutationFallbackErrorMessage(nextStatus),
         workflowId,
         bindingId,
         nextStatus
       };
     }
 
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
-      message: `${body?.endpoint_name ?? bindingId} 已切换为 ${body?.lifecycle_status ?? nextStatus}。`,
+      message: buildWorkflowPublishLifecycleMutationSuccessMessage({
+        endpointName: body?.endpoint_name,
+        bindingId,
+        lifecycleStatus: body?.lifecycle_status,
+        nextStatus
+      }),
       workflowId,
       bindingId,
       nextStatus
@@ -94,7 +124,7 @@ export async function updatePublishedEndpointLifecycle(
   } catch {
     return {
       status: "error",
-      message: "无法连接后端更新发布状态。",
+      message: buildWorkflowPublishLifecycleMutationNetworkErrorMessage(nextStatus),
       workflowId,
       bindingId,
       nextStatus
@@ -113,7 +143,7 @@ export async function createPublishedEndpointApiKey(
   if (!workflowId || !bindingId || !name) {
     return {
       status: "error",
-      message: "缺少 API key 所需信息，无法创建。",
+      message: buildWorkflowPublishApiKeyMutationValidationMessage("create"),
       workflowId,
       bindingId,
       name,
@@ -144,7 +174,7 @@ export async function createPublishedEndpointApiKey(
     if (!response.ok) {
       return {
         status: "error",
-        message: body?.detail ?? "创建 API key 失败。",
+        message: body?.detail ?? buildWorkflowPublishApiKeyMutationFallbackErrorMessage("create"),
         workflowId,
         bindingId,
         name,
@@ -153,10 +183,13 @@ export async function createPublishedEndpointApiKey(
       };
     }
 
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
-      message: `${body?.name ?? name} 已创建，请立即保存 secret，本页不会再次展示。`,
+      message: buildWorkflowPublishApiKeyMutationSuccessMessage({
+        action: "create",
+        name: body?.name ?? name
+      }),
       workflowId,
       bindingId,
       name: "",
@@ -166,12 +199,82 @@ export async function createPublishedEndpointApiKey(
   } catch {
     return {
       status: "error",
-      message: "无法连接后端创建 API key。",
+      message: buildWorkflowPublishApiKeyMutationNetworkErrorMessage("create"),
       workflowId,
       bindingId,
       name,
       secretKey: null,
       keyPrefix: null
+    };
+  }
+}
+
+export async function cleanupLegacyPublishedEndpointBindings(
+  _: CleanupLegacyPublishedEndpointBindingsState,
+  formData: FormData
+): Promise<CleanupLegacyPublishedEndpointBindingsState> {
+  const workflowId = String(formData.get("workflowId") ?? "").trim();
+  const bindingIds = formData
+    .getAll("bindingId")
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+
+  if (!workflowId || bindingIds.length === 0) {
+    return {
+      status: "error",
+      message: buildWorkflowPublishLegacyAuthCleanupValidationMessage(),
+      workflowId,
+      bindingIds
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+        workflowId
+      )}/published-endpoints/legacy-auth-cleanup`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ binding_ids: bindingIds }),
+        cache: "no-store"
+      }
+    );
+
+    const body = (await response.json().catch(() => null)) as
+      | ({ detail?: string } & Partial<WorkflowPublishedEndpointLegacyAuthCleanupResult>)
+      | null;
+
+    if (!response.ok) {
+      return {
+        status: "error",
+        message: body?.detail ?? buildWorkflowPublishLegacyAuthCleanupFallbackErrorMessage(),
+        workflowId,
+        bindingIds
+      };
+    }
+
+    revalidatePath(buildWorkflowDetailHref(workflowId));
+    return {
+      status: "success",
+      message: buildWorkflowPublishLegacyAuthCleanupSuccessMessage({
+        requested_count: body?.requested_count ?? bindingIds.length,
+        updated_count: body?.updated_count ?? 0,
+        skipped_count: body?.skipped_count ?? 0,
+        updated_binding_ids: body?.updated_binding_ids ?? [],
+        skipped_items: body?.skipped_items ?? []
+      }),
+      workflowId,
+      bindingIds
+    };
+  } catch {
+    return {
+      status: "error",
+      message: buildWorkflowPublishLegacyAuthCleanupNetworkErrorMessage(),
+      workflowId,
+      bindingIds
     };
   }
 }
@@ -188,7 +291,7 @@ export async function revokePublishedEndpointApiKey(
   if (!workflowId || !bindingId || !keyId) {
     return {
       status: "error",
-      message: "缺少 API key 标识，无法撤销。",
+      message: buildWorkflowPublishApiKeyMutationValidationMessage("revoke"),
       workflowId,
       bindingId,
       keyId
@@ -215,17 +318,21 @@ export async function revokePublishedEndpointApiKey(
     if (!response.ok) {
       return {
         status: "error",
-        message: body?.detail ?? "撤销 API key 失败。",
+        message: body?.detail ?? buildWorkflowPublishApiKeyMutationFallbackErrorMessage("revoke"),
         workflowId,
         bindingId,
         keyId
       };
     }
 
-    revalidatePath(`/workflows/${workflowId}`);
+    revalidatePath(buildWorkflowDetailHref(workflowId));
     return {
       status: "success",
-      message: `${body?.name ?? keyName ?? keyId} 已撤销。`,
+      message: buildWorkflowPublishApiKeyMutationSuccessMessage({
+        action: "revoke",
+        name: body?.name ?? keyName,
+        keyId
+      }),
       workflowId,
       bindingId,
       keyId
@@ -233,7 +340,7 @@ export async function revokePublishedEndpointApiKey(
   } catch {
     return {
       status: "error",
-      message: "无法连接后端撤销 API key。",
+      message: buildWorkflowPublishApiKeyMutationNetworkErrorMessage("revoke"),
       workflowId,
       bindingId,
       keyId

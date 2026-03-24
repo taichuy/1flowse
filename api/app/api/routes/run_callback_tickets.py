@@ -7,6 +7,17 @@ from app.schemas.run import (
     CallbackTicketCleanupRequest,
     CallbackTicketCleanupResponse,
 )
+from app.services.callback_blocker_deltas import (
+    build_callback_blocker_delta_summary,
+    capture_callback_blocker_snapshot,
+)
+from app.services.operator_run_follow_up import (
+    build_operator_run_follow_up_summary,
+    load_operator_run_snapshot,
+)
+from app.services.run_action_explanations import (
+    build_callback_cleanup_outcome_explanation,
+)
 from app.services.run_callback_ticket_cleanup import (
     CallbackTicketCleanupResult,
     RunCallbackTicketCleanupService,
@@ -18,6 +29,11 @@ cleanup_service = RunCallbackTicketCleanupService()
 
 def _serialize_cleanup_result(
     result: CallbackTicketCleanupResult,
+    *,
+    outcome_explanation=None,
+    callback_blocker_delta=None,
+    run_snapshot=None,
+    run_follow_up=None,
 ) -> CallbackTicketCleanupResponse:
     return CallbackTicketCleanupResponse(
         source=result.source,
@@ -48,7 +64,23 @@ def _serialize_cleanup_result(
             )
             for item in result.items
         ],
+        outcome_explanation=outcome_explanation,
+        callback_blocker_delta=callback_blocker_delta,
+        run_snapshot=run_snapshot,
+        run_follow_up=run_follow_up,
     )
+
+
+def _resolve_primary_run_id(
+    *,
+    requested_run_id: str | None,
+    affected_run_ids: list[str],
+) -> str | None:
+    if requested_run_id:
+        return requested_run_id
+    if len(affected_run_ids) == 1:
+        return affected_run_ids[0]
+    return None
 
 
 @router.post("/cleanup", response_model=CallbackTicketCleanupResponse)
@@ -56,6 +88,17 @@ def cleanup_stale_run_callback_tickets(
     payload: CallbackTicketCleanupRequest,
     db: Session = Depends(get_db),
 ) -> CallbackTicketCleanupResponse:
+    scoped_run_id = (payload.run_id or "").strip() or None
+    scoped_node_run_id = (payload.node_run_id or "").strip() or None
+    before_blocker = (
+        capture_callback_blocker_snapshot(
+            db,
+            run_id=scoped_run_id,
+            node_run_id=scoped_node_run_id,
+        )
+        if scoped_run_id is not None
+        else None
+    )
     result = cleanup_service.cleanup_stale_tickets(
         db,
         source=payload.source,
@@ -68,4 +111,33 @@ def cleanup_stale_run_callback_tickets(
     )
     if not payload.dry_run:
         db.commit()
-    return _serialize_cleanup_result(result)
+    run_follow_up = build_operator_run_follow_up_summary(db, result.run_ids)
+    outcome_explanation = build_callback_cleanup_outcome_explanation(
+        result,
+        run_follow_up,
+    )
+    primary_run_id = _resolve_primary_run_id(
+        requested_run_id=payload.run_id,
+        affected_run_ids=result.run_ids,
+    )
+    after_blocker = (
+        capture_callback_blocker_snapshot(
+            db,
+            run_id=primary_run_id,
+            node_run_id=scoped_node_run_id,
+        )
+        if before_blocker is not None and primary_run_id is not None
+        else None
+    )
+    return _serialize_cleanup_result(
+        result,
+        outcome_explanation=outcome_explanation,
+        callback_blocker_delta=build_callback_blocker_delta_summary(
+            before=before_blocker,
+            after=after_blocker,
+        )
+        if before_blocker is not None
+        else None,
+        run_snapshot=load_operator_run_snapshot(db, primary_run_id),
+        run_follow_up=run_follow_up,
+    )

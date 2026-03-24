@@ -2,8 +2,18 @@ from __future__ import annotations
 
 from fastapi import status
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
+from app.services.operator_run_follow_up import (
+    build_operator_run_follow_up_summary,
+    load_operator_run_snapshot,
+    resolve_operator_run_snapshot_from_follow_up,
+)
+from app.services.sensitive_access_action_explanations import (
+    build_sensitive_access_timeline_outcome_explanation,
+)
 from app.services.sensitive_access_reasoning import describe_sensitive_access_reasoning
+from app.services.sensitive_access_run_resolution import collect_sensitive_access_run_ids
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
 __all__ = [
@@ -68,9 +78,63 @@ def serialize_sensitive_access_bundle(bundle: SensitiveAccessRequestBundle) -> d
     }
 
 
+def _build_sensitive_access_run_context(
+    db: Session,
+    bundle: SensitiveAccessRequestBundle,
+) -> dict:
+    payload: dict[str, object | None] = {
+        "outcome_explanation": build_sensitive_access_timeline_outcome_explanation(
+            bundle
+        ).model_dump(mode="json")
+    }
+
+    metadata_payload = (
+        bundle.resource.metadata_payload
+        if isinstance(bundle.resource.metadata_payload, dict)
+        else {}
+    )
+    metadata_run_ids = metadata_payload.get("run_ids")
+    extra_run_ids: list[object | None] = [metadata_payload.get("run_id")]
+    if isinstance(metadata_run_ids, (list, tuple, set)):
+        extra_run_ids.extend(metadata_run_ids)
+    elif isinstance(metadata_run_ids, str):
+        extra_run_ids.append(metadata_run_ids)
+
+    run_ids = collect_sensitive_access_run_ids(
+        db,
+        scopes=[
+            (bundle.access_request.run_id, bundle.access_request.node_run_id),
+            (
+                bundle.approval_ticket.run_id if bundle.approval_ticket is not None else None,
+                bundle.approval_ticket.node_run_id if bundle.approval_ticket is not None else None,
+            ),
+        ],
+        extra_run_ids=extra_run_ids,
+    )
+
+    if not run_ids:
+        return payload
+
+    primary_run_id = run_ids[0]
+    run_follow_up = build_operator_run_follow_up_summary(db, run_ids)
+    run_snapshot = resolve_operator_run_snapshot_from_follow_up(
+        run_follow_up,
+        run_id=primary_run_id,
+    )
+    if run_snapshot is None:
+        run_snapshot = load_operator_run_snapshot(db, primary_run_id)
+
+    payload["run_snapshot"] = (
+        run_snapshot.model_dump(mode="json") if run_snapshot is not None else None
+    )
+    payload["run_follow_up"] = run_follow_up.model_dump(mode="json")
+    return payload
+
+
 def build_sensitive_access_blocking_response(
     bundle: SensitiveAccessRequestBundle | None,
     *,
+    db: Session,
     approval_detail: str,
     deny_detail: str,
 ) -> JSONResponse | None:
@@ -78,6 +142,7 @@ def build_sensitive_access_blocking_response(
         return None
 
     payload = serialize_sensitive_access_bundle(bundle)
+    payload.update(_build_sensitive_access_run_context(db, bundle))
     if (
         bundle.access_request.decision == "require_approval"
         and bundle.approval_ticket is not None

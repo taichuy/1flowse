@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
+import { fetchRunSnapshotWithContext } from "@/app/actions/run-snapshot";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-runs";
@@ -20,6 +22,7 @@ export function useWorkflowRunOverlay({
   const [availableRuns, setAvailableRuns] = useState(recentRuns);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(recentRuns[0]?.id ?? null);
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunDetail | null>(null);
+  const [selectedRunSnapshot, setSelectedRunSnapshot] = useState<RunSnapshotWithId | null>(null);
   const [selectedRunTrace, setSelectedRunTrace] = useState<RunTrace | null>(null);
   const [runOverlayError, setRunOverlayError] = useState<string | null>(null);
   const [isLoadingRunOverlay, setIsLoadingRunOverlay] = useState(false);
@@ -29,6 +32,7 @@ export function useWorkflowRunOverlay({
     setAvailableRuns(recentRuns);
     setSelectedRunId(recentRuns[0]?.id ?? null);
     setSelectedRunDetail(null);
+    setSelectedRunSnapshot(null);
     setSelectedRunTrace(null);
     setRunOverlayError(null);
     setIsLoadingRunOverlay(false);
@@ -40,6 +44,7 @@ export function useWorkflowRunOverlay({
 
     if (!selectedRunId) {
       setSelectedRunDetail(null);
+      setSelectedRunSnapshot(null);
       setSelectedRunTrace(null);
       setRunOverlayError(null);
       setIsLoadingRunOverlay(false);
@@ -50,18 +55,21 @@ export function useWorkflowRunOverlay({
 
     setIsLoadingRunOverlay(true);
 
-    void Promise.all([fetchRunDetail(selectedRunId), fetchRunTrace(selectedRunId)]).then(
-      ([runDetail, traceResult]) => {
+    void Promise.all([
+      fetchRunDetail(selectedRunId),
+      fetchRunSnapshotWithContext(selectedRunId),
+      fetchRunTrace(selectedRunId)
+    ]).then(([runDetail, runSnapshot, traceResult]) => {
         if (isCancelled) {
           return;
         }
 
         setSelectedRunDetail(runDetail);
+        setSelectedRunSnapshot(runSnapshot);
         setSelectedRunTrace(traceResult.trace);
         setRunOverlayError(traceResult.errorMessage);
         setIsLoadingRunOverlay(false);
-      }
-    );
+      });
 
     return () => {
       isCancelled = true;
@@ -86,6 +94,7 @@ export function useWorkflowRunOverlay({
     selectedRunId,
     setSelectedRunId,
     selectedRunDetail,
+    selectedRunSnapshot,
     selectedRunTrace,
     runOverlayError,
     isLoadingRunOverlay,

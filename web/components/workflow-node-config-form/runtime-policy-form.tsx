@@ -1,7 +1,11 @@
 "use client";
 
+import React from "react";
 import type { Edge, Node } from "@xyflow/react";
 
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import type {
   WorkflowCanvasEdgeData,
   WorkflowCanvasNodeData
@@ -25,6 +29,9 @@ type WorkflowNodeRuntimePolicyFormProps = {
   edges: Array<Edge<WorkflowCanvasEdgeData>>;
   onChange: (nextRuntimePolicy: Record<string, unknown> | undefined) => void;
   highlighted?: boolean;
+  highlightedFieldPath?: string | null;
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 const JOIN_MODES = ["any", "all"] as const;
@@ -36,11 +43,16 @@ export function WorkflowNodeRuntimePolicyForm({
   nodes,
   edges,
   onChange,
-  highlighted = false
+  highlighted = false,
+  highlightedFieldPath = null,
+  focusedValidationItem = null,
+  sandboxReadiness = null
 }: WorkflowNodeRuntimePolicyFormProps) {
+  const sectionRef = React.useRef<HTMLDivElement | null>(null);
   const runtimePolicy = cloneRecord(node.data.runtimePolicy ?? {});
   const retry = readRetryPolicy(runtimePolicy);
   const join = toRecord(runtimePolicy.join);
+  const normalizedHighlightedField = normalizeRuntimePolicyFieldKey(highlightedFieldPath);
   const incomingNodes = listIncomingNodes(node.id, nodes, edges);
   const joinSupported = node.data.nodeType !== "trigger" && incomingNodes.length > 0;
   const joinEnabled = joinSupported && Boolean(join);
@@ -51,6 +63,28 @@ export function WorkflowNodeRuntimePolicyForm({
   const joinOnUnmet = typeof join?.onUnmet === "string" ? join.onUnmet : "skip";
   const joinMergeStrategy =
     typeof join?.mergeStrategy === "string" ? join.mergeStrategy : "error";
+  const showRuntimePolicyRemediation =
+    Boolean(focusedValidationItem && normalizedHighlightedField) &&
+    !normalizedHighlightedField?.startsWith("execution.");
+  const retryHighlighted =
+    normalizedHighlightedField === "retry" || normalizedHighlightedField?.startsWith("retry.");
+  const joinHighlighted =
+    normalizedHighlightedField === "join" || normalizedHighlightedField?.startsWith("join.");
+
+  React.useEffect(() => {
+    if (!normalizedHighlightedField) {
+      return;
+    }
+
+    const targetContainer = sectionRef.current?.querySelector<HTMLElement>(
+      `[data-validation-field="${normalizedHighlightedField}"]`
+    );
+    const target =
+      targetContainer?.querySelector<HTMLElement>("input, select, textarea") ?? targetContainer;
+
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    target?.focus();
+  }, [normalizedHighlightedField, joinEnabled, joinMode, joinSupported]);
 
   const updateRetryField = (
     field: "maxAttempts" | "backoffSeconds" | "backoffMultiplier",
@@ -119,7 +153,10 @@ export function WorkflowNodeRuntimePolicyForm({
   };
 
   return (
-    <div className={`binding-form compact-stack ${highlighted ? "validation-focus-ring" : ""}`.trim()}>
+    <div
+      ref={sectionRef}
+      className={`binding-form compact-stack ${highlighted ? "validation-focus-ring" : ""}`.trim()}
+    >
       <div className="binding-field">
         <span className="binding-label">Runtime policy</span>
         <small className="section-copy">
@@ -127,16 +164,32 @@ export function WorkflowNodeRuntimePolicyForm({
         </small>
       </div>
 
+      {showRuntimePolicyRemediation && focusedValidationItem ? (
+        <WorkflowValidationRemediationCard
+          item={focusedValidationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
+
       <WorkflowNodeRuntimePolicyExecutionSection
         nodeId={node.id}
         nodeType={node.data.nodeType}
         runtimePolicy={runtimePolicy}
         onChange={onChange}
+        highlightedFieldPath={highlightedFieldPath}
+        focusedValidationItem={focusedValidationItem}
+        sandboxReadiness={sandboxReadiness}
       />
 
-      <div className="binding-field compact-stack">
+      <div
+        className={`binding-field compact-stack ${retryHighlighted ? "validation-focus-ring" : ""}`.trim()}
+        data-validation-field="retry"
+      >
         <span className="binding-label">Retry policy</span>
-        <label className="binding-field">
+        <label
+          className={`binding-field ${normalizedHighlightedField === "retry.maxAttempts" ? "validation-focus-ring" : ""}`.trim()}
+          data-validation-field="retry.maxAttempts"
+        >
           <span className="binding-label">Max attempts</span>
           <input
             className="trace-text-input"
@@ -151,7 +204,10 @@ export function WorkflowNodeRuntimePolicyForm({
           />
         </label>
 
-        <label className="binding-field">
+        <label
+          className={`binding-field ${normalizedHighlightedField === "retry.backoffSeconds" ? "validation-focus-ring" : ""}`.trim()}
+          data-validation-field="retry.backoffSeconds"
+        >
           <span className="binding-label">Backoff seconds</span>
           <input
             className="trace-text-input"
@@ -168,7 +224,10 @@ export function WorkflowNodeRuntimePolicyForm({
           />
         </label>
 
-        <label className="binding-field">
+        <label
+          className={`binding-field ${normalizedHighlightedField === "retry.backoffMultiplier" ? "validation-focus-ring" : ""}`.trim()}
+          data-validation-field="retry.backoffMultiplier"
+        >
           <span className="binding-label">Backoff multiplier</span>
           <input
             className="trace-text-input"
@@ -192,12 +251,17 @@ export function WorkflowNodeRuntimePolicyForm({
         </small>
       </div>
 
-      <div className="binding-field compact-stack">
+      <div
+        className={`binding-field compact-stack ${joinHighlighted ? "validation-focus-ring" : ""}`.trim()}
+        data-validation-field="join"
+      >
         <span className="binding-label">Join policy</span>
 
         {joinSupported ? (
           <>
-            <label>
+            <label
+              className={normalizedHighlightedField === "join" ? "validation-focus-ring" : undefined}
+            >
               <input
                 type="checkbox"
                 checked={joinEnabled}
@@ -208,7 +272,10 @@ export function WorkflowNodeRuntimePolicyForm({
 
             {joinEnabled ? (
               <>
-                <label className="binding-field">
+                <label
+                  className={`binding-field ${normalizedHighlightedField === "join.mode" ? "validation-focus-ring" : ""}`.trim()}
+                  data-validation-field="join.mode"
+                >
                   <span className="binding-label">Mode</span>
                   <select
                     className="binding-select"
@@ -223,7 +290,10 @@ export function WorkflowNodeRuntimePolicyForm({
                   </select>
                 </label>
 
-                <label className="binding-field">
+                <label
+                  className={`binding-field ${normalizedHighlightedField === "join.onUnmet" ? "validation-focus-ring" : ""}`.trim()}
+                  data-validation-field="join.onUnmet"
+                >
                   <span className="binding-label">On unmet</span>
                   <select
                     className="binding-select"
@@ -238,7 +308,10 @@ export function WorkflowNodeRuntimePolicyForm({
                   </select>
                 </label>
 
-                <label className="binding-field">
+                <label
+                  className={`binding-field ${normalizedHighlightedField === "join.mergeStrategy" ? "validation-focus-ring" : ""}`.trim()}
+                  data-validation-field="join.mergeStrategy"
+                >
                   <span className="binding-label">Merge strategy</span>
                   <select
                     className="binding-select"
@@ -254,7 +327,10 @@ export function WorkflowNodeRuntimePolicyForm({
                 </label>
 
                 {joinMode === "all" ? (
-                  <div className="binding-field compact-stack">
+                  <div
+                    className={`binding-field compact-stack ${normalizedHighlightedField === "join.requiredNodeIds" ? "validation-focus-ring" : ""}`.trim()}
+                    data-validation-field="join.requiredNodeIds"
+                  >
                     <span className="binding-label">Required upstream nodes</span>
                     <small className="section-copy">
                       不勾选时默认等待全部入边来源；只在 `all` 模式下生效。
@@ -292,6 +368,31 @@ export function WorkflowNodeRuntimePolicyForm({
       </div>
     </div>
   );
+}
+
+function normalizeRuntimePolicyFieldKey(fieldPath?: string | null) {
+  const normalized = fieldPath?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "runtimePolicy.retry") {
+    return "retry";
+  }
+
+  if (normalized.startsWith("runtimePolicy.retry.")) {
+    return normalized.replace(/^runtimePolicy\./, "");
+  }
+
+  if (normalized === "runtimePolicy.join") {
+    return "join";
+  }
+
+  if (normalized.startsWith("runtimePolicy.join.")) {
+    return normalized.replace(/^runtimePolicy\./, "");
+  }
+
+  return null;
 }
 
 function readRetryPolicy(runtimePolicy: Record<string, unknown>) {

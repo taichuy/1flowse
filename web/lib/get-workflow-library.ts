@@ -1,5 +1,11 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type {
+  SignalFollowUpExplanation,
+  WorkspaceStarterSourceGovernanceKind,
+  WorkspaceStarterSourceActionDecisionPayload
+} from "@/lib/get-workspace-starters";
+import { buildWorkspaceStarterTemplateQueryParams } from "@/lib/get-workspace-starters";
 import type { WorkflowEdgeItem, WorkflowNodeItem } from "@/lib/get-workflows";
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
@@ -62,6 +68,19 @@ export type WorkflowLibraryStarterItem = {
   archivedAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  sourceGovernance?: WorkflowStarterSourceGovernance | null;
+};
+
+export type WorkflowStarterSourceGovernance = {
+  kind: "no_source" | "missing_source" | "synced" | "drifted";
+  statusLabel: string;
+  summary: string;
+  sourceWorkflowId?: string | null;
+  sourceWorkflowName?: string | null;
+  templateVersion?: string | null;
+  sourceVersion?: string | null;
+  actionDecision?: WorkspaceStarterSourceActionDecisionPayload | null;
+  outcomeExplanation?: SignalFollowUpExplanation | null;
 };
 
 export type WorkflowLibrarySnapshot = {
@@ -91,11 +110,31 @@ const fallbackSnapshot: WorkflowLibrarySnapshot = {
   tools: []
 };
 
-export async function getWorkflowLibrarySnapshot(
-  workspaceId = "default"
-): Promise<WorkflowLibrarySnapshot> {
-  const params = new URLSearchParams();
-  params.set("workspace_id", workspaceId);
+export async function getWorkflowLibrarySnapshot({
+  workspaceId = "default",
+  businessTrack,
+  search,
+  sourceGovernanceKind,
+  needsFollowUp = false,
+  includeBuiltinStarters = true
+}: {
+  workspaceId?: string;
+  businessTrack?: WorkflowBusinessTrack;
+  search?: string;
+  sourceGovernanceKind?: WorkspaceStarterSourceGovernanceKind;
+  needsFollowUp?: boolean;
+  includeBuiltinStarters?: boolean;
+} = {}): Promise<WorkflowLibrarySnapshot> {
+  const params = buildWorkspaceStarterTemplateQueryParams({
+    workspaceId,
+    businessTrack,
+    search,
+    sourceGovernanceKind,
+    needsFollowUp
+  });
+  if (!includeBuiltinStarters) {
+    params.set("include_builtin_starters", "false");
+  }
 
   try {
     const response = await fetch(
@@ -238,7 +277,52 @@ function normalizeStarterItem(input: Record<string, unknown>): WorkflowLibrarySt
     archived: Boolean(input.archived),
     archivedAt: asOptionalString(input.archived_at),
     createdAt: asOptionalString(input.created_at),
-    updatedAt: asOptionalString(input.updated_at)
+    updatedAt: asOptionalString(input.updated_at),
+    sourceGovernance: isRecord(input.source_governance)
+      ? normalizeStarterSourceGovernance(input.source_governance)
+      : null
+  };
+}
+
+function normalizeStarterSourceGovernance(
+  input: Record<string, unknown>
+): WorkflowStarterSourceGovernance {
+  return {
+    kind: asString(input.kind, "no_source") as WorkflowStarterSourceGovernance["kind"],
+    statusLabel: asString(input.status_label),
+    summary: asString(input.summary),
+    sourceWorkflowId: asOptionalString(input.source_workflow_id),
+    sourceWorkflowName: asOptionalString(input.source_workflow_name),
+    templateVersion: asOptionalString(input.template_version),
+    sourceVersion: asOptionalString(input.source_version),
+    actionDecision: isRecord(input.action_decision)
+      ? normalizeSourceActionDecision(input.action_decision)
+      : null,
+    outcomeExplanation: isRecord(input.outcome_explanation)
+      ? normalizeSignalFollowUpExplanation(input.outcome_explanation)
+      : null
+  };
+}
+
+function normalizeSourceActionDecision(
+  input: Record<string, unknown>
+): WorkspaceStarterSourceActionDecisionPayload {
+  return {
+    recommended_action: asString(input.recommended_action, "none") as WorkspaceStarterSourceActionDecisionPayload["recommended_action"],
+    status_label: asString(input.status_label),
+    summary: asString(input.summary),
+    can_refresh: Boolean(input.can_refresh),
+    can_rebase: Boolean(input.can_rebase),
+    fact_chips: asStringArray(input.fact_chips)
+  };
+}
+
+function normalizeSignalFollowUpExplanation(
+  input: Record<string, unknown>
+): SignalFollowUpExplanation {
+  return {
+    primary_signal: asOptionalString(input.primary_signal),
+    follow_up: asOptionalString(input.follow_up)
   };
 }
 

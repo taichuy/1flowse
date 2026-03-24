@@ -8,6 +8,13 @@ from app.services.plugin_runtime_types import (
 )
 from app.services.runtime_execution_policy import default_execution_class_for_tool_ecosystem
 from app.services.sandbox_backends import SandboxBackendClient, get_sandbox_backend_client
+from app.services.tool_execution_isolation import (
+    build_tool_execution_not_yet_isolated_reason,
+    describe_tool_execution_backend_selection,
+    is_strong_tool_execution_class,
+)
+
+_DEPENDENCY_MODES = {"builtin", "dependency_ref", "backend_managed"}
 
 
 class PluginExecutionDispatchPlanner:
@@ -46,6 +53,7 @@ class PluginExecutionDispatchPlanner:
             and execution_source == "default"
         ):
             requested_execution_class = tool.default_execution_class
+            execution_source = "tool_default"
         requested_execution_profile = self._normalize_optional_string(
             requested_execution.get("profile")
         )
@@ -55,6 +63,23 @@ class PluginExecutionDispatchPlanner:
         )
         requested_filesystem_policy = self._normalize_optional_string(
             requested_execution.get("filesystemPolicy")
+        )
+        requested_dependency_mode = self._normalize_optional_enum(
+            requested_execution.get("dependencyMode"),
+            allowed=_DEPENDENCY_MODES,
+        )
+        requested_builtin_package_set = self._normalize_optional_string(
+            requested_execution.get("builtinPackageSet")
+        )
+        if requested_dependency_mode != "builtin":
+            requested_builtin_package_set = None
+        requested_dependency_ref = self._normalize_optional_string(
+            requested_execution.get("dependencyRef")
+        )
+        if requested_dependency_mode != "dependency_ref":
+            requested_dependency_ref = None
+        requested_backend_extensions = self._normalize_optional_object(
+            requested_execution.get("backendExtensions")
         )
 
         if request.ecosystem == "native":
@@ -70,6 +95,7 @@ class PluginExecutionDispatchPlanner:
             blocked_reason = None
             sandbox_backend_id = None
             sandbox_backend_executor_ref = None
+            sandbox_runner_kind = None
             if requested_execution_class != effective_execution_class:
                 if self._requires_fail_closed(
                     requested_execution_class=requested_execution_class,
@@ -83,21 +109,41 @@ class PluginExecutionDispatchPlanner:
                     )
                 else:
                     fallback_reason = "native_tool_execution_class_not_supported"
-            if blocked_reason is None and effective_execution_class in {"sandbox", "microvm"}:
-                backend_selection = self._sandbox_backend_client.describe_tool_execution_backend(
+            if is_strong_tool_execution_class(effective_execution_class):
+                sandbox_runner_kind = "native-tool"
+            if blocked_reason is None and is_strong_tool_execution_class(
+                effective_execution_class
+            ):
+                backend_selection = describe_tool_execution_backend_selection(
+                    sandbox_backend_client=self._sandbox_backend_client,
                     execution_class=effective_execution_class,
                     profile=requested_execution_profile,
+                    dependency_mode=requested_dependency_mode,
+                    builtin_package_set=requested_builtin_package_set,
                     network_policy=requested_network_policy,
                     filesystem_policy=requested_filesystem_policy,
+                    backend_extensions=requested_backend_extensions,
                 )
-                if not backend_selection.available or backend_selection.backend_id is None:
-                    blocked_reason = (
-                        backend_selection.reason
-                        or "No compatible sandbox backend is currently available."
-                    )
+                if backend_selection is not None and not backend_selection.available:
+                    blocked_reason = backend_selection.reason
                 else:
-                    sandbox_backend_id = backend_selection.backend_id
-                    sandbox_backend_executor_ref = backend_selection.executor_ref
+                    if backend_selection is not None and backend_selection.available:
+                        sandbox_backend_id = backend_selection.backend_id
+                        sandbox_backend_executor_ref = backend_selection.executor_ref
+                        if backend_selection.capability.supports_tool_execution:
+                            blocked_reason = None
+                        else:
+                            blocked_reason = build_tool_execution_not_yet_isolated_reason(
+                                tool_id=request.tool_id,
+                                execution_class=effective_execution_class,
+                                backend_selection=backend_selection,
+                            )
+                    else:
+                        blocked_reason = build_tool_execution_not_yet_isolated_reason(
+                            tool_id=request.tool_id,
+                            execution_class=effective_execution_class,
+                            backend_selection=backend_selection,
+                        )
             return PluginExecutionDispatchPlan(
                 requested_execution_class=requested_execution_class,
                 effective_execution_class=effective_execution_class,
@@ -110,6 +156,10 @@ class PluginExecutionDispatchPlanner:
                 ),
                 requested_network_policy=requested_network_policy,
                 requested_filesystem_policy=requested_filesystem_policy,
+                requested_dependency_mode=requested_dependency_mode,
+                requested_builtin_package_set=requested_builtin_package_set,
+                requested_dependency_ref=requested_dependency_ref,
+                requested_backend_extensions=requested_backend_extensions,
                 executor_ref=(
                     f"tool:native-{effective_execution_class}"
                     if effective_execution_class != "inline"
@@ -119,11 +169,16 @@ class PluginExecutionDispatchPlanner:
                     requested_execution=requested_execution,
                     effective_execution_class=effective_execution_class,
                     execution_source=execution_source,
+                    requested_dependency_mode=requested_dependency_mode,
+                    requested_builtin_package_set=requested_builtin_package_set,
+                    requested_dependency_ref=requested_dependency_ref,
+                    requested_backend_extensions=requested_backend_extensions,
                     sandbox_backend_id=sandbox_backend_id,
                     sandbox_backend_executor_ref=sandbox_backend_executor_ref,
                 ),
                 sandbox_backend_id=sandbox_backend_id,
                 sandbox_backend_executor_ref=sandbox_backend_executor_ref,
+                sandbox_runner_kind=sandbox_runner_kind,
                 fallback_reason=fallback_reason,
                 blocked_reason=blocked_reason,
             )
@@ -144,6 +199,7 @@ class PluginExecutionDispatchPlanner:
         blocked_reason = None
         sandbox_backend_id = None
         sandbox_backend_executor_ref = None
+        sandbox_runner_kind = None
         if requested_execution_class != effective_execution_class:
             if self._requires_fail_closed(
                 requested_execution_class=requested_execution_class,
@@ -156,21 +212,41 @@ class PluginExecutionDispatchPlanner:
                 )
             else:
                 fallback_reason = "compat_adapter_execution_class_not_supported"
-        if blocked_reason is None and effective_execution_class in {"sandbox", "microvm"}:
-            backend_selection = self._sandbox_backend_client.describe_tool_execution_backend(
+        if is_strong_tool_execution_class(effective_execution_class):
+            sandbox_runner_kind = "compat-adapter"
+        if blocked_reason is None and is_strong_tool_execution_class(
+            effective_execution_class
+        ):
+            backend_selection = describe_tool_execution_backend_selection(
+                sandbox_backend_client=self._sandbox_backend_client,
                 execution_class=effective_execution_class,
                 profile=requested_execution_profile,
+                dependency_mode=requested_dependency_mode,
+                builtin_package_set=requested_builtin_package_set,
                 network_policy=requested_network_policy,
                 filesystem_policy=requested_filesystem_policy,
+                backend_extensions=requested_backend_extensions,
             )
-            if not backend_selection.available or backend_selection.backend_id is None:
-                blocked_reason = (
-                    backend_selection.reason
-                    or "No compatible sandbox backend is currently available."
-                )
+            if backend_selection is not None and not backend_selection.available:
+                blocked_reason = backend_selection.reason
             else:
-                sandbox_backend_id = backend_selection.backend_id
-                sandbox_backend_executor_ref = backend_selection.executor_ref
+                if backend_selection is not None and backend_selection.available:
+                    sandbox_backend_id = backend_selection.backend_id
+                    sandbox_backend_executor_ref = backend_selection.executor_ref
+                    if backend_selection.capability.supports_tool_execution:
+                        blocked_reason = None
+                    else:
+                        blocked_reason = build_tool_execution_not_yet_isolated_reason(
+                            tool_id=request.tool_id,
+                            execution_class=effective_execution_class,
+                            backend_selection=backend_selection,
+                        )
+                else:
+                    blocked_reason = build_tool_execution_not_yet_isolated_reason(
+                        tool_id=request.tool_id,
+                        execution_class=effective_execution_class,
+                        backend_selection=backend_selection,
+                    )
         return PluginExecutionDispatchPlan(
             requested_execution_class=requested_execution_class,
             effective_execution_class=effective_execution_class,
@@ -183,16 +259,25 @@ class PluginExecutionDispatchPlanner:
             ),
             requested_network_policy=requested_network_policy,
             requested_filesystem_policy=requested_filesystem_policy,
+            requested_dependency_mode=requested_dependency_mode,
+            requested_builtin_package_set=requested_builtin_package_set,
+            requested_dependency_ref=requested_dependency_ref,
+            requested_backend_extensions=requested_backend_extensions,
             executor_ref=f"tool:compat-adapter:{resolved_adapter.id}",
             effective_execution=self._build_effective_execution_payload(
                 requested_execution=requested_execution,
                 effective_execution_class=effective_execution_class,
                 execution_source=execution_source,
+                requested_dependency_mode=requested_dependency_mode,
+                requested_builtin_package_set=requested_builtin_package_set,
+                requested_dependency_ref=requested_dependency_ref,
+                requested_backend_extensions=requested_backend_extensions,
                 sandbox_backend_id=sandbox_backend_id,
                 sandbox_backend_executor_ref=sandbox_backend_executor_ref,
             ),
             sandbox_backend_id=sandbox_backend_id,
             sandbox_backend_executor_ref=sandbox_backend_executor_ref,
+            sandbox_runner_kind=sandbox_runner_kind,
             fallback_reason=fallback_reason,
             blocked_reason=blocked_reason,
         )
@@ -203,15 +288,30 @@ class PluginExecutionDispatchPlanner:
         requested_execution_class: str,
         execution_source: str,
     ) -> bool:
-        return (
-            requested_execution_class != "inline"
-            and execution_source in {"tool_call", "tool_policy", "runtime_policy"}
-        )
+        if execution_source in {"tool_call", "tool_policy", "runtime_policy"}:
+            return requested_execution_class != "inline"
+        if execution_source in {"tool_default", "tool_sensitivity"}:
+            return requested_execution_class in {"sandbox", "microvm"}
+        return False
 
     @staticmethod
     def _normalize_optional_string(value: object) -> str | None:
         if isinstance(value, str):
-            return str(value)
+            normalized = str(value).strip()
+            return normalized or None
+        return None
+
+    @staticmethod
+    def _normalize_optional_enum(value: object, *, allowed: set[str]) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip().lower()
+        return normalized if normalized in allowed else None
+
+    @staticmethod
+    def _normalize_optional_object(value: object) -> dict[str, object] | None:
+        if isinstance(value, dict):
+            return value
         return None
 
     @staticmethod
@@ -220,12 +320,32 @@ class PluginExecutionDispatchPlanner:
         requested_execution: dict[str, object],
         effective_execution_class: str,
         execution_source: str,
+        requested_dependency_mode: str | None,
+        requested_builtin_package_set: str | None,
+        requested_dependency_ref: str | None,
+        requested_backend_extensions: dict[str, object] | None,
         sandbox_backend_id: str | None,
         sandbox_backend_executor_ref: str | None,
     ) -> dict[str, object]:
         effective_execution = dict(requested_execution)
         effective_execution["class"] = effective_execution_class
         effective_execution["source"] = execution_source
+        if requested_dependency_mode is not None:
+            effective_execution["dependencyMode"] = requested_dependency_mode
+        else:
+            effective_execution.pop("dependencyMode", None)
+        if requested_builtin_package_set is not None:
+            effective_execution["builtinPackageSet"] = requested_builtin_package_set
+        else:
+            effective_execution.pop("builtinPackageSet", None)
+        if requested_dependency_ref is not None:
+            effective_execution["dependencyRef"] = requested_dependency_ref
+        else:
+            effective_execution.pop("dependencyRef", None)
+        if requested_backend_extensions is not None:
+            effective_execution["backendExtensions"] = requested_backend_extensions
+        else:
+            effective_execution.pop("backendExtensions", None)
         if sandbox_backend_id is not None:
             effective_execution["sandboxBackend"] = {
                 "id": sandbox_backend_id,

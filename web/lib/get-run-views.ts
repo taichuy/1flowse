@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type RunArtifactItem = {
   id: string;
@@ -22,7 +23,32 @@ export type ToolCallItem = {
   phase: string;
   status: string;
   request_summary: string;
+  execution_trace?: Record<string, unknown> | null;
+  requested_execution_class?: string | null;
+  requested_execution_source?: string | null;
+  requested_execution_profile?: string | null;
+  requested_execution_timeout_ms?: number | null;
+  requested_execution_network_policy?: string | null;
+  requested_execution_filesystem_policy?: string | null;
+  requested_execution_dependency_mode?: string | null;
+  requested_execution_builtin_package_set?: string | null;
+  requested_execution_dependency_ref?: string | null;
+  requested_execution_backend_extensions?: Record<string, unknown> | null;
+  effective_execution_class?: string | null;
+  execution_executor_ref?: string | null;
+  execution_sandbox_backend_id?: string | null;
+  execution_sandbox_backend_executor_ref?: string | null;
+  execution_sandbox_runner_kind?: string | null;
+  adapter_request_trace_id?: string | null;
+  adapter_request_execution?: Record<string, unknown> | null;
+  adapter_request_execution_class?: string | null;
+  adapter_request_execution_source?: string | null;
+  adapter_request_execution_contract?: Record<string, unknown> | null;
+  execution_blocking_reason?: string | null;
+  execution_fallback_reason?: string | null;
   response_summary?: string | null;
+  response_content_type?: string | null;
+  response_meta?: Record<string, unknown>;
   raw_ref?: string | null;
   latency_ms: number;
   retry_count: number;
@@ -89,6 +115,136 @@ export type SkillReferenceLoadItem = {
   references: SkillReferenceLoadReferenceItem[];
 };
 
+export type RunExecutionFocusReason =
+  | "blocking_node_run"
+  | "blocked_execution"
+  | "current_node"
+  | "fallback_node";
+
+export type RunExecutionSkillTraceNodeItem = {
+  node_run_id: string;
+  node_id?: string | null;
+  node_name?: string | null;
+  reference_count: number;
+  loads: SkillReferenceLoadItem[];
+};
+
+export type RunExecutionSkillTrace = {
+  scope: "execution_focus_node" | "run";
+  reference_count: number;
+  phase_counts: Record<string, number>;
+  source_counts: Record<string, number>;
+  nodes: RunExecutionSkillTraceNodeItem[];
+};
+
+export type RunExecutionFocusExplanation = {
+  primary_signal?: string | null;
+  follow_up?: string | null;
+};
+
+export type OperatorRunFocusArtifactItem = {
+  artifact_kind: string;
+  content_type: string;
+  summary: string;
+  uri: string;
+};
+
+export type OperatorRunFocusToolCallItem = {
+  id: string;
+  tool_id: string;
+  tool_name: string;
+  phase: string;
+  status: string;
+  requested_execution_class?: string | null;
+  requested_execution_source?: string | null;
+  requested_execution_profile?: string | null;
+  requested_execution_timeout_ms?: number | null;
+  requested_execution_network_policy?: string | null;
+  requested_execution_filesystem_policy?: string | null;
+  requested_execution_dependency_mode?: string | null;
+  requested_execution_builtin_package_set?: string | null;
+  requested_execution_dependency_ref?: string | null;
+  requested_execution_backend_extensions?: Record<string, unknown> | null;
+  effective_execution_class?: string | null;
+  execution_executor_ref?: string | null;
+  execution_sandbox_backend_id?: string | null;
+  execution_sandbox_backend_executor_ref?: string | null;
+  execution_sandbox_runner_kind?: string | null;
+  adapter_request_trace_id?: string | null;
+  adapter_request_execution?: Record<string, unknown> | null;
+  adapter_request_execution_class?: string | null;
+  adapter_request_execution_source?: string | null;
+  adapter_request_execution_contract?: Record<string, unknown> | null;
+  execution_blocking_reason?: string | null;
+  execution_fallback_reason?: string | null;
+  response_summary?: string | null;
+  response_content_type?: string | null;
+  raw_ref?: string | null;
+};
+
+export type OperatorRunFocusSkillTrace = {
+  reference_count: number;
+  phase_counts: Record<string, number>;
+  source_counts: Record<string, number>;
+  loads: SkillReferenceLoadItem[];
+};
+
+export type OperatorRunSnapshot = {
+  workflow_id?: string | null;
+  status?: string | null;
+  current_node_id?: string | null;
+  waiting_reason?: string | null;
+  execution_focus_reason?: RunExecutionFocusReason | null;
+  execution_focus_node_id?: string | null;
+  execution_focus_node_run_id?: string | null;
+  execution_focus_node_name?: string | null;
+  execution_focus_node_type?: string | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_reason?: string | null;
+  scheduled_resume_source?: string | null;
+  scheduled_waiting_status?: string | null;
+  scheduled_resume_scheduled_at?: string | null;
+  scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
+  execution_focus_artifact_count: number;
+  execution_focus_artifact_ref_count: number;
+  execution_focus_tool_call_count: number;
+  execution_focus_raw_ref_count: number;
+  execution_focus_artifact_refs: string[];
+  execution_focus_artifacts: OperatorRunFocusArtifactItem[];
+  execution_focus_tool_calls: OperatorRunFocusToolCallItem[];
+  execution_focus_skill_trace?: OperatorRunFocusSkillTrace | null;
+};
+
+export type OperatorRunSnapshotSample = {
+  run_id: string;
+  snapshot?: OperatorRunSnapshot | null;
+  callback_tickets?: RunCallbackTicketItem[];
+  sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+};
+
+export type OperatorRunFollowUpSummary = {
+  affected_run_count: number;
+  sampled_run_count: number;
+  waiting_run_count: number;
+  running_run_count: number;
+  succeeded_run_count: number;
+  failed_run_count: number;
+  unknown_run_count: number;
+  recommended_action?: {
+    kind: string;
+    entry_key: string;
+    href: string | null;
+    label: string | null;
+  } | null;
+  sampled_runs: OperatorRunSnapshotSample[];
+  explanation?: RunExecutionFocusExplanation | null;
+};
+
 export type CallbackWaitingLifecycleSummary = {
   wait_cycle_count: number;
   issued_ticket_count: number;
@@ -122,7 +278,10 @@ export type RunCallbackWaitingSummary = {
   canceled_ticket_count: number;
   late_callback_count: number;
   resume_schedule_count: number;
+  scheduled_resume_pending_node_count: number;
+  scheduled_resume_requeued_node_count: number;
   resume_source_counts: Record<string, number>;
+  scheduled_resume_source_counts: Record<string, number>;
   termination_reason_counts: Record<string, number>;
 };
 
@@ -139,14 +298,29 @@ export type RunExecutionNodeItem = {
   execution_timeout_ms?: number | null;
   execution_network_policy?: string | null;
   execution_filesystem_policy?: string | null;
+  execution_dependency_mode?: string | null;
+  execution_builtin_package_set?: string | null;
+  execution_dependency_ref?: string | null;
+  execution_backend_extensions?: Record<string, unknown> | null;
   execution_dispatched_count: number;
   execution_fallback_count: number;
   execution_blocked_count: number;
   execution_unavailable_count: number;
+  requested_execution_class?: string | null;
+  requested_execution_source?: string | null;
+  requested_execution_profile?: string | null;
+  requested_execution_timeout_ms?: number | null;
+  requested_execution_network_policy?: string | null;
+  requested_execution_filesystem_policy?: string | null;
+  requested_execution_dependency_mode?: string | null;
+  requested_execution_builtin_package_set?: string | null;
+  requested_execution_dependency_ref?: string | null;
+  requested_execution_backend_extensions?: Record<string, unknown> | null;
   effective_execution_class?: string | null;
   execution_executor_ref?: string | null;
   execution_sandbox_backend_id?: string | null;
   execution_sandbox_backend_executor_ref?: string | null;
+  execution_sandbox_runner_kind?: string | null;
   execution_blocking_reason?: string | null;
   execution_fallback_reason?: string | null;
   retry_count: number;
@@ -166,6 +340,16 @@ export type RunExecutionNodeItem = {
   skill_reference_loads: SkillReferenceLoadItem[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
   callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_reason?: string | null;
+  scheduled_resume_source?: string | null;
+  scheduled_waiting_status?: string | null;
+  scheduled_resume_scheduled_at?: string | null;
+  scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
 };
 
 export type RunExecutionView = {
@@ -206,6 +390,14 @@ export type RunExecutionView = {
     sensitive_access_notification_status_counts: Record<string, number>;
     callback_waiting: RunCallbackWaitingSummary;
   };
+  blocking_node_run_id?: string | null;
+  execution_focus_reason?: RunExecutionFocusReason | null;
+  execution_focus_node?: RunExecutionNodeItem | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
+  run_snapshot?: OperatorRunSnapshot | null;
+  run_follow_up?: OperatorRunFollowUpSummary | null;
+  skill_trace?: RunExecutionSkillTrace | null;
   nodes: RunExecutionNodeItem[];
 };
 

@@ -301,3 +301,75 @@ def test_notification_delivery_service_marks_email_failure_when_not_configured(
     assert context.notification.status == "failed"
     assert context.notification.delivered_at is None
     assert "Email delivery adapter is not configured" in (context.notification.error or "")
+
+
+def test_notification_delivery_service_skips_dispatch_when_ticket_no_longer_waiting(
+    sqlite_session: Session,
+) -> None:
+    smtp_factory_called = False
+
+    def smtp_factory(host: str, port: int, timeout_seconds: float, use_ssl: bool):
+        nonlocal smtp_factory_called
+        smtp_factory_called = True
+        return FakeSMTPClient()
+
+    service = SensitiveAccessControlService(
+        resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+        notification_dispatch_scheduler=NotificationDispatchScheduler(
+            dispatcher=lambda _request: None
+        ),
+        settings=Settings(
+            notification_email_smtp_host="smtp.example.test",
+            notification_email_smtp_port=2525,
+            notification_email_from_address="noreply@example.test",
+        ),
+    )
+    resource_id = _create_high_sensitivity_resource(
+        service,
+        sqlite_session,
+        label="Stale notification approval",
+    )
+
+    bundle = service.request_access(
+        sqlite_session,
+        run_id=None,
+        node_run_id=None,
+        requester_type="ai",
+        requester_id="assistant-stale-notification",
+        resource_id=resource_id,
+        action_type="read",
+        purpose_text="skip stale notification delivery",
+        notification_channel="email",
+        notification_target="ops@example.com",
+    )
+    sqlite_session.commit()
+
+    assert bundle.approval_ticket is not None
+    assert bundle.notifications[0].status == "pending"
+
+    service.decide_ticket(
+        sqlite_session,
+        ticket_id=bundle.approval_ticket.id,
+        status="approved",
+        approved_by="ops-reviewer",
+    )
+    sqlite_session.commit()
+
+    context = NotificationDeliveryService(
+        settings=Settings(
+            notification_email_smtp_host="smtp.example.test",
+            notification_email_smtp_port=2525,
+            notification_email_from_address="noreply@example.test",
+        ),
+        smtp_factory=smtp_factory,
+    ).deliver_dispatch(
+        sqlite_session,
+        dispatch_id=bundle.notifications[0].id,
+    )
+
+    assert smtp_factory_called is False
+    assert context.notification.status == "failed"
+    assert (
+        context.notification.error
+        == "Approval ticket is no longer waiting; notification delivery skipped."
+    )

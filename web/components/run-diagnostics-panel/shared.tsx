@@ -5,6 +5,7 @@ import {
   type RunTrace,
   type RunTraceQuery
 } from "@/lib/get-run-trace";
+import { buildRequiredOperatorRunDetailLinkSurface } from "@/lib/operator-follow-up-presenters";
 import { formatJsonPayload } from "@/lib/runtime-presenters";
 
 export const TRACE_LIMIT_OPTIONS = [50, 100, 200, 500];
@@ -84,7 +85,27 @@ export function summarizeActiveFilters(query: RunTraceQuery) {
   return filters;
 }
 
-export function buildPageTraceHref(runId: string, query: RunTraceQuery) {
+export function buildPageTraceHref(
+  runId: string,
+  query: RunTraceQuery,
+  baseHref?: string | null
+) {
   const queryString = buildRunTraceQueryString(query);
-  return `/runs/${encodeURIComponent(runId)}${queryString ? `?${queryString}` : ""}`;
+  const runHref = baseHref ?? buildRequiredOperatorRunDetailLinkSurface({ runId }).href;
+
+  if (!queryString) {
+    return runHref;
+  }
+
+  const [pathname, existingQuery = ""] = runHref.split("?");
+  const mergedSearchParams = new URLSearchParams(existingQuery);
+  const traceSearchParams = new URLSearchParams(queryString);
+
+  traceSearchParams.forEach((value, key) => {
+    mergedSearchParams.set(key, value);
+  });
+
+  const mergedQuery = mergedSearchParams.toString();
+
+  return mergedQuery ? `${pathname}?${mergedQuery}` : pathname;
 }

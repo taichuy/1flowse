@@ -1,9 +1,15 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.explanations import SignalFollowUpExplanation
+from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
 from app.schemas.run import AICallItem, RunArtifactItem, ToolCallItem
 from app.schemas.sensitive_access import SensitiveAccessTimelineEntryItem
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
 
 
 class RunCallbackTicketItem(BaseModel):
@@ -33,7 +39,10 @@ class RunCallbackWaitingSummary(BaseModel):
     canceled_ticket_count: int = 0
     late_callback_count: int = 0
     resume_schedule_count: int = 0
+    scheduled_resume_pending_node_count: int = 0
+    scheduled_resume_requeued_node_count: int = 0
     resume_source_counts: dict[str, int] = Field(default_factory=dict)
+    scheduled_resume_source_counts: dict[str, int] = Field(default_factory=dict)
     termination_reason_counts: dict[str, int] = Field(default_factory=dict)
 
 
@@ -113,6 +122,33 @@ class SkillReferenceLoadItem(BaseModel):
     references: list[SkillReferenceLoadReferenceItem] = Field(default_factory=list)
 
 
+RunExecutionFocusReason = Literal[
+    "blocking_node_run",
+    "blocked_execution",
+    "current_node",
+    "fallback_node",
+]
+
+
+class RunExecutionSkillTraceNodeItem(BaseModel):
+    node_run_id: str
+    node_id: str | None = None
+    node_name: str | None = None
+    reference_count: int = 0
+    loads: list[SkillReferenceLoadItem] = Field(default_factory=list)
+
+
+class RunExecutionSkillTrace(BaseModel):
+    scope: Literal["execution_focus_node", "run"]
+    reference_count: int = 0
+    phase_counts: dict[str, int] = Field(default_factory=dict)
+    source_counts: dict[str, int] = Field(default_factory=dict)
+    nodes: list[RunExecutionSkillTraceNodeItem] = Field(default_factory=list)
+
+
+RunExecutionFocusExplanation = SignalFollowUpExplanation
+
+
 class RunExecutionNodeItem(BaseModel):
     node_run_id: str
     node_id: str
@@ -126,14 +162,29 @@ class RunExecutionNodeItem(BaseModel):
     execution_timeout_ms: int | None = None
     execution_network_policy: str | None = None
     execution_filesystem_policy: str | None = None
+    execution_dependency_mode: str | None = None
+    execution_builtin_package_set: str | None = None
+    execution_dependency_ref: str | None = None
+    execution_backend_extensions: dict | None = None
     execution_dispatched_count: int = 0
     execution_fallback_count: int = 0
     execution_blocked_count: int = 0
     execution_unavailable_count: int = 0
+    requested_execution_class: str | None = None
+    requested_execution_source: str | None = None
+    requested_execution_profile: str | None = None
+    requested_execution_timeout_ms: int | None = None
+    requested_execution_network_policy: str | None = None
+    requested_execution_filesystem_policy: str | None = None
+    requested_execution_dependency_mode: str | None = None
+    requested_execution_builtin_package_set: str | None = None
+    requested_execution_dependency_ref: str | None = None
+    requested_execution_backend_extensions: dict | None = None
     effective_execution_class: str | None = None
     execution_executor_ref: str | None = None
     execution_sandbox_backend_id: str | None = None
     execution_sandbox_backend_executor_ref: str | None = None
+    execution_sandbox_runner_kind: str | None = None
     execution_blocking_reason: str | None = None
     execution_fallback_reason: str | None = None
     retry_count: int = 0
@@ -155,6 +206,16 @@ class RunExecutionNodeItem(BaseModel):
         default_factory=list
     )
     callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
+    execution_focus_explanation: RunExecutionFocusExplanation | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
+    scheduled_resume_delay_seconds: float | None = None
+    scheduled_resume_reason: str | None = None
+    scheduled_resume_source: str | None = None
+    scheduled_waiting_status: str | None = None
+    scheduled_resume_scheduled_at: datetime | None = None
+    scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
 
 
 class RunExecutionView(BaseModel):
@@ -164,6 +225,14 @@ class RunExecutionView(BaseModel):
     compiled_blueprint_id: str | None = None
     status: str
     summary: RunExecutionSummary = Field(default_factory=RunExecutionSummary)
+    blocking_node_run_id: str | None = None
+    execution_focus_reason: RunExecutionFocusReason | None = None
+    execution_focus_node: RunExecutionNodeItem | None = None
+    execution_focus_explanation: RunExecutionFocusExplanation | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    skill_trace: RunExecutionSkillTrace | None = None
     nodes: list[RunExecutionNodeItem] = Field(default_factory=list)
 
 

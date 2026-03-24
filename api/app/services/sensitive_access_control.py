@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -40,9 +41,12 @@ from app.services.sensitive_access_queries import (
 from app.services.sensitive_access_types import (
     AccessDecisionResult,
     ApprovalDecisionBundle,
+    ApprovalTicketExpiryItem,
+    ApprovalTicketExpiryResult,
     NotificationDispatchRetryBundle,
     SensitiveAccessControlError,
     SensitiveAccessRequestBundle,
+    SensitiveAccessTicketExpiredError,
 )
 
 
@@ -50,13 +54,23 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 __all__ = [
     "AccessDecisionResult",
+    "ApprovalTicketExpiryResult",
     "ApprovalDecisionBundle",
     "NotificationDispatchRetryBundle",
     "SensitiveAccessControlError",
     "SensitiveAccessControlService",
     "SensitiveAccessRequestBundle",
+    "SensitiveAccessTicketExpiredError",
 ]
 
 
@@ -339,6 +353,7 @@ class SensitiveAccessControlService:
         approval_ticket = None
         notifications: list[NotificationDispatchRecord] = []
         if decision_result.decision == "require_approval":
+            approval_ticket_created_at = _utcnow()
             approval_ticket = ApprovalTicketRecord(
                 id=str(uuid4()),
                 access_request_id=access_request.id,
@@ -348,7 +363,10 @@ class SensitiveAccessControlService:
                 waiting_status="waiting",
                 approved_by=None,
                 decided_at=None,
-                created_at=_utcnow(),
+                expires_at=self._compute_approval_ticket_expires_at(
+                    approval_ticket_created_at
+                ),
+                created_at=approval_ticket_created_at,
             )
             db.add(approval_ticket)
             db.flush()
@@ -394,35 +412,128 @@ class SensitiveAccessControlService:
         if access_request is None:
             raise SensitiveAccessControlError("Sensitive access request not found for ticket.")
 
-        decided_at = _utcnow()
-        approval_ticket.status = status
-        approval_ticket.waiting_status = "resumed" if status == "approved" else "failed"
-        approval_ticket.approved_by = approved_by.strip()
-        approval_ticket.decided_at = decided_at
-
-        access_request.decision = "allow" if status == "approved" else "deny"
-        access_request.reason_code = (
-            "approved_after_review" if status == "approved" else "rejected_after_review"
-        )
-        access_request.decided_at = decided_at
-
         notifications = self.list_notification_dispatches(
             db,
             approval_ticket_id=approval_ticket.id,
         )
-        if approval_ticket.run_id:
-            self._resume_scheduler.schedule(
-                run_id=approval_ticket.run_id,
-                reason=(
-                    f"Sensitive access ticket {approval_ticket.id} {status}"
-                ),
-                source="sensitive_access_decision",
-                db=db,
+
+        decided_at = _utcnow()
+        if self._is_approval_ticket_expired(approval_ticket, now=decided_at):
+            self._expire_approval_ticket(
+                db,
+                approval_ticket=approval_ticket,
+                access_request=access_request,
+                notifications=notifications,
+                decided_at=decided_at,
+                source="sensitive_access_expiry",
             )
+            raise SensitiveAccessTicketExpiredError("Approval ticket expired.")
+
+        self._resolve_approval_ticket(
+            db,
+            approval_ticket=approval_ticket,
+            access_request=access_request,
+            notifications=notifications,
+            status=status,
+            waiting_status="resumed" if status == "approved" else "failed",
+            approved_by=approved_by.strip(),
+            decided_at=decided_at,
+            reason_code=(
+                "approved_after_review" if status == "approved" else "rejected_after_review"
+            ),
+            resume_source="sensitive_access_decision",
+            notification_resolution=(
+                "Approval ticket approved before notification delivery."
+                if status == "approved"
+                else "Approval ticket rejected before notification delivery."
+            ),
+        )
         return ApprovalDecisionBundle(
             access_request=access_request,
             approval_ticket=approval_ticket,
             notifications=notifications,
+        )
+
+    def expire_pending_tickets(
+        self,
+        db: Session,
+        *,
+        source: str = "sensitive_access_expiry",
+        limit: int | None = None,
+        now: datetime | None = None,
+    ) -> ApprovalTicketExpiryResult:
+        effective_limit = max(
+            int(limit or self._settings.approval_ticket_expiry_batch_size),
+            1,
+        )
+        effective_now = now or _utcnow()
+        tickets = list(
+            db.scalars(
+                select(ApprovalTicketRecord)
+                .where(
+                    ApprovalTicketRecord.status == "pending",
+                    ApprovalTicketRecord.waiting_status == "waiting",
+                    ApprovalTicketRecord.expires_at.is_not(None),
+                    ApprovalTicketRecord.expires_at <= effective_now,
+                )
+                .order_by(
+                    ApprovalTicketRecord.expires_at.asc(),
+                    ApprovalTicketRecord.created_at.asc(),
+                    ApprovalTicketRecord.id.asc(),
+                )
+                .limit(effective_limit)
+            )
+        )
+
+        run_ids: list[str] = []
+        ticket_ids: list[str] = []
+        items: list[ApprovalTicketExpiryItem] = []
+        seen_run_ids: set[str] = set()
+        for approval_ticket in tickets:
+            access_request = db.get(
+                SensitiveAccessRequestRecord,
+                approval_ticket.access_request_id,
+            )
+            if access_request is None:
+                raise SensitiveAccessControlError(
+                    "Sensitive access request not found for ticket."
+                )
+            notifications = self.list_notification_dispatches(
+                db,
+                approval_ticket_id=approval_ticket.id,
+            )
+            self._expire_approval_ticket(
+                db,
+                approval_ticket=approval_ticket,
+                access_request=access_request,
+                notifications=notifications,
+                decided_at=effective_now,
+                source=source,
+            )
+            ticket_ids.append(approval_ticket.id)
+            if approval_ticket.run_id and approval_ticket.run_id not in seen_run_ids:
+                seen_run_ids.add(approval_ticket.run_id)
+                run_ids.append(approval_ticket.run_id)
+            items.append(
+                ApprovalTicketExpiryItem(
+                    ticket_id=approval_ticket.id,
+                    access_request_id=approval_ticket.access_request_id,
+                    run_id=approval_ticket.run_id,
+                    node_run_id=approval_ticket.node_run_id,
+                    expires_at=approval_ticket.expires_at,
+                    notification_ids=[notification.id for notification in notifications],
+                )
+            )
+
+        return ApprovalTicketExpiryResult(
+            source=source,
+            limit=effective_limit,
+            matched_count=len(tickets),
+            expired_count=len(ticket_ids),
+            scheduled_resume_count=len(run_ids),
+            ticket_ids=ticket_ids,
+            run_ids=run_ids,
+            items=items,
         )
 
     def retry_notification_dispatch(
@@ -480,3 +591,102 @@ class SensitiveAccessControlService:
             approval_ticket=approval_ticket,
             notification=retried_notification,
         )
+
+    def _compute_approval_ticket_expires_at(
+        self,
+        created_at: datetime,
+    ) -> datetime | None:
+        ttl_seconds = max(int(self._settings.approval_ticket_ttl_seconds), 0)
+        if ttl_seconds <= 0:
+            return None
+        return created_at + timedelta(seconds=ttl_seconds)
+
+    def _is_approval_ticket_expired(
+        self,
+        approval_ticket: ApprovalTicketRecord,
+        *,
+        now: datetime,
+    ) -> bool:
+        expires_at = _normalize_datetime(approval_ticket.expires_at)
+        effective_now = _normalize_datetime(now)
+        return (
+            approval_ticket.status == "pending"
+            and approval_ticket.waiting_status == "waiting"
+            and expires_at is not None
+            and effective_now is not None
+            and expires_at <= effective_now
+        )
+
+    def _expire_approval_ticket(
+        self,
+        db: Session,
+        *,
+        approval_ticket: ApprovalTicketRecord,
+        access_request: SensitiveAccessRequestRecord,
+        notifications: list[NotificationDispatchRecord],
+        decided_at: datetime,
+        source: str,
+    ) -> None:
+        self._resolve_approval_ticket(
+            db,
+            approval_ticket=approval_ticket,
+            access_request=access_request,
+            notifications=notifications,
+            status="expired",
+            waiting_status="failed",
+            approved_by=None,
+            decided_at=decided_at,
+            reason_code="approval_expired",
+            resume_source=source,
+            notification_resolution="Approval ticket expired before notification delivery.",
+        )
+
+    def _resolve_approval_ticket(
+        self,
+        db: Session,
+        *,
+        approval_ticket: ApprovalTicketRecord,
+        access_request: SensitiveAccessRequestRecord,
+        notifications: list[NotificationDispatchRecord],
+        status: str,
+        waiting_status: str,
+        approved_by: str | None,
+        decided_at: datetime,
+        reason_code: str,
+        resume_source: str,
+        notification_resolution: str,
+    ) -> None:
+        approval_ticket.status = status
+        approval_ticket.waiting_status = waiting_status
+        approval_ticket.approved_by = approved_by
+        approval_ticket.decided_at = decided_at
+
+        access_request.decision = "allow" if status == "approved" else "deny"
+        access_request.reason_code = reason_code
+        access_request.decided_at = decided_at
+
+        self._mark_pending_notifications_failed(
+            notifications,
+            error=notification_resolution,
+        )
+
+        if approval_ticket.run_id:
+            self._resume_scheduler.schedule(
+                run_id=approval_ticket.run_id,
+                reason=f"Sensitive access ticket {approval_ticket.id} {status}",
+                source=resume_source,
+                db=db,
+            )
+
+    def _mark_pending_notifications_failed(
+        self,
+        notifications: list[NotificationDispatchRecord],
+        *,
+        error: str,
+    ) -> None:
+        for notification in notifications:
+            if notification.status != "pending":
+                continue
+            notification.status = "failed"
+            notification.delivered_at = None
+            notification.error = error

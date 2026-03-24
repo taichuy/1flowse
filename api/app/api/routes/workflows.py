@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -33,7 +32,9 @@ from app.services.workflow_publish_version_references import (
     build_allowed_publish_workflow_versions,
 )
 from app.services.workflow_views import (
+    WorkflowListDefinitionIssueFilter,
     build_workflow_detail,
+    list_workflow_items,
     list_workflow_run_items,
     list_workflow_version_items,
 )
@@ -93,17 +94,11 @@ def _validate_workflow_definition_for_persistence(
 
 
 @router.get("", response_model=list[WorkflowListItem])
-def list_workflows(db: Session = Depends(get_db)) -> list[WorkflowListItem]:
-    items = db.scalars(select(Workflow).order_by(Workflow.name.asc())).all()
-    return [
-        WorkflowListItem(
-            id=item.id,
-            name=item.name,
-            version=item.version,
-            status=item.status,
-        )
-        for item in items
-    ]
+def list_workflows(
+    definition_issue: WorkflowListDefinitionIssueFilter | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> list[WorkflowListItem]:
+    return list_workflow_items(db, definition_issue=definition_issue)
 
 
 @router.post("", response_model=WorkflowDetail, status_code=status.HTTP_201_CREATED)

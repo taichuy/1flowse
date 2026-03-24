@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Node } from "@xyflow/react";
 
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
@@ -21,6 +22,7 @@ type AuthorizedContextFieldsProps = {
   ) => void;
   readableNodesLabel: string;
   readableNodesHint: string;
+  highlightedFieldKey?: string | null;
 };
 
 export function AuthorizedContextFields({
@@ -31,11 +33,39 @@ export function AuthorizedContextFields({
   onToggleReadableNode,
   onToggleReadableArtifact,
   readableNodesLabel,
-  readableNodesHint
+  readableNodesHint,
+  highlightedFieldKey = null
 }: AuthorizedContextFieldsProps) {
+  const readableNodesRef = useRef<HTMLDivElement | null>(null);
+  const readableArtifactsRef = useRef<HTMLDivElement | null>(null);
+  const highlightNodes = highlightedFieldKey === "contextAccess.readableNodeIds";
+  const highlightArtifacts = highlightedFieldKey === "contextAccess.readableArtifacts";
+
+  useEffect(() => {
+    if (!highlightedFieldKey) {
+      return;
+    }
+    const container =
+      highlightedFieldKey === "contextAccess.readableArtifacts"
+        ? readableArtifactsRef.current
+        : readableNodesRef.current;
+    const target = container?.querySelector<HTMLElement>(
+      `[data-validation-field="${highlightedFieldKey}"] input, ` +
+        `[data-validation-field="${highlightedFieldKey}"] textarea`
+    );
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      target.focus();
+    }
+  }, [highlightedFieldKey]);
+
   return (
     <>
-      <div className="binding-field">
+      <div
+        className={`binding-field ${highlightNodes ? "validation-focus-ring" : ""}`.trim()}
+        data-validation-field="contextAccess.readableNodeIds"
+        ref={readableNodesRef}
+      >
         <span className="binding-label">{readableNodesLabel}</span>
         {availableNodes.length === 0 ? (
           <p className="empty-state compact">当前画布没有可授权的其他节点。</p>
@@ -62,7 +92,11 @@ export function AuthorizedContextFields({
       </div>
 
       {readableNodeIds.length > 0 ? (
-        <div className="binding-field">
+        <div
+          className={`binding-field ${highlightArtifacts ? "validation-focus-ring" : ""}`.trim()}
+          data-validation-field="contextAccess.readableArtifacts"
+          ref={readableArtifactsRef}
+        >
           <span className="binding-label">Extra artifact grants</span>
           {readableNodeIds.map((candidateId) => {
             const relatedNode =

@@ -1,8 +1,9 @@
 "use client";
 
+import React from "react";
 import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   decideSensitiveAccessApprovalTicket,
@@ -10,10 +11,19 @@ import {
   type DecideSensitiveAccessApprovalTicketState,
   type RetrySensitiveAccessNotificationDispatchState
 } from "@/app/actions/sensitive-access";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { NotificationChannelCapabilityItem } from "@/lib/get-sensitive-access";
 import {
   getApprovalExpectationCopy,
   getNotificationRetryExpectationCopy
 } from "@/lib/operator-action-result-presenters";
+import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
+import { buildSensitiveAccessNotificationRetryGuidance } from "@/lib/sensitive-access-notification-guidance";
+import {
+  buildRunDetailHrefFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
+import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 
 export const DEFAULT_INLINE_OPERATOR_ID = "studio-operator";
 
@@ -36,8 +46,11 @@ type InlineNotification = {
 type SensitiveAccessInlineActionsProps = {
   ticket?: InlineApprovalTicket | null;
   notifications?: InlineNotification[];
+  notificationChannels?: NotificationChannelCapabilityItem[];
   runId?: string | null;
   nodeRunId?: string | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingSummaryProps?: CallbackWaitingSummaryProps;
   compact?: boolean;
 };
 
@@ -106,11 +119,32 @@ function DecisionSubmitButton({
 export function SensitiveAccessInlineActions({
   ticket,
   notifications = [],
+  notificationChannels = [],
   runId = null,
   nodeRunId = null,
+  sandboxReadiness = null,
+  callbackWaitingSummaryProps,
   compact = false
 }: SensitiveAccessInlineActionsProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentHref = React.useMemo(() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+  const workspaceStarterViewState = React.useMemo(
+    () => readWorkspaceStarterLibraryViewState(new URLSearchParams(searchParams?.toString())),
+    [searchParams]
+  );
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      buildRunDetailHrefFromWorkspaceStarterViewState(
+        candidateRunId,
+        workspaceStarterViewState
+      ),
+    [workspaceStarterViewState]
+  );
   const [decisionState, decisionAction] = useActionState(
     decideSensitiveAccessApprovalTicket,
     initialDecisionState
@@ -120,6 +154,12 @@ export function SensitiveAccessInlineActions({
     initialRetryState
   );
   const retriableNotification = pickRetriableNotification(ticket, notifications);
+  const retryGuidance = retriableNotification
+    ? buildSensitiveAccessNotificationRetryGuidance({
+        notification: retriableNotification,
+        channels: notificationChannels
+      })
+    : null;
 
   useEffect(() => {
     if (decisionState.status === "success" || retryState.status === "success") {
@@ -157,7 +197,21 @@ export function SensitiveAccessInlineActions({
           </div>
           <p className="empty-state compact">{getApprovalExpectationCopy()}</p>
           {decisionState.message && decisionState.ticketId === ticket?.id ? (
-            <p className={`sync-message ${decisionState.status}`}>{decisionState.message}</p>
+            <InlineOperatorActionFeedback
+              callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+              currentHref={currentHref}
+              message={decisionState.message}
+              outcomeExplanation={decisionState.outcomeExplanation}
+              resolveRunDetailHref={resolveRunDetailHref}
+              runFollowUpExplanation={decisionState.runFollowUpExplanation}
+              runFollowUp={decisionState.runFollowUp}
+              blockerDeltaSummary={decisionState.blockerDeltaSummary}
+              runId={runId}
+              runSnapshot={decisionState.runSnapshot}
+              sandboxReadiness={sandboxReadiness}
+              status={decisionState.status}
+              title="审批结果"
+            />
           ) : null}
         </form>
       ) : null}
@@ -178,7 +232,9 @@ export function SensitiveAccessInlineActions({
             defaultValue={retriableNotification.target ?? ""}
             id={`inlineNotificationTarget-${retriableNotification.id}`}
             name="target"
-            placeholder="输入新的通知目标；留空则沿用当前目标"
+            placeholder={
+              retryGuidance?.placeholder ?? "输入新的通知目标；留空则沿用当前目标"
+            }
             type="text"
           />
           <div className="binding-actions">
@@ -197,9 +253,52 @@ export function SensitiveAccessInlineActions({
           {retriableNotification.error ? (
             <p className="empty-state compact">{retriableNotification.error}</p>
           ) : null}
+          {retryGuidance ? (
+            <div className="entry-card compact-card">
+              <p className="entry-card-title">Channel guidance</p>
+              <div className="tool-badge-row">
+                {retryGuidance.chips.map((chip) => (
+                  <span className="event-chip" key={`${retriableNotification.id}:${chip}`}>
+                    {chip}
+                  </span>
+                ))}
+              </div>
+              <p className="section-copy entry-copy">{retryGuidance.headline}</p>
+              {retryGuidance.summary ? (
+                <p className="binding-meta">{retryGuidance.summary}</p>
+              ) : null}
+              <p className="binding-meta">{retryGuidance.targetHint}</p>
+              <p className="binding-meta">示例：{retryGuidance.targetExample}</p>
+              {retryGuidance.configFacts.map((fact) => (
+                <p
+                  className={fact.status === "missing" ? "empty-state compact" : "binding-meta"}
+                  key={`${retriableNotification.id}:${fact.key}`}
+                >
+                  {fact.label}: {fact.value}
+                </p>
+              ))}
+              {retryGuidance.warning ? (
+                <p className="empty-state compact">{retryGuidance.warning}</p>
+              ) : null}
+            </div>
+          ) : null}
           <p className="empty-state compact">{getNotificationRetryExpectationCopy()}</p>
           {retryState.message && retryState.dispatchId === retriableNotification.id ? (
-            <p className={`sync-message ${retryState.status}`}>{retryState.message}</p>
+            <InlineOperatorActionFeedback
+              callbackWaitingSummaryProps={callbackWaitingSummaryProps}
+              currentHref={currentHref}
+              message={retryState.message}
+              outcomeExplanation={retryState.outcomeExplanation}
+              resolveRunDetailHref={resolveRunDetailHref}
+              runFollowUpExplanation={retryState.runFollowUpExplanation}
+              runFollowUp={retryState.runFollowUp}
+              blockerDeltaSummary={retryState.blockerDeltaSummary}
+              runId={runId}
+              runSnapshot={retryState.runSnapshot}
+              sandboxReadiness={sandboxReadiness}
+              status={retryState.status}
+              title="通知重试结果"
+            />
           ) : null}
         </form>
       ) : null}

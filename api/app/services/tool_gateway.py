@@ -14,7 +14,12 @@ from app.models.plugin import PluginToolRecord
 from app.models.run import NodeRun, ToolCallRecord
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.credential_store import CredentialStore, CredentialStoreError
-from app.services.plugin_runtime import PluginCallProxy, PluginCallRequest, PluginInvocationError
+from app.services.plugin_runtime import (
+    PluginCallProxy,
+    PluginCallRequest,
+    PluginCallResponse,
+    PluginInvocationError,
+)
 from app.services.runtime_execution_policy import ResolvedExecutionPolicy
 from app.services.runtime_types import ToolExecutionResult, WorkflowExecutionError
 from app.services.sensitive_access_control import SensitiveAccessControlService
@@ -141,6 +146,7 @@ class ToolGateway:
         execution_trace = self._plugin_call_proxy.describe_execution_dispatch(
             request
         ).as_trace_payload()
+        call_record.execution_trace = dict(execution_trace)
         started_at = time.perf_counter()
         try:
             invocation_credentials = self._credential_store.resolve_masked_runtime_credentials(
@@ -159,13 +165,19 @@ class ToolGateway:
                     execution=request.execution,
                 )
             )
+            execution_trace = self._merge_execution_trace_with_response_meta(
+                execution_trace,
+                response.meta,
+            )
+            call_record.execution_trace = dict(execution_trace)
+            response_payload = self._payload_from_plugin_response(response)
             result = self._normalize_result(
                 db,
                 run_id=run_id,
                 node_run_id=node_run.id,
                 tool_id=tool_id,
                 tool_name=tool_name,
-                payload=response.output,
+                payload=response_payload,
                 latency_ms=response.duration_ms
                 or int((time.perf_counter() - started_at) * 1000),
                 artifact_metadata=execution_trace,
@@ -176,6 +188,8 @@ class ToolGateway:
             result.meta.setdefault("tool_call_id", call_record.id)
             call_record.status = result.status
             call_record.response_summary = result.summary
+            call_record.response_content_type = result.content_type
+            call_record.response_meta = dict(result.meta or {})
             raw_ref = result.raw_ref or ""
             if raw_ref.startswith("artifact://"):
                 call_record.raw_artifact_id = raw_ref.removeprefix("artifact://")
@@ -311,6 +325,8 @@ class ToolGateway:
         if tool_call_record is not None:
             tool_call_record.status = result.status
             tool_call_record.response_summary = result.summary
+            tool_call_record.response_content_type = result.content_type
+            tool_call_record.response_meta = dict(result.meta or {})
             raw_ref = result.raw_ref or ""
             if raw_ref.startswith("artifact://"):
                 tool_call_record.raw_artifact_id = raw_ref.removeprefix("artifact://")
@@ -392,6 +408,105 @@ class ToolGateway:
                 "truncated": False,
             },
         )
+
+    def _payload_from_plugin_response(
+        self,
+        response: PluginCallResponse,
+    ) -> dict[str, Any]:
+        if (
+            response.raw_ref is None
+            and response.summary is None
+            and response.content_type is None
+            and not response.meta
+        ):
+            return dict(response.output or {})
+
+        meta = dict(response.meta or {})
+        if response.logs:
+            meta.setdefault("runner_logs", list(response.logs))
+        return {
+            "status": response.status,
+            "content_type": response.content_type
+            or self._artifact_store.infer_content_type(response.output),
+            "summary": response.summary
+            or self._artifact_store.summarize(response.output),
+            "raw_ref": response.raw_ref,
+            "structured": dict(response.output or {}),
+            "meta": meta,
+        }
+
+    @staticmethod
+    def _merge_execution_trace_with_response_meta(
+        execution_trace: dict[str, Any],
+        response_meta: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        merged = dict(execution_trace)
+        if not isinstance(response_meta, dict):
+            return merged
+
+        effective_execution_class = response_meta.get("effective_execution_class")
+        if (
+            isinstance(effective_execution_class, str)
+            and effective_execution_class.strip()
+        ):
+            merged["effective_execution_class"] = effective_execution_class.strip()
+
+        sandbox_backend_id = response_meta.get("sandbox_backend_id")
+        if isinstance(sandbox_backend_id, str) and sandbox_backend_id.strip():
+            merged["sandbox_backend_id"] = sandbox_backend_id.strip()
+
+        sandbox_backend_executor_ref = response_meta.get("sandbox_backend_executor_ref")
+        if (
+            isinstance(sandbox_backend_executor_ref, str)
+            and sandbox_backend_executor_ref.strip()
+        ):
+            merged["sandbox_backend_executor_ref"] = (
+                sandbox_backend_executor_ref.strip()
+            )
+
+        request_meta = response_meta.get("request_meta")
+        if isinstance(request_meta, dict):
+            adapter_request_trace_id = request_meta.get("trace_id") or request_meta.get(
+                "traceId"
+            )
+            if (
+                isinstance(adapter_request_trace_id, str)
+                and adapter_request_trace_id.strip()
+            ):
+                merged["adapter_request_trace_id"] = adapter_request_trace_id.strip()
+
+            adapter_request_execution = request_meta.get("execution")
+            if isinstance(adapter_request_execution, dict) and adapter_request_execution:
+                merged["adapter_request_execution"] = dict(adapter_request_execution)
+                adapter_request_execution_class = adapter_request_execution.get("class")
+                if (
+                    isinstance(adapter_request_execution_class, str)
+                    and adapter_request_execution_class.strip()
+                ):
+                    merged["adapter_request_execution_class"] = (
+                        adapter_request_execution_class.strip()
+                    )
+                adapter_request_execution_source = adapter_request_execution.get("source")
+                if (
+                    isinstance(adapter_request_execution_source, str)
+                    and adapter_request_execution_source.strip()
+                ):
+                    merged["adapter_request_execution_source"] = (
+                        adapter_request_execution_source.strip()
+                    )
+
+            adapter_request_execution_contract = request_meta.get(
+                "execution_contract"
+            ) or request_meta.get("executionContract")
+            if (
+                isinstance(adapter_request_execution_contract, dict)
+                and adapter_request_execution_contract
+            ):
+                merged["adapter_request_execution_contract"] = dict(
+                    adapter_request_execution_contract
+                )
+
+        return merged
 
     def _build_sensitive_access_waiting_result(
         self,

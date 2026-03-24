@@ -15,6 +15,11 @@ from app.services.plugin_registry_store import get_plugin_registry_store
 from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_plugin_registry
 from app.services.sandbox_backends import get_sandbox_backend_client
 from app.services.workflow_library_catalog import build_node_catalog_items
+from app.services.workflow_publish_auth_mode_validation import (
+    build_workflow_publish_auth_mode_contract_summary,
+    build_workflow_publish_auth_mode_follow_up,
+    collect_invalid_workflow_publish_auth_modes,
+)
 from app.services.workflow_publish_identity_validation import (
     collect_invalid_workflow_publish_identities,
 )
@@ -25,6 +30,7 @@ from app.services.workflow_skill_references import (
     collect_invalid_workflow_skill_references,
 )
 from app.services.workflow_tool_execution_validation import (
+    collect_invalid_workflow_node_execution_references,
     collect_invalid_workflow_tool_execution_references,
 )
 from app.services.workflow_variable_validation import collect_invalid_workflow_variables
@@ -64,6 +70,24 @@ def validate_workflow_definition(definition: dict[str, Any] | None) -> dict[str,
                     field=issue.get("field"),
                 )
                 for issue in invalid_publish_identities
+            ],
+        )
+
+    invalid_publish_auth_modes = collect_invalid_workflow_publish_auth_modes(definition)
+    if invalid_publish_auth_modes:
+        raise WorkflowDefinitionValidationError(
+            "Workflow definition contains publish auth modes that are not currently "
+            "available for persistence. "
+            f"{build_workflow_publish_auth_mode_contract_summary()} "
+            f"{build_workflow_publish_auth_mode_follow_up()}",
+            issues=[
+                WorkflowDefinitionValidationIssue(
+                    category="publish_draft",
+                    message=issue["message"],
+                    path=issue.get("path"),
+                    field=issue.get("field"),
+                )
+                for issue in invalid_publish_auth_modes
             ],
         )
 
@@ -462,13 +486,34 @@ def validate_persistable_workflow_definition(
         raise WorkflowDefinitionValidationError(
             "Workflow definition requests tool execution capabilities that are not currently "
             "available: "
-            + "; ".join(invalid_tool_execution_references),
+            + "; ".join(issue.message for issue in invalid_tool_execution_references),
             issues=[
                 WorkflowDefinitionValidationIssue(
                     category="tool_execution",
-                    message=issue,
+                    message=issue.message,
+                    path=issue.path,
+                    field=issue.field,
                 )
                 for issue in invalid_tool_execution_references
+            ],
+        )
+
+    invalid_node_execution_references = collect_invalid_workflow_node_execution_references(
+        validated_definition,
+    )
+    if invalid_node_execution_references:
+        raise WorkflowDefinitionValidationError(
+            "Workflow definition requests node execution capabilities that are not currently "
+            "available: "
+            + "; ".join(issue.message for issue in invalid_node_execution_references),
+            issues=[
+                WorkflowDefinitionValidationIssue(
+                    category="node_execution",
+                    message=issue.message,
+                    path=issue.path,
+                    field=issue.field,
+                )
+                for issue in invalid_node_execution_references
             ],
         )
 

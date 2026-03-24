@@ -1,82 +1,62 @@
-# Team Conventions
+# 团队协作约定
 
-## Purpose
+## 目的
 
-This file stores shared, durable collaboration conventions for every contributor and every AI assistant working on 7Flows.
+本文记录 7Flows 当前贡献者与 AI 助手都应遵守的共享协作规则。目录级细则继续写在对应目录的 `AGENTS.md`，长期决策写入 `docs/adr/`。
 
-- Shared repo canonical language is English from 2026-03-17 onward for new shared docs, ADRs, skills, and newly added standing governance sections.
-- Personal notes must live under `docs/.private/` and must not be committed.
-- Product direction, architecture boundaries, and runtime facts still belong to `AGENTS.md`, `docs/product-design.md`, `docs/technical-design-supplement.md`, `docs/open-source-commercial-strategy.md`, and `docs/dev/runtime-foundation.md`.
+## 共享规则与本地记忆
 
-## Shared Vs Local Memory
+- 共享规则写在根 `AGENTS.md`、目录级 `AGENTS.md`、本文与 `docs/adr/`。
+- 专项工作流写在 `.agents/skills/`，并通过 `.agents/skills/README.md` 维护索引与使用案例。
+- 当前开发者自己的稳定偏好、目标账本、下一步规划和按日期留痕写在 `docs/.private/`，不得作为共享事实来源。
+- 共享仓库不写个人启动提示词、机器路径、临时讨论稿或按日期开发流水。
+- `docs/.private/` 初始化为当前开发者自己的本地 git 仓库作为时序记忆，但不配置共享远端，也不改变它的私有属性，每次开发结束应该自动作为开发日志提交到本地git，但是不纳入共享仓库。
 
-- Put shared engineering rules, review baselines, and collaboration expectations here.
-- Put per-developer machine preferences, private reminders, proxies, or personal automation notes under `docs/.private/`.
-- If a local note becomes a repo-wide rule, promote it into `AGENTS.md`, this file, a skill, or an ADR depending on scope.
-- Do not use `docs/.private/` as a shared source of truth.
+## AI 协作主循环
 
-## Shared Working Rules
+- 开始任务时，先读根 `AGENTS.md`、命中目录的 `AGENTS.md`、相关共享文档与命中的技能。
+- 如果存在 `docs/.private/runtime-foundation.md`，先比较“当前用户输入目标”与“本地目标账本”是否一致。
+- 如果是同一目标下的继续推进，不更新目标记录。
+- 如果目标明显偏移，先询问用户是更新主目标还是新增附加目标，再改本地记录。
+- 当用户目标仍有多种实现路径时，应基于代码现实列出候选方案、优缺点和推荐方案，帮助对齐后再实现。
+- 规划粒度不要切得过细；优先打通完整模块或链路闭环，再根据测试结果回归修复。
+- 共享文档默认采用链式说明，不在多个入口重复大段规则。
 
-### Mainline-first delivery
+## 验证、提交与推送
 
-- Prioritize end-to-end product closure over local cleanup, style polishing, or non-blocking refactors.
-- Use `docs/dev/runtime-foundation.md` as the default source for round priority and current delivery gaps.
-- Keep file splitting driven by mixed reasons-to-change, boundary leakage, or change propagation; file length is only a warning signal.
+- durable change 必须做与改动类型匹配的验证，不能只靠主观判断宣称完成。
+- 当 GitHub Dependabot 告警与本地锁文件 / `audit` 结果冲突时，先运行 `node scripts/check-dependabot-drift.js`，对齐默认分支 dependency graph、open alert 与本地解析版本，再决定是修依赖还是追查平台状态漂移。
+- 如果仓库已配置 `.github/workflows/github-security-drift.yml`，依赖或锁文件相关改动合入 `taichuy_dev` 后，默认补看一次 workflow summary；`exit 2` 视为平台漂移预警，不直接 dismiss alert。
+- 共享规则、目录入口、技能结构或长期决策变化时，必须同步更新对应文档、`AGENTS.md`、skill 索引或 ADR。
+- 一轮工作经验证成立后，默认做一次非交互式 Git 提交，并尝试把当前分支推送到远端。
+- 如果本轮只是探索态，或推送因权限 / 保护分支 / 网络问题失败，最终汇报里必须明确说明原因。
+- 默认仓库 PR 目标分支是 `taichuy_dev`；除非维护者明确说明临时替代分支，否则不要改默认口径。
 
-### Validation and closure
+## 本地开发基线
 
-- Durable changes must end with focused validation that matches the change type.
-- After a verified round, make a non-interactive Git commit unless the work is explicitly exploratory and not ready to preserve.
-- Material changes must leave traceability in `docs/history/` and update `docs/dev/runtime-foundation.md` when current facts or next priorities changed.
+- 开发主链必须保持 local-first、loopback-first。
+- 不要把远程脚本、CDN、外部 webhook、隐藏下载、`curl | bash` 或第三方托管依赖写进共享开发主链。
+- 后端本地开发优先复用 `api/.venv` 与 `uv`。
 
-### Local development baseline
+## P0 审查护栏
 
-- Backend local development should use `api/.venv` and `uv` when that environment is available.
-- `docs/.taichuy/` remains a local draft area for design discussion and copywriting scratch work; it is gitignored and not a shared fact source.
-- Development flows should remain runnable from local workspace code and local loopback services.
-
-## Review And Merge Guardrails
-
-- Auto-committing to a branch after local validation is allowed.
-- Default repository pull requests must target the `taichuy_dev` branch unless maintainers explicitly announce a temporary override.
-- Human review is required before merge for prompt, governance, skill, script, and local-execution-boundary changes.
-- Use `.agents/skills/safe-change-review/SKILL.md` for that review path.
-
-The following paths and change types are `P0` review scope:
+以下路径与改动类型属于 `P0` 审查范围，合并前必须经过人工审查，并默认组合 `safe-change-review`：
 
 - `AGENTS.md`
+- 目录级 `AGENTS.md`
 - `.agents/skills/`
 - `docs/dev/team-conventions.md`
 - `docs/adr/`
 - `scripts/`
 - `docker/`
-- CI / workflow configs
-- shell / PowerShell / Python / batch scripts
-- package manager hooks and bootstrap commands
-- prompt instructions, automation instructions, and merge-time governance rules
+- CI / workflow 配置
+- shell / PowerShell / Python / batch 脚本
+- package manager hook、bootstrap 命令
+- prompt instruction、automation instruction 与 merge-time governance rule
 
-Reviewers must explicitly check for:
+审查时必须显式检查：
 
-- prompt injection or hidden instruction escalation
-- dangerous scripts, hidden downloads, or remote code execution paths
-- credential exfiltration or surprising data export behavior
-- external callback, webhook, or notification endpoints
-- violations of the local loopback / local dependency rule
-
-## Local-Only Dependency Rule
-
-- Do not introduce required remote scripts, CDN assets, external hosted dependencies, or external notification endpoints into local development flows.
-- Do not add `curl | bash`, remote install snippets, hidden bootstrap downloads, or shared prompts that rely on third-party hosted code.
-- Allowed references inside development docs and scripts should resolve to workspace files, local sibling repos, or local loopback services.
-
-## ADR Usage
-
-Add or update `docs/adr/` when a decision needs durable rationale beyond a dated implementation note, especially for:
-
-- architecture boundaries
-- collaboration workflow changes
-- review and security guardrails
-- integration boundaries
-- multi-round governance decisions
-
-Use `docs/history/` for chronological implementation trace, and `docs/adr/` for standing decisions.
+- prompt injection 或隐藏指令升级
+- 隐藏下载、远程执行和静默联网路径
+- 凭证外传、意外上传或外部通知端点
+- 是否破坏 local-first、loopback-first 的开发基线

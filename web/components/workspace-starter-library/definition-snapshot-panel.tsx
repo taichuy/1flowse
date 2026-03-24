@@ -1,30 +1,60 @@
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import { WorkspaceStarterSourceCard } from "@/components/workspace-starter-library/source-status-card";
-import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import type {
+  WorkspaceStarterSourceGovernance,
+  WorkspaceStarterSourceDiff,
+  WorkspaceStarterTemplateItem
+} from "@/lib/get-workspace-starters";
+import {
+  buildWorkflowDefinitionSandboxGovernanceBadges,
+  describeWorkflowDefinitionSandboxDependency,
+  type WorkflowDefinitionSandboxGovernance,
+  type WorkflowDefinitionSandboxGovernanceNode
+} from "@/lib/workflow-definition-sandbox-governance";
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
-import type { WorkspaceStarterSourceStatus } from "@/lib/workspace-starter-source-status";
 
-import { formatTimestamp } from "./shared";
+import {
+  buildWorkspaceStarterSourceGovernancePresenter,
+  formatTimestamp
+} from "./shared";
 
 type WorkspaceStarterDefinitionSnapshotPanelProps = {
   selectedTemplate: WorkspaceStarterTemplateItem | null;
+  selectedTemplateSandboxGovernance: WorkflowDefinitionSandboxGovernance;
   selectedTemplateToolGovernance: WorkflowDefinitionToolGovernance;
-  sourceStatus: WorkspaceStarterSourceStatus | null;
-  sourceStatusMessage: string | null;
-  isLoadingSourceWorkflow: boolean;
+  sourceGovernance: WorkspaceStarterSourceGovernance | null;
+  sourceDiff: WorkspaceStarterSourceDiff | null;
+  isLoadingSourceDiff: boolean;
   isRefreshing: boolean;
+  isRebasing: boolean;
+  createWorkflowHref?: string | null;
   onRefresh: () => void;
+  onRebase: () => void;
 };
 
 export function WorkspaceStarterDefinitionSnapshotPanel({
   selectedTemplate,
+  selectedTemplateSandboxGovernance,
   selectedTemplateToolGovernance,
-  sourceStatus,
-  sourceStatusMessage,
-  isLoadingSourceWorkflow,
+  sourceGovernance,
+  sourceDiff,
+  isLoadingSourceDiff,
   isRefreshing,
-  onRefresh
+  isRebasing,
+  createWorkflowHref = null,
+  onRefresh,
+  onRebase
 }: WorkspaceStarterDefinitionSnapshotPanelProps) {
+  const sandboxGovernanceBadges = buildWorkflowDefinitionSandboxGovernanceBadges(
+    selectedTemplateSandboxGovernance
+  );
+  const sourceGovernancePresenter = selectedTemplate
+    ? buildWorkspaceStarterSourceGovernancePresenter(selectedTemplate)
+    : null;
+  const sandboxDependencySummary = describeWorkflowDefinitionSandboxDependency(
+    selectedTemplateSandboxGovernance
+  );
+
   return (
     <article className="diagnostic-panel">
       <div className="section-heading">
@@ -49,7 +79,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             </div>
             <div className="summary-card">
               <span>Source status</span>
-              <strong>{sourceStatus?.label ?? "-"}</strong>
+              <strong>{sourceGovernancePresenter?.statusLabel ?? "-"}</strong>
             </div>
             <div className="summary-card">
               <span>Governed tools</span>
@@ -63,6 +93,14 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
               <span>Missing catalog tools</span>
               <strong>{selectedTemplateToolGovernance.missingToolIds.length}</strong>
             </div>
+            <div className="summary-card">
+              <span>Sandbox nodes</span>
+              <strong>{selectedTemplateSandboxGovernance.sandboxNodeCount}</strong>
+            </div>
+            <div className="summary-card">
+              <span>Dependency modes</span>
+              <strong>{selectedTemplateSandboxGovernance.dependencyModes.join(" / ") || "-"}</strong>
+            </div>
           </div>
 
           <div className="starter-tag-row">
@@ -75,11 +113,14 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
 
           <WorkspaceStarterSourceCard
             template={selectedTemplate}
-            sourceStatus={sourceStatus}
-            sourceStatusMessage={sourceStatusMessage}
-            isLoadingSourceWorkflow={isLoadingSourceWorkflow}
+            sourceGovernance={sourceGovernance}
+            sourceDiff={sourceDiff}
+            isLoadingSourceDiff={isLoadingSourceDiff}
             isRefreshing={isRefreshing}
+            isRebasing={isRebasing}
+            createWorkflowHref={createWorkflowHref}
             onRefresh={onRefresh}
+            onRebase={onRebase}
           />
 
           <div className="section-heading">
@@ -133,6 +174,79 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             </div>
           ) : null}
 
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Sandbox</p>
+              <h3>Sandbox dependency</h3>
+            </div>
+            <p className="section-copy">
+              这里直接暴露 starter definition 里的 `sandbox_code` runtime policy，避免作者保存过的依赖约束在治理页丢失。
+            </p>
+          </div>
+
+          {selectedTemplateSandboxGovernance.sandboxNodeCount === 0 ? (
+            <p className="empty-state">
+              当前模板没有 `sandbox_code` 节点，因此这里没有额外的 sandbox 依赖治理摘要。
+            </p>
+          ) : (
+            <>
+              <div className="summary-strip compact-strip">
+                <div className="summary-card">
+                  <span>Sandbox nodes</span>
+                  <strong>{selectedTemplateSandboxGovernance.sandboxNodeCount}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Explicit execution</span>
+                  <strong>{selectedTemplateSandboxGovernance.explicitExecutionCount}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Execution</span>
+                  <strong>
+                    {selectedTemplateSandboxGovernance.executionClasses.join(" / ") || "-"}
+                  </strong>
+                </div>
+                <div className="summary-card">
+                  <span>Backend extensions</span>
+                  <strong>{selectedTemplateSandboxGovernance.backendExtensionNodeCount}</strong>
+                </div>
+              </div>
+
+              <div className="starter-tag-row">
+                {sandboxGovernanceBadges.map((badge) => (
+                  <span className="event-chip" key={`${selectedTemplate.id}-sandbox-${badge}`}>
+                    {badge}
+                  </span>
+                ))}
+              </div>
+
+              <p className="binding-meta">
+                {sandboxDependencySummary ??
+                  "当前模板含有 sandbox_code 节点，但还没有记录显式 dependencyMode；进入编辑器后应优先补齐依赖策略、builtin package set 或 dependency ref。"}
+              </p>
+
+              <div className="governance-node-list">
+                {selectedTemplateSandboxGovernance.nodes.map((node) => (
+                  <div className="binding-card compact-card" key={`${selectedTemplate.id}-sandbox-node-${node.id}`}>
+                    <div className="binding-card-header">
+                      <div>
+                        <p className="entry-card-title">{node.name}</p>
+                        <p className="binding-meta">sandbox_code · {node.id}</p>
+                      </div>
+                      <span className="health-pill">{node.executionClass}</span>
+                    </div>
+                    <div className="starter-tag-row">
+                      {buildSandboxNodeFactChips(node).map((fact) => (
+                        <span className="event-chip" key={`${selectedTemplate.id}-${node.id}-${fact}`}>
+                          {fact}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           <div className="governance-node-list">
             {(selectedTemplate.definition.nodes ?? []).map((node) => (
               <div className="binding-card compact-card" key={node.id}>
@@ -152,4 +266,23 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
       )}
     </article>
   );
+}
+
+function buildSandboxNodeFactChips(node: WorkflowDefinitionSandboxGovernanceNode) {
+  const chips = [
+    node.explicitExecution ? "explicit runtimePolicy" : "default runtimePolicy",
+    `dependencyMode ${node.dependencyMode ?? "未声明"}`
+  ];
+
+  if (node.builtinPackageSet) {
+    chips.push(`builtin ${node.builtinPackageSet}`);
+  }
+  if (node.dependencyRef) {
+    chips.push(`dependency ref ${node.dependencyRef}`);
+  }
+  if (node.backendExtensionKeys.length > 0) {
+    chips.push(`extensions ${node.backendExtensionKeys.join(", ")}`);
+  }
+
+  return chips;
 }

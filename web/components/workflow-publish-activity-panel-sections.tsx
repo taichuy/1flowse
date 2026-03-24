@@ -1,4 +1,12 @@
+import React from "react";
+import Link from "next/link";
+
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
+import { WorkflowPublishSelectedNextStepCard } from "@/components/workflow-publish-selected-next-step-card";
 import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
 import { WorkflowPublishInvocationDetailPanel } from "@/components/workflow-publish-invocation-detail-panel";
 import { WorkflowPublishInvocationEntryCard } from "@/components/workflow-publish-invocation-entry-card";
@@ -9,21 +17,28 @@ import type {
 } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import {
-  buildPublishedInvocationWaitingOverview,
-  formatPublishedInvocationReasonLabel,
-  formatPublishedInvocationSurfaceLabel,
-  formatPublishedRunStatusLabel,
-  formatRateLimitPressure
+  buildPublishedInvocationActivityInsightsSurface,
+  buildPublishedInvocationApiKeyUsageCardSurface,
+  buildPublishedInvocationActivityDetailsSurfaceCopy,
+  buildPublishedInvocationFailureReasonCardSurface
 } from "@/lib/published-invocation-presenters";
-import { formatTimestamp } from "@/lib/runtime-presenters";
 
-import { facetCount, formatTimeWindowLabel } from "@/components/workflow-publish-activity-panel-helpers";
+import {
+  formatTimeWindowLabel,
+  resolveWorkflowPublishSelectedInvocationDetailSurface
+} from "@/components/workflow-publish-activity-panel-helpers";
 import type { WorkflowPublishActivityPanelProps } from "@/components/workflow-publish-activity-panel-helpers";
+import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 type WorkflowPublishActivityInsightsProps = {
   binding: WorkflowPublishActivityPanelProps["binding"];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   rateLimitWindowAudit: PublishedEndpointInvocationListResponse | null;
+  selectedInvocationId?: string | null;
+  selectedInvocationHref?: string | null;
+  selectedInvocationDetail?: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse> | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
   activeTimeWindow: WorkflowPublishActivityPanelProps["activeInvocationFilter"] extends infer T
     ? T extends { timeWindow: infer U }
       ? U | null
@@ -35,99 +50,76 @@ export function WorkflowPublishActivityInsights({
   binding,
   invocationAudit,
   rateLimitWindowAudit,
+  selectedInvocationId,
+  selectedInvocationHref,
+  selectedInvocationDetail,
+  callbackWaitingAutomation,
+  sandboxReadiness,
   activeTimeWindow
 }: WorkflowPublishActivityInsightsProps) {
-  const summary = invocationAudit?.summary;
-  const requestSourceCounts = invocationAudit?.facets.request_source_counts ?? [];
-  const requestSurfaceCounts = invocationAudit?.facets.request_surface_counts ?? [];
-  const cacheStatusCounts = invocationAudit?.facets.cache_status_counts ?? [];
-  const runStatusCounts = invocationAudit?.facets.run_status_counts ?? [];
-  const reasonCounts = invocationAudit?.facets.reason_counts ?? [];
   const timeline = invocationAudit?.facets.timeline ?? [];
   const timelineGranularity = invocationAudit?.facets.timeline_granularity ?? "hour";
-  const rateLimitPolicy = binding.rate_limit_policy;
-  const waitingOverview = buildPublishedInvocationWaitingOverview({
-    summary,
-    runStatusCounts,
-    reasonCounts
+  const timeWindowLabel = formatTimeWindowLabel(activeTimeWindow ?? "all");
+  const selectedInvocationSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
+    selectedInvocationId: selectedInvocationId ?? null,
+    selectedInvocationDetail: selectedInvocationDetail ?? null,
+    currentHref: selectedInvocationHref ?? null,
+    callbackWaitingAutomation,
+    sandboxReadiness
   });
-  const windowUsed = rateLimitWindowAudit
-    ? rateLimitWindowAudit.summary.succeeded_count + rateLimitWindowAudit.summary.failed_count
-    : 0;
-  const windowRejected = rateLimitWindowAudit?.summary.rejected_count ?? 0;
-  const remainingQuota = rateLimitPolicy ? Math.max(rateLimitPolicy.requests - windowUsed, 0) : null;
-  const pressure = rateLimitPolicy ? formatRateLimitPressure(rateLimitPolicy.requests, windowUsed) : null;
+  const insightsSurface = buildPublishedInvocationActivityInsightsSurface({
+    invocationAudit,
+    rateLimitWindowAudit,
+    rateLimitPolicy: binding.rate_limit_policy,
+    callbackWaitingAutomation,
+    sandboxReadiness,
+    timeWindowLabel,
+    selectedInvocation:
+      selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.detail.invocation : null,
+    selectedInvocationErrorMessage:
+      selectedInvocationSurface.kind === "ok"
+        ? selectedInvocationSurface.detail.invocation.error_message ?? null
+        : null,
+    selectedInvocationNextStepSurface:
+      selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.nextStepSurface : null
+  });
 
   return (
     <>
-      <div className="publish-summary-grid">
-        <article className="status-card compact-card">
-          <span className="status-label">Total calls</span>
-          <strong>{summary?.total_count ?? 0}</strong>
-        </article>
-        <article className="status-card compact-card">
-          <span className="status-label">Succeeded</span>
-          <strong>{summary?.succeeded_count ?? 0}</strong>
-        </article>
-        <article className="status-card compact-card">
-          <span className="status-label">Failed</span>
-          <strong>{summary?.failed_count ?? 0}</strong>
-        </article>
-        <article className="status-card compact-card">
-          <span className="status-label">Rejected</span>
-          <strong>{summary?.rejected_count ?? 0}</strong>
-        </article>
-        <article className="status-card compact-card">
-          <span className="status-label">Last run status</span>
-          <strong>{summary?.last_run_status ?? "n/a"}</strong>
-        </article>
-        <article className="status-card compact-card">
-          <span className="status-label">Waiting now</span>
-          <strong>{waitingOverview.activeWaitingCount}</strong>
-        </article>
+      <div className="summary-strip compact-strip">
+        {insightsSurface.summaryCards.map((card) => (
+          <article className="summary-card" key={card.key}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            {card.detail ? <p className="binding-meta">{card.detail}</p> : null}
+            {card.href && card.hrefLabel ? (
+              <Link className="inline-link" href={card.href}>
+                {card.hrefLabel}
+              </Link>
+            ) : null}
+          </article>
+        ))}
       </div>
 
       <div className="publish-meta-grid">
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Traffic mix</span>
+            <span className="status-meta">{insightsSurface.trafficMixCard.title}</span>
           </div>
+          <p className="section-copy entry-copy">{insightsSurface.trafficMixCard.detail}</p>
           <dl className="compact-meta-list">
-            <div>
-              <dt>Workflow</dt>
-              <dd>{facetCount(requestSourceCounts, "workflow")}</dd>
-            </div>
-            <div>
-              <dt>Alias</dt>
-              <dd>{facetCount(requestSourceCounts, "alias")}</dd>
-            </div>
-            <div>
-              <dt>Path</dt>
-              <dd>{facetCount(requestSourceCounts, "path")}</dd>
-            </div>
-            <div>
-              <dt>Cache surface</dt>
-              <dd>
-                hit {facetCount(cacheStatusCounts, "hit")} / miss {facetCount(cacheStatusCounts, "miss")} /
-                bypass {facetCount(cacheStatusCounts, "bypass")}
-              </dd>
-            </div>
-            <div>
-              <dt>Run states</dt>
-              <dd>
-                {runStatusCounts.length
-                  ? runStatusCounts
-                      .map((item) => `${formatPublishedRunStatusLabel(item.value)} ${item.count}`)
-                      .join(" / ")
-                  : "n/a"}
-              </dd>
-            </div>
+            {insightsSurface.trafficMixCard.rows.map((row) => (
+              <div key={row.key}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
           </dl>
-          {requestSurfaceCounts.length ? (
+          {insightsSurface.trafficMixCard.requestSurfaceLabels.length ? (
             <div className="tool-badge-row">
-              {requestSurfaceCounts.map((item) => (
-                <span className="event-chip" key={item.value}>
-                  {formatPublishedInvocationSurfaceLabel(item.value)} {item.count}
+              {insightsSurface.trafficMixCard.requestSurfaceLabels.map((label) => (
+                <span className="event-chip" key={label}>
+                  {label}
                 </span>
               ))}
             </div>
@@ -136,78 +128,69 @@ export function WorkflowPublishActivityInsights({
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Waiting follow-up</span>
+            <span className="status-meta">{insightsSurface.waitingFollowUpCard.title}</span>
           </div>
-          <p className="section-copy entry-copy">{waitingOverview.headline}</p>
-          {waitingOverview.chips.length ? (
-            <p className="binding-meta">{waitingOverview.chips.join(" · ")}</p>
+          <p className="section-copy entry-copy">{insightsSurface.waitingFollowUpCard.headline}</p>
+          {insightsSurface.waitingFollowUpCard.chips.length ? (
+            <p className="binding-meta">{insightsSurface.waitingFollowUpCard.chips.join(" · ")}</p>
           ) : null}
           <dl className="compact-meta-list">
-            <div>
-              <dt>Active waiting</dt>
-              <dd>{waitingOverview.activeWaitingCount}</dd>
-            </div>
-            <div>
-              <dt>Callback waits</dt>
-              <dd>{waitingOverview.callbackWaitingCount}</dd>
-            </div>
-            <div>
-              <dt>Approval/input waits</dt>
-              <dd>{waitingOverview.waitingInputCount}</dd>
-            </div>
-            <div>
-              <dt>Generic waits</dt>
-              <dd>{waitingOverview.generalWaitingCount}</dd>
-            </div>
-            <div>
-              <dt>Sync waiting rejected</dt>
-              <dd>{waitingOverview.syncWaitingRejectedCount}</dd>
-            </div>
-            <div>
-              <dt>Latest run status</dt>
-              <dd>{waitingOverview.lastRunStatusLabel ?? "n/a"}</dd>
-            </div>
+            {insightsSurface.waitingFollowUpCard.rows.map((row) => (
+              <div key={row.key}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
           </dl>
-          <p className="section-copy entry-copy">{waitingOverview.detail}</p>
+          <p className="section-copy entry-copy">{insightsSurface.waitingFollowUpCard.detail}</p>
+          {insightsSurface.waitingFollowUpCard.selectedNextStepSurface ? (
+            <WorkflowPublishSelectedNextStepCard
+              surface={insightsSurface.waitingFollowUpCard.selectedNextStepSurface}
+              showTitle={false}
+            />
+          ) : null}
+          {insightsSurface.waitingFollowUpCard.followUpHref &&
+          insightsSurface.waitingFollowUpCard.followUpHrefLabel ? (
+            <div className="tool-badge-row">
+              <Link
+                className="event-chip inbox-filter-link"
+                href={insightsSurface.waitingFollowUpCard.followUpHref}
+              >
+                {insightsSurface.waitingFollowUpCard.followUpHrefLabel}
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <div className="payload-card compact-card">
           <div className="payload-card-header">
-            <span className="status-meta">Rate limit window</span>
+            <span className="status-meta">{insightsSurface.rateLimitWindowCard.title}</span>
           </div>
-          {rateLimitPolicy ? (
+          {insightsSurface.rateLimitWindowCard.enabled ? (
             <>
               <dl className="compact-meta-list">
-                <div>
-                  <dt>Policy</dt>
-                  <dd>
-                    {rateLimitPolicy.requests} / {rateLimitPolicy.windowSeconds}s
-                  </dd>
-                </div>
-                <div>
-                  <dt>Used</dt>
-                  <dd>{windowUsed}</dd>
-                </div>
-                <div>
-                  <dt>Remaining</dt>
-                  <dd>{remainingQuota}</dd>
-                </div>
-                <div>
-                  <dt>Pressure</dt>
-                  <dd>{pressure?.label ?? "0%"}</dd>
-                </div>
-                <div>
-                  <dt>Rejected</dt>
-                  <dd>{windowRejected}</dd>
-                </div>
+                {insightsSurface.rateLimitWindowCard.rows.map((row) => (
+                  <div key={row.key}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
               </dl>
-              <p className="section-copy entry-copy">
-                当前窗口从 {formatTimestamp(rateLimitWindowAudit?.filters.created_from ?? null)} 开始统计成功和失败调用，
-                `rejected` 仅作为治理信号，不占配额。
-              </p>
+              {insightsSurface.rateLimitWindowCard.description ? (
+                <p className="section-copy entry-copy">{insightsSurface.rateLimitWindowCard.description}</p>
+              ) : null}
+              {insightsSurface.rateLimitWindowCard.insight ? (
+                <p className="section-copy entry-copy">{insightsSurface.rateLimitWindowCard.insight}</p>
+              ) : null}
+              {insightsSurface.rateLimitWindowCard.selectedNextStepSurface ? (
+                <WorkflowPublishSelectedNextStepCard
+                  surface={insightsSurface.rateLimitWindowCard.selectedNextStepSurface}
+                  showTitle={false}
+                />
+              ) : null}
             </>
           ) : (
-            <p className="empty-state compact">当前 binding 没有启用 rate limit，开放调用不会按时间窗口限流。</p>
+            <p className="empty-state compact">{insightsSurface.rateLimitWindowCard.emptyState}</p>
           )}
         </div>
       </div>
@@ -215,21 +198,36 @@ export function WorkflowPublishActivityInsights({
       <WorkflowPublishTrafficTimeline
         timeline={timeline}
         timelineGranularity={timelineGranularity}
-        timeWindowLabel={formatTimeWindowLabel(activeTimeWindow ?? "all")}
+        timeWindowLabel={timeWindowLabel}
       />
 
-      {reasonCounts.length ? (
+      {insightsSurface.issueSignalsSurface ? (
         <div className="entry-card compact-card">
-          <p className="entry-card-title">Issue signals</p>
-          <p className="section-copy entry-copy">
-            将 `rejected / failed` 聚合为稳定原因码，便于区分限流、鉴权和当前同步协议边界。
-          </p>
+          <p className="entry-card-title">{insightsSurface.issueSignalsSurface.title}</p>
+          <p className="section-copy entry-copy">{insightsSurface.issueSignalsSurface.description}</p>
+          {insightsSurface.issueSignalsSurface.insight ? (
+            <p className="section-copy entry-copy">{insightsSurface.issueSignalsSurface.insight}</p>
+          ) : null}
+          {insightsSurface.issueSignalsSurface.selectedNextStepSurface ? (
+            <WorkflowPublishSelectedNextStepCard
+              surface={insightsSurface.issueSignalsSurface.selectedNextStepSurface}
+            />
+          ) : null}
           <div className="tool-badge-row">
-            {reasonCounts.map((item) => (
-              <span className="event-chip" key={item.value}>
-                {formatPublishedInvocationReasonLabel(item.value)} {item.count}
+            {insightsSurface.issueSignalsSurface.chips.map((chip) => (
+              <span className="event-chip" key={chip}>
+                {chip}
               </span>
             ))}
+            {insightsSurface.issueSignalsSurface.followUpHref &&
+            insightsSurface.issueSignalsSurface.followUpHrefLabel ? (
+              <Link
+                className="event-chip inbox-filter-link"
+                href={insightsSurface.issueSignalsSurface.followUpHref}
+              >
+                {insightsSurface.issueSignalsSurface.followUpHrefLabel}
+              </Link>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -241,116 +239,196 @@ type WorkflowPublishActivityDetailsProps = {
   tools: PluginToolRegistryItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   selectedInvocationId: string | null;
+  selectedInvocationHref?: string | null;
   selectedInvocationDetail: SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse>;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
   buildInvocationDetailHref: (invocationId: string) => string;
   clearInvocationDetailHref: string | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 };
 
 export function WorkflowPublishActivityDetails({
   tools,
   invocationAudit,
   selectedInvocationId,
+  selectedInvocationHref,
   selectedInvocationDetail,
+  callbackWaitingAutomation,
+  sandboxReadiness,
   buildInvocationDetailHref,
-  clearInvocationDetailHref
+  clearInvocationDetailHref,
+  workspaceStarterGovernanceQueryScope = null
 }: WorkflowPublishActivityDetailsProps) {
   const items = invocationAudit?.items ?? [];
+  const detailsSurfaceCopy = buildPublishedInvocationActivityDetailsSurfaceCopy();
   const apiKeyUsage = invocationAudit?.facets.api_key_usage ?? [];
   const failureReasons = invocationAudit?.facets.recent_failure_reasons ?? [];
+  const reasonCounts = invocationAudit?.facets.reason_counts ?? [];
+  const selectedInvocationSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
+    selectedInvocationId,
+    selectedInvocationDetail,
+    currentHref: selectedInvocationHref ?? null,
+    callbackWaitingAutomation,
+    sandboxReadiness
+  });
+  const selectedInvocationFailureBridgeNextStepSurface =
+    clearInvocationDetailHref && selectedInvocationSurface.kind === "ok"
+      ? selectedInvocationSurface.nextStepSurface
+      : null;
+  const selectedInvocationFailureBridgeErrorMessage =
+    clearInvocationDetailHref && selectedInvocationSurface.kind === "ok"
+      ? selectedInvocationSurface.detail.invocation.error_message ?? null
+      : null;
+  const selectedInvocationUnavailableSurface =
+    selectedInvocationSurface.kind === "unavailable"
+      ? selectedInvocationSurface.unavailableSurfaceCopy
+      : null;
+  const selectedInvocationDetailValue =
+    selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.detail.invocation : null;
+  const selectedInvocationDetailNextStepSurface =
+    selectedInvocationSurface.kind === "ok" ? selectedInvocationSurface.nextStepSurface : null;
 
   return (
     <>
       {apiKeyUsage.length ? (
         <div className="publish-cache-list">
-          {apiKeyUsage.map((item) => (
-            <article className="payload-card compact-card" key={item.api_key_id}>
-              <div className="payload-card-header">
-                <span className="status-meta">{item.name ?? item.api_key_id}</span>
-                <span className="event-chip">{item.key_prefix ?? "no-prefix"}</span>
-              </div>
-              <dl className="compact-meta-list">
-                <div>
-                  <dt>Calls</dt>
-                  <dd>{item.invocation_count}</dd>
+          {apiKeyUsage.map((item) => {
+            const cardSurface = buildPublishedInvocationApiKeyUsageCardSurface({
+              item,
+              selectedInvocation: selectedInvocationDetailValue,
+              selectedInvocationNextStepSurface: selectedInvocationDetailNextStepSurface,
+              surfaceCopy: detailsSurfaceCopy
+            });
+
+            return (
+              <article className="payload-card compact-card" key={item.api_key_id}>
+                <div className="payload-card-header">
+                  <span className="status-meta">{cardSurface.title}</span>
+                  <span className="event-chip">{cardSurface.chipLabel}</span>
                 </div>
-                <div>
-                  <dt>Status mix</dt>
-                  <dd>
-                    ok {item.succeeded_count} / failed {item.failed_count} / rejected {item.rejected_count}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{item.last_status ?? item.status ?? "n/a"}</dd>
-                </div>
-                <div>
-                  <dt>Last used</dt>
-                  <dd>{formatTimestamp(item.last_invoked_at)}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
+                <dl className="compact-meta-list">
+                  {cardSurface.rows.map((row) => (
+                    <div key={`${item.api_key_id}:${row.key}`}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {cardSurface.selectedNextStepSurface ? (
+                  <WorkflowPublishSelectedNextStepCard
+                    surface={cardSurface.selectedNextStepSurface}
+                    showTitle={false}
+                  />
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       ) : null}
 
       {failureReasons.length ? (
         <div className="publish-cache-list">
-          {failureReasons.map((item) => (
-            <article className="payload-card compact-card" key={item.message}>
-              <div className="payload-card-header">
-                <span className="status-meta">Failure reason</span>
-                <span className="event-chip">count {item.count}</span>
-              </div>
-              <p className="binding-meta">{item.message}</p>
-              <p className="section-copy entry-copy">最近一次出现在 {formatTimestamp(item.last_invoked_at)}。</p>
-            </article>
-          ))}
+          {failureReasons.map((item) => {
+            const cardSurface = buildPublishedInvocationFailureReasonCardSurface({
+              item,
+              reasonCounts,
+              sandboxReadiness,
+              callbackWaitingAutomation,
+              selectedInvocationErrorMessage: selectedInvocationFailureBridgeErrorMessage,
+              selectedInvocationNextStepSurface: selectedInvocationFailureBridgeNextStepSurface,
+              surfaceCopy: detailsSurfaceCopy
+            });
+
+            return (
+              <article className="payload-card compact-card" key={item.message}>
+                <div className="payload-card-header">
+                  <span className="status-meta">{cardSurface.title}</span>
+                  <span className="event-chip">{cardSurface.countLabel}</span>
+                </div>
+                <p className="binding-meta">{cardSurface.message}</p>
+                {cardSurface.diagnosis ? (
+                  <>
+                    <p className="section-copy entry-copy">{cardSurface.diagnosis.headline}</p>
+                    <p className="binding-meta">{cardSurface.diagnosis.detail}</p>
+                    {cardSurface.diagnosis.href && cardSurface.diagnosis.hrefLabel ? (
+                      <div className="tool-badge-row">
+                        <Link className="event-chip inbox-filter-link" href={cardSurface.diagnosis.href}>
+                          {cardSurface.diagnosis.hrefLabel}
+                        </Link>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                {cardSurface.selectedNextStepSurface ? (
+                  <WorkflowPublishSelectedNextStepCard
+                    surface={cardSurface.selectedNextStepSurface}
+                    showTitle={false}
+                  />
+                ) : null}
+                <p className="section-copy entry-copy">{cardSurface.lastSeenLabel}</p>
+              </article>
+            );
+          })}
         </div>
+      ) : null}
+
+      {selectedInvocationSurface.nextStepSurface && !clearInvocationDetailHref ? (
+        <WorkflowPublishSelectedNextStepCard surface={selectedInvocationSurface.nextStepSurface} />
       ) : null}
 
       {items.length ? (
         <>
-          {selectedInvocationId && clearInvocationDetailHref ? (
-            selectedInvocationDetail?.kind === "ok" ? (
-              <WorkflowPublishInvocationDetailPanel
-                clearHref={clearInvocationDetailHref}
-                detail={selectedInvocationDetail.data}
-                tools={tools}
-              />
-            ) : selectedInvocationDetail?.kind === "blocked" ? (
-              <SensitiveAccessBlockedCard
-                clearHref={clearInvocationDetailHref}
-                payload={selectedInvocationDetail.payload}
-                summary="当前 invocation detail 已被纳入统一敏感访问控制；可先查看审批票据和关联 run，再决定是否继续申请明细查看。"
-                title="Invocation detail access blocked"
-              />
-            ) : (
-              <article className="entry-card compact-card">
-                <div className="payload-card-header">
-                  <div>
-                    <p className="entry-card-title">Invocation detail unavailable</p>
-                    <p className="binding-meta">当前未能拉取该 invocation 的详情 payload。</p>
-                  </div>
+          {clearInvocationDetailHref && selectedInvocationSurface.kind === "ok" ? (
+            <WorkflowPublishInvocationDetailPanel
+              clearHref={clearInvocationDetailHref}
+              currentHref={selectedInvocationHref}
+              detail={selectedInvocationSurface.detail}
+              tools={tools}
+              callbackWaitingAutomation={callbackWaitingAutomation}
+              sandboxReadiness={sandboxReadiness}
+              selectedNextStepSurface={selectedInvocationSurface.nextStepSurface}
+              workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
+            />
+          ) : clearInvocationDetailHref && selectedInvocationSurface.kind === "blocked" ? (
+            <SensitiveAccessBlockedCard
+              callbackWaitingAutomation={callbackWaitingAutomation}
+              clearHref={clearInvocationDetailHref}
+              payload={selectedInvocationSurface.payload}
+              sandboxReadiness={sandboxReadiness}
+              summary={selectedInvocationSurface.blockedSurfaceCopy.summary}
+              title={selectedInvocationSurface.blockedSurfaceCopy.title}
+            />
+          ) : clearInvocationDetailHref && selectedInvocationUnavailableSurface ? (
+            <article className="entry-card compact-card">
+              <div className="payload-card-header">
+                <div>
+                  <p className="entry-card-title">{selectedInvocationUnavailableSurface.title}</p>
+                  <p className="binding-meta">{selectedInvocationUnavailableSurface.summary}</p>
                 </div>
-                <p className="section-copy entry-copy">
-                  审计列表仍可继续使用；如果问题可复现，优先回到 run detail 或稍后重试该详情入口。
-                </p>
-              </article>
-            )
+              </div>
+              <p className="section-copy entry-copy">{selectedInvocationUnavailableSurface.detail}</p>
+            </article>
           ) : null}
           <div className="publish-cache-list">
             {items.map((item) => (
               <WorkflowPublishInvocationEntryCard
+                callbackWaitingAutomation={callbackWaitingAutomation}
                 detailActive={selectedInvocationId === item.id}
                 detailHref={buildInvocationDetailHref(item.id)}
+                hideRecommendedNextStep={
+                  selectedInvocationId === item.id && Boolean(selectedInvocationSurface.nextStepSurface)
+                }
                 item={item}
+                sandboxReadiness={sandboxReadiness}
                 key={item.id}
+                workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
               />
             ))}
           </div>
         </>
       ) : (
-        <p className="empty-state compact">当前还没有 invocation 审计记录。endpoint 发布后，外部入口命中会在这里留下治理事实。</p>
+        <p className="empty-state compact">{detailsSurfaceCopy.invocationAuditEmptyState}</p>
       )}
     </>
   );

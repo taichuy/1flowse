@@ -3,6 +3,22 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.explanations import SignalFollowUpExplanation
+from app.schemas.operator_follow_up import (
+    OperatorCallbackWaitingLifecycleSummary,
+    OperatorRunCallbackTicketItem,
+    OperatorRunFocusSkillTrace,
+    OperatorRunFollowUpSummary,
+    OperatorRunSnapshot,
+)
+from app.schemas.sensitive_access import (
+    CallbackBlockerDeltaSummary,
+    SensitiveAccessTimelineEntryItem,
+)
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
+
 
 class RunCreate(BaseModel):
     input_payload: dict = Field(default_factory=dict)
@@ -64,6 +80,10 @@ class CallbackTicketCleanupResponse(BaseModel):
     scheduled_resume_run_ids: list[str] = Field(default_factory=list)
     terminated_run_ids: list[str] = Field(default_factory=list)
     items: list[CallbackTicketCleanupItem] = Field(default_factory=list)
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
 class NodeRunItem(BaseModel):
@@ -163,7 +183,32 @@ class ToolCallItem(BaseModel):
     phase: str
     status: str
     request_summary: str
+    execution_trace: dict | None = None
+    requested_execution_class: str | None = None
+    requested_execution_source: str | None = None
+    requested_execution_profile: str | None = None
+    requested_execution_timeout_ms: int | None = None
+    requested_execution_network_policy: str | None = None
+    requested_execution_filesystem_policy: str | None = None
+    requested_execution_dependency_mode: str | None = None
+    requested_execution_builtin_package_set: str | None = None
+    requested_execution_dependency_ref: str | None = None
+    requested_execution_backend_extensions: dict | None = None
+    effective_execution_class: str | None = None
+    execution_executor_ref: str | None = None
+    execution_sandbox_backend_id: str | None = None
+    execution_sandbox_backend_executor_ref: str | None = None
+    execution_sandbox_runner_kind: str | None = None
+    adapter_request_trace_id: str | None = None
+    adapter_request_execution: dict | None = None
+    adapter_request_execution_class: str | None = None
+    adapter_request_execution_source: str | None = None
+    adapter_request_execution_contract: dict | None = None
+    execution_blocking_reason: str | None = None
+    execution_fallback_reason: str | None = None
     response_summary: str | None = None
+    response_content_type: str | None = None
+    response_meta: dict = Field(default_factory=dict)
     raw_ref: str | None = None
     latency_ms: int = 0
     retry_count: int = 0
@@ -193,6 +238,59 @@ class AICallItem(BaseModel):
     finished_at: datetime | None = None
 
 
+RunDetailExecutionFocusReason = Literal[
+    "blocking_node_run",
+    "blocked_execution",
+    "current_node",
+    "fallback_node",
+]
+
+
+class RunDetailExecutionFocusNode(BaseModel):
+    node_run_id: str
+    node_id: str
+    node_name: str
+    node_type: str
+    status: str
+    callback_waiting_explanation: SignalFollowUpExplanation | None = None
+    callback_waiting_lifecycle: OperatorCallbackWaitingLifecycleSummary | None = None
+    phase: str | None = None
+    execution_class: str | None = None
+    execution_source: str | None = None
+    requested_execution_class: str | None = None
+    requested_execution_source: str | None = None
+    requested_execution_profile: str | None = None
+    requested_execution_timeout_ms: int | None = None
+    requested_execution_network_policy: str | None = None
+    requested_execution_filesystem_policy: str | None = None
+    requested_execution_dependency_mode: str | None = None
+    requested_execution_builtin_package_set: str | None = None
+    requested_execution_dependency_ref: str | None = None
+    requested_execution_backend_extensions: dict | None = None
+    effective_execution_class: str | None = None
+    execution_executor_ref: str | None = None
+    execution_sandbox_backend_id: str | None = None
+    execution_sandbox_backend_executor_ref: str | None = None
+    execution_sandbox_runner_kind: str | None = None
+    execution_blocking_reason: str | None = None
+    execution_fallback_reason: str | None = None
+    scheduled_resume_delay_seconds: float | None = None
+    scheduled_resume_reason: str | None = None
+    scheduled_resume_source: str | None = None
+    scheduled_waiting_status: str | None = None
+    scheduled_resume_scheduled_at: datetime | None = None
+    scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
+    artifact_refs: list[str] = Field(default_factory=list)
+    artifacts: list[RunArtifactItem] = Field(default_factory=list)
+    tool_calls: list[ToolCallItem] = Field(default_factory=list)
+    callback_tickets: list[OperatorRunCallbackTicketItem] = Field(default_factory=list)
+    sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
+        default_factory=list
+    )
+
+
 class RunDetail(BaseModel):
     id: str
     workflow_id: str
@@ -211,11 +309,26 @@ class RunDetail(BaseModel):
     event_type_counts: dict[str, int] = Field(default_factory=dict)
     first_event_at: datetime | None = None
     last_event_at: datetime | None = None
+    blocking_node_run_id: str | None = None
+    execution_focus_reason: RunDetailExecutionFocusReason | None = None
+    execution_focus_node: RunDetailExecutionFocusNode | None = None
+    execution_focus_explanation: SignalFollowUpExplanation | None = None
+    execution_focus_skill_trace: OperatorRunFocusSkillTrace | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
     node_runs: list[NodeRunItem]
     artifacts: list[RunArtifactItem] = Field(default_factory=list)
     tool_calls: list[ToolCallItem] = Field(default_factory=list)
     ai_calls: list[AICallItem] = Field(default_factory=list)
     events: list[RunEventItem] = Field(default_factory=list)
+
+
+class RunResumeResponse(BaseModel):
+    run: RunDetail
+    outcome_explanation: SignalFollowUpExplanation | None = None
+    callback_blocker_delta: CallbackBlockerDeltaSummary | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
 
 
 class RunCallbackResponse(BaseModel):

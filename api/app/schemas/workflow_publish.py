@@ -5,13 +5,37 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
 from app.schemas.run import RunDetail
-from app.schemas.run_views import CallbackWaitingLifecycleSummary, RunCallbackTicketItem
+from app.schemas.run_views import (
+    CallbackWaitingLifecycleSummary,
+    RunCallbackTicketItem,
+    RunExecutionFocusExplanation,
+    RunExecutionNodeItem,
+    SkillReferenceLoadItem,
+)
 from app.schemas.sensitive_access import SensitiveAccessTimelineEntryItem
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem,
+    WorkflowPublishedEndpointLegacyAuthGovernanceBuckets,
+    WorkflowPublishedEndpointLegacyAuthGovernanceChecklistItem,
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+    WorkflowPublishedEndpointLegacyAuthGovernanceSummary,
+    WorkflowPublishedEndpointLegacyAuthGovernanceWorkflowItem,
+)
 from app.schemas.workflow_published_endpoint import (
     WorkflowPublishedEndpointCachePolicy,
     WorkflowPublishedEndpointRateLimitPolicy,
 )
+
+__all__ = [
+    "WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem",
+    "WorkflowPublishedEndpointLegacyAuthGovernanceBuckets",
+    "WorkflowPublishedEndpointLegacyAuthGovernanceChecklistItem",
+    "WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot",
+    "WorkflowPublishedEndpointLegacyAuthGovernanceSummary",
+    "WorkflowPublishedEndpointLegacyAuthGovernanceWorkflowItem",
+]
 
 PublishedEndpointLifecycleStatus = Literal["draft", "published", "offline"]
 PublishedEndpointApiKeyStatus = Literal["active", "revoked"]
@@ -52,10 +76,49 @@ PublishedEndpointInvocationReasonCode = Literal[
     "workflow_missing",
 ]
 PublishedEndpointInvocationTimeBucketGranularity = Literal["hour", "day"]
+PublishedEndpointIssueCategory = Literal["unsupported_auth_mode"]
+WorkflowPublishedEndpointLegacyAuthCleanupSkipReason = Literal[
+    "binding_not_found",
+    "binding_not_legacy_auth",
+    "binding_not_draft",
+    "binding_already_offline",
+]
 
 
 class WorkflowPublishedEndpointLifecycleUpdate(BaseModel):
     status: Literal["published", "offline"]
+
+
+class WorkflowPublishedEndpointLegacyAuthCleanupRequest(BaseModel):
+    binding_ids: list[str] = Field(default_factory=list, min_length=1)
+
+
+class WorkflowPublishedEndpointLegacyAuthCleanupSkipItem(BaseModel):
+    binding_id: str
+    endpoint_id: str | None = None
+    endpoint_name: str | None = None
+    workflow_version: str | None = None
+    lifecycle_status: PublishedEndpointLifecycleStatus | None = None
+    reason: WorkflowPublishedEndpointLegacyAuthCleanupSkipReason
+    detail: str
+
+
+class WorkflowPublishedEndpointLegacyAuthCleanupResult(BaseModel):
+    requested_count: int = 0
+    updated_count: int = 0
+    skipped_count: int = 0
+    updated_binding_ids: list[str] = Field(default_factory=list)
+    skipped_items: list[WorkflowPublishedEndpointLegacyAuthCleanupSkipItem] = Field(
+        default_factory=list
+    )
+
+
+class WorkflowPublishedEndpointIssue(BaseModel):
+    category: PublishedEndpointIssueCategory
+    message: str
+    field: str | None = None
+    remediation: str | None = None
+    blocks_lifecycle_publish: bool = False
 
 
 class WorkflowPublishedEndpointItem(BaseModel):
@@ -84,6 +147,7 @@ class WorkflowPublishedEndpointItem(BaseModel):
     updated_at: datetime
     activity: PublishedEndpointInvocationSummary | None = None
     cache_inventory: PublishedEndpointCacheInventorySummary | None = None
+    issues: list[WorkflowPublishedEndpointIssue] = Field(default_factory=list)
 
 
 class PublishedNativeRunRequest(BaseModel):
@@ -267,6 +331,14 @@ class PublishedEndpointInvocationSummary(BaseModel):
     last_run_id: str | None = None
     last_run_status: str | None = None
     last_reason_code: str | None = None
+    approval_ticket_count: int = 0
+    pending_approval_count: int = 0
+    approved_approval_count: int = 0
+    rejected_approval_count: int = 0
+    expired_approval_count: int = 0
+    pending_notification_count: int = 0
+    delivered_notification_count: int = 0
+    failed_notification_count: int = 0
 
 
 class PublishedEndpointInvocationWaitingLifecycle(BaseModel):
@@ -276,10 +348,28 @@ class PublishedEndpointInvocationWaitingLifecycle(BaseModel):
     callback_ticket_count: int = 0
     callback_ticket_status_counts: dict[str, int] = Field(default_factory=dict)
     callback_waiting_lifecycle: CallbackWaitingLifecycleSummary | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
+    sensitive_access_summary: PublishedEndpointInvocationSensitiveAccessSummary | None = None
     scheduled_resume_delay_seconds: float | None = None
     scheduled_resume_reason: str | None = None
     scheduled_resume_source: str | None = None
     scheduled_waiting_status: str | None = None
+    scheduled_resume_scheduled_at: datetime | None = None
+    scheduled_resume_due_at: datetime | None = None
+    scheduled_resume_requeued_at: datetime | None = None
+    scheduled_resume_requeue_source: str | None = None
+
+
+class PublishedEndpointInvocationSensitiveAccessSummary(BaseModel):
+    request_count: int = 0
+    approval_ticket_count: int = 0
+    pending_approval_count: int = 0
+    approved_approval_count: int = 0
+    rejected_approval_count: int = 0
+    expired_approval_count: int = 0
+    pending_notification_count: int = 0
+    delivered_notification_count: int = 0
+    failed_notification_count: int = 0
 
 
 class PublishedEndpointInvocationItem(BaseModel):
@@ -304,6 +394,10 @@ class PublishedEndpointInvocationItem(BaseModel):
     run_current_node_id: str | None = None
     run_waiting_reason: str | None = None
     run_waiting_lifecycle: PublishedEndpointInvocationWaitingLifecycle | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    execution_focus_explanation: RunExecutionFocusExplanation | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
     reason_code: str | None = None
     error_message: str | None = None
     request_preview: dict
@@ -343,6 +437,7 @@ class PublishedEndpointInvocationApiKeyUsageItem(BaseModel):
     rejected_count: int = 0
     last_invoked_at: datetime | None = None
     last_status: PublishedEndpointInvocationStatus | None = None
+    last_reason_code: str | None = None
 
 
 class PublishedEndpointInvocationFailureReasonItem(BaseModel):
@@ -461,11 +556,43 @@ class PublishedEndpointInvocationCacheReference(BaseModel):
     inventory_entry: PublishedEndpointCacheInventoryItem | None = None
 
 
+class PublishedEndpointInvocationSkillTraceNodeItem(BaseModel):
+    node_run_id: str
+    node_id: str | None = None
+    node_name: str | None = None
+    reference_count: int = 0
+    loads: list[SkillReferenceLoadItem] = Field(default_factory=list)
+
+
+class PublishedEndpointInvocationSkillTrace(BaseModel):
+    scope: Literal["execution_focus_node", "run"]
+    reference_count: int = 0
+    phase_counts: dict[str, int] = Field(default_factory=dict)
+    source_counts: dict[str, int] = Field(default_factory=dict)
+    nodes: list[PublishedEndpointInvocationSkillTraceNodeItem] = Field(default_factory=list)
+
+
+PublishedEndpointInvocationExecutionFocusReason = Literal[
+    "blocking_node_run",
+    "blocked_execution",
+    "current_node",
+    "fallback_node",
+]
+
+
 class PublishedEndpointInvocationDetailResponse(BaseModel):
     invocation: PublishedEndpointInvocationItem
     run: PublishedEndpointInvocationRunReference | None = None
+    run_snapshot: OperatorRunSnapshot | None = None
+    run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
     callback_tickets: list[RunCallbackTicketItem] = Field(default_factory=list)
     blocking_node_run_id: str | None = None
+    execution_focus_reason: PublishedEndpointInvocationExecutionFocusReason | None = None
+    execution_focus_node: RunExecutionNodeItem | None = None
+    execution_focus_explanation: RunExecutionFocusExplanation | None = None
+    callback_waiting_explanation: RunExecutionFocusExplanation | None = None
+    skill_trace: PublishedEndpointInvocationSkillTrace | None = None
     blocking_sensitive_access_entries: list[SensitiveAccessTimelineEntryItem] = Field(
         default_factory=list
     )

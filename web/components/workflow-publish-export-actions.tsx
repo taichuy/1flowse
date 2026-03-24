@@ -1,8 +1,13 @@
 "use client";
 
+import React from "react";
 import { useMemo, useState } from "react";
 
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import {
   buildPublishedEndpointInvocationExportUrl,
   type PublishedEndpointInvocationExportFormat,
@@ -16,34 +21,36 @@ import {
   parseSensitiveAccessBlockingResponse,
   type SensitiveAccessBlockingPayload
 } from "@/lib/sensitive-access";
+import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
+import {
+  buildWorkflowPublishExportActionSurface,
+  buildWorkflowPublishExportFallbackErrorMessage,
+  buildWorkflowPublishExportNetworkErrorMessage,
+  buildWorkflowPublishExportReadinessHint,
+  buildWorkflowPublishExportSuccessMessage
+} from "@/lib/workflow-publish-binding-presenters";
 
 type WorkflowPublishExportActionsProps = {
   workflowId: string;
   bindingId: string;
   activeInvocationFilter: WorkflowPublishInvocationActiveFilter | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   formats?: PublishedEndpointInvocationExportFormat[];
   requesterId?: string;
-  blockedTitle?: string;
-  blockedSummary?: string;
 };
 
 const DEFAULT_FORMATS: PublishedEndpointInvocationExportFormat[] = ["json", "jsonl"];
 const EXPORT_LIMIT = 200;
 
-const EXPORT_LABELS: Record<PublishedEndpointInvocationExportFormat, string> = {
-  json: "导出 activity JSON",
-  jsonl: "导出 activity JSONL"
-};
-
 export function WorkflowPublishExportActions({
   workflowId,
   bindingId,
   activeInvocationFilter,
+  sandboxReadiness,
+  callbackWaitingAutomation = null,
   formats = DEFAULT_FORMATS,
-  requesterId = "publish-activity-export-ui",
-  blockedTitle = "Publish activity export access blocked",
-  blockedSummary =
-    "当前 publish activity export 已接入统一敏感访问控制；可先查看审批票据和关联 run，再决定是否继续导出。"
+  requesterId = "publish-activity-export-ui"
 }: WorkflowPublishExportActionsProps) {
   const [activeFormat, setActiveFormat] =
     useState<PublishedEndpointInvocationExportFormat | null>(null);
@@ -51,6 +58,13 @@ export function WorkflowPublishExportActions({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [blockedPayload, setBlockedPayload] =
     useState<SensitiveAccessBlockingPayload | null>(null);
+  const sandboxPreflightHint = buildWorkflowPublishExportReadinessHint(sandboxReadiness);
+  const blockedCopy = blockedPayload
+    ? buildSensitiveAccessBlockedSurfaceCopy({
+        surfaceLabel: "Publish activity export",
+        payload: blockedPayload
+      })
+    : null;
 
   const exportOptions = useMemo<PublishedEndpointInvocationListOptions>(
     () => ({
@@ -107,11 +121,9 @@ export function WorkflowPublishExportActions({
         format
       );
       triggerDownload(blob, filename);
-      setSuccessMessage(
-        `${EXPORT_LABELS[format]} 已开始下载（最多 ${EXPORT_LIMIT} 条过滤后的 invocation）。`
-      );
+      setSuccessMessage(buildWorkflowPublishExportSuccessMessage({ format, limit: EXPORT_LIMIT }));
     } catch {
-      setErrorMessage(`无法导出 ${format.toUpperCase()}，请确认 API 已启动。`);
+      setErrorMessage(buildWorkflowPublishExportNetworkErrorMessage(format));
     } finally {
       setActiveFormat(null);
     }
@@ -119,17 +131,27 @@ export function WorkflowPublishExportActions({
 
   return (
     <>
-      {formats.map((format) => (
-        <button
-          className="activity-link action-link-button"
-          disabled={activeFormat !== null}
-          key={format}
-          onClick={() => void handleExport(format)}
-          type="button"
-        >
-          {activeFormat === format ? `导出 ${format.toUpperCase()}...` : EXPORT_LABELS[format]}
-        </button>
-      ))}
+      {formats.map((format) => {
+        const actionSurface = buildWorkflowPublishExportActionSurface(format);
+
+        return (
+          <button
+            className="activity-link action-link-button"
+            disabled={activeFormat !== null}
+            key={format}
+            onClick={() => void handleExport(format)}
+            type="button"
+          >
+            {activeFormat === format ? actionSurface.pendingLabel : actionSurface.idleLabel}
+          </button>
+        );
+      })}
+
+      {sandboxPreflightHint ? (
+        <p className="section-copy entry-copy trace-export-feedback">
+          {sandboxPreflightHint}
+        </p>
+      ) : null}
 
       {successMessage ? (
         <p className="sync-message success trace-export-feedback">{successMessage}</p>
@@ -142,9 +164,11 @@ export function WorkflowPublishExportActions({
       {blockedPayload ? (
         <div className="trace-export-blocked">
           <SensitiveAccessBlockedCard
+            callbackWaitingAutomation={callbackWaitingAutomation}
             payload={blockedPayload}
-            summary={blockedSummary}
-            title={blockedTitle}
+            sandboxReadiness={sandboxReadiness}
+            summary={blockedCopy?.summary}
+            title={blockedCopy?.title ?? "Publish activity export access blocked"}
           />
         </div>
       ) : null}
@@ -172,7 +196,10 @@ async function buildErrorMessage(
     return text;
   }
 
-  return `导出 ${format.toUpperCase()} 失败，API 返回 ${response.status}。`;
+  return buildWorkflowPublishExportFallbackErrorMessage({
+    format,
+    status: response.status
+  });
 }
 
 function resolveFilename(

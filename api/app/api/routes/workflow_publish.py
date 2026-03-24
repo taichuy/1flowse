@@ -8,6 +8,9 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSummary,
     PublishedEndpointLifecycleStatus,
     WorkflowPublishedEndpointItem,
+    WorkflowPublishedEndpointLegacyAuthCleanupRequest,
+    WorkflowPublishedEndpointLegacyAuthCleanupResult,
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
     WorkflowPublishedEndpointLifecycleUpdate,
 )
 from app.services.published_cache import PublishedEndpointCacheService
@@ -15,6 +18,9 @@ from app.services.published_invocations import PublishedInvocationService
 from app.services.workflow_publish import (
     WorkflowPublishBindingError,
     WorkflowPublishBindingService,
+)
+from app.services.workflow_publish_auth_mode_validation import (
+    collect_invalid_published_endpoint_auth_mode_issues,
 )
 
 router = APIRouter(prefix="/workflows", tags=["workflow-publish"])
@@ -42,6 +48,14 @@ def _serialize_published_invocation_summary(
         last_run_id=summary.last_run_id,
         last_run_status=summary.last_run_status,
         last_reason_code=summary.last_reason_code,
+        approval_ticket_count=summary.approval_ticket_count,
+        pending_approval_count=summary.pending_approval_count,
+        approved_approval_count=summary.approved_approval_count,
+        rejected_approval_count=summary.rejected_approval_count,
+        expired_approval_count=summary.expired_approval_count,
+        pending_notification_count=summary.pending_notification_count,
+        delivered_notification_count=summary.delivered_notification_count,
+        failed_notification_count=summary.failed_notification_count,
     )
 
 
@@ -69,6 +83,11 @@ def _serialize_workflow_published_endpoint_item(
     activity: PublishedEndpointInvocationSummary | None = None,
     cache_inventory=None,
 ) -> WorkflowPublishedEndpointItem:
+    issues = collect_invalid_published_endpoint_auth_mode_issues(
+        endpoint_id=record.endpoint_id,
+        endpoint_name=record.endpoint_name,
+        auth_mode=record.auth_mode,
+    )
     return WorkflowPublishedEndpointItem(
         id=record.id,
         workflow_id=record.workflow_id,
@@ -95,7 +114,18 @@ def _serialize_workflow_published_endpoint_item(
         updated_at=record.updated_at,
         activity=_serialize_published_invocation_summary(activity),
         cache_inventory=_serialize_published_cache_inventory_summary(cache_inventory),
+        issues=issues,
     )
+
+
+@router.get(
+    "/published-endpoints/legacy-auth-governance",
+    response_model=WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
+def get_workflow_published_endpoint_legacy_auth_governance(
+    db: Session = Depends(get_db),
+) -> WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot:
+    return workflow_publish_service.build_legacy_auth_governance_snapshot(db)
 
 
 @router.get(
@@ -137,6 +167,35 @@ def list_workflow_published_endpoints(
         )
         for record in records
     ]
+
+
+@router.post(
+    "/{workflow_id}/published-endpoints/legacy-auth-cleanup",
+    response_model=WorkflowPublishedEndpointLegacyAuthCleanupResult,
+)
+def cleanup_workflow_published_endpoint_legacy_auth_bindings(
+    workflow_id: str,
+    payload: WorkflowPublishedEndpointLegacyAuthCleanupRequest,
+    db: Session = Depends(get_db),
+) -> WorkflowPublishedEndpointLegacyAuthCleanupResult:
+    workflow = db.get(Workflow, workflow_id)
+    if workflow is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found.")
+
+    try:
+        result = workflow_publish_service.bulk_offline_legacy_auth_draft_bindings(
+            db,
+            workflow_id=workflow_id,
+            binding_ids=payload.binding_ids,
+        )
+    except WorkflowPublishBindingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    db.commit()
+    return result
 
 
 @router.patch(

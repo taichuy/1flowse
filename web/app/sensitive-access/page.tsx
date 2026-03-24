@@ -1,13 +1,21 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
+import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { SensitiveAccessChannelHealthPanel } from "@/components/sensitive-access-channel-health-panel";
 import { SensitiveAccessInboxFilterSection } from "@/components/sensitive-access-inbox-filter-section";
+import { SensitiveAccessLegacyAuthGovernanceCard } from "@/components/sensitive-access-legacy-auth-governance-card";
 import { SensitiveAccessInboxPanel } from "@/components/sensitive-access-inbox-panel";
 import {
   APPROVAL_STATUS_OPTIONS,
+  buildSensitiveAccessInboxScopeChips,
+  buildSensitiveAccessInboxSliceChips,
+  clearSensitiveAccessInboxScopeFilters,
+  clearSensitiveAccessInboxSliceFilters,
   firstSearchValue,
-  hasActiveInboxFilters,
+  hasActiveInboxScopeFilters,
+  hasActiveInboxSliceFilters,
   NOTIFICATION_CHANNEL_OPTIONS,
   NOTIFICATION_STATUS_OPTIONS,
   REQUEST_DECISION_OPTIONS,
@@ -16,12 +24,21 @@ import {
   WAITING_STATUS_OPTIONS
 } from "@/components/sensitive-access-inbox-page-shared";
 import { SensitiveAccessInboxSliceForm } from "@/components/sensitive-access-inbox-slice-form";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import {
+  buildCrossEntryRiskDigest,
+  type CrossEntryRiskDigest
+} from "@/lib/cross-entry-risk-digest";
 import {
   getSensitiveAccessInboxSnapshot,
   type ApprovalTicketItem,
   type NotificationDispatchItem,
   type SensitiveAccessRequestItem
 } from "@/lib/get-sensitive-access";
+import { buildSensitiveAccessInboxRecommendedNextStep } from "@/lib/operator-workbench-next-step";
+import { buildSensitiveAccessInboxLegacyAuthGovernanceSnapshot } from "@/lib/sensitive-access-legacy-auth-governance";
+import { buildSensitiveAccessInboxSurfaceCopy } from "@/lib/workbench-entry-surfaces";
+import { getSystemOverview } from "@/lib/get-system-overview";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
 type SensitiveAccessInboxPageProps = {
@@ -114,6 +131,8 @@ export default async function SensitiveAccessInboxPage({
 }: SensitiveAccessInboxPageProps) {
   const resolvedSearchParams = (await searchParams) ?? {};
   const filters = buildFilters(resolvedSearchParams);
+  const activeScopeChips = buildSensitiveAccessInboxScopeChips(filters);
+  const activeSliceChips = buildSensitiveAccessInboxSliceChips(filters);
 
   const snapshot = await getSensitiveAccessInboxSnapshot({
     ticketStatus: filters.status ?? undefined,
@@ -127,6 +146,36 @@ export default async function SensitiveAccessInboxPage({
     accessRequestId: filters.accessRequestId ?? undefined,
     approvalTicketId: filters.approvalTicketId ?? undefined
   });
+  const systemOverview = await getSystemOverview();
+  const surfaceCopy = buildSensitiveAccessInboxSurfaceCopy();
+  const legacyAuthGovernanceSnapshot = buildSensitiveAccessInboxLegacyAuthGovernanceSnapshot(
+    snapshot.entries
+  );
+  const crossEntryRiskDigest: CrossEntryRiskDigest = buildCrossEntryRiskDigest({
+    sandboxReadiness: systemOverview.sandbox_readiness,
+    callbackWaitingAutomation: systemOverview.callback_waiting_automation,
+    sensitiveAccessSummary: snapshot.summary,
+    channels: snapshot.channels
+  });
+  const currentInboxHref = buildSensitiveAccessInboxHref({
+    status: filters.status,
+    waitingStatus: filters.waitingStatus,
+    requestDecision: filters.requestDecision,
+    requesterType: filters.requesterType,
+    notificationStatus: filters.notificationStatus,
+    notificationChannel: filters.notificationChannel,
+    runId: filters.runId,
+    nodeRunId: filters.nodeRunId,
+    accessRequestId: filters.accessRequestId,
+    approvalTicketId: filters.approvalTicketId
+  });
+  const recommendedNextStep = buildSensitiveAccessInboxRecommendedNextStep({
+    entries: snapshot.entries,
+    summary: snapshot.summary,
+    callbackWaitingAutomation: systemOverview.callback_waiting_automation,
+    sandboxReadiness: systemOverview.sandbox_readiness,
+    currentHref: currentInboxHref
+  });
 
   return (
     <main className="page-shell workspace-page">
@@ -134,20 +183,25 @@ export default async function SensitiveAccessInboxPage({
         <div>
           <p className="eyebrow">Sensitive access inbox</p>
           <h1>审批、恢复与通知派发统一收口</h1>
-          <p className="hero-copy">
-            把 sensitive access request、approval ticket、notification dispatch 与 callback waiting
-            lifecycle 放到同一条 operator 主链里，减少“看得到阻断但处理动作还要四处跳”的排障成本。
-          </p>
+          <p className="hero-copy">{surfaceCopy.heroDescription}</p>
         </div>
-        <div className="hero-actions">
-          <Link className="ghost-button" href="/runs">
-            查看 run diagnostics
-          </Link>
-          <Link className="ghost-button" href="/workflows">
-            回到 workflows
-          </Link>
-        </div>
+        <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
       </section>
+
+      <section className="diagnostics-layout">
+        <CrossEntryRiskDigestPanel
+          currentHref={currentInboxHref}
+          digest={crossEntryRiskDigest}
+          eyebrow="Operator overview"
+          intro="审批、恢复、通知和强隔离恢复已经落到同一套工作台事实，但 operator 仍需要先看到跨入口主风险，再决定是回 inbox、run 诊断还是 workflow 列表继续处理。"
+        />
+      </section>
+
+      {legacyAuthGovernanceSnapshot ? (
+        <section className="diagnostics-layout">
+          <SensitiveAccessLegacyAuthGovernanceCard snapshot={legacyAuthGovernanceSnapshot} />
+        </section>
+      ) : null}
 
       <section className="diagnostics-layout">
         <article className="diagnostic-panel panel-span">
@@ -211,44 +265,32 @@ export default async function SensitiveAccessInboxPage({
             title="notification_channel"
           />
 
-          {hasActiveInboxFilters(filters) ? (
+          {hasActiveInboxScopeFilters(filters) ? (
             <div className="summary-strip">
-              {filters.runId ? <span className="event-chip">run slice {filters.runId}</span> : null}
-              {filters.nodeRunId ? (
-                <span className="event-chip">node run {filters.nodeRunId}</span>
-              ) : null}
-              {filters.accessRequestId ? (
-                <span className="event-chip">request {filters.accessRequestId.slice(0, 8)}</span>
-              ) : null}
-              {filters.approvalTicketId ? (
-                <span className="event-chip">ticket {filters.approvalTicketId.slice(0, 8)}</span>
-              ) : null}
-              {filters.requestDecision ? (
-                <span className="event-chip">decision {filters.requestDecision}</span>
-              ) : null}
-              {filters.requesterType ? (
-                <span className="event-chip">requester {filters.requesterType}</span>
-              ) : null}
-              {filters.notificationStatus ? (
-                <span className="event-chip">notify {filters.notificationStatus}</span>
-              ) : null}
-              {filters.notificationChannel ? (
-                <span className="event-chip">channel {filters.notificationChannel}</span>
-              ) : null}
+              {activeScopeChips.map((chip) => (
+                <span className="event-chip" key={chip.key}>
+                  {chip.label}
+                </span>
+              ))}
               <Link
                 className="event-chip inbox-filter-link"
-                href={buildSensitiveAccessInboxHref({
-                  status: null,
-                  waitingStatus: null,
-                  requestDecision: null,
-                  requesterType: null,
-                  notificationStatus: null,
-                  notificationChannel: null,
-                  runId: null,
-                  nodeRunId: null,
-                  accessRequestId: null,
-                  approvalTicketId: null
-                })}
+                href={buildSensitiveAccessInboxHref(clearSensitiveAccessInboxScopeFilters(filters))}
+              >
+                clear scope filters
+              </Link>
+            </div>
+          ) : null}
+
+          {hasActiveInboxSliceFilters(filters) ? (
+            <div className="summary-strip">
+              {activeSliceChips.map((chip) => (
+                <span className="event-chip" key={chip.key}>
+                  {chip.label}
+                </span>
+              ))}
+              <Link
+                className="event-chip inbox-filter-link"
+                href={buildSensitiveAccessInboxHref(clearSensitiveAccessInboxSliceFilters(filters))}
               >
                 clear detail slice
               </Link>
@@ -261,7 +303,23 @@ export default async function SensitiveAccessInboxPage({
       </section>
 
       <section className="diagnostics-layout">
-        <SensitiveAccessInboxPanel entries={snapshot.entries} />
+        <article className="diagnostic-panel">
+          <SandboxReadinessOverviewCard
+            currentHref={currentInboxHref}
+            intro="approval / resume / notification 已经汇到同一条 operator inbox，但强隔离恢复是否真的可执行，仍要先看 live sandbox readiness，而不是只等单条票据展开后再发现 backend 仍 blocked。"
+            hideRecommendedNextStep={Boolean(recommendedNextStep)}
+            readiness={systemOverview.sandbox_readiness}
+            title="Live sandbox readiness"
+          />
+        </article>
+
+        <SensitiveAccessInboxPanel
+          callbackWaitingAutomation={systemOverview.callback_waiting_automation}
+          channels={snapshot.channels}
+          entries={snapshot.entries}
+          recommendedNextStep={recommendedNextStep}
+          sandboxReadiness={systemOverview.sandbox_readiness}
+        />
       </section>
     </main>
   );

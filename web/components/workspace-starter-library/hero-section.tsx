@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 
+import { buildWorkspaceStarterGovernanceHeroSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import { getWorkflowBusinessTrack, WORKFLOW_BUSINESS_TRACKS } from "@/lib/workflow-business-tracks";
 
 import type { TrackFilter } from "./shared";
@@ -13,6 +14,7 @@ type WorkspaceStarterHeroSectionProps = {
   selectedTemplateName: string | null;
   strongIsolationTemplateCount: number;
   activeTrack: TrackFilter;
+  createWorkflowHref: string;
 };
 
 export function WorkspaceStarterHeroSection({
@@ -23,17 +25,17 @@ export function WorkspaceStarterHeroSection({
   missingToolTemplateCount,
   selectedTemplateName,
   strongIsolationTemplateCount,
-  activeTrack
+  activeTrack,
+  createWorkflowHref
 }: WorkspaceStarterHeroSectionProps) {
+  const surfaceCopy = buildWorkspaceStarterGovernanceHeroSurfaceCopy({ createWorkflowHref });
+
   return (
     <section className="hero creation-hero">
       <div className="hero-copy">
         <p className="eyebrow">Workspace Starter Governance</p>
         <h1>把模板从“能保存”推进到“能治理”</h1>
-        <p className="hero-text">
-          这条链路专门承接 editor 保存出来的 workspace starter，让团队能按业务主线查看、
-          筛选、校对和更新模板元数据，而不是继续把模板治理留在编辑器里的单个按钮。
-        </p>
+        <p className="hero-text">{surfaceCopy.heroDescription}</p>
         <div className="pill-row">
           <span className="pill">{activeTemplateCount} active starters</span>
           <span className="pill">{archivedTemplateCount} archived starters</span>
@@ -43,12 +45,7 @@ export function WorkspaceStarterHeroSection({
           <span className="pill">{missingToolTemplateCount} missing tool starters</span>
         </div>
         <div className="hero-actions">
-          <Link className="inline-link" href="/workflows/new">
-            返回创建页
-          </Link>
-          <Link className="inline-link secondary" href="/">
-            返回系统首页
-          </Link>
+          <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
         </div>
       </div>
 

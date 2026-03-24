@@ -7,16 +7,23 @@ import { WorkspaceStarterMetadataPanel } from "@/components/workspace-starter-li
 import { WorkspaceStarterSourceDiffPanel } from "@/components/workspace-starter-library/source-diff-panel";
 import { WorkspaceStarterTemplateListPanel } from "@/components/workspace-starter-library/template-list-panel";
 import { useWorkspaceStarterLibraryState } from "@/components/workspace-starter-library/use-workspace-starter-library-state";
+import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
+  type WorkspaceStarterLibraryViewState
+} from "@/components/workspace-starter-library/shared";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
+import { pickWorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 type WorkspaceStarterLibraryProps = {
   initialTemplates: WorkspaceStarterTemplateItem[];
+  initialViewState: WorkspaceStarterLibraryViewState;
   tools: PluginToolRegistryItem[];
 };
 
 export function WorkspaceStarterLibrary({
   initialTemplates,
+  initialViewState,
   tools
 }: WorkspaceStarterLibraryProps) {
   const {
@@ -24,9 +31,11 @@ export function WorkspaceStarterLibrary({
     activeTrack,
     archiveFilter,
     archivedTemplateCount,
-    bulkActionCandidates,
+    bulkPreview,
+    bulkPreviewNotice,
     filteredTemplates,
     formState,
+    focusTemplateFromBulkResult,
     governedTemplateCount,
     handleBulkAction,
     handleRebaseFromSource,
@@ -36,9 +45,10 @@ export function WorkspaceStarterLibrary({
     hasPendingChanges,
     historyItems,
     isBulkMutating,
+    isLoadingBulkPreview,
+    isLoadingSourceGovernanceScope,
     isLoadingHistory,
     isLoadingSourceDiff,
-    isLoadingSourceWorkflow,
     isMutating,
     isRebasing,
     isRefreshing,
@@ -47,23 +57,43 @@ export function WorkspaceStarterLibrary({
     message,
     messageTone,
     missingToolTemplateCount,
+    needsFollowUp,
     searchQuery,
     selectedTemplate,
     selectedTemplateId,
+    sourceGovernanceKind,
+    sourceGovernanceScope,
+    selectedTemplateSandboxGovernance,
     selectedTemplateToolGovernance,
     selectedTrackMeta,
     setActiveTrack,
     setArchiveFilter,
     setFormState,
+    setNeedsFollowUp,
     setSearchQuery,
     setSelectedTemplateId,
+    setSourceGovernanceKind,
     sourceDiff,
-    sourceStatus,
-    sourceStatusMessage,
+    sourceGovernance,
     strongIsolationTemplateCount,
     templateToolGovernanceById,
     templates
-  } = useWorkspaceStarterLibraryState(initialTemplates, tools);
+  } = useWorkspaceStarterLibraryState(initialTemplates, tools, initialViewState);
+
+  const createWorkflowHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+    activeTrack,
+    sourceGovernanceKind,
+    needsFollowUp,
+    searchQuery,
+    selectedTemplateId: selectedTemplate?.archived ? null : selectedTemplateId
+  });
+  const workspaceStarterGovernanceQueryScope = pickWorkspaceStarterGovernanceQueryScope({
+    activeTrack,
+    sourceGovernanceKind,
+    needsFollowUp,
+    searchQuery,
+    selectedTemplateId
+  });
 
   return (
     <main className="editor-shell">
@@ -76,6 +106,7 @@ export function WorkspaceStarterLibrary({
         selectedTemplateName={selectedTemplate?.name ?? null}
         strongIsolationTemplateCount={strongIsolationTemplateCount}
         activeTrack={activeTrack}
+        createWorkflowHref={createWorkflowHref}
       />
 
       <section className="governance-layout">
@@ -85,23 +116,27 @@ export function WorkspaceStarterLibrary({
           selectedTemplateId={selectedTemplateId}
           activeTrack={activeTrack}
           archiveFilter={archiveFilter}
+          sourceGovernanceKind={sourceGovernanceKind}
+          needsFollowUp={needsFollowUp}
           searchQuery={searchQuery}
+          createWorkflowHref={createWorkflowHref}
           activeTemplateCount={activeTemplateCount}
           archivedTemplateCount={archivedTemplateCount}
           templateToolGovernanceById={templateToolGovernanceById}
-          bulkCandidateCounts={{
-            archive: bulkActionCandidates.archive.length,
-            restore: bulkActionCandidates.restore.length,
-            refresh: bulkActionCandidates.refresh.length,
-            rebase: bulkActionCandidates.rebase.length,
-            delete: bulkActionCandidates.delete.length
-          }}
+          bulkPreview={bulkPreview}
+          bulkPreviewNotice={bulkPreviewNotice}
           isBulkMutating={isBulkMutating}
+          isLoadingBulkPreview={isLoadingBulkPreview}
+          isLoadingSourceGovernanceScope={isLoadingSourceGovernanceScope}
           lastBulkResult={lastBulkResult}
+          sourceGovernanceScope={sourceGovernanceScope}
           onTrackChange={setActiveTrack}
           onArchiveFilterChange={setArchiveFilter}
+          onSourceGovernanceKindChange={setSourceGovernanceKind}
+          onNeedsFollowUpChange={setNeedsFollowUp}
           onSearchQueryChange={setSearchQuery}
           onSelectTemplate={setSelectedTemplateId}
+          onFocusTemplate={focusTemplateFromBulkResult}
           onBulkAction={handleBulkAction}
         />
 
@@ -115,6 +150,8 @@ export function WorkspaceStarterLibrary({
             isMutating={isMutating}
             message={message}
             messageTone={messageTone}
+            createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
+            workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             setFormState={setFormState}
             onSave={handleSave}
             onTemplateMutation={handleTemplateMutation}
@@ -122,12 +159,16 @@ export function WorkspaceStarterLibrary({
 
           <WorkspaceStarterDefinitionSnapshotPanel
             selectedTemplate={selectedTemplate}
+            selectedTemplateSandboxGovernance={selectedTemplateSandboxGovernance}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
-            sourceStatus={sourceStatus}
-            sourceStatusMessage={sourceStatusMessage}
-            isLoadingSourceWorkflow={isLoadingSourceWorkflow}
+            sourceGovernance={sourceGovernance}
+            sourceDiff={sourceDiff}
+            isLoadingSourceDiff={isLoadingSourceDiff}
             isRefreshing={isRefreshing}
+            isRebasing={isRebasing}
+            createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
             onRefresh={handleRefreshFromSource}
+            onRebase={handleRebaseFromSource}
           />
 
           <WorkspaceStarterHistoryPanel

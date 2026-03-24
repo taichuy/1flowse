@@ -409,6 +409,13 @@ a {
   color: var(--down);
 }
 
+.health-pill.degraded,
+.health-pill.warning,
+.health-pill.partial {
+  background: rgba(208, 99, 45, 0.12);
+  color: var(--accent);
+}
+
 .health-pill.rejected {
   background: rgba(208, 99, 45, 0.12);
   color: var(--accent);
@@ -481,17 +488,24 @@ a {
   text-decoration: none;
 }
 
-.timeline-filter-button {
+.timeline-filter-button,
+.event-chip-button {
   appearance: none;
   cursor: pointer;
   font: inherit;
   color: inherit;
 }
 
-.inbox-filter-link.active {
+.inbox-filter-link.active,
+.event-chip-button.active {
   border-color: rgba(118, 92, 47, 0.28);
   background: rgba(244, 197, 92, 0.16);
   color: var(--ink);
+}
+
+.event-chip-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .tool-row {
@@ -838,6 +852,17 @@ a {
 }
 
 .validation-focus-ring {
+  border-color: rgba(208, 99, 45, 0.4);
+  box-shadow:
+    0 0 0 2px rgba(208, 99, 45, 0.18),
+    var(--shadow);
+}
+
+.workflow-definition-anchor-target {
+  scroll-margin-top: 88px;
+}
+
+.workflow-definition-anchor-target:target {
   border-color: rgba(208, 99, 45, 0.4);
   box-shadow:
     0 0 0 2px rgba(208, 99, 45, 0.18),

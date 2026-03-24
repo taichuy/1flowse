@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
@@ -13,10 +13,185 @@ from app.models.sensitive_access import (
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
 )
-from app.models.workflow import Workflow
+from app.models.workflow import Workflow, WorkflowPublishedEndpoint
 from app.services.notification_dispatch_scheduler import NotificationDispatchScheduler
 from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.sensitive_access_control import SensitiveAccessControlService
+
+
+def _assert_single_run_follow_up(
+    run_follow_up: dict,
+    *,
+    run_id: str,
+    snapshot: dict,
+    follow_up: str,
+) -> dict:
+    assert run_follow_up["affected_run_count"] == 1
+    assert run_follow_up["sampled_run_count"] == 1
+    assert run_follow_up["waiting_run_count"] == 1
+    assert run_follow_up["running_run_count"] == 0
+    assert run_follow_up["succeeded_run_count"] == 0
+    assert run_follow_up["failed_run_count"] == 0
+    assert run_follow_up["unknown_run_count"] == 0
+    assert run_follow_up["explanation"] == {
+        "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+        "follow_up": follow_up,
+    }
+
+    sampled_runs = run_follow_up["sampled_runs"]
+    assert len(sampled_runs) == 1
+    sampled_run = sampled_runs[0]
+    assert sampled_run["run_id"] == run_id
+    assert sampled_run["snapshot"] == snapshot
+    return sampled_run
+
+
+def _assert_single_sensitive_access_focus_entry(
+    sampled_run: dict,
+    *,
+    run_id: str,
+    node_run_id: str,
+    requester_id: str,
+    resource_id: str,
+    approval_ticket_id: str,
+    approval_status: str,
+    approval_waiting_status: str,
+    notification_status_by_id: dict[str, str],
+    request_decision: str | None = None,
+    request_reason_code: str | None = None,
+) -> None:
+    assert sampled_run["callback_tickets"] == []
+
+    entries = sampled_run["sensitive_access_entries"]
+    assert len(entries) == 1
+    entry = entries[0]
+
+    assert entry["request"]["run_id"] == run_id
+    assert entry["request"]["node_run_id"] == node_run_id
+    assert entry["request"]["requester_id"] == requester_id
+    assert entry["request"]["resource_id"] == resource_id
+    if request_decision is not None:
+        assert entry["request"]["decision"] == request_decision
+    if request_reason_code is not None:
+        assert entry["request"]["reason_code"] == request_reason_code
+
+    assert entry["resource"]["id"] == resource_id
+    assert entry["approval_ticket"] is not None
+    assert entry["approval_ticket"]["id"] == approval_ticket_id
+    assert entry["approval_ticket"]["status"] == approval_status
+    assert entry["approval_ticket"]["waiting_status"] == approval_waiting_status
+    assert {
+        item["id"]: item["status"] for item in entry["notifications"]
+    } == notification_status_by_id
+
+
+def _seed_legacy_auth_binding(
+    sqlite_session: Session,
+    workflow: Workflow,
+    *,
+    binding_id: str,
+    endpoint_id: str,
+    endpoint_name: str,
+    endpoint_alias: str,
+    lifecycle_status: str = "published",
+) -> None:
+    sqlite_session.add(
+        WorkflowPublishedEndpoint(
+            id=binding_id,
+            workflow_id=workflow.id,
+            workflow_version_id=f"{binding_id}-workflow-version",
+            workflow_version=workflow.version,
+            target_workflow_version_id=f"{binding_id}-target-version",
+            target_workflow_version=workflow.version,
+            compiled_blueprint_id=f"{binding_id}-blueprint",
+            endpoint_id=endpoint_id,
+            endpoint_name=endpoint_name,
+            endpoint_alias=endpoint_alias,
+            route_path=f"/published/{endpoint_alias}",
+            protocol="native",
+            auth_mode="token",
+            streaming=False,
+            lifecycle_status=lifecycle_status,
+            input_schema={},
+            output_schema=None,
+            rate_limit_policy=None,
+            cache_policy=None,
+            created_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+        )
+    )
+
+
+def _assert_legacy_auth_governance_snapshot(
+    snapshot: dict,
+    *,
+    workflow: Workflow,
+    binding_id: str,
+    endpoint_id: str,
+    endpoint_name: str,
+) -> None:
+    assert snapshot == {
+        "generated_at": snapshot["generated_at"],
+        "workflow_count": 1,
+        "binding_count": 1,
+        "auth_mode_contract": {
+            "supported_auth_modes": ["api_key", "internal"],
+            "retired_legacy_auth_modes": ["token"],
+            "summary": (
+                "当前 publish gateway 只支持 durable authMode=api_key/internal；"
+                "token 仅作为 legacy inventory 出现在治理 handoff 中。"
+            ),
+            "follow_up": (
+                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
+                "replacement binding，最后清理 draft/offline legacy backlog。"
+            ),
+        },
+        "summary": {
+            "draft_candidate_count": 0,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 0,
+        },
+        "checklist": [
+            {
+                "key": "published_follow_up",
+                "title": "再补发支持鉴权的 replacement bindings",
+                "tone": "manual",
+                "tone_label": "人工跟进",
+                "count": 1,
+                "detail": (
+                    "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
+                    "endpoint 把 authMode 切回 api_key/internal，并发布新版 "
+                    "binding，再决定历史版本是否下线。"
+                ),
+            }
+        ],
+        "workflows": [
+            {
+                "workflow_id": workflow.id,
+                "workflow_name": workflow.name,
+                "binding_count": 1,
+                "draft_candidate_count": 0,
+                "published_blocker_count": 1,
+                "offline_inventory_count": 0,
+            }
+        ],
+        "buckets": {
+            "draft_candidates": [],
+            "published_blockers": [
+                {
+                    "workflow_id": workflow.id,
+                    "workflow_name": workflow.name,
+                    "binding_id": binding_id,
+                    "workflow_version": workflow.version,
+                    "endpoint_id": endpoint_id,
+                    "endpoint_name": endpoint_name,
+                    "lifecycle_status": "published",
+                    "auth_mode": "token",
+                }
+            ],
+            "offline_inventory": [],
+        },
+    }
 
 
 def test_create_sensitive_resource_and_list_it(
@@ -94,6 +269,12 @@ def test_request_low_sensitivity_access_allows_without_ticket(
     )
     assert body["approval_ticket"] is None
     assert body["notifications"] == []
+    assert body["outcome_explanation"] == {
+        "primary_signal": "本次敏感访问已按策略放行，当前不需要额外审批。",
+        "follow_up": "Default policy allows low-sensitivity resources without extra review.",
+    }
+    assert body["run_snapshot"] is None
+    assert body["run_follow_up"] is None
 
     stored_requests = sqlite_session.query(SensitiveAccessRequestRecord).all()
     assert len(stored_requests) == 1
@@ -104,7 +285,54 @@ def test_request_low_sensitivity_access_allows_without_ticket(
 def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
+    sample_workflow: Workflow,
 ) -> None:
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+            settings=Settings(),
+        ),
+    )
+
+    run = Run(
+        id="run-approval-success",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-approval-success",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        waiting_reason="waiting approval",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-approval-handoff",
+        endpoint_id="endpoint-approval-handoff",
+        endpoint_name="Approval Handoff Endpoint",
+        endpoint_alias="approval-handoff-endpoint",
+    )
+    sqlite_session.commit()
+
     resource_response = client.post(
         "/api/sensitive-access/resources",
         json={
@@ -119,6 +347,8 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     request_response = client.post(
         "/api/sensitive-access/requests",
         json={
+            "run_id": run.id,
+            "node_run_id": node_run.id,
             "requester_type": "ai",
             "requester_id": "assistant-main",
             "resource_id": resource_id,
@@ -144,6 +374,7 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     assert approval_ticket is not None
     assert approval_ticket["status"] == "pending"
     assert approval_ticket["waiting_status"] == "waiting"
+    assert approval_ticket["expires_at"] is not None
     assert request_body["notifications"] == [
         {
             "id": request_body["notifications"][0]["id"],
@@ -156,6 +387,79 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
             "created_at": request_body["notifications"][0]["created_at"],
         }
     ]
+    assert request_body["outcome_explanation"] == {
+        "primary_signal": "敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。",
+        "follow_up": (
+            "High-sensitivity access must be reviewed by an operator before "
+            "the workflow can resume. "
+            "已有 1 条通知送达审批人，可直接在 inbox 里处理。 "
+            "审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。"
+        ),
+    }
+    assert request_body["run_snapshot"] == {
+        "workflow_id": sample_workflow.id,
+        "status": "waiting",
+        "current_node_id": "mock_tool",
+        "waiting_reason": "waiting approval",
+        "execution_focus_reason": "blocking_node_run",
+        "execution_focus_node_id": "mock_tool",
+        "execution_focus_node_run_id": node_run.id,
+        "execution_focus_node_name": "Mock Tool",
+        "execution_focus_node_type": "tool",
+        "execution_focus_explanation": {
+            "primary_signal": "等待原因：waiting approval",
+            "follow_up": (
+                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+            ),
+        },
+        "callback_waiting_explanation": {
+            "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+            "follow_up": (
+                "下一步：先在当前 operator 入口完成审批或拒绝，"
+                "再观察 waiting 节点是否自动恢复。"
+            ),
+        },
+        "callback_waiting_lifecycle": None,
+        "scheduled_resume_delay_seconds": None,
+        "scheduled_resume_reason": None,
+        "scheduled_resume_source": None,
+        "scheduled_waiting_status": None,
+        "scheduled_resume_scheduled_at": None,
+        "scheduled_resume_due_at": None,
+        "scheduled_resume_requeued_at": None,
+        "scheduled_resume_requeue_source": None,
+        "execution_focus_artifact_count": 0,
+        "execution_focus_artifact_ref_count": 0,
+        "execution_focus_tool_call_count": 0,
+        "execution_focus_raw_ref_count": 0,
+        "execution_focus_artifact_refs": [],
+        "execution_focus_artifacts": [],
+        "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
+    }
+    sampled_run = _assert_single_run_follow_up(
+        request_body["run_follow_up"],
+        run_id=run.id,
+        snapshot=request_body["run_snapshot"],
+        follow_up=(
+            f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
+            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+        ),
+    )
+    _assert_single_sensitive_access_focus_entry(
+        sampled_run,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_id="assistant-main",
+        resource_id=resource_id,
+        approval_ticket_id=approval_ticket["id"],
+        approval_status="pending",
+        approval_waiting_status="waiting",
+        notification_status_by_id={request_body["notifications"][0]["id"]: "delivered"},
+        request_decision="require_approval",
+        request_reason_code="approval_required_high_sensitive_access",
+    )
 
     decision_response = client.post(
         f"/api/sensitive-access/approval-tickets/{approval_ticket['id']}/decision",
@@ -176,6 +480,90 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     assert decision_body["approval_ticket"]["waiting_status"] == "resumed"
     assert decision_body["approval_ticket"]["approved_by"] == "ops-reviewer"
     assert len(decision_body["notifications"]) == 1
+    assert decision_body["outcome_explanation"] == {
+        "primary_signal": "审批已通过，对应 waiting 链路已交回 runtime 恢复。",
+        "follow_up": (
+            "An operator approved the request and the blocked workflow can resume. "
+            "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
+        ),
+    }
+    assert decision_body["callback_blocker_delta"] == {
+        "sampled_scope_count": 1,
+        "changed_scope_count": 1,
+        "cleared_scope_count": 1,
+        "fully_cleared_scope_count": 1,
+        "still_blocked_scope_count": 0,
+        "summary": (
+            "阻塞变化：已解除 approval pending。 "
+            "阻塞变化：当前 callback summary 已没有显式 operator blocker。 "
+            "建议动作已清空；下一步应结合最新 run 状态确认是否真正离开 waiting。"
+        ),
+    }
+    assert decision_body["run_snapshot"] == {
+        "workflow_id": sample_workflow.id,
+        "status": "waiting",
+        "current_node_id": "mock_tool",
+        "waiting_reason": "waiting approval",
+        "execution_focus_reason": "blocking_node_run",
+        "execution_focus_node_id": "mock_tool",
+        "execution_focus_node_run_id": node_run.id,
+        "execution_focus_node_name": "Mock Tool",
+        "execution_focus_node_type": "tool",
+        "execution_focus_explanation": {
+            "primary_signal": "等待原因：waiting approval",
+            "follow_up": (
+                "下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。"
+            ),
+        },
+        "callback_waiting_explanation": None,
+        "callback_waiting_lifecycle": None,
+        "scheduled_resume_delay_seconds": None,
+        "scheduled_resume_reason": None,
+        "scheduled_resume_source": None,
+        "scheduled_waiting_status": None,
+        "scheduled_resume_scheduled_at": None,
+        "scheduled_resume_due_at": None,
+        "scheduled_resume_requeued_at": None,
+        "scheduled_resume_requeue_source": None,
+        "execution_focus_artifact_count": 0,
+        "execution_focus_artifact_ref_count": 0,
+        "execution_focus_tool_call_count": 0,
+        "execution_focus_raw_ref_count": 0,
+        "execution_focus_artifact_refs": [],
+        "execution_focus_artifacts": [],
+        "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
+    }
+    sampled_run = _assert_single_run_follow_up(
+        decision_body["run_follow_up"],
+        run_id=run.id,
+        snapshot=decision_body["run_snapshot"],
+        follow_up=(
+            f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+            "重点信号：等待原因：waiting approval 后续动作："
+            "下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。"
+        ),
+    )
+    _assert_single_sensitive_access_focus_entry(
+        sampled_run,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_id="assistant-main",
+        resource_id=resource_id,
+        approval_ticket_id=approval_ticket["id"],
+        approval_status="approved",
+        approval_waiting_status="resumed",
+        notification_status_by_id={request_body["notifications"][0]["id"]: "delivered"},
+        request_decision="allow",
+        request_reason_code="approved_after_review",
+    )
+    _assert_legacy_auth_governance_snapshot(
+        decision_body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-approval-handoff",
+        endpoint_id="endpoint-approval-handoff",
+        endpoint_name="Approval Handoff Endpoint",
+    )
 
     stored_request = sqlite_session.get(
         SensitiveAccessRequestRecord,
@@ -189,6 +577,200 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
     assert stored_ticket.status == "approved"
     assert stored_ticket.waiting_status == "resumed"
     assert len(stored_notifications) == 1
+
+
+def test_request_high_sensitivity_access_resolves_run_context_from_node_run_id(
+    client: TestClient,
+    sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
+    sample_workflow: Workflow,
+) -> None:
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+            settings=Settings(),
+        ),
+    )
+
+    run = Run(
+        id="run-approval-node-run-only",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-approval-node-run-only",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        waiting_reason="waiting approval",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+        endpoint_alias="bulk-approval-handoff-endpoint",
+    )
+    sqlite_session.commit()
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Published production secret",
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"endpoint_id": "pub-node-run-only"},
+        },
+    )
+
+    request_response = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "node_run_id": node_run.id,
+            "requester_type": "ai",
+            "requester_id": "assistant-main",
+            "resource_id": resource_response.json()["id"],
+            "action_type": "read",
+            "purpose_text": "inspect published auth secret",
+        },
+    )
+
+    assert request_response.status_code == 201
+    body = request_response.json()
+    assert body["request"]["run_id"] is None
+    assert body["approval_ticket"]["run_id"] is None
+    assert body["run_snapshot"] is not None
+    assert body["run_snapshot"]["workflow_id"] == sample_workflow.id
+    assert body["run_snapshot"]["execution_focus_node_run_id"] == node_run.id
+    assert body["run_follow_up"] is not None
+    assert body["run_follow_up"]["affected_run_count"] == 1
+    assert body["run_follow_up"]["sampled_runs"][0]["run_id"] == run.id
+
+
+def test_decide_expired_approval_ticket_marks_ticket_expired_and_returns_error(
+    client: TestClient,
+    sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
+    sample_workflow: Workflow,
+) -> None:
+    scheduled_resumes = []
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=scheduled_resumes.append),
+            notification_dispatch_scheduler=NotificationDispatchScheduler(
+                dispatcher=lambda _request: None
+            ),
+            settings=Settings(),
+        ),
+    )
+
+    run = Run(
+        id="run-approval-expired",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-approval-expired",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+        endpoint_alias="bulk-approval-handoff-endpoint",
+    )
+    sqlite_session.commit()
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Expired approval secret",
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"binding_id": "binding-expired-approval"},
+        },
+    )
+    resource_id = resource_response.json()["id"]
+
+    request_response = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "run_id": run.id,
+            "node_run_id": node_run.id,
+            "requester_type": "ai",
+            "requester_id": "assistant-expired-approval",
+            "resource_id": resource_id,
+            "action_type": "read",
+            "purpose_text": "expire before operator decision",
+        },
+    )
+
+    assert request_response.status_code == 201
+    approval_ticket = request_response.json()["approval_ticket"]
+    assert approval_ticket is not None
+
+    stored_ticket = sqlite_session.get(ApprovalTicketRecord, approval_ticket["id"])
+    assert stored_ticket is not None
+    stored_ticket.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    sqlite_session.commit()
+
+    decision_response = client.post(
+        f"/api/sensitive-access/approval-tickets/{approval_ticket['id']}/decision",
+        json={"status": "approved", "approved_by": "ops-reviewer"},
+    )
+
+    assert decision_response.status_code == 422
+    assert decision_response.json()["detail"] == "Approval ticket expired."
+
+    sqlite_session.refresh(stored_ticket)
+    stored_request = sqlite_session.get(
+        SensitiveAccessRequestRecord,
+        request_response.json()["request"]["id"],
+    )
+    assert stored_request is not None
+    assert stored_ticket.status == "expired"
+    assert stored_ticket.waiting_status == "failed"
+    assert stored_request.decision == "deny"
+    assert stored_request.reason_code == "approval_expired"
+    assert len(scheduled_resumes) == 1
+    assert scheduled_resumes[0].run_id == run.id
+    assert scheduled_resumes[0].source == "sensitive_access_expiry"
 
 
 def test_request_external_notification_channel_fails_fast_when_target_is_not_supported(
@@ -352,7 +934,54 @@ def test_create_sensitive_access_request_uses_channel_default_target_when_omitte
 def test_bulk_decide_approval_tickets_allows_partial_success(
     client: TestClient,
     sqlite_session: Session,
+    monkeypatch: MonkeyPatch,
+    sample_workflow: Workflow,
 ) -> None:
+    monkeypatch.setattr(
+        sensitive_access_routes,
+        "service",
+        SensitiveAccessControlService(
+            resume_scheduler=RunResumeScheduler(dispatcher=lambda _request: None),
+            settings=Settings(),
+        ),
+    )
+
+    run = Run(
+        id="run-approval-bulk",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-approval-bulk",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        waiting_reason="waiting approval",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+        endpoint_alias="bulk-approval-handoff-endpoint",
+    )
+    sqlite_session.commit()
+
     resource_response = client.post(
         "/api/sensitive-access/resources",
         json={
@@ -367,6 +996,8 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
     request_response = client.post(
         "/api/sensitive-access/requests",
         json={
+            "run_id": run.id,
+            "node_run_id": node_run.id,
             "requester_type": "ai",
             "requester_id": "assistant-bulk",
             "resource_id": resource_id,
@@ -376,7 +1007,8 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
     )
 
     assert request_response.status_code == 201
-    ticket_id = request_response.json()["approval_ticket"]["id"]
+    request_body = request_response.json()
+    ticket_id = request_body["approval_ticket"]["id"]
 
     bulk_response = client.post(
         "/api/sensitive-access/approval-tickets/bulk-decision",
@@ -408,6 +1040,90 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
             "detail": "Approval ticket not found.",
         }
     ]
+    assert body["outcome_explanation"] == {
+        "primary_signal": "本次已批准 1 条审批票据，并把对应 waiting 链路交回 runtime 恢复。",
+        "follow_up": (
+            "另有 1 条未处理（票据不存在 1 条），请先刷新 inbox slice 再决定是否补做。 "
+            "后续请继续回看对应 run detail / inbox slice，确认 waiting 是否真正继续前进。"
+        ),
+    }
+    assert body["callback_blocker_delta"] == {
+        "sampled_scope_count": 1,
+        "changed_scope_count": 1,
+        "cleared_scope_count": 1,
+        "fully_cleared_scope_count": 1,
+        "still_blocked_scope_count": 0,
+        "summary": (
+            "已回读 1 个 blocker 样本；发生变化 1 个。 "
+            "其中已解除阻塞 1 个。 "
+            "已完全清空显式 operator blocker 1 个。"
+        ),
+    }
+    sampled_run = _assert_single_run_follow_up(
+        body["run_follow_up"],
+        run_id=run.id,
+        snapshot={
+            "workflow_id": sample_workflow.id,
+            "status": "waiting",
+            "current_node_id": "mock_tool",
+            "waiting_reason": "waiting approval",
+            "execution_focus_reason": "blocking_node_run",
+            "execution_focus_node_id": "mock_tool",
+            "execution_focus_node_run_id": node_run.id,
+            "execution_focus_node_name": "Mock Tool",
+            "execution_focus_node_type": "tool",
+            "execution_focus_explanation": {
+                "primary_signal": "等待原因：waiting approval",
+                "follow_up": (
+                    "下一步：优先沿 waiting / callback 事实链排查，"
+                    "不要只盯单次 invocation 返回。"
+                ),
+            },
+            "callback_waiting_explanation": None,
+            "callback_waiting_lifecycle": None,
+            "scheduled_resume_delay_seconds": None,
+            "scheduled_resume_reason": None,
+            "scheduled_resume_source": None,
+            "scheduled_waiting_status": None,
+            "scheduled_resume_scheduled_at": None,
+            "scheduled_resume_due_at": None,
+            "scheduled_resume_requeued_at": None,
+            "scheduled_resume_requeue_source": None,
+            "execution_focus_artifact_count": 0,
+            "execution_focus_artifact_ref_count": 0,
+            "execution_focus_tool_call_count": 0,
+            "execution_focus_raw_ref_count": 0,
+            "execution_focus_artifact_refs": [],
+            "execution_focus_artifacts": [],
+            "execution_focus_tool_calls": [],
+            "execution_focus_skill_trace": None,
+        },
+        follow_up=(
+            f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+            "重点信号：等待原因：waiting approval 后续动作："
+            "下一步：优先沿 waiting / callback 事实链排查，不要只盯单次 invocation 返回。"
+        ),
+    )
+    _assert_single_sensitive_access_focus_entry(
+        sampled_run,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_id="assistant-bulk",
+        resource_id=resource_id,
+        approval_ticket_id=ticket_id,
+        approval_status="approved",
+        approval_waiting_status="resumed",
+        notification_status_by_id={request_body["notifications"][0]["id"]: "delivered"},
+        request_decision="allow",
+        request_reason_code="approved_after_review",
+    )
+    _assert_legacy_auth_governance_snapshot(
+        body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-bulk-approval-handoff",
+        endpoint_id="endpoint-bulk-approval-handoff",
+        endpoint_name="Bulk Approval Handoff Endpoint",
+    )
 
     stored_ticket = sqlite_session.get(ApprovalTicketRecord, ticket_id)
     assert stored_ticket is not None
@@ -420,8 +1136,44 @@ def test_retry_notification_dispatch_creates_new_attempt(
     client: TestClient,
     sqlite_session: Session,
     monkeypatch: MonkeyPatch,
+    sample_workflow: Workflow,
 ) -> None:
     scheduled_dispatches = []
+    run = Run(
+        id="run-notification-retry",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-notification-retry",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        waiting_reason="waiting approval",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-notification-retry-handoff",
+        endpoint_id="endpoint-notification-retry-handoff",
+        endpoint_name="Notification Retry Handoff Endpoint",
+        endpoint_alias="notification-retry-handoff-endpoint",
+    )
+    sqlite_session.commit()
     monkeypatch.setattr(
         sensitive_access_routes,
         "service",
@@ -452,6 +1204,8 @@ def test_retry_notification_dispatch_creates_new_attempt(
     request_response = client.post(
         "/api/sensitive-access/requests",
         json={
+            "run_id": run.id,
+            "node_run_id": node_run.id,
             "requester_type": "ai",
             "requester_id": "assistant-main",
             "resource_id": resource_id,
@@ -481,6 +1235,95 @@ def test_retry_notification_dispatch_creates_new_attempt(
     assert retried_notification["target"] == "ops@example.com"
     assert retried_notification["status"] == "pending"
     assert retried_notification["error"] is None
+    assert retry_body["outcome_explanation"] == {
+        "primary_signal": "通知已按 ops@example.com 重新入队，等待 worker 投递。",
+        "follow_up": (
+            "这一步只负责重新送达审批请求，不会直接恢复 run；"
+            "后续仍取决于审批结果或后续 callback。"
+        ),
+    }
+    assert retry_body["callback_blocker_delta"] == {
+        "sampled_scope_count": 1,
+        "changed_scope_count": 1,
+        "cleared_scope_count": 0,
+        "fully_cleared_scope_count": 0,
+        "still_blocked_scope_count": 1,
+        "summary": (
+            "阻塞变化：当前仍是 approval pending。 "
+            "建议动作已切换为“Retry notification here first”。"
+        ),
+    }
+    assert retry_body["run_snapshot"] == {
+        "workflow_id": sample_workflow.id,
+        "status": "waiting",
+        "current_node_id": "mock_tool",
+        "waiting_reason": "waiting approval",
+        "execution_focus_reason": "blocking_node_run",
+        "execution_focus_node_id": "mock_tool",
+        "execution_focus_node_run_id": node_run.id,
+        "execution_focus_node_name": "Mock Tool",
+        "execution_focus_node_type": "tool",
+        "execution_focus_explanation": {
+            "primary_signal": "等待原因：waiting approval",
+            "follow_up": (
+                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+            ),
+        },
+        "callback_waiting_explanation": {
+            "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+            "follow_up": "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。",
+        },
+        "callback_waiting_lifecycle": None,
+        "scheduled_resume_delay_seconds": None,
+        "scheduled_resume_reason": None,
+        "scheduled_resume_source": None,
+        "scheduled_waiting_status": None,
+        "scheduled_resume_scheduled_at": None,
+        "scheduled_resume_due_at": None,
+        "scheduled_resume_requeued_at": None,
+        "scheduled_resume_requeue_source": None,
+        "execution_focus_artifact_count": 0,
+        "execution_focus_artifact_ref_count": 0,
+        "execution_focus_tool_call_count": 0,
+        "execution_focus_raw_ref_count": 0,
+        "execution_focus_artifact_refs": [],
+        "execution_focus_artifacts": [],
+        "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
+    }
+    sampled_run = _assert_single_run_follow_up(
+        retry_body["run_follow_up"],
+        run_id=run.id,
+        snapshot=retry_body["run_snapshot"],
+        follow_up=(
+            f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
+            "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
+        ),
+    )
+    _assert_single_sensitive_access_focus_entry(
+        sampled_run,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_id="assistant-main",
+        resource_id=resource_id,
+        approval_ticket_id=approval_ticket["id"],
+        approval_status="pending",
+        approval_waiting_status="waiting",
+        notification_status_by_id={
+            first_notification["id"]: "failed",
+            retried_notification["id"]: "pending",
+        },
+        request_decision="require_approval",
+        request_reason_code="approval_required_high_sensitive_access",
+    )
+    _assert_legacy_auth_governance_snapshot(
+        retry_body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-notification-retry-handoff",
+        endpoint_id="endpoint-notification-retry-handoff",
+        endpoint_name="Notification Retry Handoff Endpoint",
+    )
 
     assert len(scheduled_dispatches) == 2
     assert scheduled_dispatches[0].dispatch_id == first_notification["id"]
@@ -499,8 +1342,44 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
     client: TestClient,
     sqlite_session: Session,
     monkeypatch: MonkeyPatch,
+    sample_workflow: Workflow,
 ) -> None:
     scheduled_dispatches = []
+    run = Run(
+        id="run-notification-bulk",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-notification-bulk",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        waiting_reason="waiting approval",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    _seed_legacy_auth_binding(
+        sqlite_session,
+        sample_workflow,
+        binding_id="binding-bulk-retry-handoff",
+        endpoint_id="endpoint-bulk-retry-handoff",
+        endpoint_name="Bulk Retry Handoff Endpoint",
+        endpoint_alias="bulk-retry-handoff-endpoint",
+    )
+    sqlite_session.commit()
     monkeypatch.setattr(
         sensitive_access_routes,
         "service",
@@ -531,6 +1410,8 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
     request_response = client.post(
         "/api/sensitive-access/requests",
         json={
+            "run_id": run.id,
+            "node_run_id": node_run.id,
             "requester_type": "ai",
             "requester_id": "assistant-bulk-retry",
             "resource_id": resource_id,
@@ -581,6 +1462,99 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
             "detail": "Notification dispatch not found.",
         }
     ]
+    assert body["outcome_explanation"] == {
+        "primary_signal": "本次已重试 1 条通知，其中 1 条正在等待 worker 投递。",
+        "follow_up": (
+            "另有 1 条未处理（通知不存在 1 条），请先刷新当前 ticket 的最新通知列表。 "
+            "通知重试只负责把审批请求重新送达目标，不会直接恢复 run；"
+            "后续仍取决于审批结果或 callback。"
+        ),
+    }
+    assert body["callback_blocker_delta"] == {
+        "sampled_scope_count": 1,
+        "changed_scope_count": 1,
+        "cleared_scope_count": 0,
+        "fully_cleared_scope_count": 0,
+        "still_blocked_scope_count": 1,
+        "summary": (
+            "已回读 1 个 blocker 样本；发生变化 1 个。 "
+            "动作后仍有 1 个样本存在 operator blocker。"
+        ),
+    }
+    sampled_run = _assert_single_run_follow_up(
+        body["run_follow_up"],
+        run_id=run.id,
+        snapshot={
+            "workflow_id": sample_workflow.id,
+            "status": "waiting",
+            "current_node_id": "mock_tool",
+            "waiting_reason": "waiting approval",
+            "execution_focus_reason": "blocking_node_run",
+            "execution_focus_node_id": "mock_tool",
+            "execution_focus_node_run_id": node_run.id,
+            "execution_focus_node_name": "Mock Tool",
+            "execution_focus_node_type": "tool",
+            "execution_focus_explanation": {
+                "primary_signal": "等待原因：waiting approval",
+                "follow_up": (
+                    "下一步：优先处理这条 sensitive access 审批票据，"
+                    "再观察 waiting 节点是否恢复。"
+                ),
+            },
+            "callback_waiting_explanation": {
+                "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+                "follow_up": (
+                    "下一步：先重试或改投审批通知，再处理审批结果；"
+                    "不要直接强制恢复 run。"
+                ),
+            },
+            "callback_waiting_lifecycle": None,
+            "scheduled_resume_delay_seconds": None,
+            "scheduled_resume_reason": None,
+            "scheduled_resume_source": None,
+            "scheduled_waiting_status": None,
+            "scheduled_resume_scheduled_at": None,
+            "scheduled_resume_due_at": None,
+            "scheduled_resume_requeued_at": None,
+            "scheduled_resume_requeue_source": None,
+            "execution_focus_artifact_count": 0,
+            "execution_focus_artifact_ref_count": 0,
+            "execution_focus_tool_call_count": 0,
+            "execution_focus_raw_ref_count": 0,
+            "execution_focus_artifact_refs": [],
+            "execution_focus_artifacts": [],
+            "execution_focus_tool_calls": [],
+            "execution_focus_skill_trace": None,
+        },
+        follow_up=(
+            f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
+            "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
+        ),
+    )
+    _assert_single_sensitive_access_focus_entry(
+        sampled_run,
+        run_id=run.id,
+        node_run_id=node_run.id,
+        requester_id="assistant-bulk-retry",
+        resource_id=resource_id,
+        approval_ticket_id=approval_ticket["id"],
+        approval_status="pending",
+        approval_waiting_status="waiting",
+        notification_status_by_id={
+            first_notification["id"]: "failed",
+            retried_item["notification"]["id"]: "pending",
+        },
+        request_decision="require_approval",
+        request_reason_code="approval_required_high_sensitive_access",
+    )
+    _assert_legacy_auth_governance_snapshot(
+        body["legacy_auth_governance"],
+        workflow=sample_workflow,
+        binding_id="binding-bulk-retry-handoff",
+        endpoint_id="endpoint-bulk-retry-handoff",
+        endpoint_name="Bulk Retry Handoff Endpoint",
+    )
 
     assert len(scheduled_dispatches) == 2
     assert scheduled_dispatches[0].dispatch_id == first_notification["id"]
@@ -866,3 +1840,210 @@ def test_sensitive_access_listing_filters_support_node_and_ticket_scopes(
     )
     assert unmatched_tickets_response.status_code == 200
     assert unmatched_tickets_response.json() == []
+
+
+
+def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    run = Run(
+        id="run-inbox-1",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="waiting",
+        current_node_id="mock_tool",
+        input_payload={},
+        checkpoint_payload={},
+        created_at=datetime.now(UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-inbox-1",
+        run_id=run.id,
+        node_id="mock_tool",
+        node_name="Mock Tool",
+        node_type="tool",
+        status="waiting_callback",
+        phase="waiting_callback",
+        input_payload={},
+        checkpoint_payload={},
+        working_context={},
+        artifact_refs=[],
+        waiting_reason="waiting approval",
+        created_at=datetime.now(UTC),
+    )
+    sqlite_session.add_all([run, node_run])
+    sqlite_session.add(
+        WorkflowPublishedEndpoint(
+            id="binding-inbox-handoff",
+            workflow_id=sample_workflow.id,
+            workflow_version_id="wf-demo-v1",
+            workflow_version=sample_workflow.version,
+            target_workflow_version_id="wf-demo-v1",
+            target_workflow_version=sample_workflow.version,
+            compiled_blueprint_id="bp-inbox-handoff",
+            endpoint_id="endpoint-inbox-handoff",
+            endpoint_name="Inbox Handoff Endpoint",
+            endpoint_alias="inbox-handoff-endpoint",
+            route_path="/published/inbox-handoff-endpoint",
+            protocol="native",
+            auth_mode="token",
+            streaming=False,
+            lifecycle_status="published",
+            input_schema={},
+            output_schema=None,
+            rate_limit_policy=None,
+            cache_policy=None,
+            created_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+        )
+    )
+    sqlite_session.commit()
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Inbox approval secret",
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"endpoint_id": "pub-inbox-1"},
+        },
+    )
+    resource_id = resource_response.json()["id"]
+
+    request_response = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "run_id": run.id,
+            "node_run_id": node_run.id,
+            "requester_type": "ai",
+            "requester_id": "assistant-inbox",
+            "resource_id": resource_id,
+            "action_type": "read",
+            "purpose_text": "inspect inbox contract",
+        },
+    )
+
+    assert request_response.status_code == 201
+    request_body = request_response.json()
+
+    response = client.get(
+        "/api/sensitive-access/inbox",
+        params={
+            "status": "pending",
+            "waiting_status": "waiting",
+            "decision": "require_approval",
+            "run_id": run.id,
+            "approval_ticket_id": request_body["approval_ticket"]["id"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["ticket"]["id"] for item in body["entries"]] == [
+        request_body["approval_ticket"]["id"]
+    ]
+    assert body["entries"][0]["request"]["id"] == request_body["request"]["id"]
+    assert body["entries"][0]["resource"]["id"] == resource_id
+    assert [item["id"] for item in body["entries"][0]["notifications"]] == [
+        request_body["notifications"][0]["id"]
+    ]
+    assert body["entries"][0]["run_snapshot"] == request_body["run_snapshot"]
+    assert body["entries"][0]["run_follow_up"] == request_body["run_follow_up"]
+    assert body["entries"][0]["legacy_auth_governance"] == {
+        "generated_at": body["entries"][0]["legacy_auth_governance"]["generated_at"],
+        "workflow_count": 1,
+        "binding_count": 1,
+        "auth_mode_contract": {
+            "supported_auth_modes": ["api_key", "internal"],
+            "retired_legacy_auth_modes": ["token"],
+            "summary": (
+                "当前 publish gateway 只支持 durable authMode=api_key/internal；"
+                "token 仅作为 legacy inventory 出现在治理 handoff 中。"
+            ),
+            "follow_up": (
+                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
+                "replacement binding，最后清理 draft/offline legacy backlog。"
+            ),
+        },
+        "summary": {
+            "draft_candidate_count": 0,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 0,
+        },
+        "checklist": [
+            {
+                "key": "published_follow_up",
+                "title": "再补发支持鉴权的 replacement bindings",
+                "tone": "manual",
+                "tone_label": "人工跟进",
+                "count": 1,
+                "detail": (
+                    "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
+                    "endpoint 把 authMode 切回 api_key/internal，"
+                    "并发布新版 binding，再决定历史版本是否下线。"
+                ),
+            }
+        ],
+        "workflows": [
+            {
+                "workflow_id": sample_workflow.id,
+                "workflow_name": "Demo Workflow",
+                "binding_count": 1,
+                "draft_candidate_count": 0,
+                "published_blocker_count": 1,
+                "offline_inventory_count": 0,
+            }
+        ],
+        "buckets": {
+            "draft_candidates": [],
+            "published_blockers": [
+                {
+                    "workflow_id": sample_workflow.id,
+                    "workflow_name": "Demo Workflow",
+                    "binding_id": "binding-inbox-handoff",
+                    "workflow_version": sample_workflow.version,
+                    "endpoint_id": "endpoint-inbox-handoff",
+                    "endpoint_name": "Inbox Handoff Endpoint",
+                    "lifecycle_status": "published",
+                    "auth_mode": "token",
+                }
+            ],
+            "offline_inventory": [],
+        },
+    }
+    assert body["execution_views"] == []
+    assert body["summary"] == {
+        "ticket_count": 1,
+        "pending_ticket_count": 1,
+        "approved_ticket_count": 0,
+        "rejected_ticket_count": 0,
+        "expired_ticket_count": 0,
+        "waiting_ticket_count": 1,
+        "resumed_ticket_count": 0,
+        "failed_ticket_count": 0,
+        "pending_notification_count": 0,
+        "delivered_notification_count": 1,
+        "failed_notification_count": 0,
+        "affected_run_count": 1,
+        "affected_workflow_count": 1,
+        "primary_blocker_kind": "pending_approval",
+        "blockers": [
+            {
+                "kind": "pending_approval",
+                "tone": "blocked",
+                "item_count": 1,
+                "affected_run_count": 1,
+                "affected_workflow_count": 1,
+            },
+            {
+                "kind": "waiting_resume",
+                "tone": "blocked",
+                "item_count": 1,
+                "affected_run_count": 1,
+                "affected_workflow_count": 1,
+            },
+        ],
+    }
+    assert any(item["channel"] == "in_app" for item in body["channels"])

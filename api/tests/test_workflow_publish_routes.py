@@ -54,6 +54,7 @@ def test_create_workflow_persists_publish_bindings(client: TestClient) -> None:
     assert body[0]["cache_policy"] is None
     assert body[0]["published_at"] is None
     assert body[0]["unpublished_at"] is None
+    assert body[0]["issues"] == []
 
 
 def test_create_workflow_persists_publish_cache_policy(client: TestClient) -> None:
@@ -381,6 +382,275 @@ def test_unpublish_binding_marks_binding_offline(client: TestClient) -> None:
     assert body["lifecycle_status"] == "offline"
     assert body["published_at"] is not None
     assert body["unpublished_at"] is not None
+
+
+def test_bulk_cleanup_offlines_only_draft_legacy_auth_bindings(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Legacy Auth Cleanup Workflow",
+            "definition": _publishable_definition(),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    for answer in ("updated-v1", "updated-v2"):
+        update_response = client.put(
+            f"/api/workflows/{workflow_id}",
+            json={
+                "definition": _publishable_definition(answer=answer, workflow_version=None),
+            },
+        )
+        assert update_response.status_code == 200
+
+    bindings = sqlite_session.scalars(
+        select(WorkflowPublishedEndpoint).where(
+            WorkflowPublishedEndpoint.workflow_id == workflow_id
+        )
+    ).all()
+    bindings_by_version = {binding.workflow_version: binding for binding in bindings}
+
+    draft_binding = bindings_by_version["0.1.2"]
+    published_binding = bindings_by_version["0.1.1"]
+    offline_binding = bindings_by_version["0.1.0"]
+
+    draft_binding.auth_mode = "token"
+    draft_binding.lifecycle_status = "draft"
+
+    published_binding.auth_mode = "token"
+    published_binding.lifecycle_status = "published"
+    published_binding.published_at = datetime.now(UTC)
+    published_binding.unpublished_at = None
+
+    offline_binding.auth_mode = "token"
+    offline_binding.lifecycle_status = "offline"
+    offline_binding.unpublished_at = datetime.now(UTC)
+
+    sqlite_session.add_all([draft_binding, published_binding, offline_binding])
+    sqlite_session.commit()
+
+    cleanup_response = client.post(
+        f"/api/workflows/{workflow_id}/published-endpoints/legacy-auth-cleanup",
+        json={
+            "binding_ids": [
+                draft_binding.id,
+                published_binding.id,
+                offline_binding.id,
+                "missing-binding",
+            ]
+        },
+    )
+
+    assert cleanup_response.status_code == 200
+    body = cleanup_response.json()
+    assert body["requested_count"] == 4
+    assert body["updated_count"] == 1
+    assert body["skipped_count"] == 3
+    assert body["updated_binding_ids"] == [draft_binding.id]
+    assert {item["binding_id"]: item["reason"] for item in body["skipped_items"]} == {
+        published_binding.id: "binding_not_draft",
+        offline_binding.id: "binding_already_offline",
+        "missing-binding": "binding_not_found",
+    }
+
+    sqlite_session.expire_all()
+    stored_draft_binding = sqlite_session.get(WorkflowPublishedEndpoint, draft_binding.id)
+    stored_published_binding = sqlite_session.get(
+        WorkflowPublishedEndpoint, published_binding.id
+    )
+    stored_offline_binding = sqlite_session.get(WorkflowPublishedEndpoint, offline_binding.id)
+
+    assert stored_draft_binding is not None
+    assert stored_draft_binding.lifecycle_status == "offline"
+    assert stored_draft_binding.unpublished_at is not None
+
+    assert stored_published_binding is not None
+    assert stored_published_binding.lifecycle_status == "published"
+
+    assert stored_offline_binding is not None
+    assert stored_offline_binding.lifecycle_status == "offline"
+
+
+def test_bulk_cleanup_legacy_auth_bindings_requires_binding_ids(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Legacy Auth Cleanup Validation Workflow",
+            "definition": _publishable_definition(),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    cleanup_response = client.post(
+        f"/api/workflows/{workflow_id}/published-endpoints/legacy-auth-cleanup",
+        json={"binding_ids": []},
+    )
+
+    assert cleanup_response.status_code == 422
+
+
+def test_list_legacy_auth_governance_snapshot_across_workflows(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    first_create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Legacy Auth Cleanup Workflow",
+            "definition": _publishable_definition(),
+        },
+    )
+    assert first_create_response.status_code == 201
+    first_workflow_id = first_create_response.json()["id"]
+
+    for answer in ("updated-v1", "updated-v2"):
+        update_response = client.put(
+            f"/api/workflows/{first_workflow_id}",
+            json={
+                "definition": _publishable_definition(answer=answer, workflow_version=None),
+            },
+        )
+        assert update_response.status_code == 200
+
+    second_create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Replacement Ready Workflow",
+            "definition": _publishable_definition(answer="other"),
+        },
+    )
+    assert second_create_response.status_code == 201
+    second_workflow_id = second_create_response.json()["id"]
+
+    first_bindings = sqlite_session.scalars(
+        select(WorkflowPublishedEndpoint).where(
+            WorkflowPublishedEndpoint.workflow_id == first_workflow_id
+        )
+    ).all()
+    first_bindings_by_version = {
+        binding.workflow_version: binding for binding in first_bindings
+    }
+
+    first_draft_binding = first_bindings_by_version["0.1.2"]
+    first_published_binding = first_bindings_by_version["0.1.1"]
+    first_offline_binding = first_bindings_by_version["0.1.0"]
+
+    first_draft_binding.auth_mode = "token"
+    first_draft_binding.lifecycle_status = "draft"
+
+    first_published_binding.auth_mode = "token"
+    first_published_binding.lifecycle_status = "published"
+    first_published_binding.published_at = datetime.now(UTC)
+    first_published_binding.unpublished_at = None
+
+    first_offline_binding.auth_mode = "token"
+    first_offline_binding.lifecycle_status = "offline"
+    first_offline_binding.unpublished_at = datetime.now(UTC)
+
+    second_binding = sqlite_session.scalars(
+        select(WorkflowPublishedEndpoint).where(
+            WorkflowPublishedEndpoint.workflow_id == second_workflow_id
+        )
+    ).one()
+    second_binding.auth_mode = "token"
+    second_binding.lifecycle_status = "published"
+    second_binding.published_at = datetime.now(UTC)
+    second_binding.unpublished_at = None
+
+    sqlite_session.add_all(
+        [
+            first_draft_binding,
+            first_published_binding,
+            first_offline_binding,
+            second_binding,
+        ]
+    )
+    sqlite_session.commit()
+
+    response = client.get("/api/workflows/published-endpoints/legacy-auth-governance")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generated_at"] is not None
+    assert body["workflow_count"] == 2
+    assert body["binding_count"] == 4
+    assert body["auth_mode_contract"] == {
+        "supported_auth_modes": ["api_key", "internal"],
+        "retired_legacy_auth_modes": ["token"],
+        "summary": (
+            "当前 publish gateway 只支持 durable authMode=api_key/internal；"
+            "token 仅作为 legacy inventory 出现在治理 handoff 中。"
+        ),
+        "follow_up": (
+            "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
+            "replacement binding，最后清理 draft/offline legacy backlog。"
+        ),
+    }
+    assert body["summary"] == {
+        "draft_candidate_count": 1,
+        "published_blocker_count": 2,
+        "offline_inventory_count": 1,
+    }
+    assert [item["key"] for item in body["checklist"]] == [
+        "draft_cleanup",
+        "published_follow_up",
+        "offline_inventory",
+    ]
+    assert body["workflows"] == [
+        {
+            "workflow_id": first_workflow_id,
+            "workflow_name": "Legacy Auth Cleanup Workflow",
+            "binding_count": 3,
+            "draft_candidate_count": 1,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 1,
+        },
+        {
+            "workflow_id": second_workflow_id,
+            "workflow_name": "Replacement Ready Workflow",
+            "binding_count": 1,
+            "draft_candidate_count": 0,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 0,
+        },
+    ]
+    assert body["buckets"]["draft_candidates"] == [
+        {
+            "workflow_id": first_workflow_id,
+            "workflow_name": "Legacy Auth Cleanup Workflow",
+            "binding_id": first_draft_binding.id,
+            "endpoint_id": "native-chat",
+            "endpoint_name": "Native Chat",
+            "workflow_version": "0.1.2",
+            "lifecycle_status": "draft",
+            "auth_mode": "token",
+        }
+    ]
+    assert {
+        item["workflow_name"] for item in body["buckets"]["published_blockers"]
+    } == {
+        "Legacy Auth Cleanup Workflow",
+        "Replacement Ready Workflow",
+    }
+    assert body["buckets"]["offline_inventory"] == [
+        {
+            "workflow_id": first_workflow_id,
+            "workflow_name": "Legacy Auth Cleanup Workflow",
+            "binding_id": first_offline_binding.id,
+            "endpoint_id": "native-chat",
+            "endpoint_name": "Native Chat",
+            "workflow_version": "0.1.0",
+            "lifecycle_status": "offline",
+            "auth_mode": "token",
+        }
+    ]
 
 
 def test_invoke_published_native_endpoint_uses_active_binding_blueprint(
@@ -1172,11 +1442,15 @@ def test_invoke_published_native_endpoint_uses_response_cache(
         "miss": 2,
         "bypass": 0,
     }
-    assert [item["cache_status"] for item in invocation_body["items"]] == [
-        "miss",
+    assert sorted(item["cache_status"] for item in invocation_body["items"]) == [
         "hit",
         "miss",
+        "miss",
     ]
+    assert [item["created_at"] for item in invocation_body["items"]] == sorted(
+        (item["created_at"] for item in invocation_body["items"]),
+        reverse=True,
+    )
 
     list_response = client.get(f"/api/workflows/{workflow_id}/published-endpoints")
     assert list_response.status_code == 200
@@ -1215,8 +1489,9 @@ def test_invoke_published_native_endpoint_uses_response_cache(
     assert all(item["cache_key"] for item in cache_inventory_body["items"])
 
 
-def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
+def test_publish_binding_rejects_legacy_unsupported_auth_mode(
     client: TestClient,
+    sqlite_session: Session,
 ) -> None:
     create_response = client.post(
         "/api/workflows",
@@ -1230,7 +1505,7 @@ def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
                         "name": "Native Chat",
                         "protocol": "native",
                         "workflowVersion": "0.1.0",
-                        "authMode": "token",
+                        "authMode": "internal",
                         "streaming": False,
                         "inputSchema": {"type": "object"},
                     }
@@ -1248,29 +1523,58 @@ def test_invoke_published_native_endpoint_rejects_unimplemented_token_auth_mode(
     assert bindings_response.status_code == 200
     binding_id = bindings_response.json()[0]["id"]
 
+    binding = sqlite_session.get(WorkflowPublishedEndpoint, binding_id)
+    assert binding is not None
+    binding.auth_mode = "token"
+    sqlite_session.add(binding)
+    sqlite_session.commit()
+
     publish_response = client.patch(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/lifecycle",
         json={"status": "published"},
     )
-    assert publish_response.status_code == 200
+    assert publish_response.status_code == 422
+    assert "unsupported legacy auth mode 'token'" in publish_response.json()["detail"]
+    assert "use 'api_key' or 'internal'" in publish_response.json()["detail"]
+
+    list_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert list_response.status_code == 200
+    listed_binding = list_response.json()[0]
+    assert listed_binding["issues"] == [
+        {
+            "category": "unsupported_auth_mode",
+            "message": (
+                "Published endpoint 'Native Chat' still uses unsupported legacy auth "
+                "mode 'token'. Current publish lifecycle only supports durable "
+                "bindings with auth_mode 'api_key' or 'internal'."
+            ),
+            "field": "auth_mode",
+            "remediation": (
+                "Update the workflow definition to use 'api_key' or 'internal', save "
+                "to resync bindings, then retry the publish lifecycle action."
+            ),
+            "blocks_lifecycle_publish": True,
+        }
+    ]
 
     invoke_response = client.post(
         f"/v1/workflows/{workflow_id}/published-endpoints/native-chat/run",
         json={"input_payload": {}},
     )
-    assert invoke_response.status_code == 422
-    assert "auth mode 'token' is not supported yet" in invoke_response.json()["detail"]
+    assert invoke_response.status_code == 404
 
     activity_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations"
     )
     assert activity_response.status_code == 200
     body = activity_response.json()
-    assert body["summary"]["total_count"] == 1
-    assert body["summary"]["rejected_count"] == 1
-    assert body["summary"]["last_status"] == "rejected"
-    assert body["items"][0]["status"] == "rejected"
-    assert body["items"][0]["run_id"] is None
+    assert body["summary"]["total_count"] == 0
+    assert body["summary"]["rejected_count"] == 0
+    assert body["summary"]["last_status"] is None
+    assert body["items"] == []
 
 
 def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
@@ -1352,6 +1656,8 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
                 "reason": "callback pending",
                 "source": "callback_ticket_monitor",
                 "waiting_status": "waiting_callback",
+                "scheduled_at": now.isoformat().replace("+00:00", "Z"),
+                "due_at": (now + timedelta(seconds=30)).isoformat().replace("+00:00", "Z"),
             }
         },
         working_context={},
@@ -1519,6 +1825,54 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     expected_callback_expires_at = (now + timedelta(minutes=5)).replace(tzinfo=None).isoformat()
     expected_cache_expires_at = (now + timedelta(minutes=10)).replace(tzinfo=None).isoformat()
 
+    activity_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations"
+    )
+    assert activity_response.status_code == 200
+    activity_body = activity_response.json()
+    assert activity_body["summary"]["approval_ticket_count"] == 1
+    assert activity_body["summary"]["pending_approval_count"] == 0
+    assert activity_body["summary"]["approved_approval_count"] == 1
+    assert activity_body["summary"]["rejected_approval_count"] == 0
+    assert activity_body["summary"]["expired_approval_count"] == 0
+    assert activity_body["summary"]["pending_notification_count"] == 0
+    assert activity_body["summary"]["delivered_notification_count"] == 1
+    assert activity_body["summary"]["failed_notification_count"] == 0
+    assert activity_body["items"][0]["run_follow_up"]["affected_run_count"] == 1
+    assert activity_body["items"][0]["run_follow_up"]["sampled_run_count"] == 1
+    assert activity_body["items"][0]["run_follow_up"]["waiting_run_count"] == 1
+    assert activity_body["items"][0]["run_follow_up"]["sampled_runs"][0]["run_id"] == run.id
+    assert activity_body["items"][0]["run_follow_up"]["explanation"]["primary_signal"] == (
+        "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。"
+    )
+    assert "run run-publish-detail：当前 run 状态：waiting。" in activity_body["items"][0][
+        "run_follow_up"
+    ]["explanation"]["follow_up"]
+    assert activity_body["items"][0]["execution_focus_explanation"] == {
+        "primary_signal": "等待原因：callback pending",
+        "follow_up": (
+            "下一步：优先确认 callback ticket 是否已回调；"
+            "若尚未回调，继续沿 ticket / inbox 事实链跟进。"
+        ),
+    }
+    assert activity_body["items"][0]["callback_waiting_explanation"] == {
+        "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+        "follow_up": (
+            "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+        ),
+    }
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding_activity = bindings_response.json()[0]["activity"]
+    assert binding_activity["approval_ticket_count"] == 1
+    assert binding_activity["pending_approval_count"] == 0
+    assert binding_activity["approved_approval_count"] == 1
+    assert binding_activity["delivered_notification_count"] == 1
+
     detail_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}"
     )
@@ -1534,6 +1888,23 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "waiting_reason": "callback pending",
         "callback_ticket_count": 1,
         "callback_ticket_status_counts": {"pending": 1},
+        "callback_waiting_explanation": {
+            "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+            "follow_up": (
+                "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+            ),
+        },
+        "sensitive_access_summary": {
+            "request_count": 1,
+            "approval_ticket_count": 1,
+            "pending_approval_count": 0,
+            "approved_approval_count": 1,
+            "rejected_approval_count": 0,
+            "expired_approval_count": 0,
+            "pending_notification_count": 0,
+            "delivered_notification_count": 1,
+            "failed_notification_count": 0,
+        },
         "callback_waiting_lifecycle": {
             "wait_cycle_count": 1,
             "issued_ticket_count": 1,
@@ -1561,6 +1932,12 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "scheduled_resume_reason": "callback pending",
         "scheduled_resume_source": "callback_ticket_monitor",
         "scheduled_waiting_status": "waiting_callback",
+        "scheduled_resume_scheduled_at": now.isoformat().replace("+00:00", "Z"),
+        "scheduled_resume_due_at": (now + timedelta(seconds=30)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "scheduled_resume_requeued_at": None,
+        "scheduled_resume_requeue_source": None,
     }
     assert detail_body["run"] == {
         "id": run.id,
@@ -1591,11 +1968,141 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         }
     ]
     assert detail_body["blocking_node_run_id"] == node_run.id
+    assert detail_body["execution_focus_reason"] == "blocking_node_run"
+    assert detail_body["execution_focus_node"]["node_run_id"] == node_run.id
+    assert detail_body["execution_focus_explanation"] == {
+        "primary_signal": "等待原因：callback pending",
+        "follow_up": (
+            "下一步：优先确认 callback ticket 是否已回调；"
+            "若尚未回调，继续沿 ticket / inbox 事实链跟进。"
+        ),
+    }
+    assert detail_body["callback_waiting_explanation"] == {
+        "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+        "follow_up": (
+            "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+        ),
+    }
+    assert detail_body["run_follow_up"]["affected_run_count"] == 1
+    assert detail_body["run_follow_up"]["sampled_run_count"] == 1
+    assert detail_body["run_follow_up"]["waiting_run_count"] == 1
+    assert detail_body["run_follow_up"]["sampled_runs"][0]["run_id"] == run.id
+    assert detail_body["run_follow_up"]["sampled_runs"][0]["snapshot"] == {
+        "workflow_id": workflow_id,
+        "status": "waiting",
+        "current_node_id": "tool_wait",
+        "waiting_reason": "callback pending",
+        "execution_focus_reason": "blocking_node_run",
+        "execution_focus_node_id": "tool_wait",
+        "execution_focus_node_run_id": node_run.id,
+        "execution_focus_node_name": "Tool Wait",
+        "execution_focus_node_type": "tool",
+        "execution_focus_explanation": {
+            "primary_signal": "等待原因：callback pending",
+            "follow_up": (
+                "下一步：优先确认 callback ticket 是否已回调；"
+                "若尚未回调，继续沿 ticket / inbox 事实链跟进。"
+            ),
+        },
+        "callback_waiting_explanation": {
+            "primary_signal": "当前仍有 1 条 callback ticket 等待外部回调。",
+            "follow_up": (
+                "下一步：优先确认外部系统是否已经回调，不要重复触发 resume 或额外发起同类请求。"
+            ),
+        },
+        "callback_waiting_lifecycle": {
+            "wait_cycle_count": 1,
+            "issued_ticket_count": 1,
+            "expired_ticket_count": 0,
+            "consumed_ticket_count": 0,
+            "canceled_ticket_count": 0,
+            "late_callback_count": 0,
+            "resume_schedule_count": 1,
+            "max_expired_ticket_count": 0,
+            "terminated": False,
+            "termination_reason": None,
+            "terminated_at": None,
+            "last_ticket_status": "pending",
+            "last_ticket_reason": "callback pending",
+            "last_ticket_updated_at": now.isoformat().replace("+00:00", "Z"),
+            "last_late_callback_status": None,
+            "last_late_callback_reason": None,
+            "last_late_callback_at": None,
+            "last_resume_delay_seconds": 30.0,
+            "last_resume_reason": "callback pending",
+            "last_resume_source": "callback_ticket_monitor",
+            "last_resume_backoff_attempt": 0,
+        },
+        "scheduled_resume_delay_seconds": 30.0,
+        "scheduled_resume_reason": "callback pending",
+        "scheduled_resume_source": "callback_ticket_monitor",
+        "scheduled_waiting_status": "waiting_callback",
+        "scheduled_resume_scheduled_at": now.isoformat().replace("+00:00", "Z"),
+        "scheduled_resume_due_at": (now + timedelta(seconds=30)).isoformat().replace(
+            "+00:00", "Z"
+        ),
+        "scheduled_resume_requeued_at": None,
+        "scheduled_resume_requeue_source": None,
+        "execution_focus_artifact_count": 0,
+        "execution_focus_artifact_ref_count": 0,
+        "execution_focus_tool_call_count": 0,
+        "execution_focus_raw_ref_count": 0,
+        "execution_focus_artifact_refs": [],
+        "execution_focus_artifacts": [],
+        "execution_focus_tool_calls": [],
+        "execution_focus_skill_trace": None,
+    }
+    assert detail_body["run_follow_up"]["explanation"]["primary_signal"] == (
+        "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。"
+    )
+    assert "run run-publish-detail：当前 run 状态：waiting。" in detail_body["run_follow_up"][
+        "explanation"
+    ]["follow_up"]
+    assert detail_body["execution_focus_node"]["node_id"] == "tool_wait"
+    assert detail_body["execution_focus_node"]["node_name"] == "Tool Wait"
+    assert detail_body["execution_focus_node"]["status"] == "waiting"
+    assert detail_body["execution_focus_node"]["phase"] == "waiting_callback"
+    assert detail_body["execution_focus_node"]["execution_class"] == "inline"
+    assert detail_body["execution_focus_node"]["waiting_reason"] == "callback pending"
+    assert (
+        detail_body["execution_focus_node"]["callback_tickets"][0]["ticket"]
+        == callback_ticket.id
+    )
+    assert detail_body["run_follow_up"]["sampled_runs"][0]["callback_tickets"] == detail_body[
+        "execution_focus_node"
+    ]["callback_tickets"]
+    assert activity_body["items"][0]["run_follow_up"]["sampled_runs"][0][
+        "callback_tickets"
+    ] == detail_body["run_follow_up"]["sampled_runs"][0]["callback_tickets"]
     assert len(detail_body["blocking_sensitive_access_entries"]) == 1
     assert (
         detail_body["blocking_sensitive_access_entries"][0]["request"]["id"]
         == sensitive_request.id
     )
+    assert detail_body["blocking_sensitive_access_entries"][0]["outcome_explanation"] == {
+        "primary_signal": "审批已通过，对应 waiting 链路已交回 runtime 恢复。",
+        "follow_up": (
+            "An operator approved the request and the blocked workflow can resume. "
+            "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
+        ),
+    }
+    assert detail_body["blocking_sensitive_access_entries"][0]["run_snapshot"] == detail_body[
+        "run_follow_up"
+    ]["sampled_runs"][0]["snapshot"]
+    assert detail_body["blocking_sensitive_access_entries"][0]["run_follow_up"] == detail_body[
+        "run_follow_up"
+    ]
+    expected_sample_sensitive_entry = {
+        key: value
+        for key, value in detail_body["blocking_sensitive_access_entries"][0].items()
+        if key not in {"run_snapshot", "run_follow_up"}
+    }
+    assert detail_body["run_follow_up"]["sampled_runs"][0][
+        "sensitive_access_entries"
+    ] == [expected_sample_sensitive_entry]
+    assert activity_body["items"][0]["run_follow_up"]["sampled_runs"][0][
+        "sensitive_access_entries"
+    ] == [expected_sample_sensitive_entry]
     assert len(detail_body["sensitive_access_entries"]) == 2
     assert detail_body["sensitive_access_entries"][0]["resource"]["label"] == (
         "Published Search Tool"
@@ -1611,6 +2118,19 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     assert detail_body["sensitive_access_entries"][0]["request"]["policy_summary"] == (
         "An operator approved the request and the blocked workflow can resume."
     )
+    assert detail_body["sensitive_access_entries"][0]["outcome_explanation"] == {
+        "primary_signal": "审批已通过，对应 waiting 链路已交回 runtime 恢复。",
+        "follow_up": (
+            "An operator approved the request and the blocked workflow can resume. "
+            "如果 run 仍停在 waiting，请继续检查 callback 到达情况或定时恢复链路。"
+        ),
+    }
+    assert detail_body["sensitive_access_entries"][0]["run_snapshot"] == detail_body[
+        "run_follow_up"
+    ]["sampled_runs"][0]["snapshot"]
+    assert detail_body["sensitive_access_entries"][0]["run_follow_up"] == detail_body[
+        "run_follow_up"
+    ]
     assert detail_body["sensitive_access_entries"][0]["approval_ticket"] == {
         "id": approval_ticket.id,
         "access_request_id": sensitive_request.id,
@@ -1639,6 +2159,10 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "Published Other Tool"
     )
     assert detail_body["sensitive_access_entries"][1]["request"]["decision"] == "deny"
+    assert detail_body["sensitive_access_entries"][1]["outcome_explanation"] == {
+        "primary_signal": "本次敏感访问已被策略拒绝，对应节点不会继续自动执行。",
+        "follow_up": "如条件变化，应重新发起新的访问请求，而不是依赖当前 blocked 链路自动恢复。",
+    }
     assert detail_body["cache"] == {
         "cache_status": "hit",
         "cache_key": cache_entry.cache_key,

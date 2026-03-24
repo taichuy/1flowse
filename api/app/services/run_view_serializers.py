@@ -17,7 +17,10 @@ from app.schemas.run_views import (
     RunCallbackTicketItem,
     RunCallbackWaitingSummary,
 )
-from app.services.callback_waiting_lifecycle import load_callback_waiting_lifecycle
+from app.services.callback_waiting_lifecycle import (
+    load_callback_waiting_lifecycle,
+    load_callback_waiting_scheduled_resume,
+)
 
 
 def normalize_datetime(value: datetime | None) -> datetime | None:
@@ -56,6 +59,22 @@ def serialize_callback_waiting_lifecycle_summary(
     return CallbackWaitingLifecycleSummary(**lifecycle)
 
 
+def serialize_callback_waiting_scheduled_resume(
+    checkpoint_payload: dict | None,
+) -> dict[str, str | float | None]:
+    scheduled_resume = load_callback_waiting_scheduled_resume(checkpoint_payload)
+    return {
+        "scheduled_resume_delay_seconds": scheduled_resume["delay_seconds"],
+        "scheduled_resume_reason": scheduled_resume["reason"],
+        "scheduled_resume_source": scheduled_resume["source"],
+        "scheduled_waiting_status": scheduled_resume["waiting_status"],
+        "scheduled_resume_scheduled_at": scheduled_resume["scheduled_at"],
+        "scheduled_resume_due_at": scheduled_resume["due_at"],
+        "scheduled_resume_requeued_at": scheduled_resume["requeued_at"],
+        "scheduled_resume_requeue_source": scheduled_resume["requeue_source"],
+    }
+
+
 def serialize_run_callback_waiting_summary(
     node_runs: list[NodeRun],
 ) -> RunCallbackWaitingSummary:
@@ -72,6 +91,16 @@ def serialize_run_callback_waiting_summary(
         for summary in lifecycle_summaries
         if summary.last_resume_source is not None
     )
+    scheduled_resume_summaries = [
+        serialize_callback_waiting_scheduled_resume(node_run.checkpoint_payload)
+        for node_run in node_runs
+    ]
+    scheduled_resume_source_counts = Counter(
+        summary["scheduled_resume_source"]
+        for summary in scheduled_resume_summaries
+        if summary["scheduled_resume_delay_seconds"] is not None
+        and summary["scheduled_resume_source"] is not None
+    )
     termination_reason_counts = Counter(
         summary.termination_reason
         for summary in lifecycle_summaries
@@ -86,7 +115,22 @@ def serialize_run_callback_waiting_summary(
         canceled_ticket_count=sum(summary.canceled_ticket_count for summary in lifecycle_summaries),
         late_callback_count=sum(summary.late_callback_count for summary in lifecycle_summaries),
         resume_schedule_count=sum(summary.resume_schedule_count for summary in lifecycle_summaries),
+        scheduled_resume_pending_node_count=sum(
+            1
+            for summary in scheduled_resume_summaries
+            if summary["scheduled_resume_delay_seconds"] is not None
+            and summary["scheduled_resume_requeued_at"] is None
+        ),
+        scheduled_resume_requeued_node_count=sum(
+            1
+            for summary in scheduled_resume_summaries
+            if summary["scheduled_resume_delay_seconds"] is not None
+            and summary["scheduled_resume_requeued_at"] is not None
+        ),
         resume_source_counts=dict(sorted(resume_source_counts.items())),
+        scheduled_resume_source_counts=dict(
+            sorted(scheduled_resume_source_counts.items())
+        ),
         termination_reason_counts=dict(sorted(termination_reason_counts.items())),
     )
 
@@ -117,6 +161,13 @@ def serialize_run_artifact(artifact: RunArtifact) -> RunArtifactItem:
 
 
 def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
+    execution_trace = dict(tool_call.execution_trace or {})
+    requested_backend_extensions = execution_trace.get("requested_backend_extensions")
+    adapter_request_execution = execution_trace.get("adapter_request_execution")
+    adapter_request_execution_contract = execution_trace.get(
+        "adapter_request_execution_contract"
+    )
+    response_meta = dict(tool_call.response_meta or {})
     return ToolCallItem(
         id=tool_call.id,
         run_id=tool_call.run_id,
@@ -126,7 +177,58 @@ def serialize_tool_call(tool_call: ToolCallRecord) -> ToolCallItem:
         phase=tool_call.phase,
         status=tool_call.status,
         request_summary=tool_call.request_summary,
+        execution_trace=execution_trace or None,
+        requested_execution_class=execution_trace.get("requested_execution_class"),
+        requested_execution_source=execution_trace.get("execution_source"),
+        requested_execution_profile=execution_trace.get("requested_execution_profile"),
+        requested_execution_timeout_ms=execution_trace.get("requested_execution_timeout_ms"),
+        requested_execution_network_policy=execution_trace.get("requested_network_policy"),
+        requested_execution_filesystem_policy=execution_trace.get(
+            "requested_filesystem_policy"
+        ),
+        requested_execution_dependency_mode=execution_trace.get(
+            "requested_dependency_mode"
+        ),
+        requested_execution_builtin_package_set=execution_trace.get(
+            "requested_builtin_package_set"
+        ),
+        requested_execution_dependency_ref=execution_trace.get(
+            "requested_dependency_ref"
+        ),
+        requested_execution_backend_extensions=(
+            dict(requested_backend_extensions)
+            if isinstance(requested_backend_extensions, dict)
+            else None
+        ),
+        effective_execution_class=execution_trace.get("effective_execution_class"),
+        execution_executor_ref=execution_trace.get("executor_ref"),
+        execution_sandbox_backend_id=execution_trace.get("sandbox_backend_id"),
+        execution_sandbox_backend_executor_ref=execution_trace.get(
+            "sandbox_backend_executor_ref"
+        ),
+        execution_sandbox_runner_kind=execution_trace.get("sandbox_runner_kind"),
+        adapter_request_trace_id=execution_trace.get("adapter_request_trace_id"),
+        adapter_request_execution=(
+            dict(adapter_request_execution)
+            if isinstance(adapter_request_execution, dict)
+            else None
+        ),
+        adapter_request_execution_class=execution_trace.get(
+            "adapter_request_execution_class"
+        ),
+        adapter_request_execution_source=execution_trace.get(
+            "adapter_request_execution_source"
+        ),
+        adapter_request_execution_contract=(
+            dict(adapter_request_execution_contract)
+            if isinstance(adapter_request_execution_contract, dict)
+            else None
+        ),
+        execution_blocking_reason=execution_trace.get("blocked_reason"),
+        execution_fallback_reason=execution_trace.get("fallback_reason"),
         response_summary=tool_call.response_summary,
+        response_content_type=tool_call.response_content_type,
+        response_meta=response_meta,
         raw_ref=(
             f"artifact://{tool_call.raw_artifact_id}"
             if tool_call.raw_artifact_id is not None

@@ -9,9 +9,13 @@ import {
   type WorkspaceStarterSourceDiff,
   type WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
-import type { WorkflowDetail } from "@/lib/get-workflows";
-
-import type { WorkspaceStarterMessageTone } from "./shared";
+import {
+  buildWorkspaceStarterMutationFallbackErrorMessage,
+  buildWorkspaceStarterMutationNetworkErrorMessage,
+  buildWorkspaceStarterMutationPendingMessage,
+  buildWorkspaceStarterMutationSuccessMessage,
+  type WorkspaceStarterMessageTone
+} from "@/lib/workspace-starter-mutation-presenters";
 
 type UseWorkspaceStarterSourceOptions = {
   selectedTemplate: WorkspaceStarterTemplateItem | null;
@@ -28,72 +32,12 @@ export function useWorkspaceStarterSource({
   setMessage,
   setMessageTone
 }: UseWorkspaceStarterSourceOptions) {
-  const [sourceWorkflow, setSourceWorkflow] = useState<WorkflowDetail | null>(null);
-  const [sourceStatusMessage, setSourceStatusMessage] = useState<string | null>(null);
-  const [isLoadingSourceWorkflow, setIsLoadingSourceWorkflow] = useState(false);
   const [historyItems, setHistoryItems] = useState<WorkspaceStarterHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [sourceDiff, setSourceDiff] = useState<WorkspaceStarterSourceDiff | null>(null);
   const [isLoadingSourceDiff, setIsLoadingSourceDiff] = useState(false);
   const [isRefreshing, startRefreshingTransition] = useTransition();
   const [isRebasing, startRebasingTransition] = useTransition();
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!selectedTemplate?.created_from_workflow_id) {
-      setSourceWorkflow(null);
-      setSourceStatusMessage(null);
-      setIsLoadingSourceWorkflow(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setIsLoadingSourceWorkflow(true);
-    setSourceStatusMessage(null);
-
-    void fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
-        selectedTemplate.created_from_workflow_id
-      )}`,
-      {
-        cache: "no-store"
-      }
-    )
-      .then(async (response) => {
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          setSourceWorkflow(null);
-          setSourceStatusMessage(
-            response.status === 404
-              ? "源 workflow 已不存在。"
-              : `读取源 workflow 失败，API 返回 ${response.status}。`
-          );
-          setIsLoadingSourceWorkflow(false);
-          return;
-        }
-
-        setSourceWorkflow((await response.json()) as WorkflowDetail);
-        setIsLoadingSourceWorkflow(false);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setSourceWorkflow(null);
-        setSourceStatusMessage("无法连接后端读取源 workflow，请确认 API 已启动。");
-        setIsLoadingSourceWorkflow(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedTemplate?.created_from_workflow_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,9 +125,12 @@ export function useWorkspaceStarterSource({
     setIsLoadingSourceDiff(true);
 
     try {
-      setSourceDiff(await getWorkspaceStarterSourceDiff(templateId));
+      const nextSourceDiff = await getWorkspaceStarterSourceDiff(templateId);
+      setSourceDiff(nextSourceDiff);
+      return nextSourceDiff;
     } catch {
       setSourceDiff(null);
+      return null;
     } finally {
       setIsLoadingSourceDiff(false);
     }
@@ -194,8 +141,6 @@ export function useWorkspaceStarterSource({
   };
 
   const clearSelectionArtifacts = () => {
-    setSourceWorkflow(null);
-    setSourceStatusMessage(null);
     setHistoryItems([]);
     setSourceDiff(null);
   };
@@ -206,7 +151,7 @@ export function useWorkspaceStarterSource({
     }
 
     startRefreshingTransition(async () => {
-      setMessage("正在从源 workflow 刷新 starter 快照...");
+      setMessage(buildWorkspaceStarterMutationPendingMessage("refresh"));
       setMessageTone("idle");
 
       try {
@@ -222,7 +167,11 @@ export function useWorkspaceStarterSource({
           | null;
 
         if (!response.ok || !body || !("id" in body)) {
-          setMessage(body && "detail" in body ? body.detail ?? "刷新失败。" : "刷新失败。");
+          setMessage(
+            body && "detail" in body
+              ? body.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage("refresh")
+              : buildWorkspaceStarterMutationFallbackErrorMessage("refresh")
+          );
           setMessageTone("error");
           return;
         }
@@ -232,11 +181,17 @@ export function useWorkspaceStarterSource({
         );
         setSelectedTemplateId(body.id);
         await reloadHistory(body.id);
-        await reloadSourceDiff(body.id);
-        setMessage(`已刷新 workspace starter：${body.name}。`);
+        const nextSourceDiff = await reloadSourceDiff(body.id);
+        setMessage(
+          buildWorkspaceStarterMutationSuccessMessage({
+            action: "refresh",
+            templateName: body.name,
+            sourceDiff: nextSourceDiff
+          })
+        );
         setMessageTone("success");
       } catch {
-        setMessage("无法连接后端刷新 starter，请确认 API 已启动。");
+        setMessage(buildWorkspaceStarterMutationNetworkErrorMessage("refresh"));
         setMessageTone("error");
       }
     });
@@ -248,7 +203,7 @@ export function useWorkspaceStarterSource({
     }
 
     startRebasingTransition(async () => {
-      setMessage("正在基于 source workflow 执行 rebase...");
+      setMessage(buildWorkspaceStarterMutationPendingMessage("rebase"));
       setMessageTone("idle");
 
       try {
@@ -264,7 +219,11 @@ export function useWorkspaceStarterSource({
           | null;
 
         if (!response.ok || !body || !("id" in body)) {
-          setMessage(body && "detail" in body ? body.detail ?? "rebase 失败。" : "rebase 失败。");
+          setMessage(
+            body && "detail" in body
+              ? body.detail ?? buildWorkspaceStarterMutationFallbackErrorMessage("rebase")
+              : buildWorkspaceStarterMutationFallbackErrorMessage("rebase")
+          );
           setMessageTone("error");
           return;
         }
@@ -274,11 +233,17 @@ export function useWorkspaceStarterSource({
         );
         setSelectedTemplateId(body.id);
         await reloadHistory(body.id);
-        await reloadSourceDiff(body.id);
-        setMessage(`已完成 workspace starter rebase：${body.name}。`);
+        const nextSourceDiff = await reloadSourceDiff(body.id);
+        setMessage(
+          buildWorkspaceStarterMutationSuccessMessage({
+            action: "rebase",
+            templateName: body.name,
+            sourceDiff: nextSourceDiff
+          })
+        );
         setMessageTone("success");
       } catch {
-        setMessage("无法连接后端执行 starter rebase，请确认 API 已启动。");
+        setMessage(buildWorkspaceStarterMutationNetworkErrorMessage("rebase"));
         setMessageTone("error");
       }
     });
@@ -292,13 +257,10 @@ export function useWorkspaceStarterSource({
     historyItems,
     isLoadingHistory,
     isLoadingSourceDiff,
-    isLoadingSourceWorkflow,
     isRebasing,
     isRefreshing,
     reloadHistory,
     reloadSourceDiff,
-    sourceDiff,
-    sourceStatusMessage,
-    sourceWorkflow
+    sourceDiff
   };
 }

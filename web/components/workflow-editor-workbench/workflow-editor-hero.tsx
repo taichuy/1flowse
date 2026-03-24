@@ -1,8 +1,13 @@
 "use client";
 
-import Link from "next/link";
+import React from "react";
 
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
+import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import { buildWorkflowEditorHeroSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
+import type { WorkflowPersistBlocker } from "./persist-blockers";
 
 type WorkflowEditorHeroProps = {
   workflowId: string;
@@ -20,11 +25,19 @@ type WorkflowEditorHeroProps = {
   unsupportedNodes: UnsupportedWorkflowNodeSummary[];
   contractValidationIssuesCount: number;
   toolReferenceValidationIssuesCount: number;
+  nodeExecutionValidationIssuesCount: number;
   toolExecutionValidationIssuesCount: number;
-  publishVersionValidationIssuesCount: number;
+  publishDraftValidationIssuesCount: number;
   persistBlockedMessage: string | null;
+  persistBlockerSummary: string | null;
+  persistBlockers: WorkflowPersistBlocker[];
+  persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
   isSaving: boolean;
   isSavingStarter: boolean;
+  workflowLibraryHref?: string;
+  createWorkflowHref?: string;
+  workspaceStarterLibraryHref?: string;
+  hasScopedWorkspaceStarterFilters?: boolean;
   onSave: () => void;
   onSaveAsWorkspaceStarter: () => void;
 };
@@ -45,15 +58,29 @@ export function WorkflowEditorHero({
   unsupportedNodes,
   contractValidationIssuesCount,
   toolReferenceValidationIssuesCount,
+  nodeExecutionValidationIssuesCount,
   toolExecutionValidationIssuesCount,
-  publishVersionValidationIssuesCount,
+  publishDraftValidationIssuesCount,
   persistBlockedMessage,
+  persistBlockerSummary,
+  persistBlockers,
+  persistBlockerRecommendedNextStep = null,
   isSaving,
   isSavingStarter,
+  workflowLibraryHref = "/workflows",
+  createWorkflowHref = "/workflows/new",
+  workspaceStarterLibraryHref = "/workspace-starters",
+  hasScopedWorkspaceStarterFilters = false,
   onSave,
   onSaveAsWorkspaceStarter
 }: WorkflowEditorHeroProps) {
   const plannedNodeSummary = plannedNodeLabels.join(" / ");
+  const heroSurfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
+    workflowLibraryHref,
+    createWorkflowHref,
+    workspaceStarterLibraryHref,
+    plannedNodeSummary
+  });
 
   return (
     <section className="hero editor-hero">
@@ -81,23 +108,18 @@ export function WorkflowEditorHero({
           {toolReferenceValidationIssuesCount > 0 ? (
             <span className="pill">{toolReferenceValidationIssuesCount} tool reference issues</span>
           ) : null}
+          {nodeExecutionValidationIssuesCount > 0 ? (
+            <span className="pill">{nodeExecutionValidationIssuesCount} node execution issues</span>
+          ) : null}
           {toolExecutionValidationIssuesCount > 0 ? (
             <span className="pill">{toolExecutionValidationIssuesCount} execution capability issues</span>
           ) : null}
-          {publishVersionValidationIssuesCount > 0 ? (
-            <span className="pill">{publishVersionValidationIssuesCount} publish version issues</span>
+          {publishDraftValidationIssuesCount > 0 ? (
+            <span className="pill">{publishDraftValidationIssuesCount} publish draft issues</span>
           ) : null}
         </div>
         <div className="hero-actions">
-          <Link className="inline-link" href="/">
-            返回系统首页
-          </Link>
-          <Link className="inline-link secondary" href="/workflows/new">
-            新建 workflow
-          </Link>
-          <Link className="inline-link secondary" href="/workspace-starters">
-            管理 workspace starters
-          </Link>
+          <WorkbenchEntryLinks {...heroSurfaceCopy.heroLinks} />
           <button className="sync-button" type="button" onClick={onSave} disabled={isSaving}>
             {isSaving ? "保存中..." : "保存 workflow"}
           </button>
@@ -110,21 +132,18 @@ export function WorkflowEditorHero({
             {isSavingStarter ? "模板保存中..." : "保存为 workspace starter"}
           </button>
         </div>
+        <OperatorRecommendedNextStepCard recommendedNextStep={persistBlockerRecommendedNextStep} />
       </div>
 
       <div className="hero-panel">
         <div className="panel-label">Editor state</div>
         <div className="panel-value">{isDirty ? "Dirty" : "Synced"}</div>
         <p className="panel-text">
-          当前保存链路：<strong>web canvas -&gt; workflow definition -&gt; API versioning</strong>
+          当前保存链路：<strong>{heroSurfaceCopy.saveChainValue}</strong>
         </p>
         <p className="panel-text">
           当前节点边界：
-          <strong>
-            {plannedNodeSummary
-              ? `${plannedNodeSummary} 仍保持 planned；发布网关 / 调试联动继续推进`
-              : "发布网关 / 调试联动继续推进"}
-          </strong>
+          <strong>{heroSurfaceCopy.plannedNodeBoundaryValue}</strong>
         </p>
         {unsupportedNodes.length > 0 ? (
           <p className="panel-text">
@@ -135,16 +154,46 @@ export function WorkflowEditorHero({
           </p>
         ) : null}
         {persistBlockedMessage ? (
-          <p className="panel-text">
-            当前保存策略：
-            <strong>
-              含 planned / unknown 节点、非法 contract schema、tool catalog 引用漂移、tool execution capability 不匹配或 publish version 引用失配时阻断保存与 starter 沉淀
-            </strong>
-          </p>
+          <>
+            <p className="panel-text">
+              当前保存策略：<strong>{persistBlockerSummary}</strong>
+            </p>
+            <div className="starter-tag-row">
+              {persistBlockers.map((blocker) => (
+                <span className="event-chip" key={blocker.id}>
+                  {blocker.label}
+                </span>
+              ))}
+            </div>
+          </>
         ) : null}
         <p className="panel-text">
-          当前治理入口：<strong>editor -&gt; workspace starter library</strong>
+          当前治理入口：<strong>{heroSurfaceCopy.governanceEntryValue}</strong>
         </p>
+        {hasScopedWorkspaceStarterFilters ? (
+          <p className="panel-text">
+            {heroSurfaceCopy.scopedGovernancePrefix}
+            {" "}
+            <WorkbenchEntryLink
+              className="inline-link secondary"
+              linkKey="workspaceStarterLibrary"
+              override={{ href: workspaceStarterLibraryHref }}
+            >
+              {heroSurfaceCopy.scopedGovernanceBackLinkLabel}
+            </WorkbenchEntryLink>
+            {" "}
+            {heroSurfaceCopy.scopedGovernanceInfix}
+            {" "}
+            <WorkbenchEntryLink
+              className="inline-link secondary"
+              linkKey="createWorkflow"
+              override={{ href: createWorkflowHref }}
+            >
+              {heroSurfaceCopy.scopedGovernanceCreateWorkflowLabel}
+            </WorkbenchEntryLink>
+            。
+          </p>
+        ) : null}
         <dl className="signal-list">
           <div>
             <dt>Selected node</dt>

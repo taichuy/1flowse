@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8091
     adapter_id: str = "dify-default"
-    health_status: str = "ok"
+    health_status: str = "up"
     supported_ecosystem: str = "compat:dify"
     default_latency_ms: int = Field(default=5, ge=0, le=30_000)
     catalog_root: str = "catalog"

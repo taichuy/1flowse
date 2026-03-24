@@ -1,6 +1,8 @@
 import type {
   CallbackWaitingLifecycleSummary,
-  RunCallbackTicketItem
+  RunCallbackTicketItem,
+  RunExecutionNodeItem,
+  SkillReferenceLoadItem
 } from "@/lib/get-run-views";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 
@@ -39,6 +41,14 @@ export type PublishedEndpointInvocationSummary = {
   last_run_id?: string | null;
   last_run_status?: string | null;
   last_reason_code?: string | null;
+  approval_ticket_count?: number;
+  pending_approval_count?: number;
+  approved_approval_count?: number;
+  rejected_approval_count?: number;
+  expired_approval_count?: number;
+  pending_notification_count?: number;
+  delivered_notification_count?: number;
+  failed_notification_count?: number;
 };
 
 export type PublishedEndpointInvocationItem = {
@@ -69,11 +79,31 @@ export type PublishedEndpointInvocationItem = {
     callback_ticket_count: number;
     callback_ticket_status_counts: Record<string, number>;
     callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+    callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+    sensitive_access_summary?: {
+      request_count: number;
+      approval_ticket_count: number;
+      pending_approval_count: number;
+      approved_approval_count: number;
+      rejected_approval_count: number;
+      expired_approval_count: number;
+      pending_notification_count: number;
+      delivered_notification_count: number;
+      failed_notification_count: number;
+    } | null;
     scheduled_resume_delay_seconds?: number | null;
     scheduled_resume_reason?: string | null;
     scheduled_resume_source?: string | null;
     scheduled_waiting_status?: string | null;
+    scheduled_resume_scheduled_at?: string | null;
+    scheduled_resume_due_at?: string | null;
+    scheduled_resume_requeued_at?: string | null;
+    scheduled_resume_requeue_source?: string | null;
   } | null;
+  run_snapshot?: OperatorRunFollowUpSnapshot | null;
+  run_follow_up?: OperatorRunFollowUpSummary | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
   reason_code?: string | null;
   error_message?: string | null;
   request_preview: {
@@ -105,6 +135,7 @@ export type PublishedEndpointInvocationApiKeyUsageItem = {
   rejected_count: number;
   last_invoked_at?: string | null;
   last_status?: PublishedEndpointInvocationStatus | null;
+  last_reason_code?: string | null;
 };
 
 export type PublishedEndpointInvocationFailureReasonItem = {
@@ -203,11 +234,143 @@ export type PublishedEndpointInvocationCacheReference = {
   inventory_entry?: PublishedEndpointCacheInventoryItem | null;
 };
 
+export type PublishedEndpointInvocationSkillTraceNodeItem = {
+  node_run_id: string;
+  node_id?: string | null;
+  node_name?: string | null;
+  reference_count: number;
+  loads: SkillReferenceLoadItem[];
+};
+
+export type PublishedEndpointInvocationSkillTrace = {
+  scope: "execution_focus_node" | "run";
+  reference_count: number;
+  phase_counts: Record<string, number>;
+  source_counts: Record<string, number>;
+  nodes: PublishedEndpointInvocationSkillTraceNodeItem[];
+};
+
+export type PublishedEndpointInvocationExecutionFocusReason =
+  | "blocking_node_run"
+  | "blocked_execution"
+  | "current_node"
+  | "fallback_node";
+
+export type RunExecutionFocusExplanation = {
+  primary_signal?: string | null;
+  follow_up?: string | null;
+};
+
+export type OperatorRunFollowUpSnapshot = {
+  workflow_id?: string | null;
+  status?: string | null;
+  current_node_id?: string | null;
+  waiting_reason?: string | null;
+  execution_focus_reason?: PublishedEndpointInvocationExecutionFocusReason | null;
+  execution_focus_node_id?: string | null;
+  execution_focus_node_name?: string | null;
+  execution_focus_node_type?: string | null;
+  execution_focus_node_run_id?: string | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_lifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduled_resume_delay_seconds?: number | null;
+  scheduled_resume_reason?: string | null;
+  scheduled_resume_source?: string | null;
+  scheduled_waiting_status?: string | null;
+  scheduled_resume_scheduled_at?: string | null;
+  scheduled_resume_due_at?: string | null;
+  scheduled_resume_requeued_at?: string | null;
+  scheduled_resume_requeue_source?: string | null;
+  execution_focus_artifact_count?: number;
+  execution_focus_artifact_ref_count?: number;
+  execution_focus_tool_call_count?: number;
+  execution_focus_raw_ref_count?: number;
+  execution_focus_artifact_refs?: string[];
+  execution_focus_artifacts?: Array<{
+    artifact_kind?: string | null;
+    content_type?: string | null;
+    summary?: string | null;
+    uri?: string | null;
+  }>;
+  execution_focus_tool_calls?: Array<{
+    id?: string | null;
+    tool_id?: string | null;
+    tool_name?: string | null;
+    phase?: string | null;
+    status?: string | null;
+    requested_execution_class?: string | null;
+    requested_execution_source?: string | null;
+    requested_execution_profile?: string | null;
+    requested_execution_timeout_ms?: number | null;
+    requested_execution_network_policy?: string | null;
+    requested_execution_filesystem_policy?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
+    effective_execution_class?: string | null;
+    execution_executor_ref?: string | null;
+    execution_sandbox_backend_id?: string | null;
+    execution_sandbox_backend_executor_ref?: string | null;
+    execution_sandbox_runner_kind?: string | null;
+    adapter_request_trace_id?: string | null;
+    adapter_request_execution?: Record<string, unknown> | null;
+    adapter_request_execution_class?: string | null;
+    adapter_request_execution_source?: string | null;
+    adapter_request_execution_contract?: Record<string, unknown> | null;
+    execution_blocking_reason?: string | null;
+    execution_fallback_reason?: string | null;
+    response_summary?: string | null;
+    response_content_type?: string | null;
+    raw_ref?: string | null;
+  }>;
+  execution_focus_skill_trace?: {
+    reference_count: number;
+    phase_counts: Record<string, number>;
+    source_counts: Record<string, number>;
+    loads: SkillReferenceLoadItem[];
+  } | null;
+};
+
+export type OperatorRunFollowUpSnapshotSample = {
+  run_id: string;
+  snapshot?: OperatorRunFollowUpSnapshot | null;
+  callback_tickets?: RunCallbackTicketItem[];
+  sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+};
+
+export type OperatorRunFollowUpSummary = {
+  affected_run_count: number;
+  sampled_run_count: number;
+  waiting_run_count: number;
+  running_run_count: number;
+  succeeded_run_count: number;
+  failed_run_count: number;
+  unknown_run_count: number;
+  recommended_action?: {
+    kind: string;
+    entry_key: string;
+    href: string | null;
+    label: string | null;
+  } | null;
+  sampled_runs: OperatorRunFollowUpSnapshotSample[];
+  explanation?: RunExecutionFocusExplanation | null;
+};
+
 export type PublishedEndpointInvocationDetailResponse = {
   invocation: PublishedEndpointInvocationItem;
   run?: PublishedEndpointInvocationRunReference | null;
+  run_snapshot?: OperatorRunFollowUpSnapshot | null;
+  run_follow_up?: OperatorRunFollowUpSummary | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
   blocking_node_run_id?: string | null;
+  execution_focus_reason?: PublishedEndpointInvocationExecutionFocusReason | null;
+  execution_focus_node?: RunExecutionNodeItem | null;
+  execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  callback_waiting_explanation?: RunExecutionFocusExplanation | null;
+  skill_trace?: PublishedEndpointInvocationSkillTrace | null;
   blocking_sensitive_access_entries: SensitiveAccessTimelineEntry[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
   cache: PublishedEndpointInvocationCacheReference;
@@ -244,6 +407,107 @@ export type PublishedEndpointCacheInventoryItem = {
 export type PublishedEndpointCacheInventoryResponse = {
   summary: PublishedEndpointCacheInventorySummary;
   items: PublishedEndpointCacheInventoryItem[];
+};
+
+export type WorkflowPublishedEndpointIssue = {
+  category: "unsupported_auth_mode";
+  message: string;
+  field?: string | null;
+  remediation?: string | null;
+  blocks_lifecycle_publish: boolean;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthCleanupSkipReason =
+  | "binding_not_found"
+  | "binding_not_legacy_auth"
+  | "binding_not_draft"
+  | "binding_already_offline";
+
+export type WorkflowPublishedEndpointLegacyAuthCleanupSkipItem = {
+  binding_id: string;
+  endpoint_id?: string | null;
+  endpoint_name?: string | null;
+  workflow_version?: string | null;
+  lifecycle_status?: "draft" | "published" | "offline" | null;
+  reason: WorkflowPublishedEndpointLegacyAuthCleanupSkipReason;
+  detail: string;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthCleanupResult = {
+  requested_count: number;
+  updated_count: number;
+  skipped_count: number;
+  updated_binding_ids: string[];
+  skipped_items: WorkflowPublishedEndpointLegacyAuthCleanupSkipItem[];
+};
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceChecklistKey =
+  | "draft_cleanup"
+  | "published_follow_up"
+  | "offline_inventory";
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceChecklistTone =
+  | "ready"
+  | "manual"
+  | "inventory";
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem = {
+  workflow_id: string;
+  workflow_name: string;
+  binding_id: string;
+  endpoint_id: string;
+  endpoint_name: string;
+  workflow_version: string;
+  lifecycle_status: "draft" | "published" | "offline";
+  auth_mode: string;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceChecklistItem = {
+  key: WorkflowPublishedEndpointLegacyAuthGovernanceChecklistKey;
+  title: string;
+  tone: WorkflowPublishedEndpointLegacyAuthGovernanceChecklistTone;
+  tone_label: string;
+  count: number;
+  detail: string;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceWorkflowItem = {
+  workflow_id: string;
+  workflow_name: string;
+  binding_count: number;
+  draft_candidate_count: number;
+  published_blocker_count: number;
+  offline_inventory_count: number;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceSummary = {
+  draft_candidate_count: number;
+  published_blocker_count: number;
+  offline_inventory_count: number;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceBuckets = {
+  draft_candidates: WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem[];
+  published_blockers: WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem[];
+  offline_inventory: WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem[];
+};
+
+export type WorkflowPublishedEndpointLegacyAuthModeContract = {
+  supported_auth_modes: string[];
+  retired_legacy_auth_modes: string[];
+  summary: string;
+  follow_up: string;
+};
+
+export type WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot = {
+  generated_at: string;
+  workflow_count: number;
+  binding_count: number;
+  auth_mode_contract?: WorkflowPublishedEndpointLegacyAuthModeContract;
+  summary: WorkflowPublishedEndpointLegacyAuthGovernanceSummary;
+  checklist: WorkflowPublishedEndpointLegacyAuthGovernanceChecklistItem[];
+  workflows: WorkflowPublishedEndpointLegacyAuthGovernanceWorkflowItem[];
+  buckets: WorkflowPublishedEndpointLegacyAuthGovernanceBuckets;
 };
 
 export type PublishedEndpointApiKeyItem = {
@@ -297,4 +561,5 @@ export type WorkflowPublishedEndpointItem = {
   updated_at: string;
   activity?: PublishedEndpointInvocationSummary | null;
   cache_inventory?: PublishedEndpointCacheInventorySummary | null;
+  issues?: WorkflowPublishedEndpointIssue[];
 };

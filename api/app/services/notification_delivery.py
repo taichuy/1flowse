@@ -402,6 +402,18 @@ class NotificationDeliveryService:
         ):
             return context
 
+        if (
+            context.approval_ticket.status != "pending"
+            or context.approval_ticket.waiting_status != "waiting"
+        ):
+            context.notification.status = "failed"
+            context.notification.delivered_at = None
+            context.notification.error = (
+                "Approval ticket is no longer waiting; notification delivery skipped."
+            )
+            db.flush()
+            return context
+
         adapter = self._adapters.get(context.notification.channel)
         if adapter is None:
             outcome = NotificationDeliveryOutcome(

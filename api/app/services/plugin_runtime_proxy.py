@@ -7,6 +7,7 @@ import httpx
 
 from app.services.plugin_execution_contract import (
     build_execution_contract,
+    build_sandbox_tool_execution_contract,
     normalize_contract_bound_request,
 )
 from app.services.plugin_execution_dispatch import PluginExecutionDispatchPlanner
@@ -20,7 +21,11 @@ from app.services.plugin_runtime_types import (
     PluginInvocationError,
     PluginToolDefinition,
 )
-from app.services.sandbox_backends import SandboxBackendClient, get_sandbox_backend_client
+from app.services.sandbox_backends import (
+    SandboxBackendClient,
+    SandboxToolExecutionRequest,
+    get_sandbox_backend_client,
+)
 
 
 def default_plugin_client_factory(timeout_ms: int) -> httpx.Client:
@@ -38,9 +43,10 @@ class PluginCallProxy:
     ) -> None:
         self._registry = registry
         self._client_factory = client_factory or default_plugin_client_factory
+        self._sandbox_backend_client = sandbox_backend_client or get_sandbox_backend_client()
         self._execution_dispatch_planner = PluginExecutionDispatchPlanner(
             registry,
-            sandbox_backend_client=sandbox_backend_client or get_sandbox_backend_client(),
+            sandbox_backend_client=self._sandbox_backend_client,
         )
 
     def invoke(self, request: PluginCallRequest) -> PluginCallResponse:
@@ -55,7 +61,7 @@ class PluginCallProxy:
             )
 
         if request.ecosystem == "native":
-            return self._invoke_native_tool(request)
+            return self._invoke_native_tool(tool, request)
 
         adapter = self._registry.resolve_adapter(
             ecosystem=request.ecosystem,
@@ -74,10 +80,21 @@ class PluginCallProxy:
             adapter=adapter,
         )
 
-    def _invoke_native_tool(self, request: PluginCallRequest) -> PluginCallResponse:
+    def _invoke_native_tool(
+        self,
+        tool: PluginToolDefinition,
+        request: PluginCallRequest,
+    ) -> PluginCallResponse:
         execution_dispatch = self.describe_execution_dispatch(request)
         if execution_dispatch.blocked_reason:
             raise PluginInvocationError(execution_dispatch.blocked_reason)
+
+        if execution_dispatch.effective_execution_class in {"sandbox", "microvm"}:
+            return self._invoke_native_tool_via_sandbox(
+                tool=tool,
+                request=request,
+                execution_dispatch=execution_dispatch,
+            )
 
         invoker = self._registry.get_native_invoker(request.tool_id)
         if invoker is None:
@@ -134,11 +151,23 @@ class PluginCallProxy:
             "adapterId": adapter.id,
             "inputs": normalized_inputs,
             "credentials": normalized_credentials,
-            "timeout": request.timeout_ms,
+            "timeout": (
+                execution_dispatch.requested_execution_timeout_ms or request.timeout_ms
+            ),
             "traceId": request.trace_id,
             "execution": execution_dispatch.effective_execution,
             "executionContract": execution_contract,
         }
+
+        if execution_dispatch.effective_execution_class in {"sandbox", "microvm"}:
+            return self._invoke_adapter_tool_via_sandbox(
+                adapter=adapter,
+                request=request,
+                execution_dispatch=execution_dispatch,
+                normalized_inputs=normalized_inputs,
+                normalized_credentials=normalized_credentials,
+                execution_contract=execution_contract,
+            )
 
         with self._client_factory(request.timeout_ms) as client:
             response = client.post(
@@ -169,7 +198,229 @@ class PluginCallProxy:
             duration_ms=int(
                 body.get("durationMs") or int((time.perf_counter() - started_at) * 1000)
             ),
+            meta=self._build_adapter_response_meta(body),
         )
+
+    def _invoke_adapter_tool_via_sandbox(
+        self,
+        *,
+        adapter: CompatibilityAdapterRegistration,
+        request: PluginCallRequest,
+        execution_dispatch: PluginExecutionDispatchPlan,
+        normalized_inputs: dict,
+        normalized_credentials: dict,
+        execution_contract: dict,
+    ) -> PluginCallResponse:
+        started_at = time.perf_counter()
+        try:
+            sandbox_response = self._sandbox_backend_client.execute_tool(
+                SandboxToolExecutionRequest(
+                    execution_class=execution_dispatch.effective_execution_class,
+                    tool_id=request.tool_id,
+                    ecosystem=request.ecosystem,
+                    inputs=normalized_inputs,
+                    credentials=normalized_credentials,
+                    timeout_ms=(
+                        execution_dispatch.requested_execution_timeout_ms or request.timeout_ms
+                    ),
+                    trace_id=request.trace_id,
+                    execution=execution_dispatch.effective_execution,
+                    execution_contract=execution_contract,
+                    runner_kind="compat-adapter",
+                    adapter_id=adapter.id,
+                    adapter_endpoint=adapter.endpoint,
+                    profile=execution_dispatch.requested_execution_profile,
+                    dependency_mode=execution_dispatch.requested_dependency_mode,
+                    builtin_package_set=execution_dispatch.requested_builtin_package_set,
+                    dependency_ref=execution_dispatch.requested_dependency_ref,
+                    network_policy=execution_dispatch.requested_network_policy,
+                    filesystem_policy=execution_dispatch.requested_filesystem_policy,
+                    backend_extensions=execution_dispatch.requested_backend_extensions,
+                )
+            )
+        except RuntimeError as exc:
+            raise PluginInvocationError(str(exc)) from exc
+
+        return self._build_sandbox_tool_response(
+            sandbox_response=sandbox_response,
+            started_at=started_at,
+        )
+
+    def _invoke_native_tool_via_sandbox(
+        self,
+        *,
+        tool: PluginToolDefinition,
+        request: PluginCallRequest,
+        execution_dispatch: PluginExecutionDispatchPlan,
+    ) -> PluginCallResponse:
+        started_at = time.perf_counter()
+        try:
+            sandbox_response = self._sandbox_backend_client.execute_tool(
+                SandboxToolExecutionRequest(
+                    execution_class=execution_dispatch.effective_execution_class,
+                    tool_id=request.tool_id,
+                    ecosystem=request.ecosystem,
+                    inputs=request.inputs,
+                    credentials=request.credentials,
+                    timeout_ms=(
+                        execution_dispatch.requested_execution_timeout_ms or request.timeout_ms
+                    ),
+                    trace_id=request.trace_id,
+                    execution=execution_dispatch.effective_execution,
+                    execution_contract=build_sandbox_tool_execution_contract(tool),
+                    runner_kind="native-tool",
+                    profile=execution_dispatch.requested_execution_profile,
+                    dependency_mode=execution_dispatch.requested_dependency_mode,
+                    builtin_package_set=execution_dispatch.requested_builtin_package_set,
+                    dependency_ref=execution_dispatch.requested_dependency_ref,
+                    network_policy=execution_dispatch.requested_network_policy,
+                    filesystem_policy=execution_dispatch.requested_filesystem_policy,
+                    backend_extensions=execution_dispatch.requested_backend_extensions,
+                )
+            )
+        except RuntimeError as exc:
+            raise PluginInvocationError(str(exc)) from exc
+
+        return self._build_sandbox_tool_response(
+            sandbox_response=sandbox_response,
+            started_at=started_at,
+        )
+
+    @staticmethod
+    def _build_sandbox_tool_response(
+        *,
+        sandbox_response,
+        started_at: float,
+    ) -> PluginCallResponse:
+
+        body = sandbox_response.result
+        if not isinstance(body, dict):
+            raise PluginInvocationError(
+                "Sandbox-backed tool execution returned a non-object payload."
+            )
+        status = str(body.get("status") or "error")
+        if status != "success":
+            raise PluginInvocationError(
+                str(body.get("error") or "Sandbox-backed tool execution failed.")
+            )
+
+        if "output" in body:
+            output = body.get("output")
+        elif isinstance(body.get("structured"), dict):
+            output = body.get("structured")
+        else:
+            output = {}
+        if not isinstance(output, dict):
+            raise PluginInvocationError(
+                "Sandbox-backed tool execution returned a non-object output payload."
+            )
+
+        logs = list(body.get("logs") or [])
+        if sandbox_response.stdout.strip():
+            logs.append(sandbox_response.stdout)
+        if sandbox_response.stderr.strip():
+            logs.append(sandbox_response.stderr)
+
+        meta = dict(body.get("meta") or {})
+        request_meta = PluginCallProxy._normalize_request_meta(
+            body.get("requestMeta")
+            or body.get("request_meta")
+            or meta.get("request_meta")
+            or meta.get("requestMeta")
+        )
+        if request_meta is not None:
+            meta["request_meta"] = request_meta
+            meta.pop("requestMeta", None)
+        meta.setdefault("sandbox_backend_id", sandbox_response.backend_id)
+        meta.setdefault("sandbox_backend_executor_ref", sandbox_response.executor_ref)
+        meta.setdefault(
+            "effective_execution_class",
+            sandbox_response.effective_execution_class,
+        )
+        artifact_refs = PluginCallProxy._normalize_artifact_refs(
+            body.get("artifact_refs") or body.get("artifactRefs")
+        )
+        if artifact_refs:
+            meta.setdefault("artifact_refs", artifact_refs)
+        runner_trace = body.get("execution_trace") or body.get("executionTrace")
+        if isinstance(runner_trace, dict):
+            meta.setdefault("sandbox_runner_trace", dict(runner_trace))
+
+        return PluginCallResponse(
+            status=status,
+            output=dict(output),
+            logs=logs,
+            duration_ms=int(
+                body.get("durationMs") or int((time.perf_counter() - started_at) * 1000)
+            ),
+            content_type=PluginCallProxy._normalize_optional_string(
+                body.get("content_type") or body.get("contentType")
+            ),
+            summary=PluginCallProxy._normalize_optional_string(body.get("summary")),
+            raw_ref=PluginCallProxy._normalize_optional_string(
+                body.get("raw_ref") or body.get("rawRef")
+            ),
+            meta=meta,
+        )
+
+    @staticmethod
+    def _normalize_optional_string(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @staticmethod
+    def _build_adapter_response_meta(body: object) -> dict[str, object]:
+        if not isinstance(body, dict):
+            return {}
+
+        meta = dict(body.get("meta") or {})
+        request_meta = PluginCallProxy._normalize_request_meta(
+            body.get("requestMeta")
+            or body.get("request_meta")
+            or meta.get("request_meta")
+            or meta.get("requestMeta")
+        )
+        if request_meta is not None:
+            meta["request_meta"] = request_meta
+            meta.pop("requestMeta", None)
+        return meta
+
+    @staticmethod
+    def _normalize_request_meta(value: object) -> dict[str, object] | None:
+        if not isinstance(value, dict):
+            return None
+
+        normalized: dict[str, object] = {}
+        trace_id = PluginCallProxy._normalize_optional_string(
+            value.get("trace_id") or value.get("traceId")
+        )
+        if trace_id is not None:
+            normalized["trace_id"] = trace_id
+
+        execution = value.get("execution")
+        if isinstance(execution, dict) and execution:
+            normalized["execution"] = dict(execution)
+
+        execution_contract = value.get("execution_contract") or value.get("executionContract")
+        if isinstance(execution_contract, dict) and execution_contract:
+            normalized["execution_contract"] = dict(execution_contract)
+
+        return normalized or None
+
+    @staticmethod
+    def _normalize_artifact_refs(value: object) -> list[str]:
+        normalized: list[str] = []
+        if not isinstance(value, list):
+            return normalized
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            candidate = item.strip()
+            if candidate:
+                normalized.append(candidate)
+        return normalized
 
 
 @lru_cache(maxsize=1)

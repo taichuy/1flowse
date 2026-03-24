@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 from app.models.run import NodeRun
 from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
-from app.services.runtime_execution_policy import ResolvedExecutionPolicy
+from app.services.runtime_branch_subprocess import HostBranchNodeExecutor
+from app.services.runtime_execution_policy import (
+    ResolvedExecutionPolicy,
+    resolve_sandbox_code_dependency_contract,
+)
 from app.services.runtime_sandbox_code import HostSandboxCodeExecutor
 from app.services.runtime_types import (
     AuthorizedContextRefs,
@@ -21,6 +25,11 @@ from app.services.sandbox_backends import (
     SandboxBackendClient,
     SandboxExecutionRequest,
     get_sandbox_backend_client,
+)
+from app.services.tool_execution_isolation import (
+    build_tool_execution_not_yet_isolated_reason,
+    describe_tool_execution_backend_selection,
+    is_strong_tool_execution_class,
 )
 
 
@@ -43,6 +52,8 @@ class NodeExecutionAvailability:
     available: bool
     blocking_reason: str | None = None
     executor_ref: str | None = None
+    sandbox_backend_id: str | None = None
+    sandbox_backend_executor_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,15 +81,77 @@ def _normalize_backend_extensions(value: object) -> dict[str, Any] | None:
     return dict(value)
 
 
-def _parse_sandbox_code_dispatch_config(config: dict[str, Any]) -> SandboxCodeDispatchConfig:
+def build_node_execution_signal_payload(
+    *,
+    node: dict[str, Any],
+    execution_policy: ResolvedExecutionPolicy,
+    effective_execution_class: str | None = None,
+    executor_ref: str | None = None,
+    sandbox_backend_id: str | None = None,
+    sandbox_backend_executor_ref: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "node_id": node.get("id"),
+        "node_type": node.get("type"),
+        "requested_execution_class": execution_policy.execution_class,
+        "execution_source": execution_policy.source,
+    }
+    if execution_policy.profile is not None:
+        payload["requested_execution_profile"] = execution_policy.profile
+    if execution_policy.timeout_ms is not None:
+        payload["requested_execution_timeout_ms"] = execution_policy.timeout_ms
+    if execution_policy.network_policy is not None:
+        payload["requested_network_policy"] = execution_policy.network_policy
+    if execution_policy.filesystem_policy is not None:
+        payload["requested_filesystem_policy"] = execution_policy.filesystem_policy
+
+    if (
+        str(node.get("type") or "") == "sandbox_code"
+        and execution_policy.execution_class in {"sandbox", "microvm"}
+    ):
+        dependency_contract = resolve_sandbox_code_dependency_contract(
+            config=dict(node.get("config") or {}),
+            execution_policy=execution_policy,
+        )
+        if dependency_contract.dependency_mode is not None:
+            payload["requested_dependency_mode"] = dependency_contract.dependency_mode
+        if dependency_contract.builtin_package_set is not None:
+            payload["requested_builtin_package_set"] = (
+                dependency_contract.builtin_package_set
+            )
+        if dependency_contract.dependency_ref is not None:
+            payload["requested_dependency_ref"] = dependency_contract.dependency_ref
+        if dependency_contract.backend_extensions is not None:
+            payload["requested_backend_extensions"] = dependency_contract.backend_extensions
+
+    if effective_execution_class is not None:
+        payload["effective_execution_class"] = effective_execution_class
+    if executor_ref is not None:
+        payload["executor_ref"] = executor_ref
+    if sandbox_backend_id is not None:
+        payload["sandbox_backend_id"] = sandbox_backend_id
+    if sandbox_backend_executor_ref is not None:
+        payload["sandbox_backend_executor_ref"] = sandbox_backend_executor_ref
+    return payload
+
+
+def _parse_sandbox_code_dispatch_config(
+    config: dict[str, Any],
+    *,
+    execution_policy: ResolvedExecutionPolicy,
+) -> SandboxCodeDispatchConfig:
     language = str(config.get("language") or "python").strip().lower() or "python"
     code = str(config.get("code") or "")
     if not code.strip():
         raise WorkflowExecutionError("sandbox_code nodes must define a non-empty config.code.")
 
-    dependency_mode = _normalize_optional_string(config.get("dependencyMode"))
-    builtin_package_set = _normalize_optional_string(config.get("builtinPackageSet"))
-    dependency_ref = _normalize_optional_string(config.get("dependencyRef"))
+    dependency_contract = resolve_sandbox_code_dependency_contract(
+        config=config,
+        execution_policy=execution_policy,
+    )
+    dependency_mode = dependency_contract.dependency_mode
+    builtin_package_set = dependency_contract.builtin_package_set
+    dependency_ref = dependency_contract.dependency_ref
     if builtin_package_set is not None and dependency_mode != "builtin":
         raise WorkflowExecutionError(
             "sandbox_code builtinPackageSet requires dependencyMode 'builtin'."
@@ -94,7 +167,9 @@ def _parse_sandbox_code_dispatch_config(config: dict[str, Any]) -> SandboxCodeDi
         dependency_mode=dependency_mode,
         builtin_package_set=builtin_package_set,
         dependency_ref=dependency_ref,
-        backend_extensions=_normalize_backend_extensions(config.get("backendExtensions")),
+        backend_extensions=_normalize_backend_extensions(
+            dependency_contract.backend_extensions
+        ),
     )
 
 
@@ -105,28 +180,26 @@ class InlineExecutionAdapter:
         return request.inline_executor()
 
 
-class InlineExecutionFallbackAdapter:
-    def __init__(self, execution_class: str) -> None:
-        self._execution_class = execution_class
-        self.adapter_ref = f"runtime:inline-fallback:{execution_class}"
-
-    def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
-        result = request.inline_executor()
-        result.events.insert(
-            0,
-            RuntimeEvent(
-                "node.execution.fallback",
-                {
-                    "node_id": request.node.get("id"),
-                    "node_type": request.node.get("type"),
-                    "requested_execution_class": self._execution_class,
-                    "effective_execution_class": "inline",
-                    "executor_ref": self.adapter_ref,
-                    "reason": "execution_class_not_implemented_for_node_type",
-                },
-            ),
+def _build_unsupported_node_execution_reason(*, node_type: str, execution_class: str) -> str:
+    if execution_class == "subprocess":
+        return (
+            f"Node type '{node_type}' does not implement requested execution class "
+            "'subprocess'. Explicit execution-class requests must stay blocked until "
+            "a compatible execution adapter is available."
         )
-        return result
+
+    if execution_class in {"sandbox", "microvm"}:
+        return (
+            f"Node type '{node_type}' does not implement requested strong-isolation "
+            f"execution class '{execution_class}'. Strong-isolation paths must fail "
+            "closed until a compatible execution adapter is available."
+        )
+
+    return (
+        f"Node type '{node_type}' does not implement requested execution class "
+        f"'{execution_class}'. Explicit execution-class requests must stay blocked until "
+        "a compatible execution adapter is available."
+    )
 
 
 class SandboxCodeExecutionAdapter:
@@ -151,13 +224,12 @@ class SandboxCodeExecutionAdapter:
         events = [
             RuntimeEvent(
                 "node.execution.dispatched",
-                {
-                    "node_id": request.node.get("id"),
-                    "node_type": request.node.get("type"),
-                    "requested_execution_class": request.execution_policy.execution_class,
-                    "effective_execution_class": "subprocess",
-                    "executor_ref": self.adapter_ref,
-                },
+                build_node_execution_signal_payload(
+                    node=request.node,
+                    execution_policy=request.execution_policy,
+                    effective_execution_class="subprocess",
+                    executor_ref=self.adapter_ref,
+                ),
             )
         ]
 
@@ -213,6 +285,42 @@ class SandboxCodeExecutionAdapter:
         return {"value": result}
 
 
+class BranchSubprocessExecutionAdapter:
+    adapter_ref = "runtime:host-subprocess-branch"
+
+    def __init__(self, *, branch_executor: HostBranchNodeExecutor) -> None:
+        self._branch_executor = branch_executor
+
+    def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
+        node_type = str(request.node.get("type") or "unknown")
+        if node_type not in {"condition", "router"}:
+            raise WorkflowExecutionError(
+                "Host subprocess branch adapter only supports condition/router nodes."
+            )
+        if request.execution_policy.execution_class != "subprocess":
+            raise WorkflowExecutionError(
+                "Host subprocess branch adapter only supports explicit subprocess execution."
+            )
+
+        events = [
+            RuntimeEvent(
+                "node.execution.dispatched",
+                build_node_execution_signal_payload(
+                    node=request.node,
+                    execution_policy=request.execution_policy,
+                    effective_execution_class="subprocess",
+                    executor_ref=self.adapter_ref,
+                ),
+            )
+        ]
+        execution = self._branch_executor.execute(
+            node=request.node,
+            node_input=request.node_input,
+            timeout_ms=request.execution_policy.timeout_ms,
+        )
+        return NodeExecutionResult(output=execution.result, events=events)
+
+
 class RemoteSandboxExecutionAdapter:
     def __init__(
         self,
@@ -227,7 +335,10 @@ class RemoteSandboxExecutionAdapter:
 
     def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
         config = dict(request.node.get("config") or {})
-        dispatch_config = _parse_sandbox_code_dispatch_config(config)
+        dispatch_config = _parse_sandbox_code_dispatch_config(
+            config,
+            execution_policy=request.execution_policy,
+        )
         language = dispatch_config.language
         dependency_mode = dispatch_config.dependency_mode
         builtin_package_set = dispatch_config.builtin_package_set
@@ -290,13 +401,14 @@ class RemoteSandboxExecutionAdapter:
             events=[
                 RuntimeEvent(
                     "node.execution.dispatched",
-                    {
-                        "node_id": request.node.get("id"),
-                        "node_type": request.node.get("type"),
-                        "requested_execution_class": request.execution_policy.execution_class,
-                        "effective_execution_class": execution.effective_execution_class,
-                        "executor_ref": execution.executor_ref,
-                    },
+                    build_node_execution_signal_payload(
+                        node=request.node,
+                        execution_policy=request.execution_policy,
+                        effective_execution_class=execution.effective_execution_class,
+                        executor_ref=execution.executor_ref,
+                        sandbox_backend_id=execution.backend_id,
+                        sandbox_backend_executor_ref=execution.executor_ref,
+                    ),
                 ),
                 RuntimeEvent(
                     "sandbox_code.completed",
@@ -333,11 +445,9 @@ class RuntimeExecutionAdapterRegistry:
     ) -> None:
         self._sandbox_backend_client = sandbox_backend_client or get_sandbox_backend_client()
         self._inline_adapter = InlineExecutionAdapter()
-        self._fallback_adapters = {
-            "subprocess": InlineExecutionFallbackAdapter("subprocess"),
-            "sandbox": InlineExecutionFallbackAdapter("sandbox"),
-            "microvm": InlineExecutionFallbackAdapter("microvm"),
-        }
+        self._branch_subprocess_adapter = BranchSubprocessExecutionAdapter(
+            branch_executor=HostBranchNodeExecutor()
+        )
         self._sandbox_code_adapter = SandboxCodeExecutionAdapter(
             sandbox_code_executor=sandbox_code_executor or HostSandboxCodeExecutor(),
             artifact_store=artifact_store,
@@ -355,7 +465,75 @@ class RuntimeExecutionAdapterRegistry:
         node: dict[str, Any],
         execution_policy: ResolvedExecutionPolicy,
     ) -> NodeExecutionAvailability:
-        if node.get("type") != "sandbox_code":
+        node_type = str(node.get("type") or "unknown")
+        if (
+            node_type in {"condition", "router"}
+            and execution_policy.execution_class == "subprocess"
+        ):
+            return NodeExecutionAvailability(
+                available=True,
+                executor_ref=self._branch_subprocess_adapter.adapter_ref,
+            )
+        if node_type != "sandbox_code":
+            if node_type == "tool" and is_strong_tool_execution_class(
+                execution_policy.execution_class
+            ):
+                tool_binding = dict((node.get("config") or {}).get("tool") or {})
+                tool_id = str(
+                    tool_binding.get("toolId") or node.get("id") or node.get("name") or "tool"
+                )
+                backend_selection = describe_tool_execution_backend_selection(
+                    sandbox_backend_client=self._sandbox_backend_client,
+                    execution_class=execution_policy.execution_class,
+                    profile=execution_policy.profile,
+                    dependency_mode=execution_policy.dependency_mode,
+                    builtin_package_set=execution_policy.builtin_package_set,
+                    network_policy=execution_policy.network_policy,
+                    filesystem_policy=execution_policy.filesystem_policy,
+                    backend_extensions=execution_policy.backend_extensions,
+                )
+                if backend_selection is not None and not backend_selection.available:
+                    return NodeExecutionAvailability(
+                        available=False,
+                        blocking_reason=backend_selection.reason,
+                    )
+                if (
+                    backend_selection is not None
+                    and backend_selection.available
+                    and backend_selection.capability.supports_tool_execution
+                ):
+                    return NodeExecutionAvailability(available=True)
+                return NodeExecutionAvailability(
+                    available=False,
+                    blocking_reason=(
+                        build_tool_execution_not_yet_isolated_reason(
+                            tool_id=tool_id,
+                            execution_class=execution_policy.execution_class,
+                            backend_selection=backend_selection,
+                        )
+                    ),
+                    sandbox_backend_id=(
+                        backend_selection.backend_id
+                        if backend_selection is not None and backend_selection.available
+                        else None
+                    ),
+                    sandbox_backend_executor_ref=(
+                        backend_selection.executor_ref
+                        if backend_selection is not None and backend_selection.available
+                        else None
+                    ),
+                )
+            if node_type == "tool":
+                return NodeExecutionAvailability(available=True)
+
+            if execution_policy.execution_class != "inline":
+                return NodeExecutionAvailability(
+                    available=False,
+                    blocking_reason=_build_unsupported_node_execution_reason(
+                        node_type=node_type,
+                        execution_class=execution_policy.execution_class,
+                    ),
+                )
             return NodeExecutionAvailability(available=True)
 
         if execution_policy.execution_class == "subprocess":
@@ -377,7 +555,10 @@ class RuntimeExecutionAdapterRegistry:
         if execution_policy.execution_class in {"sandbox", "microvm"}:
             config = dict(node.get("config") or {})
             try:
-                dispatch_config = _parse_sandbox_code_dispatch_config(config)
+                dispatch_config = _parse_sandbox_code_dispatch_config(
+                    config,
+                    execution_policy=execution_policy,
+                )
             except WorkflowExecutionError as exc:
                 return NodeExecutionAvailability(
                     available=False,
@@ -420,6 +601,7 @@ class RuntimeExecutionAdapterRegistry:
         )
 
     def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
+        node_type = str(request.node.get("type") or "unknown")
         if request.node.get("type") == "sandbox_code":
             if request.execution_policy.execution_class == "subprocess":
                 return self._sandbox_code_adapter.execute(request)
@@ -430,6 +612,21 @@ class RuntimeExecutionAdapterRegistry:
                 f"'{request.execution_policy.execution_class}' is unavailable "
                 "without a registered sandbox backend."
             )
+
+        if node_type == "tool":
+            return self._inline_adapter.execute(request)
+
+        if (
+            node_type in {"condition", "router"}
+            and request.execution_policy.execution_class == "subprocess"
+        ):
+            return self._branch_subprocess_adapter.execute(request)
+
         if request.execution_policy.execution_class == "inline":
             return self._inline_adapter.execute(request)
-        return self._fallback_adapters[request.execution_policy.execution_class].execute(request)
+        raise WorkflowExecutionError(
+            _build_unsupported_node_execution_reason(
+                node_type=node_type,
+                execution_class=request.execution_policy.execution_class,
+            )
+        )

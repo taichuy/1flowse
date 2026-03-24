@@ -14,6 +14,22 @@ from app.services.plugin_runtime_types import (
 )
 
 
+def _canonicalize_adapter_status(value: object) -> str:
+    if not isinstance(value, str):
+        return "degraded"
+
+    normalized = value.strip().lower()
+    if normalized in {"up", "ok", "healthy", "ready"}:
+        return "up"
+    if normalized in {"degraded", "warn", "warning", "partial"}:
+        return "degraded"
+    if normalized in {"disabled", "off"}:
+        return "disabled"
+    if normalized in {"down", "offline", "error", "failed", "unhealthy"}:
+        return "down"
+    return "degraded"
+
+
 class CompatibilityAdapterHealthChecker:
     def __init__(
         self,
@@ -49,12 +65,37 @@ class CompatibilityAdapterHealthChecker:
                 detail=str(exc),
             )
 
+        health_payload: dict[str, Any] = {}
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+
+        if isinstance(payload, dict):
+            health_payload = payload
+
+        detail = (
+            health_payload.get("detail")
+            if isinstance(health_payload.get("detail"), str)
+            else None
+        )
+        if not health_payload:
+            detail = "Adapter health endpoint returned a non-object JSON payload."
+        elif not isinstance(health_payload.get("status"), str):
+            detail = detail or "Adapter health payload did not include a supported status string."
+
         return CompatibilityAdapterHealth(
             id=adapter.id,
             ecosystem=adapter.ecosystem,
             endpoint=adapter.endpoint,
             enabled=True,
-            status="up",
+            status=_canonicalize_adapter_status(health_payload.get("status")),
+            detail=detail,
+            mode=(
+                health_payload.get("mode")
+                if isinstance(health_payload.get("mode"), str)
+                else None
+            ),
         )
 
     def probe_all(self, registry: PluginRegistry) -> list[CompatibilityAdapterHealth]:

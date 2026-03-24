@@ -1,20 +1,34 @@
-import Link from "next/link";
+import React from "react";
 
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import {
   WorkspaceStarterBulkGovernanceCard,
 } from "@/components/workspace-starter-library/bulk-governance-card";
-import type { WorkspaceStarterBulkAction } from "@/lib/get-workspace-starters";
 import type {
+  WorkspaceStarterBulkAction,
+  WorkspaceStarterBulkPreview,
   WorkspaceStarterBulkActionResult,
+  WorkspaceStarterSourceGovernanceScopeSummary,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import { buildWorkspaceStarterTemplateListSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import {
   getWorkflowBusinessTrack,
   WORKFLOW_BUSINESS_TRACKS
 } from "@/lib/workflow-business-tracks";
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
-import { formatTimestamp, type ArchiveFilter, type TrackFilter } from "./shared";
+import {
+  buildWorkspaceStarterBulkPreviewFocusTargets,
+  buildWorkspaceStarterBulkResultFocusTargets,
+  buildWorkspaceStarterSourceGovernancePrimaryFollowUp,
+  buildWorkspaceStarterSourceGovernanceFocusTargets,
+  buildWorkspaceStarterSourceGovernancePresenter,
+  formatTimestamp,
+  type ArchiveFilter,
+  type SourceGovernanceFilter,
+  type TrackFilter
+} from "./shared";
 
 type WorkspaceStarterTemplateListPanelProps = {
   templates: WorkspaceStarterTemplateItem[];
@@ -22,17 +36,27 @@ type WorkspaceStarterTemplateListPanelProps = {
   selectedTemplateId: string | null;
   activeTrack: TrackFilter;
   archiveFilter: ArchiveFilter;
+  sourceGovernanceKind: SourceGovernanceFilter;
+  needsFollowUp: boolean;
   searchQuery: string;
+  createWorkflowHref: string;
   activeTemplateCount: number;
   archivedTemplateCount: number;
   templateToolGovernanceById: Map<string, WorkflowDefinitionToolGovernance>;
-  bulkCandidateCounts: Record<WorkspaceStarterBulkAction, number>;
+  bulkPreview: WorkspaceStarterBulkPreview | null;
+  bulkPreviewNotice: string | null;
   isBulkMutating: boolean;
+  isLoadingBulkPreview: boolean;
+  isLoadingSourceGovernanceScope: boolean;
   lastBulkResult: WorkspaceStarterBulkActionResult | null;
+  sourceGovernanceScope: WorkspaceStarterSourceGovernanceScopeSummary | null;
   onTrackChange: (track: TrackFilter) => void;
   onArchiveFilterChange: (filter: ArchiveFilter) => void;
+  onSourceGovernanceKindChange: (filter: SourceGovernanceFilter) => void;
+  onNeedsFollowUpChange: (value: boolean) => void;
   onSearchQueryChange: (value: string) => void;
   onSelectTemplate: (templateId: string) => void;
+  onFocusTemplate: (templateId: string) => void;
   onBulkAction: (action: WorkspaceStarterBulkAction) => void;
 };
 
@@ -42,19 +66,54 @@ export function WorkspaceStarterTemplateListPanel({
   selectedTemplateId,
   activeTrack,
   archiveFilter,
+  sourceGovernanceKind,
+  needsFollowUp,
   searchQuery,
+  createWorkflowHref,
   activeTemplateCount,
   archivedTemplateCount,
   templateToolGovernanceById,
-  bulkCandidateCounts,
+  bulkPreview,
+  bulkPreviewNotice,
   isBulkMutating,
+  isLoadingBulkPreview,
+  isLoadingSourceGovernanceScope,
   lastBulkResult,
+  sourceGovernanceScope,
   onTrackChange,
   onArchiveFilterChange,
+  onSourceGovernanceKindChange,
+  onNeedsFollowUpChange,
   onSearchQueryChange,
   onSelectTemplate,
+  onFocusTemplate,
   onBulkAction
 }: WorkspaceStarterTemplateListPanelProps) {
+  const resultFocusTargets = lastBulkResult
+    ? buildWorkspaceStarterBulkResultFocusTargets(lastBulkResult, templates)
+    : [];
+  const previewFocusTargets = buildWorkspaceStarterBulkPreviewFocusTargets(
+    bulkPreview,
+    templates
+  );
+  const sourceGovernanceFocusTargets = buildWorkspaceStarterSourceGovernanceFocusTargets(
+    sourceGovernanceScope,
+    templates
+  );
+  const sourceGovernancePrimaryFollowUp = buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
+    sourceGovernanceScope,
+    templates,
+    createWorkflowHref,
+    workspaceStarterGovernanceQueryScope: {
+      activeTrack,
+      sourceGovernanceKind,
+      needsFollowUp,
+      searchQuery,
+      selectedTemplateId
+    }
+  });
+  const surfaceCopy = buildWorkspaceStarterTemplateListSurfaceCopy({ createWorkflowHref });
+
   return (
     <article className="diagnostic-panel">
       <div className="section-heading">
@@ -62,10 +121,7 @@ export function WorkspaceStarterTemplateListPanel({
           <p className="eyebrow">Library</p>
           <h2>Template list</h2>
         </div>
-        <p className="section-copy">
-          先按主业务线和关键字收敛范围，再进入具体模板详情，避免 workspace starter
-          library 只停留在“知道它存在”。
-        </p>
+        <p className="section-copy">{surfaceCopy.sectionDescription}</p>
       </div>
 
       <div className="starter-track-bar" role="tablist" aria-label="Workspace starter tracks">
@@ -129,6 +185,34 @@ export function WorkspaceStarterTemplateListPanel({
           ))}
         </div>
 
+        <div className="binding-field">
+          <span className="binding-label">Source governance</span>
+          <div className="starter-tag-row" role="tablist" aria-label="Workspace starter source governance">
+            {[
+              { id: "all" as const, label: "全部治理状态" },
+              { id: "drifted" as const, label: "来源漂移" },
+              { id: "missing_source" as const, label: "来源缺失" },
+              { id: "no_source" as const, label: "无来源" },
+              { id: "synced" as const, label: "已对齐" }
+            ].map((item) => (
+              <button
+                key={item.id}
+                className={`event-chip event-chip-button ${
+                  sourceGovernanceKind === item.id ? "active" : ""
+                }`}
+                type="button"
+                aria-pressed={sourceGovernanceKind === item.id}
+                onClick={() => onSourceGovernanceKindChange(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <p className="binding-meta">
+            {surfaceCopy.sourceGovernanceMeta}
+          </p>
+        </div>
+
         <label className="binding-field">
           <span className="binding-label">Search templates</span>
           <input
@@ -139,29 +223,60 @@ export function WorkspaceStarterTemplateListPanel({
           />
         </label>
 
+        <div className="binding-field">
+          <span className="binding-label">Follow-up queue</span>
+          <div className="starter-tag-row">
+            <button
+              className={`event-chip event-chip-button ${needsFollowUp ? "active" : ""}`}
+              type="button"
+              aria-pressed={needsFollowUp}
+              onClick={() => onNeedsFollowUpChange(!needsFollowUp)}
+            >
+              {surfaceCopy.followUpQueueLabel}
+            </button>
+          </div>
+          <p className="binding-meta">
+            {surfaceCopy.followUpQueueMeta}
+          </p>
+        </div>
+
         <WorkspaceStarterBulkGovernanceCard
           inScopeCount={filteredTemplates.length}
-          candidateCounts={bulkCandidateCounts}
+          sourceGovernanceScope={sourceGovernanceScope}
+          sourceGovernancePrimaryFollowUp={sourceGovernancePrimaryFollowUp}
+          sourceGovernanceFocusTargets={sourceGovernanceFocusTargets}
+          preview={bulkPreview}
+          previewNotice={bulkPreviewNotice}
           isMutating={isBulkMutating}
+          isLoadingPreview={isLoadingBulkPreview}
+          isLoadingSourceGovernanceScope={isLoadingSourceGovernanceScope}
           lastResult={lastBulkResult}
+          previewFocusTargets={previewFocusTargets}
+          resultFocusTargets={resultFocusTargets}
+          selectedTemplateId={selectedTemplateId}
+          workspaceStarterGovernanceQueryScope={{
+            activeTrack,
+            sourceGovernanceKind,
+            needsFollowUp,
+            searchQuery,
+            selectedTemplateId
+          }}
+          onSelectQueuedTemplate={onSelectTemplate}
+          onFocusTemplate={onFocusTemplate}
           onAction={onBulkAction}
         />
       </div>
 
       {filteredTemplates.length === 0 ? (
         <div className="empty-state-block">
-          <p className="empty-state">
-            当前筛选条件下还没有 workspace starter。可以先回到创建页新建 workflow，
-            再从 editor 保存一个模板进入治理库。
-          </p>
-          <Link className="inline-link" href="/workflows/new">
-            去创建第一个 starter
-          </Link>
+          <p className="empty-state">{surfaceCopy.emptyStateDescription}</p>
+          <WorkbenchEntryLinks {...surfaceCopy.emptyStateLinks} />
         </div>
       ) : (
         <div className="starter-grid">
           {filteredTemplates.map((template) => {
             const toolGovernance = templateToolGovernanceById.get(template.id);
+            const sourceGovernance = buildWorkspaceStarterSourceGovernancePresenter(template);
 
             return (
               <button
@@ -176,6 +291,13 @@ export function WorkspaceStarterTemplateListPanel({
                     <span className="health-pill">
                       {getWorkflowBusinessTrack(template.business_track).priority}
                     </span>
+                    <span className="health-pill">{sourceGovernance.statusLabel}</span>
+                    {sourceGovernance.actionStatusLabel ? (
+                      <span className="event-chip">{sourceGovernance.actionStatusLabel}</span>
+                    ) : null}
+                    {sourceGovernance.sourceVersion ? (
+                      <span className="event-chip">source {sourceGovernance.sourceVersion}</span>
+                    ) : null}
                     {toolGovernance && toolGovernance.strongIsolationToolCount > 0 ? (
                       <span className="event-chip">strong isolation</span>
                     ) : null}
@@ -190,6 +312,12 @@ export function WorkspaceStarterTemplateListPanel({
                 <p className="starter-focus-copy">
                   {template.workflow_focus || "暂未填写 workflow focus。"}
                 </p>
+                <p className="binding-meta">
+                  <strong>Source:</strong> {sourceGovernance.summary}
+                </p>
+                {sourceGovernance.followUp && sourceGovernance.needsAttention ? (
+                  <p className="binding-meta">{sourceGovernance.followUp}</p>
+                ) : null}
                 <div className="starter-meta-row">
                   <span>{template.definition.nodes?.length ?? 0} nodes</span>
                   <span>{toolGovernance?.governedToolCount ?? 0} governed tools</span>

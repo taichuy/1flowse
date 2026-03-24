@@ -1,17 +1,25 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import {
-  fetchCallbackBlockerSnapshot,
-  formatCallbackBlockerDeltaSummary
-} from "@/lib/callback-blocker-follow-up";
-import { formatCleanupResultMessage } from "@/lib/operator-action-result-presenters";
+  formatCleanupResultMessage,
+  formatOperatorOutcomeExplanationMessage
+} from "@/lib/operator-action-result-presenters";
+import {
+  buildActionCallbackBlockerDeltaSummary,
+  fetchScopedCallbackBlockerSnapshot
+} from "./callback-blocker-action-summary";
 
-import { fetchRunSnapshot } from "./run-snapshot";
+import { revalidateOperatorFollowUpPaths } from "./operator-follow-up-revalidation";
+import {
+  resolveCanonicalOperatorRunSnapshot,
+  normalizeOperatorRunFollowUp,
+  type OperatorRunFollowUpBody,
+  type OperatorRunSnapshotBody
+} from "./run-snapshot";
+import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
 
-export type CleanupRunCallbackTicketsState = {
+export type CleanupRunCallbackTicketsState = OperatorInlineActionResultState & {
   status: "idle" | "success" | "error";
   message: string;
   scopeKey: string;
@@ -23,17 +31,16 @@ type CleanupRunCallbackTicketsResponseBody = {
   scheduled_resume_count: number;
   terminated_count: number;
   run_ids: string[];
+  outcome_explanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+  callback_blocker_delta?: {
+    summary?: string | null;
+  } | null;
+  run_snapshot?: OperatorRunSnapshotBody | null;
+  run_follow_up?: OperatorRunFollowUpBody | null;
 };
-
-function revalidateCallbackPaths(runIds: Array<string | null | undefined>) {
-  revalidatePath("/");
-  revalidatePath("/sensitive-access");
-
-  const uniqueRunIds = [...new Set(runIds.map((item) => item?.trim()).filter(Boolean))];
-  for (const runId of uniqueRunIds) {
-    revalidatePath(`/runs/${runId}`);
-  }
-}
 
 export async function cleanupRunCallbackTickets(
   _: CleanupRunCallbackTicketsState,
@@ -52,9 +59,9 @@ export async function cleanupRunCallbackTickets(
   }
 
   try {
-    const beforeBlockers = await fetchCallbackBlockerSnapshot({
+    const beforeBlockers = await fetchScopedCallbackBlockerSnapshot({
       runId,
-      nodeRunId: nodeRunId || null
+      nodeRunId
     });
     const response = await fetch(`${getApiBaseUrl()}/api/runs/callback-tickets/cleanup`, {
       method: "POST",
@@ -82,31 +89,51 @@ export async function cleanupRunCallbackTickets(
       };
     }
 
-    revalidateCallbackPaths(body?.run_ids?.length ? body.run_ids : [runId]);
-
     const expiredCount = body?.expired_count ?? 0;
     const scheduledResumeCount = body?.scheduled_resume_count ?? 0;
     const terminatedCount = body?.terminated_count ?? 0;
     const matchedCount = body?.matched_count ?? 0;
-    const runSnapshot = await fetchRunSnapshot(runId);
-    const afterBlockers = await fetchCallbackBlockerSnapshot({
+    const runSnapshot = resolveCanonicalOperatorRunSnapshot({
       runId,
-      nodeRunId: nodeRunId || null
+      runSnapshot: body?.run_snapshot,
+      runFollowUp: body?.run_follow_up
+    });
+    revalidateOperatorFollowUpPaths({
+      runIds: body?.run_ids?.length ? body.run_ids : [runId],
+      workflowIds: [runSnapshot?.workflowId]
+    });
+    const afterBlockers = await fetchScopedCallbackBlockerSnapshot({
+      runId,
+      nodeRunId
+    });
+    const blockerDeltaSummary = buildActionCallbackBlockerDeltaSummary({
+      backendSummary: body?.callback_blocker_delta?.summary,
+      before: beforeBlockers,
+      after: afterBlockers
     });
 
     return {
       status: "success",
-      message: formatCleanupResultMessage({
-        matchedCount,
-        expiredCount,
-        scheduledResumeCount,
-        terminatedCount,
-        blockerDeltaSummary: formatCallbackBlockerDeltaSummary({
-          before: beforeBlockers,
-          after: afterBlockers
-        }),
-        runSnapshot
+      message: formatOperatorOutcomeExplanationMessage({
+        explanation: body?.outcome_explanation,
+        blockerDeltaSummary,
+        runFollowUpExplanation: body?.run_follow_up?.explanation,
+        runSnapshot,
+        fallback: formatCleanupResultMessage({
+          matchedCount,
+          expiredCount,
+          scheduledResumeCount,
+          terminatedCount,
+          blockerDeltaSummary,
+          runFollowUpExplanation: body?.run_follow_up?.explanation,
+          runSnapshot
+        })
       }),
+      outcomeExplanation: body?.outcome_explanation ?? null,
+      runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
+      blockerDeltaSummary,
+      runSnapshot,
       scopeKey
     };
   } catch {

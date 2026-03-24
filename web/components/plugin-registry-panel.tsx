@@ -1,3 +1,5 @@
+import React from "react";
+
 import { syncAdapterTools } from "@/app/actions/workflow";
 import { AdapterSyncForm } from "@/components/adapter-sync-form";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
@@ -5,6 +7,7 @@ import type {
   PluginAdapterRegistryItem,
   PluginToolRegistryItem
 } from "@/lib/get-plugin-registry";
+import { describePluginAdapterHealth } from "@/lib/plugin-adapter-presenters";
 import { compareToolsByGovernance } from "@/lib/tool-governance";
 
 type PluginRegistryPanelProps = {
@@ -47,11 +50,11 @@ export function PluginRegistryPanel({
                 </div>
                 <p className="adapter-endpoint">{adapter.endpoint}</p>
                 <p className="adapter-copy">
-                  {adapter.detail ??
-                    "目录同步会调用 adapter 的 /tools，并把返回结果写入 API 持久化目录。"}
+                  {describePluginAdapterHealth(adapter)}
                 </p>
                 <div className="adapter-meta-row">
                   <span className="event-chip">{adapter.ecosystem}</span>
+                  {adapter.mode ? <span className="event-chip">mode={adapter.mode}</span> : null}
                   <span className="event-chip">
                     {adapter.enabled ? "enabled" : "disabled"}
                   </span>

@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
@@ -15,13 +19,23 @@ import type {
   WorkflowDetail,
   WorkflowListItem
 } from "@/lib/get-workflows";
-import type { WorkflowValidationFocusTarget } from "@/lib/workflow-validation-navigation";
+import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
+import { pickWorkflowValidationRemediationItem } from "@/lib/workflow-validation-remediation";
 import { getPaletteNodeCatalog, getPlannedNodeCatalog } from "@/lib/workflow-node-catalog";
 
 import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/workflow-editor-canvas";
 import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
-import { type WorkflowEditorMessageTone } from "@/components/workflow-editor-workbench/shared";
+import {
+  type WorkflowEditorMessageKind,
+  type WorkflowEditorMessageTone
+} from "@/components/workflow-editor-workbench/shared";
 import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
+import {
+  buildWorkflowPersistBlockerRecommendedNextStep,
+  summarizeWorkflowPersistBlockers
+} from "@/components/workflow-editor-workbench/persist-blockers";
 import {
   applyRunOverlayToNodes,
   WORKFLOW_EDITOR_NODE_TYPES
@@ -40,8 +54,16 @@ type WorkflowEditorWorkbenchProps = {
   toolSourceLanes: WorkflowLibrarySourceLane[];
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   recentRuns: WorkflowRunListItem[];
+  currentEditorHref?: string;
+  workflowLibraryHref?: string;
+  createWorkflowHref?: string;
+  workspaceStarterLibraryHref?: string;
+  hasScopedWorkspaceStarterFilters?: boolean;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 };
 
 export function WorkflowEditorWorkbench({
@@ -52,16 +74,33 @@ export function WorkflowEditorWorkbench({
   toolSourceLanes,
   tools,
   adapters,
+  callbackWaitingAutomation,
   sandboxReadiness,
-  recentRuns
+  sandboxBackends,
+  recentRuns,
+  currentEditorHref,
+  workflowLibraryHref,
+  createWorkflowHref,
+  workspaceStarterLibraryHref,
+  hasScopedWorkspaceStarterFilters = false,
+  workspaceStarterGovernanceQueryScope = null
 }: WorkflowEditorWorkbenchProps) {
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
   const plannedNodeLibrary = getPlannedNodeCatalog(nodeCatalog);
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<WorkflowEditorMessageTone>("idle");
-  const [serverValidationIssues, setServerValidationIssues] = useState<WorkflowDefinitionPreflightIssue[]>([]);
-  const [validationFocusTarget, setValidationFocusTarget] =
-    useState<WorkflowValidationFocusTarget | null>(null);
+  const [messageKind, setMessageKind] = useState<WorkflowEditorMessageKind>("default");
+  const persistedDefinitionSignature = useMemo(
+    () => JSON.stringify(workflow.definition),
+    [workflow.definition]
+  );
+  const [serverValidationIssues, setServerValidationIssues] = useState<WorkflowDefinitionPreflightIssue[]>(
+    workflow.definition_issues ?? []
+  );
+  const [serverValidationIssueSourceSignature, setServerValidationIssueSourceSignature] =
+    useState<string>(persistedDefinitionSignature);
+  const [validationFocusItem, setValidationFocusItem] =
+    useState<WorkflowValidationNavigatorItem | null>(null);
 
   const graph = useWorkflowEditorGraph({
     workflow,
@@ -69,6 +108,10 @@ export function WorkflowEditorWorkbench({
     setMessage,
     setMessageTone
   });
+  const currentDefinitionSignature = useMemo(
+    () => JSON.stringify(graph.currentDefinition),
+    [graph.currentDefinition]
+  );
   const runOverlay = useWorkflowRunOverlay({
     workflowId: workflow.id,
     recentRuns
@@ -81,8 +124,43 @@ export function WorkflowEditorWorkbench({
     tools,
     adapters,
     sandboxReadiness,
+    sandboxBackends,
     serverValidationIssues
   });
+  const sandboxReadinessPreflightHint = useMemo(
+    () => formatSandboxReadinessPreflightHint(sandboxReadiness),
+    [sandboxReadiness]
+  );
+  const executionPreflightMessage = useMemo(() => {
+    if (validation.toolExecutionValidationIssues.length > 0) {
+      return [
+        `保存前还有 ${validation.toolExecutionValidationIssues.length} 个 execution capability 问题。`,
+        sandboxReadinessPreflightHint,
+        "先对齐 tool binding、tool 节点 runtimePolicy / LLM Agent tool policy，以及 live sandbox readiness，再继续保存。"
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    return sandboxReadinessPreflightHint;
+  }, [sandboxReadinessPreflightHint, validation.toolExecutionValidationIssues.length]);
+  const preflightValidationItem = useMemo(
+    () => pickWorkflowValidationRemediationItem(validation.validationNavigatorItems),
+    [validation.validationNavigatorItems]
+  );
+  const persistBlockerSummary = useMemo(
+    () => summarizeWorkflowPersistBlockers(validation.persistBlockers),
+    [validation.persistBlockers]
+  );
+  const persistBlockerRecommendedNextStep = useMemo(
+    () =>
+      buildWorkflowPersistBlockerRecommendedNextStep(
+        validation.persistBlockers,
+        sandboxReadiness,
+        currentEditorHref
+      ),
+    [currentEditorHref, sandboxReadiness, validation.persistBlockers]
+  );
   const persistence = useWorkflowEditorPersistence({
     workflowId: workflow.id,
     fallbackWorkflowName: workflow.name,
@@ -90,15 +168,51 @@ export function WorkflowEditorWorkbench({
     workflowVersion: graph.workflowVersion,
     currentDefinition: graph.currentDefinition,
     persistBlockedMessage: validation.persistBlockedMessage,
+    validationNavigatorItems: validation.validationNavigatorItems,
+    sandboxReadiness,
     setPersistedWorkflowName: graph.setPersistedWorkflowName,
     setPersistedDefinition: graph.setPersistedDefinition,
     setWorkflowVersion: graph.setWorkflowVersion,
+    currentDefinitionSignature,
     setServerValidationIssues,
+    setServerValidationIssueSourceSignature,
     setMessage,
     setMessageTone,
+    setMessageKind,
     focusNode: graph.focusNode,
-    setValidationFocusTarget
+    setValidationFocusItem
   });
+
+  useEffect(() => {
+    if (messageKind !== "workspace_starter_saved") {
+      return;
+    }
+
+    if (messageTone === "success" && message?.startsWith("已保存 workspace starter：")) {
+      return;
+    }
+
+    setMessageKind("default");
+  }, [message, messageKind, messageTone]);
+
+  useEffect(() => {
+    setServerValidationIssues(workflow.definition_issues ?? []);
+    setServerValidationIssueSourceSignature(persistedDefinitionSignature);
+  }, [persistedDefinitionSignature, workflow.definition_issues]);
+
+  useEffect(() => {
+    if (serverValidationIssues.length === 0) {
+      return;
+    }
+    if (serverValidationIssueSourceSignature === currentDefinitionSignature) {
+      return;
+    }
+    setServerValidationIssues([]);
+  }, [
+    currentDefinitionSignature,
+    serverValidationIssueSourceSignature,
+    serverValidationIssues.length
+  ]);
 
   const displayedNodes = applyRunOverlayToNodes(
     graph.nodes,
@@ -127,17 +241,26 @@ export function WorkflowEditorWorkbench({
           unsupportedNodes={validation.unsupportedNodes}
           contractValidationIssuesCount={validation.contractValidationIssues.length}
           toolReferenceValidationIssuesCount={validation.toolReferenceValidationIssues.length}
+          nodeExecutionValidationIssuesCount={validation.nodeExecutionValidationIssues.length}
           toolExecutionValidationIssuesCount={validation.toolExecutionValidationIssues.length}
-          publishVersionValidationIssuesCount={validation.publishVersionValidationIssues.length}
+          publishDraftValidationIssuesCount={validation.publishDraftValidationIssues.length}
           persistBlockedMessage={validation.persistBlockedMessage || null}
+          persistBlockerSummary={persistBlockerSummary}
+          persistBlockers={validation.persistBlockers}
+          persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
           isSaving={persistence.isSaving}
           isSavingStarter={persistence.isSavingStarter}
+          workflowLibraryHref={workflowLibraryHref}
+          createWorkflowHref={createWorkflowHref}
+          workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+          hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
           onSave={persistence.handleSave}
           onSaveAsWorkspaceStarter={persistence.handleSaveAsWorkspaceStarter}
         />
 
         <section className="editor-workspace">
           <WorkflowEditorSidebar
+            currentHref={currentEditorHref}
             workflowId={workflow.id}
             workflowName={graph.workflowName}
             workflows={workflows}
@@ -148,13 +271,28 @@ export function WorkflowEditorWorkbench({
             unsupportedNodes={validation.unsupportedNodes}
             message={message}
             messageTone={messageTone}
+            messageKind={messageKind}
+            persistBlockerSummary={persistBlockerSummary}
+            persistBlockers={validation.persistBlockers}
+            persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
+            executionPreflightMessage={executionPreflightMessage}
+            toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
+            focusedValidationItem={validationFocusItem}
+            preflightValidationItem={preflightValidationItem}
             validationNavigatorItems={validation.validationNavigatorItems}
             runs={runOverlay.availableRuns}
             selectedRunId={runOverlay.selectedRunId}
             run={runOverlay.selectedRunDetail}
+            runSnapshot={runOverlay.selectedRunSnapshot}
             trace={runOverlay.selectedRunTrace}
             traceError={runOverlay.runOverlayError}
             selectedNodeId={graph.selectedNodeId}
+            callbackWaitingAutomation={callbackWaitingAutomation}
+            sandboxReadiness={sandboxReadiness}
+            workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
+            createWorkflowHref={createWorkflowHref}
+            workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+            hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
             isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
             isRefreshingRuns={runOverlay.isRefreshingRuns}
             onWorkflowNameChange={graph.setWorkflowName}
@@ -176,11 +314,13 @@ export function WorkflowEditorWorkbench({
 
           <aside className="editor-inspector">
             <WorkflowEditorInspector
+              currentHref={currentEditorHref}
               selectedNode={selectedNode}
               selectedEdge={selectedEdge}
               nodes={graph.nodes}
               edges={graph.edges}
               tools={tools}
+              adapters={adapters}
               nodeConfigText={graph.nodeConfigText}
               onNodeConfigTextChange={graph.setNodeConfigText}
               onApplyNodeConfigJson={graph.applyNodeConfigJson}
@@ -200,31 +340,43 @@ export function WorkflowEditorWorkbench({
               onUpdateSelectedEdge={graph.updateSelectedEdge}
               onDeleteSelectedEdge={graph.handleDeleteSelectedEdge}
               highlightedNodeSection={
-                validationFocusTarget?.scope === "node" &&
-                validationFocusTarget.nodeId === graph.selectedNodeId
-                  ? validationFocusTarget.section
+                validationFocusItem?.target.scope === "node" &&
+                validationFocusItem.target.nodeId === graph.selectedNodeId
+                  ? validationFocusItem.target.section
+                  : null
+              }
+              highlightedNodeFieldPath={
+                validationFocusItem?.target.scope === "node" &&
+                validationFocusItem.target.nodeId === graph.selectedNodeId
+                  ? validationFocusItem.target.fieldPath ?? null
                   : null
               }
               highlightedPublishEndpointIndex={
-                validationFocusTarget?.scope === "publish"
-                  ? validationFocusTarget.endpointIndex
+                validationFocusItem?.target.scope === "publish"
+                  ? validationFocusItem.target.endpointIndex
                   : null
               }
               highlightedPublishEndpointFieldPath={
-                validationFocusTarget?.scope === "publish"
-                  ? validationFocusTarget.fieldPath ?? null
+                validationFocusItem?.target.scope === "publish"
+                  ? validationFocusItem.target.fieldPath ?? null
                   : null
               }
               highlightedVariableIndex={
-                validationFocusTarget?.scope === "variables"
-                  ? validationFocusTarget.variableIndex
+                validationFocusItem?.target.scope === "variables"
+                  ? validationFocusItem.target.variableIndex
                   : null
               }
               highlightedVariableFieldPath={
-                validationFocusTarget?.scope === "variables"
-                  ? validationFocusTarget.fieldPath ?? null
+                validationFocusItem?.target.scope === "variables"
+                  ? validationFocusItem.target.fieldPath ?? null
                   : null
               }
+              focusedValidationItem={validationFocusItem}
+              persistBlockedMessage={validation.persistBlockedMessage || null}
+              persistBlockerSummary={persistBlockerSummary}
+              persistBlockers={validation.persistBlockers}
+              persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
+              sandboxReadiness={sandboxReadiness}
             />
           </aside>
         </section>

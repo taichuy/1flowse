@@ -24,9 +24,10 @@ description: 面向 7Flows `web/` 目录的前端代码审查技能。适用于 
 1. 先识别改动属于页面骨架、组件、数据获取，还是工作流编辑器相关实现。
 2. 如果涉及画布、节点、调试、发布、插件 UI、安全或变量传递，优先阅读：
    - `docs/product-design.md`
-   - `docs/open-source-commercial-strategy.md`
+   - `docs/open-source-positioning.md`
    - `docs/technical-design-supplement.md`
-   - `docs/dev/runtime-foundation.md`
+   - `docs/dev/team-conventions.md`
+   - `docs/.private/runtime-foundation.md`（如当前本地开发者已维护）
 3. 使用通用前端审查规则和 7Flows 专项规则共同审查。
 4. 输出时优先指出行为错误、架构偏离、交互误导和性能风险。
 

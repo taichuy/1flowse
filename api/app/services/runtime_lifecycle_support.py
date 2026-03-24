@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.models.run import NodeRun, Run, RunEvent
 from app.services.callback_waiting_lifecycle import (
     apply_callback_waiting_termination_policy,
+    build_callback_waiting_scheduled_resume,
     record_callback_ticket_canceled,
     record_callback_ticket_issued,
 )
@@ -135,12 +136,13 @@ class RuntimeLifecycleSupportMixin:
             db=db,
         )
         checkpoint_payload = dict(node_run.checkpoint_payload or {})
-        checkpoint_payload["scheduled_resume"] = {
-            "delay_seconds": scheduled_resume.delay_seconds,
-            "reason": scheduled_resume.reason,
-            "source": scheduled_resume.source,
-            "waiting_status": result.waiting_status,
-        }
+        checkpoint_payload["scheduled_resume"] = build_callback_waiting_scheduled_resume(
+            delay_seconds=scheduled_resume.delay_seconds,
+            reason=scheduled_resume.reason,
+            source=scheduled_resume.source,
+            waiting_status=result.waiting_status,
+            backoff_attempt=0,
+        )
         node_run.checkpoint_payload = checkpoint_payload
         events.append(
             self._build_event(

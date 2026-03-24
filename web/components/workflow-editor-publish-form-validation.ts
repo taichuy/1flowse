@@ -1,9 +1,11 @@
 import {
+  isSupportedPublishedEndpointAuthMode,
   normalizePublishedEndpointAlias,
   normalizePublishedEndpointPath,
   WORKFLOW_VERSION_PATTERN,
   type WorkflowPublishedEndpointDraft
 } from "./workflow-editor-publish-form-shared";
+import { buildLegacyPublishAuthModeValidationMessage } from "@/lib/legacy-publish-auth-contract";
 import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
 import { buildWorkflowPublishVersionValidationIssues } from "@/lib/workflow-publish-version-validation";
 
@@ -11,7 +13,10 @@ export type WorkflowEditorPublishValidationIssue = {
   key: string;
   endpointKey: string;
   endpointId: string;
+  category: "publish_draft" | "publish_version";
   message: string;
+  path: string;
+  field: string;
 };
 
 export function buildPublishedEndpointValidationIssues(
@@ -32,7 +37,10 @@ export function buildPublishedEndpointValidationIssues(
         key: `${entryKey}-workflow-version`,
         endpointKey,
         endpointId: endpoint.id,
-        message: `${endpointLabel} 的 workflowVersion 必须使用 major.minor.patch 语义版本格式。`
+        category: "publish_version",
+        message: `${endpointLabel} 的 workflowVersion 必须使用 major.minor.patch 语义版本格式。`,
+        path: `publish.${index}.workflowVersion`,
+        field: "workflowVersion"
       });
     }
 
@@ -52,9 +60,27 @@ export function buildPublishedEndpointValidationIssues(
           key: `${entryKey}-cache-vary-by`,
           endpointKey,
           endpointId: endpoint.id,
-          message: `${endpointLabel} 的 cache.varyBy 不能包含重复字段。`
+          category: "publish_draft",
+          message: `${endpointLabel} 的 cache.varyBy 不能包含重复字段。`,
+          path: `publish.${index}.cache.varyBy`,
+          field: "cache.varyBy"
         });
       }
+    }
+
+    if (!isSupportedPublishedEndpointAuthMode(endpoint.authMode)) {
+      issues.push({
+        key: `${entryKey}-auth-mode-${endpoint.authMode}`,
+        endpointKey,
+        endpointId: endpoint.id,
+        category: "publish_draft",
+        message: buildLegacyPublishAuthModeValidationMessage({
+          endpointLabel,
+          authMode: endpoint.authMode
+        }),
+        path: `publish.${index}.authMode`,
+        field: "authMode"
+      });
     }
 
     pushSchemaValidationIssue(
@@ -63,6 +89,8 @@ export function buildPublishedEndpointValidationIssues(
         key: `${entryKey}-input-schema`,
         endpointKey,
         endpointId: endpoint.id,
+        path: `publish.${index}.inputSchema`,
+        field: "inputSchema",
         errorPrefix: `Published endpoint '${endpoint.id}' inputSchema`
       },
       issues
@@ -74,6 +102,8 @@ export function buildPublishedEndpointValidationIssues(
           key: `${entryKey}-output-schema`,
           endpointKey,
           endpointId: endpoint.id,
+          path: `publish.${index}.outputSchema`,
+          field: "outputSchema",
           errorPrefix: `Published endpoint '${endpoint.id}' outputSchema`
         },
         issues
@@ -106,7 +136,10 @@ export function buildPublishedEndpointValidationIssues(
       key: issue.key,
       endpointKey: endpointIndex >= 0 ? String(endpointIndex) : issue.endpointId,
       endpointId: issue.endpointId,
-      message: issue.message
+      category: "publish_version",
+      message: issue.message,
+      path: issue.path,
+      field: issue.field
     });
   });
 
@@ -126,7 +159,10 @@ function readNormalizedAlias(
       key: `${endpoint.id}-alias-format-${issues.length}`,
       endpointKey,
       endpointId: endpoint.id,
-      message: `${endpointLabel} 的 endpoint alias 不合法：${readErrorMessage(error)}`
+      category: "publish_draft",
+      message: `${endpointLabel} 的 endpoint alias 不合法：${readErrorMessage(error)}`,
+      path: `${buildPublishEndpointPath(endpointKey)}.alias`,
+      field: "alias"
     });
     return undefined;
   }
@@ -146,7 +182,10 @@ function readNormalizedPath(
       key: `${endpoint.id}-path-format-${issues.length}`,
       endpointKey,
       endpointId: endpoint.id,
-      message: `${endpointLabel} 的 endpoint path 不合法：${readErrorMessage(error)}`
+      category: "publish_draft",
+      message: `${endpointLabel} 的 endpoint path 不合法：${readErrorMessage(error)}`,
+      path: `${buildPublishEndpointPath(endpointKey)}.path`,
+      field: "path"
     });
     return undefined;
   }
@@ -188,7 +227,10 @@ function pushDuplicateIssues(
       key: `${item.entryKey}-${field}-duplicate`,
       endpointKey: item.endpointKey,
       endpointId: item.endpointId,
-      message: `${item.endpointLabel} 的 ${label} “${value}” 与其他 publish endpoint 重复。`
+      category: "publish_draft",
+      message: `${item.endpointLabel} 的 ${label} “${value}” 与其他 publish endpoint 重复。`,
+      path: `${buildPublishEndpointPath(item.endpointKey)}.${field}`,
+      field
     });
   }
 }
@@ -199,6 +241,8 @@ function pushSchemaValidationIssue(
     key: string;
     endpointKey: string;
     endpointId: string;
+    path: string;
+    field: string;
     errorPrefix: string;
   },
   issues: WorkflowEditorPublishValidationIssue[]
@@ -210,9 +254,16 @@ function pushSchemaValidationIssue(
       key: issue.key,
       endpointKey: issue.endpointKey,
       endpointId: issue.endpointId,
-      message: readErrorMessage(error)
+      category: "publish_draft",
+      message: readErrorMessage(error),
+      path: issue.path,
+      field: issue.field
     });
   }
+}
+
+function buildPublishEndpointPath(endpointKey: string) {
+  return `publish.${endpointKey}`;
 }
 
 function readErrorMessage(error: unknown) {

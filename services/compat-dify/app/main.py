@@ -13,6 +13,7 @@ from app.invocation import InvocationValidationError, validate_invocation_reques
 from app.schemas import (
     AdapterHealthResponse,
     AdapterInvokeRequest,
+    AdapterInvokeRequestMeta,
     AdapterInvokeResponse,
     AdapterToolListResponse,
 )
@@ -38,11 +39,14 @@ def create_app() -> FastAPI:
 
     @application.get("/healthz", response_model=AdapterHealthResponse)
     def healthz() -> AdapterHealthResponse:
+        health_status, health_detail = _resolve_health_status(settings)
         return AdapterHealthResponse(
-            status=settings.health_status,
+            status=health_status,
             adapter_id=settings.adapter_id,
             ecosystem=settings.supported_ecosystem,
             mode=settings.invoke_mode,
+            detail=health_detail,
+            supported_execution_classes=["subprocess"],
         )
 
     def validate_adapter_header(x_sevenflows_adapter_id: str | None) -> None:
@@ -164,9 +168,35 @@ def create_app() -> FastAPI:
             output=output,
             logs=logs,
             durationMs=int((time.perf_counter() - started_at) * 1000),
+            requestMeta=AdapterInvokeRequestMeta(
+                toolId=payload.toolId,
+                adapterId=settings.adapter_id,
+                ecosystem=payload.ecosystem,
+                traceId=payload.traceId,
+                execution=dict(payload.execution),
+                executionContract=payload.executionContract.model_dump(),
+            ),
         )
 
     return application
 
 
 app = create_app()
+
+
+def _resolve_health_status(settings) -> tuple[str, str | None]:
+    issues: list[str] = []
+    if settings.invoke_mode == "proxy":
+        missing: list[str] = []
+        if not settings.plugin_daemon_url.strip():
+            missing.append("SEVENFLOWS_COMPAT_DIFY_PLUGIN_DAEMON_URL")
+        if not settings.plugin_daemon_api_key.strip():
+            missing.append("SEVENFLOWS_COMPAT_DIFY_PLUGIN_DAEMON_API_KEY")
+        if missing:
+            issues.append(f"Proxy mode requires {' and '.join(missing)}.")
+
+    status_value = settings.health_status
+    if issues and status_value == "up":
+        status_value = "degraded"
+    detail = " ".join(issues) if issues else None
+    return status_value, detail

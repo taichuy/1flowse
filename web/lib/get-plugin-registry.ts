@@ -11,6 +11,7 @@ export type PluginAdapterRegistryItem = {
   supported_execution_classes: string[];
   status: string;
   detail?: string | null;
+  mode?: string | null;
 };
 
 export type PluginToolRegistryItem = {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -27,32 +28,29 @@ class SensitiveAccessTimelineSnapshot:
     notification_status_counts: dict[str, int] | None = None
 
 
-def load_sensitive_access_timeline(
+def _empty_timeline_snapshot() -> SensitiveAccessTimelineSnapshot:
+    return SensitiveAccessTimelineSnapshot(
+        bundles=[],
+        by_node_run={},
+        decision_counts={},
+        approval_status_counts={},
+        notification_status_counts={},
+    )
+
+
+def _normalize_run_ids(run_ids: Sequence[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(str(run_id).strip() for run_id in run_ids if str(run_id).strip()))
+
+
+def _build_sensitive_access_timeline_snapshots(
     db: Session,
     *,
-    run_id: str,
-    scoped_to_node_runs: bool = True,
-) -> SensitiveAccessTimelineSnapshot:
-    statement = select(SensitiveAccessRequestRecord).where(
-        SensitiveAccessRequestRecord.run_id == run_id
-    )
-    if scoped_to_node_runs:
-        statement = statement.where(SensitiveAccessRequestRecord.node_run_id.is_not(None))
-
-    access_requests = db.scalars(
-        statement.order_by(
-            SensitiveAccessRequestRecord.created_at.asc(),
-            SensitiveAccessRequestRecord.id.asc(),
-        )
-    ).all()
+    access_requests: list[SensitiveAccessRequestRecord],
+    run_ids: Sequence[str],
+) -> dict[str, SensitiveAccessTimelineSnapshot]:
+    normalized_run_ids = _normalize_run_ids(run_ids)
     if not access_requests:
-        return SensitiveAccessTimelineSnapshot(
-            bundles=[],
-            by_node_run={},
-            decision_counts={},
-            approval_status_counts={},
-            notification_status_counts={},
-        )
+        return {run_id: _empty_timeline_snapshot() for run_id in normalized_run_ids}
 
     resource_ids = {request.resource_id for request in access_requests}
     resources = {
@@ -74,7 +72,6 @@ def load_sensitive_access_timeline(
         ticket.access_request_id: ticket for ticket in approval_tickets
     }
 
-    notification_status_counts: Counter[str] = Counter()
     notifications_by_ticket_id: dict[str, list[NotificationDispatchRecord]] = defaultdict(list)
     approval_ticket_ids = [ticket.id for ticket in approval_tickets]
     if approval_ticket_ids:
@@ -88,19 +85,22 @@ def load_sensitive_access_timeline(
         ).all()
         for notification in notifications:
             notifications_by_ticket_id[notification.approval_ticket_id].append(notification)
-            notification_status_counts[notification.status] += 1
 
-    decision_counts: Counter[str] = Counter()
-    approval_status_counts: Counter[str] = Counter()
-    bundles: list[SensitiveAccessRequestBundle] = []
-    by_node_run: dict[str, list[SensitiveAccessRequestBundle]] = defaultdict(list)
-    notification_count = 0
+    bundles_by_run: dict[str, list[SensitiveAccessRequestBundle]] = defaultdict(list)
+    by_node_run_by_run: dict[str, dict[str, list[SensitiveAccessRequestBundle]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    decision_counts_by_run: dict[str, Counter[str]] = defaultdict(Counter)
+    approval_status_counts_by_run: dict[str, Counter[str]] = defaultdict(Counter)
+    notification_status_counts_by_run: dict[str, Counter[str]] = defaultdict(Counter)
+    notification_count_by_run: Counter[str] = Counter()
 
     for access_request in access_requests:
         resource = resources.get(access_request.resource_id)
         if resource is None:
             continue
 
+        run_id = str(access_request.run_id)
         approval_ticket = approval_tickets_by_request_id.get(access_request.id)
         notifications = (
             notifications_by_ticket_id.get(approval_ticket.id, [])
@@ -113,25 +113,77 @@ def load_sensitive_access_timeline(
             approval_ticket=approval_ticket,
             notifications=notifications,
         )
-        bundles.append(bundle)
-
-        decision_counts[str(access_request.decision or "pending")] += 1
+        bundles_by_run[run_id].append(bundle)
+        decision_counts_by_run[run_id][str(access_request.decision or "pending")] += 1
         if approval_ticket is not None:
-            approval_status_counts[approval_ticket.status] += 1
-        notification_count += len(notifications)
+            approval_status_counts_by_run[run_id][approval_ticket.status] += 1
+        for notification in notifications:
+            notification_status_counts_by_run[run_id][notification.status] += 1
+        notification_count_by_run[run_id] += len(notifications)
 
         if access_request.node_run_id:
-            by_node_run[str(access_request.node_run_id)].append(bundle)
+            by_node_run_by_run[run_id][str(access_request.node_run_id)].append(bundle)
 
-    return SensitiveAccessTimelineSnapshot(
-        bundles=bundles,
-        by_node_run=dict(by_node_run),
-        request_count=len(bundles),
-        approval_ticket_count=sum(
-            1 for bundle in bundles if bundle.approval_ticket is not None
-        ),
-        notification_count=notification_count,
-        decision_counts=dict(sorted(decision_counts.items())),
-        approval_status_counts=dict(sorted(approval_status_counts.items())),
-        notification_status_counts=dict(sorted(notification_status_counts.items())),
+    return {
+        run_id: SensitiveAccessTimelineSnapshot(
+            bundles=bundles_by_run.get(run_id, []),
+            by_node_run=dict(by_node_run_by_run.get(run_id, {})),
+            request_count=len(bundles_by_run.get(run_id, [])),
+            approval_ticket_count=sum(
+                1
+                for bundle in bundles_by_run.get(run_id, [])
+                if bundle.approval_ticket is not None
+            ),
+            notification_count=notification_count_by_run.get(run_id, 0),
+            decision_counts=dict(sorted(decision_counts_by_run.get(run_id, Counter()).items())),
+            approval_status_counts=dict(
+                sorted(approval_status_counts_by_run.get(run_id, Counter()).items())
+            ),
+            notification_status_counts=dict(
+                sorted(notification_status_counts_by_run.get(run_id, Counter()).items())
+            ),
+        )
+        for run_id in normalized_run_ids
+    }
+
+
+def load_sensitive_access_timelines(
+    db: Session,
+    *,
+    run_ids: Sequence[str],
+    scoped_to_node_runs: bool = True,
+) -> dict[str, SensitiveAccessTimelineSnapshot]:
+    normalized_run_ids = _normalize_run_ids(run_ids)
+    if not normalized_run_ids:
+        return {}
+
+    statement = select(SensitiveAccessRequestRecord).where(
+        SensitiveAccessRequestRecord.run_id.in_(normalized_run_ids)
     )
+    if scoped_to_node_runs:
+        statement = statement.where(SensitiveAccessRequestRecord.node_run_id.is_not(None))
+
+    access_requests = db.scalars(
+        statement.order_by(
+            SensitiveAccessRequestRecord.created_at.asc(),
+            SensitiveAccessRequestRecord.id.asc(),
+        )
+    ).all()
+    return _build_sensitive_access_timeline_snapshots(
+        db,
+        access_requests=access_requests,
+        run_ids=normalized_run_ids,
+    )
+
+
+def load_sensitive_access_timeline(
+    db: Session,
+    *,
+    run_id: str,
+    scoped_to_node_runs: bool = True,
+) -> SensitiveAccessTimelineSnapshot:
+    return load_sensitive_access_timelines(
+        db,
+        run_ids=[run_id],
+        scoped_to_node_runs=scoped_to_node_runs,
+    ).get(run_id, _empty_timeline_snapshot())

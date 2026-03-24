@@ -1,4 +1,4 @@
-import Link from "next/link";
+import React from "react";
 
 import { RunDiagnosticsExecutionSections } from "@/components/run-diagnostics-execution-sections";
 import { RunDiagnosticsOverviewSections } from "@/components/run-diagnostics-panel/overview-sections";
@@ -10,18 +10,25 @@ import {
 } from "@/components/run-diagnostics-panel/shared";
 import { RunDiagnosticsTraceFiltersSection } from "@/components/run-diagnostics-panel/trace-filters-section";
 import { RunDiagnosticsTraceResultsSection } from "@/components/run-diagnostics-panel/trace-results-section";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { RunDetail } from "@/lib/get-run-detail";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 import type { RunEvidenceView, RunExecutionView } from "@/lib/get-run-views";
 import {
   DEFAULT_RUN_TRACE_LIMIT,
   type RunTrace,
   type RunTraceQuery
 } from "@/lib/get-run-trace";
+import { buildRunDiagnosticsHeroSurfaceCopy } from "@/lib/run-diagnostics-presenters";
 import {
   formatDuration,
   formatTimestamp
 } from "@/lib/runtime-presenters";
+import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 type RunDiagnosticsPanelProps = {
   run: RunDetail;
@@ -30,6 +37,11 @@ type RunDiagnosticsPanelProps = {
   traceQuery: RunTraceQuery;
   executionView: RunExecutionView | null;
   evidenceView: RunEvidenceView | null;
+  callbackWaitingAutomation: CallbackWaitingAutomationCheck;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowDetailHref?: string | null;
+  runLibraryHref?: string | null;
+  runDetailHref?: string | null;
 };
 
 export function RunDiagnosticsPanel({
@@ -38,7 +50,12 @@ export function RunDiagnosticsPanel({
   traceError,
   traceQuery,
   executionView,
-  evidenceView
+  evidenceView,
+  callbackWaitingAutomation,
+  sandboxReadiness = null,
+  workflowDetailHref = null,
+  runLibraryHref = null,
+  runDetailHref = null
 }: RunDiagnosticsPanelProps) {
   const eventTypes = run.event_type_counts;
   const activeTraceQuery = trace
@@ -61,19 +78,21 @@ export function RunDiagnosticsPanel({
     ])
   ).sort();
   const activeFilters = summarizeActiveFilters(activeTraceQuery);
-  const traceHref = buildPageTraceHref(run.id, activeTraceQuery);
+  const traceHref = buildPageTraceHref(run.id, activeTraceQuery, runDetailHref);
   const eventsApiHref = `${getApiBaseUrl()}/api/runs/${encodeURIComponent(run.id)}/events`;
+  const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
+    workflowId: run.workflow_id,
+    variant: "editor"
+  });
+  const heroSurfaceCopy = buildRunDiagnosticsHeroSurfaceCopy();
 
   return (
     <main className="shell">
       <section className="hero diagnostic-hero">
         <div className="hero-copy">
-          <p className="eyebrow">Run Diagnostics</p>
+          <p className="eyebrow">{heroSurfaceCopy.eyebrowLabel}</p>
           <h1>{run.workflow_id}</h1>
-          <p className="hero-text">
-            这页现在直接消费 `run trace`，可以按事件类型、节点、时间窗和
-            payload key 顺着 `run_events` 排障，同时保留导出与原始事件入口。
-          </p>
+          <p className="hero-text">{heroSurfaceCopy.description}</p>
           <div className="pill-row">
             <span className="pill">run {run.id}</span>
             <span className="pill">version {run.workflow_version}</span>
@@ -81,34 +100,46 @@ export function RunDiagnosticsPanel({
             <span className="pill">{run.event_count} events</span>
           </div>
           <div className="hero-actions">
-            <Link className="inline-link" href="/">
-              返回系统首页
-            </Link>
+            <WorkbenchEntryLinks
+              keys={["workflowLibrary", "runLibrary", "operatorInbox", "home"]}
+              overrides={{
+                workflowLibrary: {
+                  href: workflowDetailHref ?? workflowDetailLink.href,
+                  label: workflowDetailLink.label
+                },
+                runLibrary: {
+                  href: runLibraryHref ?? "/runs",
+                  label: "回到 run 列表"
+                }
+              }}
+              primaryKey="workflowLibrary"
+              variant="inline"
+            />
             <a className="inline-link" href={eventsApiHref} target="_blank" rel="noreferrer">
-              打开原始 events API
+              {heroSurfaceCopy.eventsApiLinkLabel}
             </a>
           </div>
         </div>
         <div className="hero-panel">
-          <div className="panel-label">Run status</div>
+          <div className="panel-label">{heroSurfaceCopy.statusPanelTitle}</div>
           <div className="panel-value">{run.status}</div>
           <p className="panel-text">
-            创建时间：<strong>{formatTimestamp(run.created_at)}</strong>
+            {heroSurfaceCopy.createdAtLabel}：<strong>{formatTimestamp(run.created_at)}</strong>
           </p>
           <p className="panel-text">
-            执行耗时：<strong>{formatDuration(run.started_at, run.finished_at)}</strong>
+            {heroSurfaceCopy.durationLabel}：<strong>{formatDuration(run.started_at, run.finished_at)}</strong>
           </p>
           <dl className="signal-list">
             <div>
-              <dt>Node runs</dt>
+              <dt>{heroSurfaceCopy.nodeRunsLabel}</dt>
               <dd>{run.node_runs.length}</dd>
             </div>
             <div>
-              <dt>Events</dt>
+              <dt>{heroSurfaceCopy.eventsLabel}</dt>
               <dd>{run.event_count}</dd>
             </div>
             <div>
-              <dt>Errors</dt>
+              <dt>{heroSurfaceCopy.errorsLabel}</dt>
               <dd>{countErroredNodes(run)}</dd>
             </div>
           </dl>
@@ -120,6 +151,8 @@ export function RunDiagnosticsPanel({
         eventTypes={eventTypes}
         activeFilters={activeFilters}
         activeTraceQuery={activeTraceQuery}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <RunDiagnosticsTraceFiltersSection
@@ -128,11 +161,16 @@ export function RunDiagnosticsPanel({
         eventTypeOptions={eventTypeOptions}
         nodeRunOptions={nodeRunOptions}
         activeFilters={activeFilters}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
+        runDetailHref={runDetailHref}
       />
 
       <RunDiagnosticsExecutionSections
         executionView={executionView}
         evidenceView={evidenceView}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <RunDiagnosticsTraceResultsSection
@@ -141,6 +179,7 @@ export function RunDiagnosticsPanel({
         traceError={traceError}
         activeTraceQuery={activeTraceQuery}
         traceHref={traceHref}
+        runDetailHref={runDetailHref}
       />
     </main>
   );

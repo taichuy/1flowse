@@ -35,6 +35,10 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationSummary,
     PublishedEndpointInvocationTimeBucketItem,
 )
+from app.services.operator_run_follow_up import (
+    build_operator_run_follow_up_summary_map,
+    build_operator_run_snapshot_map,
+)
 from app.services.published_invocation_export_access import (
     PublishedInvocationExportAccessService,
 )
@@ -46,10 +50,13 @@ from app.services.published_invocation_exports import (
 from app.services.published_invocations import (
     PublishedInvocationService,
 )
+from app.services.sensitive_access_timeline import load_sensitive_access_timelines
+from app.services.workflow_publish import WorkflowPublishBindingService
 
 router = APIRouter(prefix="/workflows", tags=["published-endpoint-activity"])
 published_invocation_service = PublishedInvocationService()
 published_invocation_export_access_service = PublishedInvocationExportAccessService()
+workflow_publish_service = WorkflowPublishBindingService()
 
 
 def _serialize_published_invocation_summary(summary) -> PublishedEndpointInvocationSummary:
@@ -67,6 +74,14 @@ def _serialize_published_invocation_summary(summary) -> PublishedEndpointInvocat
         last_run_id=summary.last_run_id,
         last_run_status=summary.last_run_status,
         last_reason_code=summary.last_reason_code,
+        approval_ticket_count=summary.approval_ticket_count,
+        pending_approval_count=summary.pending_approval_count,
+        approved_approval_count=summary.approved_approval_count,
+        rejected_approval_count=summary.rejected_approval_count,
+        expired_approval_count=summary.expired_approval_count,
+        pending_notification_count=summary.pending_notification_count,
+        delivered_notification_count=summary.delivered_notification_count,
+        failed_notification_count=summary.failed_notification_count,
     )
 def _serialize_facet_item(item) -> PublishedEndpointInvocationFacetItem:
     return PublishedEndpointInvocationFacetItem(
@@ -89,6 +104,7 @@ def _serialize_api_key_usage_item(item) -> PublishedEndpointInvocationApiKeyUsag
         rejected_count=item.rejected_count,
         last_invoked_at=item.last_invoked_at,
         last_status=item.last_status,
+        last_reason_code=item.last_reason_code,
     )
 
 
@@ -203,15 +219,28 @@ def _build_published_endpoint_invocation_list_response(
     )
     waiting_reason_lookup = {}
     waiting_lifecycle_lookup = {}
+    run_snapshot_lookup = {}
+    run_follow_up_lookup = {}
     if run_ids:
         node_runs = db.scalars(select(NodeRun).where(NodeRun.run_id.in_(run_ids))).all()
         callback_tickets = db.scalars(
             select(RunCallbackTicket).where(RunCallbackTicket.run_id.in_(run_ids))
         ).all()
+        sensitive_access_timelines = load_sensitive_access_timelines(
+            db,
+            run_ids=run_ids,
+        )
         waiting_reason_lookup, waiting_lifecycle_lookup = build_waiting_lifecycle_lookup(
             run_lookup,
             node_runs,
             callback_tickets,
+            sensitive_access_timelines,
+        )
+        run_snapshot_lookup = build_operator_run_snapshot_map(db, run_ids)
+        run_follow_up_lookup = build_operator_run_follow_up_summary_map(
+            db,
+            run_ids,
+            sample_limit=1,
         )
 
     return records, PublishedEndpointInvocationListResponse(
@@ -255,6 +284,8 @@ def _build_published_endpoint_invocation_list_response(
                 run_lookup=run_lookup,
                 waiting_reason_lookup=waiting_reason_lookup,
                 waiting_lifecycle_lookup=waiting_lifecycle_lookup,
+                run_snapshot_lookup=run_snapshot_lookup,
+                run_follow_up_lookup=run_follow_up_lookup,
             )
             for record in records
         ],
@@ -372,6 +403,7 @@ def export_published_endpoint_invocations(
             requester_id=requester_id,
             purpose_text=purpose_text,
         ),
+        db=db,
         approval_detail=(
             "Published invocation export requires approval before the payload can be exported."
         ),
@@ -385,6 +417,10 @@ def export_published_endpoint_invocations(
         export_format=format,
         limit=limit,
         response=response,
+        legacy_auth_governance=workflow_publish_service.build_legacy_auth_governance_snapshot(
+            db,
+            workflow_id=workflow_id,
+        ),
     )
     filename = build_published_invocation_export_filename(binding, format)
     headers = {

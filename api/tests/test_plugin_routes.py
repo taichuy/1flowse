@@ -7,9 +7,15 @@ from app.services.plugin_runtime import (
 
 
 class _StaticHealthChecker:
-    def __init__(self, status: str = "up", detail: str | None = None) -> None:
+    def __init__(
+        self,
+        status: str = "up",
+        detail: str | None = None,
+        mode: str | None = None,
+    ) -> None:
         self._status = status
         self._detail = detail
+        self._mode = mode
 
     def probe(self, adapter) -> CompatibilityAdapterHealth:
         return CompatibilityAdapterHealth(
@@ -19,6 +25,7 @@ class _StaticHealthChecker:
             enabled=adapter.enabled,
             status=self._status,
             detail=self._detail,
+            mode=self._mode,
         )
 
 
@@ -36,7 +43,7 @@ def test_register_and_list_plugin_adapter(client, monkeypatch) -> None:
     monkeypatch.setattr(
         plugin_routes,
         "get_compatibility_adapter_health_checker",
-        lambda: _StaticHealthChecker(status="up"),
+        lambda: _StaticHealthChecker(status="degraded", mode="translate"),
     )
 
     create_response = client.post(
@@ -63,8 +70,9 @@ def test_register_and_list_plugin_adapter(client, monkeypatch) -> None:
         "workspace_ids": ["ws-demo"],
         "plugin_kinds": ["node", "provider"],
         "supported_execution_classes": ["subprocess", "microvm"],
-        "status": "up",
+        "status": "degraded",
         "detail": None,
+        "mode": "translate",
     }
 
     list_response = client.get("/api/plugins/adapters")

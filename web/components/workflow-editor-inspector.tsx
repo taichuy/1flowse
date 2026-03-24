@@ -1,24 +1,35 @@
 "use client";
 
+import React from "react";
 import type { Edge, Node } from "@xyflow/react";
 
-import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type {
+  PluginAdapterRegistryItem,
+  PluginToolRegistryItem
+} from "@/lib/get-plugin-registry";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type {
   WorkflowCanvasEdgeData,
   WorkflowCanvasNodeData
 } from "@/lib/workflow-editor";
+import type { WorkflowPersistBlocker } from "@/components/workflow-editor-workbench/persist-blockers";
 import { WorkflowNodeConfigForm } from "@/components/workflow-node-config-form";
 import { WorkflowNodeIoSchemaForm } from "@/components/workflow-node-config-form/node-io-schema-form";
 import { WorkflowNodeRuntimePolicyForm } from "@/components/workflow-node-config-form/runtime-policy-form";
+import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-blocker-notice";
 import { WorkflowEditorPublishForm } from "@/components/workflow-editor-publish-form";
 import { WorkflowEditorVariableForm } from "@/components/workflow-editor-variable-form";
 
 type WorkflowEditorInspectorProps = {
+  currentHref?: string | null;
   selectedNode: Node<WorkflowCanvasNodeData> | null;
   selectedEdge: Edge<WorkflowCanvasEdgeData> | null;
   nodes: Array<Node<WorkflowCanvasNodeData>>;
   edges: Array<Edge<WorkflowCanvasEdgeData>>;
   tools: PluginToolRegistryItem[];
+  adapters: PluginAdapterRegistryItem[];
   nodeConfigText: string;
   onNodeConfigTextChange: (value: string) => void;
   onApplyNodeConfigJson: () => void;
@@ -46,18 +57,27 @@ type WorkflowEditorInspectorProps = {
   ) => void;
   onDeleteSelectedEdge: () => void;
   highlightedNodeSection?: "config" | "contract" | "runtime" | null;
+  highlightedNodeFieldPath?: string | null;
   highlightedPublishEndpointIndex?: number | null;
   highlightedPublishEndpointFieldPath?: string | null;
   highlightedVariableIndex?: number | null;
   highlightedVariableFieldPath?: string | null;
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
+  persistBlockedMessage?: string | null;
+  persistBlockerSummary?: string | null;
+  persistBlockers: WorkflowPersistBlocker[];
+  persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
 export function WorkflowEditorInspector({
+  currentHref = null,
   selectedNode,
   selectedEdge,
   nodes,
   edges,
   tools,
+  adapters,
   nodeConfigText,
   onNodeConfigTextChange,
   onApplyNodeConfigJson,
@@ -77,10 +97,17 @@ export function WorkflowEditorInspector({
   onUpdateSelectedEdge,
   onDeleteSelectedEdge,
   highlightedNodeSection = null,
+  highlightedNodeFieldPath = null,
   highlightedPublishEndpointIndex = null,
   highlightedPublishEndpointFieldPath = null,
   highlightedVariableIndex = null,
-  highlightedVariableFieldPath = null
+  highlightedVariableFieldPath = null,
+  focusedValidationItem = null,
+  persistBlockedMessage = null,
+  persistBlockerSummary = null,
+  persistBlockers,
+  persistBlockerRecommendedNextStep = null,
+  sandboxReadiness
 }: WorkflowEditorInspectorProps) {
   return (
     <>
@@ -115,6 +142,12 @@ export function WorkflowEditorInspector({
               node={selectedNode}
               nodes={nodes}
               tools={tools}
+              adapters={adapters}
+              sandboxReadiness={sandboxReadiness}
+              highlightedFieldPath={highlightedNodeSection === "config" ? highlightedNodeFieldPath : null}
+              focusedValidationItem={
+                highlightedNodeSection === "config" ? focusedValidationItem : null
+              }
               onChange={onNodeConfigChange}
             />
 
@@ -123,6 +156,13 @@ export function WorkflowEditorInspector({
               onInputSchemaChange={onNodeInputSchemaChange}
               onOutputSchemaChange={onNodeOutputSchemaChange}
               highlighted={highlightedNodeSection === "contract"}
+              highlightedFieldPath={
+                highlightedNodeSection === "contract" ? highlightedNodeFieldPath : null
+              }
+              focusedValidationItem={
+                highlightedNodeSection === "contract" ? focusedValidationItem : null
+              }
+              sandboxReadiness={sandboxReadiness}
             />
 
             <label className="binding-field">
@@ -144,6 +184,13 @@ export function WorkflowEditorInspector({
               edges={edges}
               onChange={onNodeRuntimePolicyUpdate}
               highlighted={highlightedNodeSection === "runtime"}
+              highlightedFieldPath={
+                highlightedNodeSection === "runtime" ? highlightedNodeFieldPath : null
+              }
+              focusedValidationItem={
+                highlightedNodeSection === "runtime" ? focusedValidationItem : null
+              }
+              sandboxReadiness={sandboxReadiness}
             />
 
             <label className="binding-field">
@@ -225,20 +272,52 @@ export function WorkflowEditorInspector({
         )}
       </article>
 
+      {persistBlockedMessage ? (
+        <article className="diagnostic-panel editor-panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Status</p>
+              <h2>Save gate</h2>
+            </div>
+          </div>
+
+          <WorkflowPersistBlockerNotice
+            title="Inspector remediation"
+            summary={persistBlockerSummary ?? persistBlockedMessage}
+            blockers={persistBlockers}
+            sandboxReadiness={sandboxReadiness}
+            currentHref={currentHref}
+            hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
+          />
+        </article>
+      ) : null}
+
       <WorkflowEditorPublishForm
+        currentHref={currentHref}
         workflowVersion={workflowVersion}
         availableWorkflowVersions={availableWorkflowVersions}
         publishEndpoints={workflowPublish}
+        sandboxReadiness={sandboxReadiness}
         onChange={onWorkflowPublishChange}
+        focusedValidationItem={
+          focusedValidationItem?.target.scope === "publish" ? focusedValidationItem : null
+        }
+        persistBlockers={persistBlockers}
         highlightedEndpointIndex={highlightedPublishEndpointIndex}
         highlightedEndpointFieldPath={highlightedPublishEndpointFieldPath}
       />
 
       <WorkflowEditorVariableForm
+        currentHref={currentHref}
         variables={workflowVariables}
         onChange={onWorkflowVariablesChange}
         highlightedVariableIndex={highlightedVariableIndex}
         highlightedVariableFieldPath={highlightedVariableFieldPath}
+        focusedValidationItem={
+          focusedValidationItem?.target.scope === "variables" ? focusedValidationItem : null
+        }
+        persistBlockers={persistBlockers}
+        sandboxReadiness={sandboxReadiness}
       />
 
       <article

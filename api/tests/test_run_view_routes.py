@@ -63,7 +63,16 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                 "last_resume_reason": "search callback pending",
                 "last_resume_source": "callback_ticket_monitor",
                 "last_resume_backoff_attempt": 2,
-            }
+            },
+            "scheduled_resume": {
+                "delay_seconds": 0,
+                "reason": "search callback pending",
+                "source": "callback_ticket_monitor",
+                "waiting_status": "waiting_callback",
+                "backoff_attempt": 2,
+                "scheduled_at": "2026-03-11T10:05:00Z",
+                "due_at": "2026-03-11T10:05:00Z",
+            },
         },
         artifact_refs=["artifact://artifact-tool", "artifact://artifact-evidence"],
         waiting_reason="Waiting for external search callback.",
@@ -104,7 +113,61 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
                 phase="tool_execute",
                 status="waiting",
                 request_summary="Search pending callback.",
+                execution_trace={
+                    "requested_execution_class": "sandbox",
+                    "effective_execution_class": "sandbox",
+                    "execution_source": "runtime_policy",
+                    "requested_execution_profile": "risk-reviewed",
+                    "requested_execution_timeout_ms": 3000,
+                    "requested_network_policy": "isolated",
+                    "requested_filesystem_policy": "ephemeral",
+                    "requested_dependency_mode": "dependency_ref",
+                    "requested_dependency_ref": "bundle://callback/search-v1",
+                    "requested_backend_extensions": {
+                        "image": "python:3.12",
+                        "mount": "workspace",
+                    },
+                    "executor_ref": "tool:compat-adapter:dify-default",
+                    "sandbox_backend_id": "sandbox-default",
+                    "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+                    "sandbox_runner_kind": "compat-adapter",
+                    "adapter_request_trace_id": "trace-compat-view",
+                    "adapter_request_execution": {
+                        "class": "sandbox",
+                        "source": "runtime_policy",
+                        "profile": "risk-reviewed",
+                        "timeoutMs": 3000,
+                    },
+                    "adapter_request_execution_class": "sandbox",
+                    "adapter_request_execution_source": "runtime_policy",
+                    "adapter_request_execution_contract": {
+                        "kind": "tool_execution",
+                        "toolId": "compat:dify:plugin/search",
+                    },
+                    "fallback_reason": None,
+                    "blocked_reason": None,
+                },
                 response_summary="Waiting for callback payload.",
+                response_content_type="json",
+                response_meta={
+                    "tool_name": "search",
+                    "tool_id": "compat:dify:plugin/search",
+                    "waiting_reason": "Waiting for external search callback.",
+                    "request_meta": {
+                        "trace_id": "trace-compat-view",
+                        "execution": {
+                            "class": "sandbox",
+                            "source": "runtime_policy",
+                            "profile": "risk-reviewed",
+                            "timeoutMs": 3000,
+                        },
+                        "execution_contract": {
+                            "kind": "tool_execution",
+                            "toolId": "compat:dify:plugin/search",
+                        },
+                    },
+                    "sandbox_runner_trace": {"runner": "compat-adapter"},
+                },
                 raw_artifact_id="artifact-tool",
                 latency_ms=1200,
                 retry_count=0,
@@ -260,13 +323,59 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         "canceled_ticket_count": 0,
         "late_callback_count": 1,
         "resume_schedule_count": 1,
+        "scheduled_resume_pending_node_count": 1,
+        "scheduled_resume_requeued_node_count": 0,
         "resume_source_counts": {"callback_ticket_monitor": 1},
+        "scheduled_resume_source_counts": {"callback_ticket_monitor": 1},
         "termination_reason_counts": {},
     }
+    assert body["blocking_node_run_id"] == node_run.id
+    assert body["execution_focus_reason"] == "blocking_node_run"
+    assert body["execution_focus_node"]["node_run_id"] == node_run.id
+    assert body["execution_focus_explanation"] == {
+        "primary_signal": "等待原因：Waiting for external search callback.",
+        "follow_up": (
+            "下一步：优先处理这条 sensitive access 审批票据，"
+            "再观察 waiting 节点是否恢复。"
+        ),
+    }
+    assert body["run_snapshot"] is not None
+    assert body["run_snapshot"]["workflow_id"] == sample_workflow.id
+    assert body["run_snapshot"]["status"] == "waiting"
+    assert body["run_snapshot"]["execution_focus_reason"] == "blocking_node_run"
+    assert body["run_snapshot"]["execution_focus_node_run_id"] == node_run.id
+    assert body["run_follow_up"] is not None
+    assert body["run_follow_up"]["affected_run_count"] == 1
+    assert body["run_follow_up"]["sampled_run_count"] == 1
+    assert body["run_follow_up"]["recommended_action"] == {
+        "kind": "approval blocker",
+        "entry_key": "operatorInbox",
+        "href": f"/sensitive-access?run_id={run.id}&node_run_id={node_run.id}",
+        "label": "open approval inbox slice",
+    }
+    sampled_run = body["run_follow_up"]["sampled_runs"][0]
+    assert sampled_run["run_id"] == run.id
+    assert sampled_run["snapshot"] == body["run_snapshot"]
+    assert sampled_run["callback_tickets"] == body["execution_focus_node"]["callback_tickets"]
+    assert sampled_run["sensitive_access_entries"] == [
+        {
+            key: value
+            for key, value in body["execution_focus_node"]["sensitive_access_entries"][0].items()
+            if key not in {"run_snapshot", "run_follow_up"}
+        }
+    ]
+    assert body["skill_trace"] is None
     assert len(body["nodes"]) == 1
     node = body["nodes"][0]
     assert node["node_run_id"] == node_run.id
     assert node["phase"] == "waiting_callback"
+    assert node["execution_focus_explanation"] == {
+        "primary_signal": "等待原因：Waiting for external search callback.",
+        "follow_up": (
+            "下一步：优先处理这条 sensitive access 审批票据，"
+            "再观察 waiting 节点是否恢复。"
+        ),
+    }
     assert node["event_count"] == 2
     assert node["event_type_counts"] == {
         "run.callback.ticket.issued": 1,
@@ -276,6 +385,79 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert len(node["artifacts"]) == 2
     assert len(node["tool_calls"]) == 1
     assert len(node["ai_calls"]) == 2
+    assert node["tool_calls"][0]["requested_execution_class"] == "sandbox"
+    assert node["tool_calls"][0]["requested_execution_source"] == "runtime_policy"
+    assert node["tool_calls"][0]["requested_execution_profile"] == "risk-reviewed"
+    assert node["tool_calls"][0]["requested_execution_timeout_ms"] == 3000
+    assert node["tool_calls"][0]["requested_execution_network_policy"] == "isolated"
+    assert node["tool_calls"][0]["requested_execution_filesystem_policy"] == "ephemeral"
+    assert node["tool_calls"][0]["requested_execution_dependency_mode"] == "dependency_ref"
+    assert (
+        node["tool_calls"][0]["requested_execution_dependency_ref"]
+        == "bundle://callback/search-v1"
+    )
+    assert node["tool_calls"][0]["requested_execution_builtin_package_set"] is None
+    assert node["tool_calls"][0]["requested_execution_backend_extensions"] == {
+        "image": "python:3.12",
+        "mount": "workspace",
+    }
+    assert node["tool_calls"][0]["effective_execution_class"] == "sandbox"
+    assert node["tool_calls"][0]["execution_executor_ref"] == "tool:compat-adapter:dify-default"
+    assert node["tool_calls"][0]["execution_sandbox_backend_id"] == "sandbox-default"
+    assert (
+        node["tool_calls"][0]["execution_sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default"
+    )
+    assert node["tool_calls"][0]["execution_sandbox_runner_kind"] == "compat-adapter"
+    assert node["tool_calls"][0]["adapter_request_trace_id"] == "trace-compat-view"
+    assert node["tool_calls"][0]["adapter_request_execution"] == {
+        "class": "sandbox",
+        "source": "runtime_policy",
+        "profile": "risk-reviewed",
+        "timeoutMs": 3000,
+    }
+    assert node["tool_calls"][0]["adapter_request_execution_class"] == "sandbox"
+    assert node["tool_calls"][0]["adapter_request_execution_source"] == "runtime_policy"
+    assert node["tool_calls"][0]["adapter_request_execution_contract"] == {
+        "kind": "tool_execution",
+        "toolId": "compat:dify:plugin/search",
+    }
+    assert node["tool_calls"][0]["execution_blocking_reason"] is None
+    assert node["tool_calls"][0]["execution_fallback_reason"] is None
+    assert node["tool_calls"][0]["response_content_type"] == "json"
+    assert node["tool_calls"][0]["response_meta"] == {
+        "tool_name": "search",
+        "tool_id": "compat:dify:plugin/search",
+        "waiting_reason": "Waiting for external search callback.",
+        "request_meta": {
+            "trace_id": "trace-compat-view",
+            "execution": {
+                "class": "sandbox",
+                "source": "runtime_policy",
+                "profile": "risk-reviewed",
+                "timeoutMs": 3000,
+            },
+            "execution_contract": {
+                "kind": "tool_execution",
+                "toolId": "compat:dify:plugin/search",
+            },
+        },
+        "sandbox_runner_trace": {"runner": "compat-adapter"},
+    }
+    assert (
+        node["tool_calls"][0]["execution_trace"]["executor_ref"]
+        == "tool:compat-adapter:dify-default"
+    )
+    assert (
+        node["tool_calls"][0]["execution_trace"]["adapter_request_trace_id"]
+        == "trace-compat-view"
+    )
+    assert node["tool_calls"][0]["execution_trace"]["adapter_request_execution"] == {
+        "class": "sandbox",
+        "source": "runtime_policy",
+        "profile": "risk-reviewed",
+        "timeoutMs": 3000,
+    }
     assert len(node["callback_tickets"]) == 1
     assert len(node["sensitive_access_entries"]) == 1
     assert node["callback_tickets"][0]["ticket"] == "ticket-agent"
@@ -296,6 +478,14 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         node["sensitive_access_entries"][0]["request"]["policy_summary"]
         == "High-sensitivity access must be reviewed by an operator before the workflow can resume."
     )
+    assert node["sensitive_access_entries"][0]["outcome_explanation"] == {
+        "primary_signal": "敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。",
+        "follow_up": (
+            "High-sensitivity access must be reviewed by an operator before the workflow can "
+            "resume. 已有 1 条通知送达审批人，可直接在 inbox 里处理。"
+            " 审批完成后再继续回看 run / inbox slice，确认 waiting 是否真正恢复。"
+        ),
+    }
     assert node["sensitive_access_entries"][0]["approval_ticket"]["status"] == "pending"
     assert node["sensitive_access_entries"][0]["notifications"] == [
         {
@@ -309,6 +499,123 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
             "created_at": "2026-03-11T10:00:32",
         }
     ]
+    run_snapshot = node["sensitive_access_entries"][0]["run_snapshot"]
+    assert run_snapshot is not None
+    assert run_snapshot["workflow_id"] == sample_workflow.id
+    assert run_snapshot["status"] == "waiting"
+    assert run_snapshot["current_node_id"] is None
+    assert run_snapshot["waiting_reason"] == "Waiting for external search callback."
+    assert run_snapshot["execution_focus_reason"] == "blocking_node_run"
+    assert run_snapshot["execution_focus_node_id"] == "agent_plan"
+    assert run_snapshot["execution_focus_node_run_id"] == "node-run-agent"
+    assert run_snapshot["execution_focus_node_name"] == "Agent Plan"
+    assert run_snapshot["execution_focus_node_type"] == "llm_agent"
+    assert run_snapshot["execution_focus_explanation"] == {
+        "primary_signal": "等待原因：Waiting for external search callback.",
+        "follow_up": (
+            "下一步：优先处理这条 sensitive access 审批票据，"
+            "再观察 waiting 节点是否恢复。"
+        ),
+    }
+    assert run_snapshot["callback_waiting_explanation"] == {
+        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "follow_up": (
+            "下一步：先在当前 operator 入口完成审批或拒绝，"
+            "再观察 waiting 节点是否自动恢复。"
+        ),
+    }
+    assert run_snapshot["execution_focus_artifact_count"] == 2
+    assert run_snapshot["execution_focus_artifact_ref_count"] == 2
+    assert run_snapshot["execution_focus_tool_call_count"] == 1
+    assert run_snapshot["execution_focus_raw_ref_count"] == 1
+    assert run_snapshot["execution_focus_artifact_refs"] == [
+        "artifact://artifact-tool",
+        "artifact://artifact-evidence",
+    ]
+    assert [item["uri"] for item in run_snapshot["execution_focus_artifacts"]] == [
+        "artifact://artifact-tool",
+        "artifact://artifact-evidence",
+    ]
+    assert run_snapshot["execution_focus_tool_calls"] == [
+        {
+            "id": "tool-call-agent",
+            "tool_id": "compat:dify:plugin/search",
+            "tool_name": "search",
+            "phase": "tool_execute",
+            "status": "waiting",
+            "requested_execution_class": "sandbox",
+            "requested_execution_source": "runtime_policy",
+            "requested_execution_profile": "risk-reviewed",
+            "requested_execution_timeout_ms": 3000,
+            "requested_execution_network_policy": "isolated",
+            "requested_execution_filesystem_policy": "ephemeral",
+            "requested_execution_dependency_mode": "dependency_ref",
+            "requested_execution_builtin_package_set": None,
+            "requested_execution_dependency_ref": "bundle://callback/search-v1",
+            "requested_execution_backend_extensions": {
+                "image": "python:3.12",
+                "mount": "workspace",
+            },
+            "effective_execution_class": "sandbox",
+            "execution_executor_ref": "tool:compat-adapter:dify-default",
+            "execution_sandbox_backend_id": "sandbox-default",
+            "execution_sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+            "execution_sandbox_runner_kind": "compat-adapter",
+            "adapter_request_trace_id": "trace-compat-view",
+            "adapter_request_execution": {
+                "class": "sandbox",
+                "source": "runtime_policy",
+                "profile": "risk-reviewed",
+                "timeoutMs": 3000,
+            },
+            "adapter_request_execution_class": "sandbox",
+            "adapter_request_execution_source": "runtime_policy",
+            "adapter_request_execution_contract": {
+                "kind": "tool_execution",
+                "toolId": "compat:dify:plugin/search",
+            },
+            "execution_blocking_reason": None,
+            "execution_fallback_reason": None,
+            "response_summary": "Waiting for callback payload.",
+            "response_content_type": "json",
+            "raw_ref": "artifact://artifact-tool",
+        }
+    ]
+    assert run_snapshot["execution_focus_skill_trace"] is None
+
+    run_follow_up = node["sensitive_access_entries"][0]["run_follow_up"]
+    assert run_follow_up is not None
+    assert run_snapshot == body["run_snapshot"]
+    assert run_follow_up == body["run_follow_up"]
+    assert run_follow_up["affected_run_count"] == 1
+    assert run_follow_up["sampled_run_count"] == 1
+    assert run_follow_up["waiting_run_count"] == 1
+    assert run_follow_up["running_run_count"] == 0
+    assert run_follow_up["succeeded_run_count"] == 0
+    assert run_follow_up["failed_run_count"] == 0
+    assert run_follow_up["unknown_run_count"] == 0
+    sampled_run = run_follow_up["sampled_runs"][0]
+    assert sampled_run["run_id"] == "run-execution-view"
+    assert sampled_run["snapshot"] == run_snapshot
+    assert sampled_run["callback_tickets"] == body["execution_focus_node"]["callback_tickets"]
+    assert sampled_run["sensitive_access_entries"] == [
+        {
+            key: value
+            for key, value in body["execution_focus_node"]["sensitive_access_entries"][0].items()
+            if key not in {"run_snapshot", "run_follow_up"}
+        }
+    ]
+    assert run_follow_up["explanation"] == {
+        "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
+        "follow_up": (
+            "run run-execution-view：当前 run 状态：waiting。 聚焦节点：agent_plan。 "
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 "
+            "后续动作：下一步：先在当前 operator 入口完成审批或拒绝，"
+            "再观察 waiting 节点是否自动恢复。"
+        ),
+    }
+
+
     assert node["callback_waiting_lifecycle"] == {
         "wait_cycle_count": 2,
         "issued_ticket_count": 2,
@@ -332,6 +639,322 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         "last_resume_source": "callback_ticket_monitor",
         "last_resume_backoff_attempt": 2,
     }
+    assert node["callback_waiting_explanation"] == {
+        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "follow_up": (
+            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+        ),
+    }
+    assert node["scheduled_resume_delay_seconds"] == 0
+    assert node["scheduled_resume_reason"] == "search callback pending"
+    assert node["scheduled_resume_source"] == "callback_ticket_monitor"
+    assert node["scheduled_waiting_status"] == "waiting_callback"
+    assert node["scheduled_resume_scheduled_at"] == "2026-03-11T10:05:00Z"
+    assert node["scheduled_resume_due_at"] == "2026-03-11T10:05:00Z"
+
+    run_detail_response = client.get(
+        f"/api/runs/{run.id}", params={"include_events": "false"}
+    )
+
+    assert run_detail_response.status_code == 200
+    run_detail_body = run_detail_response.json()
+    assert run_detail_body["execution_focus_reason"] == "blocking_node_run"
+    assert run_detail_body["execution_focus_node"]["node_run_id"] == node_run.id
+    assert run_detail_body["execution_focus_node"]["callback_waiting_explanation"] == {
+        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "follow_up": (
+            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+        ),
+    }
+    assert run_detail_body["execution_focus_node"]["callback_waiting_lifecycle"] == node[
+        "callback_waiting_lifecycle"
+    ]
+    assert run_detail_body["execution_focus_node"]["scheduled_resume_delay_seconds"] == 0
+    assert (
+        run_detail_body["execution_focus_node"]["scheduled_resume_reason"]
+        == "search callback pending"
+    )
+    assert (
+        run_detail_body["execution_focus_node"]["scheduled_resume_source"]
+        == "callback_ticket_monitor"
+    )
+    assert (
+        run_detail_body["execution_focus_node"]["scheduled_waiting_status"]
+        == "waiting_callback"
+    )
+    assert run_detail_body["execution_focus_node"]["artifact_refs"] == [
+        "artifact://artifact-tool",
+        "artifact://artifact-evidence",
+    ]
+    assert [
+        item["uri"] for item in run_detail_body["execution_focus_node"]["artifacts"]
+    ] == ["artifact://artifact-tool", "artifact://artifact-evidence"]
+    assert run_detail_body["execution_focus_node"]["tool_calls"] == node["tool_calls"]
+    assert run_detail_body["execution_focus_node"]["callback_tickets"] == node[
+        "callback_tickets"
+    ]
+    assert run_detail_body["execution_focus_node"]["sensitive_access_entries"] == node[
+        "sensitive_access_entries"
+    ]
+    assert run_detail_body["run_follow_up"] == body["run_follow_up"]
+    assert run_detail_body["execution_focus_skill_trace"] is None
+
+
+def test_get_run_detail_includes_execution_focus_skill_trace(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    run = Run(
+        id="run-skill-reference-focus-detail",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        status="running",
+        current_node_id="agent_skill",
+        input_payload={"message": "inspect focus skill trace"},
+        created_at=datetime(2026, 3, 17, 17, 0, tzinfo=UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-skill-focus",
+        run_id=run.id,
+        node_id="agent_skill",
+        node_name="Agent Skill",
+        node_type="llm_agent",
+        status="running",
+        phase="running_main",
+        input_payload={"execution": {"class": "inline"}},
+        created_at=datetime(2026, 3, 17, 17, 0, tzinfo=UTC),
+    )
+    sqlite_session.add_all(
+        [
+            run,
+            node_run,
+            RunEvent(
+                run_id=run.id,
+                node_run_id=node_run.id,
+                event_type="agent.skill.references.loaded",
+                payload={
+                    "node_id": node_run.node_id,
+                    "phase": "main_plan",
+                    "references": [
+                        {
+                            "skill_id": "skill-research-brief",
+                            "skill_name": "Research Brief",
+                            "reference_id": "ref-handoff",
+                            "reference_name": "Operator Handoff",
+                            "load_source": "skill_binding",
+                            "retrieval_http_path": (
+                                "/api/skills/skill-research-brief/references/ref-handoff"
+                                "?workspace_id=default"
+                            ),
+                            "retrieval_mcp_method": "skills.get_reference",
+                            "retrieval_mcp_params": {
+                                "skill_id": "skill-research-brief",
+                                "reference_id": "ref-handoff",
+                                "workspace_id": "default",
+                            },
+                        },
+                        {
+                            "skill_id": "skill-research-brief",
+                            "skill_name": "Research Brief",
+                            "reference_id": "ref-budget",
+                            "reference_name": "Budget Control",
+                            "load_source": "retrieval_query_match",
+                            "fetch_reason": "Matched query terms: budget, guardrails",
+                            "retrieval_http_path": (
+                                "/api/skills/skill-research-brief/references/ref-budget"
+                                "?workspace_id=default"
+                            ),
+                            "retrieval_mcp_method": "skills.get_reference",
+                            "retrieval_mcp_params": {
+                                "skill_id": "skill-research-brief",
+                                "reference_id": "ref-budget",
+                                "workspace_id": "default",
+                            },
+                        },
+                    ],
+                },
+                created_at=datetime(2026, 3, 17, 17, 0, 30, tzinfo=UTC),
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    response = client.get(f"/api/runs/{run.id}", params={"include_events": "false"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["execution_focus_reason"] == "current_node"
+    assert body["execution_focus_node"]["node_run_id"] == node_run.id
+    assert body["execution_focus_skill_trace"] == {
+        "reference_count": 2,
+        "phase_counts": {"main_plan": 2},
+        "source_counts": {
+            "retrieval_query_match": 1,
+            "skill_binding": 1,
+        },
+        "loads": [
+            {
+                "phase": "main_plan",
+                "references": [
+                    {
+                        "skill_id": "skill-research-brief",
+                        "skill_name": "Research Brief",
+                        "reference_id": "ref-handoff",
+                        "reference_name": "Operator Handoff",
+                        "load_source": "skill_binding",
+                        "fetch_reason": None,
+                        "fetch_request_index": None,
+                        "fetch_request_total": None,
+                        "retrieval_http_path": (
+                            "/api/skills/skill-research-brief/"
+                            "references/ref-handoff?workspace_id=default"
+                        ),
+                        "retrieval_mcp_method": "skills.get_reference",
+                        "retrieval_mcp_params": {
+                            "skill_id": "skill-research-brief",
+                            "reference_id": "ref-handoff",
+                            "workspace_id": "default",
+                        },
+                    },
+                    {
+                        "skill_id": "skill-research-brief",
+                        "skill_name": "Research Brief",
+                        "reference_id": "ref-budget",
+                        "reference_name": "Budget Control",
+                        "load_source": "retrieval_query_match",
+                        "fetch_reason": "Matched query terms: budget, guardrails",
+                        "fetch_request_index": None,
+                        "fetch_request_total": None,
+                        "retrieval_http_path": (
+                            "/api/skills/skill-research-brief/"
+                            "references/ref-budget?workspace_id=default"
+                        ),
+                        "retrieval_mcp_method": "skills.get_reference",
+                        "retrieval_mcp_params": {
+                            "skill_id": "skill-research-brief",
+                            "reference_id": "ref-budget",
+                            "workspace_id": "default",
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+
+
+def test_get_run_execution_view_includes_dependency_contract_fields(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    run = Run(
+        id="run-execution-contract",
+        workflow_id=sample_workflow.id,
+        workflow_version=sample_workflow.version,
+        compiled_blueprint_id="bp-execution-contract",
+        status="running",
+        input_payload={"message": "inspect dependency contract"},
+        created_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC),
+    )
+    node_run = NodeRun(
+        id="node-run-sandbox-contract",
+        run_id=run.id,
+        node_id="sandbox_eval",
+        node_name="Sandbox Eval",
+        node_type="sandbox_code",
+        status="running",
+        phase="executing",
+        input_payload={
+            "execution": {
+                "class": "sandbox",
+                "source": "runtime_policy",
+                "profile": "python-safe",
+                "timeoutMs": 15000,
+                "networkPolicy": "restricted",
+                "filesystemPolicy": "ephemeral",
+                "dependencyMode": "dependency_ref",
+                "dependencyRef": "bundle:finance-safe-v1",
+                "backendExtensions": {"mountPreset": "finance", "gpu": False},
+            }
+        },
+        created_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC),
+        started_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC),
+        phase_started_at=datetime(2026, 3, 18, 9, 0, tzinfo=UTC),
+    )
+    sqlite_session.add_all(
+        [
+            run,
+            node_run,
+            RunEvent(
+                run_id=run.id,
+                node_run_id=node_run.id,
+                event_type="node.execution.dispatched",
+                payload={
+                    "node_id": node_run.node_id,
+                    "node_type": node_run.node_type,
+                    "requested_execution_class": "sandbox",
+                    "execution_source": "runtime_policy",
+                    "requested_execution_profile": "python-safe",
+                    "requested_execution_timeout_ms": 15000,
+                    "requested_network_policy": "restricted",
+                    "requested_filesystem_policy": "ephemeral",
+                    "requested_dependency_mode": "dependency_ref",
+                    "requested_dependency_ref": "bundle:finance-safe-v1",
+                    "requested_backend_extensions": {
+                        "mountPreset": "finance",
+                        "gpu": False,
+                    },
+                    "effective_execution_class": "sandbox",
+                    "executor_ref": "sandbox-backend:sandbox-default",
+                    "sandbox_backend_id": "sandbox-default",
+                    "sandbox_backend_executor_ref": "sandbox-backend:sandbox-default",
+                },
+                created_at=datetime(2026, 3, 18, 9, 0, 5, tzinfo=UTC),
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    response = client.get(f"/api/runs/{run.id}/execution-view")
+
+    assert response.status_code == 200
+    body = response.json()
+    node = body["nodes"][0]
+    assert node["execution_class"] == "sandbox"
+    assert node["execution_source"] == "runtime_policy"
+    assert node["execution_profile"] == "python-safe"
+    assert node["execution_timeout_ms"] == 15000
+    assert node["execution_network_policy"] == "restricted"
+    assert node["execution_filesystem_policy"] == "ephemeral"
+    assert node["execution_dependency_mode"] == "dependency_ref"
+    assert node["execution_builtin_package_set"] is None
+    assert node["execution_dependency_ref"] == "bundle:finance-safe-v1"
+    assert node["execution_backend_extensions"] == {
+        "mountPreset": "finance",
+        "gpu": False,
+    }
+    assert node["execution_dispatched_count"] == 1
+    assert node["requested_execution_class"] == "sandbox"
+    assert node["requested_execution_source"] == "runtime_policy"
+    assert node["requested_execution_profile"] == "python-safe"
+    assert node["requested_execution_timeout_ms"] == 15000
+    assert node["requested_execution_network_policy"] == "restricted"
+    assert node["requested_execution_filesystem_policy"] == "ephemeral"
+    assert node["requested_execution_dependency_mode"] == "dependency_ref"
+    assert node["requested_execution_builtin_package_set"] is None
+    assert node["requested_execution_dependency_ref"] == "bundle:finance-safe-v1"
+    assert node["requested_execution_backend_extensions"] == {
+        "mountPreset": "finance",
+        "gpu": False,
+    }
+    assert node["effective_execution_class"] == "sandbox"
+    assert node["execution_executor_ref"] == "sandbox-backend:sandbox-default"
+    assert node["execution_sandbox_backend_id"] == "sandbox-default"
+    assert (
+        node["execution_sandbox_backend_executor_ref"]
+        == "sandbox-backend:sandbox-default"
+    )
 
 
 def test_get_run_execution_view_surfaces_skill_reference_loads(
@@ -422,6 +1045,74 @@ def test_get_run_execution_view_surfaces_skill_reference_loads(
     assert body["summary"]["skill_reference_source_counts"] == {
         "retrieval_query_match": 1,
         "skill_binding": 1,
+    }
+    assert body["blocking_node_run_id"] is None
+    assert body["execution_focus_reason"] is None
+    assert body["execution_focus_node"] is None
+    assert body["execution_focus_explanation"] is None
+    assert body["skill_trace"] == {
+        "scope": "run",
+        "reference_count": 2,
+        "phase_counts": {"main_plan": 2},
+        "source_counts": {
+            "retrieval_query_match": 1,
+            "skill_binding": 1,
+        },
+        "nodes": [
+            {
+                "node_run_id": "node-run-skill-agent",
+                "node_id": "agent_skill",
+                "node_name": "Agent Skill",
+                "reference_count": 2,
+                "loads": [
+                    {
+                        "phase": "main_plan",
+                        "references": [
+                            {
+                                "skill_id": "skill-research-brief",
+                                "skill_name": "Research Brief",
+                                "reference_id": "ref-handoff",
+                                "reference_name": "Operator Handoff",
+                                "load_source": "skill_binding",
+                                "fetch_reason": None,
+                                "fetch_request_index": None,
+                                "fetch_request_total": None,
+                                "retrieval_http_path": (
+                                    "/api/skills/skill-research-brief/"
+                                    "references/ref-handoff?workspace_id=default"
+                                ),
+                                "retrieval_mcp_method": "skills.get_reference",
+                                "retrieval_mcp_params": {
+                                    "skill_id": "skill-research-brief",
+                                    "reference_id": "ref-handoff",
+                                    "workspace_id": "default",
+                                },
+                            },
+                            {
+                                "skill_id": "skill-research-brief",
+                                "skill_name": "Research Brief",
+                                "reference_id": "ref-budget",
+                                "reference_name": "Budget Control",
+                                "load_source": "retrieval_query_match",
+                                "fetch_reason": "Matched query terms: budget, guardrails",
+                                "fetch_request_index": None,
+                                "fetch_request_total": None,
+                                "retrieval_http_path": (
+                                    "/api/skills/skill-research-brief/"
+                                    "references/ref-budget?workspace_id=default"
+                                ),
+                                "retrieval_mcp_method": "skills.get_reference",
+                                "retrieval_mcp_params": {
+                                    "skill_id": "skill-research-brief",
+                                    "reference_id": "ref-budget",
+                                    "workspace_id": "default",
+                                },
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
     }
     assert len(body["nodes"]) == 1
     node = body["nodes"][0]
@@ -530,6 +1221,16 @@ def test_get_run_evidence_view_returns_evidence_nodes_only(
                 phase="tool_execute",
                 status="success",
                 request_summary="Search request",
+                execution_trace={
+                    "requested_execution_class": "inline",
+                    "effective_execution_class": "inline",
+                    "execution_source": "default",
+                    "executor_ref": "tool:compat-adapter:dify-default",
+                    "sandbox_backend_id": None,
+                    "sandbox_backend_executor_ref": None,
+                    "fallback_reason": None,
+                    "blocked_reason": None,
+                },
                 response_summary="Structured callback payload",
                 raw_artifact_id="artifact-tool-result",
                 latency_ms=980,

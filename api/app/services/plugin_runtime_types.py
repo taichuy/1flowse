@@ -144,6 +144,7 @@ class CompatibilityAdapterHealth:
     enabled: bool
     status: str
     detail: str | None = None
+    mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -168,14 +169,19 @@ class PluginExecutionDispatchPlan:
     requested_network_policy: str | None
     requested_filesystem_policy: str | None
     executor_ref: str
+    requested_dependency_mode: str | None = None
+    requested_builtin_package_set: str | None = None
+    requested_dependency_ref: str | None = None
+    requested_backend_extensions: dict[str, Any] | None = None
     effective_execution: dict[str, Any] = field(default_factory=dict)
     sandbox_backend_id: str | None = None
     sandbox_backend_executor_ref: str | None = None
+    sandbox_runner_kind: str | None = None
     fallback_reason: str | None = None
     blocked_reason: str | None = None
 
     def as_trace_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "requested_execution_class": self.requested_execution_class,
             "effective_execution_class": self.effective_execution_class,
             "execution_source": self.execution_source,
@@ -183,12 +189,19 @@ class PluginExecutionDispatchPlan:
             "requested_execution_timeout_ms": self.requested_execution_timeout_ms,
             "requested_network_policy": self.requested_network_policy,
             "requested_filesystem_policy": self.requested_filesystem_policy,
+            "requested_dependency_mode": self.requested_dependency_mode,
+            "requested_builtin_package_set": self.requested_builtin_package_set,
+            "requested_dependency_ref": self.requested_dependency_ref,
+            "requested_backend_extensions": self.requested_backend_extensions,
             "executor_ref": self.executor_ref,
             "sandbox_backend_id": self.sandbox_backend_id,
             "sandbox_backend_executor_ref": self.sandbox_backend_executor_ref,
             "fallback_reason": self.fallback_reason,
             "blocked_reason": self.blocked_reason,
         }
+        if self.sandbox_runner_kind:
+            payload["sandbox_runner_kind"] = self.sandbox_runner_kind
+        return payload
 
 
 @dataclass(frozen=True)
@@ -197,6 +210,10 @@ class PluginCallResponse:
     output: dict[str, Any]
     logs: list[str] = field(default_factory=list)
     duration_ms: int = 0
+    content_type: str | None = None
+    summary: str | None = None
+    raw_ref: str | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 NativeToolInvoker = Callable[[PluginCallRequest], PluginCallResponse | dict[str, Any]]

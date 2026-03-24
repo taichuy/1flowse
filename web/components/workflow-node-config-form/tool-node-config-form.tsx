@@ -1,10 +1,21 @@
 "use client";
 
+import React from "react";
 import type { Node } from "@xyflow/react";
 
-import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type {
+  PluginAdapterRegistryItem,
+  PluginToolRegistryItem
+} from "@/lib/get-plugin-registry";
+import {
+  describePluginAdapterHealth,
+  formatPluginAdapterDescriptor
+} from "@/lib/plugin-adapter-presenters";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import { getToolGovernanceSummary } from "@/lib/tool-governance";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
+import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import { CredentialPicker } from "@/components/workflow-node-config-form/credential-picker";
 import {
   cloneRecord,
@@ -20,14 +31,23 @@ import {
 type ToolNodeConfigFormProps = {
   node: Node<WorkflowCanvasNodeData>;
   tools: PluginToolRegistryItem[];
+  adapters: PluginAdapterRegistryItem[];
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  highlightedFieldPath?: string | null;
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
   onChange: (nextConfig: Record<string, unknown>) => void;
 };
 
 export function ToolNodeConfigForm({
   node,
   tools,
+  adapters,
+  sandboxReadiness = null,
+  highlightedFieldPath = null,
+  focusedValidationItem = null,
   onChange
 }: ToolNodeConfigFormProps) {
+  const sectionRef = React.useRef<HTMLDivElement | null>(null);
   const config = cloneRecord(node.data.config);
   const binding = readToolBinding(config);
   const boundToolId = binding?.toolId ?? "";
@@ -37,7 +57,27 @@ export function ToolNodeConfigForm({
     ? getUnsupportedToolFieldNames(selectedTool.input_schema, schemaFields)
     : [];
   const selectedToolGovernance = selectedTool ? getToolGovernanceSummary(selectedTool) : null;
+  const adapterDiagnostics = buildCompatAdapterDiagnostics({
+    tool: selectedTool,
+    adapterId: binding?.adapterId ?? null,
+    adapters
+  });
   const inputs = toRecord(config.inputs) ?? {};
+  const normalizedHighlightedField = normalizeToolBindingFieldKey(highlightedFieldPath);
+
+  React.useEffect(() => {
+    if (!normalizedHighlightedField) {
+      return;
+    }
+
+    const target = sectionRef.current?.querySelector<HTMLElement>(
+      `[data-validation-field="${normalizedHighlightedField}"] input, ` +
+        `[data-validation-field="${normalizedHighlightedField}"] select`
+    );
+
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    target?.focus();
+  }, [normalizedHighlightedField]);
 
   const handleToolSelection = (toolId: string) => {
     const nextConfig = cloneRecord(config);
@@ -152,7 +192,14 @@ export function ToolNodeConfigForm({
   };
 
   return (
-    <div className="binding-form">
+    <div className="binding-form" ref={sectionRef}>
+      {focusedValidationItem && normalizedHighlightedField ? (
+        <WorkflowValidationRemediationCard
+          item={focusedValidationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
+
       <div className="section-heading">
         <div>
           <p className="eyebrow">Structured config</p>
@@ -160,7 +207,10 @@ export function ToolNodeConfigForm({
         </div>
       </div>
 
-      <label className="binding-field">
+      <label
+        className={`binding-field ${normalizedHighlightedField === "tool.toolId" ? "validation-focus-ring" : ""}`.trim()}
+        data-validation-field="tool.toolId"
+      >
         <span className="binding-label">Catalog tool</span>
         <select
           className="binding-select"
@@ -215,7 +265,10 @@ export function ToolNodeConfigForm({
             </div>
           ) : null}
 
-          <label className="binding-field">
+          <label
+            className={`binding-field ${normalizedHighlightedField === "tool.adapterId" ? "validation-focus-ring" : ""}`.trim()}
+            data-validation-field="tool.adapterId"
+          >
             <span className="binding-label">Adapter ID</span>
             <input
               className="trace-text-input"
@@ -230,6 +283,26 @@ export function ToolNodeConfigForm({
               }
             />
           </label>
+
+          {adapterDiagnostics ? (
+            <div className="binding-field compact-stack">
+              <span className="binding-label">Resolved compat adapter</span>
+              <div className="tool-badge-row">
+                <span className={`health-pill ${adapterDiagnostics.healthPill}`}>
+                  {adapterDiagnostics.statusLabel}
+                </span>
+                {adapterDiagnostics.badges.map((badge) => (
+                  <span className="event-chip" key={`${selectedTool.id}:${badge}`}>
+                    {badge}
+                  </span>
+                ))}
+              </div>
+              <p className="section-copy">{adapterDiagnostics.summary}</p>
+              {adapterDiagnostics.detail ? (
+                <p className="binding-meta">{adapterDiagnostics.detail}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <label className="binding-field">
             <span className="binding-label">Timeout (ms)</span>
@@ -397,4 +470,128 @@ export function ToolNodeConfigForm({
       )}
     </div>
   );
+}
+
+function normalizeToolBindingFieldKey(fieldPath?: string | null) {
+  const normalized = fieldPath?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "config.tool" || normalized === "config.tool.toolId") {
+    return "tool.toolId";
+  }
+
+  if (normalized === "config.tool.adapterId") {
+    return "tool.adapterId";
+  }
+
+  return null;
+}
+
+type CompatAdapterDiagnostics = {
+  healthPill: string;
+  statusLabel: string;
+  summary: string;
+  detail: string | null;
+  badges: string[];
+};
+
+function buildCompatAdapterDiagnostics({
+  tool,
+  adapterId,
+  adapters
+}: {
+  tool: PluginToolRegistryItem | null;
+  adapterId: string | null;
+  adapters: PluginAdapterRegistryItem[];
+}): CompatAdapterDiagnostics | null {
+  if (!tool || tool.ecosystem === "native") {
+    return null;
+  }
+
+  const normalizedAdapterId = adapterId?.trim() ?? "";
+  const ecosystemAdapters = adapters.filter((adapter) => adapter.ecosystem === tool.ecosystem);
+
+  if (normalizedAdapterId) {
+    const explicitAdapter = adapters.find((adapter) => adapter.id === normalizedAdapterId) ?? null;
+    if (!explicitAdapter) {
+      return {
+        healthPill: "disabled",
+        statusLabel: "missing",
+        summary: `当前固定绑定了 adapter ${normalizedAdapterId}，但 workspace 里看不到这个 adapter。`,
+        detail:
+          ecosystemAdapters.length > 0
+            ? `同生态候选：${ecosystemAdapters.map(formatPluginAdapterDescriptor).join("；")}`
+            : `当前还没有 ${tool.ecosystem} adapter；请先到 Adapter health and sync 注册 compat runtime。`,
+        badges: [tool.ecosystem]
+      };
+    }
+
+    if (explicitAdapter.ecosystem !== tool.ecosystem) {
+      return {
+        healthPill: "disabled",
+        statusLabel: "mismatch",
+        summary: `当前固定绑定了 adapter ${explicitAdapter.id}，但它服务于 ${explicitAdapter.ecosystem}，与工具所需的 ${tool.ecosystem} 不一致。`,
+        detail:
+          ecosystemAdapters.length > 0
+            ? `当前 ${tool.ecosystem} adapter：${ecosystemAdapters.map(formatPluginAdapterDescriptor).join("；")}`
+            : `当前还没有 ${tool.ecosystem} adapter；请先到 Adapter health and sync 注册 compat runtime。`,
+        badges: [tool.ecosystem]
+      };
+    }
+
+    return {
+      healthPill: explicitAdapter.enabled ? explicitAdapter.status : "disabled",
+      statusLabel: explicitAdapter.enabled ? explicitAdapter.status : "disabled",
+      summary: explicitAdapter.enabled
+        ? `当前固定使用 adapter ${explicitAdapter.id}。`
+        : `当前固定绑定了 adapter ${explicitAdapter.id}，但它已禁用。`,
+      detail: describePluginAdapterHealth(explicitAdapter),
+      badges: buildCompatAdapterBadges(explicitAdapter)
+    };
+  }
+
+  const defaultAdapter = ecosystemAdapters.find((adapter) => adapter.enabled) ?? null;
+  if (defaultAdapter) {
+    return {
+      healthPill: defaultAdapter.status,
+      statusLabel: defaultAdapter.status,
+      summary: `当前未显式填写 adapterId；保存和运行时会默认路由到 adapter ${defaultAdapter.id}。`,
+      detail: describePluginAdapterHealth(defaultAdapter),
+      badges: buildCompatAdapterBadges(defaultAdapter)
+    };
+  }
+
+  if (ecosystemAdapters.length === 0) {
+    return {
+      healthPill: "disabled",
+      statusLabel: "missing",
+      summary: `当前还没有 ${tool.ecosystem} adapter，compat 工具还不能进入运行时。`,
+      detail: "请先到 Adapter health and sync 注册 compat runtime，否则这里只会停留在 catalog 绑定。",
+      badges: [tool.ecosystem]
+    };
+  }
+
+  return {
+    healthPill: "disabled",
+    statusLabel: "unavailable",
+    summary: `当前 ${tool.ecosystem} adapter 都不可用，compat 工具还不能进入运行时。`,
+    detail: `已发现：${ecosystemAdapters.map(formatPluginAdapterDescriptor).join("；")}`,
+    badges: [tool.ecosystem]
+  };
+}
+
+function buildCompatAdapterBadges(adapter: PluginAdapterRegistryItem) {
+  const badges: string[] = [adapter.ecosystem];
+  if (adapter.mode) {
+    badges.push(`mode ${adapter.mode}`);
+  }
+  const executionClasses = adapter.supported_execution_classes.length
+    ? adapter.supported_execution_classes
+    : ["subprocess"];
+  executionClasses.forEach((executionClass) => {
+    badges.push(`supports ${executionClass}`);
+  });
+  return badges;
 }

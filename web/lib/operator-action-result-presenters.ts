@@ -4,6 +4,49 @@ type RunSnapshotInput = {
   status?: string | null;
   currentNodeId?: string | null;
   waitingReason?: string | null;
+  executionFocusReason?: string | null;
+  executionFocusNodeId?: string | null;
+  executionFocusNodeRunId?: string | null;
+  executionFocusNodeName?: string | null;
+  executionFocusNodeType?: string | null;
+  executionFocusExplanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+  callbackWaitingExplanation?: {
+    primary_signal?: string | null;
+    follow_up?: string | null;
+  } | null;
+  executionFocusArtifactCount?: number;
+  executionFocusArtifactRefCount?: number;
+  executionFocusToolCallCount?: number;
+  executionFocusRawRefCount?: number;
+  executionFocusArtifactRefs?: Array<string | null | undefined>;
+  executionFocusArtifacts?: Array<{
+    artifact_kind?: string | null;
+    content_type?: string | null;
+    summary?: string | null;
+    uri?: string | null;
+  }>;
+  executionFocusToolCalls?: Array<{
+    id?: string | null;
+    tool_id?: string | null;
+    tool_name?: string | null;
+    phase?: string | null;
+    status?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
+    effective_execution_class?: string | null;
+    execution_sandbox_backend_id?: string | null;
+    execution_sandbox_runner_kind?: string | null;
+    execution_blocking_reason?: string | null;
+    execution_fallback_reason?: string | null;
+    response_summary?: string | null;
+    response_content_type?: string | null;
+    raw_ref?: string | null;
+  }>;
 };
 
 type ApprovalDecisionSnapshotInput = {
@@ -15,12 +58,18 @@ type ApprovalDecisionSnapshotInput = {
   runSnapshot?: RunSnapshotInput | null;
 };
 
+type OutcomeExplanationInput = {
+  primary_signal?: string | null;
+  follow_up?: string | null;
+};
+
 type CleanupRunCallbackTicketsSummary = {
   matchedCount: number;
   expiredCount: number;
   scheduledResumeCount: number;
   terminatedCount: number;
   blockerDeltaSummary?: string | null;
+  runFollowUpExplanation?: OutcomeExplanationInput | null;
   runSnapshot?: RunSnapshotInput | null;
 };
 
@@ -48,16 +97,144 @@ function joinParts(parts: Array<string | null | undefined>) {
   return parts.filter((part): part is string => Boolean(part && part.trim())).join(" ");
 }
 
-function formatRunSnapshot({ status, currentNodeId, waitingReason }: RunSnapshotInput) {
+function appendUniqueParts(
+  base: string | null | undefined,
+  extras: Array<string | null | undefined>
+) {
+  const normalizedBase = base?.trim() || null;
+  const normalizedExtras = extras.filter((extra): extra is string => {
+    const normalizedExtra = extra?.trim();
+    if (!normalizedExtra) {
+      return false;
+    }
+
+    return !(normalizedBase && normalizedBase.includes(normalizedExtra));
+  });
+
+  return joinParts([normalizedBase, ...normalizedExtras]);
+}
+
+function formatRunSnapshotEvidenceSummary({
+  executionFocusNodeName,
+  executionFocusNodeId,
+  executionFocusArtifactCount,
+  executionFocusArtifactRefCount,
+  executionFocusToolCallCount,
+  executionFocusRawRefCount,
+  executionFocusArtifacts,
+  executionFocusToolCalls
+}: RunSnapshotInput) {
+  const artifactCount = executionFocusArtifactCount ?? executionFocusArtifacts?.length ?? 0;
+  const artifactRefCount = executionFocusArtifactRefCount ?? 0;
+  const toolCallCount = executionFocusToolCallCount ?? executionFocusToolCalls?.length ?? 0;
+  const rawRefCount =
+    executionFocusRawRefCount ??
+    executionFocusToolCalls?.filter((toolCall) => Boolean(toolCall?.raw_ref?.trim())).length ??
+    0;
+
+  if (artifactCount <= 0 && artifactRefCount <= 0 && toolCallCount <= 0 && rawRefCount <= 0) {
+    return null;
+  }
+
+  const focusNodeLabel = executionFocusNodeName?.trim() || executionFocusNodeId?.trim() || "聚焦节点";
+  const sampleToolCall = executionFocusToolCalls?.find(
+    (toolCall) =>
+      Boolean(toolCall?.raw_ref?.trim()) ||
+      Boolean(toolCall?.response_summary?.trim()) ||
+      Boolean(toolCall?.execution_sandbox_backend_id?.trim()) ||
+      Boolean(toolCall?.execution_blocking_reason?.trim()) ||
+      Boolean(toolCall?.execution_fallback_reason?.trim())
+  );
+  const sampleArtifact = executionFocusArtifacts?.find(
+    (artifact) => Boolean(artifact?.summary?.trim()) || Boolean(artifact?.uri?.trim())
+  );
+
+  const summary = joinParts([
+    `${focusNodeLabel} 已关联 ${artifactCount} 个 artifact、${artifactRefCount} 条 artifact ref、${toolCallCount} 条 tool call。`,
+    rawRefCount > 0 ? `其中 ${rawRefCount} 条 tool call 已落到 raw_ref，可直接回看原始输出。` : null
+  ]);
+
+  const sample = sampleToolCall
+    ? joinParts([
+        "样本 tool：",
+        sampleToolCall.tool_name?.trim() || sampleToolCall.tool_id?.trim() || "tool",
+        sampleToolCall.status?.trim() ? `状态 ${sampleToolCall.status.trim()}。` : null,
+        sampleToolCall.effective_execution_class?.trim()
+          ? `effective ${sampleToolCall.effective_execution_class.trim()}。`
+          : null,
+        sampleToolCall.execution_sandbox_backend_id?.trim()
+          ? `backend ${sampleToolCall.execution_sandbox_backend_id.trim()}。`
+          : null,
+        sampleToolCall.raw_ref?.trim() ? `raw_ref ${sampleToolCall.raw_ref.trim()}。` : null,
+        sampleToolCall.response_summary?.trim() ? sampleToolCall.response_summary.trim() : null,
+        sampleToolCall.execution_blocking_reason?.trim()
+          ? `执行阻断：${sampleToolCall.execution_blocking_reason.trim()}`
+          : null,
+        sampleToolCall.execution_fallback_reason?.trim()
+          ? `执行降级：${sampleToolCall.execution_fallback_reason.trim()}`
+          : null
+      ])
+    : sampleArtifact
+      ? joinParts([
+          "样本 artifact：",
+          sampleArtifact.summary?.trim() || null,
+          sampleArtifact.uri?.trim() ? `(${sampleArtifact.uri.trim()})` : null
+        ])
+      : null;
+
+  return joinParts([summary, sample]);
+}
+
+export function formatRunSnapshotSummary({
+  status,
+  currentNodeId,
+  waitingReason,
+  executionFocusNodeId,
+  executionFocusExplanation,
+  callbackWaitingExplanation,
+  ...evidence
+}: RunSnapshotInput) {
   const normalizedStatus = status?.trim() || null;
   if (!normalizedStatus) {
     return null;
   }
 
+  const executionFocusPrimarySignal =
+    executionFocusExplanation?.primary_signal?.trim() || null;
+  const executionFocusFollowUp = executionFocusExplanation?.follow_up?.trim() || null;
+  const callbackWaitingPrimarySignal =
+    callbackWaitingExplanation?.primary_signal?.trim() || null;
+  const callbackWaitingFollowUp = callbackWaitingExplanation?.follow_up?.trim() || null;
+  const normalizedFocusNodeId = executionFocusNodeId?.trim() || null;
+  const normalizedCurrentNodeId = currentNodeId?.trim() || null;
+  const shouldPreferCallbackWaitingExplanation =
+    Boolean(callbackWaitingPrimarySignal) &&
+    (!executionFocusPrimarySignal || executionFocusPrimarySignal.startsWith("等待原因："));
+  const effectivePrimarySignal = shouldPreferCallbackWaitingExplanation
+    ? callbackWaitingPrimarySignal
+    : executionFocusPrimarySignal;
+  const effectiveFollowUp = shouldPreferCallbackWaitingExplanation && callbackWaitingFollowUp
+    ? callbackWaitingFollowUp
+    : executionFocusFollowUp;
+
   return joinParts([
     `当前 run 状态：${normalizedStatus}。`,
-    currentNodeId ? `当前节点：${currentNodeId}。` : null,
-    waitingReason ? `waiting reason：${waitingReason}。` : null
+    normalizedCurrentNodeId ? `当前节点：${normalizedCurrentNodeId}。` : null,
+    normalizedFocusNodeId && normalizedFocusNodeId !== normalizedCurrentNodeId
+      ? `聚焦节点：${normalizedFocusNodeId}。`
+      : null,
+    effectivePrimarySignal ? `重点信号：${effectivePrimarySignal}` : null,
+    effectiveFollowUp ? `后续动作：${effectiveFollowUp}` : null,
+    !effectivePrimarySignal && waitingReason ? `waiting reason：${waitingReason}。` : null,
+    formatRunSnapshotEvidenceSummary({
+      executionFocusNodeId,
+      executionFocusExplanation,
+      callbackWaitingExplanation,
+      waitingReason,
+      status,
+      currentNodeId,
+      ...evidence
+    })
   ]);
 }
 
@@ -87,7 +264,7 @@ function formatBulkRunFollowUp({
   const sampleSummary = sampledRuns
     .map(({ runId, snapshot }) => {
       const shortRunId = runId.slice(0, 8);
-      const snapshotSummary = formatRunSnapshot(snapshot ?? {});
+      const snapshotSummary = formatRunSnapshotSummary(snapshot ?? {});
       return snapshotSummary
         ? `run ${shortRunId}：${snapshotSummary}`
         : `run ${shortRunId}：暂未读取到最新快照。`;
@@ -104,6 +281,58 @@ function formatBulkRunFollowUp({
       ? `其余 ${affectedRunCount - sampledCount} 个 run 可继续到对应 run detail / inbox slice 查看后续推进。`
       : null
   ]);
+}
+
+export function formatOperatorOutcomeExplanationMessage(input: {
+  explanation?: OutcomeExplanationInput | null;
+  runFollowUpExplanation?: OutcomeExplanationInput | null;
+  blockerDeltaSummary?: string | null;
+  runSnapshot?: RunSnapshotInput | null;
+  fallback: string;
+}) {
+  const primarySignal = input.explanation?.primary_signal?.trim() || null;
+  const followUp = input.explanation?.follow_up?.trim() || null;
+  const runFollowUpPrimarySignal = input.runFollowUpExplanation?.primary_signal?.trim() || null;
+  const runFollowUpFollowUp = input.runFollowUpExplanation?.follow_up?.trim() || null;
+  const runFollowUpSummary =
+    joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ||
+    formatRunSnapshotSummary(input.runSnapshot ?? {});
+  const explanationSummary = joinParts([primarySignal, followUp]);
+
+  return (
+    appendUniqueParts(explanationSummary || input.fallback, [
+      input.blockerDeltaSummary,
+      runFollowUpSummary
+    ]) || input.fallback
+  );
+}
+
+export function formatBulkOperatorOutcomeExplanationMessage(input: {
+  explanation?: OutcomeExplanationInput | null;
+  runFollowUpExplanation?: OutcomeExplanationInput | null;
+  blockerDeltaSummary?: string | null;
+  affectedRunCount: number;
+  sampledRuns: BulkRunSnapshotSample[];
+  fallback: string;
+}) {
+  const primarySignal = input.explanation?.primary_signal?.trim() || null;
+  const followUp = input.explanation?.follow_up?.trim() || null;
+  const runFollowUpPrimarySignal = input.runFollowUpExplanation?.primary_signal?.trim() || null;
+  const runFollowUpFollowUp = input.runFollowUpExplanation?.follow_up?.trim() || null;
+  const runFollowUpSummary =
+    joinParts([runFollowUpPrimarySignal, runFollowUpFollowUp]) ||
+    formatBulkRunFollowUp({
+      affectedRunCount: input.affectedRunCount,
+      sampledRuns: input.sampledRuns
+    });
+  const explanationSummary = joinParts([primarySignal, followUp]);
+
+  return (
+    appendUniqueParts(explanationSummary || input.fallback, [
+      input.blockerDeltaSummary,
+      runFollowUpSummary
+    ]) || input.fallback
+  );
 }
 
 export function summarizeBulkRunFollowUp({
@@ -171,7 +400,7 @@ export function formatManualResumeResultMessage(input?: {
     return "已发起恢复尝试，请立即回看当前 run 时间线，确认是否真正离开 waiting 状态。";
   }
 
-  const snapshotSummary = formatRunSnapshot(input?.runSnapshot ?? {});
+  const snapshotSummary = formatRunSnapshotSummary(input?.runSnapshot ?? {});
 
   if (runStatus === "waiting") {
     return joinParts([
@@ -222,14 +451,20 @@ export function formatCleanupResultMessage({
   scheduledResumeCount,
   terminatedCount,
   blockerDeltaSummary,
+  runFollowUpExplanation,
   runSnapshot
 }: CleanupRunCallbackTicketsSummary) {
-  const runSnapshotSummary = formatRunSnapshot(runSnapshot ?? {});
+  const runSnapshotSummary = formatRunSnapshotSummary(runSnapshot ?? {});
+  const runFollowUpSummary = joinParts([
+    runFollowUpExplanation?.primary_signal,
+    runFollowUpExplanation?.follow_up
+  ]);
 
   if (matchedCount === 0) {
     return joinParts([
       "当前 slice 没有发现已过期的 callback ticket；如果 run 仍在等待，问题更可能在未完成审批、外部 callback 未到达，或尚未到定时恢复窗口。",
       blockerDeltaSummary,
+      runFollowUpSummary,
       runSnapshotSummary
     ]);
   }
@@ -243,6 +478,7 @@ export function formatCleanupResultMessage({
       ? `另有 ${terminatedCount} 条等待链路被终止，需要按失败路径继续排障。`
       : null,
     blockerDeltaSummary,
+    runFollowUpSummary,
     runSnapshotSummary
   ]);
 }
@@ -256,7 +492,7 @@ export function formatApprovalDecisionResultMessage(
   snapshot?: ApprovalDecisionSnapshotInput
 ) {
   const snapshotSummary = formatApprovalSnapshot(snapshot ?? {});
-  const runSnapshotSummary = formatRunSnapshot(snapshot?.runSnapshot ?? {});
+  const runSnapshotSummary = formatRunSnapshotSummary(snapshot?.runSnapshot ?? {});
 
   if (decision === "approved") {
     return joinParts([
@@ -291,7 +527,7 @@ export function formatNotificationRetryResultMessage(input: {
   const waitingSummary = input.waitingStatus
     ? ` 当前 waiting 链路：${input.waitingStatus}。`
     : "";
-  const runSnapshotSummary = formatRunSnapshot(input.runSnapshot ?? {});
+  const runSnapshotSummary = formatRunSnapshotSummary(input.runSnapshot ?? {});
 
   if (input.status === "delivered") {
     return joinParts([
@@ -336,15 +572,27 @@ export function formatBulkApprovalDecisionResultMessage(input: {
   sampledRuns: BulkRunSnapshotSample[];
   blockerDeltaSummary?: string | null;
 }) {
-  const actionLabel = input.decision === "approved" ? "批准" : "拒绝";
+  const baseMessage = formatBulkApprovalDecisionBaseMessage(input);
   return joinParts([
-    `批量${actionLabel} ${input.updatedCount} 条票据，跳过 ${input.skippedCount} 条。`,
-    input.skippedSummary ?? null,
+    baseMessage,
     input.blockerDeltaSummary,
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
     })
+  ]);
+}
+
+export function formatBulkApprovalDecisionBaseMessage(input: {
+  decision: "approved" | "rejected";
+  updatedCount: number;
+  skippedCount: number;
+  skippedSummary?: string | null;
+}) {
+  const actionLabel = input.decision === "approved" ? "批准" : "拒绝";
+  return joinParts([
+    `批量${actionLabel} ${input.updatedCount} 条票据，跳过 ${input.skippedCount} 条。`,
+    input.skippedSummary ?? null
   ]);
 }
 
@@ -356,13 +604,24 @@ export function formatBulkNotificationRetryResultMessage(input: {
   sampledRuns: BulkRunSnapshotSample[];
   blockerDeltaSummary?: string | null;
 }) {
+  const baseMessage = formatBulkNotificationRetryBaseMessage(input);
   return joinParts([
-    `批量重试 ${input.updatedCount} 条通知，跳过 ${input.skippedCount} 条。`,
-    input.skippedSummary ?? null,
+    baseMessage,
     input.blockerDeltaSummary,
     formatBulkRunFollowUp({
       affectedRunCount: input.affectedRunCount,
       sampledRuns: input.sampledRuns
     })
+  ]);
+}
+
+export function formatBulkNotificationRetryBaseMessage(input: {
+  updatedCount: number;
+  skippedCount: number;
+  skippedSummary?: string | null;
+}) {
+  return joinParts([
+    `批量重试 ${input.updatedCount} 条通知，跳过 ${input.skippedCount} 条。`,
+    input.skippedSummary ?? null
   ]);
 }

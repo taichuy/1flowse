@@ -30,6 +30,37 @@ def test_builtin_agent_starter_preserves_catalog_defaults_and_canvas_positions()
     assert output_node["config"]["ui"]["position"] == {"x": 760, "y": 220}
 
 
+def test_builtin_sandbox_code_starter_preserves_defaults_and_connects_mainline() -> None:
+    node_catalog = build_node_catalog_items()
+
+    starters = build_builtin_starters(node_catalog)
+    sandbox_starter = next(item for item in starters if item.id == "sandbox-code")
+    sandbox_node = next(node for node in sandbox_starter.definition["nodes"] if node["id"] == "sandbox")
+    output_node = next(node for node in sandbox_starter.definition["nodes"] if node["id"] == "output")
+
+    assert sandbox_starter.business_track == "编排节点能力"
+    assert sandbox_node["type"] == "sandbox_code"
+    assert sandbox_node["name"] == "Sandbox Code"
+    assert sandbox_node["config"]["language"] == "python"
+    assert sandbox_node["config"]["code"] == "result = {'ok': True}"
+    assert sandbox_node["config"]["ui"]["position"] == {"x": 420, "y": 220}
+    assert output_node["config"]["ui"]["position"] == {"x": 780, "y": 220}
+    assert sandbox_starter.definition["edges"] == [
+        {
+            "id": "edge_trigger_sandbox",
+            "sourceNodeId": "trigger",
+            "targetNodeId": "sandbox",
+            "channel": "control",
+        },
+        {
+            "id": "edge_sandbox_output",
+            "sourceNodeId": "sandbox",
+            "targetNodeId": "output",
+            "channel": "control",
+        },
+    ]
+
+
 def test_build_tool_source_lanes_groups_native_and_compat_tools() -> None:
     lanes = build_tool_source_lanes(
         [
@@ -75,9 +106,13 @@ def test_build_node_catalog_marks_planned_nodes_without_confusing_palette_visibi
     assert trigger_node.support_status == "available"
     assert trigger_node.palette.enabled is False
 
-    assert sandbox_node.support_status == "planned"
-    assert sandbox_node.palette.enabled is False
-    assert "sandbox / microvm" in sandbox_node.support_summary
+    assert sandbox_node.support_status == "available"
+    assert sandbox_node.palette.enabled is True
+    assert sandbox_node.defaults.config == {
+        "language": "python",
+        "code": "result = {'ok': True}",
+    }
+    assert "editor / persistence / runtime 主链" in sandbox_node.support_summary
 
     assert loop_node.support_status == "planned"
     assert loop_node.palette.enabled is False

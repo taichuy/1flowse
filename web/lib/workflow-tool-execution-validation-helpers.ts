@@ -1,11 +1,18 @@
 import type { PluginAdapterRegistryItem } from "@/lib/get-plugin-registry";
-import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import type {
+  SandboxBackendCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
 
 import type {
   WorkflowExecutionCapabilityIssueOptions,
   WorkflowExplicitAdapterBindingValidationOptions,
   WorkflowToolExecutionValidationIssue
 } from "@/lib/workflow-tool-execution-validation-types";
+import {
+  describePluginAdapterHealth,
+  formatPluginAdapterDescriptor
+} from "@/lib/plugin-adapter-presenters";
 
 export function validateExplicitAdapterBinding({
   context,
@@ -23,7 +30,9 @@ export function validateExplicitAdapterBinding({
     return {
       nodeId,
       nodeName,
-      message: `${context} 绑定了 adapter ${adapterId}，但当前 workspace 看不到这个 adapter，工具 ${toolId} 无法按该绑定执行。`,
+      message:
+        `${context} 绑定了 adapter ${adapterId}，但当前 workspace 看不到这个 adapter，工具 ${toolId} 无法按该绑定执行。` +
+        ` ${buildEcosystemAdapterHint(ecosystem, adapters)}`,
       path,
       field
     };
@@ -32,7 +41,9 @@ export function validateExplicitAdapterBinding({
     return {
       nodeId,
       nodeName,
-      message: `${context} 绑定的 adapter ${adapterId} 服务于 ${adapter.ecosystem}，与工具 ${toolId} 需要的 ${ecosystem} 不一致。`,
+      message:
+        `${context} 绑定的 adapter ${adapterId} 服务于 ${adapter.ecosystem}，与工具 ${toolId} 需要的 ${ecosystem} 不一致。` +
+        ` ${buildEcosystemAdapterHint(ecosystem, adapters)}`,
       path,
       field
     };
@@ -41,7 +52,9 @@ export function validateExplicitAdapterBinding({
     return {
       nodeId,
       nodeName,
-      message: `${context} 绑定的 adapter ${adapterId} 当前已禁用，工具 ${toolId} 不能按该绑定执行。`,
+      message:
+        `${context} 绑定的 adapter ${adapterId} 当前已禁用，工具 ${toolId} 不能按该绑定执行。` +
+        ` ${buildAdapterHealthHint(adapter)}`,
       path,
       field
     };
@@ -58,8 +71,10 @@ export function buildExecutionCapabilityIssue({
   ecosystem,
   adapterId,
   requestedExecutionClass,
+  executionPayload,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: WorkflowExecutionCapabilityIssueOptions): WorkflowToolExecutionValidationIssue | null {
@@ -68,16 +83,22 @@ export function buildExecutionCapabilityIssue({
       ? tool.supported_execution_classes
       : ["inline"];
     if (supportedExecutionClasses.includes(requestedExecutionClass)) {
-      return buildSandboxReadinessIssue({
+      const sandboxIssue = buildSandboxReadinessIssue({
         context,
         nodeId,
         nodeName,
         toolId,
         requestedExecutionClass,
+        executionPayload,
         sandboxReadiness,
+        sandboxBackends,
         path,
         field
       });
+      if (sandboxIssue) {
+        return sandboxIssue;
+      }
+      return null;
     }
     return {
       nodeId,
@@ -104,7 +125,9 @@ export function buildExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 显式请求了 ${requestedExecutionClass}，但当前没有可用 adapter 能为 ${toolId} 提供 ${resolvedEcosystem} 执行入口。`,
+      message:
+        `${context} 显式请求了 ${requestedExecutionClass}，但当前没有可用 adapter 能为 ${toolId} 提供 ${resolvedEcosystem} 执行入口。` +
+        ` ${buildEcosystemAdapterHint(resolvedEcosystem, adapters)}`,
       path,
       field
     };
@@ -117,9 +140,11 @@ export function buildExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 显式请求了 ${requestedExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
-        ", "
-      )}。`,
+      message:
+        `${context} 显式请求了 ${requestedExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
+          ", "
+        )}。` +
+        ` ${buildAdapterHealthHint(adapter)}`,
       path,
       field
     };
@@ -131,12 +156,158 @@ export function buildExecutionCapabilityIssue({
     nodeName,
     toolId,
     requestedExecutionClass,
+    executionPayload,
     sandboxReadiness,
+    sandboxBackends,
     path,
     field
   });
   if (sandboxReadinessIssue) {
     return sandboxReadinessIssue;
+  }
+
+  return null;
+}
+
+export function buildSandboxReadinessCapabilityIssue({
+  context,
+  nodeId,
+  nodeName,
+  toolId,
+  requestedExecutionClass,
+  executionPayload,
+  sandboxReadiness,
+  path,
+  field
+}: {
+  context: string;
+  nodeId: string;
+  nodeName: string;
+  toolId?: string | null;
+  requestedExecutionClass: string;
+  executionPayload: Record<string, unknown> | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  path: string;
+  field: string;
+}): WorkflowToolExecutionValidationIssue | null {
+  if (
+    (requestedExecutionClass !== "sandbox" && requestedExecutionClass !== "microvm") ||
+    !sandboxReadiness
+  ) {
+    return null;
+  }
+
+  const readiness = sandboxReadiness.execution_classes.find(
+    (item) => item.execution_class === requestedExecutionClass
+  );
+  if (!readiness?.available) {
+    return null;
+  }
+
+  const scopeCopy = toolId
+    ? `，工具 ${toolId} 不能稳定落到兼容后端。`
+    : "，当前节点不能稳定落到兼容后端。";
+  const buildIssue = (
+    message: string,
+    fieldPathSuffix: string,
+    issueField: string
+  ): WorkflowToolExecutionValidationIssue => ({
+    nodeId,
+    nodeName,
+    message,
+    path: `${path}.${fieldPathSuffix}`,
+    field: issueField
+  });
+
+  const profile = normalizeString(executionPayload?.profile);
+  const supportedProfiles =
+    readiness.supported_profiles.length > 0
+      ? readiness.supported_profiles
+      : sandboxReadiness.supported_profiles;
+  if (profile && supportedProfiles.length > 0 && !supportedProfiles.includes(profile)) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 profile = ${profile}，但当前 sandbox readiness 聚合视图还没有暴露该 profile${scopeCopy}`,
+      "profile",
+      "profile"
+    );
+  }
+
+  const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
+  const supportedDependencyModes =
+    readiness.supported_dependency_modes.length > 0
+      ? readiness.supported_dependency_modes
+      : sandboxReadiness.supported_dependency_modes;
+  const dependencyRef = normalizeString(executionPayload?.dependencyRef);
+  if (
+    dependencyMode === "dependency_ref" &&
+    dependencyRef &&
+    supportedDependencyModes.length > 0 &&
+    !supportedDependencyModes.includes("dependency_ref")
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 dependencyRef = ${dependencyRef}，但当前 sandbox readiness 聚合视图还没有暴露该 dependency_ref capability${scopeCopy}`,
+      "dependencyRef",
+      "dependencyRef"
+    );
+  }
+
+  if (
+    dependencyMode &&
+    supportedDependencyModes.length > 0 &&
+    !supportedDependencyModes.includes(dependencyMode)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass}，但当前 sandbox readiness 聚合视图还不支持 dependencyMode = ${dependencyMode}${scopeCopy}`,
+      "dependencyMode",
+      "dependencyMode"
+    );
+  }
+
+  if (
+    dependencyMode === "builtin" &&
+    normalizeString(executionPayload?.builtinPackageSet) &&
+    !(readiness.supports_builtin_package_sets ?? sandboxReadiness.supports_builtin_package_sets)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 builtinPackageSet，但当前 sandbox readiness 聚合视图还不支持 builtin package set hints${scopeCopy}`,
+      "builtinPackageSet",
+      "builtinPackageSet"
+    );
+  }
+
+  if (
+    toRecord(executionPayload?.backendExtensions) &&
+    !(readiness.supports_backend_extensions ?? sandboxReadiness.supports_backend_extensions)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 backendExtensions，但当前 sandbox readiness 聚合视图还不支持 backendExtensions payload${scopeCopy}`,
+      "backendExtensions",
+      "backendExtensions"
+    );
+  }
+
+  const networkPolicy = normalizeString(executionPayload?.networkPolicy);
+  if (
+    networkPolicy &&
+    !(readiness.supports_network_policy ?? sandboxReadiness.supports_network_policy)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 networkPolicy = ${networkPolicy}，但当前 sandbox readiness 聚合视图还不支持 networkPolicy hints${scopeCopy}`,
+      "networkPolicy",
+      "networkPolicy"
+    );
+  }
+
+  const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
+  if (
+    filesystemPolicy &&
+    !(readiness.supports_filesystem_policy ?? sandboxReadiness.supports_filesystem_policy)
+  ) {
+    return buildIssue(
+      `${context} 显式请求了 ${requestedExecutionClass} 并附带 filesystemPolicy = ${filesystemPolicy}，但当前 sandbox readiness 聚合视图还不支持 filesystemPolicy hints${scopeCopy}`,
+      "filesystemPolicy",
+      "filesystemPolicy"
+    );
   }
 
   return null;
@@ -152,9 +323,13 @@ export function buildDefaultExecutionCapabilityIssue({
   adapterId,
   adapters,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
-}: Omit<WorkflowExecutionCapabilityIssueOptions, "requestedExecutionClass">): WorkflowToolExecutionValidationIssue | null {
+}: Omit<
+  WorkflowExecutionCapabilityIssueOptions,
+  "requestedExecutionClass" | "executionPayload"
+>): WorkflowToolExecutionValidationIssue | null {
   const defaultExecutionClass = normalizeStrongDefaultExecutionClass(tool.default_execution_class);
   if (!defaultExecutionClass) {
     return null;
@@ -177,16 +352,21 @@ export function buildDefaultExecutionCapabilityIssue({
       };
     }
 
-    return buildDefaultSandboxReadinessIssue({
+    const sandboxIssue = buildDefaultSandboxReadinessIssue({
       context,
       nodeId,
       nodeName,
       toolId,
       defaultExecutionClass,
       sandboxReadiness,
+      sandboxBackends,
       path,
       field
     });
+    if (sandboxIssue) {
+      return sandboxIssue;
+    }
+    return null;
   }
 
   const resolvedEcosystem = ecosystem ?? tool.ecosystem;
@@ -203,7 +383,9 @@ export function buildDefaultExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。${defaultReason}`,
+      message:
+        `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但当前没有可用 adapter 能为 ${resolvedEcosystem} 提供执行入口。` +
+        `${defaultReason} ${buildEcosystemAdapterHint(resolvedEcosystem, adapters)}`,
       path,
       field
     };
@@ -216,9 +398,10 @@ export function buildDefaultExecutionCapabilityIssue({
     return {
       nodeId,
       nodeName,
-      message: `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
-        ", "
-      )}。${defaultReason}`,
+      message:
+        `${context} 依赖工具 ${toolId} 的默认执行级别 ${defaultExecutionClass}，但 adapter ${adapter.id} 当前只支持 ${supportedExecutionClasses.join(
+          ", "
+        )}。${defaultReason} ${buildAdapterHealthHint(adapter)}`,
       path,
       field
     };
@@ -231,6 +414,7 @@ export function buildDefaultExecutionCapabilityIssue({
     toolId,
     defaultExecutionClass,
     sandboxReadiness,
+    sandboxBackends,
     path,
     field
   });
@@ -266,13 +450,39 @@ function resolveAdapterForExecution({
   return adapters.find((adapter) => adapter.enabled && adapter.ecosystem === ecosystem) ?? null;
 }
 
+function buildAdapterHealthHint(adapter: PluginAdapterRegistryItem) {
+  const detail = describePluginAdapterHealth(adapter);
+  const executionClasses = adapter.supported_execution_classes?.length
+    ? adapter.supported_execution_classes.join(", ")
+    : "subprocess";
+  return [
+    `当前状态 ${adapter.status}`,
+    adapter.mode ? `mode ${adapter.mode}` : null,
+    `supports ${executionClasses}`,
+    detail
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join("；");
+}
+
+function buildEcosystemAdapterHint(ecosystem: string, adapters: PluginAdapterRegistryItem[]) {
+  const ecosystemAdapters = adapters.filter((adapter) => adapter.ecosystem === ecosystem);
+  if (ecosystemAdapters.length === 0) {
+    return `当前 workspace 里还没有 ${ecosystem} adapter；请先在 Adapter health and sync 确认 compat runtime 已注册。`;
+  }
+
+  return `当前 ${ecosystem} adapter：${ecosystemAdapters.map(formatPluginAdapterDescriptor).join("；")}。`;
+}
+
 function buildSandboxReadinessIssue({
   context,
   nodeId,
   nodeName,
   toolId,
   requestedExecutionClass,
+  executionPayload,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: {
@@ -281,7 +491,9 @@ function buildSandboxReadinessIssue({
   nodeName: string;
   toolId: string;
   requestedExecutionClass: string;
+  executionPayload: Record<string, unknown> | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   path: string;
   field: string;
 }): WorkflowToolExecutionValidationIssue | null {
@@ -292,13 +504,46 @@ function buildSandboxReadinessIssue({
     return null;
   }
 
+  const capabilityIssue = buildSandboxReadinessCapabilityIssue({
+    context,
+    nodeId,
+    nodeName,
+    toolId,
+    requestedExecutionClass,
+    executionPayload,
+    sandboxReadiness,
+    path,
+    field
+  });
+  if (capabilityIssue) {
+    return capabilityIssue;
+  }
+
   const readiness = sandboxReadiness.execution_classes.find(
     (item) => item.execution_class === requestedExecutionClass
   );
-  if (readiness?.available) {
+  const compatibility = describeSandboxBackendCompatibility({
+    requestedExecutionClass,
+    executionPayload,
+    sandboxReadiness,
+    sandboxBackends,
+    requireToolExecutionCapability: true
+  });
+  if (compatibility.available) {
     return null;
   }
 
+  if (compatibility.reason) {
+    return {
+      nodeId,
+      nodeName,
+      message:
+        `${context} 显式请求了 ${requestedExecutionClass}，但当前没有单个 sandbox backend 能同时满足工具 ${toolId} 的执行约束。` +
+        ` ${compatibility.reason}`,
+      path,
+      field
+    };
+  }
   const reason = readiness?.reason?.trim();
   return {
     nodeId,
@@ -316,6 +561,7 @@ function buildDefaultSandboxReadinessIssue({
   toolId,
   defaultExecutionClass,
   sandboxReadiness,
+  sandboxBackends,
   path,
   field
 }: {
@@ -325,6 +571,7 @@ function buildDefaultSandboxReadinessIssue({
   toolId: string;
   defaultExecutionClass: string;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
   path: string;
   field: string;
 }): WorkflowToolExecutionValidationIssue | null {
@@ -335,14 +582,21 @@ function buildDefaultSandboxReadinessIssue({
     return null;
   }
 
-  const readiness = sandboxReadiness.execution_classes.find(
-    (item) => item.execution_class === defaultExecutionClass
-  );
-  if (readiness?.available) {
+  const compatibility = describeSandboxBackendCompatibility({
+    requestedExecutionClass: defaultExecutionClass,
+    executionPayload: null,
+    sandboxReadiness,
+    sandboxBackends,
+    requireToolExecutionCapability: true
+  });
+  if (compatibility.available) {
     return null;
   }
 
-  const reason = readiness?.reason?.trim();
+  const readiness = sandboxReadiness.execution_classes.find(
+    (item) => item.execution_class === defaultExecutionClass
+  );
+  const reason = compatibility.reason ?? readiness?.reason?.trim();
   return {
     nodeId,
     nodeName,
@@ -360,6 +614,136 @@ function normalizeStrongDefaultExecutionClass(value: unknown) {
   return normalized;
 }
 
+export function describeSandboxBackendCompatibility({
+  requestedExecutionClass,
+  executionPayload,
+  sandboxReadiness,
+  sandboxBackends,
+  language,
+  requireToolExecutionCapability = false
+}: {
+  requestedExecutionClass: string;
+  executionPayload: Record<string, unknown> | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  sandboxBackends?: SandboxBackendCheck[] | null;
+  language?: string | null;
+  requireToolExecutionCapability?: boolean;
+}): { available: boolean; reason: string | null } {
+  if (requestedExecutionClass !== "sandbox" && requestedExecutionClass !== "microvm") {
+    return { available: true, reason: null };
+  }
+
+  const enabledBackends = (sandboxBackends ?? []).filter((backend) => backend.enabled);
+  const readiness = sandboxReadiness?.execution_classes.find(
+    (item) => item.execution_class === requestedExecutionClass
+  );
+  if (enabledBackends.length === 0) {
+    if (
+      requireToolExecutionCapability &&
+      readiness?.available &&
+      !(readiness.supports_tool_execution ?? sandboxReadiness?.supports_tool_execution)
+    ) {
+      return {
+        available: false,
+        reason:
+          "当前 sandbox readiness 只说明该 execution class 对代码执行可用，但还没有 backend 宣告 sandbox-backed tool execution capability。"
+      };
+    }
+    return {
+      available: false,
+      reason: readiness?.reason ?? null
+    };
+  }
+
+  const reasons: string[] = [];
+  const normalizedLanguage = normalizeString(language)?.toLowerCase() ?? null;
+  const profile = normalizeString(executionPayload?.profile);
+  const dependencyMode = normalizeDependencyMode(executionPayload?.dependencyMode);
+  const builtinPackageSet = normalizeString(executionPayload?.builtinPackageSet);
+  const dependencyRef = normalizeString(executionPayload?.dependencyRef);
+  const backendExtensions = toRecord(executionPayload?.backendExtensions);
+  const networkPolicy = normalizeString(executionPayload?.networkPolicy);
+  const filesystemPolicy = normalizeString(executionPayload?.filesystemPolicy);
+
+  for (const backend of enabledBackends) {
+    if (backend.status !== "healthy" && backend.status !== "degraded") {
+      reasons.push(`${backend.id}: ${backend.detail || "backend is offline"}`);
+      continue;
+    }
+
+    const capability = backend.capability;
+    if (!capability.supported_execution_classes.includes(requestedExecutionClass)) {
+      reasons.push(
+        `${backend.id}: does not support executionClass = ${requestedExecutionClass}`
+      );
+      continue;
+    }
+    if (requireToolExecutionCapability && !capability.supports_tool_execution) {
+      reasons.push(`${backend.id}: does not support sandbox-backed tool execution`);
+      continue;
+    }
+    if (
+      normalizedLanguage &&
+      capability.supported_languages.length > 0 &&
+      !capability.supported_languages.includes(normalizedLanguage)
+    ) {
+      reasons.push(`${backend.id}: does not support language = ${normalizedLanguage}`);
+      continue;
+    }
+    if (
+      profile &&
+      capability.supported_profiles.length > 0 &&
+      !capability.supported_profiles.includes(profile)
+    ) {
+      reasons.push(`${backend.id}: does not expose profile = ${profile}`);
+      continue;
+    }
+    if (dependencyMode) {
+      if (!capability.supported_dependency_modes.includes(dependencyMode)) {
+        reasons.push(`${backend.id}: does not support dependencyMode = ${dependencyMode}`);
+        continue;
+      }
+      if (
+        dependencyMode === "builtin" &&
+        builtinPackageSet &&
+        !capability.supports_builtin_package_sets
+      ) {
+        reasons.push(`${backend.id}: does not support builtinPackageSet hints`);
+        continue;
+      }
+      if (
+        dependencyMode === "dependency_ref" &&
+        dependencyRef &&
+        !capability.supported_dependency_modes.includes("dependency_ref")
+      ) {
+        reasons.push(`${backend.id}: does not support dependencyRef = ${dependencyRef}`);
+        continue;
+      }
+    }
+    if (backendExtensions && !capability.supports_backend_extensions) {
+      reasons.push(`${backend.id}: does not support backendExtensions payload`);
+      continue;
+    }
+    if (networkPolicy && !capability.supports_network_policy) {
+      reasons.push(`${backend.id}: does not support networkPolicy = ${networkPolicy}`);
+      continue;
+    }
+    if (filesystemPolicy && !capability.supports_filesystem_policy) {
+      reasons.push(`${backend.id}: does not support filesystemPolicy = ${filesystemPolicy}`);
+      continue;
+    }
+
+    return { available: true, reason: null };
+  }
+
+  const readinessReason = readiness?.reason?.trim();
+  const detail = reasons.length > 0 ? reasons.join("；") : readinessReason;
+  return {
+    available: false,
+    reason: detail ? `兼容 backend 细节：${detail}` : readinessReason ?? null
+  };
+}
+
 function buildSensitivityReason(
   sensitivityLevel: "L0" | "L1" | "L2" | "L3" | null | undefined,
   defaultExecutionClass: string
@@ -372,6 +756,14 @@ function buildSensitivityReason(
 
 function normalizeString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeDependencyMode(value: unknown) {
+  const normalized = normalizeString(value)?.toLowerCase();
+  if (!normalized || !["builtin", "dependency_ref", "backend_managed"].includes(normalized)) {
+    return null;
+  }
+  return normalized;
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {

@@ -13,6 +13,9 @@ from app.schemas.sensitive_access import (
     SensitiveAccessTimelineEntryItem,
     SensitiveResourceItem,
 )
+from app.services.sensitive_access_action_explanations import (
+    build_sensitive_access_timeline_outcome_explanation,
+)
 from app.services.sensitive_access_reasoning import describe_sensitive_access_reasoning
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
@@ -88,6 +91,9 @@ def serialize_notification_dispatch(
 
 def serialize_sensitive_access_timeline_entry(
     bundle: SensitiveAccessRequestBundle,
+    *,
+    run_snapshot=None,
+    run_follow_up=None,
 ) -> SensitiveAccessTimelineEntryItem:
     return SensitiveAccessTimelineEntryItem(
         request=serialize_sensitive_access_request(bundle.access_request),
@@ -101,4 +107,7 @@ def serialize_sensitive_access_timeline_entry(
             serialize_notification_dispatch(notification)
             for notification in bundle.notifications
         ],
+        outcome_explanation=build_sensitive_access_timeline_outcome_explanation(bundle),
+        run_snapshot=run_snapshot,
+        run_follow_up=run_follow_up,
     )

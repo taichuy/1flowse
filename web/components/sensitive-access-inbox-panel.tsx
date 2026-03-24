@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import {
   bulkDecideSensitiveAccessApprovalTickets,
   bulkRetrySensitiveAccessNotificationDispatches
 } from "@/app/actions/sensitive-access";
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import {
   SensitiveAccessBulkGovernanceCard,
   getSensitiveAccessBulkActionConfirmationMessage,
@@ -18,17 +20,38 @@ import {
   isPendingWaitingTicket,
   pickRetriableNotification
 } from "@/components/sensitive-access-inbox-panel-helpers";
+import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
+import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type {
+  NotificationChannelCapabilityItem,
   SensitiveAccessBulkAction,
   SensitiveAccessBulkActionResult,
   SensitiveAccessInboxEntry
 } from "@/lib/get-sensitive-access";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
+import { resolveSensitiveAccessInboxEntryActionScope } from "@/lib/sensitive-access-inbox-entry-scope";
 
 type SensitiveAccessInboxPanelProps = {
   entries: SensitiveAccessInboxEntry[];
+  channels?: NotificationChannelCapabilityItem[];
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  recommendedNextStep?: OperatorRecommendedNextStep | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
-export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanelProps) {
+export function SensitiveAccessInboxPanel({
+  entries,
+  channels = [],
+  callbackWaitingAutomation,
+  recommendedNextStep = null,
+  sandboxReadiness = null
+}: SensitiveAccessInboxPanelProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentHref = (() => {
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  })();
   const [bulkOperator, setBulkOperator] = useState(DEFAULT_OPERATOR_ID);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [bulkMessageTone, setBulkMessageTone] = useState<SensitiveAccessMessageTone>("idle");
@@ -57,20 +80,24 @@ export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanel
 
   const decisionTicketIds = entries
     .filter((entry) => isPendingWaitingTicket(entry))
-    .map((entry) => ({
-      ticketId: entry.ticket.id,
-      runId: entry.ticket.run_id ?? entry.request?.run_id ?? null,
-      nodeRunId: entry.ticket.node_run_id ?? entry.request?.node_run_id ?? null
-    }));
+    .map((entry) => {
+      const scope = resolveSensitiveAccessInboxEntryActionScope(entry);
+      return {
+        ticketId: entry.ticket.id,
+        runId: scope.runId,
+        nodeRunId: scope.nodeRunId
+      };
+    });
   const retryDispatchIds = entries.flatMap((entry) => {
     const notification = pickRetriableNotification(entry);
+    const scope = resolveSensitiveAccessInboxEntryActionScope(entry);
     return notification
       ? [
           {
             dispatchId: notification.id,
             approvalTicketId: entry.ticket.id,
-            runId: entry.ticket.run_id ?? entry.request?.run_id ?? null,
-            nodeRunId: entry.ticket.node_run_id ?? entry.request?.node_run_id ?? null
+            runId: scope.runId,
+            nodeRunId: scope.nodeRunId
           }
         ]
       : [];
@@ -88,7 +115,11 @@ export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanel
       return;
     }
 
-    if (!window.confirm(getSensitiveAccessBulkActionConfirmationMessage(action, candidateIds.length))) {
+    if (
+      !window.confirm(
+        getSensitiveAccessBulkActionConfirmationMessage(action, candidateIds.length, entries.length)
+      )
+    ) {
       return;
     }
 
@@ -129,6 +160,10 @@ export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanel
         </p>
       </div>
 
+      {recommendedNextStep ? (
+        <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
+      ) : null}
+
       <SensitiveAccessBulkGovernanceCard
         inScopeCount={entries.length}
         decisionCandidateCount={decisionTicketIds.length}
@@ -144,7 +179,14 @@ export function SensitiveAccessInboxPanel({ entries }: SensitiveAccessInboxPanel
 
       <div className="activity-list">
         {entries.map((entry) => (
-          <SensitiveAccessInboxEntryCard entry={entry} key={entry.ticket.id} />
+          <SensitiveAccessInboxEntryCard
+            callbackWaitingAutomation={callbackWaitingAutomation}
+            currentHref={currentHref}
+            entry={entry}
+            key={entry.ticket.id}
+            notificationChannels={channels}
+            sandboxReadiness={sandboxReadiness}
+          />
         ))}
       </div>
     </article>

@@ -1,4 +1,25 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import {
+  normalizeOperatorRunFollowUp,
+  normalizeOperatorRunSnapshot,
+  type OperatorRunFollowUpBody,
+  type OperatorRunSnapshotBody
+} from "@/app/actions/run-snapshot";
+import type {
+  CallbackWaitingLifecycleSummary,
+  RunCallbackTicketItem,
+  SkillReferenceLoadItem
+} from "@/lib/get-run-views";
+import {
+  buildSensitiveAccessInboxEntryCallbackContext,
+  type SensitiveAccessInboxCallbackContext
+} from "@/lib/sensitive-access-inbox-callback-context";
+import {
+  buildSensitiveAccessInboxEntryExecutionContext,
+  type SensitiveAccessInboxExecutionContext
+} from "@/lib/sensitive-access-inbox-execution-context";
+import { resolveSensitiveAccessCanonicalRunSnapshot } from "@/lib/sensitive-access";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type SensitiveResourceItem = {
   id: string;
@@ -58,6 +79,83 @@ export type NotificationDispatchItem = {
   created_at: string;
 };
 
+export type SignalFollowUpExplanation = {
+  primary_signal?: string | null;
+  follow_up?: string | null;
+};
+
+export type OperatorRunSnapshotSummary = {
+  status?: string | null;
+  workflowId?: string | null;
+  currentNodeId?: string | null;
+  waitingReason?: string | null;
+  executionFocusReason?: string | null;
+  executionFocusNodeId?: string | null;
+  executionFocusNodeRunId?: string | null;
+  executionFocusNodeName?: string | null;
+  executionFocusNodeType?: string | null;
+  executionFocusExplanation?: SignalFollowUpExplanation | null;
+  callbackWaitingExplanation?: SignalFollowUpExplanation | null;
+  callbackWaitingLifecycle?: CallbackWaitingLifecycleSummary | null;
+  scheduledResumeDelaySeconds?: number | null;
+  scheduledResumeReason?: string | null;
+  scheduledResumeSource?: string | null;
+  scheduledWaitingStatus?: string | null;
+  scheduledResumeScheduledAt?: string | null;
+  scheduledResumeDueAt?: string | null;
+  scheduledResumeRequeuedAt?: string | null;
+  scheduledResumeRequeueSource?: string | null;
+  executionFocusArtifactCount?: number;
+  executionFocusArtifactRefCount?: number;
+  executionFocusToolCallCount?: number;
+  executionFocusRawRefCount?: number;
+  executionFocusArtifactRefs?: string[];
+  executionFocusArtifacts?: Array<{
+    artifact_kind?: string | null;
+    content_type?: string | null;
+    summary?: string | null;
+    uri?: string | null;
+  }>;
+  executionFocusToolCalls?: Array<{
+    id?: string | null;
+    tool_id?: string | null;
+    tool_name?: string | null;
+    phase?: string | null;
+    status?: string | null;
+    requested_execution_class?: string | null;
+    requested_execution_source?: string | null;
+    requested_execution_profile?: string | null;
+    requested_execution_timeout_ms?: number | null;
+    requested_execution_network_policy?: string | null;
+    requested_execution_filesystem_policy?: string | null;
+    requested_execution_dependency_mode?: string | null;
+    requested_execution_builtin_package_set?: string | null;
+    requested_execution_dependency_ref?: string | null;
+    requested_execution_backend_extensions?: Record<string, unknown> | null;
+    effective_execution_class?: string | null;
+    execution_executor_ref?: string | null;
+    execution_sandbox_backend_id?: string | null;
+    execution_sandbox_backend_executor_ref?: string | null;
+    execution_sandbox_runner_kind?: string | null;
+    execution_blocking_reason?: string | null;
+    execution_fallback_reason?: string | null;
+    response_summary?: string | null;
+    response_content_type?: string | null;
+    raw_ref?: string | null;
+  }>;
+  executionFocusSkillTrace?: {
+    reference_count: number;
+    phase_counts: Record<string, number>;
+    source_counts: Record<string, number>;
+    loads: SkillReferenceLoadItem[];
+  } | null;
+};
+
+export type SensitiveAccessBulkRunSample = {
+  runId: string;
+  snapshot: OperatorRunSnapshotSummary | null;
+};
+
 export type NotificationChannelCapabilityItem = {
   channel: "in_app" | "webhook" | "feishu" | "slack" | "email";
   delivery_mode: "inline" | "worker";
@@ -91,6 +189,11 @@ export type SensitiveAccessInboxEntry = {
   request: SensitiveAccessRequestItem | null;
   resource: SensitiveResourceItem | null;
   notifications: NotificationDispatchItem[];
+  runSnapshot?: OperatorRunSnapshotSummary | null;
+  runFollowUp?: NonNullable<ReturnType<typeof normalizeOperatorRunFollowUp>> | null;
+  legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
+  callbackWaitingContext?: SensitiveAccessInboxCallbackContext | null;
+  executionContext?: SensitiveAccessInboxExecutionContext | null;
 };
 
 export type SensitiveAccessTimelineEntry = {
@@ -98,6 +201,30 @@ export type SensitiveAccessTimelineEntry = {
   resource: SensitiveResourceItem;
   approval_ticket?: ApprovalTicketItem | null;
   notifications: NotificationDispatchItem[];
+  outcome_explanation?: SignalFollowUpExplanation | null;
+  run_snapshot?: OperatorRunSnapshotSummary | null;
+  run_follow_up?: {
+    affected_run_count: number;
+    sampled_run_count: number;
+    waiting_run_count: number;
+    running_run_count: number;
+    succeeded_run_count: number;
+    failed_run_count: number;
+    unknown_run_count: number;
+    recommended_action?: {
+      kind: string;
+      entry_key: string;
+      href: string | null;
+      label: string | null;
+    } | null;
+    sampled_runs: Array<{
+      run_id: string;
+      snapshot?: OperatorRunSnapshotSummary | null;
+      callback_tickets?: RunCallbackTicketItem[];
+      sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+    }>;
+    explanation?: SignalFollowUpExplanation | null;
+  } | null;
 };
 
 export type SensitiveAccessInboxSummary = {
@@ -112,6 +239,25 @@ export type SensitiveAccessInboxSummary = {
   pending_notification_count: number;
   delivered_notification_count: number;
   failed_notification_count: number;
+  affected_run_count?: number;
+  affected_workflow_count?: number;
+  primary_blocker_kind?:
+    | "pending_approval"
+    | "waiting_resume"
+    | "failed_notification"
+    | "pending_notification"
+    | null;
+  blockers?: Array<{
+    kind:
+      | "pending_approval"
+      | "waiting_resume"
+      | "failed_notification"
+      | "pending_notification";
+    tone: "blocked" | "degraded";
+    item_count: number;
+    affected_run_count: number;
+    affected_workflow_count: number;
+  }>;
 };
 
 export type SensitiveAccessBulkAction = "approved" | "rejected" | "retry";
@@ -126,6 +272,11 @@ export type SensitiveAccessBulkActionResult = {
   action: SensitiveAccessBulkAction;
   status: "success" | "error";
   message: string;
+  outcomeExplanation?: SignalFollowUpExplanation | null;
+  runFollowUpExplanation?: SignalFollowUpExplanation | null;
+  runFollowUp?: NonNullable<ReturnType<typeof normalizeOperatorRunFollowUp>> | null;
+  legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
+  blockerDeltaSummary?: string | null;
   requestedCount: number;
   updatedCount: number;
   skippedCount: number;
@@ -142,6 +293,7 @@ export type SensitiveAccessBulkActionResult = {
   blockerClearedCount: number;
   blockerFullyClearedCount: number;
   blockerStillBlockedCount: number;
+  sampledRuns?: SensitiveAccessBulkRunSample[];
 };
 
 export type SensitiveAccessInboxSnapshot = {
@@ -151,6 +303,25 @@ export type SensitiveAccessInboxSnapshot = {
   requests: SensitiveAccessRequestItem[];
   notifications: NotificationDispatchItem[];
   summary: SensitiveAccessInboxSummary;
+};
+
+type SensitiveAccessInboxEntryBody = {
+  ticket: ApprovalTicketItem;
+  request?: SensitiveAccessRequestItem | null;
+  resource?: SensitiveResourceItem | null;
+  notifications: NotificationDispatchItem[];
+  run_snapshot?: OperatorRunSnapshotBody | OperatorRunSnapshotSummary | null;
+  run_follow_up?: OperatorRunFollowUpBody | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
+};
+
+type SensitiveAccessInboxResponseBody = {
+  entries?: SensitiveAccessInboxEntryBody[];
+  channels?: NotificationChannelCapabilityItem[];
+  resources?: SensitiveResourceItem[];
+  requests?: SensitiveAccessRequestItem[];
+  notifications?: NotificationDispatchItem[];
+  summary?: SensitiveAccessInboxSummary | null;
 };
 
 type SensitiveAccessInboxOptions = {
@@ -178,58 +349,87 @@ export async function getSensitiveAccessInboxSnapshot({
   accessRequestId,
   approvalTicketId
 }: SensitiveAccessInboxOptions = {}): Promise<SensitiveAccessInboxSnapshot> {
-  const [resources, requests, tickets, notifications, channels] = await Promise.all([
-    getSensitiveResources(),
-    getSensitiveAccessRequests({
-      decision: requestDecision,
-      requesterType,
-      runId,
-      nodeRunId,
-      accessRequestId
-    }),
-    getApprovalTickets({
-      status: ticketStatus,
-      waitingStatus,
-      runId,
-      nodeRunId,
-      accessRequestId,
-      approvalTicketId
-    }),
-    getNotificationDispatches({
-      approvalTicketId,
-      runId,
-      nodeRunId,
-      accessRequestId,
-      status: notificationStatus,
-      channel: notificationChannel
-    }),
-    getNotificationChannels()
-  ]);
+  const params = new URLSearchParams();
+  if (ticketStatus) {
+    params.set("status", ticketStatus);
+  }
+  if (waitingStatus) {
+    params.set("waiting_status", waitingStatus);
+  }
+  if (requestDecision) {
+    params.set("decision", requestDecision);
+  }
+  if (requesterType) {
+    params.set("requester_type", requesterType);
+  }
+  if (notificationStatus) {
+    params.set("notification_status", notificationStatus);
+  }
+  if (notificationChannel) {
+    params.set("notification_channel", notificationChannel);
+  }
+  if (runId?.trim()) {
+    params.set("run_id", runId.trim());
+  }
+  if (nodeRunId?.trim()) {
+    params.set("node_run_id", nodeRunId.trim());
+  }
+  if (accessRequestId?.trim()) {
+    params.set("access_request_id", accessRequestId.trim());
+  }
+  if (approvalTicketId?.trim()) {
+    params.set("approval_ticket_id", approvalTicketId.trim());
+  }
 
-  const requestsById = new Map(requests.map((item) => [item.id, item]));
-  const resourcesById = new Map(resources.map((item) => [item.id, item]));
-  const notificationsByTicketId = groupNotificationsByTicket(notifications);
-  const entries = tickets
-    .filter((ticket) => {
-      if ((requestDecision || requesterType) && !requestsById.has(ticket.access_request_id)) {
-        return false;
-      }
-      if (
-        (notificationStatus || notificationChannel) &&
-        (notificationsByTicketId[ticket.id] ?? []).length === 0
-      ) {
-        return false;
-      }
-      return true;
-    })
-    .map((ticket) => {
-      const request = requestsById.get(ticket.access_request_id) ?? null;
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+
+  let body: SensitiveAccessInboxResponseBody | null = null;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/sensitive-access/inbox${query}`, {
+      cache: "no-store"
+    });
+    if (response.ok) {
+      body = (await response.json()) as SensitiveAccessInboxResponseBody;
+    }
+  } catch {
+    body = null;
+  }
+
+  const resources = body?.resources ?? [];
+  const requests = body?.requests ?? [];
+  const notifications = body?.notifications ?? [];
+  const channels = body?.channels ?? [];
+  const entries = (body?.entries ?? [])
+    .map((entry) => ({
+      ticket: entry.ticket,
+      request: entry.request ?? null,
+      resource: entry.resource ?? null,
+      notifications: entry.notifications ?? [],
+      runSnapshot: normalizeOperatorRunSnapshot(entry.run_snapshot) ?? null,
+      runFollowUp: normalizeOperatorRunFollowUp(entry.run_follow_up) ?? null,
+      legacyAuthGovernance: entry.legacy_auth_governance ?? null
+    }))
+    .map((entry) => {
+      const runContext = resolveSensitiveAccessCanonicalRunSnapshot({
+        requestRunId: entry.request?.run_id,
+        approvalTicketRunId: entry.ticket.run_id,
+        runSnapshot: entry.runSnapshot,
+        runFollowUp: entry.runFollowUp
+      });
+
       return {
-        ticket,
-        request,
-        resource: request ? (resourcesById.get(request.resource_id) ?? null) : null,
-        notifications: notificationsByTicketId[ticket.id] ?? []
-      } satisfies SensitiveAccessInboxEntry;
+        ...entry,
+        callbackWaitingContext: buildSensitiveAccessInboxEntryCallbackContext(
+          entry,
+          runContext.snapshot,
+          runContext.runId
+        ),
+        executionContext: buildSensitiveAccessInboxEntryExecutionContext(
+          entry,
+          runContext.snapshot,
+          runContext.runId
+        )
+      };
     })
     .sort(
       (left, right) =>
@@ -242,7 +442,24 @@ export async function getSensitiveAccessInboxSnapshot({
     resources,
     requests,
     notifications,
-    summary: buildInboxSummary(entries)
+    summary: normalizeInboxSummary(body?.summary ?? null, entries)
+  };
+}
+
+function normalizeInboxSummary(
+  summary: SensitiveAccessInboxSummary | null | undefined,
+  entries: SensitiveAccessInboxEntry[]
+): SensitiveAccessInboxSummary {
+  const fallback = buildInboxSummary(entries);
+  if (!summary) {
+    return fallback;
+  }
+
+  return {
+    ...fallback,
+    ...summary,
+    primary_blocker_kind: summary.primary_blocker_kind ?? fallback.primary_blocker_kind,
+    blockers: summary.blockers ?? fallback.blockers
   };
 }
 
@@ -406,6 +623,72 @@ function buildInboxSummary(
   entries: SensitiveAccessInboxEntry[]
 ): SensitiveAccessInboxSummary {
   const notifications = entries.flatMap((entry) => entry.notifications);
+  const collectImpactedScope = (
+    scopedEntries: SensitiveAccessInboxEntry[]
+  ): { runIds: Set<string>; workflowIds: Set<string> } => {
+    const runIds = new Set<string>();
+    const workflowIds = new Set<string>();
+    scopedEntries.forEach((entry) => {
+      const runId =
+        entry.ticket.run_id?.trim() ||
+        entry.request?.run_id?.trim() ||
+        entry.runFollowUp?.sampledRuns.find((sample) => sample.runId.trim())?.runId?.trim() ||
+        null;
+      if (runId) {
+        runIds.add(runId);
+      }
+
+      const workflowId =
+        entry.runSnapshot?.workflowId?.trim() ||
+        entry.runFollowUp?.sampledRuns
+          .map((sample) => sample.snapshot?.workflowId?.trim() ?? "")
+          .find(Boolean) ||
+        null;
+      if (workflowId) {
+        workflowIds.add(workflowId);
+      }
+    });
+    return { runIds, workflowIds };
+  };
+
+  const { runIds, workflowIds } = collectImpactedScope(entries);
+  const blockers = [
+    {
+      kind: "pending_approval" as const,
+      tone: "blocked" as const,
+      item_count: entries.filter((item) => item.ticket.status === "pending").length,
+      entries: entries.filter((item) => item.ticket.status === "pending")
+    },
+    {
+      kind: "waiting_resume" as const,
+      tone: "blocked" as const,
+      item_count: entries.filter((item) => item.ticket.waiting_status === "waiting").length,
+      entries: entries.filter((item) => item.ticket.waiting_status === "waiting")
+    },
+    {
+      kind: "failed_notification" as const,
+      tone: "blocked" as const,
+      item_count: notifications.filter((item) => item.status === "failed").length,
+      entries: entries.filter((item) => item.notifications.some((notification) => notification.status === "failed"))
+    },
+    {
+      kind: "pending_notification" as const,
+      tone: "degraded" as const,
+      item_count: notifications.filter((item) => item.status === "pending").length,
+      entries: entries.filter((item) => item.notifications.some((notification) => notification.status === "pending"))
+    }
+  ]
+    .filter((blocker) => blocker.item_count > 0)
+    .map((blocker) => {
+      const blockerScope = collectImpactedScope(blocker.entries);
+      return {
+        kind: blocker.kind,
+        tone: blocker.tone,
+        item_count: blocker.item_count,
+        affected_run_count: blockerScope.runIds.size,
+        affected_workflow_count: blockerScope.workflowIds.size
+      };
+    });
 
   return {
     ticket_count: entries.length,
@@ -418,6 +701,10 @@ function buildInboxSummary(
     failed_ticket_count: entries.filter((item) => item.ticket.waiting_status === "failed").length,
     pending_notification_count: notifications.filter((item) => item.status === "pending").length,
     delivered_notification_count: notifications.filter((item) => item.status === "delivered").length,
-    failed_notification_count: notifications.filter((item) => item.status === "failed").length
+    failed_notification_count: notifications.filter((item) => item.status === "failed").length,
+    affected_run_count: runIds.size,
+    affected_workflow_count: workflowIds.size,
+    primary_blocker_kind: blockers[0]?.kind ?? null,
+    blockers
   };
 }

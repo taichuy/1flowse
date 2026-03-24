@@ -1,16 +1,85 @@
 from collections import Counter
+from datetime import UTC, datetime
 
 from app.models.run import NodeRun, Run, RunCallbackTicket
+from app.schemas.operator_follow_up import OperatorRunFollowUpSummary, OperatorRunSnapshot
 from app.schemas.run_views import RunCallbackTicketItem
 from app.schemas.workflow_publish import (
     PublishedEndpointCacheInventoryItem,
     PublishedEndpointInvocationApiKeyUsageItem,
     PublishedEndpointInvocationItem,
     PublishedEndpointInvocationRequestSurface,
+    PublishedEndpointInvocationSensitiveAccessSummary,
     PublishedEndpointInvocationWaitingLifecycle,
 )
+from app.services.callback_waiting_explanations import (
+    build_callback_waiting_explanation,
+)
+from app.services.operator_run_follow_up import (
+    resolve_operator_run_snapshot_from_follow_up,
+)
 from app.services.published_invocations import classify_invocation_reason
-from app.services.run_view_serializers import serialize_callback_waiting_lifecycle_summary
+from app.services.run_view_serializers import (
+    serialize_callback_waiting_lifecycle_summary,
+    serialize_callback_waiting_scheduled_resume,
+)
+from app.services.sensitive_access_timeline import SensitiveAccessTimelineSnapshot
+from app.services.sensitive_access_types import SensitiveAccessRequestBundle
+
+
+def _resolve_callback_waiting_lifecycle(node_run: NodeRun):
+    return serialize_callback_waiting_lifecycle_summary(node_run.checkpoint_payload)
+
+
+def _is_active_waiting_node(node_run: NodeRun) -> bool:
+    lifecycle = _resolve_callback_waiting_lifecycle(node_run)
+    if lifecycle is not None and lifecycle.terminated:
+        return False
+
+    status = str(node_run.status or "").strip()
+    if status == "waiting" or status.startswith("waiting_"):
+        return True
+
+    return node_run.waiting_reason is not None and node_run.finished_at is None
+
+
+def _is_terminated_callback_waiting_node(node_run: NodeRun) -> bool:
+    lifecycle = _resolve_callback_waiting_lifecycle(node_run)
+    return bool(lifecycle is not None and lifecycle.terminated)
+
+
+def _node_run_recency_key(node_run: NodeRun) -> tuple[datetime, int, str]:
+    return (
+        node_run.finished_at
+        or node_run.phase_started_at
+        or node_run.started_at
+        or node_run.created_at
+        or datetime.min.replace(tzinfo=UTC),
+        node_run.retry_count,
+        node_run.id,
+    )
+
+
+def _pick_latest_node_run(node_runs: list[NodeRun]) -> NodeRun | None:
+    if not node_runs:
+        return None
+    return max(node_runs, key=_node_run_recency_key)
+
+
+def _resolve_run_snapshot(
+    *,
+    record_run_id: str | None,
+    run_snapshot_lookup: dict[str, OperatorRunSnapshot] | None,
+    run_follow_up: OperatorRunFollowUpSummary | None,
+) -> OperatorRunSnapshot | None:
+    if run_snapshot_lookup and record_run_id:
+        snapshot = run_snapshot_lookup.get(record_run_id)
+        if snapshot is not None:
+            return snapshot
+    return resolve_operator_run_snapshot_from_follow_up(
+        run_follow_up,
+        run_id=record_run_id,
+    )
 
 
 def serialize_published_invocation_item(
@@ -24,6 +93,8 @@ def serialize_published_invocation_item(
         str, PublishedEndpointInvocationWaitingLifecycle | None
     ]
     | None = None,
+    run_snapshot_lookup: dict[str, OperatorRunSnapshot] | None = None,
+    run_follow_up_lookup: dict[str, OperatorRunFollowUpSummary] | None = None,
 ) -> PublishedEndpointInvocationItem:
     api_key_metadata = api_key_lookup.get(record.api_key_id) if api_key_lookup else None
     run = run_lookup.get(record.run_id) if run_lookup and record.run_id else None
@@ -36,6 +107,16 @@ def serialize_published_invocation_item(
         waiting_lifecycle_lookup.get(record.run_id)
         if waiting_lifecycle_lookup and record.run_id
         else None
+    )
+    run_follow_up = (
+        run_follow_up_lookup.get(record.run_id)
+        if run_follow_up_lookup and record.run_id
+        else None
+    )
+    run_snapshot = _resolve_run_snapshot(
+        record_run_id=record.run_id,
+        run_snapshot_lookup=run_snapshot_lookup,
+        run_follow_up=run_follow_up,
     )
     return PublishedEndpointInvocationItem(
         id=record.id,
@@ -59,6 +140,22 @@ def serialize_published_invocation_item(
         run_current_node_id=run.current_node_id if run else None,
         run_waiting_reason=waiting_reason,
         run_waiting_lifecycle=waiting_lifecycle,
+        run_snapshot=run_snapshot,
+        run_follow_up=run_follow_up,
+        execution_focus_explanation=(
+            run_snapshot.execution_focus_explanation
+            if run_snapshot is not None
+            else None
+        ),
+        callback_waiting_explanation=(
+            waiting_lifecycle.callback_waiting_explanation
+            if waiting_lifecycle is not None
+            else (
+                run_snapshot.callback_waiting_explanation
+                if run_snapshot is not None
+                else None
+            )
+        ),
         reason_code=classify_invocation_reason(
             status=record.status,
             error_message=record.error_message,
@@ -74,71 +171,93 @@ def serialize_published_invocation_item(
 
 
 def resolve_waiting_node_run(run: Run, node_runs: list[NodeRun]) -> NodeRun | None:
-    current_node_run = next(
-        (node_run for node_run in node_runs if node_run.node_id == run.current_node_id),
-        None,
-    )
-    if current_node_run is not None and (
-        current_node_run.status == "waiting" or current_node_run.waiting_reason is not None
-    ):
+    current_waiting_node_runs = [
+        node_run
+        for node_run in node_runs
+        if node_run.node_id == run.current_node_id and _is_active_waiting_node(node_run)
+    ]
+    current_node_run = _pick_latest_node_run(current_waiting_node_runs)
+    if current_node_run is not None:
         return current_node_run
 
-    waiting_node_run = next(
-        (node_run for node_run in node_runs if node_run.status == "waiting"),
-        None,
+    waiting_node_run = _pick_latest_node_run(
+        [node_run for node_run in node_runs if _is_active_waiting_node(node_run)]
     )
     if waiting_node_run is not None:
         return waiting_node_run
 
-    return next(
-        (node_run for node_run in node_runs if node_run.waiting_reason is not None),
-        None,
+    return _pick_latest_node_run(
+        [node_run for node_run in node_runs if _is_terminated_callback_waiting_node(node_run)]
     )
 
 
 def serialize_waiting_lifecycle(
     node_run: NodeRun,
     callback_tickets: list[RunCallbackTicket],
+    sensitive_access_summary: PublishedEndpointInvocationSensitiveAccessSummary | None = None,
 ) -> PublishedEndpointInvocationWaitingLifecycle:
-    checkpoint_payload = (
+    lifecycle = _resolve_callback_waiting_lifecycle(node_run)
+    scheduled_resume = serialize_callback_waiting_scheduled_resume(
         node_run.checkpoint_payload
-        if isinstance(node_run.checkpoint_payload, dict)
-        else {}
     )
-    raw_scheduled_resume = checkpoint_payload.get("scheduled_resume")
-    scheduled_resume = raw_scheduled_resume if isinstance(raw_scheduled_resume, dict) else {}
-    scheduled_delay = scheduled_resume.get("delay_seconds")
+    pending_approval_count = (
+        sensitive_access_summary.pending_approval_count
+        if sensitive_access_summary is not None
+        else 0
+    )
+    failed_notification_count = (
+        sensitive_access_summary.failed_notification_count
+        if sensitive_access_summary is not None
+        else 0
+    )
     return PublishedEndpointInvocationWaitingLifecycle(
         node_run_id=node_run.id,
         node_status=node_run.status,
-        waiting_reason=node_run.waiting_reason,
+        waiting_reason=(
+            None
+            if lifecycle is not None and lifecycle.terminated
+            else node_run.waiting_reason
+        ),
         callback_ticket_count=len(callback_tickets),
         callback_ticket_status_counts=dict(
             sorted(Counter(ticket.status for ticket in callback_tickets).items())
         ),
-        callback_waiting_lifecycle=serialize_callback_waiting_lifecycle_summary(
-            node_run.checkpoint_payload
+        callback_waiting_lifecycle=lifecycle,
+        callback_waiting_explanation=build_callback_waiting_explanation(
+            lifecycle=lifecycle,
+            pending_callback_ticket_count=sum(
+                1 for ticket in callback_tickets if ticket.status == "pending"
+            ),
+            pending_approval_count=pending_approval_count,
+            failed_notification_count=failed_notification_count,
+            scheduled_resume_delay_seconds=scheduled_resume[
+                "scheduled_resume_delay_seconds"
+            ],
+            scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
+            scheduled_resume_requeued_at=scheduled_resume[
+                "scheduled_resume_requeued_at"
+            ],
+            scheduled_resume_requeue_source=scheduled_resume[
+                "scheduled_resume_requeue_source"
+            ],
         ),
-        scheduled_resume_delay_seconds=(
-            float(scheduled_delay)
-            if isinstance(scheduled_delay, (int, float))
-            else None
-        ),
-        scheduled_resume_reason=(
-            str(scheduled_resume.get("reason"))
-            if scheduled_resume.get("reason") is not None
-            else None
-        ),
-        scheduled_resume_source=(
-            str(scheduled_resume.get("source"))
-            if scheduled_resume.get("source") is not None
-            else None
-        ),
-        scheduled_waiting_status=(
-            str(scheduled_resume.get("waiting_status"))
-            if scheduled_resume.get("waiting_status") is not None
-            else None
-        ),
+        sensitive_access_summary=sensitive_access_summary,
+        scheduled_resume_delay_seconds=scheduled_resume[
+            "scheduled_resume_delay_seconds"
+        ],
+        scheduled_resume_reason=scheduled_resume["scheduled_resume_reason"],
+        scheduled_resume_source=scheduled_resume["scheduled_resume_source"],
+        scheduled_waiting_status=scheduled_resume["scheduled_waiting_status"],
+        scheduled_resume_scheduled_at=scheduled_resume[
+            "scheduled_resume_scheduled_at"
+        ],
+        scheduled_resume_due_at=scheduled_resume["scheduled_resume_due_at"],
+        scheduled_resume_requeued_at=scheduled_resume[
+            "scheduled_resume_requeued_at"
+        ],
+        scheduled_resume_requeue_source=scheduled_resume[
+            "scheduled_resume_requeue_source"
+        ],
     )
 
 
@@ -146,6 +265,7 @@ def build_waiting_lifecycle_lookup(
     run_lookup: dict[str, Run],
     node_runs: list[NodeRun],
     callback_tickets: list[RunCallbackTicket],
+    sensitive_access_timeline_by_run: dict[str, SensitiveAccessTimelineSnapshot] | None = None,
 ) -> tuple[
     dict[str, str | None],
     dict[str, PublishedEndpointInvocationWaitingLifecycle | None],
@@ -164,12 +284,55 @@ def build_waiting_lifecycle_lookup(
         selected_node_run = resolve_waiting_node_run(run, node_runs_by_run.get(run_id, []))
         if selected_node_run is None:
             continue
-        waiting_reason_lookup[run_id] = selected_node_run.waiting_reason
-        waiting_lifecycle_lookup[run_id] = serialize_waiting_lifecycle(
+        sensitive_access_summary = _summarize_sensitive_access_bundles(
+            sensitive_access_timeline_by_run.get(run_id).by_node_run.get(selected_node_run.id, [])
+            if sensitive_access_timeline_by_run is not None
+            and sensitive_access_timeline_by_run.get(run_id) is not None
+            else []
+        )
+        waiting_lifecycle = serialize_waiting_lifecycle(
             selected_node_run,
             callback_tickets_by_node_run.get(selected_node_run.id, []),
+            sensitive_access_summary,
         )
+        waiting_reason_lookup[run_id] = waiting_lifecycle.waiting_reason
+        waiting_lifecycle_lookup[run_id] = waiting_lifecycle
     return waiting_reason_lookup, waiting_lifecycle_lookup
+
+
+def _summarize_sensitive_access_bundles(
+    bundles: list[SensitiveAccessRequestBundle],
+) -> PublishedEndpointInvocationSensitiveAccessSummary | None:
+    if not bundles:
+        return None
+
+    approval_tickets = [
+        bundle.approval_ticket for bundle in bundles if bundle.approval_ticket is not None
+    ]
+    notifications = [
+        notification for bundle in bundles for notification in bundle.notifications
+    ]
+    return PublishedEndpointInvocationSensitiveAccessSummary(
+        request_count=len(bundles),
+        approval_ticket_count=len(approval_tickets),
+        pending_approval_count=sum(1 for ticket in approval_tickets if ticket.status == "pending"),
+        approved_approval_count=sum(
+            1 for ticket in approval_tickets if ticket.status == "approved"
+        ),
+        rejected_approval_count=sum(
+            1 for ticket in approval_tickets if ticket.status == "rejected"
+        ),
+        expired_approval_count=sum(1 for ticket in approval_tickets if ticket.status == "expired"),
+        pending_notification_count=sum(
+            1 for notification in notifications if notification.status == "pending"
+        ),
+        delivered_notification_count=sum(
+            1 for notification in notifications if notification.status == "delivered"
+        ),
+        failed_notification_count=sum(
+            1 for notification in notifications if notification.status == "failed"
+        ),
+    )
 
 
 def serialize_callback_ticket_item(ticket: RunCallbackTicket) -> RunCallbackTicketItem:

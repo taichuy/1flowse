@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.schemas.workflow_contract_validation import validate_contract_schema
 
 PublishProtocol = Literal["native", "openai", "anthropic"]
-AuthMode = Literal["api_key", "token", "internal"]
+SUPPORTED_PUBLISHED_ENDPOINT_AUTH_MODES = ("api_key", "internal")
+AuthMode = Literal["api_key", "internal"]
 
 _SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 _PUBLISHED_ALIAS_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")

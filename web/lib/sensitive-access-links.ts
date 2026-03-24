@@ -4,6 +4,7 @@ import type {
   SensitiveAccessRequestItem,
   SensitiveAccessTimelineEntry
 } from "@/lib/get-sensitive-access";
+import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 
 type SensitiveAccessInboxHrefOptions = {
   status?: ApprovalTicketItem["status"] | null;
@@ -71,7 +72,7 @@ export function buildSensitiveAccessTimelineInboxHref(
   defaultRunId?: string | null
 ): string {
   return buildSensitiveAccessInboxHref({
-    runId: entry.request.run_id ?? entry.approval_ticket?.run_id ?? defaultRunId ?? null,
+    runId: resolveSensitiveAccessTimelineEntryRunId(entry, defaultRunId),
     nodeRunId: entry.request.node_run_id ?? entry.approval_ticket?.node_run_id ?? null,
     status: entry.approval_ticket?.status ?? null,
     waitingStatus: entry.approval_ticket?.waiting_status ?? null,

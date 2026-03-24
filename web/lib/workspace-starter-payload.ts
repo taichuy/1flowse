@@ -1,5 +1,10 @@
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import {
+  buildWorkflowDefinitionSandboxGovernanceTags,
+  describeWorkflowDefinitionSandboxDependency,
+  summarizeWorkflowDefinitionSandboxGovernance
+} from "@/lib/workflow-definition-sandbox-governance";
 
 export function buildWorkspaceStarterPayload({
   workflowId,
@@ -14,6 +19,9 @@ export function buildWorkspaceStarterPayload({
   businessTrack: WorkflowBusinessTrack;
   definition: WorkflowDetail["definition"];
 }) {
+  const sandboxGovernance = summarizeWorkflowDefinitionSandboxGovernance(definition);
+  const sandboxTags = buildWorkflowDefinitionSandboxGovernanceTags(sandboxGovernance);
+  const sandboxDependencySummary = describeWorkflowDefinitionSandboxDependency(sandboxGovernance);
   const trackMeta = {
     "应用新建编排": {
       description: "来自 editor 的最小可复用 workflow 入口草稿。",
@@ -21,9 +29,9 @@ export function buildWorkspaceStarterPayload({
       recommendedNextStep: "回到创建页验证模板入口，再继续补业务节点和输出约束。"
     },
     "编排节点能力": {
-      description: "来自 editor 的节点编排样板，可继续补 Agent、分支和上下文授权。",
-      workflowFocus: "把当前 workflow 中较成熟的节点组合沉淀成团队级 starter。",
-      recommendedNextStep: "继续结构化高频节点配置，再复用到新的业务流程里。"
+      description: "来自 editor 的节点编排样板，可继续补 Agent、Sandbox Code、分支和上下文授权。",
+      workflowFocus: "把当前 workflow 中较成熟的高频节点组合沉淀成团队级 starter。",
+      recommendedNextStep: "继续结构化高频节点配置与执行策略，再复用到新的业务流程里。"
     },
     "Dify 插件兼容": {
       description: "来自 editor 的工具/兼容链路草稿，适合作为插件能力复用入口。",
@@ -36,6 +44,9 @@ export function buildWorkspaceStarterPayload({
       recommendedNextStep: "继续补 output schema、发布配置与协议映射。"
     }
   }[businessTrack];
+  const recommendedNextStep = sandboxDependencySummary
+    ? `${trackMeta.recommendedNextStep} ${sandboxDependencySummary}，创建后优先核对 sandbox readiness。`
+    : trackMeta.recommendedNextStep;
 
   return {
     workspace_id: "default",
@@ -44,8 +55,10 @@ export function buildWorkspaceStarterPayload({
     business_track: businessTrack,
     default_workflow_name: workflowName,
     workflow_focus: trackMeta.workflowFocus,
-    recommended_next_step: trackMeta.recommendedNextStep,
-    tags: ["workspace starter", "editor saved", businessTrack],
+    recommended_next_step: recommendedNextStep,
+    tags: Array.from(
+      new Set(["workspace starter", "editor saved", businessTrack, ...sandboxTags])
+    ),
     definition,
     created_from_workflow_id: workflowId,
     created_from_workflow_version: workflowVersion

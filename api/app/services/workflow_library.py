@@ -7,12 +7,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.plugin import PluginToolRecord
+from app.models.workflow import Workflow
 from app.schemas.plugin import PluginToolItem
 from app.schemas.workflow_library import (
     WorkflowLibrarySnapshot,
     WorkflowLibrarySourceLane,
     WorkflowLibraryStarterItem,
     WorkflowNodeCatalogItem,
+)
+from app.schemas.workspace_starter import (
+    WorkflowBusinessTrack,
+    WorkspaceStarterSourceGovernanceKind,
 )
 from app.services.plugin_registry_store import get_plugin_registry_store
 from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_plugin_registry
@@ -38,6 +43,11 @@ class WorkflowLibraryService:
         db: Session,
         *,
         workspace_id: str = "default",
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
+        source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
+        needs_follow_up: bool = False,
+        include_builtin_starters: bool = True,
     ) -> WorkflowLibrarySnapshot:
         tools = self.list_tool_items(db, workspace_id=workspace_id)
         tool_source_lanes = self.build_tool_source_lanes(tools)
@@ -46,6 +56,11 @@ class WorkflowLibraryService:
             db,
             workspace_id=workspace_id,
             node_catalog=nodes,
+            business_track=business_track,
+            search=search,
+            source_governance_kind=source_governance_kind,
+            needs_follow_up=needs_follow_up,
+            include_builtin_starters=include_builtin_starters,
         )
         return WorkflowLibrarySnapshot(
             nodes=nodes,
@@ -102,11 +117,24 @@ class WorkflowLibraryService:
         *,
         workspace_id: str,
         node_catalog: list[WorkflowNodeCatalogItem] | None = None,
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
+        source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
+        needs_follow_up: bool = False,
+        include_builtin_starters: bool = True,
     ) -> list[WorkflowLibraryStarterItem]:
         catalog = node_catalog or self.list_node_catalog_items()
+        builtin_starters = build_builtin_starters(catalog) if include_builtin_starters else []
         return [
-            *build_builtin_starters(catalog),
-            *self._build_workspace_starters(db, workspace_id=workspace_id),
+            *builtin_starters,
+            *self._build_workspace_starters(
+                db,
+                workspace_id=workspace_id,
+                business_track=business_track,
+                search=search,
+                source_governance_kind=source_governance_kind,
+                needs_follow_up=needs_follow_up,
+            ),
         ]
 
     def build_starter_source_lanes(
@@ -132,33 +160,78 @@ class WorkflowLibraryService:
         db: Session,
         *,
         workspace_id: str,
+        business_track: WorkflowBusinessTrack | None = None,
+        search: str | None = None,
+        source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
+        needs_follow_up: bool = False,
     ) -> list[WorkflowLibraryStarterItem]:
         service = get_workspace_starter_template_service()
-        records = service.list_templates(db, workspace_id=workspace_id)
+        records = service.list_templates(
+            db,
+            workspace_id=workspace_id,
+            business_track=business_track,
+            search=search,
+        )
         workspace_source = build_workspace_starter_source()
+        source_workflows_by_id = self._load_source_workflows(db, records)
+        source_governance_by_template_id = service.build_source_governance_by_template_id(
+            records,
+            source_workflows_by_id,
+        )
+        filtered_records = service.filter_records_by_source_governance(
+            records,
+            source_governance_by_template_id,
+            source_governance_kind=source_governance_kind,
+            needs_follow_up=needs_follow_up,
+        )
         return [
             WorkflowLibraryStarterItem(
-                id=item.id,
+                id=serialized.id,
                 origin="workspace",
-                workspace_id=item.workspace_id,
-                name=item.name,
-                description=item.description,
-                business_track=item.business_track,
-                default_workflow_name=item.default_workflow_name,
-                workflow_focus=item.workflow_focus,
-                recommended_next_step=item.recommended_next_step,
-                tags=list(item.tags),
-                definition=deepcopy(item.definition),
+                workspace_id=serialized.workspace_id,
+                name=serialized.name,
+                description=serialized.description,
+                business_track=serialized.business_track,
+                default_workflow_name=serialized.default_workflow_name,
+                workflow_focus=serialized.workflow_focus,
+                recommended_next_step=serialized.recommended_next_step,
+                tags=list(serialized.tags),
+                definition=deepcopy(serialized.definition),
                 source=workspace_source,
-                created_from_workflow_id=item.created_from_workflow_id,
-                created_from_workflow_version=item.created_from_workflow_version,
-                archived=item.archived,
-                archived_at=item.archived_at,
-                created_at=item.created_at,
-                updated_at=item.updated_at,
+                created_from_workflow_id=serialized.created_from_workflow_id,
+                created_from_workflow_version=serialized.created_from_workflow_version,
+                archived=serialized.archived,
+                archived_at=serialized.archived_at,
+                created_at=serialized.created_at,
+                updated_at=serialized.updated_at,
+                source_governance=source_governance_by_template_id.get(record.id),
             )
-            for item in (service.serialize(record) for record in records)
+            for record, serialized in (
+                (record, service.serialize(record)) for record in filtered_records
+            )
         ]
+
+    def _load_source_workflows(
+        self,
+        db: Session,
+        records,
+    ) -> dict[str, Workflow]:
+        source_workflow_ids = sorted(
+            {
+                record.created_from_workflow_id
+                for record in records
+                if record.created_from_workflow_id
+            }
+        )
+        if not source_workflow_ids:
+            return {}
+
+        return {
+            workflow.id: workflow
+            for workflow in db.scalars(
+                select(Workflow).where(Workflow.id.in_(source_workflow_ids))
+            ).all()
+        }
 
     def _serialize_tool_definition(
         self,

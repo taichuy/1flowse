@@ -1,22 +1,45 @@
 "use client";
 
-import Link from "next/link";
-
+import React from "react";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { RunDetail } from "@/lib/get-run-detail";
+import type {
+  CallbackWaitingAutomationCheck,
+  SandboxReadinessCheck
+} from "@/lib/get-system-overview";
+import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
+import {
+  buildAuthorFacingWorkflowDetailLinkSurface,
+  buildWorkflowEditorStarterSaveSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
+import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-blocker-notice";
+import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
+import { WorkflowChipLink } from "@/components/workflow-chip-link";
 
-import type { WorkflowEditorMessageTone } from "./shared";
+import {
+  buildWorkflowPersistBlockerRecommendedNextStep,
+  type WorkflowPersistBlocker
+} from "./persist-blockers";
+import type { WorkflowEditorMessageKind, WorkflowEditorMessageTone } from "./shared";
 
 type WorkflowEditorSidebarProps = {
+  currentHref?: string;
   workflowId: string;
   workflowName: string;
   workflows: WorkflowListItem[];
@@ -27,13 +50,28 @@ type WorkflowEditorSidebarProps = {
   unsupportedNodes: UnsupportedWorkflowNodeSummary[];
   message: string | null;
   messageTone: WorkflowEditorMessageTone;
+  messageKind?: WorkflowEditorMessageKind;
+  persistBlockerSummary: string | null;
+  persistBlockers: WorkflowPersistBlocker[];
+  persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
+  executionPreflightMessage: string | null;
+  toolExecutionValidationIssueCount: number;
+  focusedValidationItem?: WorkflowValidationNavigatorItem | null;
+  preflightValidationItem?: WorkflowValidationNavigatorItem | null;
   validationNavigatorItems: WorkflowValidationNavigatorItem[];
   runs: WorkflowRunListItem[];
   selectedRunId: string | null;
   run: RunDetail | null;
+  runSnapshot: RunSnapshotWithId | null;
   trace: RunTrace | null;
   traceError: string | null;
   selectedNodeId: string | null;
+  callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  sandboxReadiness?: SandboxReadinessCheck | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
+  createWorkflowHref?: string;
+  workspaceStarterLibraryHref?: string;
+  hasScopedWorkspaceStarterFilters?: boolean;
   isLoadingRunOverlay: boolean;
   isRefreshingRuns: boolean;
   onWorkflowNameChange: (value: string) => void;
@@ -44,6 +82,7 @@ type WorkflowEditorSidebarProps = {
 };
 
 export function WorkflowEditorSidebar({
+  currentHref,
   workflowId,
   workflowName,
   workflows,
@@ -54,13 +93,28 @@ export function WorkflowEditorSidebar({
   unsupportedNodes,
   message,
   messageTone,
+  messageKind = "default",
+  persistBlockerSummary,
+  persistBlockers,
+  persistBlockerRecommendedNextStep = null,
+  executionPreflightMessage,
+  toolExecutionValidationIssueCount,
+  focusedValidationItem = null,
+  preflightValidationItem = null,
   validationNavigatorItems,
   runs,
   selectedRunId,
   run,
+  runSnapshot,
   trace,
   traceError,
   selectedNodeId,
+  callbackWaitingAutomation,
+  sandboxReadiness,
+  workspaceStarterGovernanceQueryScope = null,
+  createWorkflowHref = "/workflows/new",
+  workspaceStarterLibraryHref = "/workspace-starters",
+  hasScopedWorkspaceStarterFilters = false,
   isLoadingRunOverlay,
   isRefreshingRuns,
   onWorkflowNameChange,
@@ -73,6 +127,27 @@ export function WorkflowEditorSidebar({
   const pluginBackedNodeCount = editorNodeLibrary.filter(
     (item) => item.bindingRequired
   ).length;
+  const remediationItem = focusedValidationItem ?? preflightValidationItem;
+  const resolvedPersistBlockerRecommendedNextStep =
+    persistBlockerRecommendedNextStep ??
+    buildWorkflowPersistBlockerRecommendedNextStep(
+      persistBlockers,
+      sandboxReadiness,
+      currentHref
+    );
+  const feedbackMessage =
+    message ??
+    (persistBlockers.length > 0
+      ? "选择一个待修正项或点击保存，编辑器会跳到首个阻断点。"
+      : "选择节点或连线后，这里会显示编辑器反馈。");
+  const starterSaveSurfaceCopy =
+    messageKind === "workspace_starter_saved"
+      ? buildWorkflowEditorStarterSaveSurfaceCopy({
+          createWorkflowHref,
+          workspaceStarterLibraryHref,
+          hasScopedWorkspaceStarterFilters
+        })
+      : null;
 
   return (
     <aside className="editor-sidebar">
@@ -95,18 +170,25 @@ export function WorkflowEditorSidebar({
         </label>
 
         <div className="workflow-chip-row compact-stack">
-          {workflows.map((item) => (
-            <Link
-              key={item.id}
-              className={`workflow-chip ${item.id === workflowId ? "selected" : ""}`}
-              href={`/workflows/${encodeURIComponent(item.id)}`}
-            >
-              <span>{item.name}</span>
-              <small>
-                {item.version} · {item.status}
-              </small>
-            </Link>
-          ))}
+          {workflows.map((item) => {
+            const workflowDetailLink = workspaceStarterGovernanceQueryScope
+              ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                  workflowId: item.id,
+                  viewState: workspaceStarterGovernanceQueryScope
+                })
+              : buildAuthorFacingWorkflowDetailLinkSurface({
+                  workflowId: item.id
+                });
+
+            return (
+              <WorkflowChipLink
+                key={item.id}
+                workflow={item}
+                href={workflowDetailLink.href}
+                selected={item.id === workflowId}
+              />
+            );
+          })}
         </div>
       </article>
 
@@ -223,9 +305,43 @@ export function WorkflowEditorSidebar({
           </div>
         </div>
 
-        <p className={`sync-message ${messageTone}`}>
-          {message ?? "选择节点或连线后，这里会显示编辑器反馈。"}
-        </p>
+        {persistBlockers.length > 0 ? (
+          <WorkflowPersistBlockerNotice
+            title="Save gate"
+            summary={persistBlockerSummary}
+            blockers={persistBlockers}
+            sandboxReadiness={sandboxReadiness}
+            currentHref={currentHref}
+            hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
+          />
+        ) : null}
+
+        <p className={`sync-message ${messageTone}`}>{feedbackMessage}</p>
+
+        {starterSaveSurfaceCopy ? (
+          <div className="binding-field compact-stack">
+            <span className="binding-label">{starterSaveSurfaceCopy.nextStepTitle}</span>
+            <small className="section-copy">{starterSaveSurfaceCopy.description}</small>
+            <WorkbenchEntryLinks {...starterSaveSurfaceCopy.nextStepLinks} />
+          </div>
+        ) : null}
+
+        <SandboxReadinessOverviewCard
+          currentHref={currentHref}
+          readiness={sandboxReadiness}
+          title="Execution preflight"
+          intro={executionPreflightMessage}
+          hideWhenHealthy={toolExecutionValidationIssueCount === 0}
+          hideRecommendedNextStep={Boolean(resolvedPersistBlockerRecommendedNextStep)}
+        />
+
+        {remediationItem ? (
+          <WorkflowValidationRemediationCard
+            currentHref={currentHref}
+            item={remediationItem}
+            sandboxReadiness={sandboxReadiness}
+          />
+        ) : null}
 
         {validationNavigatorItems.length > 0 ? (
           <div className="validation-issue-list">
@@ -248,9 +364,13 @@ export function WorkflowEditorSidebar({
         runs={runs}
         selectedRunId={selectedRunId}
         run={run}
+        runSnapshot={runSnapshot}
         trace={trace}
         traceError={traceError}
         selectedNodeId={selectedNodeId}
+        callbackWaitingAutomation={callbackWaitingAutomation}
+        sandboxReadiness={sandboxReadiness}
+        workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
         isLoading={isLoadingRunOverlay}
         isRefreshingRuns={isRefreshingRuns}
         onSelectRunId={onSelectRunId}
