@@ -78,6 +78,7 @@ export default async function RunsPage({ searchParams }: RunsPageProps = {}) {
     runtimeActivity: overview.runtime_activity,
     callbackWaitingAutomation: overview.callback_waiting_automation,
     sandboxReadiness: overview.sandbox_readiness,
+    sensitiveAccessEntries: sensitiveAccessInbox.entries,
     sensitiveAccessSummary: sensitiveAccessInbox.summary,
     currentHref: runLibraryHref
   });

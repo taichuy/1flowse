@@ -43,11 +43,87 @@ describe("operator workbench next step presenters", () => {
         }
       }),
       sandboxReadiness: null,
+      sensitiveAccessEntries: [
+        buildSensitiveAccessInboxEntryFixture({
+          ticket: buildSensitiveAccessTicketFixture({
+            id: "ticket-openai-prod",
+            access_request_id: "request-openai-prod",
+            run_id: "run-openai-prod",
+            node_run_id: "node-run-openai-prod",
+            created_at: "2026-03-23T00:00:00Z"
+          }),
+          request: buildSensitiveAccessRequestFixture({
+            id: "request-openai-prod",
+            run_id: "run-openai-prod",
+            node_run_id: "node-run-openai-prod",
+            resource_id: "resource-openai-prod",
+            created_at: "2026-03-23T00:00:00Z"
+          }),
+          resource: buildSensitiveAccessResourceFixture({
+            id: "resource-openai-prod",
+            label: "OpenAI Prod Key",
+            sensitivity_level: "L3",
+            source: "credential",
+            credential_governance: {
+              credential_id: "credential-openai-prod",
+              credential_name: "OpenAI Prod Key",
+              credential_type: "api_key",
+              credential_status: "active",
+              sensitivity_level: "L3",
+              sensitive_resource_id: "resource-openai-prod",
+              sensitive_resource_label: "OpenAI Prod Key",
+              credential_ref: "cred://openai/prod",
+              summary: "OpenAI Prod Key · L3 治理 · 生效中"
+            },
+            created_at: "2026-03-23T00:00:00Z",
+            updated_at: "2026-03-23T00:00:00Z"
+          })
+        })
+      ],
       sensitiveAccessSummary: buildSensitiveAccessSummaryFixture({
         ticket_count: 2,
         pending_ticket_count: 2,
         affected_run_count: 2,
         affected_workflow_count: 1,
+        primary_resource: buildSensitiveAccessResourceFixture({
+          label: "OpenAI Prod Key",
+          sensitivity_level: "L3",
+          source: "credential",
+          credential_governance: {
+            credential_id: "credential-openai-prod",
+            credential_name: "OpenAI Prod Key",
+            credential_type: "api_key",
+            credential_status: "active",
+            sensitivity_level: "L3",
+            sensitive_resource_id: "resource-1",
+            sensitive_resource_label: "OpenAI Prod Key",
+            credential_ref: "cred://openai/prod",
+            summary: "OpenAI Prod Key · L3 治理 · 生效中"
+          }
+        })
+      }),
+      currentHref: "/runs"
+    });
+
+    expect(recommendedNextStep).toMatchObject({
+      label: "approval blocker",
+      href: "/sensitive-access?status=pending&waiting_status=waiting&run_id=run-openai-prod&node_run_id=node-run-openai-prod&access_request_id=request-openai-prod&approval_ticket_id=ticket-openai-prod",
+      href_label: "open exact inbox slice"
+    });
+    expect(recommendedNextStep?.detail).toContain(
+      "OpenAI Prod Key · L3 治理 · 生效中"
+    );
+  });
+
+  it("falls back to summary backlog when run library only has aggregate sensitive access facts", () => {
+    const recommendedNextStep = buildRunLibraryRecommendedNextStep({
+      runtimeActivity: buildRuntimeActivityFixture(),
+      callbackWaitingAutomation: buildCallbackWaitingAutomationFixture(),
+      sandboxReadiness: null,
+      sensitiveAccessEntries: [],
+      sensitiveAccessSummary: buildSensitiveAccessSummaryFixture({
+        ticket_count: 2,
+        pending_ticket_count: 2,
         primary_resource: buildSensitiveAccessResourceFixture({
           label: "OpenAI Prod Key",
           sensitivity_level: "L3",
@@ -121,6 +197,7 @@ describe("operator workbench next step presenters", () => {
         }
       }),
       sandboxReadiness: null,
+      sensitiveAccessEntries: [],
       sensitiveAccessSummary: buildSensitiveAccessSummaryFixture(),
       currentHref: "/runs"
     });

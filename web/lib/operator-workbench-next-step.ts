@@ -107,6 +107,7 @@ function rehomeSelfHrefToRunDetail(
 }
 
 function buildRunLibraryBacklogCandidate(
+  entries: SensitiveAccessInboxEntry[],
   summary: SensitiveAccessInboxSummary,
   currentHref: string
 ) {
@@ -120,6 +121,15 @@ function buildRunLibraryBacklogCandidate(
   });
   if (!backlog) {
     return null;
+  }
+
+  const backlogEntry = findSensitiveAccessPrimaryBacklogEntry(entries, backlog.kind);
+  if (backlogEntry) {
+    return buildSensitiveAccessInboxEntryCandidate({
+      entry: backlogEntry,
+      backlogKind: backlog.kind,
+      currentHref
+    });
   }
 
   const primaryResourceSummary = formatSensitiveResourceGovernanceSummary(
@@ -171,17 +181,23 @@ export function buildRunLibraryRecommendedNextStep({
   runtimeActivity,
   callbackWaitingAutomation,
   sandboxReadiness,
+  sensitiveAccessEntries,
   sensitiveAccessSummary,
   currentHref = "/runs"
 }: {
   runtimeActivity: RuntimeActivityCheck;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  sensitiveAccessEntries: SensitiveAccessInboxEntry[];
   sensitiveAccessSummary: SensitiveAccessInboxSummary;
   currentHref?: string;
 }): OperatorRecommendedNextStep | null {
   const latestWaitingRun = pickLatestWaitingRun(runtimeActivity);
-  const backlogCandidate = buildRunLibraryBacklogCandidate(sensitiveAccessSummary, currentHref);
+  const backlogCandidate = buildRunLibraryBacklogCandidate(
+    sensitiveAccessEntries,
+    sensitiveAccessSummary,
+    currentHref
+  );
   const callbackCandidate = rehomeSelfHrefToRunDetail(
     buildCallbackWaitingAutomationFollowUpCandidate(
       callbackWaitingAutomation,

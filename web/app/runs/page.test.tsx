@@ -81,7 +81,26 @@ describe("RunsPage", () => {
         summary: {
           ticket_count: 1,
           pending_ticket_count: 1,
-          waiting_ticket_count: 1
+          waiting_ticket_count: 1,
+          primary_resource: buildSensitiveAccessResourceFixture({
+            id: "resource-run-secret",
+            label: "Run secret",
+            sensitivity_level: "L3",
+            source: "credential",
+            credential_governance: {
+              credential_id: "credential-run-secret",
+              credential_name: "Run secret",
+              credential_type: "api_key",
+              credential_status: "active",
+              sensitivity_level: "L3",
+              sensitive_resource_id: "resource-run-secret",
+              sensitive_resource_label: "Run secret",
+              credential_ref: "cred://run/secret",
+              summary: "Run secret · L3 治理 · 生效中"
+            },
+            created_at: "2026-03-22T09:00:00Z",
+            updated_at: "2026-03-22T09:30:00Z"
+          })
         },
         entries: [
           buildSensitiveAccessInboxEntryFixture({
@@ -106,6 +125,17 @@ describe("RunsPage", () => {
               label: "Run secret",
               sensitivity_level: "L3",
               source: "credential",
+              credential_governance: {
+                credential_id: "credential-run-secret",
+                credential_name: "Run secret",
+                credential_type: "api_key",
+                credential_status: "active",
+                sensitivity_level: "L3",
+                sensitive_resource_id: "resource-run-secret",
+                sensitive_resource_label: "Run secret",
+                credential_ref: "cred://run/secret",
+                summary: "Run secret · L3 治理 · 生效中"
+              },
               created_at: "2026-03-22T09:00:00Z",
               updated_at: "2026-03-22T09:30:00Z"
             }),
@@ -140,8 +170,12 @@ describe("RunsPage", () => {
       surfaceCopy.operatorEntryLinks.overrides?.operatorInbox?.label ?? "打开 sensitive access inbox"
     );
     expect(html).toContain("Recommended next step");
-    expect(html).toContain("pending approval ticket");
-    expect(html).toContain('/sensitive-access?status=pending');
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("Run secret · L3 治理 · 生效中");
+    expect(html).toContain(
+      '/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-library-entry&amp;node_run_id=node-library-entry&amp;access_request_id=request-run-1&amp;approval_ticket_id=ticket-run-1'
+    );
+    expect(html).toContain("open exact inbox slice");
     expect(html).toContain("callback_waiting · 1");
     expect(html).toContain("completed:1 / waiting_callback:1");
     expect(html).toContain("Live sandbox readiness");
