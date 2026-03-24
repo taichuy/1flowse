@@ -330,8 +330,10 @@ describe("SensitiveAccessInboxEntryCard", () => {
   it("adds execution timeline drilldown to compact focus evidence", () => {
     const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry: buildEntry() }));
 
-    expect(html).toContain('href="/runs/run-1#run-diagnostics-execution-timeline"');
-    expect(html).toContain("jump to execution timeline");
+    expect(html).toContain(
+      'href="/runs/run-1?node_run_id=node-run-1#run-diagnostics-execution-timeline"'
+    );
+    expect(html).toContain("jump to focused trace slice");
   });
 
   it("keeps inline approval actions at run-level when only callback waiting exposes a display node scope", () => {

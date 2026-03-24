@@ -405,6 +405,51 @@ describe("workflow publish activity panel helpers", () => {
     expect(detailSurface.nextStepSurface?.href).toContain("approval_ticket_id=ticket-1");
   });
 
+  it("projects selected invocation execution next step to a focused trace slice when blocker backlog is cleared", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.invocation.run_waiting_lifecycle = null;
+    detail.run_follow_up = null;
+    detail.callback_waiting_explanation = null;
+    detail.callback_tickets = [];
+    detail.sensitive_access_entries = [];
+    detail.blocking_sensitive_access_entries = [];
+    detail.blocking_node_run_id = null;
+    detail.execution_focus_explanation = {
+      primary_signal: "execution focus 仍需要排障。",
+      follow_up: "优先打开 run 继续检查 focus node。"
+    };
+    detail.run_snapshot = {
+      status: "failed",
+      current_node_id: "tool_wait",
+      execution_focus_node_id: "tool_wait",
+      execution_focus_node_run_id: "node-run-focus",
+      execution_focus_node_name: "Tool wait",
+      execution_focus_explanation: {
+        primary_signal: "execution focus 仍需要排障。",
+        follow_up: "优先打开 run 继续检查 focus node。"
+      }
+    } as never;
+
+    const detailSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
+      selectedInvocationId: "invocation-1",
+      selectedInvocationDetail: {
+        kind: "ok",
+        data: detail
+      }
+    });
+
+    expect(detailSurface.kind).toBe("ok");
+    expect(detailSurface.nextStepSurface).toMatchObject({
+      title: "Selected invocation next step",
+      invocationId: "invocation-1",
+      label: "execution focus",
+      href:
+        "/runs/run-selected-1?node_run_id=node-run-focus#run-diagnostics-execution-timeline",
+      hrefLabel: "open focused trace slice",
+      detail: "优先打开 run 继续检查 focus node。"
+    });
+  });
+
   it("projects blocked invocation detail copy from shared guarded surface", () => {
     const detailSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
       selectedInvocationId: "invocation-1",

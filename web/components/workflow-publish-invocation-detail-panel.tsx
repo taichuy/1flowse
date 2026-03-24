@@ -19,7 +19,7 @@ import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workfl
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
-  buildOperatorExecutionTimelineLinkSurface,
+  buildOperatorTraceSliceLinkSurface,
   buildOperatorRecommendedNextStep,
   buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
@@ -404,9 +404,10 @@ export function WorkflowPublishInvocationDetailPanel({
                       workspaceStarterGovernanceQueryScope
                     )
                   : null;
-                const sampleExecutionTimelineLink = buildOperatorExecutionTimelineLinkSurface({
+                const sampleExecutionTimelineLink = buildOperatorTraceSliceLinkSurface({
                   runId: sample.run_id,
                   runHref: scopedSampleRunHref,
+                  nodeRunId: sample.run_snapshot.executionFocusNodeRunId,
                   currentHref
                 });
 

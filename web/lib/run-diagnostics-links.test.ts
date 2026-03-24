@@ -19,4 +19,18 @@ describe("run diagnostics links", () => {
       `/runs/run%20alpha%2Fbeta#${RUN_DIAGNOSTICS_EXECUTION_TIMELINE_SECTION_ID}`
     );
   });
+
+  it("merges focused trace filters into scoped execution timeline deep links", () => {
+    expect(
+      buildRunDiagnosticsExecutionTimelineHref("run alpha/beta", {
+        baseHref: "/runs/run%20alpha%2Fbeta?needs_follow_up=true",
+        traceQuery: {
+          node_run_id: "node-run-1",
+          event_type: "tool.execution.blocked"
+        }
+      })
+    ).toBe(
+      `/runs/run%20alpha%2Fbeta?needs_follow_up=true&event_type=tool.execution.blocked&node_run_id=node-run-1#${RUN_DIAGNOSTICS_EXECUTION_TIMELINE_SECTION_ID}`
+    );
+  });
 });

@@ -22,11 +22,11 @@ import type {
 } from "@/lib/get-sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
-  buildOperatorExecutionTimelineLinkSurface,
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorInboxSliceLinkSurface,
   buildOperatorRecommendedNextStep,
   buildOperatorRunDetailLinkSurface,
+  buildOperatorTraceSliceLinkSurface,
   formatOperatorOpenRunLinkLabel
 } from "@/lib/operator-follow-up-presenters";
 import { buildOperatorRunFollowUpSampleInboxContext } from "@/lib/operator-run-follow-up-samples";
@@ -132,8 +132,9 @@ export function SensitiveAccessInboxEntryCard({
     runId: executionContext?.runId,
     surfaceCopy: operatorSurfaceCopy
   });
-  const focusExecutionTimelineLink = buildOperatorExecutionTimelineLinkSurface({
+  const focusExecutionTimelineLink = buildOperatorTraceSliceLinkSurface({
     runId: executionContext?.runId,
+    nodeRunId: executionContext?.focusNode.node_run_id,
     currentHref
   });
   const focusInboxLink = buildOperatorInboxSliceLinkSurface({

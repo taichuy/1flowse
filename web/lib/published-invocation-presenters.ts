@@ -40,7 +40,8 @@ import {
   buildOperatorInboxSliceLinkSurface,
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorRecommendedNextStep,
-  buildOperatorRunDetailLinkSurface
+  buildOperatorRunDetailLinkSurface,
+  buildOperatorTraceSliceLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
@@ -2722,6 +2723,14 @@ export function buildPublishedInvocationRecommendedNextStep({
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
+  const executionTraceLink = executionSnapshot?.executionFocusNodeRunId?.trim()
+    ? buildOperatorTraceSliceLinkSurface({
+        runId,
+        currentHref,
+        nodeRunId: executionSnapshot.executionFocusNodeRunId,
+        hrefLabel: "open focused trace slice"
+      })
+    : null;
   const executionCandidate = buildSharedOrLocalOperatorCandidate({
     sharedCandidate:
       sharedSandboxCandidate ??
@@ -2737,9 +2746,11 @@ export function buildPublishedInvocationRecommendedNextStep({
     active: Boolean(runId || executionFocusFollowUp?.trim()),
     currentHref,
     runId,
+    runHref: executionTraceLink?.href ?? null,
     label: "execution focus",
     detail: executionFocusFollowUp,
-    fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail
+    fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    hrefLabel: executionTraceLink?.label ?? null
   });
   const hasStableRecommendedCandidate = Boolean(
     callbackCandidate?.active || executionCandidate.active

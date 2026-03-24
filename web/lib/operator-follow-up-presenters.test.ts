@@ -11,6 +11,7 @@ import {
   buildRequiredOperatorRunDetailLinkSurface,
   buildOperatorRunDetailLinkSurface,
   buildOperatorRunDetailCandidate,
+  buildOperatorTraceSliceLinkSurface,
   buildSharedOrLocalOperatorCandidate,
   buildOperatorRunSnapshotMetaRows,
   formatOperatorOpenRunLinkLabel
@@ -119,6 +120,30 @@ describe("operator follow-up presenters", () => {
       buildOperatorExecutionTimelineLinkSurface({
         runId: "run-123456789",
         currentHref: "/runs/run-123456789#run-diagnostics-execution-timeline"
+      })
+    ).toBeNull();
+  });
+
+  it("为 focused evidence 构建带 node_run_id 的 trace slice 深链", () => {
+    expect(
+      buildOperatorTraceSliceLinkSurface({
+        runId: "run-123456789",
+        runHref: "/runs/run-123456789?needs_follow_up=true",
+        nodeRunId: "node-run-1"
+      })
+    ).toEqual({
+      href: "/runs/run-123456789?needs_follow_up=true&node_run_id=node-run-1#run-diagnostics-execution-timeline",
+      label: "jump to focused trace slice"
+    });
+  });
+
+  it("在 focused trace slice 已是当前页时移除重复深链", () => {
+    expect(
+      buildOperatorTraceSliceLinkSurface({
+        runId: "run-123456789",
+        nodeRunId: "node-run-1",
+        currentHref:
+          "/runs/run-123456789?node_run_id=node-run-1#run-diagnostics-execution-timeline"
       })
     ).toBeNull();
   });

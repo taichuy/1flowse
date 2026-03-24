@@ -724,7 +724,8 @@ describe("WorkflowPublishInvocationEntryCard", () => {
 
     expect(html).toContain("Recommended next step");
     expect(html).toContain("execution focus");
-    expect(html).toContain("open run");
+    expect(html).toContain("open focused trace slice");
+    expect(html).toContain("node_run_id=node-run-tool-wait");
     expect(html).toContain("当前 live sandbox readiness 显示 sandbox 已 ready。");
     expect(html).toContain("backend 是 sandbox-stale");
     expect(html).toContain("compare with live readiness");
@@ -866,7 +867,7 @@ describe("WorkflowPublishInvocationEntryCard", () => {
       '/runs/run-callback-1?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92'
     );
     expect(html).toContain(
-      '/runs/run-callback-1?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92#run-diagnostics-execution-timeline'
+      '/runs/run-callback-1?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;node_run_id=node-run-tool-wait#run-diagnostics-execution-timeline'
     );
   });
 });

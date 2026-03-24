@@ -2617,6 +2617,31 @@ describe("published invocation presenters", () => {
     });
   });
 
+  it("execution focus 带 node_run_id 时把下一步指向 focused trace slice", () => {
+    expect(
+      buildPublishedInvocationRecommendedNextStep({
+        runId: "run-focus-1",
+        canonicalFollowUp: {
+          headline: "当前 invocation 已接入 canonical follow-up 事实链。",
+          follow_up: null,
+          has_shared_callback_waiting_summary: false
+        },
+        callbackWaitingFollowUp: null,
+        executionFocusFollowUp: "优先打开 run 继续检查 focus node。",
+        executionSnapshot: {
+          executionFocusNodeRunId: "node-run-focus"
+        },
+        blockingInboxHref: null,
+        approvalInboxHref: null
+      })
+    ).toEqual({
+      label: "execution focus",
+      detail: "优先打开 run 继续检查 focus node。",
+      href: "/runs/run-focus-1?node_run_id=node-run-focus#run-diagnostics-execution-timeline",
+      href_label: "open focused trace slice"
+    });
+  });
+
   it("没有稳定 CTA 或导航目标时，不再把 canonical follow-up 单独投影成 next-step 卡片", () => {
     expect(
       buildPublishedInvocationRecommendedNextStep({

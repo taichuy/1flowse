@@ -509,6 +509,64 @@ export function buildOperatorExecutionTimelineLinkSurface({
   };
 }
 
+export function buildOperatorTraceSliceLinkSurface({
+  runId,
+  runHref,
+  currentHref,
+  nodeRunId,
+  eventType,
+  payloadKey,
+  hrefLabel
+}: {
+  runId?: string | null;
+  runHref?: string | null;
+  currentHref?: string | null;
+  nodeRunId?: string | null;
+  eventType?: string | null;
+  payloadKey?: string | null;
+  hrefLabel?: string | null;
+}): OperatorFollowUpLinkSurface | null {
+  const normalizedNodeRunId = normalizeFollowUpCopy(nodeRunId);
+  const normalizedEventType = normalizeFollowUpCopy(eventType);
+  const normalizedPayloadKey = normalizeFollowUpCopy(payloadKey);
+  const hasTraceFilters = Boolean(
+    normalizedNodeRunId || normalizedEventType || normalizedPayloadKey
+  );
+
+  if (!hasTraceFilters) {
+    return buildOperatorExecutionTimelineLinkSurface({
+      runId,
+      runHref,
+      currentHref,
+      hrefLabel
+    });
+  }
+
+  const normalizedHrefLabel =
+    normalizeFollowUpCopy(hrefLabel) ?? "jump to focused trace slice";
+  const normalizedRunHref = normalizeHref(runHref);
+  const normalizedRunId = normalizeFollowUpCopy(runId);
+  const href = normalizedRunId
+    ? buildRunDiagnosticsExecutionTimelineHref(normalizedRunId, {
+        baseHref: normalizedRunHref,
+        traceQuery: {
+          ...(normalizedNodeRunId ? { node_run_id: normalizedNodeRunId } : {}),
+          ...(normalizedEventType ? { event_type: normalizedEventType } : {}),
+          ...(normalizedPayloadKey ? { payload_key: normalizedPayloadKey } : {})
+        }
+      })
+    : null;
+
+  if (!href || isSelfHref(href, currentHref)) {
+    return null;
+  }
+
+  return {
+    href,
+    label: normalizedHrefLabel
+  };
+}
+
 export function buildOperatorInboxSliceLinkSurface({
   href,
   hrefLabel,

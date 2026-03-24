@@ -11,6 +11,7 @@ import {
   buildOperatorInboxSliceCandidate,
   buildOperatorRecommendedNextStep,
   buildOperatorRunDetailCandidate,
+  buildOperatorTraceSliceLinkSurface,
   type OperatorRecommendedNextStep,
   type OperatorRecommendedNextStepCandidate
 } from "@/lib/operator-follow-up-presenters";
@@ -65,10 +66,12 @@ function rehomeSelfHrefToRunDetail(
   candidate: OperatorRecommendedNextStepCandidate | null,
   {
     currentHref,
-    runId
+    runId,
+    nodeRunId
   }: {
     currentHref?: string | null;
     runId?: string | null;
+    nodeRunId?: string | null;
   }
 ) {
   if (!candidate) {
@@ -81,12 +84,22 @@ function rehomeSelfHrefToRunDetail(
     return null;
   }
 
+  const traceSliceLink = nodeRunId?.trim()
+    ? buildOperatorTraceSliceLinkSurface({
+        runId,
+        nodeRunId,
+        hrefLabel: "open focused trace slice"
+      })
+    : null;
+
   return buildOperatorRunDetailCandidate({
     active: candidate.active,
     runId,
+    runHref: traceSliceLink?.href ?? null,
     label: candidate.label,
     detail: candidate.detail,
-    fallbackDetail: candidate.fallback_detail
+    fallbackDetail: candidate.fallback_detail,
+    hrefLabel: traceSliceLink?.label ?? null
   });
 }
 
@@ -296,7 +309,8 @@ function buildSensitiveAccessInboxEntryCandidate({
     }),
     {
       currentHref,
-      runId: actionScope.runId
+      runId: actionScope.runId,
+      nodeRunId: actionScope.nodeRunId
     }
   );
 }

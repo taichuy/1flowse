@@ -36,7 +36,7 @@ import {
   resolvePublishedInvocationExecutionFocusExplanation
 } from "@/lib/published-invocation-presenters";
 import {
-  buildOperatorExecutionTimelineLinkSurface,
+  buildOperatorTraceSliceLinkSurface,
   buildOperatorRunDetailLinkSurface
 } from "@/lib/operator-follow-up-presenters";
 import {
@@ -159,9 +159,10 @@ export function WorkflowPublishInvocationEntryCard({
           workspaceStarterGovernanceQueryScope
         )
       : null;
-  const runFollowUpSampleExecutionTimelineLink = buildOperatorExecutionTimelineLinkSurface({
+  const runFollowUpSampleExecutionTimelineLink = buildOperatorTraceSliceLinkSurface({
     runId: runFollowUpSample?.run_id ?? null,
-    runHref: scopedRunFollowUpSampleHref
+    runHref: scopedRunFollowUpSampleHref,
+    nodeRunId: runFollowUpSample?.run_snapshot.executionFocusNodeRunId ?? null
   });
   const runFollowUpSampleApprovalInboxHref = buildPublishedInvocationRunFollowUpSampleApprovalInboxHref(
     runFollowUpSample
