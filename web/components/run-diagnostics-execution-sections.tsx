@@ -18,13 +18,15 @@ type RunDiagnosticsExecutionSectionsProps = {
   evidenceView: RunEvidenceView | null;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  runDetailHref?: string | null;
 };
 
 export function RunDiagnosticsExecutionSections({
   executionView,
   evidenceView,
   callbackWaitingAutomation,
-  sandboxReadiness = null
+  sandboxReadiness = null,
+  runDetailHref = null
 }: RunDiagnosticsExecutionSectionsProps) {
   return (
     <>
@@ -116,7 +118,12 @@ export function RunDiagnosticsExecutionSections({
           ) : (
             <div className="timeline-list">
               {evidenceView.nodes.map((node) => (
-                <EvidenceNodeCard key={node.node_run_id} node={node} />
+                <EvidenceNodeCard
+                  key={node.node_run_id}
+                  node={node}
+                  runId={evidenceView.run_id}
+                  runDetailHref={runDetailHref}
+                />
               ))}
             </div>
           )}

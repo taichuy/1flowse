@@ -47,4 +47,42 @@ describe("OperatorFocusEvidenceCard", () => {
     expect(html).toContain('href="/runs/run-1#run-diagnostics-execution-timeline"');
     expect(html).toContain("jump to execution timeline");
   });
+
+  it("adds raw_ref and evidence_ref trace drilldowns when focused trace context is available", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorFocusEvidenceCard, {
+        artifacts: [
+          {
+            key: "artifact://evidence-pack-1",
+            artifactKind: "evidence_pack",
+            contentType: "application/json",
+            summary: "Assistant evidence pack",
+            uri: "artifact://evidence-pack-1"
+          }
+        ],
+        drilldownLink: {
+          href: "/runs/run-1?needs_follow_up=true&node_run_id=node-run-1#run-diagnostics-execution-timeline",
+          label: "jump to focused trace slice"
+        },
+        toolCallSummaries: [
+          {
+            id: "tool-call-1",
+            title: "Sandbox Search · succeeded",
+            detail: "搜索结果已写入 artifact。",
+            badges: ["phase execute"],
+            rawRef: "artifact://tool-call-raw"
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain(
+      'href="/runs/run-1?needs_follow_up=true&amp;event_type=tool.completed&amp;node_run_id=node-run-1&amp;payload_key=raw_ref#run-diagnostics-execution-timeline"'
+    );
+    expect(html).toContain("open raw_ref trace");
+    expect(html).toContain(
+      'href="/runs/run-1?needs_follow_up=true&amp;event_type=assistant.completed&amp;node_run_id=node-run-1&amp;payload_key=evidence_ref#run-diagnostics-execution-timeline"'
+    );
+    expect(html).toContain("open evidence_ref trace");
+  });
 });

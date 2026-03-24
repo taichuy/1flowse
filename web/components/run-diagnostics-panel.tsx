@@ -171,6 +171,7 @@ export function RunDiagnosticsPanel({
         evidenceView={evidenceView}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
+        runDetailHref={runDetailHref}
       />
 
       <RunDiagnosticsTraceResultsSection

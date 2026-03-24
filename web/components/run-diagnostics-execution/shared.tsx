@@ -1,3 +1,5 @@
+import React from "react";
+
 import type { RunArtifactItem } from "@/lib/get-run-views";
 import { formatJsonPayload, formatTimestamp } from "@/lib/runtime-presenters";
 
