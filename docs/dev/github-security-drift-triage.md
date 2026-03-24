@@ -20,7 +20,8 @@ node scripts/check-dependabot-drift.js
 - 默认分支
 - GraphQL `dependencyGraphManifests`
 - Dependabot open alerts
-- 与本地 `pnpm-lock.yaml`、`package.json` 的版本对比
+- 本地 manifest inventory（当前覆盖 `web` 的 `package.json + pnpm-lock.yaml`，以及 `api/`、`services/compat-dify/` 的 `pyproject.toml + uv.lock`）
+- 与本地 `pnpm-lock.yaml` / `uv.lock` 和对应 `package.json` / `pyproject.toml` 的版本对比
 
 如果在 GitHub Actions 中运行，脚本还会把结论写入 `GITHUB_STEP_SUMMARY`，方便在 workflow 页面直接查看证据。
 
@@ -39,7 +40,7 @@ node scripts/check-dependabot-drift.js
 
 1. 先运行 `node scripts/check-dependabot-drift.js`。
 2. 再运行 `cd web && corepack pnpm audit --registry=https://registry.npmjs.org --json`，确认 npm registry 视角也没有新漏洞。
-3. 如果脚本显示 `dependencyGraphManifests` 为空或明显少于预期：
+3. 如果脚本显示 `dependencyGraphManifests` 为空，或 `graph coverage 缺口` 仍覆盖本地 manifest roots：
    - 到仓库 `Settings -> Security & analysis` 检查 `Dependency graph` 是否开启。
    - 如仓库策略允许，再检查 `Automatic dependency submission` 是否已配置并正常跑在默认分支。
 4. 不要因为 UI 暂时没刷新就直接 dismiss alert；应先保留命令输出、锁文件事实和结论，再等待依赖图恢复或补管理员侧操作。
@@ -49,7 +50,7 @@ node scripts/check-dependabot-drift.js
 - 仓库提供 `.github/workflows/github-security-drift.yml`，会在以下时机自动复验：
   - 手动 `workflow_dispatch`
   - 每日定时 `schedule`
-  - `taichuy_dev` 上与 `web/package.json`、`web/pnpm-lock.yaml`、`scripts/check-dependabot-drift.js` 相关的 push
+  - `taichuy_dev` 上任意受支持 manifest（`**/package.json`、`**/pnpm-lock.yaml`、`**/pyproject.toml`、`**/uv.lock`）或 `scripts/check-dependabot-drift.js` 的 push
 - 工作流会上传 `dependabot-drift-report` artifact，并把摘要写入 workflow summary。
 - 工作流会优先读取仓库 secret `DEPENDABOT_ALERTS_TOKEN`；如果未配置，则退回 `github.token`，并在无法读取 Dependabot alerts 时输出降级 warning，而不是把整条自动复验链直接打断。
 - exit code 解释与本地一致：
@@ -66,3 +67,7 @@ node scripts/check-dependabot-drift.js
 - `web/pnpm-lock.yaml` 已解析到 `next@15.5.14` 与 `flatted@3.4.2`。
 
 因此，当 GitHub 仍报告这两个依赖的 open alert 时，应优先按“平台状态漂移”而不是“本地锁文件仍未修复”处理。
+
+如果后续 GitHub 开始返回 Python 生态告警，脚本也会优先使用对应目录下的 `uv.lock` 解析实际版本，并回看 `pyproject.toml` 中的声明 specifier；不要再把 Python 告警手动降级为“脚本不支持”。
+
+新增 `uv` / `pnpm` manifest root 时，优先保持文件名落在上述受支持集合内；workflow path filter 会自动命中，不需要再为具体目录手工补一轮枚举。

@@ -8,8 +8,10 @@ on:
     branches:
       - taichuy_dev
     paths:
-      - 'web/package.json'
-      - 'web/pnpm-lock.yaml'
+      - '**/pyproject.toml'
+      - '**/uv.lock'
+      - '**/package.json'
+      - '**/pnpm-lock.yaml'
       - 'scripts/check-dependabot-drift.js'
       - '.github/workflows/github-security-drift.yml'
 
