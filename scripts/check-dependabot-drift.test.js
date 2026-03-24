@@ -448,6 +448,18 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
           rootLabels: ['api', 'web'],
           consistentAcrossRoots: true,
         },
+        recommendedActions: [
+          {
+            priority: 1,
+            audience: 'repository_admin',
+            code: 'enable_dependency_graph',
+            summary:
+              '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+            rationale:
+              'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+            roots: ['api', 'web'],
+          },
+        ],
         roots: [
           { rootLabel: 'services/compat-dify', status: 'submitted', snapshotId: 'snapshot-compat' },
           { rootLabel: 'api', status: 'blocked' },
@@ -574,6 +586,18 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
           rootLabels: ['api', 'web'],
           consistentAcrossRoots: true,
         },
+        recommendedActions: [
+          {
+            priority: 1,
+            audience: 'repository_admin',
+            code: 'enable_dependency_graph',
+            summary:
+              '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+            rationale:
+              'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+            roots: ['api', 'web'],
+          },
+        ],
         roots: [
           {
             rootLabel: 'api',
@@ -653,6 +677,18 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
     rootLabels: ['api', 'web'],
     consistentAcrossRoots: true,
   });
+  assert.deepEqual(report.dependencySubmissionEvidence.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'repository_admin',
+      code: 'enable_dependency_graph',
+      summary:
+        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+      rationale:
+        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+      roots: ['api', 'web'],
+    },
+  ]);
   assert.deepEqual(
     report.dependencySubmissionEvidence.blockedRoots.map((item) => item.rootLabel),
     ['api', 'web'],
@@ -660,6 +696,47 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
   assert.equal(report.dependencySubmissionEvidence.dependencyGraphVisibility.defaultBranch, 'taichuy_dev');
   assert.deepEqual(report.dependencySubmissionEvidence.dependencyGraphVisibility.visibleRoots, ['web']);
   assert.deepEqual(report.dependencySubmissionEvidence.dependencyGraphVisibility.missingRoots, ['api']);
+  assert.deepEqual(report.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'repository_admin',
+      code: 'enable_dependency_graph',
+      summary:
+        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+      rationale:
+        '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误。',
+      roots: ['api', 'web'],
+    },
+    {
+      priority: 2,
+      audience: 'workflow_maintainer',
+      code: 'rerun_dependency_graph_submission',
+      summary:
+        '仓库设置更新后重跑 `Dependency Graph Submission` workflow，确认 blocker evidence 是否消失并刷新 manifests。',
+      rationale:
+        '只有新的 submission run 才能证明 roots 是否开始在 GitHub dependency graph 中可见。',
+      roots: ['api', 'web'],
+    },
+    {
+      priority: 3,
+      audience: 'workflow_maintainer',
+      code: 'rerun_github_security_drift',
+      summary:
+        'submission evidence 刷新后重跑 `GitHub Security Drift`，确认 `dependabot-drift.json` 是否开始收口到最新 graph / alert 事实。',
+      rationale:
+        'drift 结论需要依赖最新 submission artifact 与 dependencyGraphManifests visibility。',
+      roots: [],
+    },
+    {
+      priority: 4,
+      audience: 'dependency_owner',
+      code: 'preserve_platform_drift_evidence',
+      summary:
+        '保留当前 drift artifact，不要直接 dismiss alert；先等待 GitHub dependency graph / alert 状态自动收口后再复验。',
+      rationale: '当前 open alerts 已被本地锁文件修复，剩余差异主要来自平台事实刷新。',
+      roots: [],
+    },
+  ]);
   assert.equal(report.conclusion.exitCode, 2);
   assert.equal(report.conclusion.kind, 'platform_drift');
 });
@@ -694,12 +771,34 @@ test('buildDriftReport keeps actions read blockers machine-readable', () => {
 
   assert.equal(report.dependencySubmissionEvidence.fetchBlockedByActionsReadPermission, true);
   assert.equal(report.dependencySubmissionEvidence.reportDownloadBlockedByActionsReadPermission, true);
+  assert.deepEqual(report.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'workflow_maintainer',
+      code: 'grant_actions_read',
+      summary:
+        '为 `GitHub Security Drift` workflow 保留 `actions: read`，确保能读取最新 dependency submission run / artifact。',
+      rationale:
+        '当前读取 workflow run 或 artifact 时出现 `Resource not accessible by integration`，这会切断 drift 与 submission 的证据链。',
+      roots: [],
+    },
+  ]);
 });
 
 test('parseDependencySubmissionJsonReport keeps dependency graph visibility evidence', () => {
   const parsed = parseDependencySubmissionJsonReport(
     JSON.stringify({
       repositoryBlocker: null,
+      recommendedActions: [
+        {
+          priority: 1,
+          audience: 'workflow_maintainer',
+          code: 'recheck_dependency_graph_visibility',
+          summary: '保留当前 artifact，稍后重跑 `Dependency Graph Submission`。',
+          rationale: 'roots 仍未可见。',
+          roots: ['api'],
+        },
+      ],
       roots: [
         {
           rootLabel: 'web',
@@ -721,6 +820,16 @@ test('parseDependencySubmissionJsonReport keeps dependency graph visibility evid
   assert.equal(parsed.dependencyGraphVisibility.manifestCount, 1);
   assert.deepEqual(parsed.dependencyGraphVisibility.visibleRoots, ['web']);
   assert.deepEqual(parsed.dependencyGraphVisibility.missingRoots, ['api']);
+  assert.deepEqual(parsed.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'workflow_maintainer',
+      code: 'recheck_dependency_graph_visibility',
+      summary: '保留当前 artifact，稍后重跑 `Dependency Graph Submission`。',
+      rationale: 'roots 仍未可见。',
+      roots: ['api'],
+    },
+  ]);
 });
 
 test('buildMarkdownSummary surfaces submission-time manifest visibility evidence', () => {
@@ -770,4 +879,6 @@ test('buildMarkdownSummary surfaces submission-time manifest visibility evidence
   assert.match(summary, /manifests observed after submission: `1`/);
   assert.match(summary, /visible roots now: `web`/);
   assert.match(summary, /roots not yet visible: `api`/);
+  assert.match(summary, /Recommended next steps/);
+  assert.match(summary, /\[workflow_maintainer\] `recheck_dependency_submission_visibility`/);
 });

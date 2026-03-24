@@ -348,6 +348,8 @@ test('buildSubmissionSummary surfaces blocked repository settings explicitly', (
   assert.match(summary.join('\n'), /blocker message: Dependency graph is disabled for this repository\./);
   assert.match(summary.join('\n'), /status: `blocked`/);
   assert.match(summary.join('\n'), /blocked reason: GitHub 仓库当前未开启/);
+  assert.match(summary.join('\n'), /Recommended next steps/);
+  assert.match(summary.join('\n'), /\[repository_admin\] `enable_dependency_graph`/);
 });
 
 test('buildSubmissionReport keeps machine-readable root evidence stable', () => {
@@ -405,6 +407,38 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
     rootLabels: ['api'],
     consistentAcrossRoots: true,
   });
+  assert.deepEqual(report.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'repository_admin',
+      code: 'enable_dependency_graph',
+      summary:
+        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+      rationale:
+        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+      roots: ['api'],
+    },
+    {
+      priority: 2,
+      audience: 'workflow_maintainer',
+      code: 'rerun_dependency_graph_submission',
+      summary:
+        '仓库设置更新后手动重跑 `Dependency Graph Submission` workflow，确认 `repositoryBlockerEvidence` 消失并刷新 `dependencyGraphVisibility`。',
+      rationale:
+        '只有重新提交 snapshot，才能验证 GitHub 是否开始接受当前 roots 并把 manifests 写入 dependency graph。',
+      roots: ['api'],
+    },
+    {
+      priority: 3,
+      audience: 'workflow_maintainer',
+      code: 'rerun_github_security_drift',
+      summary:
+        '待 submission 重新成功后重跑 `GitHub Security Drift`，确认 `dependabot-drift.json` 是否收口到最新 graph 事实。',
+      rationale:
+        'security drift 需要消费最新 dependency submission evidence，才能区分平台刷新延迟与真实依赖问题。',
+      roots: [],
+    },
+  ]);
   assert.deepEqual(report.roots, [
     {
       rootLabel: 'web',
@@ -541,6 +575,7 @@ test('buildSubmissionSummary and report include dependency graph visibility evid
   assert.match(summary, /Dependency graph manifest visibility/);
   assert.match(summary, /visible roots now: `web`/);
   assert.match(summary, /roots not yet visible: `api`/);
+  assert.match(summary, /\[workflow_maintainer\] `recheck_dependency_graph_visibility`/);
 
   const report = buildSubmissionReport(
     [
@@ -568,4 +603,16 @@ test('buildSubmissionSummary and report include dependency graph visibility evid
   assert.equal(report.dependencyGraphVisibility.manifestCount, 1);
   assert.deepEqual(report.dependencyGraphVisibility.visibleRoots, ['web']);
   assert.deepEqual(report.dependencyGraphVisibility.missingRoots, ['api']);
+  assert.deepEqual(report.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'workflow_maintainer',
+      code: 'recheck_dependency_graph_visibility',
+      summary:
+        '保留当前 artifact，稍后重跑 `Dependency Graph Submission` 或等待 GitHub 刷新，再确认 `missingRoots` 是否消失。',
+      rationale:
+        '当前 submission 已成功提交，但仍有 roots 暂未在 `dependencyGraphManifests` 中可见，需要继续区分平台刷新延迟与持续缺席。',
+      roots: ['api'],
+    },
+  ]);
 });

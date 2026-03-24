@@ -3,6 +3,11 @@ const os = require('os');
 const path = require('path');
 const { URLSearchParams } = require('url');
 const { execFileSync } = require('child_process');
+const {
+  buildDriftRecommendedActions,
+  buildRecommendedActionsMarkdownLines,
+  normalizeRecommendedActions,
+} = require('./dependency-governance-actions');
 
 const repoRoot = path.resolve(__dirname, '..');
 const trackedManifestFiles = new Set(['package.json', 'pnpm-lock.yaml', 'pyproject.toml', 'uv.lock']);
@@ -167,6 +172,7 @@ function normalizeDependencySubmissionReport(report) {
   return {
     repositoryBlocker: report?.repositoryBlocker || null,
     repositoryBlockerEvidence,
+    recommendedActions: normalizeRecommendedActions(report?.recommendedActions),
     roots,
     blockedRoots: roots.filter((item) => item.status === 'blocked'),
     submittedRoots: roots.filter((item) => item.status === 'submitted'),
@@ -829,6 +835,17 @@ function buildMarkdownSummary({
   const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
     manifestCoverage,
   );
+  const recommendedActions = buildDriftRecommendedActions({
+    missingNativeGraphRoots,
+    dependencySubmissionRoots,
+    dependencySubmissionEvidence,
+    alertsUnavailable,
+    openAlertCount: openAlerts.length,
+    actionableAlertCount: actionableAlerts.length,
+    actionsReadPermissionMissing:
+      isActionsReadPermissionError(dependencySubmissionEvidence?.fetchError) ||
+      isActionsReadPermissionError(dependencySubmissionEvidence?.reportDownloadError),
+  });
   const lines = [
     '## GitHub 安全告警漂移检查',
     '',
@@ -926,11 +943,21 @@ function buildMarkdownSummary({
     } else if (dependencySubmissionEvidence?.runAvailable) {
       lines.push('- 仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
     }
+    const recommendedActionLines = buildRecommendedActionsMarkdownLines(recommendedActions);
+    if (recommendedActionLines.length > 0) {
+      lines.push('');
+      lines.push(...recommendedActionLines);
+    }
     return lines.join('\n');
   }
 
   if (openAlerts.length === 0) {
     lines.push('- 当前没有 open alert。');
+    const recommendedActionLines = buildRecommendedActionsMarkdownLines(recommendedActions);
+    if (recommendedActionLines.length > 0) {
+      lines.push('');
+      lines.push(...recommendedActionLines);
+    }
     return lines.join('\n');
   }
 
@@ -948,10 +975,20 @@ function buildMarkdownSummary({
       lines.push('- 仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
     }
     lines.push('- 建议保留证据，不要直接 dismiss alert；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
+    const recommendedActionLines = buildRecommendedActionsMarkdownLines(recommendedActions);
+    if (recommendedActionLines.length > 0) {
+      lines.push('');
+      lines.push(...recommendedActionLines);
+    }
     return lines.join('\n');
   }
 
   lines.push('- 仍存在至少一个未被当前锁文件修复或无法解析的告警，需要继续修依赖或补排查。');
+  const recommendedActionLines = buildRecommendedActionsMarkdownLines(recommendedActions);
+  if (recommendedActionLines.length > 0) {
+    lines.push('');
+    lines.push(...recommendedActionLines);
+  }
   return lines.join('\n');
 }
 
@@ -991,6 +1028,9 @@ function buildDependencySubmissionEvidenceReport(dependencySubmissionEvidence) {
     repositoryBlockerEvidence: normalizeRepositoryBlockerEvidence(
       dependencySubmissionEvidence.report?.repositoryBlockerEvidence,
     ),
+    recommendedActions: normalizeRecommendedActions(
+      dependencySubmissionEvidence.report?.recommendedActions,
+    ),
     roots: dependencySubmissionEvidence.report?.roots || [],
     blockedRoots: dependencySubmissionEvidence.report?.blockedRoots || [],
     submittedRoots: dependencySubmissionEvidence.report?.submittedRoots || [],
@@ -1016,6 +1056,17 @@ function buildDriftReport({
   const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
     manifestCoverage,
   );
+  const recommendedActions = buildDriftRecommendedActions({
+    missingNativeGraphRoots,
+    dependencySubmissionRoots,
+    dependencySubmissionEvidence,
+    alertsUnavailable,
+    openAlertCount: openAlerts.length,
+    actionableAlertCount: actionableAlerts.length,
+    actionsReadPermissionMissing:
+      isActionsReadPermissionError(dependencySubmissionEvidence?.fetchError) ||
+      isActionsReadPermissionError(dependencySubmissionEvidence?.reportDownloadError),
+  });
 
   return {
     schemaVersion: 1,
@@ -1068,6 +1119,7 @@ function buildDriftReport({
     dependencySubmissionEvidence: buildDependencySubmissionEvidenceReport(
       dependencySubmissionEvidence,
     ),
+    recommendedActions: normalizeRecommendedActions(recommendedActions),
     conclusion,
   };
 }
@@ -1296,6 +1348,7 @@ module.exports = {
   parseDependencySubmissionReport,
   parsePythonDependencyName,
   resolveAlertEvaluationSource,
+  isActionsReadPermissionError,
 };
 
 if (require.main === module) {

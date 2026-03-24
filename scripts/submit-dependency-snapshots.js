@@ -3,6 +3,11 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const { buildWorkspaceManifestCoverage } = require('./check-dependabot-drift');
+const {
+  buildRecommendedActionsMarkdownLines,
+  buildSubmissionRecommendedActions,
+  normalizeRecommendedActions,
+} = require('./dependency-governance-actions');
 
 const {
   buildWorkspaceManifestInventory,
@@ -676,6 +681,11 @@ function buildSubmissionSummary(
   const header = dryRun ? '## Dependency snapshot dry run' : '## Dependency snapshot submission';
   const lines = [header, ''];
   const blockedItems = items.filter((item) => item.status === 'blocked');
+  const recommendedActions = buildSubmissionRecommendedActions({
+    items,
+    dependencyGraphVisibility,
+    repositoryBlockerEvidence,
+  });
 
   if (blockedItems.length > 0) {
     lines.push(`- repository blocker: ${repositoryBlockerSummary}`);
@@ -756,6 +766,12 @@ function buildSubmissionSummary(
     }
   }
 
+  const recommendedActionLines = buildRecommendedActionsMarkdownLines(recommendedActions);
+  if (recommendedActionLines.length > 0) {
+    lines.push('');
+    lines.push(...recommendedActionLines);
+  }
+
   return lines;
 }
 
@@ -771,6 +787,11 @@ function buildSubmissionReport(
   } = {},
 ) {
   const blockedItems = items.filter((item) => item.status === 'blocked');
+  const recommendedActions = buildSubmissionRecommendedActions({
+    items,
+    dependencyGraphVisibility,
+    repositoryBlockerEvidence,
+  });
 
   return {
     schemaVersion: 1,
@@ -781,6 +802,7 @@ function buildSubmissionReport(
     ref,
     repositoryBlocker: blockedItems.length > 0 ? repositoryBlockerSummary : null,
     repositoryBlockerEvidence,
+    recommendedActions: normalizeRecommendedActions(recommendedActions),
     dependencyGraphVisibility,
     roots: items.map((item) => ({
       rootLabel: item.rootLabel,
