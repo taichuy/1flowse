@@ -11,6 +11,7 @@ const {
   buildSnapshotPayload,
   buildUvResolvedDependencies,
   collectDirectDependencyScopes,
+  fetchRepositorySecurityAndAnalysis,
   parseArgs,
   selectRoots,
   submitSnapshot,
@@ -342,6 +343,16 @@ test('buildSubmissionSummary surfaces blocked repository settings explicitly', (
       },
     ],
     false,
+    null,
+    undefined,
+    null,
+    {
+      checkedAt: '2026-03-25T05:10:00.000Z',
+      raw: {
+        dependabot_security_updates: { status: 'disabled' },
+        secret_scanning: { status: 'disabled' },
+      },
+    },
   );
 
   assert.match(summary.join('\n'), /repository blocker: GitHub `Dependency graph` 未开启/);
@@ -351,6 +362,8 @@ test('buildSubmissionSummary surfaces blocked repository settings explicitly', (
   assert.match(summary.join('\n'), /blocked reason: GitHub 仓库当前未开启/);
   assert.match(summary.join('\n'), /Recommended next steps/);
   assert.match(summary.join('\n'), /\[repository_admin\] `enable_dependency_graph`/);
+  assert.match(summary.join('\n'), /Repository security & analysis snapshot/);
+  assert.match(summary.join('\n'), /dependency graph: `unknown`/);
 });
 
 test('buildSubmissionReport keeps machine-readable root evidence stable', () => {
@@ -393,6 +406,13 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       },
       sha: 'abc123',
       ref: 'refs/heads/taichuy_dev',
+      repositorySecurityAndAnalysis: {
+        checkedAt: '2026-03-25T05:10:00.000Z',
+        raw: {
+          dependabot_security_updates: { status: 'disabled' },
+          secret_scanning: { status: 'disabled' },
+        },
+      },
     },
   );
 
@@ -407,6 +427,25 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
     message: 'Dependency graph is disabled for this repository.',
     rootLabels: ['api'],
     consistentAcrossRoots: true,
+  });
+  assert.deepEqual(report.repositorySecurityAndAnalysis, {
+    checkedAt: '2026-03-25T05:10:00.000Z',
+    checkError: null,
+    dependencyGraphStatus: null,
+    automaticDependencySubmissionStatus: null,
+    dependabotSecurityUpdatesStatus: 'disabled',
+    availableFields: ['dependabot_security_updates', 'secret_scanning'],
+    missingFields: [
+      'dependency_graph',
+      'automatic_dependency_submission',
+      'secret_scanning_non_provider_patterns',
+      'secret_scanning_push_protection',
+      'secret_scanning_validity_checks',
+    ],
+    raw: {
+      dependabot_security_updates: { status: 'disabled' },
+      secret_scanning: { status: 'disabled' },
+    },
   });
   assert.deepEqual(report.recommendedActions, [
     {
@@ -604,10 +643,18 @@ test('buildSubmissionSummary and report include dependency graph visibility evid
       sha: 'abc123',
       ref: 'refs/heads/taichuy_dev',
       dependencyGraphVisibility,
+      repositorySecurityAndAnalysis: {
+        checkedAt: '2026-03-25T05:10:00.000Z',
+        raw: {
+          dependency_graph: { status: 'enabled' },
+          automatic_dependency_submission: { status: 'enabled' },
+        },
+      },
     },
   );
 
   assert.equal(report.dependencyGraphVisibility.manifestCount, 1);
+  assert.equal(report.repositorySecurityAndAnalysis.dependencyGraphStatus, 'enabled');
   assert.deepEqual(report.dependencyGraphVisibility.visibleRoots, ['web']);
   assert.deepEqual(report.dependencyGraphVisibility.missingRoots, ['api']);
   assert.deepEqual(report.recommendedActions, [
@@ -669,6 +716,14 @@ test('buildSubmissionStepOutputs expose stable blocker and follow-up fields', ()
         visibleRoots: ['web'],
         missingRoots: ['api'],
       },
+      repositorySecurityAndAnalysis: {
+        checkedAt: '2026-03-25T05:10:00.000Z',
+        raw: {
+          dependency_graph: { status: 'disabled' },
+          automatic_dependency_submission: { status: 'disabled' },
+          dependabot_security_updates: { status: 'disabled' },
+        },
+      },
     },
   );
 
@@ -678,6 +733,19 @@ test('buildSubmissionStepOutputs expose stable blocker and follow-up fields', ()
   assert.equal(outputs.recommended_actions_count, '3');
   assert.equal(outputs.primary_recommended_action_code, 'enable_dependency_graph');
   assert.equal(outputs.primary_recommended_action_audience, 'repository_admin');
+  assert.equal(outputs.dependency_graph_setting_status, 'disabled');
+  assert.equal(outputs.automatic_dependency_submission_setting_status, 'disabled');
+  assert.equal(outputs.dependabot_security_updates_status, 'disabled');
+  assert.equal(
+    outputs.repository_security_and_analysis_missing_fields_json,
+    JSON.stringify([
+      'secret_scanning',
+      'secret_scanning_non_provider_patterns',
+      'secret_scanning_push_protection',
+      'secret_scanning_validity_checks',
+    ]),
+  );
+  assert.equal(outputs.repository_security_and_analysis_check_error, '');
   assert.equal(
     outputs.primary_recommended_action_href,
     'https://github.com/taichuy/7flows/settings/security_analysis',
@@ -689,4 +757,31 @@ test('buildSubmissionStepOutputs expose stable blocker and follow-up fields', ()
   assert.equal(outputs.dependency_graph_visible_roots_json, JSON.stringify(['web']));
   assert.equal(outputs.dependency_graph_missing_roots_json, JSON.stringify(['api']));
   assert.equal(outputs.dependency_graph_check_error, '');
+});
+
+test('fetchRepositorySecurityAndAnalysis preserves partial repo settings payload', async () => {
+  const originalFetch = global.fetch;
+
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      security_and_analysis: {
+        dependabot_security_updates: { status: 'disabled' },
+        secret_scanning: { status: 'disabled' },
+      },
+    }),
+  });
+
+  const evidence = await fetchRepositorySecurityAndAnalysis(
+    { owner: 'taichuy', repo: '7flows' },
+    'token',
+  );
+
+  assert.equal(evidence.dependencyGraphStatus, null);
+  assert.equal(evidence.automaticDependencySubmissionStatus, null);
+  assert.equal(evidence.dependabotSecurityUpdatesStatus, 'disabled');
+  assert.deepEqual(evidence.availableFields, ['dependabot_security_updates', 'secret_scanning']);
+
+  global.fetch = originalFetch;
 });

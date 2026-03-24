@@ -5,7 +5,9 @@ const os = require('os');
 const path = require('path');
 
 const {
+  buildRepositorySecurityAndAnalysisMarkdownLines,
   buildRecommendedActionsOutputs,
+  normalizeRepositorySecurityAndAnalysis,
   writeGitHubOutputs,
 } = require('./dependency-governance-actions');
 
@@ -83,4 +85,50 @@ test('writeGitHubOutputs writes multiline-safe output entries', () => {
   assert.match(content, /recommended_actions_count<<EOF_RECOMMENDED_ACTIONS_COUNT/);
   assert.match(content, /primary_recommended_action_summary<<EOF_PRIMARY_RECOMMENDED_ACTION_SUMMARY/);
   assert.match(content, /第一行\n第二行/);
+});
+
+test('normalizeRepositorySecurityAndAnalysis preserves missing setting fields explicitly', () => {
+  const normalized = normalizeRepositorySecurityAndAnalysis({
+    checkedAt: '2026-03-25T05:10:00.000Z',
+    raw: {
+      dependabot_security_updates: { status: 'disabled' },
+      secret_scanning: { status: 'disabled' },
+    },
+  });
+
+  assert.deepEqual(normalized, {
+    checkedAt: '2026-03-25T05:10:00.000Z',
+    checkError: null,
+    dependencyGraphStatus: null,
+    automaticDependencySubmissionStatus: null,
+    dependabotSecurityUpdatesStatus: 'disabled',
+    availableFields: ['dependabot_security_updates', 'secret_scanning'],
+    missingFields: [
+      'dependency_graph',
+      'automatic_dependency_submission',
+      'secret_scanning_non_provider_patterns',
+      'secret_scanning_push_protection',
+      'secret_scanning_validity_checks',
+    ],
+    raw: {
+      dependabot_security_updates: { status: 'disabled' },
+      secret_scanning: { status: 'disabled' },
+    },
+  });
+});
+
+test('buildRepositorySecurityAndAnalysisMarkdownLines explains missing dependency graph fields', () => {
+  const lines = buildRepositorySecurityAndAnalysisMarkdownLines({
+    checkedAt: '2026-03-25T05:10:00.000Z',
+    raw: {
+      dependabot_security_updates: { status: 'disabled' },
+      secret_scanning: { status: 'disabled' },
+    },
+  });
+
+  assert.match(lines.join('\n'), /Repository security & analysis snapshot/);
+  assert.match(lines.join('\n'), /dependency graph: `unknown`/);
+  assert.match(lines.join('\n'), /automatic dependency submission: `unknown`/);
+  assert.match(lines.join('\n'), /fields absent from repo API payload: `dependency_graph`、`automatic_dependency_submission`/);
+  assert.match(lines.join('\n'), /最终仍以 dependency submission blocker 与 manifest visibility 证据为准/);
 });

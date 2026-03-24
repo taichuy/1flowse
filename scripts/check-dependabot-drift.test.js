@@ -11,6 +11,7 @@ const {
   buildWorkspaceManifestCoverage,
   buildWorkspaceManifestInventory,
   evaluateAlert,
+  fetchRepositorySecurityAndAnalysis,
   parseArgs,
   parseDependencySubmissionJsonReport,
   parseDependencySubmissionReport,
@@ -290,11 +291,19 @@ test('buildMarkdownSummary highlights local roots missing from dependency graph'
     openAlerts: [],
     results: [],
     actionableAlerts: [],
+    repositorySecurityAndAnalysis: {
+      checkedAt: '2026-03-25T05:10:00.000Z',
+      raw: {
+        dependabot_security_updates: { status: 'disabled' },
+      },
+    },
   });
 
   assert.match(summary, /本地 manifest roots：`3`/);
   assert.match(summary, /graph coverage 缺口：`web`（pnpm）/);
   assert.match(summary, /需 dependency submission 才能纳入 graph：`api`（uv）；`services\/compat-dify`（uv）/);
+  assert.match(summary, /Repository security & analysis snapshot/);
+  assert.match(summary, /dependency graph: `unknown`/);
 });
 
 test('parseDependencySubmissionReport extracts repository blocker evidence', () => {
@@ -359,6 +368,12 @@ test('parseDependencySubmissionJsonReport extracts submitted and blocked roots',
         rootLabels: ['api'],
         consistentAcrossRoots: true,
       },
+      repositorySecurityAndAnalysis: {
+        checkedAt: '2026-03-25T05:10:00.000Z',
+        raw: {
+          dependabot_security_updates: { status: 'disabled' },
+        },
+      },
       roots: [
         {
           rootLabel: 'web',
@@ -385,6 +400,25 @@ test('parseDependencySubmissionJsonReport extracts submitted and blocked roots',
     message: 'Dependency graph is disabled for this repository.',
     rootLabels: ['api'],
     consistentAcrossRoots: true,
+  });
+  assert.deepEqual(parsed.repositorySecurityAndAnalysis, {
+    checkedAt: '2026-03-25T05:10:00.000Z',
+    checkError: null,
+    dependencyGraphStatus: null,
+    automaticDependencySubmissionStatus: null,
+    dependabotSecurityUpdatesStatus: 'disabled',
+    availableFields: ['dependabot_security_updates'],
+    missingFields: [
+      'dependency_graph',
+      'automatic_dependency_submission',
+      'secret_scanning',
+      'secret_scanning_non_provider_patterns',
+      'secret_scanning_push_protection',
+      'secret_scanning_validity_checks',
+    ],
+    raw: {
+      dependabot_security_updates: { status: 'disabled' },
+    },
   });
   assert.deepEqual(parsed.submittedRoots, [
     {
@@ -978,6 +1012,14 @@ test('buildDriftStepOutputs expose top follow-up and blocker facts', () => {
       },
     ],
     actionableAlerts: [],
+    repositorySecurityAndAnalysis: {
+      checkedAt: '2026-03-25T05:10:00.000Z',
+      raw: {
+        dependency_graph: { status: 'disabled' },
+        automatic_dependency_submission: { status: 'disabled' },
+        dependabot_security_updates: { status: 'disabled' },
+      },
+    },
     dependencySubmissionEvidence: {
       workflowConfigured: true,
       runAvailable: true,
@@ -1012,6 +1054,19 @@ test('buildDriftStepOutputs expose top follow-up and blocker facts', () => {
   assert.equal(outputs.recommended_actions_count, '4');
   assert.equal(outputs.primary_recommended_action_code, 'enable_dependency_graph');
   assert.equal(outputs.primary_recommended_action_audience, 'repository_admin');
+  assert.equal(outputs.dependency_graph_setting_status, 'disabled');
+  assert.equal(outputs.automatic_dependency_submission_setting_status, 'disabled');
+  assert.equal(outputs.dependabot_security_updates_status, 'disabled');
+  assert.equal(
+    outputs.repository_security_and_analysis_missing_fields_json,
+    JSON.stringify([
+      'secret_scanning',
+      'secret_scanning_non_provider_patterns',
+      'secret_scanning_push_protection',
+      'secret_scanning_validity_checks',
+    ]),
+  );
+  assert.equal(outputs.repository_security_and_analysis_check_error, '');
   assert.equal(
     outputs.primary_recommended_action_href,
     'https://github.com/taichuy/7flows/settings/security_analysis',
@@ -1021,6 +1076,31 @@ test('buildDriftStepOutputs expose top follow-up and blocker facts', () => {
   assert.equal(outputs.repository_blocker_status, '404');
   assert.equal(outputs.dependency_submission_run_available, 'true');
   assert.equal(outputs.dependency_graph_missing_roots_json, JSON.stringify(['api']));
+});
+
+test('fetchRepositorySecurityAndAnalysis keeps partial gh api payload machine-readable', () => {
+  const repoRoot = createFixtureRepo();
+  const originalPath = process.env.PATH;
+  const binDir = path.join(repoRoot, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const ghPath = path.join(binDir, 'gh');
+
+  fs.writeFileSync(
+    ghPath,
+    '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ security_and_analysis: { dependabot_security_updates: { status: "disabled" } } }))\n',
+    'utf8',
+  );
+  fs.chmodSync(ghPath, 0o755);
+  process.env.PATH = `${binDir}${path.delimiter}${originalPath || ''}`;
+
+  const evidence = fetchRepositorySecurityAndAnalysis({ owner: 'taichuy', repo: '7flows' });
+
+  assert.equal(evidence.dependencyGraphStatus, null);
+  assert.equal(evidence.automaticDependencySubmissionStatus, null);
+  assert.equal(evidence.dependabotSecurityUpdatesStatus, 'disabled');
+  assert.deepEqual(evidence.availableFields, ['dependabot_security_updates']);
+
+  process.env.PATH = originalPath;
 });
 
 test('buildMarkdownSummary surfaces submission-time manifest visibility evidence', () => {

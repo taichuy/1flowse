@@ -4,9 +4,11 @@ const { execFileSync } = require('child_process');
 
 const { buildWorkspaceManifestCoverage } = require('./check-dependabot-drift');
 const {
+  buildRepositorySecurityAndAnalysisMarkdownLines,
   buildRecommendedActionsOutputs,
   buildRecommendedActionsMarkdownLines,
   buildSubmissionRecommendedActions,
+  normalizeRepositorySecurityAndAnalysis,
   normalizeRecommendedActions,
   writeGitHubOutputs,
 } = require('./dependency-governance-actions');
@@ -601,6 +603,10 @@ function resolveGitHubGraphqlUrl() {
   return `${apiUrl}/graphql`;
 }
 
+function resolveGitHubApiUrl() {
+  return String(process.env.GITHUB_API_URL || 'https://api.github.com').replace(/\/$/, '');
+}
+
 async function fetchDependencyGraphManifests(repository, token) {
   const response = await fetch(resolveGitHubGraphqlUrl(), {
     method: 'POST',
@@ -647,6 +653,32 @@ async function fetchDependencyGraphManifests(repository, token) {
   };
 }
 
+async function fetchRepositorySecurityAndAnalysis(repository, token) {
+  const response = await fetch(`${resolveGitHubApiUrl()}/repos/${repository.owner}/${repository.repo}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const responseMessage = responseBody.message || 'unknown error';
+    throw new Error(`读取仓库 security_and_analysis 失败（HTTP ${response.status}）：${responseMessage}`);
+  }
+
+  return normalizeRepositorySecurityAndAnalysis({
+    checkedAt: new Date().toISOString(),
+    raw:
+      responseBody?.security_and_analysis && typeof responseBody.security_and_analysis === 'object'
+        ? responseBody.security_and_analysis
+        : {},
+  });
+}
+
 function buildDependencyGraphVisibilityReport(roots, manifestNodes, defaultBranch = null) {
   const coverage = buildWorkspaceManifestCoverage(roots, manifestNodes);
 
@@ -680,6 +712,7 @@ function buildSubmissionSummary(
   dependencyGraphVisibility = null,
   repositoryBlockerEvidence = buildRepositoryBlockerEvidence(items),
   repository = null,
+  repositorySecurityAndAnalysis = null,
 ) {
   const header = dryRun ? '## Dependency snapshot dry run' : '## Dependency snapshot submission';
   const lines = [header, ''];
@@ -740,6 +773,14 @@ function buildSubmissionSummary(
     }
   });
 
+  const repositorySecurityAndAnalysisLines = buildRepositorySecurityAndAnalysisMarkdownLines(
+    repositorySecurityAndAnalysis,
+  );
+  if (repositorySecurityAndAnalysisLines.length > 0) {
+    lines.push('');
+    lines.push(...repositorySecurityAndAnalysisLines);
+  }
+
   if (dependencyGraphVisibility) {
     lines.push('');
     lines.push('### Dependency graph manifest visibility');
@@ -788,6 +829,7 @@ function buildSubmissionReport(
     ref = null,
     dependencyGraphVisibility = null,
     repositoryBlockerEvidence = buildRepositoryBlockerEvidence(items),
+    repositorySecurityAndAnalysis = null,
   } = {},
 ) {
   const blockedItems = items.filter((item) => item.status === 'blocked');
@@ -808,6 +850,7 @@ function buildSubmissionReport(
     repositoryBlocker: blockedItems.length > 0 ? repositoryBlockerSummary : null,
     repositoryBlockerEvidence,
     recommendedActions: normalizeRecommendedActions(recommendedActions),
+    repositorySecurityAndAnalysis: normalizeRepositorySecurityAndAnalysis(repositorySecurityAndAnalysis),
     dependencyGraphVisibility,
     roots: items.map((item) => ({
       rootLabel: item.rootLabel,
@@ -832,10 +875,21 @@ function buildSubmissionReport(
 function buildSubmissionStepOutputs(report) {
   const repositoryBlockerEvidence = report?.repositoryBlockerEvidence || null;
   const dependencyGraphVisibility = report?.dependencyGraphVisibility || null;
+  const repositorySecurityAndAnalysis = report?.repositorySecurityAndAnalysis || null;
 
   return {
     ...buildRecommendedActionsOutputs(report?.recommendedActions),
     submission_mode: report?.mode || '',
+    dependency_graph_setting_status: repositorySecurityAndAnalysis?.dependencyGraphStatus || '',
+    automatic_dependency_submission_setting_status:
+      repositorySecurityAndAnalysis?.automaticDependencySubmissionStatus || '',
+    dependabot_security_updates_status:
+      repositorySecurityAndAnalysis?.dependabotSecurityUpdatesStatus || '',
+    repository_security_and_analysis_missing_fields_json: JSON.stringify(
+      repositorySecurityAndAnalysis?.missingFields || [],
+    ),
+    repository_security_and_analysis_check_error:
+      repositorySecurityAndAnalysis?.checkError || '',
     repository_blocker_kind: repositoryBlockerEvidence?.kind || '',
     repository_blocker_status:
       Number.isInteger(repositoryBlockerEvidence?.status)
@@ -993,6 +1047,7 @@ async function main() {
   const outputPayloads = {};
   let hasRepositoryBlockers = false;
   let dependencyGraphVisibility = null;
+  let repositorySecurityAndAnalysis = null;
 
   for (const root of roots) {
     const { resolved, metadata } = loadResolvedDependenciesForRoot(root);
@@ -1098,6 +1153,17 @@ async function main() {
       };
       console.warn(`warning: 无法读取 dependency graph manifests：${error.message}`);
     }
+
+    try {
+      repositorySecurityAndAnalysis = await fetchRepositorySecurityAndAnalysis(repository, token);
+    } catch (error) {
+      repositorySecurityAndAnalysis = normalizeRepositorySecurityAndAnalysis({
+        checkedAt: new Date().toISOString(),
+        checkError: error.message,
+        raw: {},
+      });
+      console.warn(`warning: 无法读取仓库 security_and_analysis：${error.message}`);
+    }
   }
 
   const summaryLines = buildSubmissionSummary(
@@ -1106,6 +1172,7 @@ async function main() {
     dependencyGraphVisibility,
     undefined,
     repository,
+    repositorySecurityAndAnalysis,
   );
   const report = buildSubmissionReport(summaries, {
     dryRun: options.dryRun,
@@ -1113,6 +1180,7 @@ async function main() {
     sha,
     ref,
     dependencyGraphVisibility,
+    repositorySecurityAndAnalysis,
   });
   if (options.reportOutputPath) {
     const reportPath = path.resolve(repoRoot, options.reportOutputPath);
@@ -1141,6 +1209,7 @@ module.exports = {
   collectDirectDependencyScopes,
   discoverDependencySubmissionRoots,
   discoverPnpmRoots,
+  fetchRepositorySecurityAndAnalysis,
   parseArgs,
   selectRoots,
   submitSnapshot,

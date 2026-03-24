@@ -29,7 +29,10 @@ jobs:
       primary_recommended_action_audience: ${{ steps.drift.outputs.primary_recommended_action_audience }}
       primary_recommended_action_href: ${{ steps.drift.outputs.primary_recommended_action_href }}
       primary_recommended_action_href_label: ${{ steps.drift.outputs.primary_recommended_action_href_label }}
+      dependency_graph_setting_status: ${{ steps.drift.outputs.dependency_graph_setting_status }}
+      automatic_dependency_submission_setting_status: ${{ steps.drift.outputs.automatic_dependency_submission_setting_status }}
       repository_blocker_kind: ${{ steps.drift.outputs.repository_blocker_kind }}
+      repository_security_and_analysis_missing_fields_json: ${{ steps.drift.outputs.repository_security_and_analysis_missing_fields_json }}
       dependency_graph_missing_roots_json: ${{ steps.drift.outputs.dependency_graph_missing_roots_json }}
     permissions:
       actions: read

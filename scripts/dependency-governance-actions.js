@@ -1,5 +1,15 @@
 const fs = require('fs');
 
+const trackedSecurityAndAnalysisFields = [
+  'dependency_graph',
+  'automatic_dependency_submission',
+  'dependabot_security_updates',
+  'secret_scanning',
+  'secret_scanning_non_provider_patterns',
+  'secret_scanning_push_protection',
+  'secret_scanning_validity_checks',
+];
+
 function normalizeRecommendedActions(actions) {
   return (Array.isArray(actions) ? actions : [])
     .map((action) => {
@@ -119,6 +129,127 @@ function buildWorkflowHref(repository, workflowFile) {
   }
 
   return `${repositoryUrl}/actions/workflows/${encodeURIComponent(normalizedWorkflowFile)}`;
+}
+
+function normalizeSecurityAndAnalysisStatus(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const status = typeof value.status === 'string' ? value.status.trim() : '';
+  return status || null;
+}
+
+function normalizeRepositorySecurityAndAnalysis(securityAndAnalysis) {
+  if (!securityAndAnalysis || typeof securityAndAnalysis !== 'object') {
+    return null;
+  }
+
+  const rawInput =
+    securityAndAnalysis.raw && typeof securityAndAnalysis.raw === 'object'
+      ? securityAndAnalysis.raw
+      : securityAndAnalysis.security_and_analysis && typeof securityAndAnalysis.security_and_analysis === 'object'
+        ? securityAndAnalysis.security_and_analysis
+        : securityAndAnalysis;
+
+  const raw = {};
+  const availableFields = [];
+
+  Object.entries(rawInput || {}).forEach(([key, value]) => {
+    if (!key) {
+      return;
+    }
+
+    availableFields.push(key);
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      raw[key] = {
+        ...value,
+        status: normalizeSecurityAndAnalysisStatus(value),
+      };
+      return;
+    }
+
+    raw[key] = value;
+  });
+
+  const dedupedAvailableFields = [...new Set(availableFields)].sort();
+
+  return {
+    checkedAt: typeof securityAndAnalysis.checkedAt === 'string' ? securityAndAnalysis.checkedAt : null,
+    checkError: typeof securityAndAnalysis.checkError === 'string' ? securityAndAnalysis.checkError : null,
+    dependencyGraphStatus: normalizeSecurityAndAnalysisStatus(rawInput?.dependency_graph),
+    automaticDependencySubmissionStatus: normalizeSecurityAndAnalysisStatus(
+      rawInput?.automatic_dependency_submission,
+    ),
+    dependabotSecurityUpdatesStatus: normalizeSecurityAndAnalysisStatus(
+      rawInput?.dependabot_security_updates,
+    ),
+    availableFields: dedupedAvailableFields,
+    missingFields: trackedSecurityAndAnalysisFields.filter(
+      (field) => !dedupedAvailableFields.includes(field),
+    ),
+    raw,
+  };
+}
+
+function buildRepositorySecurityAndAnalysisMarkdownLines(
+  securityAndAnalysis,
+  { heading = '### Repository security & analysis snapshot' } = {},
+) {
+  const normalized = normalizeRepositorySecurityAndAnalysis(securityAndAnalysis);
+  if (!normalized) {
+    return [];
+  }
+
+  const lines = [];
+  if (heading) {
+    lines.push(heading, '');
+  }
+
+  if (normalized.checkedAt) {
+    lines.push(`- checked at: \`${normalized.checkedAt}\``);
+  }
+
+  if (normalized.checkError) {
+    lines.push(`- check error: ${normalized.checkError}`);
+    return lines;
+  }
+
+  lines.push(`- dependency graph: \`${normalized.dependencyGraphStatus || 'unknown'}\``);
+  lines.push(
+    `- automatic dependency submission: \`${normalized.automaticDependencySubmissionStatus || 'unknown'}\``,
+  );
+
+  if (normalized.dependabotSecurityUpdatesStatus) {
+    lines.push(`- dependabot security updates: \`${normalized.dependabotSecurityUpdatesStatus}\``);
+  }
+
+  if (normalized.availableFields.length > 0) {
+    lines.push(
+      `- fields returned by repo API: ${normalized.availableFields
+        .map((field) => `\`${field}\``)
+        .join('、')}`,
+    );
+  }
+
+  if (normalized.missingFields.length > 0) {
+    lines.push(
+      `- fields absent from repo API payload: ${normalized.missingFields
+        .map((field) => `\`${field}\``)
+        .join('、')}`,
+    );
+
+    if (
+      normalized.missingFields.includes('dependency_graph') ||
+      normalized.missingFields.includes('automatic_dependency_submission')
+    ) {
+      lines.push(
+        '- repo API 缺失这些字段时，不应把缺失误判成“已开启”；最终仍以 dependency submission blocker 与 manifest visibility 证据为准。',
+      );
+    }
+  }
+
+  return lines;
 }
 
 function buildRecommendedActionsMarkdownLines(actions) {
@@ -476,11 +607,13 @@ function buildDriftRecommendedActions({
 }
 
 module.exports = {
+  buildRepositorySecurityAndAnalysisMarkdownLines,
   buildRecommendedActionsOutputs,
   buildDriftRecommendedActions,
   buildRecommendedActionsMarkdownLines,
   buildSubmissionRecommendedActions,
   dedupeRecommendedActions,
+  normalizeRepositorySecurityAndAnalysis,
   normalizeRecommendedActions,
   serializeGitHubOutputValue,
   writeGitHubOutputs,
