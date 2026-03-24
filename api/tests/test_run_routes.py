@@ -996,6 +996,7 @@ def test_resume_run_route_returns_operator_follow_up_summary(
             "阻塞变化：当前仍是 waiting external callback。 "
             "建议动作仍是“Wait for callback result”。"
         ),
+        "primary_resource": None,
     }
     assert body["run_snapshot"] == {
         "workflow_id": sample_workflow.id,

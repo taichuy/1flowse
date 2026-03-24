@@ -17,6 +17,7 @@ import {
   type OperatorRunFollowUpBody,
   type OperatorRunSnapshotBody
 } from "./run-snapshot";
+import type { SensitiveResourceItem } from "@/lib/get-sensitive-access";
 import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
 
 export type CleanupRunCallbackTicketsState = OperatorInlineActionResultState & {
@@ -37,6 +38,7 @@ type CleanupRunCallbackTicketsResponseBody = {
   } | null;
   callback_blocker_delta?: {
     summary?: string | null;
+    primary_resource?: SensitiveResourceItem | null;
   } | null;
   run_snapshot?: OperatorRunSnapshotBody | null;
   run_follow_up?: OperatorRunFollowUpBody | null;
@@ -108,6 +110,7 @@ export async function cleanupRunCallbackTickets(
     });
     const blockerDeltaSummary = buildActionCallbackBlockerDeltaSummary({
       backendSummary: body?.callback_blocker_delta?.summary,
+      backendPrimaryResource: body?.callback_blocker_delta?.primary_resource,
       before: beforeBlockers,
       after: afterBlockers
     });

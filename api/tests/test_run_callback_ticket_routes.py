@@ -202,6 +202,7 @@ def test_cleanup_stale_run_callback_tickets_route_expires_stale_tickets(
             "阻塞变化：已解除 waiting external callback。 "
             "建议动作已切换为“Handle approval here first”。"
         ),
+        "primary_resource": None,
     }
     assert body["run_snapshot"]["status"] == "waiting"
     assert body["run_snapshot"]["waiting_reason"] == "cleanup route pending"
@@ -401,6 +402,7 @@ def test_cleanup_stale_run_callback_tickets_route_supports_dry_run(
             "阻塞变化：当前仍是 waiting external callback。 "
             "建议动作仍是“Wait for callback result”。"
         ),
+        "primary_resource": None,
     }
     assert body["run_snapshot"]["status"] == "waiting"
     assert body["run_snapshot"]["waiting_reason"] == "cleanup route pending"

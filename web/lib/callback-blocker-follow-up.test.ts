@@ -8,6 +8,7 @@ import {
   type CallbackBlockerSnapshot
 } from "./callback-blocker-follow-up";
 import { getRunExecutionView } from "./get-run-views";
+import { buildSensitiveAccessResourceFixture } from "./workbench-page-test-fixtures";
 
 vi.mock("@/lib/get-run-views", () => ({
   getRunExecutionView: vi.fn()
@@ -245,6 +246,45 @@ describe("callback blocker follow-up", () => {
     expect(summary).toContain("阻塞变化：当前仍是 scheduled resume queued。");
     expect(summary).toContain("Automation 变化：Requeue due waiting callbacks=degraded · overall partial · scheduler degraded → Requeue due waiting callbacks=healthy · overall configured · scheduler healthy。");
     expect(summary).toContain("Automation 摘要：Requeue due waiting callbacks: healthy。");
+  });
+
+  it("在本地 delta formatter 里补 primary governed resource 细节", () => {
+    const after: CallbackBlockerSnapshot = {
+      nodeRunId: "node-run-resource",
+      operatorStatuses: [
+        {
+          kind: "approval_pending",
+          label: "approval pending",
+          detail: "优先处理审批。"
+        }
+      ],
+      recommendedAction: {
+        kind: "resolve_inline_sensitive_access",
+        label: "Handle approval here first",
+        detail: "先处理审批。"
+      },
+      primaryResource: buildSensitiveAccessResourceFixture({
+        label: "OpenAI Prod Key",
+        sensitivity_level: "L3",
+        source: "credential",
+        credential_governance: {
+          credential_id: "cred-openai-prod",
+          credential_name: "OpenAI Prod Key",
+          credential_type: "api_key",
+          sensitivity_level: "L3",
+          credential_status: "active",
+          sensitive_resource_id: "resource-1",
+          sensitive_resource_label: "OpenAI Prod Key",
+          credential_ref: "credential://openai_api_key",
+          summary: "当前命中的凭据是 OpenAI Prod Key。"
+        }
+      })
+    };
+
+    const summary = formatCallbackBlockerDeltaSummary({ before: null, after });
+
+    expect(summary).toContain("新增 approval pending。");
+    expect(summary).toContain("当前最该追踪的治理资源：OpenAI Prod Key · L3 治理 · 生效中。");
   });
 
   it("批量 blocker 汇总会把 automation health 变化计入 changedScopeCount", () => {

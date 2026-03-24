@@ -4,7 +4,8 @@ import { getApiBaseUrl } from "@/lib/api-base-url";
 import type {
   SensitiveAccessBulkAction,
   SensitiveAccessBulkActionResult,
-  SensitiveAccessBulkSkipSummary
+  SensitiveAccessBulkSkipSummary,
+  SensitiveResourceItem
 } from "@/lib/get-sensitive-access";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 import {
@@ -63,6 +64,7 @@ type CallbackBlockerDeltaResponseBody = {
   fully_cleared_scope_count?: number;
   still_blocked_scope_count?: number;
   summary?: string | null;
+  primary_resource?: SensitiveResourceItem | null;
 };
 
 type ApprovalDecisionResponseBody = {
@@ -312,6 +314,7 @@ export async function decideSensitiveAccessApprovalTicket(
     });
     const blockerDeltaSummary = buildActionCallbackBlockerDeltaSummary({
       backendSummary: body?.callback_blocker_delta?.summary,
+      backendPrimaryResource: body?.callback_blocker_delta?.primary_resource,
       before: beforeBlockers,
       after: afterBlockers
     });
@@ -412,6 +415,7 @@ export async function retrySensitiveAccessNotificationDispatch(
     });
     const blockerDeltaSummary = buildActionCallbackBlockerDeltaSummary({
       backendSummary: body?.callback_blocker_delta?.summary,
+      backendPrimaryResource: body?.callback_blocker_delta?.primary_resource,
       before: beforeBlockers,
       after: afterBlockers
     });
@@ -529,6 +533,12 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
         }
       : await buildBulkRunFollowUpMetrics(affectedRunIds);
     const blockerDelta = body?.callback_blocker_delta;
+    const blockerDeltaSummary = buildActionCallbackBlockerDeltaSummary({
+      backendSummary: blockerDelta?.summary,
+      backendPrimaryResource: blockerDelta?.primary_resource,
+      before: null,
+      after: null
+    });
 
     return {
       action: input.status,
@@ -536,7 +546,7 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
       message: formatBulkOperatorOutcomeExplanationMessage({
         explanation: body?.outcome_explanation,
         runFollowUpExplanation: body?.run_follow_up?.explanation,
-        blockerDeltaSummary: blockerDelta?.summary,
+        blockerDeltaSummary,
         affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns,
         fallback: body?.run_follow_up?.explanation
@@ -553,14 +563,14 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
               skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
               affectedRunCount: followUpSummary.affectedRunCount,
               sampledRuns,
-              blockerDeltaSummary: blockerDelta?.summary
+              blockerDeltaSummary
             })
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       legacyAuthGovernance: body?.legacy_auth_governance ?? null,
-      blockerDeltaSummary: blockerDelta?.summary ?? null,
+      blockerDeltaSummary,
       requestedCount: body?.requested_count ?? ticketIds.length,
       updatedCount,
       skippedCount,
@@ -654,6 +664,12 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
         }
       : await buildBulkRunFollowUpMetrics(affectedRunIds);
     const blockerDelta = body?.callback_blocker_delta;
+    const blockerDeltaSummary = buildActionCallbackBlockerDeltaSummary({
+      backendSummary: blockerDelta?.summary,
+      backendPrimaryResource: blockerDelta?.primary_resource,
+      before: null,
+      after: null
+    });
 
     return {
       action: "retry",
@@ -661,7 +677,7 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
       message: formatBulkOperatorOutcomeExplanationMessage({
         explanation: body?.outcome_explanation,
         runFollowUpExplanation: body?.run_follow_up?.explanation,
-        blockerDeltaSummary: blockerDelta?.summary,
+        blockerDeltaSummary,
         affectedRunCount: followUpSummary.affectedRunCount,
         sampledRuns,
         fallback: body?.run_follow_up?.explanation
@@ -676,14 +692,14 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
               skippedSummary: buildBulkSkipSummaryMessage(skippedReasonSummary),
               affectedRunCount: followUpSummary.affectedRunCount,
               sampledRuns,
-              blockerDeltaSummary: blockerDelta?.summary
+              blockerDeltaSummary
             })
       }),
       outcomeExplanation: body?.outcome_explanation ?? null,
       runFollowUpExplanation: body?.run_follow_up?.explanation ?? null,
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       legacyAuthGovernance: body?.legacy_auth_governance ?? null,
-      blockerDeltaSummary: blockerDelta?.summary ?? null,
+      blockerDeltaSummary,
       requestedCount: body?.requested_count ?? dispatchIds.length,
       updatedCount,
       skippedCount,

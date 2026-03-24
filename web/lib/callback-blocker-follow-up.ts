@@ -2,10 +2,15 @@ import {
   getCallbackWaitingRecommendedAction,
   getCallbackWaitingAutomationHealthSnapshot,
   listCallbackWaitingOperatorStatuses,
+  pickCallbackWaitingInlineSensitiveAccessEntry,
   type CallbackWaitingAutomationHealthSnapshot,
   type CallbackWaitingOperatorStatus,
   type CallbackWaitingRecommendedAction
 } from "@/lib/callback-waiting-presenters";
+import {
+  formatPrimaryGovernedResourceChineseDetail,
+} from "@/lib/credential-governance";
+import type { SensitiveResourceItem } from "@/lib/get-sensitive-access";
 import type { CallbackWaitingAutomationCheck } from "@/lib/get-system-overview";
 import { getRunExecutionView, type RunExecutionNodeItem } from "@/lib/get-run-views";
 
@@ -14,6 +19,7 @@ export type CallbackBlockerSnapshot = {
   operatorStatuses: CallbackWaitingOperatorStatus[];
   recommendedAction?: CallbackWaitingRecommendedAction | null;
   automationHealth?: CallbackWaitingAutomationHealthSnapshot | null;
+  primaryResource?: SensitiveResourceItem | null;
 };
 
 export type CallbackBlockerScope = {
@@ -34,6 +40,7 @@ export type BulkCallbackBlockerDeltaSummary = {
   fullyClearedScopeCount: number;
   stillBlockedScopeCount: number;
   summary: string | null;
+  primaryResource?: SensitiveResourceItem | null;
 };
 
 function joinParts(parts: Array<string | null | undefined>) {
@@ -69,6 +76,22 @@ function pickCallbackNode(
 
 function formatLabels(statuses: CallbackWaitingOperatorStatus[]) {
   return statuses.map((status) => status.label).join("、");
+}
+
+function resolveDeltaPrimaryResource({
+  before,
+  after
+}: {
+  before?: CallbackBlockerSnapshot | null;
+  after?: CallbackBlockerSnapshot | null;
+}) {
+  return after?.primaryResource ?? before?.primaryResource ?? null;
+}
+
+function pickSnapshotPrimaryResource(node: Pick<RunExecutionNodeItem, "sensitive_access_entries">) {
+  return (
+    pickCallbackWaitingInlineSensitiveAccessEntry(node.sensitive_access_entries)?.resource ?? null
+  );
 }
 
 function buildScopeKey({ runId, nodeRunId }: { runId: string; nodeRunId?: string | null }) {
@@ -242,7 +265,8 @@ export async function fetchCallbackBlockerSnapshot({
       scheduledWaitingStatus: node.scheduled_waiting_status,
       scheduledResumeScheduledAt: node.scheduled_resume_scheduled_at,
       scheduledResumeDueAt: node.scheduled_resume_due_at
-    })
+    }),
+    primaryResource: pickSnapshotPrimaryResource(node)
   };
 }
 
@@ -309,6 +333,7 @@ export function formatCallbackBlockerDeltaSummary({
     after && beforeActionLabel === afterActionLabel && afterActionLabel
       ? `建议动作仍是“${afterActionLabel}”。`
       : null,
+    formatPrimaryGovernedResourceChineseDetail(resolveDeltaPrimaryResource({ before, after })),
     formatCallbackAutomationHealthDeltaSummary({ before, after })
   ]);
 }
@@ -334,6 +359,7 @@ export function summarizeBulkCallbackBlockerDelta({
     return {
       runId: beforeItem.runId,
       nodeRunId: beforeItem.nodeRunId,
+      primaryResource: afterItem?.snapshot?.primaryResource ?? beforeItem.snapshot?.primaryResource ?? null,
       deltaSummary: formatCallbackBlockerDeltaSummary({
         before: beforeItem.snapshot,
         after: afterItem?.snapshot ?? null
@@ -370,6 +396,11 @@ export function summarizeBulkCallbackBlockerDelta({
     clearedScopeCount,
     fullyClearedScopeCount,
     stillBlockedScopeCount,
+    primaryResource:
+      samples.find((sample) => sample.stillBlocked)?.primaryResource ??
+      after.find((item) => item.snapshot?.primaryResource)?.snapshot?.primaryResource ??
+      before.find((item) => item.snapshot?.primaryResource)?.snapshot?.primaryResource ??
+      null,
     summary:
       sampledScopeCount === 0
         ? null

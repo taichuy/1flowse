@@ -6,8 +6,14 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.schemas.run_views import RunExecutionNodeItem
-from app.schemas.sensitive_access import CallbackBlockerDeltaSummary
+from app.schemas.sensitive_access import (
+    CallbackBlockerDeltaSummary,
+    SensitiveResourceItem,
+)
 from app.services.run_views import RunViewService
+from app.services.sensitive_access_bundle_summary import (
+    pick_primary_sensitive_access_timeline_entry,
+)
 
 run_view_service = RunViewService()
 
@@ -17,6 +23,7 @@ class CallbackBlockerSnapshot:
     operator_status_kinds: tuple[str, ...]
     operator_status_labels: tuple[str, ...]
     recommended_action_label: str | None = None
+    primary_resource: SensitiveResourceItem | None = None
 
 
 @dataclass(frozen=True)
@@ -224,11 +231,45 @@ def capture_callback_blocker_snapshot(
         return None
 
     operator_statuses = _build_operator_statuses(node)
+    primary_entry = pick_primary_sensitive_access_timeline_entry(
+        node.sensitive_access_entries
+    )
     return CallbackBlockerSnapshot(
         operator_status_kinds=tuple(status_kind for status_kind, _ in operator_statuses),
         operator_status_labels=tuple(status_label for _, status_label in operator_statuses),
         recommended_action_label=_build_recommended_action_label(node),
+        primary_resource=primary_entry.resource if primary_entry is not None else None,
     )
+
+
+def _resolve_delta_primary_resource(
+    *,
+    before: CallbackBlockerSnapshot | None,
+    after: CallbackBlockerSnapshot | None,
+) -> SensitiveResourceItem | None:
+    if after is not None and after.primary_resource is not None:
+        return after.primary_resource
+    if before is not None and before.primary_resource is not None:
+        return before.primary_resource
+    return None
+
+
+def _pick_bulk_delta_primary_resource(
+    deltas: list[CallbackBlockerDeltaSummary],
+) -> SensitiveResourceItem | None:
+    for delta in deltas:
+        if delta.still_blocked_scope_count > 0 and delta.primary_resource is not None:
+            return delta.primary_resource
+
+    for delta in deltas:
+        if delta.changed_scope_count > 0 and delta.primary_resource is not None:
+            return delta.primary_resource
+
+    for delta in deltas:
+        if delta.primary_resource is not None:
+            return delta.primary_resource
+
+    return None
 
 
 def build_callback_blocker_delta_summary(
@@ -311,6 +352,7 @@ def build_callback_blocker_delta_summary(
         fully_cleared_scope_count=1 if before_kinds and not after_kinds else 0,
         still_blocked_scope_count=1 if after_kinds else 0,
         summary=summary,
+        primary_resource=_resolve_delta_primary_resource(before=before, after=after),
     )
 
 
@@ -367,4 +409,5 @@ def build_bulk_callback_blocker_delta_summary(
         fully_cleared_scope_count=fully_cleared_scope_count,
         still_blocked_scope_count=still_blocked_scope_count,
         summary=summary,
+        primary_resource=_pick_bulk_delta_primary_resource(normalized_deltas),
     )

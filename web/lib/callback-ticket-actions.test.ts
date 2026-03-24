@@ -260,6 +260,7 @@ describe("callback ticket actions", () => {
     });
     expect(buildActionCallbackBlockerDeltaSummary).toHaveBeenCalledWith({
       backendSummary: "阻塞变化：已解除 waiting external callback。 建议动作已切换为“Handle approval here first”。",
+      backendPrimaryResource: undefined,
       before: undefined,
       after: undefined
     });

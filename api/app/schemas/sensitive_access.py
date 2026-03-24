@@ -169,6 +169,7 @@ class CallbackBlockerDeltaSummary(BaseModel):
     fully_cleared_scope_count: int = 0
     still_blocked_scope_count: int = 0
     summary: str | None = None
+    primary_resource: SensitiveResourceItem | None = None
 
 
 class NotificationDispatchRetryResponse(BaseModel):

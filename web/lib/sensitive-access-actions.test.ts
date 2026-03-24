@@ -304,6 +304,7 @@ describe("sensitive access actions", () => {
     });
     expect(buildActionCallbackBlockerDeltaSummary).toHaveBeenCalledWith({
       backendSummary: "阻塞变化：已解除 approval pending。",
+      backendPrimaryResource: undefined,
       before: undefined,
       after: undefined
     });
@@ -396,8 +397,16 @@ describe("sensitive access actions", () => {
     });
     expect(result.message).toContain("批量通知已重试。");
     expect(result.message).toContain("继续等待审批人与 callback 后续推进。");
-    expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
+    expect(result.message).toContain(
+      "已回读 1 个 blocker 样本；发生变化 1 个。 Automation 摘要：scheduler 已重新接管该 waiting run。"
+    );
     expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
+    expect(buildActionCallbackBlockerDeltaSummary).toHaveBeenCalledWith({
+      backendSummary: "已回读 1 个 blocker 样本；发生变化 1 个。",
+      backendPrimaryResource: undefined,
+      before: null,
+      after: null
+    });
     expect(revalidateOperatorFollowUpByRunIds).toHaveBeenCalledWith(
       ["run-1"],
       expect.objectContaining({
@@ -521,6 +530,7 @@ describe("sensitive access actions", () => {
     });
     expect(buildActionCallbackBlockerDeltaSummary).toHaveBeenCalledWith({
       backendSummary: "阻塞变化：仍有 1 个 operator blocker 需要审批。",
+      backendPrimaryResource: undefined,
       before: undefined,
       after: undefined
     });
@@ -613,9 +623,17 @@ describe("sensitive access actions", () => {
     });
     expect(result.message).toContain("批量审批已通过。");
     expect(result.message).toContain("继续观察 waiting 与 callback 后续推进。");
-    expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
+    expect(result.message).toContain(
+      "已回读 1 个 blocker 样本；发生变化 1 个。 Automation 摘要：scheduler 已重新接管该 waiting run。"
+    );
     expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
     expect(result.legacyAuthGovernance).toEqual(buildLegacyAuthGovernanceSnapshot());
+    expect(buildActionCallbackBlockerDeltaSummary).toHaveBeenCalledWith({
+      backendSummary: "已回读 1 个 blocker 样本；发生变化 1 个。",
+      backendPrimaryResource: undefined,
+      before: null,
+      after: null
+    });
     expect(revalidateOperatorFollowUpByRunIds).toHaveBeenCalledWith(
       ["run-1"],
       expect.objectContaining({
@@ -718,14 +736,20 @@ describe("sensitive access actions", () => {
       waitingRunCount: 1
     });
     expect(result.message).toContain("批量批准 1 条票据，跳过 0 条。");
-    expect(result.message).toContain("已回读 1 个 blocker 样本；发生变化 1 个。");
+    expect(result.message).toContain(
+      "已回读 1 个 blocker 样本；发生变化 1 个。 Automation 摘要：scheduler 已重新接管该 waiting run。"
+    );
     expect(result.message).toContain("本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。");
     expect(result.message).toContain(
       "run run-1：当前 run 状态：waiting。 当前节点：review。 重点信号：等待原因：waiting approval"
     );
     expect(result.message).not.toContain("已回读 1 个样本，当前状态分布：waiting 1。");
     expect(
-      (result.message.match(/已回读 1 个 blocker 样本；发生变化 1 个。/g) ?? []).length
+      (
+        result.message.match(
+          /已回读 1 个 blocker 样本；发生变化 1 个。 Automation 摘要：scheduler 已重新接管该 waiting run。/g
+        ) ?? []
+      ).length
     ).toBe(1);
   });
 });
