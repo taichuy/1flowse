@@ -430,6 +430,37 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
   assert.match(summary, /submitted roots: `services\/compat-dify`（snapshot: `snapshot-compat`）/);
 });
 
+test('buildMarkdownSummary hints actions read permission when submission evidence fetch is blocked', () => {
+  const inventory = buildWorkspaceManifestInventory([
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ]);
+  const manifestCoverage = buildWorkspaceManifestCoverage(inventory, []);
+  const summary = buildMarkdownSummary({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: 'taichuy_dev',
+    manifestNodes: [],
+    workspaceManifestInventory: inventory,
+    manifestCoverage,
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    dependencySubmissionEvidence: {
+      workflowConfigured: true,
+      fetchError:
+        'gh: Resource not accessible by integration (HTTP 403) while requesting repos/taichuy/7flows/actions/workflows/dependency-graph-submission.yml/runs?per_page=1&branch=taichuy_dev',
+    },
+  });
+
+  assert.match(summary, /Resource not accessible by integration/);
+  assert.match(summary, /actions: read/);
+});
+
 test('parseArgs accepts report output path', () => {
   assert.deepEqual(parseArgs(['--report-output', 'dependabot-drift.json']), {
     reportOutputPath: 'dependabot-drift.json',
@@ -491,6 +522,7 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       conclusion: 'success',
       event: 'workflow_dispatch',
       htmlUrl: 'https://github.com/taichuy/7flows/actions/runs/23505567063',
+      createdAt: '2026-03-25T02:45:00.000Z',
       report: {
         repositoryBlocker:
           'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
@@ -503,6 +535,13 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
           { rootLabel: 'web', status: 'blocked' },
         ],
         submittedRoots: [],
+        dependencyGraphVisibility: {
+          checkedAt: '2026-03-25T02:46:00.000Z',
+          defaultBranch: 'taichuy_dev',
+          manifestCount: 1,
+          visibleRoots: ['web'],
+          missingRoots: ['api'],
+        },
       },
     },
     conclusion: {
@@ -533,13 +572,49 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
     },
   ]);
   assert.equal(report.dependencySubmissionEvidence.runId, 23505567063);
+  assert.equal(report.dependencySubmissionEvidence.createdAt, '2026-03-25T02:45:00.000Z');
   assert.match(report.dependencySubmissionEvidence.repositoryBlocker, /Dependency graph/);
   assert.deepEqual(
     report.dependencySubmissionEvidence.blockedRoots.map((item) => item.rootLabel),
     ['api', 'web'],
   );
+  assert.equal(report.dependencySubmissionEvidence.dependencyGraphVisibility.defaultBranch, 'taichuy_dev');
+  assert.deepEqual(report.dependencySubmissionEvidence.dependencyGraphVisibility.visibleRoots, ['web']);
+  assert.deepEqual(report.dependencySubmissionEvidence.dependencyGraphVisibility.missingRoots, ['api']);
   assert.equal(report.conclusion.exitCode, 2);
   assert.equal(report.conclusion.kind, 'platform_drift');
+});
+
+test('buildDriftReport keeps actions read blockers machine-readable', () => {
+  const report = buildDriftReport({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: 'taichuy_dev',
+    manifestNodes: [],
+    workspaceManifestInventory: [],
+    manifestCoverage: [],
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    dependencySubmissionEvidence: {
+      workflowConfigured: true,
+      runAvailable: false,
+      fetchError:
+        'gh: Resource not accessible by integration (HTTP 403) while requesting repos/taichuy/7flows/actions/workflows/dependency-graph-submission.yml/runs?per_page=1&branch=taichuy_dev',
+      reportDownloadError:
+        'gh: Resource not accessible by integration (HTTP 403) while downloading artifact dependency-submission-report',
+    },
+    conclusion: {
+      exitCode: 3,
+      kind: 'alerts_unavailable',
+      summary: '当前 workflow token 无法读取 Dependabot alerts；请补充 DEPENDABOT_ALERTS_TOKEN 或使用具备权限的 gh 凭证。',
+    },
+  });
+
+  assert.equal(report.dependencySubmissionEvidence.fetchBlockedByActionsReadPermission, true);
+  assert.equal(report.dependencySubmissionEvidence.reportDownloadBlockedByActionsReadPermission, true);
 });
 
 test('parseDependencySubmissionJsonReport keeps dependency graph visibility evidence', () => {

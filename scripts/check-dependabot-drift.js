@@ -105,6 +105,28 @@ function normalizeManifestPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/');
 }
 
+function normalizeDependencyGraphVisibilityEvidence(dependencyGraphVisibility) {
+  if (!dependencyGraphVisibility) {
+    return null;
+  }
+
+  return {
+    checkedAt: dependencyGraphVisibility.checkedAt || null,
+    defaultBranch: dependencyGraphVisibility.defaultBranch || null,
+    manifestCount:
+      typeof dependencyGraphVisibility.manifestCount === 'number'
+        ? dependencyGraphVisibility.manifestCount
+        : null,
+    checkError: dependencyGraphVisibility.checkError || null,
+    visibleRoots: Array.isArray(dependencyGraphVisibility.visibleRoots)
+      ? dependencyGraphVisibility.visibleRoots.filter(Boolean)
+      : [],
+    missingRoots: Array.isArray(dependencyGraphVisibility.missingRoots)
+      ? dependencyGraphVisibility.missingRoots.filter(Boolean)
+      : [],
+  };
+}
+
 function normalizeDependencySubmissionReport(report) {
   const roots = (Array.isArray(report?.roots) ? report.roots : Array.isArray(report?.blockedRoots) ? report.blockedRoots : [])
     .map((item) => ({
@@ -116,23 +138,9 @@ function normalizeDependencySubmissionReport(report) {
     }))
     .filter((item) => item.rootLabel);
 
-  const dependencyGraphVisibility = report?.dependencyGraphVisibility
-    ? {
-        checkedAt: report.dependencyGraphVisibility.checkedAt || null,
-        defaultBranch: report.dependencyGraphVisibility.defaultBranch || null,
-        manifestCount:
-          typeof report.dependencyGraphVisibility.manifestCount === 'number'
-            ? report.dependencyGraphVisibility.manifestCount
-            : null,
-        checkError: report.dependencyGraphVisibility.checkError || null,
-        visibleRoots: Array.isArray(report.dependencyGraphVisibility.visibleRoots)
-          ? report.dependencyGraphVisibility.visibleRoots.filter(Boolean)
-          : [],
-        missingRoots: Array.isArray(report.dependencyGraphVisibility.missingRoots)
-          ? report.dependencyGraphVisibility.missingRoots.filter(Boolean)
-          : [],
-      }
-    : null;
+  const dependencyGraphVisibility = normalizeDependencyGraphVisibilityEvidence(
+    report?.dependencyGraphVisibility,
+  );
 
   return {
     repositoryBlocker: report?.repositoryBlocker || null,
@@ -277,9 +285,15 @@ function buildDependencySubmissionEvidenceLines(evidence) {
   }
 
   if (evidence.fetchError) {
-    return [
+    const lines = [
       `- 已检测到 \`${dependencySubmissionWorkflowPath}\`，但当前无法读取最新 workflow 证据：${evidence.fetchError}`,
     ];
+    if (isActionsReadPermissionError(evidence.fetchError)) {
+      lines.push(
+        '- 当前最常见原因是 `GitHub Security Drift` workflow token 缺少 `actions: read`；若要读取最新 submission run 与 artifact，请为该 workflow 显式授予 `actions: read`。',
+      );
+    }
+    return lines;
   }
 
   if (!evidence.runAvailable) {
@@ -337,6 +351,11 @@ function buildDependencySubmissionEvidenceLines(evidence) {
 
   if (evidence.reportDownloadError) {
     lines.push(`- latest artifact unavailable: ${evidence.reportDownloadError}`);
+    if (isActionsReadPermissionError(evidence.reportDownloadError)) {
+      lines.push(
+        '- 最新 artifact 下载失败通常意味着当前 workflow token 缺少 `actions: read`；请先确认 `GitHub Security Drift` 已显式声明该权限。',
+      );
+    }
   }
 
   return lines;
@@ -713,6 +732,11 @@ function isDependabotAlertPermissionError(error) {
   return message.includes('dependabot/alerts') && message.includes('Resource not accessible by integration');
 }
 
+function isActionsReadPermissionError(error) {
+  const message = String(error?.message || error || '');
+  return message.includes('Resource not accessible by integration');
+}
+
 function buildMarkdownSummary({
   repository,
   defaultBranch,
@@ -863,6 +887,39 @@ function writeMarkdownSummary(params) {
   fs.writeFileSync(summaryPath, `${buildMarkdownSummary(params)}\n`, 'utf8');
 }
 
+function buildDependencySubmissionEvidenceReport(dependencySubmissionEvidence) {
+  if (!dependencySubmissionEvidence) {
+    return null;
+  }
+
+  const fetchError = dependencySubmissionEvidence.fetchError || null;
+  const reportDownloadError = dependencySubmissionEvidence.reportDownloadError || null;
+
+  return {
+    workflowConfigured: Boolean(dependencySubmissionEvidence.workflowConfigured),
+    runAvailable: Boolean(dependencySubmissionEvidence.runAvailable),
+    fetchError,
+    fetchBlockedByActionsReadPermission:
+      Boolean(fetchError) && isActionsReadPermissionError(fetchError),
+    runId: dependencySubmissionEvidence.runId || null,
+    status: dependencySubmissionEvidence.status || null,
+    conclusion: dependencySubmissionEvidence.conclusion || null,
+    event: dependencySubmissionEvidence.event || null,
+    htmlUrl: dependencySubmissionEvidence.htmlUrl || null,
+    createdAt: dependencySubmissionEvidence.createdAt || null,
+    reportDownloadError,
+    reportDownloadBlockedByActionsReadPermission:
+      Boolean(reportDownloadError) && isActionsReadPermissionError(reportDownloadError),
+    repositoryBlocker: dependencySubmissionEvidence.report?.repositoryBlocker || null,
+    roots: dependencySubmissionEvidence.report?.roots || [],
+    blockedRoots: dependencySubmissionEvidence.report?.blockedRoots || [],
+    submittedRoots: dependencySubmissionEvidence.report?.submittedRoots || [],
+    dependencyGraphVisibility: normalizeDependencyGraphVisibilityEvidence(
+      dependencySubmissionEvidence.report?.dependencyGraphVisibility,
+    ),
+  };
+}
+
 function buildDriftReport({
   repository,
   defaultBranch,
@@ -928,23 +985,9 @@ function buildDriftReport({
         note: result.reason,
       })),
     },
-    dependencySubmissionEvidence: dependencySubmissionEvidence
-      ? {
-          workflowConfigured: Boolean(dependencySubmissionEvidence.workflowConfigured),
-          runAvailable: Boolean(dependencySubmissionEvidence.runAvailable),
-          fetchError: dependencySubmissionEvidence.fetchError || null,
-          runId: dependencySubmissionEvidence.runId || null,
-          status: dependencySubmissionEvidence.status || null,
-          conclusion: dependencySubmissionEvidence.conclusion || null,
-          event: dependencySubmissionEvidence.event || null,
-          htmlUrl: dependencySubmissionEvidence.htmlUrl || null,
-          reportDownloadError: dependencySubmissionEvidence.reportDownloadError || null,
-          repositoryBlocker: dependencySubmissionEvidence.report?.repositoryBlocker || null,
-          roots: dependencySubmissionEvidence.report?.roots || [],
-          blockedRoots: dependencySubmissionEvidence.report?.blockedRoots || [],
-          submittedRoots: dependencySubmissionEvidence.report?.submittedRoots || [],
-        }
-      : null,
+    dependencySubmissionEvidence: buildDependencySubmissionEvidenceReport(
+      dependencySubmissionEvidence,
+    ),
     conclusion,
   };
 }

@@ -25,7 +25,7 @@ node scripts/check-dependabot-drift.js
 
 如果在 GitHub Actions 中运行，脚本还会把结论写入 `GITHUB_STEP_SUMMARY`，方便在 workflow 页面直接查看证据。
 
-如果仓库内已存在 `.github/workflows/dependency-graph-submission.yml`，脚本还会顺带查询默认分支最新一条 `Dependency Graph Submission` run，并优先读取其中的 `dependency-submission-report` artifact（`dependency-submission.json`，必要时回退到 `dependency-submission.txt`）把摘要串进当前结论里，避免 `GitHub Security Drift` 只停留在“manifests 还是 0”而说不清到底是平台设置阻塞、部分 root 已提交，还是平台刷新延迟。
+如果仓库内已存在 `.github/workflows/dependency-graph-submission.yml`，脚本还会顺带查询默认分支最新一条 `Dependency Graph Submission` run，并优先读取其中的 `dependency-submission-report` artifact（`dependency-submission.json`，必要时回退到 `dependency-submission.txt`）把摘要串进当前结论里，避免 `GitHub Security Drift` 只停留在“manifests 还是 0”而说不清到底是平台设置阻塞、部分 root 已提交，还是平台刷新延迟。若在 GitHub Actions 中消费这条证据链，`GitHub Security Drift` job 还必须显式具备 `actions: read`，否则会在读取 workflow run / artifact 时得到 `Resource not accessible by integration` 的 403。
 
 ## 结果解释
 
@@ -56,9 +56,10 @@ node scripts/check-dependabot-drift.js
   - 每日定时 `schedule`
   - `taichuy_dev` 上任意受脚本监控的 manifest（`**/package.json`、`**/pnpm-lock.yaml`、`**/pyproject.toml`、`**/uv.lock`）、`scripts/check-dependabot-drift.js`、`scripts/submit-dependency-snapshots.js` 或两条相关 workflow 的 push
 - 工作流会上传 `dependabot-drift-report` artifact，并把摘要写入 workflow summary。
+- 由于该 workflow 需要查询 `Dependency Graph Submission` 的最新 run 并下载其 artifact，`.github/workflows/github-security-drift.yml` 现在显式声明 `actions: read`、`contents: read` 与 `security-events: read`；若后续复制或裁剪该 workflow，请不要丢掉 `actions: read`。
 - artifact 现在会同时保留：
   - `dependabot-drift.txt`：给人读的命令输出
-  - `dependabot-drift.json`：给后续自动化 / agent 复验消费的机器可读报告，包含 manifest coverage、告警 verdict、最新 dependency submission evidence 与最终 exit code / conclusion
+  - `dependabot-drift.json`：给后续自动化 / agent 复验消费的机器可读报告，包含 manifest coverage、告警 verdict、最新 dependency submission evidence、submission-time `dependencyGraphVisibility`，以及 `actions: read` 权限阻塞标记与最终 exit code / conclusion
 - 当默认分支仍存在 `graph coverage` 缺口时，summary / artifact 现在会额外串上最新 `Dependency Graph Submission` run 证据；如果 submission workflow 已明确给出 `repository blocker`，优先按仓库设置阻塞处理，而不是继续怀疑本地 inventory 或 snapshot 覆盖面。
 - 工作流会优先读取仓库 secret `DEPENDABOT_ALERTS_TOKEN`；如果未配置，则退回 `github.token`，并在无法读取 Dependabot alerts 时输出降级 warning，而不是把整条自动复验链直接打断。
 - exit code 解释与本地一致：
