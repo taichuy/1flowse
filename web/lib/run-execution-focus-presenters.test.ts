@@ -226,11 +226,22 @@ describe("run execution focus presenters", () => {
             },
             resource: {
               id: "resource-1",
-              label: "Callback capability",
+              label: "Credential · Ops Key",
               description: "External callback channel",
-              sensitivity_level: "L2",
-              source: "local_capability",
+              sensitivity_level: "L3",
+              source: "credential",
               metadata: {},
+              credential_governance: {
+                credential_id: "cred-ops-key",
+                credential_name: "Ops Key",
+                credential_type: "api_key",
+                credential_status: "active",
+                sensitivity_level: "L3",
+                sensitive_resource_id: "resource-1",
+                sensitive_resource_label: "Credential · Ops Key",
+                credential_ref: "credential://cred-ops-key",
+                summary: "本次命中的凭据是 Ops Key（api_key）；当前治理级别 L3，状态 生效中。"
+              },
               created_at: "2026-03-18T09:00:00Z",
               updated_at: "2026-03-18T09:00:00Z"
             },
@@ -271,7 +282,9 @@ describe("run execution focus presenters", () => {
       })
     );
 
-    expect(followUp).toContain("sensitive access 审批票据");
+    expect(followUp).toBe(
+      "下一步：优先处理 Credential · Ops Key · L3 治理 · 生效中 对应的 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+    );
   });
 
   it("在没有审批和 pending ticket 时提示 scheduled resume", () => {

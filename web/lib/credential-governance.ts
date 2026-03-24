@@ -56,9 +56,11 @@ export function formatSensitiveResourceGovernanceSummary(
   }
 
   const resourceLabel = resource.label?.trim() || null;
+  const credentialGovernance = getCredentialGovernanceSummary(resource);
   const compactGovernanceSummary = formatCredentialGovernanceCompactSummary(
-    getCredentialGovernanceSummary(resource)
+    credentialGovernance
   );
+  const credentialName = credentialGovernance?.credential_name?.trim() || null;
 
   if (!compactGovernanceSummary) {
     return resourceLabel;
@@ -70,6 +72,15 @@ export function formatSensitiveResourceGovernanceSummary(
       compactGovernanceSummary.startsWith(`${resourceLabel} · `))
   ) {
     return compactGovernanceSummary;
+  }
+
+  if (
+    resourceLabel &&
+    credentialName &&
+    resourceLabel.endsWith(credentialName) &&
+    compactGovernanceSummary.startsWith(`${credentialName} · `)
+  ) {
+    return `${resourceLabel}${compactGovernanceSummary.slice(credentialName.length)}`;
   }
 
   return [resourceLabel, compactGovernanceSummary]

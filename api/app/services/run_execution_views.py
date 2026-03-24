@@ -17,16 +17,16 @@ from app.schemas.run_views import (
     SkillReferenceLoadItem,
     SkillReferenceLoadReferenceItem,
 )
-from app.services.run_execution_focus_explanations import (
-    build_run_execution_focus_explanation,
+from app.services.callback_waiting_explanations import (
+    build_callback_waiting_explanation,
 )
 from app.services.operator_follow_up_snapshots import (
     build_operator_run_snapshot,
     build_single_run_follow_up_summary,
     build_waiting_reason_lookup,
 )
-from app.services.callback_waiting_explanations import (
-    build_callback_waiting_explanation,
+from app.services.run_execution_focus_explanations import (
+    build_run_execution_focus_explanation,
 )
 from app.services.run_view_serializers import (
     serialize_ai_call,
@@ -41,6 +41,9 @@ from app.services.runtime_execution_policy import (
     execution_policy_from_node_run_input,
 )
 from app.services.runtime_records import ExecutionArtifacts
+from app.services.sensitive_access_bundle_summary import (
+    pick_primary_sensitive_access_timeline_entry,
+)
 from app.services.sensitive_access_presenters import (
     serialize_sensitive_access_timeline_entry,
 )
@@ -425,6 +428,9 @@ def _build_execution_node_item(
     node_item.execution_focus_explanation = build_run_execution_focus_explanation(
         node_item
     )
+    primary_sensitive_access_entry = pick_primary_sensitive_access_timeline_entry(
+        sensitive_access_entries
+    )
     node_item.callback_waiting_explanation = build_callback_waiting_explanation(
         lifecycle=callback_waiting_lifecycle,
         pending_callback_ticket_count=sum(
@@ -441,6 +447,11 @@ def _build_execution_node_item(
             for entry in sensitive_access_entries
             for notification in entry.notifications
             if notification.status == "failed"
+        ),
+        primary_resource=(
+            primary_sensitive_access_entry.resource
+            if primary_sensitive_access_entry is not None
+            else None
         ),
         scheduled_resume_delay_seconds=scheduled_resume[
             "scheduled_resume_delay_seconds"

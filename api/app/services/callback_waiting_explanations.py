@@ -6,6 +6,10 @@ from app.schemas.run_views import (
     CallbackWaitingLifecycleSummary,
     RunExecutionFocusExplanation,
 )
+from app.schemas.sensitive_access import SensitiveResourceItem
+from app.services.credential_governance import (
+    format_sensitive_resource_governance_summary,
+)
 
 
 def _normalize_datetime(value: datetime | str | None) -> datetime | None:
@@ -42,21 +46,55 @@ def build_callback_waiting_explanation(
     pending_callback_ticket_count: int = 0,
     pending_approval_count: int = 0,
     failed_notification_count: int = 0,
+    primary_resource: SensitiveResourceItem | None = None,
     scheduled_resume_delay_seconds: float | None = None,
     scheduled_resume_due_at: datetime | str | None = None,
     scheduled_resume_requeued_at: datetime | str | None = None,
     scheduled_resume_requeue_source: str | None = None,
 ) -> RunExecutionFocusExplanation | None:
     if pending_approval_count > 0:
+        primary_resource_summary = format_sensitive_resource_governance_summary(
+            primary_resource
+        )
         primary_signal = (
-            f"当前 callback waiting 仍卡在 {pending_approval_count} 条待处理审批。"
-            if pending_approval_count > 1
-            else "当前 callback waiting 仍卡在 1 条待处理审批。"
+            (
+                f"当前 callback waiting 仍卡在 {pending_approval_count} 条待处理审批；"
+                f"首要治理资源是 {primary_resource_summary}。"
+            )
+            if pending_approval_count > 1 and primary_resource_summary
+            else (
+                "当前 callback waiting 仍卡在 1 条待处理审批；"
+                f"首要治理资源是 {primary_resource_summary}。"
+                if primary_resource_summary
+                else (
+                    f"当前 callback waiting 仍卡在 {pending_approval_count} 条待处理审批。"
+                    if pending_approval_count > 1
+                    else "当前 callback waiting 仍卡在 1 条待处理审批。"
+                )
+            )
         )
         follow_up = (
-            "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
-            if failed_notification_count > 0
-            else "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+            (
+                f"下一步：先重试或改投 {primary_resource_summary} 对应审批通知，"
+                "再处理审批结果；不要直接强制恢复 run。"
+            )
+            if failed_notification_count > 0 and primary_resource_summary
+            else (
+                "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
+                if failed_notification_count > 0
+                else (
+                    (
+                        "下一步：先在当前 operator 入口完成 "
+                        f"{primary_resource_summary} 对应审批或拒绝，"
+                        "再观察 waiting 节点是否自动恢复。"
+                    )
+                    if primary_resource_summary
+                    else (
+                        "下一步：先在当前 operator 入口完成审批或拒绝，"
+                        "再观察 waiting 节点是否自动恢复。"
+                    )
+                )
+            )
         )
         return RunExecutionFocusExplanation(
             primary_signal=primary_signal,
@@ -67,7 +105,10 @@ def build_callback_waiting_explanation(
         termination_reason = (lifecycle.termination_reason or "callback waiting terminated").strip()
         terminated_at = _format_copy_datetime(lifecycle.terminated_at)
         follow_up = (
-            f"下一步：先确认终止原因 {termination_reason} 和终止时间 {terminated_at}，不要直接 resume。"
+            (
+                "下一步：先确认终止原因 "
+                f"{termination_reason} 和终止时间 {terminated_at}，不要直接 resume。"
+            )
             if terminated_at
             else f"下一步：先确认终止原因 {termination_reason}，不要直接 resume。"
         )
@@ -124,7 +165,10 @@ def build_callback_waiting_explanation(
             follow_up_parts.append(f"来源为 {requeue_source}。")
         follow_up_parts.append("若仍无推进，再考虑手动 resume。")
         return RunExecutionFocusExplanation(
-            primary_signal="最近一次到期的 scheduled resume 已被重新入队，waiting 节点正在等待新的恢复尝试。",
+            primary_signal=(
+                "最近一次到期的 scheduled resume 已被重新入队，"
+                "waiting 节点正在等待新的恢复尝试。"
+            ),
             follow_up="".join(follow_up_parts),
         )
 
@@ -133,7 +177,10 @@ def build_callback_waiting_explanation(
         return RunExecutionFocusExplanation(
             primary_signal="当前 scheduled resume 已超窗，waiting 节点没有按计划自动恢复。",
             follow_up=(
-                f"下一步：先检查 scheduler / worker 健康度；最近一次 due_at 为 {due_at}，必要时执行手动 resume。"
+                (
+                    "下一步：先检查 scheduler / worker 健康度；"
+                    f"最近一次 due_at 为 {due_at}，必要时执行手动 resume。"
+                )
                 if due_at
                 else "下一步：先检查 scheduler / worker 健康度，必要时执行手动 resume。"
             ),
@@ -142,10 +189,12 @@ def build_callback_waiting_explanation(
     if scheduled_resume_delay_seconds is not None:
         return RunExecutionFocusExplanation(
             primary_signal=(
-                f"系统已经安排 {scheduled_resume_delay_seconds:g}s 后再次尝试恢复 callback waiting。"
+                "系统已经安排 "
+                f"{scheduled_resume_delay_seconds:g}s 后再次尝试恢复 callback waiting。"
             ),
             follow_up=(
-                "下一步：先观察自动恢复链路；只有在需要绕过当前 backoff 时，再手动 resume 或 cleanup。"
+                "下一步：先观察自动恢复链路；"
+                "只有在需要绕过当前 backoff 时，再手动 resume 或 cleanup。"
             ),
         )
 

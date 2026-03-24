@@ -335,7 +335,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert body["execution_focus_explanation"] == {
         "primary_signal": "等待原因：Waiting for external search callback.",
         "follow_up": (
-            "下一步：优先处理这条 sensitive access 审批票据，"
+            "下一步：优先处理 Search Tool 对应的 sensitive access 审批票据，"
             "再观察 waiting 节点是否恢复。"
         ),
     }
@@ -372,7 +372,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert node["execution_focus_explanation"] == {
         "primary_signal": "等待原因：Waiting for external search callback.",
         "follow_up": (
-            "下一步：优先处理这条 sensitive access 审批票据，"
+            "下一步：优先处理 Search Tool 对应的 sensitive access 审批票据，"
             "再观察 waiting 节点是否恢复。"
         ),
     }
@@ -513,14 +513,17 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert run_snapshot["execution_focus_explanation"] == {
         "primary_signal": "等待原因：Waiting for external search callback.",
         "follow_up": (
-            "下一步：优先处理这条 sensitive access 审批票据，"
+            "下一步：优先处理 Search Tool 对应的 sensitive access 审批票据，"
             "再观察 waiting 节点是否恢复。"
         ),
     }
     assert run_snapshot["callback_waiting_explanation"] == {
-        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "primary_signal": (
+            "当前 callback waiting 仍卡在 1 条待处理审批；"
+            "首要治理资源是 Search Tool。"
+        ),
         "follow_up": (
-            "下一步：先在当前 operator 入口完成审批或拒绝，"
+            "下一步：先在当前 operator 入口完成 Search Tool 对应审批或拒绝，"
             "再观察 waiting 节点是否自动恢复。"
         ),
     }
@@ -609,8 +612,8 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         "primary_signal": "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
         "follow_up": (
             "run run-execution-view：当前 run 状态：waiting。 聚焦节点：agent_plan。 "
-            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 "
-            "后续动作：下一步：先在当前 operator 入口完成审批或拒绝，"
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批；首要治理资源是 Search Tool。 "
+            "后续动作：下一步：先在当前 operator 入口完成 Search Tool 对应审批或拒绝，"
             "再观察 waiting 节点是否自动恢复。"
         ),
     }
@@ -640,9 +643,13 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         "last_resume_backoff_attempt": 2,
     }
     assert node["callback_waiting_explanation"] == {
-        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "primary_signal": (
+            "当前 callback waiting 仍卡在 1 条待处理审批；"
+            "首要治理资源是 Search Tool。"
+        ),
         "follow_up": (
-            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+            "下一步：先在当前 operator 入口完成 Search Tool 对应审批或拒绝，"
+            "再观察 waiting 节点是否自动恢复。"
         ),
     }
     assert node["scheduled_resume_delay_seconds"] == 0
@@ -661,9 +668,13 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert run_detail_body["execution_focus_reason"] == "blocking_node_run"
     assert run_detail_body["execution_focus_node"]["node_run_id"] == node_run.id
     assert run_detail_body["execution_focus_node"]["callback_waiting_explanation"] == {
-        "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+        "primary_signal": (
+            "当前 callback waiting 仍卡在 1 条待处理审批；"
+            "首要治理资源是 Search Tool。"
+        ),
         "follow_up": (
-            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+            "下一步：先在当前 operator 入口完成 Search Tool 对应审批或拒绝，"
+            "再观察 waiting 节点是否自动恢复。"
         ),
     }
     assert run_detail_body["execution_focus_node"]["callback_waiting_lifecycle"] == node[

@@ -4,6 +4,8 @@ import type {
   RunExecutionNodeItem,
   ToolCallItem
 } from "@/lib/get-run-views";
+import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
+import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import {
   getEffectiveExecutionClassFact,
   getExecutionExecutorRefFact
@@ -858,6 +860,12 @@ function countPendingApprovalTickets(node: ExecutionFocusExplainableNode) {
     .length;
 }
 
+function formatPrimarySensitiveAccessResource(node: ExecutionFocusExplainableNode) {
+  return formatSensitiveResourceGovernanceSummary(
+    pickCallbackWaitingInlineSensitiveAccessEntry(node.sensitive_access_entries)?.resource ?? null
+  );
+}
+
 export function formatExecutionFocusPrimarySignal(node: ExecutionFocusExplainableNode): string | null {
   const blockingInsight = resolveExecutionBlockingInsight(node);
   const fallbackInsight = resolveExecutionFallbackInsight(node);
@@ -881,10 +889,15 @@ export function formatExecutionFocusPrimarySignal(node: ExecutionFocusExplainabl
 
 export function formatExecutionFocusFollowUp(node: ExecutionFocusExplainableNode): string | null {
   const pendingApprovalCount = countPendingApprovalTickets(node);
+  const primaryResourceSummary = formatPrimarySensitiveAccessResource(node);
   if (pendingApprovalCount > 0) {
     return pendingApprovalCount === 1
-      ? "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
-      : `下一步：当前有 ${pendingApprovalCount} 条 sensitive access 审批仍待处理，优先清掉审批阻塞。`;
+      ? (primaryResourceSummary
+          ? `下一步：优先处理 ${primaryResourceSummary} 对应的 sensitive access 审批票据，再观察 waiting 节点是否恢复。`
+          : "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。")
+      : (primaryResourceSummary
+          ? `下一步：当前有 ${pendingApprovalCount} 条 sensitive access 审批仍待处理；优先先处理 ${primaryResourceSummary} 对应的审批票据，再继续清掉审批阻塞。`
+          : `下一步：当前有 ${pendingApprovalCount} 条 sensitive access 审批仍待处理，优先清掉审批阻塞。`);
   }
 
   const pendingCallbackTicketCount = countPendingCallbackTickets(node.callback_tickets);

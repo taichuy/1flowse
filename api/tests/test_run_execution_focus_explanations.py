@@ -122,3 +122,69 @@ def test_build_run_execution_focus_explanation_maps_tool_runner_gap() -> None:
         "下一步：先把 tool execution class 调回当前宿主执行支持范围，"
         "或后续补齐 sandbox tool runner；在此之前继续保持 fail-closed。"
     )
+
+
+def test_build_run_execution_focus_explanation_surfaces_primary_governed_resource() -> None:
+    explanation = build_run_execution_focus_explanation(
+        _build_execution_node(
+            waiting_reason="waiting approval",
+            sensitive_access_entries=[
+                {
+                    "request": {
+                        "id": "request-1",
+                        "run_id": "run-1",
+                        "node_run_id": "nr-1",
+                        "requester_type": "tool",
+                        "requester_id": "native.search",
+                        "resource_id": "resource-1",
+                        "action_type": "invoke",
+                        "created_at": "2026-03-18T10:00:00Z",
+                    },
+                    "resource": {
+                        "id": "resource-1",
+                        "label": "Credential · Ops Key",
+                        "description": None,
+                        "sensitivity_level": "L3",
+                        "source": "credential",
+                        "metadata": {},
+                        "credential_governance": {
+                            "credential_id": "cred-ops-key",
+                            "credential_name": "Ops Key",
+                            "credential_type": "api_key",
+                            "credential_status": "active",
+                            "sensitivity_level": "L3",
+                            "sensitive_resource_id": "resource-1",
+                            "sensitive_resource_label": "Credential · Ops Key",
+                            "credential_ref": "credential://cred-ops-key",
+                            "summary": (
+                                "本次命中的凭据是 Ops Key（api_key）；"
+                                "当前治理级别 L3，状态 生效中。"
+                            ),
+                        },
+                        "created_at": "2026-03-18T10:00:00Z",
+                        "updated_at": "2026-03-18T10:00:00Z",
+                    },
+                    "approval_ticket": {
+                        "id": "ticket-1",
+                        "access_request_id": "request-1",
+                        "run_id": "run-1",
+                        "node_run_id": "nr-1",
+                        "status": "pending",
+                        "waiting_status": "waiting",
+                        "approved_by": None,
+                        "decided_at": None,
+                        "expires_at": None,
+                        "created_at": "2026-03-18T10:00:00Z",
+                    },
+                    "notifications": [],
+                }
+            ],
+        )
+    )
+
+    assert explanation is not None
+    assert explanation.primary_signal == "等待原因：waiting approval"
+    assert explanation.follow_up == (
+        "下一步：优先处理 Credential · Ops Key · L3 治理 · 生效中 对应的 sensitive "
+        "access 审批票据，再观察 waiting 节点是否恢复。"
+    )

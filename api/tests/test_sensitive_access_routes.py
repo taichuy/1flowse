@@ -359,13 +359,18 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
         "execution_focus_explanation": {
             "primary_signal": "等待原因：waiting approval",
             "follow_up": (
-                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+                "下一步：优先处理 Published production secret 对应的 sensitive access 审批票据，"
+                "再观察 waiting 节点是否恢复。"
             ),
         },
         "callback_waiting_explanation": {
-            "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+            "primary_signal": (
+                "当前 callback waiting 仍卡在 1 条待处理审批；"
+                "首要治理资源是 Published production secret。"
+            ),
             "follow_up": (
-                "下一步：先在当前 operator 入口完成审批或拒绝，"
+                "下一步：先在当前 operator 入口完成 "
+                "Published production secret 对应审批或拒绝，"
                 "再观察 waiting 节点是否自动恢复。"
             ),
         },
@@ -393,8 +398,10 @@ def test_request_high_sensitivity_access_creates_approval_ticket_and_decision(
         snapshot=request_body["run_snapshot"],
         follow_up=(
             f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
-            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
-            "下一步：先在当前 operator 入口完成审批或拒绝，再观察 waiting 节点是否自动恢复。"
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批；"
+            "首要治理资源是 Published production secret。 后续动作："
+            "下一步：先在当前 operator 入口完成 Published production secret 对应审批或拒绝，"
+            "再观察 waiting 节点是否自动恢复。"
         ),
     )
     _assert_single_sensitive_access_focus_entry(
@@ -1216,12 +1223,19 @@ def test_retry_notification_dispatch_creates_new_attempt(
         "execution_focus_explanation": {
             "primary_signal": "等待原因：waiting approval",
             "follow_up": (
-                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+                "下一步：优先处理 Publish approval export 对应的 sensitive access 审批票据，"
+                "再观察 waiting 节点是否恢复。"
             ),
         },
         "callback_waiting_explanation": {
-            "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
-            "follow_up": "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。",
+            "primary_signal": (
+                "当前 callback waiting 仍卡在 1 条待处理审批；"
+                "首要治理资源是 Publish approval export。"
+            ),
+            "follow_up": (
+                "下一步：先重试或改投 Publish approval export 对应审批通知，"
+                "再处理审批结果；不要直接强制恢复 run。"
+            ),
         },
         "callback_waiting_lifecycle": None,
         "scheduled_resume_delay_seconds": None,
@@ -1247,8 +1261,10 @@ def test_retry_notification_dispatch_creates_new_attempt(
         snapshot=retry_body["run_snapshot"],
         follow_up=(
             f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
-            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
-            "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批；"
+            "首要治理资源是 Publish approval export。 后续动作："
+            "下一步：先重试或改投 Publish approval export 对应审批通知，"
+            "再处理审批结果；不要直接强制恢复 run。"
         ),
     )
     _assert_single_sensitive_access_focus_entry(
@@ -1447,14 +1463,18 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
             "execution_focus_explanation": {
                 "primary_signal": "等待原因：waiting approval",
                 "follow_up": (
-                    "下一步：优先处理这条 sensitive access 审批票据，"
+                    "下一步：优先处理 Publish approval export 对应的 sensitive access 审批票据，"
                     "再观察 waiting 节点是否恢复。"
                 ),
             },
             "callback_waiting_explanation": {
-                "primary_signal": "当前 callback waiting 仍卡在 1 条待处理审批。",
+                "primary_signal": (
+                    "当前 callback waiting 仍卡在 1 条待处理审批；"
+                    "首要治理资源是 Publish approval export。"
+                ),
                 "follow_up": (
-                    "下一步：先重试或改投审批通知，再处理审批结果；"
+                    "下一步：先重试或改投 Publish approval export 对应审批通知，"
+                    "再处理审批结果；"
                     "不要直接强制恢复 run。"
                 ),
             },
@@ -1478,8 +1498,10 @@ def test_bulk_retry_notification_dispatches_allows_partial_success(
         },
         follow_up=(
             f"run {run.id}：当前 run 状态：waiting。 当前节点：mock_tool。 "
-            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批。 后续动作："
-            "下一步：先重试或改投审批通知，再处理审批结果；不要直接强制恢复 run。"
+            "重点信号：当前 callback waiting 仍卡在 1 条待处理审批；"
+            "首要治理资源是 Publish approval export。 后续动作："
+            "下一步：先重试或改投 Publish approval export 对应审批通知，"
+            "再处理审批结果；不要直接强制恢复 run。"
         ),
     )
     _assert_single_sensitive_access_focus_entry(

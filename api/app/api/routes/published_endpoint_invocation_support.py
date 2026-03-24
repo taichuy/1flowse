@@ -231,6 +231,11 @@ def serialize_waiting_lifecycle(
             ),
             pending_approval_count=pending_approval_count,
             failed_notification_count=failed_notification_count,
+            primary_resource=(
+                sensitive_access_summary.primary_resource
+                if sensitive_access_summary is not None
+                else None
+            ),
             scheduled_resume_delay_seconds=scheduled_resume[
                 "scheduled_resume_delay_seconds"
             ],

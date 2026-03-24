@@ -6,6 +6,12 @@ from app.schemas.run_views import (
     RunExecutionFocusExplanation,
     RunExecutionNodeItem,
 )
+from app.services.credential_governance import (
+    format_sensitive_resource_governance_summary,
+)
+from app.services.sensitive_access_bundle_summary import (
+    pick_primary_sensitive_access_timeline_entry,
+)
 
 
 def _split_compatibility_details(reason: str) -> list[str]:
@@ -30,6 +36,15 @@ def _count_pending_approval_tickets(node: RunExecutionNodeItem) -> int:
         if entry.approval_ticket is not None
         and entry.approval_ticket.status == "pending"
     )
+
+
+def _format_primary_sensitive_access_resource(node: RunExecutionNodeItem) -> str | None:
+    primary_entry = pick_primary_sensitive_access_timeline_entry(
+        node.sensitive_access_entries
+    )
+    if primary_entry is None:
+        return None
+    return format_sensitive_resource_governance_summary(primary_entry.resource)
 
 
 def _format_copy_datetime(value: datetime | None) -> str | None:
@@ -291,13 +306,27 @@ def build_run_execution_focus_explanation(
 
     pending_approval_count = _count_pending_approval_tickets(node)
     if pending_approval_count > 0:
+        primary_resource_summary = _format_primary_sensitive_access_resource(node)
         follow_up = (
-            "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
-            if pending_approval_count == 1
+            (
+                f"下一步：优先处理 {primary_resource_summary} 对应的 sensitive access 审批票据，"
+                "再观察 waiting 节点是否恢复。"
+            )
+            if pending_approval_count == 1 and primary_resource_summary
             else (
-                "下一步：当前有 "
-                f"{pending_approval_count} 条 sensitive access 审批仍待处理，"
-                "优先清掉审批阻塞。"
+                "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
+                if pending_approval_count == 1
+                else (
+                    "下一步：当前有 "
+                    f"{pending_approval_count} 条 sensitive access 审批仍待处理；"
+                    f"优先先处理 {primary_resource_summary} 对应的审批票据，再继续清掉审批阻塞。"
+                    if primary_resource_summary
+                    else (
+                        "下一步：当前有 "
+                        f"{pending_approval_count} 条 sensitive access 审批仍待处理，"
+                        "优先清掉审批阻塞。"
+                    )
+                )
             )
         )
     else:

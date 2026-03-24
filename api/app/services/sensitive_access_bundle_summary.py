@@ -4,7 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from app.schemas.sensitive_access import SensitiveResourceItem
+from app.schemas.sensitive_access import (
+    SensitiveAccessTimelineEntryItem,
+    SensitiveResourceItem,
+)
 from app.services.sensitive_access_presenters import serialize_sensitive_resource
 from app.services.sensitive_access_types import SensitiveAccessRequestBundle
 
@@ -66,6 +69,57 @@ def pick_primary_sensitive_access_bundle(
             _count_failed_notifications(bundle),
             1 if _has_retriable_notification(bundle) else 0,
             _resolve_bundle_activity_at(bundle),
+        ),
+    )
+
+
+def _has_pending_waiting_approval_entry(
+    entry: SensitiveAccessTimelineEntryItem,
+) -> bool:
+    approval_ticket = entry.approval_ticket
+    return bool(
+        approval_ticket is not None
+        and approval_ticket.status == "pending"
+        and approval_ticket.waiting_status == "waiting"
+    )
+
+
+def _count_failed_notifications_entry(entry: SensitiveAccessTimelineEntryItem) -> int:
+    return sum(1 for notification in entry.notifications if notification.status == "failed")
+
+
+def _has_retriable_notification_entry(
+    entry: SensitiveAccessTimelineEntryItem,
+) -> bool:
+    return any(notification.status != "delivered" for notification in entry.notifications)
+
+
+def _resolve_entry_activity_at(entry: SensitiveAccessTimelineEntryItem) -> datetime:
+    timestamps = [entry.request.created_at]
+    if entry.approval_ticket is not None:
+        timestamps.append(entry.approval_ticket.created_at)
+    timestamps.extend(
+        notification.created_at
+        for notification in entry.notifications
+        if notification.created_at is not None
+    )
+    return max(timestamps) if timestamps else datetime.min.replace(tzinfo=UTC)
+
+
+def pick_primary_sensitive_access_timeline_entry(
+    entries: Sequence[SensitiveAccessTimelineEntryItem],
+) -> SensitiveAccessTimelineEntryItem | None:
+    normalized_entries = [entry for entry in entries if entry is not None]
+    if not normalized_entries:
+        return None
+
+    return max(
+        normalized_entries,
+        key=lambda entry: (
+            1 if _has_pending_waiting_approval_entry(entry) else 0,
+            _count_failed_notifications_entry(entry),
+            1 if _has_retriable_notification_entry(entry) else 0,
+            _resolve_entry_activity_at(entry),
         ),
     )
 
