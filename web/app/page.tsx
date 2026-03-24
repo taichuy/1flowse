@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CallbackWaitingAutomationPanel } from "@/components/callback-waiting-automation-panel";
 import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
 import { CredentialStorePanel } from "@/components/credential-store-panel";
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { PluginRegistryPanel } from "@/components/plugin-registry-panel";
 import { SandboxReadinessPanel } from "@/components/sandbox-readiness-panel";
 import { StatusCard } from "@/components/status-card";
@@ -15,8 +16,10 @@ import { WorkflowToolBindingPanel } from "@/components/workflow-tool-binding-pan
 import { getCredentialActivity, getCredentials } from "@/lib/get-credentials";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
+import { formatPrimaryGovernedResourceChineseDetail } from "@/lib/credential-governance";
 import { buildCrossEntryRiskDigest } from "@/lib/cross-entry-risk-digest";
 import { getSystemOverview } from "@/lib/get-system-overview";
+import { buildSensitiveAccessInboxRecommendedNextStep } from "@/lib/operator-workbench-next-step";
 import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 import {
   formatCountMap,
@@ -66,6 +69,16 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const pendingSensitiveEntries = sensitiveAccessInbox.entries
     .filter((entry) => entry.ticket.status === "pending")
     .slice(0, 3);
+  const sensitiveAccessPrimaryResourceDetail = formatPrimaryGovernedResourceChineseDetail(
+    sensitiveAccessInbox.summary.primary_resource ?? null
+  );
+  const sensitiveAccessRecommendedNextStep = buildSensitiveAccessInboxRecommendedNextStep({
+    entries: sensitiveAccessInbox.entries,
+    summary: sensitiveAccessInbox.summary,
+    callbackWaitingAutomation: overview.callback_waiting_automation,
+    sandboxReadiness: overview.sandbox_readiness,
+    currentHref: "/"
+  });
   const crossEntryRiskDigest = buildCrossEntryRiskDigest({
     sandboxReadiness: overview.sandbox_readiness,
     callbackWaitingAutomation: overview.callback_waiting_automation,
@@ -198,6 +211,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <strong>{sensitiveAccessInbox.summary.failed_notification_count}</strong>
             </article>
           </div>
+
+          {sensitiveAccessPrimaryResourceDetail ? (
+            <article className="payload-card compact-card">
+              <div className="payload-card-header">
+                <span className="status-meta">Primary governed resource</span>
+              </div>
+              <p className="section-copy entry-copy">{sensitiveAccessPrimaryResourceDetail}</p>
+            </article>
+          ) : null}
+
+          <OperatorRecommendedNextStepCard
+            recommendedNextStep={sensitiveAccessRecommendedNextStep}
+          />
 
           {pendingSensitiveEntries.length === 0 ? (
             <p className="empty-state">当前没有待处理的敏感访问审批票据。</p>

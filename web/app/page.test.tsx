@@ -320,7 +320,24 @@ describe("HomePage", () => {
           pending_ticket_count: 2,
           waiting_ticket_count: 1,
           pending_notification_count: 1,
-          failed_notification_count: 1
+          failed_notification_count: 1,
+          primary_resource: buildSensitiveAccessResourceFixture({
+            id: "resource-home-secret",
+            label: "Home secret",
+            sensitivity_level: "L3",
+            source: "credential",
+            credential_governance: {
+              credential_id: "credential-home-secret",
+              credential_name: "Home secret",
+              credential_type: "api_key",
+              credential_status: "active",
+              sensitivity_level: "L3",
+              sensitive_resource_id: "resource-home-secret",
+              sensitive_resource_label: "Home secret",
+              credential_ref: "cred://home/secret",
+              summary: "Home secret · L3 治理 · 生效中"
+            }
+          })
         },
         entries: [
           buildSensitiveAccessInboxEntryFixture({
@@ -345,6 +362,17 @@ describe("HomePage", () => {
               label: "Home secret",
               sensitivity_level: "L3",
               source: "credential",
+              credential_governance: {
+                credential_id: "credential-home-secret",
+                credential_name: "Home secret",
+                credential_type: "api_key",
+                credential_status: "active",
+                sensitivity_level: "L3",
+                sensitive_resource_id: "resource-home-secret",
+                sensitive_resource_label: "Home secret",
+                credential_ref: "cred://home/secret",
+                summary: "Home secret · L3 治理 · 生效中"
+              },
               created_at: "2026-03-22T09:00:00Z",
               updated_at: "2026-03-22T09:30:00Z"
             }),
@@ -378,6 +406,10 @@ describe("HomePage", () => {
     expect(html).toContain(operatorSurfaceCopy.openInboxSliceLabel);
     expect(html).toContain("Approval &amp; notification backlog");
     expect(html).toContain("2 pending / 1 waiting");
+    expect(html).toContain("Primary governed resource");
+    expect(html).toContain("当前最该追踪的治理资源：Home secret · L3 治理 · 生效中。");
+    expect(html).toContain(operatorSurfaceCopy.recommendedNextStepTitle);
+    expect(html).toContain("当前 Home secret · L3 治理 · 生效中 的审批票据仍是 operator backlog 首要阻断");
     expect(html).toContain(
       '/runs/run-home-1?event_type=callback_waiting&amp;node_run_id=node-home-1#run-diagnostics-execution-timeline'
     );
