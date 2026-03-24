@@ -9,6 +9,7 @@ import type {
   SkillReferenceLoadItem,
   ToolCallItem
 } from "@/lib/get-run-views";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type NodeRunItem = {
   id: string;
@@ -107,6 +108,7 @@ export type RunDetail = {
     source_counts?: Record<string, number> | null;
     loads?: SkillReferenceLoadItem[] | null;
   } | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   run_follow_up?: OperatorRunFollowUpSummary | null;
   node_runs: NodeRunItem[];
   artifacts?: RunArtifactItem[];

@@ -6,6 +6,7 @@ import type { RunExecutionView } from "@/lib/get-run-views";
 
 import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics-execution/operator-follow-up-card";
 import { RunDiagnosticsExecutionOverviewBlockers } from "@/components/run-diagnostics-execution/execution-overview-blockers";
+import { RunDiagnosticsLegacyAuthGovernanceCard } from "@/components/run-diagnostics-execution/legacy-auth-governance-card";
 import { MetricChipRow, SummaryCard } from "@/components/run-diagnostics-execution/shared";
 
 export function RunDiagnosticsExecutionOverview({
@@ -103,6 +104,8 @@ export function RunDiagnosticsExecutionOverview({
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
       />
+
+      <RunDiagnosticsLegacyAuthGovernanceCard executionView={executionView} />
 
       <MetricChipRow
         title="Ticket statuses"

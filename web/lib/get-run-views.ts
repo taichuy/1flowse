@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type RunArtifactItem = {
   id: string;
@@ -393,6 +394,7 @@ export type RunExecutionView = {
   execution_focus_reason?: RunExecutionFocusReason | null;
   execution_focus_node?: RunExecutionNodeItem | null;
   execution_focus_explanation?: RunExecutionFocusExplanation | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   run_snapshot?: OperatorRunSnapshot | null;
   run_follow_up?: OperatorRunFollowUpSummary | null;
   skill_trace?: RunExecutionSkillTrace | null;

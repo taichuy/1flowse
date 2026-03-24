@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.routes import runs as run_routes
 from app.models.run import Run, RunCallbackTicket, RunEvent
-from app.models.workflow import Workflow, WorkflowVersion
+from app.models.workflow import Workflow, WorkflowPublishedEndpoint, WorkflowVersion
 from app.schemas.explanations import SignalFollowUpExplanation
 from app.schemas.operator_follow_up import (
     OperatorRunFollowUpSummary,
@@ -88,6 +88,96 @@ def test_get_run_execution_view_includes_execution_policy(
     assert nodes_by_id["trigger"]["execution_source"] == "default"
     assert nodes_by_id["mock_tool"]["execution_class"] == "inline"
     assert nodes_by_id["mock_tool"]["execution_source"] == "default"
+
+
+def test_run_routes_include_workflow_legacy_auth_governance_handoff(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow: Workflow,
+) -> None:
+    response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "legacy auth handoff"}},
+    )
+
+    assert response.status_code == 201
+    run_body = response.json()
+    run_id = run_body["id"]
+
+    sqlite_session.add(
+        WorkflowPublishedEndpoint(
+            id="binding-run-handoff",
+            workflow_id=sample_workflow.id,
+            workflow_version_id="wf-demo-v1",
+            workflow_version=sample_workflow.version,
+            target_workflow_version_id="wf-demo-v1",
+            target_workflow_version=sample_workflow.version,
+            compiled_blueprint_id=run_body["compiled_blueprint_id"],
+            endpoint_id="endpoint-run-handoff",
+            endpoint_name="Run Handoff Endpoint",
+            endpoint_alias="run-handoff-endpoint",
+            route_path="/published/run-handoff-endpoint",
+            protocol="native",
+            auth_mode="token",
+            streaming=False,
+            lifecycle_status="published",
+            input_schema={},
+            output_schema=None,
+            rate_limit_policy=None,
+            cache_policy=None,
+            created_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 24, 8, 0, tzinfo=UTC),
+        )
+    )
+    sqlite_session.commit()
+
+    execution_view_response = client.get(f"/api/runs/{run_id}/execution-view")
+
+    assert execution_view_response.status_code == 200
+    execution_view = execution_view_response.json()
+    governance = execution_view["legacy_auth_governance"]
+    assert governance["workflow_count"] == 1
+    assert governance["binding_count"] == 1
+    assert governance["summary"] == {
+        "draft_candidate_count": 0,
+        "published_blocker_count": 1,
+        "offline_inventory_count": 0,
+    }
+    assert governance["checklist"] == [
+        {
+            "key": "published_follow_up",
+            "title": "再补发支持鉴权的 replacement bindings",
+            "tone": "manual",
+            "tone_label": "人工跟进",
+            "count": 1,
+            "detail": (
+                "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
+                "endpoint 把 authMode 切回 api_key/internal，"
+                "并发布新版 binding，再决定历史版本是否下线。"
+            ),
+        }
+    ]
+    assert governance["workflows"] == [
+        {
+            "workflow_id": sample_workflow.id,
+            "workflow_name": sample_workflow.name,
+            "binding_count": 1,
+            "draft_candidate_count": 0,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 0,
+        }
+    ]
+
+    run_detail_response = client.get(
+        f"/api/runs/{run_id}",
+        params={"include_events": "false"},
+    )
+
+    assert run_detail_response.status_code == 200
+    run_detail = run_detail_response.json()
+    assert run_detail["legacy_auth_governance"]["binding_count"] == 1
+    assert run_detail["legacy_auth_governance"]["summary"]["published_blocker_count"] == 1
+    assert run_detail["legacy_auth_governance"]["workflows"][0]["workflow_id"] == sample_workflow.id
 
 
 def test_get_run_execution_view_includes_sandbox_backend_binding_summary(

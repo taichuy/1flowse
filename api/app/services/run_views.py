@@ -24,6 +24,20 @@ from app.services.run_view_serializers import (
 from app.services.runtime import RuntimeService
 from app.services.runtime_records import ExecutionArtifacts
 from app.services.sensitive_access_timeline import load_sensitive_access_timeline
+from app.services.workflow_publish import WorkflowPublishBindingService
+
+workflow_publish_service = WorkflowPublishBindingService()
+
+
+def _load_run_legacy_auth_governance(
+    db: Session,
+    workflow_id: str,
+):
+    snapshot = workflow_publish_service.build_legacy_auth_governance_snapshot(
+        db,
+        workflow_id=workflow_id,
+    )
+    return snapshot if snapshot.binding_count > 0 else None
 
 
 def _serialize_run_detail_execution_focus_node(
@@ -145,6 +159,9 @@ def serialize_run_detail(
             if operator_snapshot is not None
             else None
         ),
+        legacy_auth_governance=(
+            execution_view.legacy_auth_governance if execution_view is not None else None
+        ),
         run_follow_up=(execution_view.run_follow_up if execution_view is not None else None),
         node_runs=[
             {
@@ -184,7 +201,16 @@ def build_run_execution_view_for_artifacts(
 ) -> RunExecutionView:
     callback_tickets = list_callback_tickets(db, artifacts.run.id)
     sensitive_access_timeline = load_sensitive_access_timeline(db, run_id=artifacts.run.id)
-    return build_run_execution_view(artifacts, callback_tickets, sensitive_access_timeline)
+    execution_view = build_run_execution_view(
+        artifacts,
+        callback_tickets,
+        sensitive_access_timeline,
+    )
+    execution_view.legacy_auth_governance = _load_run_legacy_auth_governance(
+        db,
+        artifacts.run.workflow_id,
+    )
+    return execution_view
 
 
 class RunViewService:
