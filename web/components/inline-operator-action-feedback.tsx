@@ -256,6 +256,9 @@ export function InlineOperatorActionFeedback({
         </div>
       ) : null}
       {shouldRenderOutcomeFollowUp ? <p className="binding-meta">{model.outcomeFollowUp}</p> : null}
+      {model.primaryResourceDetail && model.primaryResourceDetail !== model.blockerDeltaSummary ? (
+        <p className="binding-meta">{model.primaryResourceDetail}</p>
+      ) : null}
       {model.blockerDeltaSummary ? <p className="binding-meta">{model.blockerDeltaSummary}</p> : null}
       {model.runFollowUpPrimarySignal ? (
         <p className="section-copy entry-copy">{model.runFollowUpPrimarySignal}</p>

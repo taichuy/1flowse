@@ -77,6 +77,27 @@ describe("SensitiveAccessBulkGovernanceCard", () => {
       action: "retry",
       status: "success",
       message: "批量重试已提交。",
+      primaryResource: {
+        id: "resource-1",
+        label: "OpenAI Production Key",
+        description: "production credential",
+        sensitivity_level: "L3",
+        source: "credential",
+        metadata: {},
+        created_at: "2026-03-20T10:00:00Z",
+        updated_at: "2026-03-20T10:00:00Z",
+        credential_governance: {
+          credential_id: "cred-openai-prod",
+          credential_name: "OpenAI Production Key",
+          credential_type: "api_key",
+          credential_status: "active",
+          sensitivity_level: "L3",
+          sensitive_resource_id: "resource-1",
+          sensitive_resource_label: "OpenAI Production Key",
+          credential_ref: "credential://cred-openai-prod",
+          summary: "本次命中的凭据是 OpenAI Production Key（api_key）；当前治理级别 L3，状态 生效中。"
+        }
+      },
       requestedCount: 1,
       updatedCount: 1,
       skippedCount: 0,
@@ -189,6 +210,8 @@ describe("SensitiveAccessBulkGovernanceCard", () => {
     expect(html).toContain("runner tool");
     expect(html.match(/Waiting node focus evidence/g)?.length ?? 0).toBe(1);
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
+    expect(html).toContain("Primary governed resource");
+    expect(html).toContain("OpenAI Production Key · L3 治理 · 生效中");
     expect(html).toContain("Callback recovery checklist");
     expect(html).toContain("/runs/run-waiting-1");
   });

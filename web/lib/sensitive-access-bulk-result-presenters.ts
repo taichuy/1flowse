@@ -3,6 +3,7 @@ import type {
   SignalFollowUpExplanation
 } from "@/lib/get-sensitive-access";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import {
   buildOperatorRecommendedActionCandidate,
   buildOperatorRecommendedNextStep,
@@ -56,6 +57,9 @@ export function buildSensitiveAccessBulkResultNarrative(
   const outcomePrimarySignal = normalizeExplanationText(result.outcomeExplanation, "primary_signal");
   const outcomeFollowUp = normalizeExplanationText(result.outcomeExplanation, "follow_up");
   const blockerDeltaSummary = result.blockerDeltaSummary?.trim() || null;
+  const primaryResourceSummary = formatSensitiveResourceGovernanceSummary(
+    result.primaryResource ?? null
+  );
   const runFollowUpPrimarySignal = normalizeExplanationText(
     result.runFollowUpExplanation,
     "primary_signal"
@@ -68,6 +72,13 @@ export function buildSensitiveAccessBulkResultNarrative(
 
   pushNarrativeItem(items, seenTexts, deferredTexts, "Primary signal", outcomePrimarySignal);
   pushNarrativeItem(items, seenTexts, deferredTexts, "Follow-up", outcomeFollowUp);
+  pushNarrativeItem(
+    items,
+    seenTexts,
+    deferredTexts,
+    "Primary governed resource",
+    primaryResourceSummary
+  );
   pushNarrativeItem(items, seenTexts, deferredTexts, "Blocker delta", blockerDeltaSummary);
   pushNarrativeItem(
     items,

@@ -17,6 +17,27 @@ describe("operator inline action feedback", () => {
         primary_signal: "审批已通过。",
         follow_up: "后端已把 waiting blocker 交回 runtime。"
       },
+      primaryResource: {
+        id: "resource-1",
+        label: "OpenAI Production Key",
+        description: "production credential",
+        sensitivity_level: "L3",
+        source: "credential",
+        metadata: {},
+        created_at: "2026-03-20T10:00:00Z",
+        updated_at: "2026-03-20T10:00:00Z",
+        credential_governance: {
+          credential_id: "cred-openai-prod",
+          credential_name: "OpenAI Production Key",
+          credential_type: "api_key",
+          credential_status: "active",
+          sensitivity_level: "L3",
+          sensitive_resource_id: "resource-1",
+          sensitive_resource_label: "OpenAI Production Key",
+          credential_ref: "credential://cred-openai-prod",
+          summary: "本次命中的凭据是 OpenAI Production Key（api_key）；当前治理级别 L3，状态 生效中。"
+        }
+      },
       runFollowUpExplanation: {
         primary_signal: "本次影响 1 个 run；整体状态分布：running 1。已回读 1 个样本。",
         follow_up: "run run-1：当前 run 状态：running。 当前节点：review。 重点信号：runtime 已继续推进。"
@@ -40,6 +61,10 @@ describe("operator inline action feedback", () => {
     expect(model.hasStructuredContent).toBe(true);
     expect(model.headline).toBe("审批已通过。");
     expect(model.outcomeFollowUp).toBe("后端已把 waiting blocker 交回 runtime。");
+    expect(model.primaryResourceSummary).toBe("OpenAI Production Key · L3 治理 · 生效中");
+    expect(model.primaryResourceDetail).toBe(
+      "当前最该追踪的治理资源：OpenAI Production Key · L3 治理 · 生效中。"
+    );
     expect(model.runFollowUpPrimarySignal).toContain("本次影响 1 个 run");
     expect(model.runFollowUpFollowUp).toContain("run run-1");
     expect(model.blockerDeltaSummary).toBe("阻塞变化：已解除 approval pending。");

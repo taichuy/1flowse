@@ -289,6 +289,7 @@ export type SensitiveAccessBulkActionResult = {
   runFollowUp?: NonNullable<ReturnType<typeof normalizeOperatorRunFollowUp>> | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   blockerDeltaSummary?: string | null;
+  primaryResource?: SensitiveResourceItem | null;
   requestedCount: number;
   updatedCount: number;
   skippedCount: number;

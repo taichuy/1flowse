@@ -1,4 +1,9 @@
 import type { OperatorRunFollowUpSummary, RunSnapshot } from "@/app/actions/run-snapshot";
+import {
+  formatPrimaryGovernedResourceChineseDetail,
+  formatSensitiveResourceGovernanceSummary
+} from "@/lib/credential-governance";
+import type { SensitiveResourceItem } from "@/lib/get-sensitive-access";
 import type {
   RunArtifactItem,
   RunExecutionNodeItem,
@@ -28,6 +33,7 @@ export type OperatorInlineActionResultState = {
   runFollowUpExplanation?: SignalFollowUpExplanation | null;
   runFollowUp?: OperatorRunFollowUpSummary | null;
   blockerDeltaSummary?: string | null;
+  primaryResource?: SensitiveResourceItem | null;
   runSnapshot?: RunSnapshot | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
 };
@@ -36,6 +42,8 @@ export type OperatorInlineActionFeedbackModel = {
   hasStructuredContent: boolean;
   headline: string | null;
   outcomeFollowUp: string | null;
+  primaryResourceSummary: string | null;
+  primaryResourceDetail: string | null;
   runFollowUpPrimarySignal: string | null;
   runFollowUpFollowUp: string | null;
   blockerDeltaSummary: string | null;
@@ -208,6 +216,12 @@ export function buildOperatorInlineActionFeedbackModel(
   const runFollowUpPrimarySignal = normalizeText(input.runFollowUpExplanation?.primary_signal);
   const runFollowUpFollowUp = normalizeText(input.runFollowUpExplanation?.follow_up);
   const blockerDeltaSummary = normalizeText(input.blockerDeltaSummary);
+  const primaryResourceSummary = formatSensitiveResourceGovernanceSummary(
+    input.primaryResource ?? null
+  );
+  const primaryResourceDetail = formatPrimaryGovernedResourceChineseDetail(
+    input.primaryResource ?? null
+  );
   const runSnapshotSummary = normalizeText(formatRunSnapshotSummary(input.runSnapshot ?? {}));
   const runStatus = normalizeText(input.runSnapshot?.status);
   const currentNodeId = normalizeText(input.runSnapshot?.currentNodeId);
@@ -254,8 +268,9 @@ export function buildOperatorInlineActionFeedbackModel(
 
   return {
     hasStructuredContent: Boolean(
-      outcomePrimarySignal ||
+        outcomePrimarySignal ||
         outcomeFollowUp ||
+        primaryResourceSummary ||
         runFollowUpPrimarySignal ||
         runFollowUpFollowUp ||
         blockerDeltaSummary ||
@@ -277,6 +292,8 @@ export function buildOperatorInlineActionFeedbackModel(
     ),
     headline,
     outcomeFollowUp,
+    primaryResourceSummary,
+    primaryResourceDetail,
     runFollowUpPrimarySignal:
       runFollowUpPrimarySignal && runFollowUpPrimarySignal !== headline
         ? runFollowUpPrimarySignal

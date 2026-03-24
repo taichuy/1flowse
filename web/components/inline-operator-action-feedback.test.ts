@@ -778,4 +778,37 @@ describe("InlineOperatorActionFeedback", () => {
     expect(html).toContain("再补发支持鉴权的 replacement bindings");
     expect(html).toContain("Demo Workflow");
   });
+
+  it("renders the primary governed resource when the action keeps governance context", () => {
+    const html = renderToStaticMarkup(
+      createElement(InlineOperatorActionFeedback, {
+        status: "success",
+        message: "审批已通过。",
+        title: "审批结果",
+        primaryResource: {
+          id: "resource-1",
+          label: "OpenAI Production Key",
+          description: "production credential",
+          sensitivity_level: "L3",
+          source: "credential",
+          metadata: {},
+          created_at: "2026-03-20T10:00:00Z",
+          updated_at: "2026-03-20T10:00:00Z",
+          credential_governance: {
+            credential_id: "cred-openai-prod",
+            credential_name: "OpenAI Production Key",
+            credential_type: "api_key",
+            credential_status: "active",
+            sensitivity_level: "L3",
+            sensitive_resource_id: "resource-1",
+            sensitive_resource_label: "OpenAI Production Key",
+            credential_ref: "credential://cred-openai-prod",
+            summary: "本次命中的凭据是 OpenAI Production Key（api_key）；当前治理级别 L3，状态 生效中。"
+          }
+        }
+      })
+    );
+
+    expect(html).toContain("当前最该追踪的治理资源：OpenAI Production Key · L3 治理 · 生效中。");
+  });
 });

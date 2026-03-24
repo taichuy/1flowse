@@ -340,6 +340,7 @@ export async function decideSensitiveAccessApprovalTicket(
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary,
+      primaryResource: body?.callback_blocker_delta?.primary_resource ?? null,
       runSnapshot,
       ticketId
     };
@@ -445,6 +446,7 @@ export async function retrySensitiveAccessNotificationDispatch(
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary,
+      primaryResource: body?.callback_blocker_delta?.primary_resource ?? null,
       runSnapshot,
       dispatchId,
       target: effectiveTarget
@@ -571,6 +573,7 @@ export async function bulkDecideSensitiveAccessApprovalTickets(input: {
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary,
+      primaryResource: blockerDelta?.primary_resource ?? null,
       requestedCount: body?.requested_count ?? ticketIds.length,
       updatedCount,
       skippedCount,
@@ -700,6 +703,7 @@ export async function bulkRetrySensitiveAccessNotificationDispatches(input: {
       runFollowUp: normalizeOperatorRunFollowUp(body?.run_follow_up),
       legacyAuthGovernance: body?.legacy_auth_governance ?? null,
       blockerDeltaSummary,
+      primaryResource: blockerDelta?.primary_resource ?? null,
       requestedCount: body?.requested_count ?? dispatchIds.length,
       updatedCount,
       skippedCount,
