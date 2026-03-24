@@ -32,3 +32,31 @@ export function resolveLegacyPublishAuthModeContract(
 export function formatLegacyPublishAuthModes(modes: string[]) {
   return modes.join(" / ");
 }
+
+export function buildLegacyPublishAuthModeContractSummary(
+  contract?: WorkflowPublishedEndpointLegacyAuthModeContract | null
+) {
+  const surface = resolveLegacyPublishAuthModeContract(contract);
+
+  return `Publish auth contract：supported ${formatLegacyPublishAuthModes(surface.supported_auth_modes)}；legacy ${formatLegacyPublishAuthModes(surface.retired_legacy_auth_modes)}。`;
+}
+
+export function buildLegacyPublishAuthModeFollowUp(
+  contract?: WorkflowPublishedEndpointLegacyAuthModeContract | null
+) {
+  return resolveLegacyPublishAuthModeContract(contract).follow_up;
+}
+
+export function buildLegacyPublishAuthModeValidationMessage({
+  endpointLabel,
+  authMode,
+  contract
+}: {
+  endpointLabel: string;
+  authMode: string;
+  contract?: WorkflowPublishedEndpointLegacyAuthModeContract | null;
+}) {
+  const surface = resolveLegacyPublishAuthModeContract(contract);
+
+  return `${endpointLabel} 当前不能使用 authMode = ${authMode}。${buildLegacyPublishAuthModeContractSummary(surface)} ${surface.summary}`;
+}

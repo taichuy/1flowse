@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthModeContract,
+)
 from app.schemas.workflow_publish import WorkflowPublishedEndpointIssue
 from app.schemas.workflow_published_endpoint import (
     SUPPORTED_PUBLISHED_ENDPOINT_AUTH_MODES,
@@ -10,6 +13,28 @@ from app.schemas.workflow_published_endpoint import (
 _SUPPORTED_PERSISTED_PUBLISH_AUTH_MODES = frozenset(
     SUPPORTED_PUBLISHED_ENDPOINT_AUTH_MODES
 )
+
+
+def format_workflow_publish_auth_modes(modes: list[str]) -> str:
+    return " / ".join(mode.strip() for mode in modes if isinstance(mode, str) and mode.strip())
+
+
+def build_workflow_publish_auth_mode_contract_summary(
+    contract: WorkflowPublishedEndpointLegacyAuthModeContract | None = None,
+) -> str:
+    resolved_contract = contract or WorkflowPublishedEndpointLegacyAuthModeContract()
+    return (
+        "Publish auth contract: "
+        f"supported {format_workflow_publish_auth_modes(resolved_contract.supported_auth_modes)}; "
+        f"legacy {format_workflow_publish_auth_modes(resolved_contract.retired_legacy_auth_modes)}."
+    )
+
+
+def build_workflow_publish_auth_mode_follow_up(
+    contract: WorkflowPublishedEndpointLegacyAuthModeContract | None = None,
+) -> str:
+    resolved_contract = contract or WorkflowPublishedEndpointLegacyAuthModeContract()
+    return resolved_contract.follow_up
 
 
 def is_supported_published_endpoint_auth_mode(value: object) -> bool:
@@ -40,13 +65,12 @@ def collect_invalid_published_endpoint_auth_mode_issues(
             category="unsupported_auth_mode",
             message=(
                 f"Published endpoint '{endpoint_label}' still uses unsupported legacy auth "
-                f"mode '{normalized_auth_mode}'. Current publish lifecycle only supports "
-                "durable bindings with auth_mode 'api_key' or 'internal'."
+                f"mode '{normalized_auth_mode}'. "
+                f"{build_workflow_publish_auth_mode_contract_summary()}"
             ),
             field="auth_mode",
             remediation=(
-                "Update the workflow definition to use 'api_key' or 'internal', save to "
-                "resync bindings, then retry the publish lifecycle action."
+                build_workflow_publish_auth_mode_follow_up()
             ),
             blocks_lifecycle_publish=True,
         )
@@ -80,8 +104,8 @@ def collect_invalid_workflow_publish_auth_modes(
             {
                 "message": (
                     f"Published endpoint '{endpoint_label}' requests auth mode '{auth_mode}', "
-                    "but the current published gateway only supports durable bindings with "
-                    "authMode 'api_key' or 'internal'."
+                    "which is not supported for durable publish bindings. "
+                    f"{build_workflow_publish_auth_mode_contract_summary()}"
                 ),
                 "path": f"publish.{index}.authMode",
                 "field": "authMode",

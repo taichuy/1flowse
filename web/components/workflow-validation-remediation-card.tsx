@@ -1,5 +1,6 @@
 import React from "react";
 
+import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { buildOperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
@@ -29,6 +30,8 @@ export function WorkflowValidationRemediationCard({
         currentHref
       })
     : null;
+  const showLegacyAuthContract =
+    item.target.scope === "publish" && item.target.fieldPath === "authMode";
 
   return (
     <div className="sync-message error">
@@ -40,6 +43,7 @@ export function WorkflowValidationRemediationCard({
       {remediation.followUp ? (
         <p className="binding-meta">Live sandbox readiness：{remediation.followUp}</p>
       ) : null}
+      {showLegacyAuthContract ? <LegacyPublishAuthContractCard /> : null}
       <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
     </div>
   );

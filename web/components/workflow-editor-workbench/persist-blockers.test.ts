@@ -32,6 +32,24 @@ describe("workflow persist blockers", () => {
     expect(formatWorkflowPersistBlockedMessage(blockers)).toContain("publish.0.path 重复");
   });
 
+  it("reuses shared legacy publish auth follow-up in publish draft save gates", () => {
+    const blockers = buildWorkflowPersistBlockers({
+      unsupportedNodeCount: 0,
+      publishDraftValidationSummary:
+        "Public Search 当前不能使用 authMode = token。Publish auth contract：supported api_key / internal；legacy token。",
+      hasLegacyPublishAuthModeIssues: true
+    });
+
+    expect(blockers).toEqual([
+      expect.objectContaining({
+        id: "publish_draft",
+        nextStep:
+          "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 replacement binding，最后清理 draft/offline legacy backlog。"
+      })
+    ]);
+    expect(formatWorkflowPersistBlockedMessage(blockers)).toContain("Publish auth contract");
+  });
+
   it("reuses shared sandbox readiness CTA for execution-related save gates", () => {
     const recommendedNextStep = buildWorkflowPersistBlockerRecommendedNextStep(
       [

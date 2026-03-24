@@ -2560,10 +2560,19 @@ def test_validate_workflow_definition_preflight_rejects_unsupported_publish_auth
     assert response.status_code == 422
     detail = response.json()["detail"]
     assert "publish auth modes" in detail["message"]
+    assert "Publish auth contract: supported api_key / internal; legacy token." in detail[
+        "message"
+    ]
+    assert "先把 workflow draft endpoint 切回 api_key/internal 并保存" in detail["message"]
     assert any(
         issue["category"] == "publish_draft"
         and issue["path"] == "publish.0.authMode"
         and issue["field"] == "authMode"
+        for issue in detail["issues"]
+    )
+    assert any(
+        "Publish auth contract: supported api_key / internal; legacy token."
+        in issue["message"]
         for issue in detail["issues"]
     )
 

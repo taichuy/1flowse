@@ -84,6 +84,9 @@ describe("WorkflowEditorPublishEndpointCard", () => {
     expect(html).toContain("token (unsupported legacy value)");
     expect(html).toContain("api_key");
     expect(html).toContain("internal");
-    expect(html).toContain("当前 definition 里仍有历史遗留的 unsupported auth mode");
+    expect(html).toContain("Publish auth contract");
+    expect(html).toContain("supported api_key / internal");
+    expect(html).toContain("legacy token");
+    expect(html).toContain("先把 workflow draft endpoint 切回 api_key/internal 并保存");
   });
 });

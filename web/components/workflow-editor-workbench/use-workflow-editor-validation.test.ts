@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import { buildWorkflowValidationNavigatorItems } from "@/lib/workflow-validation-navigation";
 
-import { buildWorkflowEditorPublishDraftIssues } from "./use-workflow-editor-validation";
+import {
+  buildWorkflowEditorPublishDraftIssues,
+  summarizePreflightIssues
+} from "./use-workflow-editor-validation";
 
 function createDefinition(): WorkflowDetail["definition"] {
   return {
@@ -92,6 +95,12 @@ describe("buildWorkflowEditorPublishDraftIssues", () => {
         })
       ])
     );
+    expect(
+      issues.find((issue) => issue.path === "publish.1.authMode")?.message
+    ).toContain("Publish auth contract");
+    expect(
+      issues.find((issue) => issue.path === "publish.1.authMode")?.message
+    ).toContain("supported api_key / internal");
   });
 
   it("keeps publish draft issues navigable by the shared validation navigator", () => {
@@ -122,5 +131,21 @@ describe("buildWorkflowEditorPublishDraftIssues", () => {
         })
       ])
     );
+  });
+
+  it("summarizes legacy publish auth preflight issues with the shared auth contract", () => {
+    const summary = summarizePreflightIssues([
+      {
+        category: "publish_draft",
+        message: "Public Search 当前不能使用 authMode = token。",
+        path: "publish.1.authMode",
+        field: "authMode"
+      }
+    ]);
+
+    expect(summary).toContain("publish draft");
+    expect(summary).toContain("Publish auth contract");
+    expect(summary).toContain("legacy token");
+    expect(summary).not.toContain("publish.1.authMode");
   });
 });

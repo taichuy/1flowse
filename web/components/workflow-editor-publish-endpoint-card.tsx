@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { buildWorkflowPublishDraftEndpointId } from "@/lib/workflow-publish-definition-links";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 
 import {
@@ -241,12 +242,7 @@ export function WorkflowEditorPublishEndpointCard({
         `workflowVersion` 留空时会跟随当前保存出来的 workflow version；只有填写语义版本时才会把 endpoint 固定到指定版本。
       </p>
 
-      {hasLegacyUnsupportedAuthMode ? (
-        <p className="section-copy entry-copy">
-          当前 definition 里仍有历史遗留的 unsupported auth mode；请改成 `api_key` 或
-          `internal` 后再保存，避免 publish draft、workflow detail 和 gateway 事实继续分叉。
-        </p>
-      ) : null}
+      {hasLegacyUnsupportedAuthMode ? <LegacyPublishAuthContractCard /> : null}
 
       {endpoint.workflowVersion ? (
         <div className="binding-actions">

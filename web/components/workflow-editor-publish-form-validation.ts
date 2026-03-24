@@ -5,6 +5,7 @@ import {
   WORKFLOW_VERSION_PATTERN,
   type WorkflowPublishedEndpointDraft
 } from "./workflow-editor-publish-form-shared";
+import { buildLegacyPublishAuthModeValidationMessage } from "@/lib/legacy-publish-auth-contract";
 import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
 import { buildWorkflowPublishVersionValidationIssues } from "@/lib/workflow-publish-version-validation";
 
@@ -73,8 +74,10 @@ export function buildPublishedEndpointValidationIssues(
         endpointKey,
         endpointId: endpoint.id,
         category: "publish_draft",
-        message:
-          `${endpointLabel} 当前不能使用 authMode = ${endpoint.authMode}；已落地 publish gateway 只支持 internal / api_key，避免把未实现鉴权模式写进 definition。`,
+        message: buildLegacyPublishAuthModeValidationMessage({
+          endpointLabel,
+          authMode: endpoint.authMode
+        }),
         path: `publish.${index}.authMode`,
         field: "authMode"
       });

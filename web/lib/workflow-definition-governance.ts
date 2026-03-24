@@ -17,3 +17,9 @@ export function hasWorkflowLegacyPublishAuthIssues(
 ): boolean {
   return getWorkflowLegacyPublishAuthIssues(workflow).length > 0;
 }
+
+export function hasOnlyLegacyPublishAuthModeIssues(
+  issues: WorkflowDefinitionPreflightIssue[]
+): boolean {
+  return issues.length > 0 && issues.every(isLegacyPublishAuthModeIssue);
+}

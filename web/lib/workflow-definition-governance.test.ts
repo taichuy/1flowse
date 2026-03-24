@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getWorkflowLegacyPublishAuthIssues,
+  hasOnlyLegacyPublishAuthModeIssues,
   hasWorkflowLegacyPublishAuthIssues,
   isLegacyPublishAuthModeIssue
 } from "@/lib/workflow-definition-governance";
@@ -30,6 +31,7 @@ describe("workflow-definition-governance", () => {
       })
     ).toEqual([issue]);
     expect(hasWorkflowLegacyPublishAuthIssues({ definition_issues: [issue] })).toBe(true);
+    expect(hasOnlyLegacyPublishAuthModeIssues([issue])).toBe(true);
   });
 
   it("ignores non publish auth definition issues", () => {
@@ -44,6 +46,16 @@ describe("workflow-definition-governance", () => {
           }
         ]
       })
+    ).toBe(false);
+    expect(
+      hasOnlyLegacyPublishAuthModeIssues([
+        {
+          category: "publish_draft",
+          message: "Endpoint name is missing.",
+          path: "publish.0.name",
+          field: "name"
+        }
+      ])
     ).toBe(false);
   });
 });

@@ -22,6 +22,7 @@ import {
   buildWorkspaceStarterMutationSuccessMessage
 } from "@/lib/workspace-starter-mutation-presenters";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
+import { hasOnlyLegacyPublishAuthModeIssues } from "@/lib/workflow-definition-governance";
 import {
   buildWorkflowValidationNavigatorItems,
   type WorkflowValidationNavigatorItem
@@ -138,7 +139,9 @@ export function useWorkflowEditorPersistence({
         }
         const preflightIssueSummary =
           error instanceof WorkflowDefinitionPreflightError
-            ? summarizePreflightIssues(error.issues)
+            ? hasOnlyLegacyPublishAuthModeIssues(error.issues)
+              ? null
+              : summarizePreflightIssues(error.issues)
             : null;
         const sandboxReadinessPreflightHint =
           error instanceof WorkflowDefinitionPreflightError &&

@@ -84,4 +84,33 @@ describe("WorkflowValidationRemediationCard", () => {
     expect(html).toContain("sandbox readiness");
     expect(html).not.toContain("Open workflow library</a>");
   });
+
+  it("reuses the shared publish auth contract for legacy auth remediation", () => {
+    const item: WorkflowValidationNavigatorItem = {
+      key: "publish-auth-mode",
+      category: "publish_draft",
+      message: "Public Search 当前不能使用 authMode = token。",
+      target: {
+        scope: "publish",
+        endpointIndex: 0,
+        fieldPath: "authMode",
+        label: "Publish · Public Search"
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowValidationRemediationCard, {
+        item,
+        sandboxReadiness: buildSandboxReadiness(),
+        currentHref: "/workflows/public-search"
+      })
+    );
+
+    expect(html).toContain("Publish · Public Search · Auth mode");
+    expect(html).toContain("Publish auth contract");
+    expect(html).toContain("supported api_key / internal");
+    expect(html).toContain("legacy token");
+    expect(html).toContain("先把 workflow draft endpoint 切回 api_key/internal 并保存");
+    expect(html).not.toContain("Live sandbox readiness");
+  });
 });

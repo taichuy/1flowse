@@ -11,6 +11,10 @@ import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-pre
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type { WorkflowDefinitionPreflightIssue, WorkflowDetail } from "@/lib/get-workflows";
 import type { WorkspaceStarterValidationIssue } from "@/lib/get-workspace-starters";
+import {
+  buildLegacyPublishAuthModeContractSummary,
+} from "@/lib/legacy-publish-auth-contract";
+import { isLegacyPublishAuthModeIssue } from "@/lib/workflow-definition-governance";
 import { buildWorkflowDefinitionContractValidationIssues } from "@/lib/workflow-contract-schema-validation";
 import { buildAllowedPublishWorkflowVersions } from "@/lib/workflow-publish-version-validation";
 import {
@@ -104,13 +108,21 @@ export function summarizePreflightIssues(
   return Array.from(grouped.entries())
     .map(([category, categoryIssues]) => {
       const label = PREFLIGHT_CATEGORY_LABELS[category] ?? category;
-      const head = categoryIssues
+      const descriptions = Array.from(
+        new Set(
+          categoryIssues.map((issue) =>
+            isLegacyPublishAuthModeIssue(issue)
+              ? buildLegacyPublishAuthModeContractSummary()
+              : issue.path ?? issue.field ?? issue.message
+          )
+        )
+      );
+      const head = descriptions
         .slice(0, 2)
-        .map((issue) => issue.path ?? issue.field ?? issue.message)
         .join("；");
       const suffix =
-        categoryIssues.length > 2
-          ? `；另有 ${categoryIssues.length - 2} 项同类问题`
+        categoryIssues.length > descriptions.slice(0, 2).length
+          ? `；另有 ${categoryIssues.length - descriptions.slice(0, 2).length} 项同类问题`
           : "";
       return head ? `${label}：${head}${suffix}` : `${label} ${categoryIssues.length} 项`;
     })
@@ -239,6 +251,10 @@ export function useWorkflowEditorValidation({
       ),
     [publishDraftValidationIssues]
   );
+  const hasLegacyPublishAuthModeIssues = useMemo(
+    () => publishDraftValidationIssues.some((issue) => isLegacyPublishAuthModeIssue(issue)),
+    [publishDraftValidationIssues]
+  );
   const variableValidationIssues = useMemo(
     () => buildWorkflowVariableValidationIssues(currentDefinition),
     [currentDefinition]
@@ -317,6 +333,7 @@ export function useWorkflowEditorValidation({
         toolExecutionValidationSummary,
         publishDraftValidationSummary,
         hasPublishVersionValidationIssues,
+        hasLegacyPublishAuthModeIssues,
         variableValidationSummary,
         serverValidationSummary,
         hasServerToolExecutionIssues,
@@ -326,6 +343,7 @@ export function useWorkflowEditorValidation({
     [
       contractValidationSummary,
       hasPublishVersionValidationIssues,
+      hasLegacyPublishAuthModeIssues,
       hasServerNodeExecutionIssues,
       hasServerToolExecutionIssues,
       nodeExecutionValidationSummary,

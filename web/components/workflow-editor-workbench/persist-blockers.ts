@@ -1,4 +1,5 @@
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { buildLegacyPublishAuthModeFollowUp } from "@/lib/legacy-publish-auth-contract";
 import {
   buildOperatorRecommendedNextStep,
   type OperatorRecommendedNextStep
@@ -32,6 +33,7 @@ type BuildWorkflowPersistBlockersOptions = {
   toolExecutionValidationSummary?: string | null;
   publishDraftValidationSummary?: string | null;
   hasPublishVersionValidationIssues?: boolean;
+  hasLegacyPublishAuthModeIssues?: boolean;
   variableValidationSummary?: string | null;
   serverValidationSummary?: string | null;
   hasServerToolExecutionIssues?: boolean;
@@ -55,6 +57,25 @@ function joinDetail(...parts: Array<string | null | undefined>) {
     .join(" ");
 }
 
+function buildPublishDraftNextStep({
+  hasPublishVersionValidationIssues,
+  hasLegacyPublishAuthModeIssues
+}: {
+  hasPublishVersionValidationIssues: boolean;
+  hasLegacyPublishAuthModeIssues: boolean;
+}) {
+  if (!hasPublishVersionValidationIssues && !hasLegacyPublishAuthModeIssues) {
+    return "请先在 publish draft 表单里修正发布标识、schema、缓存或版本设置，再继续保存。";
+  }
+
+  return joinDetail(
+    hasPublishVersionValidationIssues
+      ? "如果 endpoint 要跟随本次保存版本，请把 workflowVersion 留空。"
+      : null,
+    hasLegacyPublishAuthModeIssues ? buildLegacyPublishAuthModeFollowUp() : null
+  );
+}
+
 export function buildWorkflowPersistBlockers({
   unsupportedNodeCount,
   unsupportedNodeSummary,
@@ -64,6 +85,7 @@ export function buildWorkflowPersistBlockers({
   toolExecutionValidationSummary,
   publishDraftValidationSummary,
   hasPublishVersionValidationIssues = false,
+  hasLegacyPublishAuthModeIssues = false,
   variableValidationSummary,
   serverValidationSummary,
   hasServerToolExecutionIssues = false,
@@ -135,9 +157,10 @@ export function buildWorkflowPersistBlockers({
       detail: joinDetail(
         `当前 workflow definition 还有 publish draft 待修正问题：${publishDraftValidationSummary}`
       ),
-      nextStep: hasPublishVersionValidationIssues
-        ? "如果 endpoint 要跟随本次保存版本，请把 workflowVersion 留空。"
-        : "请先在 publish draft 表单里修正发布标识、schema、缓存或版本设置，再继续保存。"
+      nextStep: buildPublishDraftNextStep({
+        hasPublishVersionValidationIssues,
+        hasLegacyPublishAuthModeIssues
+      })
     });
   }
 

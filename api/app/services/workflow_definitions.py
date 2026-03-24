@@ -16,6 +16,8 @@ from app.services.plugin_runtime import CompatibilityAdapterRegistration, get_pl
 from app.services.sandbox_backends import get_sandbox_backend_client
 from app.services.workflow_library_catalog import build_node_catalog_items
 from app.services.workflow_publish_auth_mode_validation import (
+    build_workflow_publish_auth_mode_contract_summary,
+    build_workflow_publish_auth_mode_follow_up,
     collect_invalid_workflow_publish_auth_modes,
 )
 from app.services.workflow_publish_identity_validation import (
@@ -75,8 +77,9 @@ def validate_workflow_definition(definition: dict[str, Any] | None) -> dict[str,
     if invalid_publish_auth_modes:
         raise WorkflowDefinitionValidationError(
             "Workflow definition contains publish auth modes that are not currently "
-            "available for persistence: "
-            + "; ".join(issue["message"] for issue in invalid_publish_auth_modes),
+            "available for persistence. "
+            f"{build_workflow_publish_auth_mode_contract_summary()} "
+            f"{build_workflow_publish_auth_mode_follow_up()}",
             issues=[
                 WorkflowDefinitionValidationIssue(
                     category="publish_draft",
