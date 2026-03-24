@@ -17,6 +17,7 @@ import {
   buildOperatorRecommendedNextStep,
   buildOperatorRunSnapshotMetaRows,
   buildOperatorFollowUpSurfaceCopy,
+  buildOperatorTraceSliceLinkSurface,
   type OperatorRecommendedActionLike
 } from "@/lib/operator-follow-up-presenters";
 import {
@@ -198,6 +199,13 @@ export function RunDiagnosticsOperatorFollowUpCard({
   const focusSkillTrace = snapshot?.execution_focus_skill_trace ?? null;
   const sampledFollowUp = resolveOperatorRunFollowUpSample(normalizedRunFollowUp, executionView.run_id);
   const callbackSummaryFocusNode = resolveCallbackSummaryFocusNode(executionView, snapshot);
+  const focusEvidenceDrilldownLink = buildOperatorTraceSliceLinkSurface({
+    runId: executionView.run_id,
+    runHref: currentRunHref,
+    currentHref: currentRunHref,
+    nodeRunId:
+      snapshot?.execution_focus_node_run_id ?? callbackSummaryFocusNode?.node_run_id ?? null
+  });
   const callbackSummaryInboxHref =
     buildCallbackSummaryInboxHref({
       runId: executionView.run_id,
@@ -313,6 +321,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
           artifactSummary={focusArtifactSummary}
           artifactCount={snapshot?.execution_focus_artifact_count}
           artifactRefCount={snapshot?.execution_focus_artifact_ref_count ?? 0}
+          drilldownLink={focusEvidenceDrilldownLink}
           toolCallCount={snapshot?.execution_focus_tool_call_count}
           toolCallSummaries={focusToolCallSummaries}
           artifacts={focusArtifacts}

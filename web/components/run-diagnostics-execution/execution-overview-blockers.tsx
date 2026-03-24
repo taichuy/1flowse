@@ -19,7 +19,10 @@ import {
 } from "@/lib/run-execution-blockers";
 import { resolveSensitiveAccessTimelineEntryRunId } from "@/lib/sensitive-access";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
-import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
+import {
+  buildOperatorFollowUpSurfaceCopy,
+  buildOperatorTraceSliceLinkSurface
+} from "@/lib/operator-follow-up-presenters";
 import {
   buildExecutionFocusDiagnosticsBlockerMetaCopy,
   buildExecutionFocusDiagnosticsBlockerSurfaceCopy,
@@ -78,6 +81,12 @@ function renderNodeFollowUp({
 }) {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
   const currentRunHref = buildRunDetailHref(runId);
+  const focusedTraceLink = buildOperatorTraceSliceLinkSurface({
+    runId,
+    runHref: currentRunHref,
+    currentHref: currentRunHref,
+    nodeRunId: node.node_run_id
+  });
   const nodeSkillTrace = pickCallbackWaitingSkillTraceForNode(skillTrace, node.node_run_id);
   const skillReferenceLoads = pickNodeSkillReferenceLoads(node, skillTrace);
   const hasCallbackWaitingSummary = hasCallbackWaitingSummaryFacts({
@@ -131,6 +140,7 @@ function renderNodeFollowUp({
         artifactRefCount={node.artifact_refs.length}
         artifactSummary={formatExecutionFocusArtifactSummary(node)}
         artifacts={listExecutionFocusArtifactPreviews(node)}
+        drilldownLink={focusedTraceLink}
         toolCallCount={node.tool_calls.length}
         toolCallSummaries={listExecutionFocusToolCallSummaries(node)}
       />

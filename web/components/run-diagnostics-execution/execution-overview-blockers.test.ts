@@ -45,12 +45,17 @@ vi.mock("@/components/operator-focus-evidence-card", () => ({
     artifactSummary,
     artifactCount,
     artifactRefCount,
+    drilldownLink,
     toolCallCount,
     toolCallSummaries
   }: {
     artifactSummary?: string | null;
     artifactCount?: number;
     artifactRefCount?: number;
+    drilldownLink?: {
+      href: string;
+      label: string;
+    } | null;
     toolCallCount?: number;
     toolCallSummaries?: Array<{
       title?: string | null;
@@ -63,6 +68,7 @@ vi.mock("@/components/operator-focus-evidence-card", () => ({
         `artifact refs ${(artifactRefCount ?? 0).toString()} ` +
         `tool calls ${(toolCallCount ?? 0).toString()} ` +
         `summary ${artifactSummary ?? "none"} ` +
+        `drilldown ${drilldownLink?.label ?? "none"} ${drilldownLink?.href ?? "none"} ` +
         `first tool ${toolCallSummaries?.[0]?.title ?? "n/a"}`
     )
 }));
@@ -535,6 +541,9 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
     expect(html).not.toContain("callback-waiting-summary-card:node-run-focus");
     expect(html).toContain("operator-focus-evidence-card");
     expect(html).toContain("artifacts 1 artifact refs 1 tool calls 1");
+    expect(html).toContain(
+      "drilldown jump to focused trace slice /runs/run-blocked-1?node_run_id=node-run-focus#run-diagnostics-execution-timeline"
+    );
     expect(html).toContain("first tool Demo Search · blocked");
     expect(html).toContain("skill-reference-load-list");
     expect(html).toContain(

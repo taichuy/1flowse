@@ -99,15 +99,21 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
 vi.mock("@/components/operator-focus-evidence-card", () => ({
   OperatorFocusEvidenceCard: ({
     artifactSummary,
+    drilldownLink,
     toolCallCount
   }: {
     artifactSummary?: string | null;
+    drilldownLink?: {
+      href: string;
+      label: string;
+    } | null;
     toolCallCount?: number;
   }) =>
     createElement(
       "div",
       { "data-testid": "focus-evidence" },
-      `${artifactSummary ?? "no-summary"} · tools ${toolCallCount ?? 0}`
+      `${artifactSummary ?? "no-summary"} · tools ${toolCallCount ?? 0} · ` +
+        `drilldown ${drilldownLink?.label ?? "none"} ${drilldownLink?.href ?? "none"}`
     )
 }));
 
@@ -340,6 +346,9 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
     expect(html).toContain("jump to execution timeline");
     expect(html).toContain("callback pending · node-run-1");
     expect(html).toContain("聚焦节点已沉淀 1 个 artifact");
+    expect(html).toContain(
+      "drilldown jump to focused trace slice /runs/run-123?node_run_id=node-run-1#run-diagnostics-execution-timeline"
+    );
     expect(html).toContain("Focused skill trace · 1");
   });
 

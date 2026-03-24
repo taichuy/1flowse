@@ -13,6 +13,7 @@ import type {
 import {
   buildOperatorRecommendedActionCandidate,
   buildOperatorFollowUpSurfaceCopy,
+  buildOperatorTraceSliceLinkSurface,
   buildSharedOrLocalOperatorCandidate,
   buildOperatorRecommendedNextStep
 } from "@/lib/operator-follow-up-presenters";
@@ -98,6 +99,12 @@ export function RunDetailExecutionFocusCard({
         execution: executionCandidate
       })
     : null;
+  const focusedTraceLink = buildOperatorTraceSliceLinkSurface({
+    runId: run.id,
+    runHref: currentRunHref,
+    currentHref: currentRunHref,
+    nodeRunId: focus.nodeRunId
+  });
   const shouldRenderStandaloneExecutionFollowUp =
     !shouldDeferToCallbackWaitingSummary &&
     Boolean(explicitExecutionFollowUp) &&
@@ -211,6 +218,7 @@ export function RunDetailExecutionFocusCard({
               artifactRefCount={focus.artifactRefCount}
               artifacts={listExecutionFocusArtifactPreviews(focus.evidence)}
               artifactSummary={formatExecutionFocusArtifactSummary(focus.evidence)}
+              drilldownLink={focusedTraceLink}
               title="Focused execution evidence"
               toolCallCount={focus.toolCallCount}
               toolCallSummaries={listExecutionFocusToolCallSummaries(focus.evidence)}

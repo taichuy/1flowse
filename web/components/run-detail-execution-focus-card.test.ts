@@ -563,6 +563,30 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain('href="/runs/run-1#run-diagnostics-execution-view"');
   });
 
+  it("propagates focused trace context into compact execution evidence", () => {
+    const run = buildRunDetail();
+    run.node_runs[0] = {
+      ...run.node_runs[0]!,
+      waiting_reason: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(RunDetailExecutionFocusCard, {
+        run,
+        title: "Execution focus"
+      })
+    );
+
+    expect(html).toContain(
+      'href="/runs/run-1?node_run_id=node-run-1#run-diagnostics-execution-timeline"'
+    );
+    expect(html).toContain("jump to focused trace slice");
+    expect(html).toContain(
+      'href="/runs/run-1?event_type=tool.waiting&amp;node_run_id=node-run-1&amp;payload_key=reason#run-diagnostics-execution-timeline"'
+    );
+    expect(html).toContain("open waiting trace");
+  });
+
   it("prefers canonical run follow-up action before local run CTA fallback", () => {
     const run = buildRunDetail();
     run.node_runs[0] = {
