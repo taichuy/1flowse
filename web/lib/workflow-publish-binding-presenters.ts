@@ -4,6 +4,10 @@ import type {
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
 import {
+  buildLegacyPublishAuthModeContractSummary,
+  buildLegacyPublishAuthModeFollowUp
+} from "@/lib/legacy-publish-auth-contract";
+import {
   buildWorkflowPublishDraftEndpointHref,
   buildWorkflowPublishDraftSectionHref
 } from "@/lib/workflow-publish-definition-links";
@@ -208,6 +212,37 @@ function resolveLifecycleBlockingIssue(
   );
 }
 
+type WorkflowPublishedEndpointBlockingIssue = NonNullable<
+  WorkflowPublishedEndpointItem["issues"]
+>[number];
+
+function resolveLegacyAuthIssueContract(
+  issue: WorkflowPublishedEndpointBlockingIssue | null | undefined
+) {
+  if (!issue || issue.category !== "unsupported_auth_mode") {
+    return null;
+  }
+
+  return issue.auth_mode_contract ?? null;
+}
+
+function resolveLegacyAuthIssueFollowUp(
+  issue: WorkflowPublishedEndpointBlockingIssue | null | undefined
+) {
+  const contract = resolveLegacyAuthIssueContract(issue);
+  if (issue?.remediation?.trim()) {
+    return issue.remediation.trim();
+  }
+  return contract ? buildLegacyPublishAuthModeFollowUp(contract) : null;
+}
+
+function resolveLegacyAuthIssueContractSummary(
+  issue: WorkflowPublishedEndpointBlockingIssue | null | undefined
+) {
+  const contract = resolveLegacyAuthIssueContract(issue);
+  return contract ? buildLegacyPublishAuthModeContractSummary(contract) : null;
+}
+
 function normalizeWorkflowPublishDraftString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -275,6 +310,10 @@ function buildWorkflowPublishBindingIssueSurface(
     binding.endpoint_id
   );
   const resolvedWorkflowVersion = options?.currentWorkflowVersion?.trim() || null;
+  const legacyAuthIssueFollowUp = resolveLegacyAuthIssueFollowUp(lifecycleBlockingIssue);
+  const legacyAuthContractSummary = resolveLegacyAuthIssueContractSummary(
+    lifecycleBlockingIssue
+  );
 
   if (!draftEndpoint) {
     return {
@@ -296,7 +335,9 @@ function buildWorkflowPublishBindingIssueSurface(
       title: "Publish governance blocker",
       message: lifecycleBlockingIssue.message,
       remediation:
-        `当前 draft endpoint ${draftEndpointLabel} 仍声明 authMode=${draftEndpoint.authMode ?? "unknown"}；先在 publish draft 卡片里改成 api_key 或 internal 并保存，再回到这里重试 lifecycle。`,
+        legacyAuthIssueFollowUp
+          ? `当前 draft endpoint ${draftEndpointLabel} 仍声明 authMode=${draftEndpoint.authMode ?? "unknown"}。${legacyAuthIssueFollowUp}`
+          : `当前 draft endpoint ${draftEndpointLabel} 仍声明 authMode=${draftEndpoint.authMode ?? "unknown"}；先在 publish draft 卡片里改成 api_key 或 internal 并保存，再回到这里重试 lifecycle。`,
       followUpHref: buildWorkflowPublishDraftEndpointHref(draftEndpoint.id),
       followUpLabel: "Open blocking draft endpoint"
     } satisfies WorkflowPublishBindingIssueSurface;
@@ -310,7 +351,9 @@ function buildWorkflowPublishBindingIssueSurface(
     title: "Publish governance blocker",
     message: lifecycleBlockingIssue.message,
     remediation:
-      `当前 draft endpoint ${draftEndpointLabel} 已切回 authMode=${draftEndpoint.authMode}${currentWorkflowVersionDetail}；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 ${binding.workflow_version} legacy binding 保持 offline。`,
+      legacyAuthContractSummary
+        ? `当前 draft endpoint ${draftEndpointLabel} 已切回 authMode=${draftEndpoint.authMode}${currentWorkflowVersionDetail}。${legacyAuthContractSummary} 现在可以直接从这张 draft 卡片补发 replacement binding，把历史 ${binding.workflow_version} legacy binding 保持 offline。`
+        : `当前 draft endpoint ${draftEndpointLabel} 已切回 authMode=${draftEndpoint.authMode}${currentWorkflowVersionDetail}；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 ${binding.workflow_version} legacy binding 保持 offline。`,
     followUpHref: buildWorkflowPublishDraftEndpointHref(draftEndpoint.id),
     followUpLabel: "Open current draft endpoint"
   } satisfies WorkflowPublishBindingIssueSurface;
@@ -334,8 +377,18 @@ export function buildWorkflowPublishBindingCardSurface(
       : ["full-payload"];
   const lifecycleBlockingIssue = resolveLifecycleBlockingIssue(binding);
   const issueSurface = buildWorkflowPublishBindingIssueSurface(binding, options);
+  const legacyAuthIssueFollowUp = resolveLegacyAuthIssueFollowUp(lifecycleBlockingIssue);
+  const legacyAuthContractSummary = resolveLegacyAuthIssueContractSummary(
+    lifecycleBlockingIssue
+  );
   const apiKeyGovernanceEmptyState = lifecycleBlockingIssue
-    ? `当前 binding 仍处于 unsupported legacy auth mode：${lifecycleBlockingIssue.message}`
+    ? [
+        "当前 binding 仍处于 legacy publish auth handoff。",
+        legacyAuthContractSummary,
+        legacyAuthIssueFollowUp
+      ]
+        .filter((fragment): fragment is string => Boolean(fragment))
+        .join(" ")
     : `当前 binding 使用 auth_mode=${binding.auth_mode}，不需要单独管理 published API key。`;
 
   return {

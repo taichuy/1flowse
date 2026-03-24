@@ -59,6 +59,7 @@ def collect_invalid_published_endpoint_auth_mode_issues(
         or _normalize_optional_string(endpoint_id)
         or "published endpoint"
     )
+    contract = WorkflowPublishedEndpointLegacyAuthModeContract()
 
     return [
         WorkflowPublishedEndpointIssue(
@@ -66,12 +67,11 @@ def collect_invalid_published_endpoint_auth_mode_issues(
             message=(
                 f"Published endpoint '{endpoint_label}' still uses unsupported legacy auth "
                 f"mode '{normalized_auth_mode}'. "
-                f"{build_workflow_publish_auth_mode_contract_summary()}"
+                f"{build_workflow_publish_auth_mode_contract_summary(contract)}"
             ),
             field="auth_mode",
-            remediation=(
-                build_workflow_publish_auth_mode_follow_up()
-            ),
+            remediation=build_workflow_publish_auth_mode_follow_up(contract),
+            auth_mode_contract=contract,
             blocks_lifecycle_publish=True,
         )
     ]

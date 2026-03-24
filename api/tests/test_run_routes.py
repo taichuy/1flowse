@@ -26,6 +26,7 @@ from app.services.sandbox_backends import (
     SandboxBackendRegistration,
     SandboxBackendRegistry,
 )
+from tests.workflow_publish_helpers import legacy_auth_mode_contract
 
 
 class _StaticSandboxHealthChecker:
@@ -138,18 +139,7 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
     governance = execution_view["legacy_auth_governance"]
     assert governance["workflow_count"] == 1
     assert governance["binding_count"] == 1
-    assert governance["auth_mode_contract"] == {
-        "supported_auth_modes": ["api_key", "internal"],
-        "retired_legacy_auth_modes": ["token"],
-        "summary": (
-            "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-            "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-        ),
-        "follow_up": (
-            "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-            "replacement binding，最后清理 draft/offline legacy backlog。"
-        ),
-    }
+    assert governance["auth_mode_contract"] == legacy_auth_mode_contract()
     assert governance["summary"] == {
         "draft_candidate_count": 0,
         "published_blocker_count": 1,
@@ -163,9 +153,9 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
             "tone_label": "人工跟进",
             "count": 1,
             "detail": (
-                "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
-                "endpoint 把 authMode 切回 api_key/internal，"
-                "并发布新版 binding，再决定历史版本是否下线。"
+                "对 Demo Workflow 这类仍在 live 的 legacy binding，先把 workflow "
+                "draft endpoint 切回 api_key/internal 并保存，再补发 replacement "
+                "binding，最后清理 draft/offline legacy backlog。"
             ),
         }
     ]

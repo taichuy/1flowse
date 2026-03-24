@@ -21,6 +21,7 @@ import {
 } from "@/lib/workbench-entry-surfaces";
 import { getSystemOverview, type SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { getWorkflows, type WorkflowListItem } from "@/lib/get-workflows";
+import { buildLegacyPublishAuthModeFollowUp } from "@/lib/legacy-publish-auth-contract";
 import { formatCountMap } from "@/lib/runtime-presenters";
 import { getWorkflowLegacyPublishAuthIssues } from "@/lib/workflow-definition-governance";
 import {
@@ -408,7 +409,7 @@ function buildWorkflowLibraryRecommendedNextStep({
       label: "publish auth cleanup",
       detail:
         `当前 ${summary.workflowLegacyPublishAuthCount} 个 workflow 仍带着 legacy publish auth blocker；` +
-        `优先回到 ${workflowLegacyPublishAuth.name} 把 ${publishAuthIssueCount} 个 publish draft 的 authMode 切回 api_key / internal，保存后再回 publish 面板补发新版 binding。`,
+        `优先回到 ${workflowLegacyPublishAuth.name} 处理 ${publishAuthIssueCount} 个 publish draft：${buildLegacyPublishAuthModeFollowUp()}`,
       href: workflowLink.href,
       href_label: workflowLink.label
     };

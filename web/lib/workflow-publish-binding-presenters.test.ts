@@ -4,6 +4,7 @@ import type { PublishedEndpointApiKeyItem } from "@/lib/get-workflow-publish";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
 import { formatTimestamp } from "@/lib/runtime-presenters";
+import { buildLegacyPublishUnsupportedAuthIssueFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 import {
   buildWorkflowPublishApiKeyManagerSurface,
   buildWorkflowPublishApiKeyMutationFallbackErrorMessage,
@@ -213,15 +214,7 @@ describe("workflow-publish-binding-presenters", () => {
     const surface = buildWorkflowPublishBindingCardSurface({
       ...buildBinding(),
       auth_mode: "token",
-      issues: [
-        {
-          category: "unsupported_auth_mode",
-          message: "Legacy token auth is still persisted on this binding.",
-          field: "auth_mode",
-          remediation: "Switch back to api_key or internal before publishing.",
-          blocks_lifecycle_publish: true
-        }
-      ]
+      issues: [buildLegacyPublishUnsupportedAuthIssueFixture()]
     });
 
     expect(surface.issueSurface).toEqual({
@@ -231,7 +224,12 @@ describe("workflow-publish-binding-presenters", () => {
       followUpHref: null,
       followUpLabel: null
     });
-    expect(surface.apiKeyGovernanceEmptyState).toContain("unsupported legacy auth mode");
+    expect(surface.apiKeyGovernanceEmptyState).toContain(
+      "当前 binding 仍处于 legacy publish auth handoff。"
+    );
+    expect(surface.apiKeyGovernanceEmptyState).toContain(
+      "Publish auth contract：supported api_key / internal；legacy token。"
+    );
   });
 
   it("uses current publish draft context to turn legacy auth blockers into actionable follow-up", () => {
@@ -239,15 +237,7 @@ describe("workflow-publish-binding-presenters", () => {
       {
         ...buildBinding(),
         auth_mode: "token",
-        issues: [
-          {
-            category: "unsupported_auth_mode",
-            message: "Legacy token auth is still persisted on this binding.",
-            field: "auth_mode",
-            remediation: "Switch back to api_key or internal before publishing.",
-            blocks_lifecycle_publish: true
-          }
-        ]
+        issues: [buildLegacyPublishUnsupportedAuthIssueFixture()]
       },
       {
         currentWorkflowVersion: "1.1.0",
@@ -265,7 +255,7 @@ describe("workflow-publish-binding-presenters", () => {
       title: "Publish governance blocker",
       message: "Legacy token auth is still persisted on this binding.",
       remediation:
-        "当前 draft endpoint Public Search (endpoint-1) 已切回 authMode=api_key（当前 workflow 1.1.0）；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 1.0.0 legacy binding 保持 offline。",
+        "当前 draft endpoint Public Search (endpoint-1) 已切回 authMode=api_key（当前 workflow 1.1.0）。Publish auth contract：supported api_key / internal；legacy token。 现在可以直接从这张 draft 卡片补发 replacement binding，把历史 1.0.0 legacy binding 保持 offline。",
       followUpHref: "#workflow-editor-publish-endpoint-endpoint-1",
       followUpLabel: "Open current draft endpoint"
     });
@@ -347,12 +337,10 @@ describe("workflow-publish-binding-presenters", () => {
     const surface = buildWorkflowPublishLifecycleActionSurface({
       currentStatus: "draft",
       issues: [
-        {
-          category: "unsupported_auth_mode",
-          message: "Legacy token auth is still persisted on this binding.",
-          remediation: "Switch back to api_key or internal before publishing.",
-          blocks_lifecycle_publish: true
-        }
+        buildLegacyPublishUnsupportedAuthIssueFixture({
+          field: undefined,
+          auth_mode_contract: null,
+        })
       ]
     });
 

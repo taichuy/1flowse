@@ -414,6 +414,7 @@ export type WorkflowPublishedEndpointIssue = {
   message: string;
   field?: string | null;
   remediation?: string | null;
+  auth_mode_contract?: WorkflowPublishedEndpointLegacyAuthModeContract | null;
   blocks_lifecycle_publish: boolean;
 };
 

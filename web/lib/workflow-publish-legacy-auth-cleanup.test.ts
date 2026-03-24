@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
 import {
+  buildLegacyPublishAuthModeContractFixture,
+  buildLegacyPublishUnsupportedAuthIssueFixture,
+} from "@/lib/workflow-publish-legacy-auth-test-fixtures";
+import {
   buildWorkflowPublishLegacyAuthExportHint,
   buildWorkflowPublishLegacyAuthCleanupExportFilename,
   buildWorkflowPublishLegacyAuthCleanupExportPayload,
@@ -38,14 +42,7 @@ function buildBinding(
     unpublished_at: null,
     created_at: "2026-03-24T06:00:00Z",
     updated_at: "2026-03-24T06:00:00Z",
-    issues: [
-      {
-        category: "unsupported_auth_mode",
-        message: "Legacy token auth is still persisted on this binding.",
-        remediation: "Switch back to api_key or internal before publishing.",
-        blocks_lifecycle_publish: true,
-      },
-    ],
+    issues: [buildLegacyPublishUnsupportedAuthIssueFixture({ field: undefined })],
     ...overrides,
   };
 }
@@ -62,7 +59,15 @@ describe("workflow publish legacy auth cleanup helpers", () => {
     expect(surface.shouldRender).toBe(true);
     expect(surface.candidateBindingIds).toEqual(["binding-draft"]);
     expect(surface.candidateBindings[0]?.detail).toContain("可直接批量切到 offline");
-    expect(surface.publishedBindings[0]?.detail).toContain("先补发支持 api_key/internal 的新版 binding");
+    expect(surface.candidateBindings[0]?.detail).toContain(
+      "Publish auth contract：supported api_key / internal；legacy token。"
+    );
+    expect(surface.publishedBindings[0]?.detail).toContain(
+      "Publish auth contract：supported api_key / internal；legacy token。"
+    );
+    expect(surface.publishedBindings[0]?.detail).toContain(
+      "先把 workflow draft endpoint 切回 api_key/internal 并保存"
+    );
     expect(surface.offlineBindings[0]?.detail).toContain("已 offline");
   });
 
@@ -91,14 +96,7 @@ describe("workflow publish legacy auth cleanup helpers", () => {
     });
 
     expect(payload.export.exported_at).toBe("2026-03-24T08:30:00Z");
-    expect(payload.auth_mode_contract).toEqual({
-      supported_auth_modes: ["api_key", "internal"],
-      retired_legacy_auth_modes: ["token"],
-      summary:
-        "当前 publish gateway 只支持 durable authMode=api_key/internal；token 仅作为 legacy inventory 出现在治理 handoff 中。",
-      follow_up:
-        "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 replacement binding，最后清理 draft/offline legacy backlog。"
-    });
+    expect(payload.auth_mode_contract).toEqual(buildLegacyPublishAuthModeContractFixture());
     expect(payload.summary).toEqual({
       draft_candidate_count: 1,
       published_blocker_count: 1,
@@ -121,10 +119,7 @@ describe("workflow publish legacy auth cleanup helpers", () => {
 
     expect(lines[0]).toMatchObject({
       record_type: "legacy_publish_auth_governance_export",
-      auth_mode_contract: {
-        supported_auth_modes: ["api_key", "internal"],
-        retired_legacy_auth_modes: ["token"]
-      },
+      auth_mode_contract: buildLegacyPublishAuthModeContractFixture(),
       workflow: {
         workflow_id: "workflow-1",
         workflow_name: "Demo workflow",

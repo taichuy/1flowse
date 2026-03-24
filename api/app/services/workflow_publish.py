@@ -25,6 +25,8 @@ from app.schemas.workflow_published_endpoint import (
 )
 from app.services.compiled_blueprints import CompiledBlueprintService
 from app.services.workflow_publish_auth_mode_validation import (
+    build_workflow_publish_auth_mode_contract_summary,
+    build_workflow_publish_auth_mode_follow_up,
     collect_invalid_published_endpoint_auth_mode_issues,
 )
 
@@ -107,9 +109,7 @@ def _build_legacy_auth_governance_checklist(
                     "对 "
                     f"{_format_workflow_name_preview(published_blockers)} "
                     "这类仍在 live 的 legacy binding，"
-                    "先回到当前 draft endpoint 把 authMode 切回 api_key/internal，"
-                    "并发布新版 binding，"
-                    "再决定历史版本是否下线。"
+                    f"{build_workflow_publish_auth_mode_follow_up()}"
                 ),
             )
         )
@@ -584,7 +584,8 @@ class WorkflowPublishBindingService:
                         reason="binding_already_offline",
                         detail=(
                             "Binding is already offline and only remains in the cleanup "
-                            "inventory."
+                            "inventory. "
+                            f"{build_workflow_publish_auth_mode_contract_summary(blocking_issue.auth_mode_contract)}"
                         ),
                     )
                 )
@@ -600,8 +601,9 @@ class WorkflowPublishBindingService:
                         lifecycle_status=record.lifecycle_status,
                         reason="binding_not_draft",
                         detail=(
-                            "Only draft legacy bindings can be batch-offlined. "
-                            "Publish a supported replacement first if this binding is still live."
+                            "Binding is still live and cannot be batch-offlined. "
+                            f"{build_workflow_publish_auth_mode_contract_summary(blocking_issue.auth_mode_contract)} "
+                            f"{build_workflow_publish_auth_mode_follow_up(blocking_issue.auth_mode_contract)}"
                         ),
                     )
                 )

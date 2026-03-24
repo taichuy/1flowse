@@ -10,7 +10,12 @@ from app.models.sensitive_access import (
     SensitiveResourceRecord,
 )
 from app.models.workflow import WorkflowPublishedEndpoint, WorkflowPublishedInvocation
-from tests.workflow_publish_helpers import publishable_definition
+from tests.workflow_publish_helpers import (
+    legacy_auth_binding,
+    legacy_auth_export_snapshot_for_single_published_blocker,
+    legacy_auth_mode_contract,
+    publishable_definition,
+)
 
 
 def test_protocol_streaming_rejections_are_recorded_in_publish_audit(
@@ -816,67 +821,16 @@ def test_export_published_endpoint_invocations_includes_workflow_legacy_auth_han
     )
     assert export_json_response.status_code == 200
     export_json_body = export_json_response.json()
-    assert export_json_body["legacy_auth_governance"] == {
-        "generated_at": export_json_body["legacy_auth_governance"]["generated_at"],
-        "workflow_count": 1,
-        "binding_count": 1,
-        "auth_mode_contract": {
-            "supported_auth_modes": ["api_key", "internal"],
-            "retired_legacy_auth_modes": ["token"],
-            "summary": (
-                "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-                "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-            ),
-            "follow_up": (
-                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-                "replacement binding，最后清理 draft/offline legacy backlog。"
-            ),
-        },
-        "workflow": {
-            "workflow_id": workflow_id,
-            "workflow_name": "Published Invocation Export Governance Workflow",
-            "binding_count": 1,
-            "draft_candidate_count": 0,
-            "published_blocker_count": 1,
-            "offline_inventory_count": 0,
-        },
-        "summary": {
-            "draft_candidate_count": 0,
-            "published_blocker_count": 1,
-            "offline_inventory_count": 0,
-        },
-        "checklist": [
-            {
-                "key": "published_follow_up",
-                "title": "再补发支持鉴权的 replacement bindings",
-                "tone": "manual",
-                "tone_label": "人工跟进",
-                "count": 1,
-                "detail": (
-                    "对 Published Invocation Export Governance Workflow "
-                    "这类仍在 live 的 legacy binding，"
-                    "先回到当前 draft endpoint 把 authMode 切回 api_key/internal，"
-                    "并发布新版 binding，再决定历史版本是否下线。"
-                ),
-            }
-        ],
-        "buckets": {
-            "draft_candidates": [],
-            "published_blockers": [
-                {
-                    "workflow_id": workflow_id,
-                    "workflow_name": "Published Invocation Export Governance Workflow",
-                    "binding_id": binding["id"],
-                    "endpoint_id": "native-chat",
-                    "endpoint_name": "Native Chat",
-                    "workflow_version": "0.1.0",
-                    "lifecycle_status": "published",
-                    "auth_mode": "token",
-                }
-            ],
-            "offline_inventory": [],
-        },
-    }
+    expected_governance = legacy_auth_export_snapshot_for_single_published_blocker(
+        generated_at=export_json_body["legacy_auth_governance"]["generated_at"],
+        workflow_id=workflow_id,
+        workflow_name="Published Invocation Export Governance Workflow",
+        workflow_version="0.1.0",
+        binding_id=binding["id"],
+        endpoint_id="native-chat",
+        endpoint_name="Native Chat",
+    )
+    assert export_json_body["legacy_auth_governance"] == expected_governance
 
     export_jsonl_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/export",
@@ -894,59 +848,26 @@ def test_export_published_endpoint_invocations_includes_workflow_legacy_auth_han
     governance_binding_record = json.loads(jsonl_lines[2])
     invocation_record = json.loads(jsonl_lines[3])
     assert meta_record["legacy_auth_governance"] == {
-        "binding_count": 1,
-        "auth_mode_contract": {
-            "supported_auth_modes": ["api_key", "internal"],
-            "retired_legacy_auth_modes": ["token"],
-            "summary": (
-                "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-                "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-            ),
-            "follow_up": (
-                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-                "replacement binding，最后清理 draft/offline legacy backlog。"
-            ),
-        },
-        "workflow": {
-            "workflow_id": workflow_id,
-            "workflow_name": "Published Invocation Export Governance Workflow",
-            "binding_count": 1,
-            "draft_candidate_count": 0,
-            "published_blocker_count": 1,
-            "offline_inventory_count": 0,
-        },
-        "summary": {
-            "draft_candidate_count": 0,
-            "published_blocker_count": 1,
-            "offline_inventory_count": 0,
-        },
+        "binding_count": expected_governance["binding_count"],
+        "auth_mode_contract": expected_governance["auth_mode_contract"],
+        "workflow": expected_governance["workflow"],
+        "summary": expected_governance["summary"],
     }
     assert governance_record["record_type"] == "workflow_legacy_auth_governance"
     assert governance_record["binding_count"] == 1
-    assert governance_record["auth_mode_contract"] == {
-        "supported_auth_modes": ["api_key", "internal"],
-        "retired_legacy_auth_modes": ["token"],
-        "summary": (
-            "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-            "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-        ),
-        "follow_up": (
-            "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-            "replacement binding，最后清理 draft/offline legacy backlog。"
-        ),
-    }
+    assert governance_record["auth_mode_contract"] == legacy_auth_mode_contract()
     assert governance_record["workflow"]["workflow_id"] == workflow_id
     assert governance_binding_record == {
         "record_type": "workflow_legacy_auth_binding",
         "bucket": "published_blockers",
-        "workflow_id": workflow_id,
-        "workflow_name": "Published Invocation Export Governance Workflow",
-        "binding_id": binding["id"],
-        "endpoint_id": "native-chat",
-        "endpoint_name": "Native Chat",
-        "workflow_version": "0.1.0",
-        "lifecycle_status": "published",
-        "auth_mode": "token",
+        **legacy_auth_binding(
+            workflow_id=workflow_id,
+            workflow_name="Published Invocation Export Governance Workflow",
+            binding_id=binding["id"],
+            workflow_version="0.1.0",
+            endpoint_id="native-chat",
+            endpoint_name="Native Chat",
+        ),
     }
     assert invocation_record["record_type"] == "invocation"
     assert invocation_record["request_source"] == "workflow"

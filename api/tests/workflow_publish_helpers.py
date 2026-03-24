@@ -1,3 +1,8 @@
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthModeContract,
+)
+
+
 def publishable_definition(
     *,
     answer: str = "done",
@@ -101,4 +106,136 @@ def waiting_agent_publishable_definition(
         "publish": [
             endpoint
         ],
+    }
+
+
+def legacy_auth_mode_contract() -> dict[str, object]:
+    return WorkflowPublishedEndpointLegacyAuthModeContract().model_dump(mode="json")
+
+
+def legacy_auth_binding(
+    *,
+    workflow_id: str,
+    workflow_name: str,
+    binding_id: str,
+    workflow_version: str,
+    endpoint_id: str,
+    endpoint_name: str,
+    lifecycle_status: str = "published",
+    auth_mode: str = "token",
+) -> dict[str, str]:
+    return {
+        "workflow_id": workflow_id,
+        "workflow_name": workflow_name,
+        "binding_id": binding_id,
+        "workflow_version": workflow_version,
+        "endpoint_id": endpoint_id,
+        "endpoint_name": endpoint_name,
+        "lifecycle_status": lifecycle_status,
+        "auth_mode": auth_mode,
+    }
+
+
+def legacy_auth_workflow_summary(
+    *,
+    workflow_id: str,
+    workflow_name: str,
+    binding_count: int = 1,
+    draft_candidate_count: int = 0,
+    published_blocker_count: int = 1,
+    offline_inventory_count: int = 0,
+) -> dict[str, str | int]:
+    return {
+        "workflow_id": workflow_id,
+        "workflow_name": workflow_name,
+        "binding_count": binding_count,
+        "draft_candidate_count": draft_candidate_count,
+        "published_blocker_count": published_blocker_count,
+        "offline_inventory_count": offline_inventory_count,
+    }
+
+
+def legacy_auth_published_follow_up_checklist(
+    *, workflow_name: str, count: int = 1
+) -> dict[str, str | int]:
+    return {
+        "key": "published_follow_up",
+        "title": "再补发支持鉴权的 replacement bindings",
+        "tone": "manual",
+        "tone_label": "人工跟进",
+        "count": count,
+        "detail": (
+            f"对 {workflow_name} 这类仍在 live 的 legacy binding，"
+            f"{legacy_auth_mode_contract()['follow_up']}"
+        ),
+    }
+
+
+def legacy_auth_governance_snapshot_for_single_published_blocker(
+    *,
+    generated_at: str,
+    workflow_id: str,
+    workflow_name: str,
+    workflow_version: str,
+    binding_id: str,
+    endpoint_id: str,
+    endpoint_name: str,
+) -> dict[str, object]:
+    workflow = legacy_auth_workflow_summary(
+        workflow_id=workflow_id,
+        workflow_name=workflow_name,
+    )
+    published_blocker = legacy_auth_binding(
+        workflow_id=workflow_id,
+        workflow_name=workflow_name,
+        binding_id=binding_id,
+        workflow_version=workflow_version,
+        endpoint_id=endpoint_id,
+        endpoint_name=endpoint_name,
+    )
+    return {
+        "generated_at": generated_at,
+        "workflow_count": 1,
+        "binding_count": 1,
+        "auth_mode_contract": legacy_auth_mode_contract(),
+        "summary": {
+            "draft_candidate_count": 0,
+            "published_blocker_count": 1,
+            "offline_inventory_count": 0,
+        },
+        "checklist": [
+            legacy_auth_published_follow_up_checklist(workflow_name=workflow_name)
+        ],
+        "workflows": [workflow],
+        "buckets": {
+            "draft_candidates": [],
+            "published_blockers": [published_blocker],
+            "offline_inventory": [],
+        },
+    }
+
+
+def legacy_auth_export_snapshot_for_single_published_blocker(
+    *,
+    generated_at: str,
+    workflow_id: str,
+    workflow_name: str,
+    workflow_version: str,
+    binding_id: str,
+    endpoint_id: str,
+    endpoint_name: str,
+) -> dict[str, object]:
+    snapshot = legacy_auth_governance_snapshot_for_single_published_blocker(
+        generated_at=generated_at,
+        workflow_id=workflow_id,
+        workflow_name=workflow_name,
+        workflow_version=workflow_version,
+        binding_id=binding_id,
+        endpoint_id=endpoint_id,
+        endpoint_name=endpoint_name,
+    )
+    workflow = snapshot.pop("workflows")[0]
+    return {
+        **snapshot,
+        "workflow": workflow,
     }

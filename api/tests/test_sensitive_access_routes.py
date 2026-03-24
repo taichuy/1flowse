@@ -17,6 +17,9 @@ from app.models.workflow import Workflow, WorkflowPublishedEndpoint
 from app.services.notification_dispatch_scheduler import NotificationDispatchScheduler
 from app.services.run_resume_scheduler import RunResumeScheduler
 from app.services.sensitive_access_control import SensitiveAccessControlService
+from tests.workflow_publish_helpers import (
+    legacy_auth_governance_snapshot_for_single_published_blocker,
+)
 
 
 def _assert_single_run_follow_up(
@@ -130,68 +133,15 @@ def _assert_legacy_auth_governance_snapshot(
     endpoint_id: str,
     endpoint_name: str,
 ) -> None:
-    assert snapshot == {
-        "generated_at": snapshot["generated_at"],
-        "workflow_count": 1,
-        "binding_count": 1,
-        "auth_mode_contract": {
-            "supported_auth_modes": ["api_key", "internal"],
-            "retired_legacy_auth_modes": ["token"],
-            "summary": (
-                "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-                "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-            ),
-            "follow_up": (
-                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-                "replacement binding，最后清理 draft/offline legacy backlog。"
-            ),
-        },
-        "summary": {
-            "draft_candidate_count": 0,
-            "published_blocker_count": 1,
-            "offline_inventory_count": 0,
-        },
-        "checklist": [
-            {
-                "key": "published_follow_up",
-                "title": "再补发支持鉴权的 replacement bindings",
-                "tone": "manual",
-                "tone_label": "人工跟进",
-                "count": 1,
-                "detail": (
-                    "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
-                    "endpoint 把 authMode 切回 api_key/internal，并发布新版 "
-                    "binding，再决定历史版本是否下线。"
-                ),
-            }
-        ],
-        "workflows": [
-            {
-                "workflow_id": workflow.id,
-                "workflow_name": workflow.name,
-                "binding_count": 1,
-                "draft_candidate_count": 0,
-                "published_blocker_count": 1,
-                "offline_inventory_count": 0,
-            }
-        ],
-        "buckets": {
-            "draft_candidates": [],
-            "published_blockers": [
-                {
-                    "workflow_id": workflow.id,
-                    "workflow_name": workflow.name,
-                    "binding_id": binding_id,
-                    "workflow_version": workflow.version,
-                    "endpoint_id": endpoint_id,
-                    "endpoint_name": endpoint_name,
-                    "lifecycle_status": "published",
-                    "auth_mode": "token",
-                }
-            ],
-            "offline_inventory": [],
-        },
-    }
+    assert snapshot == legacy_auth_governance_snapshot_for_single_published_blocker(
+        generated_at=snapshot["generated_at"],
+        workflow_id=workflow.id,
+        workflow_name=workflow.name,
+        workflow_version=workflow.version,
+        binding_id=binding_id,
+        endpoint_id=endpoint_id,
+        endpoint_name=endpoint_name,
+    )
 
 
 def test_create_sensitive_resource_and_list_it(
@@ -1951,68 +1901,17 @@ def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
     ]
     assert body["entries"][0]["run_snapshot"] == request_body["run_snapshot"]
     assert body["entries"][0]["run_follow_up"] == request_body["run_follow_up"]
-    assert body["entries"][0]["legacy_auth_governance"] == {
-        "generated_at": body["entries"][0]["legacy_auth_governance"]["generated_at"],
-        "workflow_count": 1,
-        "binding_count": 1,
-        "auth_mode_contract": {
-            "supported_auth_modes": ["api_key", "internal"],
-            "retired_legacy_auth_modes": ["token"],
-            "summary": (
-                "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-                "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-            ),
-            "follow_up": (
-                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-                "replacement binding，最后清理 draft/offline legacy backlog。"
-            ),
-        },
-        "summary": {
-            "draft_candidate_count": 0,
-            "published_blocker_count": 1,
-            "offline_inventory_count": 0,
-        },
-        "checklist": [
-            {
-                "key": "published_follow_up",
-                "title": "再补发支持鉴权的 replacement bindings",
-                "tone": "manual",
-                "tone_label": "人工跟进",
-                "count": 1,
-                "detail": (
-                    "对 Demo Workflow 这类仍在 live 的 legacy binding，先回到当前 draft "
-                    "endpoint 把 authMode 切回 api_key/internal，"
-                    "并发布新版 binding，再决定历史版本是否下线。"
-                ),
-            }
-        ],
-        "workflows": [
-            {
-                "workflow_id": sample_workflow.id,
-                "workflow_name": "Demo Workflow",
-                "binding_count": 1,
-                "draft_candidate_count": 0,
-                "published_blocker_count": 1,
-                "offline_inventory_count": 0,
-            }
-        ],
-        "buckets": {
-            "draft_candidates": [],
-            "published_blockers": [
-                {
-                    "workflow_id": sample_workflow.id,
-                    "workflow_name": "Demo Workflow",
-                    "binding_id": "binding-inbox-handoff",
-                    "workflow_version": sample_workflow.version,
-                    "endpoint_id": "endpoint-inbox-handoff",
-                    "endpoint_name": "Inbox Handoff Endpoint",
-                    "lifecycle_status": "published",
-                    "auth_mode": "token",
-                }
-            ],
-            "offline_inventory": [],
-        },
-    }
+    assert body["entries"][0]["legacy_auth_governance"] == (
+        legacy_auth_governance_snapshot_for_single_published_blocker(
+            generated_at=body["entries"][0]["legacy_auth_governance"]["generated_at"],
+            workflow_id=sample_workflow.id,
+            workflow_name="Demo Workflow",
+            workflow_version=sample_workflow.version,
+            binding_id="binding-inbox-handoff",
+            endpoint_id="endpoint-inbox-handoff",
+            endpoint_name="Inbox Handoff Endpoint",
+        )
+    )
     assert body["execution_views"] == []
     assert body["summary"] == {
         "ticket_count": 1,

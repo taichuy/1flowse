@@ -19,6 +19,7 @@ from app.schemas.workflow_legacy_auth_governance import (
     WorkflowPublishedEndpointLegacyAuthGovernanceBindingItem,
     WorkflowPublishedEndpointLegacyAuthGovernanceBuckets,
     WorkflowPublishedEndpointLegacyAuthGovernanceChecklistItem,
+    WorkflowPublishedEndpointLegacyAuthModeContract,
     WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
     WorkflowPublishedEndpointLegacyAuthGovernanceSummary,
     WorkflowPublishedEndpointLegacyAuthGovernanceWorkflowItem,
@@ -118,6 +119,7 @@ class WorkflowPublishedEndpointIssue(BaseModel):
     message: str
     field: str | None = None
     remediation: str | None = None
+    auth_mode_contract: WorkflowPublishedEndpointLegacyAuthModeContract | None = None
     blocks_lifecycle_publish: bool = False
 
 

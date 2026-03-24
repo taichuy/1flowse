@@ -19,6 +19,7 @@ from app.models.workflow import (
 from app.services.plugin_runtime import PluginToolDefinition, reset_plugin_registry
 from app.services.published_invocations import PublishedInvocationService
 from tests.workflow_publish_helpers import (
+    legacy_auth_mode_contract,
     publishable_definition as _publishable_definition,
 )
 from tests.workflow_publish_helpers import (
@@ -451,11 +452,32 @@ def test_bulk_cleanup_offlines_only_draft_legacy_auth_bindings(
     assert body["updated_count"] == 1
     assert body["skipped_count"] == 3
     assert body["updated_binding_ids"] == [draft_binding.id]
-    assert {item["binding_id"]: item["reason"] for item in body["skipped_items"]} == {
+    skipped_items_by_id = {
+        item["binding_id"]: item for item in body["skipped_items"]
+    }
+    assert {binding_id: item["reason"] for binding_id, item in skipped_items_by_id.items()} == {
         published_binding.id: "binding_not_draft",
         offline_binding.id: "binding_already_offline",
         "missing-binding": "binding_not_found",
     }
+    assert skipped_items_by_id[published_binding.id]["detail"].startswith(
+        "Binding is still live and cannot be batch-offlined."
+    )
+    assert (
+        "Publish auth contract: supported api_key / internal; legacy token."
+        in skipped_items_by_id[published_binding.id]["detail"]
+    )
+    assert (
+        "先把 workflow draft endpoint 切回 api_key/internal 并保存"
+        in skipped_items_by_id[published_binding.id]["detail"]
+    )
+    assert skipped_items_by_id[offline_binding.id]["detail"].startswith(
+        "Binding is already offline and only remains in the cleanup inventory."
+    )
+    assert (
+        "Publish auth contract: supported api_key / internal; legacy token."
+        in skipped_items_by_id[offline_binding.id]["detail"]
+    )
 
     sqlite_session.expire_all()
     stored_draft_binding = sqlite_session.get(WorkflowPublishedEndpoint, draft_binding.id)
@@ -581,18 +603,7 @@ def test_list_legacy_auth_governance_snapshot_across_workflows(
     assert body["generated_at"] is not None
     assert body["workflow_count"] == 2
     assert body["binding_count"] == 4
-    assert body["auth_mode_contract"] == {
-        "supported_auth_modes": ["api_key", "internal"],
-        "retired_legacy_auth_modes": ["token"],
-        "summary": (
-            "当前 publish gateway 只支持 durable authMode=api_key/internal；"
-            "token 仅作为 legacy inventory 出现在治理 handoff 中。"
-        ),
-        "follow_up": (
-            "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
-            "replacement binding，最后清理 draft/offline legacy backlog。"
-        ),
-    }
+    assert body["auth_mode_contract"] == legacy_auth_mode_contract()
     assert body["summary"] == {
         "draft_candidate_count": 1,
         "published_blocker_count": 2,
@@ -1535,7 +1546,7 @@ def test_publish_binding_rejects_legacy_unsupported_auth_mode(
     )
     assert publish_response.status_code == 422
     assert "unsupported legacy auth mode 'token'" in publish_response.json()["detail"]
-    assert "use 'api_key' or 'internal'" in publish_response.json()["detail"]
+    assert "Publish auth contract: supported api_key / internal; legacy token." in publish_response.json()["detail"]
 
     list_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints",
@@ -1548,14 +1559,15 @@ def test_publish_binding_rejects_legacy_unsupported_auth_mode(
             "category": "unsupported_auth_mode",
             "message": (
                 "Published endpoint 'Native Chat' still uses unsupported legacy auth "
-                "mode 'token'. Current publish lifecycle only supports durable "
-                "bindings with auth_mode 'api_key' or 'internal'."
+                "mode 'token'. Publish auth contract: supported api_key / internal; "
+                "legacy token."
             ),
             "field": "auth_mode",
             "remediation": (
-                "Update the workflow definition to use 'api_key' or 'internal', save "
-                "to resync bindings, then retry the publish lifecycle action."
+                "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 "
+                "replacement binding，最后清理 draft/offline legacy backlog。"
             ),
+            "auth_mode_contract": legacy_auth_mode_contract(),
             "blocks_lifecycle_publish": True,
         }
     ]

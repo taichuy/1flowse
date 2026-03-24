@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowPublishLegacyAuthCleanupCard } from "@/components/workflow-publish-legacy-auth-cleanup-card";
 import type { CleanupLegacyPublishedEndpointBindingsState } from "@/app/actions/publish";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
+import { buildLegacyPublishUnsupportedAuthIssueFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 type MockActionState = Record<string, unknown>;
 
@@ -53,14 +54,7 @@ function buildBinding(
     unpublished_at: null,
     created_at: "2026-03-24T06:00:00Z",
     updated_at: "2026-03-24T06:00:00Z",
-    issues: [
-      {
-        category: "unsupported_auth_mode",
-        message: "Legacy token auth is still persisted on this binding.",
-        remediation: "Switch back to api_key or internal before publishing.",
-        blocks_lifecycle_publish: true,
-      },
-    ],
+    issues: [buildLegacyPublishUnsupportedAuthIssueFixture({ field: undefined })],
     ...overrides,
   };
 }

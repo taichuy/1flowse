@@ -3,7 +3,11 @@ import type {
   WorkflowPublishedEndpointItem,
   WorkflowPublishedEndpointLegacyAuthCleanupResult
 } from "@/lib/get-workflow-publish";
-import { resolveLegacyPublishAuthModeContract } from "@/lib/legacy-publish-auth-contract";
+import {
+  buildLegacyPublishAuthModeContractSummary,
+  buildLegacyPublishAuthModeFollowUp,
+  resolveLegacyPublishAuthModeContract
+} from "@/lib/legacy-publish-auth-contract";
 
 export type WorkflowPublishLegacyAuthCleanupExportFormat = "json" | "jsonl";
 
@@ -81,6 +85,36 @@ function hasLegacyAuthIssue(binding: Pick<WorkflowPublishedEndpointItem, "issues
   );
 }
 
+type WorkflowPublishedEndpointBlockingIssue = NonNullable<
+  WorkflowPublishedEndpointItem["issues"]
+>[number];
+
+function resolveLegacyAuthIssue(
+  binding: Pick<WorkflowPublishedEndpointItem, "issues">
+): WorkflowPublishedEndpointBlockingIssue | null {
+  return (
+    binding.issues?.find(
+      (issue) => issue.category === "unsupported_auth_mode" && issue.blocks_lifecycle_publish
+    ) ?? null
+  );
+}
+
+function resolveLegacyAuthCleanupContract(
+  bindings: ReadonlyArray<Pick<WorkflowPublishedEndpointItem, "issues">>
+) {
+  return resolveLegacyPublishAuthModeContract(
+    bindings
+      .map((binding) => resolveLegacyAuthIssue(binding)?.auth_mode_contract ?? null)
+      .find((contract) => contract != null) ?? null
+  );
+}
+
+function resolveLegacyAuthBindingContract(
+  binding: Pick<WorkflowPublishedEndpointItem, "issues">
+) {
+  return resolveLegacyPublishAuthModeContract(resolveLegacyAuthIssue(binding)?.auth_mode_contract);
+}
+
 function formatEndpointLabel(
   binding: Pick<WorkflowPublishedEndpointItem, "endpoint_id" | "endpoint_name">
 ) {
@@ -93,6 +127,7 @@ function buildBindingItem(
   binding: WorkflowPublishedEndpointItem
 ): WorkflowPublishLegacyAuthCleanupBindingItem {
   const endpointLabel = formatEndpointLabel(binding);
+  const contract = resolveLegacyAuthBindingContract(binding);
 
   if (binding.lifecycle_status === "draft") {
     return {
@@ -102,7 +137,9 @@ function buildBindingItem(
       workflowVersion: binding.workflow_version,
       lifecycleStatus: "draft",
       authMode: binding.auth_mode,
-      detail: `workflow ${binding.workflow_version} 仍是历史 legacy draft，可直接批量切到 offline。`
+      detail:
+        `workflow ${binding.workflow_version} 仍是历史 legacy draft，可直接批量切到 offline。` +
+        ` ${buildLegacyPublishAuthModeContractSummary(contract)}`
     };
   }
 
@@ -115,7 +152,9 @@ function buildBindingItem(
       lifecycleStatus: "published",
       authMode: binding.auth_mode,
       detail:
-        "当前 binding 仍在 live publish 链路上；先补发支持 api_key/internal 的新版 binding，再决定是否下线，避免直接中断 endpoint。"
+        "当前 binding 仍在 live publish 链路上。" +
+        ` ${buildLegacyPublishAuthModeContractSummary(contract)} ` +
+        buildLegacyPublishAuthModeFollowUp(contract)
     };
   }
 
@@ -126,7 +165,9 @@ function buildBindingItem(
     workflowVersion: binding.workflow_version,
     lifecycleStatus: "offline",
     authMode: binding.auth_mode,
-    detail: `workflow ${binding.workflow_version} 已 offline，仅保留在治理 inventory 里。`
+    detail:
+      `workflow ${binding.workflow_version} 已 offline，仅保留在治理 inventory 里。` +
+      ` ${buildLegacyPublishAuthModeContractSummary(contract)}`
   };
 }
 
@@ -153,7 +194,8 @@ function formatBindingLabelPreview(bindings: WorkflowPublishLegacyAuthCleanupBin
 function buildChecklistItems(
   candidateBindings: WorkflowPublishLegacyAuthCleanupBindingItem[],
   publishedBindings: WorkflowPublishLegacyAuthCleanupBindingItem[],
-  offlineBindings: WorkflowPublishLegacyAuthCleanupBindingItem[]
+  offlineBindings: WorkflowPublishLegacyAuthCleanupBindingItem[],
+  contract: WorkflowPublishedEndpointLegacyAuthModeContract
 ): WorkflowPublishLegacyAuthCleanupChecklistItem[] {
   const items: WorkflowPublishLegacyAuthCleanupChecklistItem[] = [];
 
@@ -177,7 +219,7 @@ function buildChecklistItems(
       toneLabel: "人工跟进",
       count: publishedBindings.length,
       detail:
-        `对 ${formatBindingLabelPreview(publishedBindings)} 这类仍在 live 的 legacy binding，先回到当前 draft endpoint 把 authMode 切回 api_key/internal 并发布新版 binding，再决定历史版本是否下线。`,
+        `对 ${formatBindingLabelPreview(publishedBindings)} 这类仍在 live 的 legacy binding，${buildLegacyPublishAuthModeFollowUp(contract)}`,
     });
   }
 
@@ -207,6 +249,7 @@ export function buildWorkflowPublishLegacyAuthCleanupSurface(
   const candidateBindings: WorkflowPublishLegacyAuthCleanupBindingItem[] = [];
   const publishedBindings: WorkflowPublishLegacyAuthCleanupBindingItem[] = [];
   const offlineBindings: WorkflowPublishLegacyAuthCleanupBindingItem[] = [];
+  const authModeContract = resolveLegacyAuthCleanupContract(bindings);
 
   for (const binding of bindings) {
     if (!hasLegacyAuthIssue(binding)) {
@@ -230,7 +273,8 @@ export function buildWorkflowPublishLegacyAuthCleanupSurface(
   const checklistItems = buildChecklistItems(
     candidateBindings,
     publishedBindings,
-    offlineBindings
+    offlineBindings,
+    authModeContract
   );
 
   return {
@@ -300,7 +344,7 @@ export function buildWorkflowPublishLegacyAuthCleanupExportPayload({
       format: "json",
       binding_count: bindings.length,
     },
-    auth_mode_contract: resolveLegacyPublishAuthModeContract(),
+    auth_mode_contract: resolveLegacyAuthCleanupContract(bindings),
     workflow: {
       workflow_id: workflowId,
       workflow_name: workflowName,

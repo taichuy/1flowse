@@ -10,6 +10,11 @@ import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/get-workflow-publish";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflows } from "@/lib/get-workflows";
+import {
+  buildLegacyAuthGovernanceBindingFixture,
+  buildLegacyAuthGovernanceSnapshotFixture,
+  buildLegacyAuthGovernanceWorkflowFixture,
+} from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 Object.assign(globalThis, { React });
 
@@ -140,24 +145,7 @@ function buildLegacyAuthGovernanceSnapshot(
     NonNullable<Awaited<ReturnType<typeof getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot>>>
   > = {}
 ) {
-  return {
-    generated_at: "2026-03-24T08:00:00Z",
-    workflow_count: 0,
-    binding_count: 0,
-    summary: {
-      draft_candidate_count: 0,
-      published_blocker_count: 0,
-      offline_inventory_count: 0
-    },
-    checklist: [],
-    workflows: [],
-    buckets: {
-      draft_candidates: [],
-      published_blockers: [],
-      offline_inventory: []
-    },
-    ...overrides
-  } as NonNullable<
+  return buildLegacyAuthGovernanceSnapshotFixture(overrides) as NonNullable<
     Awaited<ReturnType<typeof getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot>>
   >;
 }
@@ -323,7 +311,7 @@ describe("WorkflowsPage", () => {
     expect(html).toContain("1 publish auth blocker");
     expect(html).toContain("publish auth cleanup");
     expect(html).toContain(
-      "优先回到 Legacy Auth workflow 把 1 个 publish draft 的 authMode 切回 api_key / internal"
+      "优先回到 Legacy Auth workflow 处理 1 个 publish draft：先把 workflow draft endpoint 切回 api_key/internal 并保存"
     );
     expect(html).toContain('/workflows/workflow-legacy-auth');
   });
@@ -390,69 +378,49 @@ describe("WorkflowsPage", () => {
           }
         ],
         workflows: [
-          {
+          buildLegacyAuthGovernanceWorkflowFixture({
             workflow_id: "workflow-legacy-auth",
             workflow_name: "Legacy Auth workflow",
             binding_count: 3,
             draft_candidate_count: 1,
             published_blocker_count: 1,
             offline_inventory_count: 1
-          },
-          {
+          }),
+          buildLegacyAuthGovernanceWorkflowFixture({
             workflow_id: "workflow-replacement",
             workflow_name: "Replacement Ready workflow",
             binding_count: 1,
             draft_candidate_count: 0,
             published_blocker_count: 1,
             offline_inventory_count: 0
-          }
+          })
         ],
         buckets: {
           draft_candidates: [
-            {
-              workflow_id: "workflow-legacy-auth",
-              workflow_name: "Legacy Auth workflow",
+            buildLegacyAuthGovernanceBindingFixture({
               binding_id: "binding-draft",
-              endpoint_id: "native-chat",
-              endpoint_name: "Native Chat",
               workflow_version: "1.2.0",
-              lifecycle_status: "draft",
-              auth_mode: "token"
-            }
+              lifecycle_status: "draft"
+            })
           ],
           published_blockers: [
-            {
-              workflow_id: "workflow-legacy-auth",
-              workflow_name: "Legacy Auth workflow",
+            buildLegacyAuthGovernanceBindingFixture({
               binding_id: "binding-live",
-              endpoint_id: "native-chat",
-              endpoint_name: "Native Chat",
-              workflow_version: "1.1.0",
-              lifecycle_status: "published",
-              auth_mode: "token"
-            },
-            {
+              workflow_version: "1.1.0"
+            }),
+            buildLegacyAuthGovernanceBindingFixture({
               workflow_id: "workflow-replacement",
               workflow_name: "Replacement Ready workflow",
               binding_id: "binding-live-2",
-              endpoint_id: "native-chat",
-              endpoint_name: "Native Chat",
-              workflow_version: "1.0.0",
-              lifecycle_status: "published",
-              auth_mode: "token"
-            }
+              workflow_version: "1.0.0"
+            })
           ],
           offline_inventory: [
-            {
-              workflow_id: "workflow-legacy-auth",
-              workflow_name: "Legacy Auth workflow",
+            buildLegacyAuthGovernanceBindingFixture({
               binding_id: "binding-offline",
-              endpoint_id: "native-chat",
-              endpoint_name: "Native Chat",
               workflow_version: "1.0.0",
-              lifecycle_status: "offline",
-              auth_mode: "token"
-            }
+              lifecycle_status: "offline"
+            })
           ]
         }
       })

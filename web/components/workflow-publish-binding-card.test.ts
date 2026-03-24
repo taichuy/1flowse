@@ -7,6 +7,7 @@ import type { CallbackWaitingAutomationCheck, SandboxReadinessCheck } from "@/li
 import type { WorkflowDetail } from "@/lib/get-workflows";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import { buildLegacyPublishUnsupportedAuthIssueFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 vi.mock("@/components/workflow-publish-activity-panel", () => ({
   WorkflowPublishActivityPanel: ({ legacyAuthExportHint }: { legacyAuthExportHint?: string | null }) =>
@@ -276,15 +277,7 @@ describe("WorkflowPublishBindingCard", () => {
   it("renders publish governance blockers from binding issues", () => {
     const binding = buildBinding();
     binding.auth_mode = "token";
-    binding.issues = [
-      {
-        category: "unsupported_auth_mode",
-        message: "Legacy token auth is still persisted on this binding.",
-        field: "auth_mode",
-        remediation: "Switch back to api_key or internal before publishing.",
-        blocks_lifecycle_publish: true
-      }
-    ];
+    binding.issues = [buildLegacyPublishUnsupportedAuthIssueFixture()];
 
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishBindingCard, {
@@ -306,7 +299,7 @@ describe("WorkflowPublishBindingCard", () => {
     expect(html).toContain("Publish governance blocker");
     expect(html).toContain("Legacy token auth is still persisted on this binding.");
     expect(html).toContain(
-      "当前 draft endpoint Public Search (endpoint-1) 已切回 authMode=api_key（当前 workflow 1.0.0）；先打开 draft 卡片确认并保存，再发布新版 binding，把历史 1.0.0 legacy binding 保持 offline。"
+      "当前 draft endpoint Public Search (endpoint-1) 已切回 authMode=api_key（当前 workflow 1.0.0）。Publish auth contract：supported api_key / internal；legacy token。 现在可以直接从这张 draft 卡片补发 replacement binding，把历史 1.0.0 legacy binding 保持 offline。"
     );
     expect(html).toContain("Open current draft endpoint");
     expect(html).toContain("#workflow-editor-publish-endpoint-endpoint-1");
