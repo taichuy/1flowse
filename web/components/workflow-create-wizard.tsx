@@ -506,6 +506,11 @@ export function WorkflowCreateWizard({
                   <p className="section-copy starter-summary-copy">
                     {selectedStarterNextStepSurface.detail}
                   </p>
+                  {selectedStarterNextStepSurface.primaryResourceSummary ? (
+                    <p className="binding-meta">
+                      {`Primary governed starter: ${selectedStarterNextStepSurface.primaryResourceSummary}.`}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               {shouldRenderSelectedStarterSourceGovernance && selectedStarterSourcePresenter ? (
@@ -736,6 +741,7 @@ type WorkspaceStarterSourceGovernanceSurface = ReturnType<
 type WorkflowCreateStarterNextStepSurface = {
   label: string;
   detail: string;
+  primaryResourceSummary?: string | null;
   href: string | null;
   hrefLabel: string | null;
 };
@@ -762,7 +768,7 @@ function toWorkspaceStarterSourceGovernanceTemplate(
     id: starter.id,
     name: starter.name,
     archived: starter.archived,
-    created_from_workflow_id: starter.createdFromWorkflowId,
+    created_from_workflow_id: starter.createdFromWorkflowId ?? governance?.sourceWorkflowId ?? null,
     source_governance: governance
       ? {
           kind: governance.kind,
@@ -804,6 +810,7 @@ function buildWorkflowCreateStarterNextStepSurface({
     return {
       label: recommendedNextStep.label,
       detail: recommendedNextStep.detail,
+      primaryResourceSummary: recommendedNextStep.primaryResourceSummary,
       href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
       hrefLabel: shouldLinkToStarterGovernance
         ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
@@ -815,6 +822,7 @@ function buildWorkflowCreateStarterNextStepSurface({
     return {
       label: presenter.actionStatusLabel ?? presenter.statusLabel,
       detail: presenter.followUp ?? presenter.summary,
+      primaryResourceSummary: sourceGovernanceSurface?.recommendedNextStep?.primaryResourceSummary,
       href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
       hrefLabel: shouldLinkToStarterGovernance
         ? surfaceCopy.sourceGovernanceFollowUpLinkLabel
@@ -825,6 +833,7 @@ function buildWorkflowCreateStarterNextStepSurface({
   return {
     label: surfaceCopy.createWorkflowRecommendedNextStepLabel,
     detail: starter.recommendedNextStep,
+    primaryResourceSummary: null,
     href: shouldLinkToStarterGovernance ? starterGovernanceHref : null,
     hrefLabel: shouldLinkToStarterGovernance
       ? surfaceCopy.sourceGovernanceFollowUpLinkLabel

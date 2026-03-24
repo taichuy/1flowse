@@ -22,8 +22,8 @@ import {
   buildWorkspaceStarterBulkPreviewFocusTargets,
   buildWorkspaceStarterBulkResultFocusTargets,
   buildWorkspaceStarterSourceGovernancePrimaryFollowUp,
+  buildWorkspaceStarterSourceGovernanceSurface,
   buildWorkspaceStarterSourceGovernanceFocusTargets,
-  buildWorkspaceStarterSourceGovernancePresenter,
   formatTimestamp,
   type ArchiveFilter,
   type SourceGovernanceFilter,
@@ -276,7 +276,15 @@ export function WorkspaceStarterTemplateListPanel({
         <div className="starter-grid">
           {filteredTemplates.map((template) => {
             const toolGovernance = templateToolGovernanceById.get(template.id);
-            const sourceGovernance = buildWorkspaceStarterSourceGovernancePresenter(template);
+            const sourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
+              template,
+              createWorkflowHref
+            });
+            const sourceGovernance = sourceGovernanceSurface.presenter;
+            const recommendedNextStep = sourceGovernanceSurface.recommendedNextStep;
+            const shouldRenderStandaloneFollowUp =
+              Boolean(sourceGovernance.followUp) &&
+              sourceGovernance.followUp !== recommendedNextStep?.detail;
 
             return (
               <button
@@ -315,7 +323,23 @@ export function WorkspaceStarterTemplateListPanel({
                 <p className="binding-meta">
                   <strong>Source:</strong> {sourceGovernance.summary}
                 </p>
-                {sourceGovernance.followUp && sourceGovernance.needsAttention ? (
+                {recommendedNextStep ? (
+                  <div className="entry-card compact-card">
+                    <div className="payload-card-header">
+                      <span className="status-meta">Recommended next step</span>
+                      <span className="event-chip">{recommendedNextStep.label}</span>
+                    </div>
+                    <p className="section-copy starter-summary-copy">{recommendedNextStep.detail}</p>
+                    {recommendedNextStep.primaryResourceSummary ? (
+                      <p className="binding-meta">
+                        {`Primary governed starter: ${recommendedNextStep.primaryResourceSummary}.`}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : sourceGovernance.followUp && sourceGovernance.needsAttention ? (
+                  <p className="binding-meta">{sourceGovernance.followUp}</p>
+                ) : null}
+                {shouldRenderStandaloneFollowUp ? (
                   <p className="binding-meta">{sourceGovernance.followUp}</p>
                 ) : null}
                 <div className="starter-meta-row">

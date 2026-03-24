@@ -115,6 +115,10 @@ describe("WorkspaceStarterTemplateListPanel", () => {
     expect(html).toContain("建议 refresh");
     expect(html).toContain("source 0.3.0");
     expect(html).toContain("Source:</strong> 当前 starter 与来源 workflow 版本不一致。");
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain(
+      "Primary governed starter: Drifted starter · 建议 refresh · source 0.3.0."
+    );
     expect(html).toContain("先打开 source diff，再决定 refresh 还是 rebase。");
     expect(html).toContain("全部治理状态");
     expect(html).toContain("Primary follow-up");

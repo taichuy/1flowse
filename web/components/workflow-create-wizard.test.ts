@@ -165,6 +165,9 @@ describe("WorkflowCreateWizard", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("建议 refresh");
     expect(html).toContain("来源 workflow 0.2.0 相比模板快照 0.1.0 已有漂移。");
+    expect(html).toContain(
+      "Primary governed starter: Governed Workspace Starter · 建议 refresh · source 0.2.0."
+    );
     expect(html).toContain("管理这个 workspace starter");
     expect(html).not.toContain("下一步：");
     expect(html.match(/Recommended next step/g)?.length).toBe(1);
@@ -272,6 +275,9 @@ describe("WorkflowCreateWizard", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("优先 refresh，再进入画布创建草稿。");
     expect(html).toContain("来源 workflow 已推进到 0.4.0。");
+    expect(html).toContain(
+      "Primary governed starter: Fallback Workspace Starter · 建议 refresh · source 0.4.0."
+    );
     expect(html).toContain("管理这个 workspace starter");
     expect(html).not.toContain("下一步：");
   });
