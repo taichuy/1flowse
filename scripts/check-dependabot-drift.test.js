@@ -9,6 +9,7 @@ const {
   buildWorkspaceManifestCoverage,
   buildWorkspaceManifestInventory,
   evaluateAlert,
+  parseDependencySubmissionReport,
 } = require('./check-dependabot-drift.js');
 
 function createFixtureRepo() {
@@ -288,4 +289,89 @@ test('buildMarkdownSummary highlights local roots missing from dependency graph'
   assert.match(summary, /本地 manifest roots：`3`/);
   assert.match(summary, /graph coverage 缺口：`web`（pnpm）/);
   assert.match(summary, /需 dependency submission 才能纳入 graph：`api`（uv）；`services\/compat-dify`（uv）/);
+});
+
+test('parseDependencySubmissionReport extracts repository blocker evidence', () => {
+  const report = `## Dependency snapshot submission
+
+- repository blocker: GitHub \`Dependency graph\` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。
+
+- root: \`api\`
+  - status: \`blocked\`
+  - blocked reason: GitHub 仓库当前未开启 \`Dependency graph\`；请先到 \`Settings -> Security & analysis\` 启用 \`Dependency graph\`。
+- root: \`web\`
+  - status: \`blocked\`
+  - warning: 当前 pnpm lockfile-only snapshot 仍未暴露 development roots。`;
+
+  const parsed = parseDependencySubmissionReport(report);
+
+  assert.match(parsed.repositoryBlocker, /Dependency graph/);
+  assert.deepEqual(
+    parsed.blockedRoots.map((item) => ({
+      rootLabel: item.rootLabel,
+      status: item.status,
+      blockedReason: item.blockedReason,
+      warning: item.warning,
+    })),
+    [
+      {
+        rootLabel: 'api',
+        status: 'blocked',
+        blockedReason:
+          'GitHub 仓库当前未开启 `Dependency graph`；请先到 `Settings -> Security & analysis` 启用 `Dependency graph`。',
+        warning: null,
+      },
+      {
+        rootLabel: 'web',
+        status: 'blocked',
+        blockedReason: null,
+        warning: '当前 pnpm lockfile-only snapshot 仍未暴露 development roots。',
+      },
+    ],
+  );
+});
+
+test('buildMarkdownSummary surfaces latest dependency submission blocker evidence', () => {
+  const inventory = buildWorkspaceManifestInventory([
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ]);
+  const manifestCoverage = buildWorkspaceManifestCoverage(inventory, []);
+  const summary = buildMarkdownSummary({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: 'taichuy_dev',
+    manifestNodes: [],
+    workspaceManifestInventory: inventory,
+    manifestCoverage,
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    dependencySubmissionEvidence: {
+      workflowConfigured: true,
+      runAvailable: true,
+      runId: 23504251554,
+      status: 'completed',
+      conclusion: 'success',
+      event: 'push',
+      htmlUrl: 'https://github.com/taichuy/7flows/actions/runs/23504251554',
+      report: {
+        repositoryBlocker:
+          'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+        blockedRoots: [
+          { rootLabel: 'api', status: 'blocked' },
+          { rootLabel: 'web', status: 'blocked' },
+        ],
+      },
+    },
+  });
+
+  assert.match(summary, /Latest dependency submission evidence/);
+  assert.match(summary, /23504251554/);
+  assert.match(summary, /repository blocker: GitHub `Dependency graph` 未开启/);
+  assert.match(summary, /blocked roots: `api`、`web`/);
 });

@@ -25,6 +25,8 @@ node scripts/check-dependabot-drift.js
 
 如果在 GitHub Actions 中运行，脚本还会把结论写入 `GITHUB_STEP_SUMMARY`，方便在 workflow 页面直接查看证据。
 
+如果仓库内已存在 `.github/workflows/dependency-graph-submission.yml`，脚本还会顺带查询默认分支最新一条 `Dependency Graph Submission` run，并尽量把它的 `dependency-submission-report` artifact 摘要串进当前结论里，避免 `GitHub Security Drift` 只停留在“manifests 还是 0”而说不清到底是平台设置阻塞还是刷新延迟。
+
 ## 结果解释
 
 - `exit 0`
@@ -52,8 +54,9 @@ node scripts/check-dependabot-drift.js
 - 仓库提供 `.github/workflows/github-security-drift.yml`，会在以下时机自动复验：
   - 手动 `workflow_dispatch`
   - 每日定时 `schedule`
-  - `taichuy_dev` 上任意受脚本监控的 manifest（`**/package.json`、`**/pnpm-lock.yaml`、`**/pyproject.toml`、`**/uv.lock`）或 `scripts/check-dependabot-drift.js` 的 push
+  - `taichuy_dev` 上任意受脚本监控的 manifest（`**/package.json`、`**/pnpm-lock.yaml`、`**/pyproject.toml`、`**/uv.lock`）、`scripts/check-dependabot-drift.js`、`scripts/submit-dependency-snapshots.js` 或两条相关 workflow 的 push
 - 工作流会上传 `dependabot-drift-report` artifact，并把摘要写入 workflow summary。
+- 当默认分支仍存在 `graph coverage` 缺口时，summary / artifact 现在会额外串上最新 `Dependency Graph Submission` run 证据；如果 submission workflow 已明确给出 `repository blocker`，优先按仓库设置阻塞处理，而不是继续怀疑本地 inventory 或 snapshot 覆盖面。
 - 工作流会优先读取仓库 secret `DEPENDABOT_ALERTS_TOKEN`；如果未配置，则退回 `github.token`，并在无法读取 Dependabot alerts 时输出降级 warning，而不是把整条自动复验链直接打断。
 - exit code 解释与本地一致：
   - `0`：没有 open alert

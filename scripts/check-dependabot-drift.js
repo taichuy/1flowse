@@ -1,9 +1,12 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { URLSearchParams } = require('url');
 const { execFileSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
 const trackedManifestFiles = new Set(['package.json', 'pnpm-lock.yaml', 'pyproject.toml', 'uv.lock']);
+const dependencySubmissionWorkflowPath = '.github/workflows/dependency-graph-submission.yml';
 const dependencyGraphSupportByEcosystem = {
   pnpm: 'native',
   uv: 'dependency_submission',
@@ -100,6 +103,164 @@ function normalizePythonPackageName(packageName) {
 
 function normalizeManifestPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/');
+}
+
+function parseDependencySubmissionReport(reportText) {
+  const lines = String(reportText || '').split(/\r?\n/);
+  const blockedRoots = [];
+  let repositoryBlocker = null;
+  let currentRoot = null;
+
+  function flushCurrentRoot() {
+    if (currentRoot) {
+      blockedRoots.push(currentRoot);
+      currentRoot = null;
+    }
+  }
+
+  lines.forEach((line) => {
+    const repositoryBlockerMatch = line.match(/^- repository blocker: (.+)$/);
+    if (repositoryBlockerMatch) {
+      repositoryBlocker = repositoryBlockerMatch[1];
+      return;
+    }
+
+    const rootMatch = line.match(/^- root: `(.+)`$/);
+    if (rootMatch) {
+      flushCurrentRoot();
+      currentRoot = {
+        rootLabel: rootMatch[1],
+        status: null,
+        blockedReason: null,
+        warning: null,
+      };
+      return;
+    }
+
+    if (!currentRoot) {
+      return;
+    }
+
+    const statusMatch = line.match(/^  - status: `(.+)`$/);
+    if (statusMatch) {
+      currentRoot.status = statusMatch[1];
+      return;
+    }
+
+    const blockedReasonMatch = line.match(/^  - blocked reason: (.+)$/);
+    if (blockedReasonMatch) {
+      currentRoot.blockedReason = blockedReasonMatch[1];
+      return;
+    }
+
+    const warningMatch = line.match(/^  - warning: (.+)$/);
+    if (warningMatch) {
+      currentRoot.warning = warningMatch[1];
+    }
+  });
+
+  flushCurrentRoot();
+
+  return {
+    repositoryBlocker,
+    blockedRoots,
+  };
+}
+
+function fetchLatestDependencySubmissionEvidence(repository, defaultBranch) {
+  if (!fileExists(repoRoot, dependencySubmissionWorkflowPath)) {
+    return null;
+  }
+
+  try {
+    const params = new URLSearchParams({ per_page: '1' });
+    if (defaultBranch) {
+      params.set('branch', defaultBranch);
+    }
+
+    const workflowRunsResponse = JSON.parse(
+      run('gh', [
+        'api',
+        `repos/${repository.owner}/${repository.repo}/actions/workflows/dependency-graph-submission.yml/runs?${params.toString()}`,
+      ]),
+    );
+    const latestRun = workflowRunsResponse.workflow_runs?.[0];
+
+    if (!latestRun) {
+      return {
+        workflowConfigured: true,
+        runAvailable: false,
+      };
+    }
+
+    const evidence = {
+      workflowConfigured: true,
+      runAvailable: true,
+      runId: latestRun.id,
+      status: latestRun.status,
+      conclusion: latestRun.conclusion,
+      event: latestRun.event,
+      htmlUrl: latestRun.html_url,
+      createdAt: latestRun.created_at,
+    };
+
+    const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dependency-submission-report-'));
+    try {
+      run('gh', ['run', 'download', String(latestRun.id), '-n', 'dependency-submission-report', '-D', artifactDir]);
+      const reportPath = path.join(artifactDir, 'dependency-submission.txt');
+      if (fs.existsSync(reportPath)) {
+        evidence.report = parseDependencySubmissionReport(fs.readFileSync(reportPath, 'utf8'));
+      }
+    } catch (error) {
+      evidence.reportDownloadError = error.message;
+    } finally {
+      fs.rmSync(artifactDir, { recursive: true, force: true });
+    }
+
+    return evidence;
+  } catch (error) {
+    return {
+      workflowConfigured: true,
+      fetchError: error.message,
+    };
+  }
+}
+
+function buildDependencySubmissionEvidenceLines(evidence) {
+  if (!evidence) {
+    return [];
+  }
+
+  if (evidence.fetchError) {
+    return [
+      `- 已检测到 \`${dependencySubmissionWorkflowPath}\`，但当前无法读取最新 workflow 证据：${evidence.fetchError}`,
+    ];
+  }
+
+  if (!evidence.runAvailable) {
+    return [`- 已检测到 \`${dependencySubmissionWorkflowPath}\`，但默认分支上还没有可引用的 workflow run。`];
+  }
+
+  const lines = [
+    `- latest run: [#${evidence.runId}](${evidence.htmlUrl})（status: \`${evidence.status || 'unknown'}\`，conclusion: \`${evidence.conclusion || 'unknown'}\`，event: \`${evidence.event || 'unknown'}\`）`,
+  ];
+
+  if (evidence.report?.repositoryBlocker) {
+    lines.push(`- repository blocker: ${evidence.report.repositoryBlocker}`);
+  }
+
+  const blockedRoots = evidence.report?.blockedRoots?.filter((item) => item.status === 'blocked') || [];
+  if (blockedRoots.length > 0) {
+    lines.push(
+      `- blocked roots: ${blockedRoots.map((item) => `\`${item.rootLabel}\``).join('、')}`,
+    );
+  }
+
+  if (evidence.reportDownloadError) {
+    lines.push(`- latest artifact unavailable: ${evidence.reportDownloadError}`);
+  }
+
+  return lines;
 }
 
 function collectTrackedFiles(baseRepoRoot = repoRoot) {
@@ -460,6 +621,7 @@ function buildMarkdownSummary({
   results,
   actionableAlerts,
   alertsUnavailable = false,
+  dependencySubmissionEvidence = null,
 }) {
   const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
     manifestCoverage,
@@ -511,6 +673,16 @@ function buildMarkdownSummary({
     );
   }
 
+  const dependencySubmissionEvidenceLines = buildDependencySubmissionEvidenceLines(
+    dependencySubmissionEvidence,
+  );
+  if (dependencySubmissionEvidenceLines.length > 0) {
+    lines.push('');
+    lines.push('### Latest dependency submission evidence');
+    lines.push('');
+    lines.push(...dependencySubmissionEvidenceLines);
+  }
+
   lines.push('');
   lines.push('### Dependabot open alerts');
 
@@ -546,6 +718,11 @@ function buildMarkdownSummary({
     if (dependencySubmissionRoots.length > 0) {
       lines.push('- `uv` roots 依赖显式 dependency submission workflow 进入 GitHub graph；若仍缺席，优先检查 `.github/workflows/dependency-graph-submission.yml` 是否成功提交 `uv.lock` snapshots。');
     }
+    if (dependencySubmissionEvidence?.report?.repositoryBlocker) {
+      lines.push(`- 最新 \`Dependency Graph Submission\` run 已明确给出 repository blocker：${dependencySubmissionEvidence.report.repositoryBlocker}`);
+    } else if (dependencySubmissionEvidence?.runAvailable) {
+      lines.push('- 仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
+    }
     return lines.join('\n');
   }
 
@@ -561,6 +738,11 @@ function buildMarkdownSummary({
     }
     if (dependencySubmissionRoots.length > 0) {
       lines.push('- `uv` roots 通过显式 dependency submission workflow 进入 graph coverage 预期；若仍缺席，优先检查 `dependency-graph-submission.yml` 是否成功提交，而不是误判成管理员开关未开启。');
+    }
+    if (dependencySubmissionEvidence?.report?.repositoryBlocker) {
+      lines.push(`- 最新 \`Dependency Graph Submission\` run 已明确把 manifests 缺席归类为仓库设置阻塞：${dependencySubmissionEvidence.report.repositoryBlocker}`);
+    } else if (dependencySubmissionEvidence?.runAvailable) {
+      lines.push('- 仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
     }
     lines.push('- 建议保留证据，不要直接 dismiss alert；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
     return lines.join('\n');
@@ -626,6 +808,15 @@ function main() {
   const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
     manifestCoverage,
   );
+  const shouldFetchDependencySubmissionEvidence =
+    missingNativeGraphRoots.length > 0 ||
+    dependencySubmissionRoots.some((item) => !item.graphVisible);
+  const dependencySubmissionEvidence = shouldFetchDependencySubmissionEvidence
+    ? fetchLatestDependencySubmissionEvidence(
+        repository,
+        repositoryData.data.repository.defaultBranchRef?.name,
+      )
+    : null;
 
   printSection('仓库事实');
   console.log(`repo: ${repository.owner}/${repository.repo}`);
@@ -644,6 +835,14 @@ function main() {
     console.log(`- ${node.filename} | dependencies=${node.dependenciesCount} | parseable=${node.parseable}`);
   });
 
+  const dependencySubmissionEvidenceLines = buildDependencySubmissionEvidenceLines(
+    dependencySubmissionEvidence,
+  );
+  if (dependencySubmissionEvidenceLines.length > 0) {
+    printSection('Dependency submission evidence');
+    dependencySubmissionEvidenceLines.forEach((line) => console.log(line));
+  }
+
   printSection('Dependabot open alerts');
   if (alertsUnavailable) {
     console.log('当前 token 无法读取 Dependabot alerts（HTTP 403: Resource not accessible by integration）。');
@@ -658,6 +857,7 @@ function main() {
       results,
       actionableAlerts,
       alertsUnavailable,
+      dependencySubmissionEvidence,
     });
     printSection('结论');
     console.log('当前 workflow token 只能继续复验 dependencyGraphManifests 等仓库事实，无法直接比较 Dependabot open alerts。');
@@ -667,6 +867,11 @@ function main() {
     }
     if (dependencySubmissionRoots.length > 0) {
       console.log(`这些 roots 当前需要额外 dependency submission 才会进入 graph coverage: ${dependencySubmissionRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
+    }
+    if (dependencySubmissionEvidence?.report?.repositoryBlocker) {
+      console.log(`最新 Dependency Graph Submission run 已明确给出 repository blocker: ${dependencySubmissionEvidence.report.repositoryBlocker}`);
+    } else if (dependencySubmissionEvidence?.runAvailable) {
+      console.log('仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
     }
     console.log('若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 DEPENDABOT_ALERTS_TOKEN。');
     process.exit(3);
@@ -684,6 +889,7 @@ function main() {
       results,
       actionableAlerts,
       alertsUnavailable,
+      dependencySubmissionEvidence,
     });
     process.exit(0);
   }
@@ -708,6 +914,11 @@ function main() {
     if (dependencySubmissionRoots.length > 0) {
       console.log(`这些 roots 当前需要额外 dependency submission 才会进入 graph coverage: ${dependencySubmissionRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
     }
+    if (dependencySubmissionEvidence?.report?.repositoryBlocker) {
+      console.log(`最新 Dependency Graph Submission run 已明确把 manifests 缺席归类为仓库设置阻塞: ${dependencySubmissionEvidence.report.repositoryBlocker}`);
+    } else if (dependencySubmissionEvidence?.runAvailable) {
+      console.log('仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
+    }
     console.log('建议保留证据，不要直接 dismiss 告警；先修复依赖图刷新链路，再等待 GitHub 自动关闭。');
     writeMarkdownSummary({
       repository,
@@ -719,6 +930,7 @@ function main() {
       results,
       actionableAlerts,
       alertsUnavailable,
+      dependencySubmissionEvidence,
     });
     process.exit(2);
   }
@@ -734,12 +946,14 @@ function main() {
     results,
     actionableAlerts,
     alertsUnavailable,
+    dependencySubmissionEvidence,
   });
   process.exit(1);
 }
 
 module.exports = {
   buildMarkdownSummary,
+  buildDependencySubmissionEvidenceLines,
   buildWorkspaceManifestCoverage,
   buildWorkspaceManifestInventory,
   collectPackageSpecifiers,
@@ -750,8 +964,10 @@ module.exports = {
   collectUvPackageVersions,
   compareVersions,
   evaluateAlert,
+  fetchLatestDependencySubmissionEvidence,
   normalizePythonPackageName,
   normalizeVersion,
+  parseDependencySubmissionReport,
   parsePythonDependencyName,
   resolveAlertEvaluationSource,
 };
