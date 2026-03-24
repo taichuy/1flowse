@@ -1,0 +1,38 @@
+name: Dependency Graph Submission
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '11 2 * * *'
+  push:
+    branches:
+      - taichuy_dev
+    paths:
+      - '**/package.json'
+      - '**/pnpm-lock.yaml'
+      - 'scripts/submit-dependency-snapshots.js'
+      - 'scripts/submit-dependency-snapshots.test.js'
+      - '.github/workflows/dependency-graph-submission.yml'
+
+jobs:
+  submit-pnpm-snapshots:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Submit pnpm dependency snapshots
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/submit-dependency-snapshots.js

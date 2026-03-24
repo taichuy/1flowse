@@ -43,6 +43,7 @@ node scripts/check-dependabot-drift.js
 3. 如果脚本显示 `dependencyGraphManifests` 为空，或 `graph coverage 缺口` 仍覆盖本地 manifest roots：
    - 到仓库 `Settings -> Security & analysis` 检查 `Dependency graph` 是否开启。
    - 如仓库策略允许，再检查 `Automatic dependency submission` 是否已配置并正常跑在默认分支。
+   - 再检查 `.github/workflows/dependency-graph-submission.yml` 是否已在默认分支成功提交 `web/pnpm-lock.yaml` 的手工 snapshot；该 workflow 只用 `github.token + contents:write` 和本地 `pnpm list --lockfile-only` 构建事实，不依赖第三方 action 或远程脚本。
    - 当前 `uv` roots 不再计入“原生 graph coverage 缺口”；如果后续确实希望 Python `uv` 目录也进入 GitHub dependency graph / alert drift 对照，应另行补 dependency submission API，而不是继续把它误判成管理员开关问题。
 4. 不要因为 UI 暂时没刷新就直接 dismiss alert；应先保留命令输出、锁文件事实和结论，再等待依赖图恢复或补管理员侧操作。
 
@@ -60,6 +61,15 @@ node scripts/check-dependabot-drift.js
   - `2`：已确认是平台状态漂移，工作流保留 warning 与证据，但不把本轮代码视为失败
 -  `3`：workflow token 无法读取 Dependabot alerts；工作流会继续保留 dependency graph 事实与 warning，但完整 drift 对比仍需 `DEPENDABOT_ALERTS_TOKEN` 或本地 `gh` 凭证。
 - 当管理员完成 `Security & analysis` 检查后，优先手动重跑该 workflow，再判断告警是否自动收口。
+
+## 显式 dependency submission
+
+- 仓库新增 `.github/workflows/dependency-graph-submission.yml`，会在 `workflow_dispatch`、每日定时和 `taichuy_dev` 上的 `package.json` / `pnpm-lock.yaml` 变更时执行。
+- 当前它使用 `scripts/submit-dependency-snapshots.js` 为所有 pnpm roots 提交手工 snapshot；按当前代码事实，实际命中的 root 是 `web`。
+- 该脚本直接调用 GitHub dependency submission REST API，提交 `web/pnpm-lock.yaml` 的 runtime resolved tree，并保留 `direct|indirect` 关系事实；这已经足以覆盖当前 `next` / `flatted` 这类 default branch runtime 告警主线。
+- 当前 `pnpm list --lockfile-only` 在本仓库下还不能稳定暴露 development roots，所以 workflow summary 会显式提示这仍是“先收口 runtime dependency graph 覆盖”的中间态，不要误以为 devDependencies 已全部进入 GitHub graph。
+- 这样做的目标不是替代 `github-security-drift` 的告警比对，而是把 `web` 的 dependency graph 覆盖从“依赖平台自动识别是否稳定”收口成“仓库自己显式提交一份最高优先级 runtime snapshot”。
+- 如果 workflow 成功但 `dependencyGraphManifests` 仍长期缺少 `web/pnpm-lock.yaml`，说明平台侧仍可能存在刷新延迟或权限异常，应优先保留该 workflow run 证据，再继续管理员侧排查。
 
 ## 当前仓库已验证的信号
 
