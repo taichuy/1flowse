@@ -302,26 +302,34 @@ describe("workbench entry surface copy", () => {
   it("keeps workflow editor starter save follow-up on the shared surface contract", () => {
     const surfaceCopy = buildWorkflowEditorStarterSaveSurfaceCopy({
       createWorkflowHref:
-        "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted",
+        "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1",
       workspaceStarterLibraryHref:
-        "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted",
-      hasScopedWorkspaceStarterFilters: true
+        "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1",
+      hasScopedWorkspaceStarterFilters: true,
+      savedStarterName: "Starter A",
+      recommendedNextStepDetail:
+        "带此 starter 回到创建页继续创建 workflow，并保留当前模板上下文。",
+      primaryResourceSummary: "Starter A · 已对齐 · source 0.1.0",
+      workspaceStarterLibraryLabel: "打开刚保存的 starter：Starter A",
+      createWorkflowLabel: "带此 starter 回到创建页"
     });
 
     expect(surfaceCopy.description).toContain("query scope");
+    expect(surfaceCopy.description).toContain("保留当前模板上下文");
     expect(surfaceCopy.nextStepTitle).toBe("Recommended next step");
+    expect(surfaceCopy.primaryResourceSummary).toBe("Starter A · 已对齐 · source 0.1.0");
     expect(surfaceCopy.nextStepLinks).toMatchObject({
       keys: ["workspaceStarterLibrary", "createWorkflow"],
       primaryKey: "workspaceStarterLibrary",
       variant: "inline"
     });
     expect(surfaceCopy.nextStepLinks.overrides?.workspaceStarterLibrary).toMatchObject({
-      href: "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted",
-      label: "回到治理页"
+      href: "/workspace-starters?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1",
+      label: "打开刚保存的 starter：Starter A"
     });
     expect(surfaceCopy.nextStepLinks.overrides?.createWorkflow).toMatchObject({
-      href: "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted",
-      label: "再新建一个 workflow"
+      href: "/workflows/new?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1",
+      label: "带此 starter 回到创建页"
     });
   });
 });

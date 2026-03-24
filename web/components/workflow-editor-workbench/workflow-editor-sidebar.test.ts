@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
+import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 
 Object.assign(globalThis, { React });
@@ -52,6 +53,51 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
       entry_key: "workflowLibrary",
       href: "/workflows?execution=sandbox",
       label: "Open workflow library"
+    }
+  };
+}
+
+function buildSavedWorkspaceStarter(): WorkspaceStarterTemplateItem {
+  return {
+    id: "workspace-starter-1",
+    workspace_id: "default",
+    name: "Starter A",
+    description: "Governed starter",
+    business_track: "应用新建编排",
+    default_workflow_name: "Demo workflow",
+    workflow_focus: "复用当前 workflow 草稿",
+    recommended_next_step: "带此 starter 回到创建页继续创建 workflow。",
+    tags: ["workspace starter"],
+    definition: {
+      nodes: [],
+      edges: [],
+      variables: [],
+      publish: []
+    },
+    created_from_workflow_id: "workflow-1",
+    created_from_workflow_version: "0.1.0",
+    archived: false,
+    created_at: "2026-03-25T07:30:00Z",
+    updated_at: "2026-03-25T07:30:00Z",
+    source_governance: {
+      kind: "synced",
+      status_label: "已对齐",
+      summary: "当前 starter 与来源 workflow 已对齐。",
+      source_workflow_id: "workflow-1",
+      source_workflow_name: "Demo workflow",
+      template_version: "0.1.0",
+      source_version: "0.1.0",
+      action_decision: {
+        recommended_action: "none",
+        status_label: "已对齐",
+        summary: "带此 starter 回到创建页继续创建 workflow，并保留当前模板上下文。",
+        can_refresh: false,
+        can_rebase: false,
+        fact_chips: ["source 0.1.0"]
+      },
+      outcome_explanation: {
+        follow_up: "带此 starter 回到创建页继续创建 workflow，并保留当前模板上下文。"
+      }
     }
   };
 }
@@ -260,6 +306,7 @@ describe("WorkflowEditorSidebar", () => {
         message: "已保存 workspace starter：Starter A。",
         messageTone: "success",
         messageKind: "workspace_starter_saved",
+        savedWorkspaceStarter: buildSavedWorkspaceStarter(),
         persistBlockerSummary: null,
         persistBlockers: [],
         executionPreflightMessage: null,
@@ -290,13 +337,14 @@ describe("WorkflowEditorSidebar", () => {
 
     expect(html).toContain("Recommended next step");
     expect(html).toContain("query scope");
-    expect(html).toContain("回到治理页");
-    expect(html).toContain("再新建一个 workflow");
+    expect(html).toContain("Primary governed starter: Starter A · 已对齐 · source 0.1.0.");
+    expect(html).toContain("打开刚保存的 starter：Starter A");
+    expect(html).toContain("带此 starter 回到创建页");
     expect(html).toContain(
-      'href="/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted"'
+      'href="/workspace-starters?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1"'
     );
     expect(html).toContain(
-      'href="/workflows/new?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted"'
+      'href="/workflows/new?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1"'
     );
   });
 });

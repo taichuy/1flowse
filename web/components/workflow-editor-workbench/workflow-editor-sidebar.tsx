@@ -7,6 +7,7 @@ import type {
   WorkflowLibrarySourceLane,
   WorkflowNodeCatalogItem
 } from "@/lib/get-workflow-library";
+import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type {
@@ -18,7 +19,9 @@ import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
 import {
@@ -31,6 +34,7 @@ import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-bloc
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import { WorkflowRunOverlayPanel } from "@/components/workflow-run-overlay-panel";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
+import { buildWorkspaceStarterSourceGovernanceSurface } from "@/components/workspace-starter-library/shared";
 
 import {
   buildWorkflowPersistBlockerRecommendedNextStep,
@@ -51,6 +55,7 @@ type WorkflowEditorSidebarProps = {
   message: string | null;
   messageTone: WorkflowEditorMessageTone;
   messageKind?: WorkflowEditorMessageKind;
+  savedWorkspaceStarter?: WorkspaceStarterTemplateItem | null;
   persistBlockerSummary: string | null;
   persistBlockers: WorkflowPersistBlocker[];
   persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
@@ -94,6 +99,7 @@ export function WorkflowEditorSidebar({
   message,
   messageTone,
   messageKind = "default",
+  savedWorkspaceStarter = null,
   persistBlockerSummary,
   persistBlockers,
   persistBlockerRecommendedNextStep = null,
@@ -140,12 +146,46 @@ export function WorkflowEditorSidebar({
     (persistBlockers.length > 0
       ? "选择一个待修正项或点击保存，编辑器会跳到首个阻断点。"
       : "选择节点或连线后，这里会显示编辑器反馈。");
+  const savedWorkspaceStarterLibraryHref = savedWorkspaceStarter
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState({
+          ...workspaceStarterGovernanceQueryScope,
+          selectedTemplateId: savedWorkspaceStarter.id
+        })
+      : mergeWorkspaceStarterSelectionIntoHref(workspaceStarterLibraryHref, savedWorkspaceStarter.id)
+    : workspaceStarterLibraryHref;
+  const savedWorkspaceStarterCreateWorkflowHref = savedWorkspaceStarter
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+          ...workspaceStarterGovernanceQueryScope,
+          selectedTemplateId: savedWorkspaceStarter.id
+        })
+      : mergeWorkspaceStarterSelectionIntoHref(createWorkflowHref, savedWorkspaceStarter.id)
+    : createWorkflowHref;
+  const savedWorkspaceStarterGovernanceSurface = savedWorkspaceStarter
+    ? buildWorkspaceStarterSourceGovernanceSurface({
+        template: savedWorkspaceStarter,
+        createWorkflowHref: savedWorkspaceStarterCreateWorkflowHref
+      })
+    : null;
+  const savedWorkspaceStarterNextStep =
+    savedWorkspaceStarterGovernanceSurface?.recommendedNextStep ?? null;
   const starterSaveSurfaceCopy =
     messageKind === "workspace_starter_saved"
       ? buildWorkflowEditorStarterSaveSurfaceCopy({
-          createWorkflowHref,
-          workspaceStarterLibraryHref,
-          hasScopedWorkspaceStarterFilters
+          createWorkflowHref: savedWorkspaceStarterCreateWorkflowHref,
+          workspaceStarterLibraryHref: savedWorkspaceStarterLibraryHref,
+          hasScopedWorkspaceStarterFilters,
+          savedStarterName: savedWorkspaceStarter?.name ?? null,
+          recommendedNextStepDetail: savedWorkspaceStarterNextStep?.detail ?? null,
+          primaryResourceSummary: savedWorkspaceStarterNextStep?.primaryResourceSummary ?? null,
+          workspaceStarterLibraryLabel: savedWorkspaceStarter
+            ? `打开刚保存的 starter：${savedWorkspaceStarter.name}`
+            : null,
+          createWorkflowLabel:
+            savedWorkspaceStarterNextStep?.entryKey === "createWorkflow"
+              ? savedWorkspaceStarterNextStep.entryOverride?.label ?? savedWorkspaceStarterNextStep.label
+              : null
         })
       : null;
 
@@ -322,6 +362,11 @@ export function WorkflowEditorSidebar({
           <div className="binding-field compact-stack">
             <span className="binding-label">{starterSaveSurfaceCopy.nextStepTitle}</span>
             <small className="section-copy">{starterSaveSurfaceCopy.description}</small>
+            {starterSaveSurfaceCopy.primaryResourceSummary ? (
+              <small className="binding-meta">
+                {`Primary governed starter: ${starterSaveSurfaceCopy.primaryResourceSummary}.`}
+              </small>
+            ) : null}
             <WorkbenchEntryLinks {...starterSaveSurfaceCopy.nextStepLinks} />
           </div>
         ) : null}
@@ -378,4 +423,18 @@ export function WorkflowEditorSidebar({
       />
     </aside>
   );
+}
+
+function mergeWorkspaceStarterSelectionIntoHref(href: string, starterId: string) {
+  const [pathWithQuery, hash = ""] = href.split("#");
+  const [pathname, query = ""] = pathWithQuery.split("?");
+  const searchParams = new URLSearchParams(query);
+
+  searchParams.set("starter", starterId);
+  searchParams.sort();
+
+  const resolvedQuery = searchParams.toString();
+  const resolvedPath = resolvedQuery ? `${pathname}?${resolvedQuery}` : pathname;
+
+  return hash ? `${resolvedPath}#${hash}` : resolvedPath;
 }

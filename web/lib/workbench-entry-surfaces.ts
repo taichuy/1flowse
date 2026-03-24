@@ -89,6 +89,7 @@ export type WorkflowEditorStarterSaveSurfaceCopy = {
   description: string;
   nextStepTitle: string;
   nextStepLinks: WorkbenchEntryLinksConfig;
+  primaryResourceSummary?: string | null;
 };
 
 export type WorkflowPublishPanelSurfaceCopy = {
@@ -426,11 +427,21 @@ export function buildWorkflowEditorHeroSurfaceCopy({
 export function buildWorkflowEditorStarterSaveSurfaceCopy({
   createWorkflowHref,
   workspaceStarterLibraryHref,
-  hasScopedWorkspaceStarterFilters = false
+  hasScopedWorkspaceStarterFilters = false,
+  savedStarterName = null,
+  recommendedNextStepDetail = null,
+  primaryResourceSummary = null,
+  workspaceStarterLibraryLabel = null,
+  createWorkflowLabel = null
 }: {
   createWorkflowHref: string;
   workspaceStarterLibraryHref: string;
   hasScopedWorkspaceStarterFilters?: boolean;
+  savedStarterName?: string | null;
+  recommendedNextStepDetail?: string | null;
+  primaryResourceSummary?: string | null;
+  workspaceStarterLibraryLabel?: string | null;
+  createWorkflowLabel?: string | null;
 }): WorkflowEditorStarterSaveSurfaceCopy {
   const heroSurfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
     createWorkflowHref,
@@ -440,31 +451,51 @@ export function buildWorkflowEditorStarterSaveSurfaceCopy({
   const createWizardSurfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
     starterGovernanceHref: workspaceStarterLibraryHref
   });
+  const normalizedSavedStarterName = savedStarterName?.trim() || null;
+  const normalizedRecommendedNextStepDetail = recommendedNextStepDetail?.trim() || null;
+  const normalizedPrimaryResourceSummary = primaryResourceSummary?.trim() || null;
 
   return {
-    description: hasScopedWorkspaceStarterFilters
-      ? "这个保存结果继续复用当前 workspace starter 治理页的 query scope；优先回到治理页确认来源 follow-up，再在同一范围内创建 workflow 验证它已可复用。"
-      : "这个保存结果已经写回 workspace starter library；创建页会直接复用最新 starter 元数据，不再要求作者手动回填治理上下文。",
+    description: [
+      hasScopedWorkspaceStarterFilters
+        ? "这个保存结果继续复用当前 workspace starter 治理页的 query scope。"
+        : normalizedSavedStarterName
+        ? `${normalizedSavedStarterName} 已经写回 workspace starter library；作者不需要再从成功提示里倒推刚保存的是哪一个 starter。`
+        : "这个保存结果已经写回 workspace starter library；创建页会直接复用最新 starter 元数据，不再要求作者手动回填治理上下文。",
+      normalizedRecommendedNextStepDetail ??
+        (hasScopedWorkspaceStarterFilters
+          ? "优先回到治理页确认来源 follow-up，再在同一范围内创建 workflow 验证它已可复用。"
+          : null)
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" "),
     nextStepTitle: createWizardSurfaceCopy.recommendedNextStepTitle,
     nextStepLinks: {
       keys: ["workspaceStarterLibrary", "createWorkflow"],
       overrides: {
         workspaceStarterLibrary: {
           href: workspaceStarterLibraryHref,
-          label: hasScopedWorkspaceStarterFilters
-            ? heroSurfaceCopy.scopedGovernanceBackLinkLabel
-            : createWizardSurfaceCopy.sourceGovernanceFollowUpLinkLabel
+          label:
+            workspaceStarterLibraryLabel?.trim() ||
+            (hasScopedWorkspaceStarterFilters
+              ? heroSurfaceCopy.scopedGovernanceBackLinkLabel
+              : createWizardSurfaceCopy.sourceGovernanceFollowUpLinkLabel)
         },
         createWorkflow: {
           href: createWorkflowHref,
-          label: hasScopedWorkspaceStarterFilters
-            ? heroSurfaceCopy.scopedGovernanceCreateWorkflowLabel
-            : createWizardSurfaceCopy.createWorkflowRecommendedNextStepLabel
+          label:
+            createWorkflowLabel?.trim() ||
+            (hasScopedWorkspaceStarterFilters
+              ? heroSurfaceCopy.scopedGovernanceCreateWorkflowLabel
+              : createWizardSurfaceCopy.createWorkflowRecommendedNextStepLabel)
         }
       },
       primaryKey: "workspaceStarterLibrary",
       variant: "inline"
-    }
+    },
+    ...(normalizedPrimaryResourceSummary
+      ? { primaryResourceSummary: normalizedPrimaryResourceSummary }
+      : {})
   };
 }
 

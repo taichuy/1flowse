@@ -19,6 +19,7 @@ import type {
   WorkflowDetail,
   WorkflowListItem
 } from "@/lib/get-workflows";
+import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
@@ -90,6 +91,7 @@ export function WorkflowEditorWorkbench({
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<WorkflowEditorMessageTone>("idle");
   const [messageKind, setMessageKind] = useState<WorkflowEditorMessageKind>("default");
+  const [savedWorkspaceStarter, setSavedWorkspaceStarter] = useState<WorkspaceStarterTemplateItem | null>(null);
   const persistedDefinitionSignature = useMemo(
     () => JSON.stringify(workflow.definition),
     [workflow.definition]
@@ -179,6 +181,7 @@ export function WorkflowEditorWorkbench({
     setMessage,
     setMessageTone,
     setMessageKind,
+    setSavedWorkspaceStarter,
     focusNode: graph.focusNode,
     setValidationFocusItem
   });
@@ -192,6 +195,7 @@ export function WorkflowEditorWorkbench({
       return;
     }
 
+    setSavedWorkspaceStarter(null);
     setMessageKind("default");
   }, [message, messageKind, messageTone]);
 
@@ -272,6 +276,7 @@ export function WorkflowEditorWorkbench({
             message={message}
             messageTone={messageTone}
             messageKind={messageKind}
+            savedWorkspaceStarter={savedWorkspaceStarter}
             persistBlockerSummary={persistBlockerSummary}
             persistBlockers={validation.persistBlockers}
             persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}

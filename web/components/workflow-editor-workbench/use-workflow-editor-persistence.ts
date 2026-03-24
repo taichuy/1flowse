@@ -13,6 +13,7 @@ import {
 } from "@/lib/get-workflows";
 import {
   createWorkspaceStarterTemplate,
+  type WorkspaceStarterTemplateItem,
   WorkspaceStarterValidationError
 } from "@/lib/get-workspace-starters";
 import { buildWorkspaceStarterPayload } from "@/lib/workspace-starter-payload";
@@ -56,6 +57,7 @@ type UseWorkflowEditorPersistenceOptions = {
   setMessage: Dispatch<SetStateAction<string | null>>;
   setMessageTone: Dispatch<SetStateAction<WorkflowEditorMessageTone>>;
   setMessageKind: Dispatch<SetStateAction<WorkflowEditorMessageKind>>;
+  setSavedWorkspaceStarter: Dispatch<SetStateAction<WorkspaceStarterTemplateItem | null>>;
   focusNode: (nodeId: string | null) => void;
   setValidationFocusItem: Dispatch<SetStateAction<WorkflowValidationNavigatorItem | null>>;
 };
@@ -78,6 +80,7 @@ export function useWorkflowEditorPersistence({
   setMessage,
   setMessageTone,
   setMessageKind,
+  setSavedWorkspaceStarter,
   focusNode,
   setValidationFocusItem
 }: UseWorkflowEditorPersistenceOptions) {
@@ -98,6 +101,7 @@ export function useWorkflowEditorPersistence({
   const handleSave = () => {
     if (persistBlockedMessage) {
       setMessageKind("default");
+      setSavedWorkspaceStarter(null);
       applyValidationFocus(pickWorkflowValidationRemediationItem(validationNavigatorItems));
       setMessage(persistBlockedMessage);
       setMessageTone("error");
@@ -106,6 +110,7 @@ export function useWorkflowEditorPersistence({
 
     startSavingTransition(async () => {
       setMessageKind("default");
+      setSavedWorkspaceStarter(null);
       setMessage("正在保存 workflow definition...");
       setMessageTone("idle");
 
@@ -123,6 +128,7 @@ export function useWorkflowEditorPersistence({
         setServerValidationIssues(body?.definition_issues ?? []);
         setServerValidationIssueSourceSignature(JSON.stringify(body?.definition ?? preflight.definition));
         setMessageKind("default");
+        setSavedWorkspaceStarter(null);
         setMessage(`已保存 workflow，当前版本 ${body?.version ?? workflowVersion}。`);
         setMessageTone("success");
       } catch (error) {
@@ -149,6 +155,7 @@ export function useWorkflowEditorPersistence({
             ? formatSandboxReadinessPreflightHint(sandboxReadiness)
             : null;
         setMessageKind("default");
+        setSavedWorkspaceStarter(null);
         setMessage(
           error instanceof WorkflowDefinitionPreflightError
             ? [error.message, preflightIssueSummary, sandboxReadinessPreflightHint]
@@ -168,6 +175,7 @@ export function useWorkflowEditorPersistence({
 
     const remediation = buildWorkflowValidationRemediation(item, sandboxReadiness);
     setMessageKind("default");
+    setSavedWorkspaceStarter(null);
     setMessage(`已定位到 ${remediation.title}。${remediation.suggestion}`);
     setMessageTone("error");
   };
@@ -175,6 +183,7 @@ export function useWorkflowEditorPersistence({
   const handleSaveAsWorkspaceStarter = () => {
     if (persistBlockedMessage) {
       setMessageKind("default");
+      setSavedWorkspaceStarter(null);
       applyValidationFocus(pickWorkflowValidationRemediationItem(validationNavigatorItems));
       setMessage(persistBlockedMessage);
       setMessageTone("error");
@@ -192,12 +201,14 @@ export function useWorkflowEditorPersistence({
 
     startSaveStarterTransition(async () => {
       setMessageKind("default");
+      setSavedWorkspaceStarter(null);
       setMessage(buildWorkspaceStarterMutationPendingMessage("create"));
       setMessageTone("idle");
 
       try {
         const body = await createWorkspaceStarterTemplate(starterPayload);
         setMessageKind("workspace_starter_saved");
+        setSavedWorkspaceStarter(body);
         setMessage(
           buildWorkspaceStarterMutationSuccessMessage({
             action: "create",
@@ -211,6 +222,7 @@ export function useWorkflowEditorPersistence({
             ? summarizeWorkspaceStarterValidationIssues(error.issues)
             : null;
         setMessageKind("default");
+        setSavedWorkspaceStarter(null);
         setMessage(
           error instanceof WorkspaceStarterValidationError
             ? validationSummary
