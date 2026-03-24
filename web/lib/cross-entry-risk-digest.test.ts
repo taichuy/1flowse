@@ -47,6 +47,17 @@ function buildFocusedBacklogEntry(): SensitiveAccessInboxEntry {
       description: "production secret",
       sensitivity_level: "L3",
       source: "credential",
+      credential_governance: {
+        credential_id: "credential-prod-secret",
+        credential_name: "Prod secret",
+        credential_type: "api_key",
+        credential_status: "active",
+        sensitivity_level: "L3",
+        sensitive_resource_id: "resource-prod-secret",
+        sensitive_resource_label: "Prod secret",
+        credential_ref: "cred://prod/secret",
+        summary: "Prod secret · L3 治理 · 生效中"
+      },
       created_at: "2026-03-22T09:00:00Z",
       updated_at: "2026-03-22T09:30:00Z"
     }),
@@ -135,6 +146,22 @@ describe("buildCrossEntryRiskDigest", () => {
         failed_notification_count: 1,
         affected_run_count: 2,
         affected_workflow_count: 1,
+        primary_resource: buildSensitiveAccessResourceFixture({
+          label: "OpenAI Prod Key",
+          sensitivity_level: "L3",
+          source: "credential",
+          credential_governance: {
+            credential_id: "credential-openai-prod",
+            credential_name: "OpenAI Prod Key",
+            credential_type: "api_key",
+            credential_status: "active",
+            sensitivity_level: "L3",
+            sensitive_resource_id: "resource-1",
+            sensitive_resource_label: "OpenAI Prod Key",
+            credential_ref: "cred://openai/prod",
+            summary: "OpenAI Prod Key · L3 治理 · 生效中"
+          }
+        }),
         primary_blocker_kind: "pending_approval",
         blockers: [
           buildSensitiveAccessBlockerFixture({
@@ -209,6 +236,9 @@ describe("buildCrossEntryRiskDigest", () => {
         label: "open inbox slice"
       }
     });
+    expect(digest.focusAreas.find((area) => area.id === "operator")?.summary).toContain(
+      "OpenAI Prod Key · L3 治理 · 生效中"
+    );
     expect(digest.focusAreas.find((area) => area.id === "operator")?.summary).toContain(
       "2 个审批待处理"
     );
@@ -285,6 +315,9 @@ describe("buildCrossEntryRiskDigest", () => {
     });
     expect(digest.focusAreas.find((area) => area.id === "operator")?.nextStep).toContain(
       "Prod secret"
+    );
+    expect(digest.focusAreas.find((area) => area.id === "operator")?.nextStep).toContain(
+      "L3 治理"
     );
     expect(digest.focusAreas.find((area) => area.id === "operator")?.nextStep).toContain(
       operatorSurfaceCopy.focusedTraceSliceLinkLabel

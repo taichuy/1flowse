@@ -252,6 +252,7 @@ export type SensitiveAccessInboxSummary = {
   failed_notification_count: number;
   affected_run_count?: number;
   affected_workflow_count?: number;
+  primary_resource?: SensitiveResourceItem | null;
   primary_blocker_kind?:
     | "pending_approval"
     | "waiting_resume"
@@ -634,6 +635,52 @@ function buildInboxSummary(
   entries: SensitiveAccessInboxEntry[]
 ): SensitiveAccessInboxSummary {
   const notifications = entries.flatMap((entry) => entry.notifications);
+
+  const hasPendingWaitingApproval = (entry: SensitiveAccessInboxEntry) =>
+    entry.ticket.status === "pending" && entry.ticket.waiting_status === "waiting";
+
+  const countFailedNotifications = (entry: SensitiveAccessInboxEntry) =>
+    entry.notifications.filter((item) => item.status === "failed").length;
+
+  const hasRetriableNotification = (entry: SensitiveAccessInboxEntry) =>
+    entry.notifications.some((item) => item.status !== "delivered");
+
+  const resolveActivityAt = (entry: SensitiveAccessInboxEntry) => {
+    const timestamps = [entry.ticket.created_at, entry.request?.created_at ?? null];
+    entry.notifications.forEach((item) => timestamps.push(item.created_at));
+    return Math.max(
+      ...timestamps
+        .filter((value): value is string => Boolean(value))
+        .map((value) => new Date(value).getTime())
+    );
+  };
+
+  const primaryEntry = entries
+    .filter((entry) => entry.resource)
+    .sort((left, right) => {
+      const leftKey = [
+        hasPendingWaitingApproval(left) ? 1 : 0,
+        countFailedNotifications(left),
+        hasRetriableNotification(left) ? 1 : 0,
+        resolveActivityAt(left)
+      ];
+      const rightKey = [
+        hasPendingWaitingApproval(right) ? 1 : 0,
+        countFailedNotifications(right),
+        hasRetriableNotification(right) ? 1 : 0,
+        resolveActivityAt(right)
+      ];
+
+      for (let index = 0; index < leftKey.length; index += 1) {
+        const delta = rightKey[index]! - leftKey[index]!;
+        if (delta !== 0) {
+          return delta;
+        }
+      }
+
+      return 0;
+    })[0] ?? null;
+
   const collectImpactedScope = (
     scopedEntries: SensitiveAccessInboxEntry[]
   ): { runIds: Set<string>; workflowIds: Set<string> } => {
@@ -715,6 +762,7 @@ function buildInboxSummary(
     failed_notification_count: notifications.filter((item) => item.status === "failed").length,
     affected_run_count: runIds.size,
     affected_workflow_count: workflowIds.size,
+    primary_resource: primaryEntry?.resource ?? null,
     primary_blocker_kind: blockers[0]?.kind ?? null,
     blockers
   };

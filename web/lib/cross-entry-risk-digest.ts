@@ -5,6 +5,10 @@ import type {
   SensitiveAccessInboxSummary
 } from "@/lib/get-sensitive-access";
 import {
+  formatPrimaryGovernedResourceChineseDetail,
+  formatSensitiveResourceGovernanceSummary
+} from "@/lib/credential-governance";
+import {
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorInboxSliceLinkSurface,
   buildOperatorTraceSliceLinkSurface
@@ -302,19 +306,32 @@ function buildLegacyOperatorBlockers(
 }
 
 function buildOperatorBacklogNextStep(
-  primaryBacklog: ReturnType<typeof resolveSensitiveAccessPrimaryBacklog>
+  primaryBacklog: ReturnType<typeof resolveSensitiveAccessPrimaryBacklog>,
+  primaryResourceSummary?: string | null
 ) {
+  const primaryResourcePrefix = primaryResourceSummary ? `${primaryResourceSummary} 的` : null;
+
   switch (primaryBacklog?.kind) {
     case "pending_approval":
-      return "优先先收掉 pending approval ticket 对应的审批票据，再回到具体 run。";
+      return primaryResourcePrefix
+        ? `优先先收掉 ${primaryResourcePrefix}审批票据，再回到具体 run。`
+        : "优先先收掉 pending approval ticket 对应的审批票据，再回到具体 run。";
     case "waiting_resume":
-      return "优先回到 inbox 处理 waiting resume，再确认 run 是否真正继续推进。";
+      return primaryResourcePrefix
+        ? `优先回到 inbox 处理 ${primaryResourcePrefix}恢复等待，再确认 run 是否真正继续推进。`
+        : "优先回到 inbox 处理 waiting resume，再确认 run 是否真正继续推进。";
     case "failed_notification":
-      return "优先重试失败通知或更换目标，再回到具体 run 继续排障。";
+      return primaryResourcePrefix
+        ? `优先重试 ${primaryResourcePrefix}失败通知或更换目标，再回到具体 run 继续排障。`
+        : "优先重试失败通知或更换目标，再回到具体 run 继续排障。";
     case "pending_notification":
-      return "先确认通知是否送达，再回到具体 run 判断是否还有真实阻塞。";
+      return primaryResourcePrefix
+        ? `先确认 ${primaryResourcePrefix}通知是否送达，再回到具体 run 判断是否还有真实阻塞。`
+        : "先确认通知是否送达，再回到具体 run 判断是否还有真实阻塞。";
     default:
-      return "优先在 sensitive access inbox 收掉 pending approval、waiting resume 和失败通知，再回到具体 run。";
+      return primaryResourcePrefix
+        ? `优先在 sensitive access inbox 处理 ${primaryResourcePrefix}审批、恢复等待和失败通知，再回到具体 run。`
+        : "优先在 sensitive access inbox 收掉 pending approval、waiting resume 和失败通知，再回到具体 run。";
   }
 }
 
@@ -323,7 +340,10 @@ function buildFocusedTraceBacklogNextStep(
   backlogKind: NonNullable<ReturnType<typeof resolveSensitiveAccessPrimaryBacklog>>["kind"],
   focusedTraceSliceLabel: string
 ) {
-  const resourceLabel = entry.resource?.label ?? entry.request?.resource_id ?? entry.ticket.id;
+  const resourceLabel =
+    formatSensitiveResourceGovernanceSummary(entry.resource ?? null) ??
+    entry.request?.resource_id ??
+    entry.ticket.id;
 
   switch (backlogKind) {
     case "pending_approval":
@@ -497,6 +517,13 @@ export function buildCrossEntryRiskDigest({
     blockers: operatorBlockers,
     channelAttentionCount: channelAttention.attentionCount
   });
+  const primaryOperatorEntry = operatorPrimaryBacklog
+    ? findSensitiveAccessPrimaryBacklogEntry(sensitiveAccessEntries, operatorPrimaryBacklog.kind)
+    : null;
+  const primaryOperatorResource = sensitiveAccessSummary.primary_resource ?? primaryOperatorEntry?.resource ?? null;
+  const primaryOperatorResourceSummary = formatSensitiveResourceGovernanceSummary(
+    primaryOperatorResource
+  );
   const operatorFocusedTraceSurface = buildFocusedTraceFollowUpSurface(
     operatorPrimaryBacklog,
     sensitiveAccessEntries
@@ -506,6 +533,7 @@ export function buildCrossEntryRiskDigest({
   });
   const operatorSummary =
     joinNonEmpty([
+      formatPrimaryGovernedResourceChineseDetail(primaryOperatorResource),
       formatImpactedScopeSummary(sensitiveAccessSummary)
         ? `当前 operator backlog 影响 ${formatImpactedScopeSummary(sensitiveAccessSummary)}。`
         : null,
@@ -573,7 +601,7 @@ export function buildCrossEntryRiskDigest({
       summary: operatorSummary,
       nextStep:
         operatorFocusedTraceSurface?.nextStep ??
-        buildOperatorBacklogNextStep(operatorPrimaryBacklog),
+        buildOperatorBacklogNextStep(operatorPrimaryBacklog, primaryOperatorResourceSummary),
       entryKey: operatorFocusedTraceSurface?.entryKey ?? "operatorInbox",
       entryOverride:
         operatorFocusedTraceSurface?.entryOverride ??

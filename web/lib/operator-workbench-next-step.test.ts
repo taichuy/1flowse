@@ -47,7 +47,23 @@ describe("operator workbench next step presenters", () => {
         ticket_count: 2,
         pending_ticket_count: 2,
         affected_run_count: 2,
-        affected_workflow_count: 1
+        affected_workflow_count: 1,
+        primary_resource: buildSensitiveAccessResourceFixture({
+          label: "OpenAI Prod Key",
+          sensitivity_level: "L3",
+          source: "credential",
+          credential_governance: {
+            credential_id: "credential-openai-prod",
+            credential_name: "OpenAI Prod Key",
+            credential_type: "api_key",
+            credential_status: "active",
+            sensitivity_level: "L3",
+            sensitive_resource_id: "resource-1",
+            sensitive_resource_label: "OpenAI Prod Key",
+            credential_ref: "cred://openai/prod",
+            summary: "OpenAI Prod Key · L3 治理 · 生效中"
+          }
+        })
       }),
       currentHref: "/runs"
     });
@@ -56,6 +72,9 @@ describe("operator workbench next step presenters", () => {
       label: "pending approval ticket",
       href: "/sensitive-access?status=pending"
     });
+    expect(recommendedNextStep?.detail).toContain(
+      "OpenAI Prod Key · L3 治理 · 生效中"
+    );
   });
 
   it("re-homes callback recovery self-links to the latest waiting run", () => {
@@ -123,6 +142,20 @@ describe("operator workbench next step presenters", () => {
             created_at: "2026-03-23T00:00:00Z"
           }),
           resource: buildSensitiveAccessResourceFixture({
+            label: "OpenAI Prod Key",
+            sensitivity_level: "L3",
+            source: "credential",
+            credential_governance: {
+              credential_id: "credential-openai-prod",
+              credential_name: "OpenAI Prod Key",
+              credential_type: "api_key",
+              credential_status: "active",
+              sensitivity_level: "L3",
+              sensitive_resource_id: "resource-1",
+              sensitive_resource_label: "OpenAI Prod Key",
+              credential_ref: "cred://openai/prod",
+              summary: "OpenAI Prod Key · L3 治理 · 生效中"
+            },
             created_at: "2026-03-23T00:00:00Z",
             updated_at: "2026-03-23T00:00:00Z"
           })
@@ -144,6 +177,9 @@ describe("operator workbench next step presenters", () => {
       label: "approval blocker",
       href: "/sensitive-access?status=pending&waiting_status=waiting&run_id=run-1&node_run_id=node-run-1&access_request_id=request-1&approval_ticket_id=ticket-1"
     });
+    expect(recommendedNextStep?.detail).toContain(
+      "OpenAI Prod Key · L3 治理 · 生效中"
+    );
   });
 
   it("falls back to run detail when the current inbox page already matches the exact ticket slice", () => {

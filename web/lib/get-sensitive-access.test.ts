@@ -286,7 +286,18 @@ describe("getSensitiveAccessInboxSnapshot", () => {
           failed_ticket_count: 0,
           pending_notification_count: 1,
           delivered_notification_count: 0,
-          failed_notification_count: 0
+          failed_notification_count: 0,
+          primary_resource: {
+            id: "resource-1",
+            label: "Inbox approval secret",
+            description: null,
+            sensitivity_level: "L3",
+            source: "published_secret",
+            metadata: {},
+            credential_governance: null,
+            created_at: "2026-03-19T09:00:00Z",
+            updated_at: "2026-03-19T09:00:00Z"
+          }
         }
       })
     } as Response);
@@ -316,6 +327,7 @@ describe("getSensitiveAccessInboxSnapshot", () => {
     expect(snapshot.summary.pending_notification_count).toBe(1);
     expect(snapshot.summary.affected_run_count).toBe(1);
     expect(snapshot.summary.affected_workflow_count).toBe(1);
+    expect(snapshot.summary.primary_resource?.id).toBe("resource-1");
     expect(snapshot.summary.primary_blocker_kind).toBe("pending_approval");
     expect(snapshot.summary.blockers).toEqual([
       {
@@ -466,6 +478,8 @@ describe("getSensitiveAccessInboxSnapshot", () => {
     expect(snapshot.entries[0]?.executionContext?.runId).toBe("run-current");
     expect(snapshot.entries[0]?.executionContext?.focusNode.node_id).toBe("current-node");
     expect(snapshot.entries[0]?.executionContext?.focusNode.node_run_id).toBe("node-run-current");
+    expect(snapshot.summary.primary_resource?.id).toBe("resource-1");
+    expect(snapshot.summary.primary_resource?.label).toBe("Remote search capability");
     expect(snapshot.entries[0]?.executionContext?.focusExplanation?.primary_signal).toBe(
       "current execution focus"
     );

@@ -272,6 +272,7 @@ export function buildSensitiveAccessSummaryFixture(
     failed_notification_count: 0,
     affected_run_count: 0,
     affected_workflow_count: 0,
+    primary_resource: null,
     primary_blocker_kind: null,
     blockers
   };

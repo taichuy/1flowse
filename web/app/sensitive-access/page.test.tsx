@@ -14,6 +14,8 @@ import {
   buildLegacyAuthGovernanceWorkflowFixture
 } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 import {
+  buildSensitiveAccessExecutionContextFixture,
+  buildSensitiveAccessExecutionFocusNodeFixture,
   buildSensitiveAccessInboxEntryFixture,
   buildSensitiveAccessInboxSnapshotFixture,
   buildSensitiveAccessRequestFixture,
@@ -144,6 +146,90 @@ describe("SensitiveAccessInboxPage", () => {
     expect(html).toContain(
       '/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-1&amp;node_run_id=node-run-1&amp;access_request_id=request-1&amp;approval_ticket_id=ticket-1'
     );
+  });
+
+  it("projects the primary operator blocker to a focused trace slice in the cross-entry digest", async () => {
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshotFixture({
+        summary: {
+          ticket_count: 1,
+          pending_ticket_count: 1,
+          waiting_ticket_count: 1,
+          primary_resource: buildSensitiveAccessResourceFixture({
+            label: "OpenAI Prod Key",
+            sensitivity_level: "L3",
+            source: "credential",
+            credential_governance: {
+              credential_id: "credential-openai-prod",
+              credential_name: "OpenAI Prod Key",
+              credential_type: "api_key",
+              credential_status: "active",
+              sensitivity_level: "L3",
+              sensitive_resource_id: "resource-1",
+              sensitive_resource_label: "OpenAI Prod Key",
+              credential_ref: "cred://openai/prod",
+              summary: "OpenAI Prod Key · L3 治理 · 生效中"
+            }
+          })
+        },
+        entries: [
+          buildSensitiveAccessInboxEntryFixture({
+            ticket: buildSensitiveAccessTicketFixture({
+              run_id: "run-sensitive-focus",
+              node_run_id: "node-sensitive-entry",
+              created_at: "2026-03-24T08:00:00Z"
+            }),
+            request: buildSensitiveAccessRequestFixture({
+              run_id: "run-sensitive-focus",
+              node_run_id: "node-sensitive-entry",
+              resource_id: "resource-1",
+              created_at: "2026-03-24T08:00:00Z"
+            }),
+            resource: buildSensitiveAccessResourceFixture({
+              label: "OpenAI Prod Key",
+              sensitivity_level: "L3",
+              source: "credential",
+              credential_governance: {
+                credential_id: "credential-openai-prod",
+                credential_name: "OpenAI Prod Key",
+                credential_type: "api_key",
+                credential_status: "active",
+                sensitivity_level: "L3",
+                sensitive_resource_id: "resource-1",
+                sensitive_resource_label: "OpenAI Prod Key",
+                credential_ref: "cred://openai/prod",
+                summary: "OpenAI Prod Key · L3 治理 · 生效中"
+              },
+              created_at: "2026-03-24T08:00:00Z",
+              updated_at: "2026-03-24T08:00:00Z"
+            }),
+            executionContext: buildSensitiveAccessExecutionContextFixture({
+              runId: "run-sensitive-focus",
+              focusNode: buildSensitiveAccessExecutionFocusNodeFixture({
+                node_run_id: "node-sensitive-focus",
+                node_id: "approval-node",
+                node_name: "Approval Gate"
+              }),
+              focusMatchesEntry: false,
+              entryNodeRunId: "node-sensitive-entry"
+            })
+          })
+        ]
+      })
+    );
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+
+    const html = renderToStaticMarkup(
+      await SensitiveAccessInboxPage({
+        searchParams: Promise.resolve({})
+      })
+    );
+
+    expect(html).toContain("jump to focused trace slice");
+    expect(html).toContain(
+      '/runs/run-sensitive-focus?node_run_id=node-sensitive-focus#run-diagnostics-execution-timeline'
+    );
+    expect(html).toContain("OpenAI Prod Key · L3 治理 · 生效中");
   });
 
   it("surfaces workflow legacy auth handoff alongside the inbox backlog", async () => {

@@ -7,6 +7,7 @@ import type {
   SensitiveAccessInboxEntry,
   SensitiveAccessInboxSummary
 } from "@/lib/get-sensitive-access";
+import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import {
   buildOperatorInboxSliceCandidate,
   buildOperatorRecommendedNextStep,
@@ -121,16 +122,30 @@ function buildRunLibraryBacklogCandidate(
     return null;
   }
 
+  const primaryResourceSummary = formatSensitiveResourceGovernanceSummary(
+    summary.primary_resource ?? null
+  );
+
   const detail =
     backlog.kind === "pending_approval"
-      ? `当前 ${backlog.count} 条 pending approval ticket 仍在 inbox；优先处理审批，再回到 run diagnostics 确认 waiting 是否恢复。`
+      ? primaryResourceSummary
+        ? `当前 ${primaryResourceSummary} 的审批票据仍是 operator backlog 首要阻断；优先处理审批，再回到 run diagnostics 确认 waiting 是否恢复。`
+        : `当前 ${backlog.count} 条 pending approval ticket 仍在 inbox；优先处理审批，再回到 run diagnostics 确认 waiting 是否恢复。`
       : backlog.kind === "waiting_resume"
-        ? `当前 ${backlog.count} 条 waiting resume 仍在 inbox；先处理恢复链路，再回到 run diagnostics 观察 callback 进度。`
+        ? primaryResourceSummary
+          ? `当前 ${primaryResourceSummary} 仍停在 waiting resume；先处理恢复链路，再回到 run diagnostics 观察 callback 进度。`
+          : `当前 ${backlog.count} 条 waiting resume 仍在 inbox；先处理恢复链路，再回到 run diagnostics 观察 callback 进度。`
         : backlog.kind === "failed_notification"
-          ? `当前 ${backlog.count} 条失败通知仍卡在 operator backlog；优先重试通知，再回到 run diagnostics 继续排障。`
+          ? primaryResourceSummary
+            ? `当前 ${primaryResourceSummary} 的通知仍失败；优先重试通知，再回到 run diagnostics 继续排障。`
+            : `当前 ${backlog.count} 条失败通知仍卡在 operator backlog；优先重试通知，再回到 run diagnostics 继续排障。`
           : backlog.kind === "pending_notification"
-            ? `当前 ${backlog.count} 条 pending notification 仍待送达；先确认通知是否真正送出，再回到 run diagnostics 判断是否还要人工介入。`
-            : `当前 ${backlog.count} 条 operator backlog 仍未收口；优先打开 inbox slice 继续处理。`;
+            ? primaryResourceSummary
+              ? `当前 ${primaryResourceSummary} 的通知仍在排队；先确认通知是否真正送出，再回到 run diagnostics 判断是否还要人工介入。`
+              : `当前 ${backlog.count} 条 pending notification 仍待送达；先确认通知是否真正送出，再回到 run diagnostics 判断是否还要人工介入。`
+            : primaryResourceSummary
+              ? `当前 ${primaryResourceSummary} 仍在 operator backlog；优先打开 inbox slice 继续处理。`
+              : `当前 ${backlog.count} 条 operator backlog 仍未收口；优先打开 inbox slice 继续处理。`;
 
   return dropSelfHrefCandidate(
     buildOperatorInboxSliceCandidate({
@@ -203,7 +218,10 @@ function buildInboxEntryBacklogDetail(
   entry: SensitiveAccessInboxEntry,
   backlogKind: NonNullable<ReturnType<typeof resolveSensitiveAccessPrimaryBacklog>>["kind"]
 ) {
-  const resourceLabel = entry.resource?.label ?? entry.request?.resource_id ?? entry.ticket.id;
+  const resourceLabel =
+    formatSensitiveResourceGovernanceSummary(entry.resource ?? null) ??
+    entry.request?.resource_id ??
+    entry.ticket.id;
 
   switch (backlogKind) {
     case "pending_approval":
@@ -324,13 +342,18 @@ export function buildSensitiveAccessInboxRecommendedNextStep({
         currentHref
       })
     : null;
+  const summaryPrimaryResource = formatSensitiveResourceGovernanceSummary(
+    summary.primary_resource ?? null
+  );
   const summaryBacklogCandidate = backlog
     ? dropSelfHrefCandidate(
         buildOperatorInboxSliceCandidate({
           active: true,
           href: backlog.href,
           label: backlog.countLabel,
-          detail: `当前 ${backlog.count} 条 ${backlog.countLabel} 仍在 operator inbox；优先收掉这批 backlog，再回到 run 诊断或 workflow 列表继续排障。`,
+          detail: summaryPrimaryResource
+            ? `当前 ${summaryPrimaryResource} 仍是 operator inbox 的首要治理资源；优先收掉对应 backlog，再回到 run 诊断或 workflow 列表继续排障。`
+            : `当前 ${backlog.count} 条 ${backlog.countLabel} 仍在 operator inbox；优先收掉这批 backlog，再回到 run 诊断或 workflow 列表继续排障。`,
           fallbackDetail:
             "优先收掉当前 operator backlog，再回到 run 诊断或 workflow 列表继续排障。"
         }),

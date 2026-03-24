@@ -156,7 +156,8 @@ export default async function SensitiveAccessInboxPage({
     callbackWaitingAutomation: systemOverview.callback_waiting_automation,
     recentEvents: systemOverview.runtime_activity.recent_events,
     sensitiveAccessSummary: snapshot.summary,
-    channels: snapshot.channels
+    channels: snapshot.channels,
+    sensitiveAccessEntries: snapshot.entries
   });
   const currentInboxHref = buildSensitiveAccessInboxHref({
     status: filters.status,

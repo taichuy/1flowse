@@ -234,6 +234,7 @@ class SensitiveAccessInboxSummary(BaseModel):
     failed_notification_count: int = 0
     affected_run_count: int = 0
     affected_workflow_count: int = 0
+    primary_resource: SensitiveResourceItem | None = None
     primary_blocker_kind: SensitiveAccessInboxBlockerKind | None = None
     blockers: list[SensitiveAccessInboxBlockerSummary] = Field(default_factory=list)
 

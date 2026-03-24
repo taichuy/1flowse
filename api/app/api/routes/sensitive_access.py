@@ -400,6 +400,35 @@ def _build_sensitive_access_inbox_summary(
                 workflow_ids.add(workflow_id)
         return run_ids, workflow_ids
 
+    def has_pending_waiting_approval(entry: SensitiveAccessInboxEntryItem) -> bool:
+        return entry.ticket.status == "pending" and entry.ticket.waiting_status == "waiting"
+
+    def count_failed_notifications(entry: SensitiveAccessInboxEntryItem) -> int:
+        return sum(1 for item in entry.notifications if item.status == "failed")
+
+    def has_retriable_notification(entry: SensitiveAccessInboxEntryItem) -> bool:
+        return any(item.status != "delivered" for item in entry.notifications)
+
+    def resolve_activity_at(entry: SensitiveAccessInboxEntryItem):
+        timestamps = [entry.ticket.created_at]
+        if entry.request is not None:
+            timestamps.append(entry.request.created_at)
+        timestamps.extend(
+            item.created_at for item in entry.notifications if item.created_at is not None
+        )
+        return max(timestamps)
+
+    primary_entry = max(
+        (entry for entry in entries if entry.resource is not None),
+        key=lambda entry: (
+            1 if has_pending_waiting_approval(entry) else 0,
+            count_failed_notifications(entry),
+            1 if has_retriable_notification(entry) else 0,
+            resolve_activity_at(entry),
+        ),
+        default=None,
+    )
+
     affected_run_ids, affected_workflow_ids = collect_impacted_scope(entries)
     blocker_specs = (
         (
@@ -468,6 +497,7 @@ def _build_sensitive_access_inbox_summary(
         failed_notification_count=sum(1 for item in notifications if item.status == "failed"),
         affected_run_count=len(affected_run_ids),
         affected_workflow_count=len(affected_workflow_ids),
+        primary_resource=primary_entry.resource if primary_entry is not None else None,
         primary_blocker_kind=blockers[0].kind if blockers else None,
         blockers=blockers,
     )

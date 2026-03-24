@@ -76,3 +76,18 @@ export function formatSensitiveResourceGovernanceSummary(
     .filter((value): value is string => Boolean(value))
     .join(" · ");
 }
+
+export function formatPrimaryGovernedResourceEnglishDetail(
+  resource?: SensitiveResourceItem | null
+) {
+  const summary = formatSensitiveResourceGovernanceSummary(resource);
+  return summary ? `Primary governed resource: ${summary}.` : null;
+}
+
+export function formatPrimaryGovernedResourceChineseDetail(
+  resource?: SensitiveResourceItem | null,
+  prefix = "当前最该追踪的治理资源"
+) {
+  const summary = formatSensitiveResourceGovernanceSummary(resource);
+  return summary ? `${prefix}：${summary}。` : null;
+}

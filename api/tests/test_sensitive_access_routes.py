@@ -1927,6 +1927,17 @@ def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
         "failed_notification_count": 0,
         "affected_run_count": 1,
         "affected_workflow_count": 1,
+        "primary_resource": {
+            "id": resource_id,
+            "label": "Inbox approval secret",
+            "description": None,
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"endpoint_id": "pub-inbox-1"},
+            "credential_governance": None,
+            "created_at": body["summary"]["primary_resource"]["created_at"],
+            "updated_at": body["summary"]["primary_resource"]["updated_at"],
+        },
         "primary_blocker_kind": "pending_approval",
         "blockers": [
             {
