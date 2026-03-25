@@ -908,8 +908,8 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
   const renderedToolSummary =
     formatCatalogGapToolSummary(normalizedMissingToolIds) ?? "unknown tool";
   const detail = sourceWorkflowId
-    ? `当前 starter 仍引用目录里不存在的 tool：${renderedToolSummary}；先回源 workflow 补齐 tool binding，再回来继续复用或创建。`
-    : `当前 starter 仍引用目录里不存在的 tool：${renderedToolSummary}；先同步 workspace plugin catalog，或切换到仍可用的 starter。`;
+    ? `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先回源 workflow 补齐 binding，再回来继续复用或创建。`
+    : `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先同步 workspace plugin catalog，或切换到仍可用的 starter。`;
 
   const sourceWorkflowLink = sourceWorkflowId
     ? workspaceStarterGovernanceQueryScope

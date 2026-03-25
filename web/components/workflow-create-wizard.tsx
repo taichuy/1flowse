@@ -673,7 +673,7 @@ export function WorkflowCreateWizard({
                 <div className="binding-form">
                   <p className="binding-label">Catalog gap</p>
                   <p className="binding-meta">
-                    当前 starter 里的缺失 tool 会让创建动作在 API 校验阶段 fail-closed；先沿治理入口补齐 binding，
+                    当前 starter 里的 catalog gap 会让创建动作在 API 校验阶段 fail-closed；先沿治理入口补齐 binding，
                     再回到创建页继续推草稿。
                   </p>
                   <div className="starter-tag-row">
@@ -934,7 +934,7 @@ function buildWorkflowCreateStarterMissingToolGovernanceSurface({
     return {
       label: "catalog gap",
       detail:
-        `当前 starter 仍引用目录里不存在的 tool：${renderedToolSummary}；` +
+        `当前 starter 仍有 catalog gap（${renderedToolSummary}）；` +
         "如果现在创建，API 会直接拒绝该草稿。先同步 workspace plugin catalog，或切换到仍可用的 starter。",
       primaryResourceSummary:
         formatCatalogGapResourceSummary(starter.name, missingToolIds) ??
@@ -955,8 +955,8 @@ function buildWorkflowCreateStarterMissingToolGovernanceSurface({
   return {
     label: "catalog gap",
     detail:
-      `当前 starter 仍引用目录里不存在的 tool：${renderedToolSummary}；` +
-      "如果现在创建，API 会直接拒绝该草稿。先回源 workflow 补齐 tool binding，再回来继续创建。",
+      `当前 starter 仍有 catalog gap（${renderedToolSummary}）；` +
+      "如果现在创建，API 会直接拒绝该草稿。先回源 workflow 补齐 binding，再回来继续创建。",
     primaryResourceSummary:
       formatCatalogGapResourceSummary(starter.name, missingToolIds) ??
       `${starter.name} · catalog gap`,

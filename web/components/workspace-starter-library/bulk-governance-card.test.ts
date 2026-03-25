@@ -541,7 +541,7 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
         }
       ],
       outcome_explanation: {
-        primary_signal: "其中 1 个 starter 仍缺少 catalog tool 绑定。",
+        primary_signal: "其中 1 个 starter 仍有 catalog gap。",
         follow_up: "优先回到仍缺 catalog tool 的 starter 或其来源 workflow。"
       },
       follow_up_template_ids: ["starter-catalog-gap"]

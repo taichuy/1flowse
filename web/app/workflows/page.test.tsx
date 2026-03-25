@@ -225,7 +225,7 @@ describe("WorkflowsPage", () => {
     expect(html).toContain("跨 workflow catalog gap handoff");
     expect(html).toContain("只看 missing-tool workflow");
     expect(html).toContain(
-      "当前 workflow 仍引用目录里不存在的 tool：tool-missing；补齐 binding 后即可清空当前范围里的 missing-tool backlog。"
+      "当前 workflow 仍有 catalog gap（tool-missing）；补齐 binding 后即可清空当前范围里的 missing-tool backlog。"
     );
     expect(html).toContain("Sandbox execution chain");
     expect(html).toContain("Live sandbox readiness");
@@ -336,7 +336,7 @@ describe("WorkflowsPage", () => {
     expect(html).toContain('/sensitive-access?status=pending');
     expect(html).toContain("跨 workflow catalog gap handoff");
     expect(html).toContain(
-      "当前 workflow 仍引用目录里不存在的 tool：tool-missing；补齐 binding 后即可清空当前范围里的 missing-tool backlog。"
+      "当前 workflow 仍有 catalog gap（tool-missing）；补齐 binding 后即可清空当前范围里的 missing-tool backlog。"
     );
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
     expect(html).not.toContain("publish auth cleanup");
@@ -726,7 +726,7 @@ describe("WorkflowsPage", () => {
       "/workflows/new?needs_follow_up=true&amp;source_governance_kind=missing_source&amp;starter=starter-governed&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
     );
     expect(html.match(/Recommended next step/g)).toHaveLength(1);
-    expect(html).toContain("没有缺失 catalog tool");
+    expect(html).toContain("没有存在 catalog gap");
   });
 
   it("prioritizes missing-tool starter follow-up when the workflow library is empty", async () => {
@@ -774,7 +774,7 @@ describe("WorkflowsPage", () => {
       "Primary governed starter: Governed starter · catalog gap · native.catalog-gap · source 0.4.0."
     );
     expect(html).toContain(
-      "当前 starter 仍引用目录里不存在的 tool：native.catalog-gap；先回源 workflow 补齐 tool binding，再回来继续复用或创建。"
+      "当前 starter 仍有 catalog gap（native.catalog-gap）；先回源 workflow 补齐 binding，再回来继续复用或创建。"
     );
     expect(html).toContain("打开源 workflow");
     expect(html).toContain("/workflows/workflow-source-missing-tool");

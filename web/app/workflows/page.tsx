@@ -395,7 +395,7 @@ export default async function WorkflowsPage({
 
           <div className="event-type-strip">
             {summary.workflowsWithMissingTools.length === 0 ? (
-              <p className="empty-state compact">当前 workflow 列表里没有缺失 catalog tool 的条目。</p>
+              <p className="empty-state compact">当前 workflow 列表里没有存在 catalog gap 的条目。</p>
             ) : (
               summary.workflowsWithMissingTools.map((workflow) => (
                 <Link
@@ -551,7 +551,7 @@ function buildWorkflowLibraryRecommendedNextStep({
     return {
       label: "tool governance",
       detail:
-        `当前 ${summary.workflowMissingToolCount} 个 workflow 仍缺少 catalog tool 绑定；` +
+        `当前 ${summary.workflowMissingToolCount} 个 workflow 仍有 catalog gap；` +
         `优先回到 ${workflowMissingTools.name} 补齐 catalog gap（${primaryCatalogGapTools}），再继续清理其余条目。`,
       href: workflowLink.href,
       href_label: workflowLink.label

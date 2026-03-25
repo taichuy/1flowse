@@ -1207,7 +1207,7 @@ describe("workspace starter source action decision", () => {
         }
       ],
       outcome_explanation: {
-        primary_signal: "其中 1 个 starter 仍缺少 catalog tool 绑定。",
+        primary_signal: "其中 1 个 starter 仍有 catalog gap。",
         follow_up: "优先回到仍缺 catalog tool 的 starter 或其来源 workflow。"
       },
       follow_up_template_ids: ["starter-catalog-gap", "starter-name-only"]
@@ -1224,12 +1224,12 @@ describe("workspace starter source action decision", () => {
         }
       })
     ).toMatchObject({
-      primarySignal: "其中 1 个 starter 仍缺少 catalog tool 绑定。",
+      primarySignal: "其中 1 个 starter 仍有 catalog gap。",
       recommendedNextStep: {
         action: "review_result_receipt",
         label: "catalog gap",
         detail:
-          "当前 starter 仍引用目录里不存在的 tool：native.catalog-gap；先回源 workflow 补齐 tool binding，再回来继续复用或创建。",
+          "当前 starter 仍有 catalog gap（native.catalog-gap）；先回源 workflow 补齐 binding，再回来继续复用或创建。",
         primaryResourceSummary:
           "Catalog gap starter · catalog gap · native.catalog-gap · source 0.4.0",
         focusTemplateId: "starter-catalog-gap",

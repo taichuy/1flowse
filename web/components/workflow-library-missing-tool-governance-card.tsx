@@ -1,6 +1,11 @@
 import Link from "next/link";
 
 import type { WorkflowListItem } from "@/lib/get-workflows";
+import {
+  formatCatalogGapSummary,
+  formatCatalogGapToolSummary,
+  getWorkflowMissingToolIds
+} from "@/lib/workflow-definition-governance";
 
 type WorkflowLibraryMissingToolGovernanceCardProps = {
   workflows: WorkflowListItem[];
@@ -16,12 +21,12 @@ type MissingToolWorkflowEntry = {
 export function WorkflowLibraryMissingToolGovernanceCard({
   workflows,
   workflowDetailHrefsById,
-  workflowLibraryFilterHref,
+  workflowLibraryFilterHref
 }: WorkflowLibraryMissingToolGovernanceCardProps) {
   const entries = workflows
     .map<MissingToolWorkflowEntry>((workflow) => ({
       workflow,
-      missingToolIds: workflow.tool_governance?.missing_tool_ids ?? [],
+      missingToolIds: getWorkflowMissingToolIds(workflow)
     }))
     .filter((entry) => entry.missingToolIds.length > 0);
 
@@ -31,10 +36,10 @@ export function WorkflowLibraryMissingToolGovernanceCard({
 
   const totalMissingBindingCount = entries.reduce(
     (count, entry) => count + entry.missingToolIds.length,
-    0,
+    0
   );
   const uniqueMissingToolIds = Array.from(
-    new Set(entries.flatMap((entry) => entry.missingToolIds)),
+    new Set(entries.flatMap((entry) => entry.missingToolIds))
   );
   const primaryEntry = entries[0];
   const remainingWorkflowCount = Math.max(entries.length - 1, 0);
@@ -80,8 +85,7 @@ export function WorkflowLibraryMissingToolGovernanceCard({
         <article className="payload-card compact-card">
           <div className="payload-card-header">
             <span className="status-meta">
-              {primaryEntry.missingToolIds.length} missing binding
-              {primaryEntry.missingToolIds.length === 1 ? "" : "s"}
+              {formatCatalogGapSummary(primaryEntry.missingToolIds, 3) ?? "catalog gap"}
             </span>
             {workflowDetailHrefsById[primaryEntry.workflow.id] ? (
               <Link
@@ -118,8 +122,7 @@ export function WorkflowLibraryMissingToolGovernanceCard({
             <article className="payload-card compact-card" key={entry.workflow.id}>
               <div className="payload-card-header">
                 <span className="status-meta">
-                  {entry.missingToolIds.length} missing binding
-                  {entry.missingToolIds.length === 1 ? "" : "s"}
+                  {formatCatalogGapSummary(entry.missingToolIds, 3) ?? "catalog gap"}
                 </span>
                 {workflowHref ? (
                   <Link className="event-chip inbox-filter-link" href={workflowHref}>
@@ -156,40 +159,31 @@ export function WorkflowLibraryMissingToolGovernanceCard({
 
 function buildPrimaryFollowUpDetail(
   entry: MissingToolWorkflowEntry,
-  remainingWorkflowCount: number,
+  remainingWorkflowCount: number
 ) {
-  const missingToolCopy = formatMissingToolIds(entry.missingToolIds);
+  const missingToolCopy = formatCatalogGapToolSummary(entry.missingToolIds, 3) ?? "unknown tool";
 
   if (remainingWorkflowCount > 0) {
     return (
-      `当前 workflow 仍引用目录里不存在的 tool：${missingToolCopy}；` +
+      `当前 workflow 仍有 catalog gap（${missingToolCopy}）；` +
       `先回 editor 补齐 binding，再继续排查剩余 ${remainingWorkflowCount} 个 workflow。`
     );
   }
 
   return (
-    `当前 workflow 仍引用目录里不存在的 tool：${missingToolCopy}；` +
+    `当前 workflow 仍有 catalog gap（${missingToolCopy}）；` +
     "补齐 binding 后即可清空当前范围里的 missing-tool backlog。"
   );
 }
 
 function buildWorkflowHandoffDetail(entry: MissingToolWorkflowEntry) {
   const governedToolCount = entry.workflow.tool_governance?.governed_tool_count ?? 0;
+  const catalogGapSummary = formatCatalogGapSummary(entry.missingToolIds, 3) ?? "catalog gap";
 
   return (
     `${entry.workflow.version} · ${entry.workflow.status} · ${entry.workflow.node_count} nodes · ` +
-    `${governedToolCount} governed tools。 当前仍缺少 ${entry.missingToolIds.length} 个 catalog tool binding：` +
-    `${formatMissingToolIds(entry.missingToolIds)}。`
+    `${governedToolCount} governed tools。 当前 workflow 仍有 ${catalogGapSummary}。`
   );
-}
-
-function formatMissingToolIds(missingToolIds: string[]) {
-  const uniqueMissingToolIds = Array.from(new Set(missingToolIds));
-  if (uniqueMissingToolIds.length <= 3) {
-    return uniqueMissingToolIds.join("、");
-  }
-
-  return `${uniqueMissingToolIds.slice(0, 3).join("、")} 等 ${uniqueMissingToolIds.length} 个`;
 }
 
 function renderMissingToolChips(missingToolIds: string[]) {

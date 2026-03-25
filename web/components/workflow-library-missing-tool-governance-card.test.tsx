@@ -15,7 +15,7 @@ vi.mock("next/link", () => ({
 }));
 
 function buildWorkflow(
-  overrides: Partial<WorkflowListItem> = {},
+  overrides: Partial<WorkflowListItem> = {}
 ): WorkflowListItem {
   return {
     id: "workflow-1",
@@ -28,9 +28,9 @@ function buildWorkflow(
       referenced_tool_ids: ["native.catalog-gap"],
       missing_tool_ids: ["native.catalog-gap"],
       governed_tool_count: 1,
-      strong_isolation_tool_count: 0,
+      strong_isolation_tool_count: 0
     },
-    ...overrides,
+    ...overrides
   };
 }
 
@@ -58,19 +58,21 @@ describe("WorkflowLibraryMissingToolGovernanceCard", () => {
           "workflow-2": "/workflows/workflow-2?definition_issue=missing_tool",
         }}
         workflowLibraryFilterHref="/workflows?definition_issue=missing_tool"
-      />,
+      />
     );
 
     expect(html).toContain("跨 workflow catalog gap handoff");
     expect(html).toContain("Affected workflows");
     expect(html).toContain("Missing bindings");
     expect(html).toContain("Catalog gaps");
+    expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain(
-      "当前 workflow 仍引用目录里不存在的 tool：native.catalog-gap；先回 editor 补齐 binding，再继续排查剩余 1 个 workflow。"
+      "当前 workflow 仍有 catalog gap（native.catalog-gap）；先回 editor 补齐 binding，再继续排查剩余 1 个 workflow。"
     );
     expect(html).toContain(
-      "2.0.0 · published · 4 nodes · 2 governed tools。 当前仍缺少 2 个 catalog tool binding：native.catalog-gap、native.second-gap。"
+      "2.0.0 · published · 4 nodes · 2 governed tools。 当前 workflow 仍有 catalog gap · native.catalog-gap、native.second-gap。"
     );
+    expect(html).not.toContain("missing binding");
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
     expect(html).toContain('/workflows/workflow-2?definition_issue=missing_tool');
     expect(html).toContain('/workflows?definition_issue=missing_tool');
@@ -91,7 +93,7 @@ describe("WorkflowLibraryMissingToolGovernanceCard", () => {
         ]}
         workflowDetailHrefsById={{}}
         workflowLibraryFilterHref="/workflows?definition_issue=missing_tool"
-      />,
+      />
     );
 
     expect(html).toBe("");

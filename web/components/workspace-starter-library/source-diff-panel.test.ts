@@ -235,7 +235,7 @@ describe("WorkspaceStarterSourceDiffPanel", () => {
       "Primary governed starter: Missing Tool Starter · catalog gap · native.missing · source 0.2.0."
     );
     expect(html).toContain(
-      "当前 starter 仍引用目录里不存在的 tool：native.missing；先回源 workflow 补齐 tool binding，再回来继续复用或创建。"
+      "当前 starter 仍有 catalog gap（native.missing）；先回源 workflow 补齐 binding，再回来继续复用或创建。"
     );
     expect(html).toContain("打开源 workflow");
     expect(html).toContain("definition_issue=missing_tool");

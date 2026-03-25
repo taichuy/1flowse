@@ -162,7 +162,7 @@ describe("WorkspaceStarterDefinitionSnapshotPanel", () => {
     expect(html).toContain("Catalog gap starter");
     expect(html).toContain("Recommended next step");
     expect(html).toContain("catalog gap");
-    expect(html).toContain("当前 starter 仍引用目录里不存在的 tool：catalog.tool.missing");
+    expect(html).toContain("当前 starter 仍有 catalog gap（catalog.tool.missing）");
     expect(html).toContain(
       "Primary governed starter: Catalog gap starter · catalog gap · catalog.tool.missing · source 0.4.0."
     );

@@ -894,7 +894,7 @@ describe("WorkflowCreateWizard", () => {
     );
 
     expect(html).toContain("Catalog gap");
-    expect(html).toContain("当前 starter 仍引用目录里不存在的 tool：native.missing");
+    expect(html).toContain("当前 starter 仍有 catalog gap（native.missing）");
     expect(html).toContain("如果现在创建，API 会直接拒绝该草稿");
     expect(html).toContain(
       "Primary governed starter: Missing Tool Starter · catalog gap · native.missing."
