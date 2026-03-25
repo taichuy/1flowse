@@ -52,6 +52,25 @@ node scripts/check-dependabot-drift.js
    - `uv` roots 不计入 GitHub 原生 graph coverage 缺口，但现在已由仓库内显式 dependency submission workflow 接手；若这些目录仍缺席，优先检查 workflow run 证据与平台刷新延迟，而不是继续误判成管理员开关问题。
 4. 不要因为 UI 暂时没刷新就直接 dismiss alert；应先保留命令输出、锁文件事实和结论，再等待依赖图恢复或补管理员侧操作。
 
+## 外部阻塞已确认时的默认处置
+
+如果最新一轮 `dependabot-drift.json` 同时满足以下信号：
+
+- `conclusion.kind=alerts_unavailable`
+- `recommendedActions` 已把 `configure_dependabot_alerts_token -> enable_dependency_graph -> rerun_dependency_graph_submission -> rerun_github_security_drift` 排成首要动作链
+- `dependencySubmissionEvidence.repositoryBlockerEvidence.kind=dependency_graph_disabled`
+- `repositorySecurityAndAnalysis.missingFields` 仍包含 `dependency_graph` / `automatic_dependency_submission`
+
+说明当前主阻塞已经从“本地脚本是否还缺证据”收口到“仓库设置 + workflow token 权限”这两个外部动作。此时默认不要继续本地润色 `scripts/check-dependabot-drift.js`、`scripts/submit-dependency-snapshots.js` 或 workflow summary 文案，而应按下面顺序推进：
+
+1. 仓库管理员在 `Settings -> Secrets and variables -> Actions` 补齐 `DEPENDABOT_ALERTS_TOKEN`，让 `GitHub Security Drift` 能读取 Dependabot alerts。
+2. 仓库管理员在 `Settings -> Security & analysis` 开启 `Dependency graph`，必要时顺带核对 `Automatic dependency submission`。
+3. workflow 维护者重跑 `Dependency Graph Submission`，确认新的 `dependency-submission.json` 不再保留 `repositoryBlockerEvidence`。
+4. 确认 `dependencyGraphVisibility.visibleRoots` 开始出现 roots，或至少 `missingRoots` 不再是全量缺席。
+5. 再重跑 `GitHub Security Drift`，确认 `dependabot-drift.json` 是否开始收口到最新 graph / alert 事实。
+
+只有以上外部动作都完成后仍异常，才回到本地脚本层继续排查实现问题；否则默认把最新 artifact 与 `recommendedActions.href` 直接交给管理员 / maintainer 执行，不再把同一阻塞循环留在本地会话里。
+
 ## 仓库自动复验
 
 - 仓库提供 `.github/workflows/github-security-drift.yml`，会在以下时机自动复验：
