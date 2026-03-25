@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatWorkflowMissingToolSummary,
   getWorkflowLegacyPublishAuthIssues,
+  getWorkflowMissingToolIds,
   hasOnlyLegacyPublishAuthModeIssues,
   hasWorkflowLegacyPublishAuthIssues,
+  hasWorkflowMissingToolIssues,
   isLegacyPublishAuthModeIssue
 } from "@/lib/workflow-definition-governance";
 
@@ -57,5 +60,35 @@ describe("workflow-definition-governance", () => {
         }
       ])
     ).toBe(false);
+  });
+
+  it("normalizes workflow missing tool ids into a shared catalog-gap summary", () => {
+    const workflow = {
+      tool_governance: {
+        referenced_tool_ids: ["native.catalog-gap", "native.second-gap", "native.third-gap"],
+        missing_tool_ids: [
+          " native.catalog-gap ",
+          "native.second-gap",
+          "native.catalog-gap",
+          "native.third-gap",
+          ""
+        ],
+        governed_tool_count: 2,
+        strong_isolation_tool_count: 1
+      }
+    };
+
+    expect(getWorkflowMissingToolIds(workflow)).toEqual([
+      "native.catalog-gap",
+      "native.second-gap",
+      "native.third-gap"
+    ]);
+    expect(hasWorkflowMissingToolIssues(workflow)).toBe(true);
+    expect(formatWorkflowMissingToolSummary(workflow)).toBe(
+      "catalog gap · native.catalog-gap、native.second-gap 等 3 个 tool"
+    );
+    expect(formatWorkflowMissingToolSummary(workflow, 3)).toBe(
+      "catalog gap · native.catalog-gap、native.second-gap、native.third-gap"
+    );
   });
 });
