@@ -60,6 +60,10 @@ export function buildSensitiveAccessInboxLegacyAuthGovernanceSnapshot(
     return null;
   }
 
+  const authModeContract =
+    snapshots.find((snapshot) => snapshot.auth_mode_contract != null)?.auth_mode_contract ??
+    undefined;
+
   const checklistByKey = new Map<
     WorkflowPublishedEndpointLegacyAuthGovernanceChecklistKey,
     WorkflowPublishedEndpointLegacyAuthGovernanceChecklistItem
@@ -102,6 +106,7 @@ export function buildSensitiveAccessInboxLegacyAuthGovernanceSnapshot(
     generated_at: snapshots[0].generated_at,
     workflow_count: workflows.length,
     binding_count: bindingCount,
+    auth_mode_contract: authModeContract,
     summary: {
       draft_candidate_count: draftCandidateCount,
       published_blocker_count: publishedBlockerCount,

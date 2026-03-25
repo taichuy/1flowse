@@ -317,6 +317,8 @@ describe("SensitiveAccessInboxPage", () => {
     expect(html).toContain("先批量下线 draft legacy bindings");
     expect(html).toContain("再补发支持鉴权的 replacement bindings");
     expect(html).toContain("Demo Workflow");
+    expect(html).toContain("Publish auth contract");
+    expect(html).toContain("supported api_key / internal");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
   });
 });
