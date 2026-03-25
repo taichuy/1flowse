@@ -16,6 +16,18 @@ from app.services.run_trace_filters import (
     normalize_filter_datetime,
     normalize_payload_key,
 )
+from app.services.workflow_publish import WorkflowPublishBindingService
+from app.services.workflow_views import load_workflow_run_tool_governance_summary
+
+workflow_publish_service = WorkflowPublishBindingService()
+
+
+def _load_run_trace_legacy_auth_governance(db: Session, *, workflow_id: str):
+    snapshot = workflow_publish_service.build_legacy_auth_governance_snapshot(
+        db,
+        workflow_id=workflow_id,
+    )
+    return snapshot if snapshot.binding_count > 0 else None
 
 
 def load_run_trace(
@@ -52,7 +64,7 @@ def load_run_trace(
     run_events = db.scalars(
         select(RunEvent).where(RunEvent.run_id == run_id).order_by(RunEvent.id.asc())
     ).all()
-    return create_run_trace(
+    trace = create_run_trace(
         run_id=run_id,
         cursor=cursor,
         event_type=event_type,
@@ -65,6 +77,19 @@ def load_run_trace(
         limit=limit,
         order=order,
         run_events=run_events,
+    )
+    return trace.model_copy(
+        update={
+            "tool_governance": load_workflow_run_tool_governance_summary(
+                db,
+                run.workflow_id,
+                run.workflow_version,
+            ),
+            "legacy_auth_governance": _load_run_trace_legacy_auth_governance(
+                db,
+                workflow_id=run.workflow_id,
+            ),
+        }
     )
 
 
@@ -86,6 +111,16 @@ def serialize_trace_export_jsonl(trace: RunTrace) -> str:
                 "exported_at": exported_at,
                 "filters": trace.filters.model_dump(mode="json"),
                 "summary": trace.summary.model_dump(mode="json"),
+                "tool_governance": (
+                    trace.tool_governance.model_dump(mode="json")
+                    if trace.tool_governance is not None
+                    else None
+                ),
+                "legacy_auth_governance": (
+                    trace.legacy_auth_governance.model_dump(mode="json")
+                    if trace.legacy_auth_governance is not None
+                    else None
+                ),
             },
             ensure_ascii=False,
         )

@@ -1,4 +1,6 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
+import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export const DEFAULT_RUN_TRACE_LIMIT = 100;
 
@@ -54,6 +56,8 @@ export type RunTrace = {
   run_id: string;
   filters: RunTraceFilters;
   summary: RunTraceSummary;
+  tool_governance?: WorkflowToolGovernanceSummary | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   events: RunTraceEventItem[];
 };
 

@@ -160,6 +160,8 @@ class RunTrace(BaseModel):
     run_id: str
     filters: RunTraceFilters
     summary: RunTraceSummary = Field(default_factory=RunTraceSummary)
+    tool_governance: WorkflowToolGovernanceSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
     events: list[RunTraceEventItem] = Field(default_factory=list)
 
 

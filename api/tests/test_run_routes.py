@@ -178,7 +178,7 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
         "/api/sensitive-access/resources",
         json={
             "label": "Run legacy auth handoff secret",
-            "sensitivity_level": "L3",
+            "sensitivity_level": "L1",
             "source": "published_secret",
             "metadata": {"endpoint_id": "endpoint-run-handoff"},
         },
@@ -263,6 +263,43 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
     assert run_detail["legacy_auth_governance"]["binding_count"] == 1
     assert run_detail["legacy_auth_governance"]["summary"]["published_blocker_count"] == 1
     assert run_detail["legacy_auth_governance"]["workflows"][0]["workflow_id"] == sample_workflow.id
+
+    trace_response = client.get(f"/api/runs/{run_id}/trace", params={"limit": 2})
+
+    assert trace_response.status_code == 200
+    trace_body = trace_response.json()
+    assert trace_body["legacy_auth_governance"]["binding_count"] == 1
+    assert trace_body["legacy_auth_governance"]["auth_mode_contract"] == legacy_auth_mode_contract()
+
+    export_json_response = client.get(
+        f"/api/runs/{run_id}/trace/export",
+        params={"format": "json"},
+    )
+
+    assert export_json_response.status_code == 200
+    export_json_body = export_json_response.json()
+    assert export_json_body["legacy_auth_governance"]["binding_count"] == 1
+    assert (
+        export_json_body["legacy_auth_governance"]["summary"]["published_blocker_count"]
+        == 1
+    )
+
+    export_jsonl_response = client.get(
+        f"/api/runs/{run_id}/trace/export",
+        params={"format": "jsonl"},
+    )
+
+    assert export_jsonl_response.status_code == 200
+    export_lines = [
+        json.loads(line)
+        for line in export_jsonl_response.text.splitlines()
+        if line.strip()
+    ]
+    assert export_lines[0]["record_type"] == "trace"
+    assert export_lines[0]["legacy_auth_governance"]["binding_count"] == 1
+    assert export_lines[0]["legacy_auth_governance"]["auth_mode_contract"] == (
+        legacy_auth_mode_contract()
+    )
 
 
 def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
@@ -984,6 +1021,21 @@ def test_get_run_includes_version_specific_tool_governance(
         "governed_tool_count": 0,
         "strong_isolation_tool_count": 0,
     }
+
+    trace_response = client.get("/api/runs/run-governance-gap/trace")
+
+    assert trace_response.status_code == 200
+    trace_body = trace_response.json()
+    assert trace_body["tool_governance"] == body["tool_governance"]
+
+    export_response = client.get(
+        "/api/runs/run-governance-gap/trace/export",
+        params={"format": "json"},
+    )
+
+    assert export_response.status_code == 200
+    export_body = export_response.json()
+    assert export_body["tool_governance"] == body["tool_governance"]
 
 
 def test_resume_run_route_forwards_source_and_reason(

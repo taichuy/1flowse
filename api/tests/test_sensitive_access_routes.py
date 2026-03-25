@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
@@ -86,6 +87,16 @@ def _assert_single_sensitive_access_focus_entry(
     assert {
         item["id"]: item["status"] for item in entry["notifications"]
     } == notification_status_by_id
+
+
+def _normalize_sampled_run_legacy_auth_generated_at(run_follow_up: dict) -> dict:
+    normalized = deepcopy(run_follow_up)
+    for sampled_run in normalized.get("sampled_runs", []):
+        for entry in sampled_run.get("sensitive_access_entries", []):
+            governance = entry.get("legacy_auth_governance")
+            if isinstance(governance, dict) and governance.get("generated_at"):
+                governance["generated_at"] = "<generated_at>"
+    return normalized
 
 
 def _seed_legacy_auth_binding(
@@ -1930,7 +1941,9 @@ def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
         request_body["notifications"][0]["id"]
     ]
     assert body["entries"][0]["run_snapshot"] == request_body["run_snapshot"]
-    assert body["entries"][0]["run_follow_up"] == request_body["run_follow_up"]
+    assert _normalize_sampled_run_legacy_auth_generated_at(
+        body["entries"][0]["run_follow_up"]
+    ) == _normalize_sampled_run_legacy_auth_generated_at(request_body["run_follow_up"])
     assert body["entries"][0]["legacy_auth_governance"] == (
         legacy_auth_governance_snapshot_for_single_published_blocker(
             generated_at=body["entries"][0]["legacy_auth_governance"]["generated_at"],
