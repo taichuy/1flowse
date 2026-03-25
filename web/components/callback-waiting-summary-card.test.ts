@@ -132,6 +132,30 @@ function buildSensitiveAccessEntry(): SensitiveAccessEntry {
   };
 }
 
+function buildPrimaryGovernedResource(): NonNullable<SensitiveAccessEntry["resource"]> {
+  return {
+    id: "resource-openai-prod",
+    label: "OpenAI Production Key",
+    description: "Production credential",
+    sensitivity_level: "L3",
+    source: "credential",
+    metadata: {},
+    credential_governance: {
+      credential_id: "cred-openai-prod",
+      credential_name: "OpenAI Production Key",
+      credential_type: "api_key",
+      credential_status: "active",
+      sensitivity_level: "L3",
+      sensitive_resource_id: "resource-openai-prod",
+      sensitive_resource_label: "OpenAI Production Key",
+      credential_ref: "credential://cred-openai-prod",
+      summary: "本次命中的凭据是 OpenAI Production Key（api_key）；当前治理级别 L3，状态 生效中。"
+    },
+    created_at: "2026-03-20T09:50:00Z",
+    updated_at: "2026-03-20T09:50:00Z"
+  };
+}
+
 function buildLifecycle(
   overrides: Partial<CallbackWaitingLifecycleSummary> = {}
 ): CallbackWaitingLifecycleSummary {
@@ -291,6 +315,18 @@ describe("CallbackWaitingSummaryCard", () => {
       createElement(CallbackWaitingSummaryCard, {
         lifecycle: buildLifecycle({ late_callback_count: 1 }),
         inboxHref: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+        sensitiveAccessSummary: {
+          request_count: 1,
+          approval_ticket_count: 1,
+          pending_approval_count: 1,
+          approved_approval_count: 0,
+          rejected_approval_count: 0,
+          expired_approval_count: 0,
+          pending_notification_count: 0,
+          delivered_notification_count: 0,
+          failed_notification_count: 0,
+          primary_resource: buildPrimaryGovernedResource()
+        },
         recommendedAction: canonicalRecommendedAction,
         operatorFollowUp: "Open the approval inbox first, then retry the callback path.",
         preferCanonicalRecommendedNextStep: true,
@@ -303,6 +339,37 @@ describe("CallbackWaitingSummaryCard", () => {
     expect(html).toContain("Open approval inbox");
     expect(html).toContain(
       'href="/sensitive-access?run_id=run-1&amp;approval_ticket_id=ticket-1"'
+    );
+    expect(html).toContain(
+      "Primary governed resource: OpenAI Production Key · L3 治理 · 生效中."
+    );
+  });
+
+  it("surfaces the primary governed resource on the local callback inbox CTA", () => {
+    const html = renderToStaticMarkup(
+      createElement(CallbackWaitingSummaryCard, {
+        lifecycle: buildLifecycle(),
+        inboxHref: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+        sensitiveAccessSummary: {
+          request_count: 1,
+          approval_ticket_count: 1,
+          pending_approval_count: 1,
+          approved_approval_count: 0,
+          rejected_approval_count: 0,
+          expired_approval_count: 0,
+          pending_notification_count: 0,
+          delivered_notification_count: 0,
+          failed_notification_count: 0,
+          primary_resource: buildPrimaryGovernedResource()
+        },
+        runId: "run-1"
+      })
+    );
+
+    expect(html).toContain("Open inbox slice first");
+    expect(html).toContain("Open approval inbox");
+    expect(html).toContain(
+      "Primary governed resource: OpenAI Production Key · L3 治理 · 生效中."
     );
   });
 

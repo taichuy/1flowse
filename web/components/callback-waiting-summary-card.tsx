@@ -5,6 +5,7 @@ import { CallbackWaitingInlineActions } from "@/components/callback-waiting-inli
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import { SensitiveAccessInlineActions } from "@/components/sensitive-access-inline-actions";
+import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import type {
   CallbackWaitingLifecycleSummary,
   RunCallbackTicketItem,
@@ -213,6 +214,7 @@ export function CallbackWaitingSummaryCard({
     lifecycle,
     callbackTickets,
     sensitiveAccessEntries,
+    sensitiveAccessSummary,
     callbackWaitingAutomation,
     scheduledResumeDelaySeconds,
     scheduledResumeSource,
@@ -235,10 +237,14 @@ export function CallbackWaitingSummaryCard({
           ctaLabel: "Open approval inbox"
         }
       : baseRecommendedAction;
+  const callbackWaitingPrimaryResourceSummary = formatSensitiveResourceGovernanceSummary(
+    inlineSensitiveAccessEntry?.resource ?? sensitiveAccessSummary?.primary_resource ?? null
+  );
   const localRecommendedNextStep = buildCallbackWaitingRecommendedNextStep({
     action: recommendedAction,
     inboxHref,
     callbackWaitingAutomation,
+    primaryResourceSummary: callbackWaitingPrimaryResourceSummary,
     operatorFollowUp: callbackFollowUp,
     surfaceCopy
   });
@@ -251,6 +257,7 @@ export function CallbackWaitingSummaryCard({
       callbackFollowUp ??
       operatorFollowUp ??
       surfaceCopy.reviewTimelineFallbackDetail,
+    primaryResourceSummary: callbackWaitingPrimaryResourceSummary,
     scope: "callback"
   });
   const canonicalRecommendedNextStep =
@@ -429,6 +436,11 @@ export function CallbackWaitingSummaryCard({
             ) : null}
           </div>
           <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
+          {recommendedNextStep.primaryResourceSummary ? (
+            <p className="binding-meta">
+              {`Primary governed resource: ${recommendedNextStep.primaryResourceSummary}.`}
+            </p>
+          ) : null}
           {isObserveFirstRecommendedAction && shouldShowCallbackInlineActions ? (
             <p className="binding-meta">{surfaceCopy.optionalOverrideDescription}</p>
           ) : null}

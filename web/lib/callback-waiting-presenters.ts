@@ -55,6 +55,7 @@ type CallbackWaitingExplanationInput = {
   lifecycle?: CallbackWaitingLifecycleSummary | null;
   callbackTickets?: RunCallbackTicketItem[];
   sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+  sensitiveAccessSummary?: CallbackWaitingSensitiveAccessSummaryLike | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   scheduledResumeDelaySeconds?: number | null;
   scheduledResumeSource?: string | null;
@@ -263,12 +264,14 @@ export function buildCallbackWaitingRecommendedNextStep({
   action,
   inboxHref,
   callbackWaitingAutomation,
+  primaryResourceSummary,
   operatorFollowUp,
   surfaceCopy = buildCallbackWaitingSummarySurfaceCopy()
 }: {
   action?: CallbackWaitingRecommendedAction | null;
   inboxHref?: string | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
+  primaryResourceSummary?: string | null;
   operatorFollowUp?: string | null;
   surfaceCopy?: CallbackWaitingSummarySurfaceCopy;
 }): OperatorRecommendedNextStep | null {
@@ -297,7 +300,10 @@ export function buildCallbackWaitingRecommendedNextStep({
   }
 
   return buildOperatorRecommendedNextStep({
-    callback: callbackCandidate,
+    callback: {
+      ...callbackCandidate,
+      ...(primaryResourceSummary ? { primaryResourceSummary } : {})
+    },
     operatorFollowUp,
     operatorLabel: surfaceCopy.callbackFollowUpLabel
   });
@@ -1507,6 +1513,7 @@ export function getCallbackWaitingRecommendedAction({
   lifecycle,
   callbackTickets = [],
   sensitiveAccessEntries = [],
+  sensitiveAccessSummary = null,
   callbackWaitingAutomation,
   scheduledResumeDelaySeconds,
   scheduledResumeScheduledAt,
@@ -1514,8 +1521,12 @@ export function getCallbackWaitingRecommendedAction({
   scheduledResumeRequeuedAt,
   scheduledResumeRequeueSource
 }: CallbackWaitingExplanationInput): CallbackWaitingRecommendedAction | null {
-  const pendingApprovalCount = countPendingApprovals(sensitiveAccessEntries);
-  const failedNotificationCount = countFailedNotifications(sensitiveAccessEntries);
+  const pendingApprovalCount = sensitiveAccessEntries.length
+    ? countPendingApprovals(sensitiveAccessEntries)
+    : (sensitiveAccessSummary?.pending_approval_count ?? 0);
+  const failedNotificationCount = sensitiveAccessEntries.length
+    ? countFailedNotifications(sensitiveAccessEntries)
+    : (sensitiveAccessSummary?.failed_notification_count ?? 0);
   const expiredTicketCount = lifecycle?.expired_ticket_count ?? 0;
   const lateCallbackCount = lifecycle?.late_callback_count ?? 0;
   const pendingTicketCount = callbackTickets.filter((ticket) => ticket.status === "pending").length;

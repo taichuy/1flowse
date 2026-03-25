@@ -90,6 +90,29 @@ describe("callback waiting presenters", () => {
     });
   });
 
+  it("在只有敏感访问 summary 时也给出稳定 inbox CTA", () => {
+    expect(
+      getCallbackWaitingRecommendedAction({
+        sensitiveAccessSummary: {
+          request_count: 1,
+          approval_ticket_count: 1,
+          pending_approval_count: 1,
+          approved_approval_count: 0,
+          rejected_approval_count: 0,
+          expired_approval_count: 0,
+          pending_notification_count: 0,
+          delivered_notification_count: 0,
+          failed_notification_count: 0,
+          primary_resource: null
+        }
+      })
+    ).toMatchObject({
+      kind: "open_inbox",
+      label: "Open inbox slice first",
+      ctaLabel: "Open approval inbox"
+    });
+  });
+
   it("把 approval waiting 的 callback 动作映射成稳定 approval blocker CTA", () => {
     expect(
       buildCallbackWaitingApprovalRecommendedAction({
@@ -156,6 +179,27 @@ describe("callback waiting presenters", () => {
         operatorFollowUp: "先继续观察 callback ticket 是否真正被消费。"
       })
     ).toBeNull();
+  });
+
+  it("把 primary governed resource 透传给 callback waiting next step", () => {
+    expect(
+      buildCallbackWaitingRecommendedNextStep({
+        action: {
+          kind: "open_inbox",
+          label: "Open inbox slice first",
+          detail: "1 approval is still pending, so resume should start from approval handling.",
+          ctaLabel: "Open approval inbox"
+        },
+        inboxHref: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+        primaryResourceSummary: "OpenAI Production Key · L3 治理 · 生效中"
+      })
+    ).toEqual({
+      label: "Open inbox slice first",
+      detail: "1 approval is still pending, so resume should start from approval handling.",
+      href: "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1",
+      href_label: "Open approval inbox",
+      primaryResourceSummary: "OpenAI Production Key · L3 治理 · 生效中"
+    });
   });
 
   it("暴露 callback waiting 共享 surface copy", () => {
