@@ -11,6 +11,8 @@ from app.schemas.workflow_publish import (
     WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
 )
 
+WORKFLOW_EDITOR_LINK_LABEL = "回到 workflow 编辑器"
+
 __all__ = [
     "build_published_invocation_export_filename",
     "build_published_invocation_export_payload",
@@ -84,17 +86,99 @@ def _serialize_legacy_auth_governance(
         return None
 
     payload = snapshot.model_dump(mode="json")
-    workflows = payload.pop("workflows", [])
+    serialized_workflows: list[dict[str, Any]] = []
+    workflow_follow_up_by_id: dict[str, dict[str, Any]] = {}
+    for workflow in payload.pop("workflows", []):
+        if not isinstance(workflow, dict):
+            continue
+
+        workflow_follow_up = _build_legacy_auth_workflow_follow_up(workflow)
+        serialized_workflow = {
+            **workflow,
+            "workflow_follow_up": workflow_follow_up,
+        }
+        serialized_workflows.append(serialized_workflow)
+        workflow_id = workflow.get("workflow_id")
+        if isinstance(workflow_id, str) and workflow_id:
+            workflow_follow_up_by_id[workflow_id] = workflow_follow_up
+
+    buckets_payload = payload.get("buckets") if isinstance(payload.get("buckets"), dict) else {}
+    serialized_buckets: dict[str, list[dict[str, Any]]] = {}
+    for bucket in ("draft_candidates", "published_blockers", "offline_inventory"):
+        items = buckets_payload.get(bucket)
+        if not isinstance(items, list):
+            serialized_buckets[bucket] = []
+            continue
+
+        serialized_buckets[bucket] = [
+            _serialize_legacy_auth_binding_item(item, workflow_follow_up_by_id)
+            for item in items
+            if isinstance(item, dict)
+        ]
 
     return {
         "generated_at": payload.get("generated_at"),
         "workflow_count": payload.get("workflow_count"),
         "binding_count": payload.get("binding_count"),
         "auth_mode_contract": payload.get("auth_mode_contract") or {},
-        "workflow": workflows[0] if workflows else None,
+        "workflow": serialized_workflows[0] if serialized_workflows else None,
         "summary": payload.get("summary") or {},
         "checklist": payload.get("checklist") or [],
-        "buckets": payload.get("buckets") or {},
+        "buckets": serialized_buckets,
+    }
+
+
+def _build_legacy_auth_workflow_follow_up(
+    workflow: dict[str, Any],
+) -> dict[str, Any]:
+    workflow_id = workflow.get("workflow_id")
+    workflow_detail_href = (
+        f"/workflows/{workflow_id}"
+        if isinstance(workflow_id, str) and workflow_id
+        else "/workflows"
+    )
+    tool_governance = (
+        workflow.get("tool_governance")
+        if isinstance(workflow.get("tool_governance"), dict)
+        else {}
+    )
+    missing_tool_ids = tool_governance.get("missing_tool_ids")
+    definition_issue = (
+        "missing_tool"
+        if isinstance(missing_tool_ids, list)
+        and any(isinstance(item, str) and item for item in missing_tool_ids)
+        else None
+    )
+    if definition_issue is not None:
+        workflow_detail_href = f"{workflow_detail_href}?definition_issue={definition_issue}"
+
+    return {
+        "workflow_detail_href": workflow_detail_href,
+        "workflow_detail_label": WORKFLOW_EDITOR_LINK_LABEL,
+        "definition_issue": definition_issue,
+    }
+
+
+def _serialize_legacy_auth_binding_item(
+    item: dict[str, Any],
+    workflow_follow_up_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    workflow_id = item.get("workflow_id")
+    workflow_follow_up = (
+        workflow_follow_up_by_id.get(workflow_id)
+        if isinstance(workflow_id, str)
+        else None
+    )
+    if workflow_follow_up is None:
+        workflow_follow_up = _build_legacy_auth_workflow_follow_up(
+            {
+                "workflow_id": workflow_id,
+            }
+        )
+
+    return {
+        **item,
+        "workflow_follow_up": workflow_follow_up,
     }
 
 

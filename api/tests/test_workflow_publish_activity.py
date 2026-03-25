@@ -9,9 +9,12 @@ from app.models.sensitive_access import (
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
 )
-from app.models.workflow import WorkflowPublishedEndpoint, WorkflowPublishedInvocation
+from app.models.workflow import (
+    Workflow,
+    WorkflowPublishedEndpoint,
+    WorkflowPublishedInvocation,
+)
 from tests.workflow_publish_helpers import (
-    legacy_auth_binding,
     legacy_auth_export_snapshot_for_single_published_blocker,
     legacy_auth_mode_contract,
     publishable_definition,
@@ -860,17 +863,141 @@ def test_export_published_endpoint_invocations_includes_workflow_legacy_auth_han
     assert governance_binding_record == {
         "record_type": "workflow_legacy_auth_binding",
         "bucket": "published_blockers",
-        **legacy_auth_binding(
-            workflow_id=workflow_id,
-            workflow_name="Published Invocation Export Governance Workflow",
-            binding_id=binding["id"],
-            workflow_version="0.1.0",
-            endpoint_id="native-chat",
-            endpoint_name="Native Chat",
-        ),
+        **expected_governance["buckets"]["published_blockers"][0],
     }
     assert invocation_record["record_type"] == "invocation"
     assert invocation_record["request_source"] == "workflow"
+
+
+def test_export_published_endpoint_invocations_keep_missing_tool_scope_in_legacy_auth_handoff(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Published Invocation Export Catalog Gap Workflow",
+            "definition": publishable_definition(
+                answer="export-catalog-gap",
+                alias="native-export-catalog-gap",
+                path="/team/native-export-catalog-gap",
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        params={"include_all_versions": "true"},
+    )
+    assert bindings_response.status_code == 200
+    binding = bindings_response.json()[0]
+
+    publish_response = client.patch(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/lifecycle",
+        json={"status": "published"},
+    )
+    assert publish_response.status_code == 200
+
+    invoke_response = client.post(
+        f"/v1/workflows/{workflow_id}/published-endpoints/native-chat/run",
+        json={"input_payload": {"source": "workflow"}},
+    )
+    assert invoke_response.status_code == 200
+
+    workflow_record = sqlite_session.get(Workflow, workflow_id)
+    assert workflow_record is not None
+    workflow_record.definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "tool",
+                "type": "tool",
+                "name": "Catalog Gap Tool",
+                "config": {
+                    "tool": {
+                        "toolId": "native.catalog-gap",
+                        "ecosystem": "native",
+                    }
+                },
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+        ],
+        "publish": [
+            {
+                "id": "native-chat",
+                "name": "Native Chat",
+                "alias": "native-export-catalog-gap",
+                "path": "/team/native-export-catalog-gap",
+                "protocol": "native",
+                "authMode": "internal",
+                "streaming": False,
+                "inputSchema": {"type": "object"},
+                "workflowVersion": "0.1.0",
+            }
+        ],
+    }
+    binding_record = sqlite_session.get(WorkflowPublishedEndpoint, binding["id"])
+    assert binding_record is not None
+    binding_record.auth_mode = "token"
+    sqlite_session.commit()
+
+    export_json_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/export",
+        params={
+            "request_source": "workflow",
+            "limit": 10,
+            "format": "json",
+        },
+    )
+    assert export_json_response.status_code == 200
+    export_json_body = export_json_response.json()
+    expected_governance = legacy_auth_export_snapshot_for_single_published_blocker(
+        generated_at=export_json_body["legacy_auth_governance"]["generated_at"],
+        workflow_id=workflow_id,
+        workflow_name="Published Invocation Export Catalog Gap Workflow",
+        workflow_version="0.1.0",
+        binding_id=binding["id"],
+        endpoint_id="native-chat",
+        endpoint_name="Native Chat",
+        missing_tool_ids=["native.catalog-gap"],
+    )
+    assert export_json_body["legacy_auth_governance"] == expected_governance
+
+    export_jsonl_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/export",
+        params={
+            "request_source": "workflow",
+            "limit": 10,
+            "format": "jsonl",
+        },
+    )
+    assert export_jsonl_response.status_code == 200
+    jsonl_lines = export_jsonl_response.text.strip().splitlines()
+    assert len(jsonl_lines) == 4
+    meta_record = json.loads(jsonl_lines[0])
+    governance_record = json.loads(jsonl_lines[1])
+    governance_binding_record = json.loads(jsonl_lines[2])
+    assert meta_record["legacy_auth_governance"]["workflow"]["workflow_follow_up"] == {
+        "workflow_detail_href": f"/workflows/{workflow_id}?definition_issue=missing_tool",
+        "workflow_detail_label": "回到 workflow 编辑器",
+        "definition_issue": "missing_tool",
+    }
+    assert governance_record["workflow"]["workflow_follow_up"] == {
+        "workflow_detail_href": f"/workflows/{workflow_id}?definition_issue=missing_tool",
+        "workflow_detail_label": "回到 workflow 编辑器",
+        "definition_issue": "missing_tool",
+    }
+    assert governance_binding_record == {
+        "record_type": "workflow_legacy_auth_binding",
+        "bucket": "published_blockers",
+        **expected_governance["buckets"]["published_blockers"][0],
+    }
 
 
 def test_export_published_endpoint_invocations_requires_approval_for_sensitive_runs(

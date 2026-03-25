@@ -113,6 +113,22 @@ def legacy_auth_mode_contract() -> dict[str, object]:
     return WorkflowPublishedEndpointLegacyAuthModeContract().model_dump(mode="json")
 
 
+def legacy_auth_workflow_follow_up(
+    *, workflow_id: str, definition_issue: str | None = None
+) -> dict[str, str | None]:
+    workflow_detail_href = f"/workflows/{workflow_id}"
+    if definition_issue is not None:
+        workflow_detail_href = (
+            f"{workflow_detail_href}?definition_issue={definition_issue}"
+        )
+
+    return {
+        "workflow_detail_href": workflow_detail_href,
+        "workflow_detail_label": "回到 workflow 编辑器",
+        "definition_issue": definition_issue,
+    }
+
+
 def legacy_auth_binding(
     *,
     workflow_id: str,
@@ -123,8 +139,9 @@ def legacy_auth_binding(
     endpoint_name: str,
     lifecycle_status: str = "published",
     auth_mode: str = "token",
-) -> dict[str, str]:
-    return {
+    workflow_follow_up: dict[str, object] | None = None,
+) -> dict[str, object]:
+    binding = {
         "workflow_id": workflow_id,
         "workflow_name": workflow_name,
         "binding_id": binding_id,
@@ -134,6 +151,10 @@ def legacy_auth_binding(
         "lifecycle_status": lifecycle_status,
         "auth_mode": auth_mode,
     }
+    if workflow_follow_up is not None:
+        binding["workflow_follow_up"] = workflow_follow_up
+
+    return binding
 
 
 def legacy_auth_workflow_summary(
@@ -145,8 +166,9 @@ def legacy_auth_workflow_summary(
     published_blocker_count: int = 1,
     offline_inventory_count: int = 0,
     tool_governance: dict[str, object] | None = None,
+    workflow_follow_up: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    return {
+    workflow = {
         "workflow_id": workflow_id,
         "workflow_name": workflow_name,
         "binding_count": binding_count,
@@ -161,6 +183,10 @@ def legacy_auth_workflow_summary(
             "strong_isolation_tool_count": 0,
         },
     }
+    if workflow_follow_up is not None:
+        workflow["workflow_follow_up"] = workflow_follow_up
+
+    return workflow
 
 
 def legacy_auth_published_follow_up_checklist(
@@ -295,7 +321,14 @@ def legacy_auth_export_snapshot_for_single_published_blocker(
     binding_id: str,
     endpoint_id: str,
     endpoint_name: str,
+    missing_tool_ids: list[str] | None = None,
 ) -> dict[str, object]:
+    missing_tool_ids = missing_tool_ids or []
+    definition_issue = "missing_tool" if missing_tool_ids else None
+    workflow_follow_up = legacy_auth_workflow_follow_up(
+        workflow_id=workflow_id,
+        definition_issue=definition_issue,
+    )
     snapshot = legacy_auth_governance_snapshot_for_single_published_blocker(
         generated_at=generated_at,
         workflow_id=workflow_id,
@@ -306,6 +339,20 @@ def legacy_auth_export_snapshot_for_single_published_blocker(
         endpoint_name=endpoint_name,
     )
     workflow = snapshot.pop("workflows")[0]
+    workflow["tool_governance"] = {
+        "referenced_tool_ids": missing_tool_ids,
+        "missing_tool_ids": missing_tool_ids,
+        "governed_tool_count": 0,
+        "strong_isolation_tool_count": 0,
+    }
+    workflow["workflow_follow_up"] = workflow_follow_up
+    snapshot["buckets"]["published_blockers"] = [
+        {
+            **item,
+            "workflow_follow_up": workflow_follow_up,
+        }
+        for item in snapshot["buckets"]["published_blockers"]
+    ]
     return {
         **snapshot,
         "workflow": workflow,
