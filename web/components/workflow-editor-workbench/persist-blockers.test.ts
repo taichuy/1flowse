@@ -50,6 +50,34 @@ describe("workflow persist blockers", () => {
     expect(formatWorkflowPersistBlockedMessage(blockers)).toContain("Publish auth contract");
   });
 
+  it("surfaces concrete catalog gaps in save gates instead of generic tool-reference wording", () => {
+    const blockers = buildWorkflowPersistBlockers({
+      unsupportedNodeCount: 0,
+      toolReferenceValidationSummary:
+        "Tool 节点 Search Tool (tool-node-1) 引用了当前目录中不存在的工具 native.catalog-gap。",
+      toolReferenceValidationIssues: [
+        {
+          nodeId: "tool-node-1",
+          nodeName: "Search Tool",
+          toolIds: ["native.catalog-gap"],
+          message:
+            "Tool 节点 Search Tool (tool-node-1) 引用了当前目录中不存在的工具 native.catalog-gap。",
+          path: "nodes.0.config.tool.toolId",
+          field: "toolId"
+        }
+      ]
+    });
+
+    expect(blockers).toEqual([
+      expect.objectContaining({
+        id: "tool_reference",
+        label: "Catalog gap",
+        detail: expect.stringContaining("catalog gap · native.catalog-gap"),
+        nextStep: "请先补齐 catalog gap（native.catalog-gap）里的 tool binding / LLM Agent tool policy 后再保存。"
+      })
+    ]);
+  });
+
   it("reuses shared sandbox readiness CTA for execution-related save gates", () => {
     const recommendedNextStep = buildWorkflowPersistBlockerRecommendedNextStep(
       [

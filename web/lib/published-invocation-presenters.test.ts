@@ -898,7 +898,7 @@ describe("published invocation presenters", () => {
 
     expect(formatPublishedInvocationNodeRunLabel("node-run-1")).toBe("node run node-run-1");
     expect(formatPublishedInvocationMissingToolCatalogEntry("tool-missing")).toBe(
-      "missing catalog entry tool-missing"
+      "catalog gap · tool-missing"
     );
     expect(
       buildPublishedInvocationIssueSignalsSurface({

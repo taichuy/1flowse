@@ -74,6 +74,41 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain("Open workflow library");
   });
 
+  it("labels tool reference blockers as catalog gap issues in hero pills", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorHero, {
+        workflowId: "workflow-1",
+        workflowVersion: "1.0.0",
+        nodesCount: 4,
+        edgesCount: 3,
+        toolsCount: 2,
+        availableRunsCount: 1,
+        isDirty: false,
+        selectedNodeLabel: null,
+        selectedEdgeId: null,
+        workflowsCount: 1,
+        selectedRunAttached: false,
+        plannedNodeLabels: [],
+        unsupportedNodes: [],
+        contractValidationIssuesCount: 0,
+        toolReferenceValidationIssuesCount: 2,
+        nodeExecutionValidationIssuesCount: 0,
+        toolExecutionValidationIssuesCount: 0,
+        publishDraftValidationIssuesCount: 0,
+        persistBlockedMessage: null,
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        isSaving: false,
+        isSavingStarter: false,
+        onSave: () => undefined,
+        onSaveAsWorkspaceStarter: () => undefined
+      })
+    );
+
+    expect(html).toContain("2 catalog gap issues");
+    expect(html).not.toContain("tool reference issues");
+  });
+
   it("keeps workspace starter governance scope in editor actions", () => {
     const surfaceCopy = buildWorkflowEditorHeroSurfaceCopy({
       workflowLibraryHref:

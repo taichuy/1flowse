@@ -1580,7 +1580,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("phases plan 1 · execute 1");
     expect(html).toContain("sources explicit 2");
     expect(html).toContain("node run node-run-skill · node node-skill");
-    expect(html).toContain("missing catalog entry tool-missing");
+    expect(html).toContain("catalog gap · tool-missing");
   });
 
   it("forwards callback waiting automation into sampled publish detail summaries", async () => {

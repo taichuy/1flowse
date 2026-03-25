@@ -8,6 +8,11 @@ import {
   buildSandboxReadinessFollowUpCandidate,
   shouldPreferSharedSandboxReadinessFollowUp
 } from "@/lib/system-overview-follow-up-presenters";
+import {
+  formatCatalogGapSummary,
+  formatCatalogGapToolSummary
+} from "@/lib/workflow-definition-governance";
+import type { WorkflowToolReferenceValidationIssue } from "@/lib/workflow-tool-reference-validation";
 
 export type WorkflowPersistBlocker = {
   id:
@@ -28,6 +33,7 @@ type BuildWorkflowPersistBlockersOptions = {
   unsupportedNodeCount: number;
   unsupportedNodeSummary?: string | null;
   contractValidationSummary?: string | null;
+  toolReferenceValidationIssues?: WorkflowToolReferenceValidationIssue[];
   toolReferenceValidationSummary?: string | null;
   nodeExecutionValidationSummary?: string | null;
   toolExecutionValidationSummary?: string | null;
@@ -80,6 +86,7 @@ export function buildWorkflowPersistBlockers({
   unsupportedNodeCount,
   unsupportedNodeSummary,
   contractValidationSummary,
+  toolReferenceValidationIssues = [],
   toolReferenceValidationSummary,
   nodeExecutionValidationSummary,
   toolExecutionValidationSummary,
@@ -117,13 +124,22 @@ export function buildWorkflowPersistBlockers({
   }
 
   if (toolReferenceValidationSummary) {
+    const missingToolIds = Array.from(
+      new Set(toolReferenceValidationIssues.flatMap((issue) => issue.toolIds ?? []))
+    );
+    const catalogGapSummary = formatCatalogGapSummary(missingToolIds, 3);
+    const missingToolSummary = formatCatalogGapToolSummary(missingToolIds, 3);
     blockers.push({
       id: "tool_reference",
-      label: "Tool bindings",
+      label: "Catalog gap",
       detail: joinDetail(
-        `当前 workflow definition 还有 tool catalog 引用待修正问题：${toolReferenceValidationSummary}`
+        catalogGapSummary
+          ? `当前 workflow definition 仍有 ${catalogGapSummary}：${toolReferenceValidationSummary}`
+          : `当前 workflow definition 还有 tool catalog 引用待修正问题：${toolReferenceValidationSummary}`
       ),
-      nextStep: "请先修正 tool binding / LLM Agent tool policy 后再保存。"
+      nextStep: missingToolSummary
+        ? `请先补齐 catalog gap（${missingToolSummary}）里的 tool binding / LLM Agent tool policy 后再保存。`
+        : "请先修正 tool binding / LLM Agent tool policy 后再保存。"
     });
   }
 

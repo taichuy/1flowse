@@ -7,6 +7,7 @@ import type { UpdateWorkflowToolBindingState } from "@/app/actions/workflow";
 import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import { compareToolsByGovernance } from "@/lib/tool-governance";
+import { formatCatalogGapToolSummary } from "@/lib/workflow-definition-governance";
 
 type WorkflowToolBindingFormProps = {
   workflowId: string;
@@ -59,6 +60,7 @@ export function WorkflowToolBindingForm({
   const selectedTool = sortedTools.find((tool) => tool.id === selectedToolId) ?? null;
   const missingSelectedTool =
     Boolean(selectedToolId) && !selectedTool && !sortedTools.some((tool) => tool.id === selectedToolId);
+  const missingToolSummary = formatCatalogGapToolSummary(selectedToolId ? [selectedToolId] : []);
 
   return (
     <form action={formAction} className="binding-form">
@@ -97,7 +99,8 @@ export function WorkflowToolBindingForm({
       ) : null}
       {missingSelectedTool ? (
         <p className="sync-message error">
-          当前选择的工具已不在目录里。请先重新同步工具目录，或改绑到仍可用的 catalog tool。
+          当前 tool binding 仍有 catalog gap（{missingToolSummary ?? selectedToolId}）。请先重新同步工具目录，
+          或改绑到仍可用的 catalog tool。
         </p>
       ) : null}
 

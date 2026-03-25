@@ -106,7 +106,7 @@ export function WorkflowEditorHero({
             <span className="pill">{contractValidationIssuesCount} contract issues</span>
           ) : null}
           {toolReferenceValidationIssuesCount > 0 ? (
-            <span className="pill">{toolReferenceValidationIssuesCount} tool reference issues</span>
+            <span className="pill">{toolReferenceValidationIssuesCount} catalog gap issues</span>
           ) : null}
           {nodeExecutionValidationIssuesCount > 0 ? (
             <span className="pill">{nodeExecutionValidationIssuesCount} node execution issues</span>

@@ -47,6 +47,7 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
+import { formatCatalogGapSummary } from "@/lib/workflow-definition-governance";
 import { buildLegacyPublishAuthGovernanceSurfaceCopy } from "@/lib/legacy-publish-auth-governance-presenters";
 import {
   buildCallbackWaitingAutomationSystemFollowUp,
@@ -1582,7 +1583,7 @@ export function formatPublishedInvocationNodeRunLabel(nodeRunId: string): string
 }
 
 export function formatPublishedInvocationMissingToolCatalogEntry(toolId: string): string {
-  return `missing catalog entry ${toolId}`;
+  return formatCatalogGapSummary([toolId], 1) ?? `catalog gap · ${toolId}`;
 }
 
 export function buildPublishedInvocationSkillTraceSurface(

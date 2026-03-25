@@ -4,6 +4,7 @@ import type { WorkflowDefinition } from "@/lib/workflow-editor";
 export type WorkflowToolReferenceValidationIssue = {
   nodeId: string;
   nodeName: string;
+  toolIds: string[];
   message: string;
   path: string;
   field: string;
@@ -74,6 +75,7 @@ function buildToolNodeIssues({
       {
         nodeId,
         nodeName,
+        toolIds: [toolId],
         message: `Tool 节点 ${nodeName} (${nodeId}) 引用了当前目录中不存在的工具 ${toolId}。`,
         path: `nodes.${nodeIndex}.config.tool.toolId`,
         field: "toolId"
@@ -86,6 +88,7 @@ function buildToolNodeIssues({
       {
         nodeId,
         nodeName,
+        toolIds: [toolId],
         message: `Tool 节点 ${nodeName} (${nodeId}) 声明的 ecosystem ${ecosystem} 与目录工具 ${toolId} 的 ecosystem ${tool.ecosystem} 不一致。`,
         path: `nodes.${nodeIndex}.config.tool.ecosystem`,
         field: "ecosystem"
@@ -130,6 +133,7 @@ function buildAgentToolPolicyIssues({
     {
       nodeId,
       nodeName,
+      toolIds: missingToolIds,
       message: `LLM Agent 节点 ${nodeName} (${nodeId}) 的 toolPolicy.allowedToolIds 引用了当前目录中不存在的工具：${missingToolIds.join(
         ", "
       )}。`,
