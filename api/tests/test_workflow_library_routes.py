@@ -311,6 +311,93 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_source_governance(
     assert "来源 workflow 已不可用" in orphan_source["outcome_explanation"]["primary_signal"]
 
 
+def test_workflow_library_snapshot_surfaces_workspace_starter_tool_governance(
+    client,
+    sqlite_session,
+    monkeypatch,
+) -> None:
+    registry = PluginRegistry()
+    registry.register_tool(
+        PluginToolDefinition(
+            id="native.risk-search",
+            name="Risk Search",
+            ecosystem="native",
+            source="builtin",
+            supported_execution_classes=("inline", "sandbox"),
+            default_execution_class="sandbox",
+        ),
+        invoker=lambda request: {"ok": True},
+    )
+    monkeypatch.setattr(
+        "app.services.workflow_library.get_plugin_registry",
+        lambda: registry,
+    )
+
+    sqlite_session.add(
+        WorkspaceStarterTemplateRecord(
+            id="starter-tool-governance",
+            workspace_id="default",
+            name="Tool Governance Starter",
+            description="Starter still references a missing catalog tool.",
+            business_track="应用新建编排",
+            default_workflow_name="Tool Governance Workflow",
+            workflow_focus="Keep starter tool bindings governed.",
+            recommended_next_step="Fix missing tool bindings before reuse.",
+            tags=["tool", "workspace starter"],
+            definition={
+                "nodes": [
+                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {
+                        "id": "tool",
+                        "type": "tool",
+                        "name": "Risk Search",
+                        "config": {
+                            "tool": {
+                                "toolId": "native.risk-search",
+                                "ecosystem": "native",
+                            }
+                        },
+                    },
+                    {
+                        "id": "agent",
+                        "type": "llm_agent",
+                        "name": "Agent",
+                        "config": {
+                            "toolPolicy": {
+                                "allowedToolIds": [
+                                    "native.risk-search",
+                                    "native.catalog-gap",
+                                ]
+                            }
+                        },
+                    },
+                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                ],
+                "edges": [
+                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
+                    {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
+                    {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "output"},
+                ],
+            },
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    sqlite_session.commit()
+
+    response = client.get("/api/workflow-library?include_builtin_starters=false")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [starter["id"] for starter in body["starters"]] == ["starter-tool-governance"]
+    assert body["starters"][0]["tool_governance"] == {
+        "referenced_tool_ids": ["native.risk-search", "native.catalog-gap"],
+        "missing_tool_ids": ["native.catalog-gap"],
+        "governed_tool_count": 0,
+        "strong_isolation_tool_count": 1,
+    }
+
+
 def test_workflow_library_snapshot_reuses_workspace_starter_governance_filters(
     client,
     sqlite_session,

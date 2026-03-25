@@ -152,6 +152,13 @@ function buildStarter(
     archived: false,
     createdAt: "2026-03-23T19:45:00Z",
     updatedAt: "2026-03-23T19:45:00Z",
+    toolGovernance: {
+      referencedToolIds: [],
+      referencedTools: [],
+      missingToolIds: [],
+      governedToolCount: 0,
+      strongIsolationToolCount: 0
+    },
     sourceGovernance: {
       kind: "no_source",
       statusLabel: "无来源",
@@ -710,6 +717,62 @@ describe("WorkflowsPage", () => {
     );
     expect(html.match(/Recommended next step/g)).toHaveLength(1);
     expect(html).toContain("没有缺失 catalog tool");
+  });
+
+  it("prioritizes missing-tool starter follow-up when the workflow library is empty", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshot()
+    );
+    vi.mocked(getWorkflows).mockResolvedValue([]);
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(
+      buildWorkflowLibrarySnapshot({
+        starters: [
+          buildStarter({
+            id: "starter-governed",
+            name: "Governed starter",
+            createdFromWorkflowId: "workflow-source-missing-tool",
+            createdFromWorkflowVersion: "0.4.0",
+            toolGovernance: {
+              referencedToolIds: ["native.risk-search", "native.catalog-gap"],
+              referencedTools: [],
+              missingToolIds: ["native.catalog-gap"],
+              governedToolCount: 1,
+              strongIsolationToolCount: 1
+            },
+            sourceGovernance: {
+              kind: "synced",
+              statusLabel: "已对齐",
+              summary: "Source workflow is still available.",
+              sourceWorkflowId: "workflow-source-missing-tool",
+              sourceWorkflowName: "Source workflow",
+              templateVersion: "0.4.0",
+              sourceVersion: "0.4.0",
+              actionDecision: null,
+              outcomeExplanation: null
+            }
+          })
+        ]
+      })
+    );
+
+    const html = renderToStaticMarkup(await WorkflowsPage());
+
+    expect(html).toContain("Governed starter 当前是 workflow library 空态下最先需要处理的 starter。");
+    expect(html).toContain("catalog gap");
+    expect(html).toContain(
+      "Primary governed starter: Governed starter · missing tool native.catalog-gap · source 0.4.0."
+    );
+    expect(html).toContain(
+      "当前 starter 仍引用目录里不存在的 tool：native.catalog-gap；先回源 workflow 补齐 tool binding，再回来继续复用或创建。"
+    );
+    expect(html).toContain("打开源 workflow");
+    expect(html).toContain("/workflows/workflow-source-missing-tool");
+    expect(html).toContain("definition_issue=missing_tool");
+    expect(html).toContain("starter=starter-governed");
+    expect(html).not.toContain("确认模板后带此 starter 回到创建页");
+    expect(html).not.toContain("带此 starter 回到创建页");
+    expect(html.match(/Recommended next step/g)).toHaveLength(1);
   });
 
   it("prefers a starter-scoped create entry when the workflow library is empty but an active starter is ready", async () => {

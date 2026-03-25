@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.plugin import PluginToolItem
+from app.schemas.workflow import WorkflowToolGovernanceSummary
 from app.schemas.workspace_starter import (
     WorkflowBusinessTrack,
     WorkspaceStarterSourceGovernance,
@@ -103,6 +104,9 @@ class WorkflowLibraryStarterItem(BaseModel):
     archived_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    tool_governance: WorkflowToolGovernanceSummary = Field(
+        default_factory=WorkflowToolGovernanceSummary
+    )
     source_governance: WorkspaceStarterSourceGovernance | None = None
 
 

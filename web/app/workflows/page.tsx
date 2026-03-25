@@ -12,6 +12,7 @@ import {
 } from "@/components/workbench-entry-links";
 import { WorkspaceStarterFollowUpCard } from "@/components/workspace-starter-library/follow-up-card";
 import {
+  buildWorkspaceStarterMissingToolGovernanceSurface,
   buildWorkspaceStarterSourceGovernanceSurface
 } from "@/components/workspace-starter-library/shared";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
@@ -581,6 +582,7 @@ function buildWorkflowLibraryEmptyStateStarterFollowUp({
   const starterRequiringFollowUp =
     activeStarters.find(
       (starter) =>
+        (starter.toolGovernance?.missingToolIds.length ?? 0) > 0 ||
         starter.sourceGovernance?.kind === "missing_source" ||
         starter.sourceGovernance?.kind === "drifted"
     ) ?? null;
@@ -598,6 +600,23 @@ function buildWorkflowLibraryEmptyStateStarterFollowUp({
       needsFollowUp: true,
       selectedTemplateId: starterRequiringFollowUp.id
     };
+    const missingToolGovernanceSurface = buildWorkspaceStarterMissingToolGovernanceSurface({
+      template: toWorkspaceStarterTemplateItem(starterRequiringFollowUp),
+      missingToolIds: starterRequiringFollowUp.toolGovernance?.missingToolIds ?? [],
+      workspaceStarterGovernanceQueryScope: followUpViewState
+    });
+
+    if (missingToolGovernanceSurface) {
+      return {
+        label: missingToolGovernanceSurface.label,
+        headline: `${starterRequiringFollowUp.name} 当前是 workflow library 空态下最先需要处理的 starter。`,
+        detail: missingToolGovernanceSurface.detail,
+        primaryResourceSummary: missingToolGovernanceSurface.primaryResourceSummary,
+        entryKey: missingToolGovernanceSurface.entryKey,
+        entryOverride: missingToolGovernanceSurface.entryOverride
+      };
+    }
+
     const sourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
       template: toWorkspaceStarterTemplateItem(starterRequiringFollowUp),
       workspaceStarterGovernanceQueryScope: followUpViewState

@@ -7,8 +7,11 @@ import type {
   WorkspaceStarterSourceGovernance,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
+import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 import {
+  buildWorkspaceStarterMissingToolGovernanceSurface,
   buildWorkspaceStarterSourceCardSurface,
   buildWorkspaceStarterSourceActionDecision,
   buildWorkspaceStarterSourceGovernanceSurface
@@ -23,6 +26,8 @@ type WorkspaceStarterSourceCardProps = {
   isRefreshing: boolean;
   isRebasing: boolean;
   createWorkflowHref?: string | null;
+  selectedTemplateToolGovernance?: WorkflowDefinitionToolGovernance | null;
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   onRefresh: () => void;
   onRebase: () => void;
 };
@@ -35,16 +40,36 @@ export function WorkspaceStarterSourceCard({
   isRefreshing,
   isRebasing,
   createWorkflowHref = null,
+  selectedTemplateToolGovernance = null,
+  workspaceStarterGovernanceQueryScope = null,
   onRefresh,
   onRebase
 }: WorkspaceStarterSourceCardProps) {
   const hasSourceBinding = Boolean(template.created_from_workflow_id);
   const fallbackActionDecision = buildWorkspaceStarterSourceActionDecision(sourceDiff);
-  const sourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
+  const missingToolGovernanceSurface = buildWorkspaceStarterMissingToolGovernanceSurface({
+    template,
+    missingToolIds: selectedTemplateToolGovernance?.missingToolIds ?? [],
+    workspaceStarterGovernanceQueryScope
+  });
+  const baseSourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
     template,
     createWorkflowHref,
+    workspaceStarterGovernanceQueryScope,
     fallbackActionDecision
   });
+  const resolvedRecommendedNextStep = missingToolGovernanceSurface
+    ? {
+        action: "review_result_receipt" as const,
+        ...missingToolGovernanceSurface
+      }
+    : baseSourceGovernanceSurface.recommendedNextStep;
+  const sourceGovernanceSurface = missingToolGovernanceSurface
+    ? {
+        ...baseSourceGovernanceSurface,
+        recommendedNextStep: resolvedRecommendedNextStep
+      }
+    : baseSourceGovernanceSurface;
   const sourceCardSurface = buildWorkspaceStarterSourceCardSurface({
     template,
     sourceGovernance,
@@ -55,13 +80,16 @@ export function WorkspaceStarterSourceCard({
   const actionDecision = sourceGovernanceSurface.actionDecision;
   const canRefresh = hasSourceBinding && !isLoadingSourceDiff && actionDecision.canRefresh;
   const canRebase = hasSourceBinding && !isLoadingSourceDiff && actionDecision.canRebase;
-  const shouldShowSourceActions = isLoadingSourceDiff || canRefresh || canRebase;
+  const shouldShowSourceActions =
+    !missingToolGovernanceSurface && (isLoadingSourceDiff || canRefresh || canRebase);
   const templateNextStep = template.recommended_next_step.trim();
   const recommendedNextStep = sourceGovernanceSurface.recommendedNextStep;
   const recommendedNextStepEntryKey = recommendedNextStep?.entryKey;
   const governanceFollowUp = presenter.followUp;
   const shouldRenderStandaloneGovernanceFollowUp =
-    Boolean(governanceFollowUp) && governanceFollowUp !== recommendedNextStep?.detail;
+    !missingToolGovernanceSurface &&
+    Boolean(governanceFollowUp) &&
+    governanceFollowUp !== recommendedNextStep?.detail;
   const shouldRenderGovernanceSummaryStrip =
     Boolean(sourceGovernance) || presenter.kind === "unknown" || presenter.kind === "no_source";
 

@@ -167,6 +167,8 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             isRefreshing={isRefreshing}
             isRebasing={isRebasing}
             createWorkflowHref={createWorkflowHref}
+            selectedTemplateToolGovernance={selectedTemplateToolGovernance}
+            workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             onRefresh={onRefresh}
             onRebase={onRebase}
           />

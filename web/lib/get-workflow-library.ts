@@ -6,6 +6,7 @@ import type {
   WorkspaceStarterSourceActionDecisionPayload
 } from "@/lib/get-workspace-starters";
 import { buildWorkspaceStarterTemplateQueryParams } from "@/lib/get-workspace-starters";
+import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 import type { WorkflowEdgeItem, WorkflowNodeItem } from "@/lib/get-workflows";
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type { WorkflowDefinition } from "@/lib/workflow-editor";
@@ -68,6 +69,7 @@ export type WorkflowLibraryStarterItem = {
   archivedAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  toolGovernance?: WorkflowDefinitionToolGovernance | null;
   sourceGovernance?: WorkflowStarterSourceGovernance | null;
 };
 
@@ -159,10 +161,13 @@ export async function getWorkflowLibrarySnapshot({
 function normalizeWorkflowLibrarySnapshot(
   input: WorkflowLibrarySnapshotResponse
 ): WorkflowLibrarySnapshot {
+  const tools = Array.isArray(input.tools) ? input.tools.map(normalizeToolItem) : [];
+  const toolIndex = new Map(tools.map((tool) => [tool.id, tool]));
+
   return {
     nodes: Array.isArray(input.nodes) ? input.nodes.map(normalizeNodeCatalogItem) : [],
     starters: Array.isArray(input.starters)
-      ? input.starters.map(normalizeStarterItem)
+      ? input.starters.map((starter) => normalizeStarterItem(starter, toolIndex))
       : [],
     starterSourceLanes: Array.isArray(input.starter_source_lanes)
       ? input.starter_source_lanes.map(normalizeSourceLane)
@@ -173,7 +178,7 @@ function normalizeWorkflowLibrarySnapshot(
     toolSourceLanes: Array.isArray(input.tool_source_lanes)
       ? input.tool_source_lanes.map(normalizeSourceLane)
       : [],
-    tools: Array.isArray(input.tools) ? input.tools.map(normalizeToolItem) : []
+    tools
   };
 }
 
@@ -255,7 +260,10 @@ function normalizeNodeCatalogItem(
   };
 }
 
-function normalizeStarterItem(input: Record<string, unknown>): WorkflowLibraryStarterItem {
+function normalizeStarterItem(
+  input: Record<string, unknown>,
+  toolIndex: Map<string, PluginToolRegistryItem>
+): WorkflowLibraryStarterItem {
   return {
     id: asString(input.id),
     origin: asString(input.origin, "builtin") as WorkflowLibraryStarterItem["origin"],
@@ -278,9 +286,33 @@ function normalizeStarterItem(input: Record<string, unknown>): WorkflowLibrarySt
     archivedAt: asOptionalString(input.archived_at),
     createdAt: asOptionalString(input.created_at),
     updatedAt: asOptionalString(input.updated_at),
+    toolGovernance: isRecord(input.tool_governance)
+      ? normalizeStarterToolGovernance(input.tool_governance, toolIndex)
+      : null,
     sourceGovernance: isRecord(input.source_governance)
       ? normalizeStarterSourceGovernance(input.source_governance)
       : null
+  };
+}
+
+function normalizeStarterToolGovernance(
+  input: Record<string, unknown>,
+  toolIndex: Map<string, PluginToolRegistryItem>
+): WorkflowDefinitionToolGovernance {
+  const referencedToolIds = asStringArray(input.referenced_tool_ids);
+
+  return {
+    referencedToolIds,
+    referencedTools: referencedToolIds
+      .map((toolId) => toolIndex.get(toolId) ?? null)
+      .filter((tool): tool is PluginToolRegistryItem => tool !== null),
+    missingToolIds: asStringArray(input.missing_tool_ids),
+    governedToolCount:
+      typeof input.governed_tool_count === "number" ? input.governed_tool_count : 0,
+    strongIsolationToolCount:
+      typeof input.strong_isolation_tool_count === "number"
+        ? input.strong_isolation_tool_count
+        : 0
   };
 }
 

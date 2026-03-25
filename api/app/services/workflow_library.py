@@ -26,6 +26,9 @@ from app.services.tool_execution_governance import (
     governed_default_execution_class,
     resolve_tool_sensitivity_level,
 )
+from app.services.workflow_definition_governance import (
+    summarize_workflow_definition_tool_governance,
+)
 from app.services.workflow_library_catalog import (
     build_builtin_starters,
     build_node_catalog_items,
@@ -52,10 +55,12 @@ class WorkflowLibraryService:
         tools = self.list_tool_items(db, workspace_id=workspace_id)
         tool_source_lanes = self.build_tool_source_lanes(tools)
         nodes = self.list_node_catalog_items(tool_source_lanes=tool_source_lanes)
+        tool_index = {tool.id: tool for tool in tools}
         starters = self.list_starter_items(
             db,
             workspace_id=workspace_id,
             node_catalog=nodes,
+            tool_index=tool_index,
             business_track=business_track,
             search=search,
             source_governance_kind=source_governance_kind,
@@ -117,6 +122,7 @@ class WorkflowLibraryService:
         *,
         workspace_id: str,
         node_catalog: list[WorkflowNodeCatalogItem] | None = None,
+        tool_index: dict[str, PluginToolItem] | None = None,
         business_track: WorkflowBusinessTrack | None = None,
         search: str | None = None,
         source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
@@ -124,12 +130,21 @@ class WorkflowLibraryService:
         include_builtin_starters: bool = True,
     ) -> list[WorkflowLibraryStarterItem]:
         catalog = node_catalog or self.list_node_catalog_items()
-        builtin_starters = build_builtin_starters(catalog) if include_builtin_starters else []
+        resolved_tool_index = tool_index or {}
+        builtin_starters = (
+            self._with_tool_governance(
+                build_builtin_starters(catalog),
+                tool_index=resolved_tool_index,
+            )
+            if include_builtin_starters
+            else []
+        )
         return [
             *builtin_starters,
             *self._build_workspace_starters(
                 db,
                 workspace_id=workspace_id,
+                tool_index=resolved_tool_index,
                 business_track=business_track,
                 search=search,
                 source_governance_kind=source_governance_kind,
@@ -160,6 +175,7 @@ class WorkflowLibraryService:
         db: Session,
         *,
         workspace_id: str,
+        tool_index: dict[str, PluginToolItem] | None = None,
         business_track: WorkflowBusinessTrack | None = None,
         search: str | None = None,
         source_governance_kind: WorkspaceStarterSourceGovernanceKind | None = None,
@@ -204,11 +220,33 @@ class WorkflowLibraryService:
                 archived_at=serialized.archived_at,
                 created_at=serialized.created_at,
                 updated_at=serialized.updated_at,
+                tool_governance=summarize_workflow_definition_tool_governance(
+                    serialized.definition,
+                    tool_index=tool_index or {},
+                ),
                 source_governance=source_governance_by_template_id.get(record.id),
             )
             for record, serialized in (
                 (record, service.serialize(record)) for record in filtered_records
             )
+        ]
+
+    def _with_tool_governance(
+        self,
+        starters: list[WorkflowLibraryStarterItem],
+        *,
+        tool_index: dict[str, PluginToolItem],
+    ) -> list[WorkflowLibraryStarterItem]:
+        return [
+            starter.model_copy(
+                update={
+                    "tool_governance": summarize_workflow_definition_tool_governance(
+                        starter.definition,
+                        tool_index=tool_index,
+                    )
+                }
+            )
+            for starter in starters
         ]
 
     def _load_source_workflows(
