@@ -16,6 +16,7 @@ import type {
 } from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
+import type { WorkflowDetail } from "@/lib/get-workflows";
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
@@ -67,6 +68,7 @@ import {
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
@@ -74,6 +76,7 @@ import {
 
 type WorkflowPublishInvocationDetailPanelProps = {
   detail: PublishedEndpointInvocationDetailResponse;
+  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
   clearHref: string;
   currentHref?: string | null;
   tools: PluginToolRegistryItem[];
@@ -84,6 +87,7 @@ type WorkflowPublishInvocationDetailPanelProps = {
 };
 export function WorkflowPublishInvocationDetailPanel({
   detail,
+  workflow = null,
   clearHref,
   currentHref = null,
   tools,
@@ -213,6 +217,11 @@ export function WorkflowPublishInvocationDetailPanel({
         workflowId: invocation.workflow_id,
         variant: "editor"
       });
+  const workflowDetailHref = workflow
+    ? appendWorkflowLibraryViewStateForWorkflow(workflowDetailLink.href, workflow, {
+        definitionIssue: null
+      })
+    : workflowDetailLink.href;
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId,
     canonicalFollowUp,
@@ -648,7 +657,7 @@ export function WorkflowPublishInvocationDetailPanel({
                   : detailSurfaceCopy.legacyAuthGovernanceWorkflowFollowUpFallback}
               </p>
             </div>
-            <Link className="activity-link" href={workflowDetailLink.href}>
+            <Link className="activity-link" href={workflowDetailHref}>
               {workflowDetailLink.label}
             </Link>
           </div>

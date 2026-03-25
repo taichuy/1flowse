@@ -15,6 +15,7 @@ import {
 
 export function WorkflowPublishActivityPanel({
   workflowId,
+  workflow = null,
   tools,
   binding,
   apiKeys,
@@ -32,6 +33,7 @@ export function WorkflowPublishActivityPanel({
   const runStatusOptions = buildRunStatusOptions(invocationAudit?.facets.run_status_counts);
   const detailLinks = resolveWorkflowPublishActivityDetailLinks({
     workflowId,
+    workflow,
     bindingId: binding.id,
     activeInvocationFilter,
     workspaceStarterGovernanceQueryScope
@@ -49,6 +51,7 @@ export function WorkflowPublishActivityPanel({
 
       <WorkflowPublishActivityFilterForm
         workflowId={workflowId}
+        workflow={workflow}
         bindingId={binding.id}
         apiKeys={apiKeys}
         activeInvocationFilter={activeInvocationFilter}
@@ -93,6 +96,7 @@ export function WorkflowPublishActivityPanel({
       />
 
       <WorkflowPublishActivityDetails
+        workflow={workflow}
         tools={tools}
         invocationAudit={invocationAudit}
         selectedInvocationId={selectedInvocationId}

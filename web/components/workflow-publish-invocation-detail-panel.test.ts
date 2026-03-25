@@ -559,6 +559,61 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("/workflows/workflow-1");
   });
 
+  it("scopes the shared workflow legacy auth handoff back to missing-tool workflow detail", () => {
+    const detail = buildDetail();
+    detail.legacy_auth_governance = {
+      generated_at: "2026-03-20T12:00:00Z",
+      auth_mode_contract: {
+        supported_auth_modes: ["api_key", "internal"],
+        retired_legacy_auth_modes: ["token"],
+        summary: "supported api_key / internal, legacy token",
+        follow_up: "replace token bindings"
+      },
+      workflow_count: 1,
+      binding_count: 1,
+      summary: {
+        draft_candidate_count: 1,
+        published_blocker_count: 0,
+        offline_inventory_count: 0
+      },
+      checklist: [],
+      workflows: [
+        {
+          workflow_id: "workflow-1",
+          workflow_name: "Workflow 1",
+          binding_count: 1,
+          draft_candidate_count: 1,
+          published_blocker_count: 0,
+          offline_inventory_count: 0
+        }
+      ],
+      buckets: {
+        draft_candidates: [],
+        published_blockers: [],
+        offline_inventory: []
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        workflow: {
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+  });
+
   it("prefers shared callback recovery CTA when publish detail only carries local callback prose", () => {
     const detail = buildDetail();
     detail.invocation.run_waiting_lifecycle = { node_run_id: "node-run-tool-wait" } as never;

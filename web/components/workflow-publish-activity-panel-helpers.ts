@@ -12,6 +12,7 @@ import type {
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
+import type { WorkflowDetail } from "@/lib/get-workflows";
 import type {
   SensitiveAccessBlockingPayload,
   SensitiveAccessGuardedResult
@@ -46,6 +47,7 @@ export { buildWorkflowPublishActivityHref };
 
 export type WorkflowPublishActivityPanelProps = {
   workflowId: string;
+  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
   tools: PluginToolRegistryItem[];
   binding: WorkflowPublishedEndpointItem;
   apiKeys: PublishedEndpointApiKeyItem[];
@@ -62,6 +64,7 @@ export type WorkflowPublishActivityPanelProps = {
 
 type WorkflowPublishActivityDetailLinkOptions = {
   workflowId: string;
+  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
   bindingId?: string | null;
   activeInvocationFilter?: WorkflowPublishInvocationActiveFilter | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
@@ -161,6 +164,7 @@ export function buildRunStatusOptions(
 
 export function resolveWorkflowPublishActivityDetailLinks({
   workflowId,
+  workflow = null,
   bindingId,
   activeInvocationFilter,
   workspaceStarterGovernanceQueryScope = null
@@ -169,6 +173,7 @@ export function resolveWorkflowPublishActivityDetailLinks({
     buildInvocationDetailHref: (invocationId) =>
       buildWorkflowPublishActivityHref({
         workflowId,
+        workflow,
         bindingId,
         activeInvocationFilter,
         invocationId,
@@ -176,6 +181,7 @@ export function resolveWorkflowPublishActivityDetailLinks({
       }),
     clearInvocationDetailHref: buildWorkflowPublishActivityHref({
       workflowId,
+      workflow,
       bindingId,
       activeInvocationFilter,
       workspaceStarterGovernanceQueryScope

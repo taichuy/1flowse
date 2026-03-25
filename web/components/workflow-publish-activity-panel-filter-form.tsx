@@ -1,6 +1,7 @@
 import React from "react";
 
 import type { PublishedEndpointApiKeyItem } from "@/lib/get-workflow-publish";
+import type { WorkflowDetail } from "@/lib/get-workflows";
 import {
   PUBLISHED_INVOCATION_CACHE_STATUSES,
   PUBLISHED_INVOCATION_REASON_CODES,
@@ -19,6 +20,7 @@ import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-start
 
 type WorkflowPublishActivityFilterFormProps = {
   workflowId: string;
+  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
   bindingId: string;
   apiKeys: PublishedEndpointApiKeyItem[];
   activeInvocationFilter: WorkflowPublishActivityPanelProps["activeInvocationFilter"];
@@ -28,6 +30,7 @@ type WorkflowPublishActivityFilterFormProps = {
 
 export function WorkflowPublishActivityFilterForm({
   workflowId,
+  workflow = null,
   bindingId,
   apiKeys,
   activeInvocationFilter,
@@ -38,6 +41,7 @@ export function WorkflowPublishActivityFilterForm({
     <form
       action={buildWorkflowPublishActivityHref({
         workflowId,
+        workflow,
         workspaceStarterGovernanceQueryScope
       })}
       className="trace-filter-form governance-filter-form"
@@ -168,6 +172,7 @@ export function WorkflowPublishActivityFilterForm({
           className="inline-link"
           href={buildWorkflowPublishActivityHref({
             workflowId,
+            workflow,
             bindingId,
             workspaceStarterGovernanceQueryScope
           })}

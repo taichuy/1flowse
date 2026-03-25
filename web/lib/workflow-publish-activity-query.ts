@@ -5,12 +5,14 @@ import type {
   PublishedEndpointInvocationStatus,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkflowPublishInvocationFetchFilter } from "@/lib/get-workflow-publish-governance";
 import {
   PUBLISHED_INVOCATION_CACHE_STATUSES,
   PUBLISHED_INVOCATION_REASON_CODES,
   PUBLISHED_INVOCATION_REQUEST_SURFACES
 } from "@/lib/published-invocation-presenters";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 import {
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
@@ -38,6 +40,7 @@ export type WorkflowPublishActivityResolvedFilters = {
 
 type WorkflowPublishActivityHrefOptions = {
   workflowId: string;
+  workflow?: Pick<WorkflowListItem, "tool_governance"> | null;
   bindingId?: string | null;
   activeInvocationFilter?: WorkflowPublishInvocationActiveFilter | null;
   invocationId?: string | null;
@@ -169,12 +172,13 @@ export function buildWorkflowPublishActivitySearchParams(
 
 export function buildWorkflowPublishActivityHref({
   workflowId,
+  workflow = null,
   bindingId,
   activeInvocationFilter,
   invocationId,
   workspaceStarterGovernanceQueryScope = null
 }: WorkflowPublishActivityHrefOptions) {
-  const workflowHref = workspaceStarterGovernanceQueryScope
+  const baseWorkflowHref = workspaceStarterGovernanceQueryScope
     ? buildWorkflowEditorHrefFromWorkspaceStarterViewState(
         workflowId,
         workspaceStarterGovernanceQueryScope
@@ -183,6 +187,11 @@ export function buildWorkflowPublishActivityHref({
         workflowId,
         variant: "editor"
       }).href;
+  const workflowHref = workflow
+    ? appendWorkflowLibraryViewStateForWorkflow(baseWorkflowHref, workflow, {
+        definitionIssue: null
+      })
+    : baseWorkflowHref;
   const searchParams = buildWorkflowPublishActivitySearchParams({
     bindingId: normalizeOptionalQueryValue(bindingId) ?? activeInvocationFilter?.bindingId ?? null,
     status: activeInvocationFilter?.status ?? null,

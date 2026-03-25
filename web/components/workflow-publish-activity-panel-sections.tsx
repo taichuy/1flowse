@@ -236,6 +236,7 @@ export function WorkflowPublishActivityInsights({
 }
 
 type WorkflowPublishActivityDetailsProps = {
+  workflow?: WorkflowPublishActivityPanelProps["workflow"];
   tools: PluginToolRegistryItem[];
   invocationAudit: PublishedEndpointInvocationListResponse | null;
   selectedInvocationId: string | null;
@@ -249,6 +250,7 @@ type WorkflowPublishActivityDetailsProps = {
 };
 
 export function WorkflowPublishActivityDetails({
+  workflow = null,
   tools,
   invocationAudit,
   selectedInvocationId,
@@ -384,6 +386,7 @@ export function WorkflowPublishActivityDetails({
               clearHref={clearInvocationDetailHref}
               currentHref={selectedInvocationHref}
               detail={selectedInvocationSurface.detail}
+              workflow={workflow}
               tools={tools}
               callbackWaitingAutomation={callbackWaitingAutomation}
               sandboxReadiness={sandboxReadiness}

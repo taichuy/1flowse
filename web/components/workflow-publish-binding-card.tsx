@@ -162,6 +162,7 @@ export function WorkflowPublishBindingCard({
 
       <WorkflowPublishActivityPanel
         workflowId={workflow.id}
+        workflow={workflow}
         tools={tools}
         binding={binding}
         apiKeys={apiKeys}
