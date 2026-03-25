@@ -116,8 +116,8 @@ describe("WorkflowEditorSidebar", () => {
             version: "0.1.0",
             node_count: 1,
             tool_governance: {
-              referenced_tool_ids: [],
-              missing_tool_ids: [],
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
               governed_tool_count: 0,
               strong_isolation_tool_count: 0
             }
@@ -161,7 +161,7 @@ describe("WorkflowEditorSidebar", () => {
     );
 
     expect(html).toContain(
-      'href="/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"'
+      'href="/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=missing_tool"'
     );
   });
 

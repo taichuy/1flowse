@@ -25,6 +25,7 @@ import {
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import {
   buildAuthorFacingWorkflowDetailLinkSurface,
   buildWorkflowEditorStarterSaveSurfaceCopy
@@ -220,12 +221,19 @@ export function WorkflowEditorSidebar({
               : buildAuthorFacingWorkflowDetailLinkSurface({
                   workflowId: item.id
                 });
+            const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+              workflowDetailLink.href,
+              item,
+              {
+                definitionIssue: null
+              }
+            );
 
             return (
               <WorkflowChipLink
                 key={item.id}
                 workflow={item}
-                href={workflowDetailLink.href}
+                href={workflowDetailHref}
                 selected={item.id === workflowId}
               />
             );

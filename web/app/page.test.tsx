@@ -207,6 +207,40 @@ describe("HomePage", () => {
     expect(html).toContain('href="/workflows/workflow%20alpha%2Fbeta"');
   });
 
+  it("adds missing-tool scope to editor chips when the workflow already has a catalog gap", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildHomeSystemOverview());
+    vi.mocked(getPluginRegistrySnapshot).mockResolvedValue(buildPluginRegistrySnapshot());
+    vi.mocked(getWorkflows).mockResolvedValue([
+      {
+        id: "workflow-home-gap",
+        name: "Gap workflow",
+        version: "0.2.0",
+        status: "draft",
+        node_count: 1,
+        tool_governance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        }
+      }
+    ]);
+    vi.mocked(getWorkflowDetail).mockResolvedValue(null);
+    vi.mocked(getCredentials).mockResolvedValue([]);
+    vi.mocked(getCredentialActivity).mockResolvedValue([]);
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshotFixture()
+    );
+
+    const html = renderToStaticMarkup(
+      await HomePage({
+        searchParams: Promise.resolve({})
+      })
+    );
+
+    expect(html).toContain('href="/workflows/workflow-home-gap?definition_issue=missing_tool"');
+  });
+
   it("surfaces workflow catalog-gap handoff on homepage recent runs", async () => {
     vi.mocked(getSystemOverview).mockResolvedValue(
       buildHomeSystemOverview({

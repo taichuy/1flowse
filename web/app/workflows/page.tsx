@@ -46,6 +46,7 @@ import {
   getWorkflowLegacyPublishAuthIssues
 } from "@/lib/workflow-definition-governance";
 import {
+  appendWorkflowLibraryViewStateForWorkflow,
   appendWorkflowLibraryViewState,
   readWorkflowLibraryViewState,
   type WorkflowLibraryViewState
@@ -314,14 +315,18 @@ export default async function WorkflowsPage({
                   workflowId: workflow.id,
                   viewState: workspaceStarterViewState,
                   workflowLibraryViewState
-                }
+                });
+                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+                  workflowDetailLink.href,
+                  workflow,
+                  workflowLibraryViewState
                 );
 
                 return (
                   <WorkflowChipLink
                     key={`workflow-library-${workflow.id}`}
                     workflow={workflow}
-                    href={workflowDetailLink.href}
+                    href={workflowDetailHref}
                   />
                 );
               })}

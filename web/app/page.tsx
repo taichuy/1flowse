@@ -34,7 +34,10 @@ import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
 } from "@/lib/workbench-entry-surfaces";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
+import {
+  appendWorkflowLibraryViewState,
+  appendWorkflowLibraryViewStateForWorkflow
+} from "@/lib/workflow-library-query";
 
 const highlights = [
   "Dify 风格的本地源码开发路径",
@@ -308,12 +311,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
                   workflowId: workflow.id
                 });
+                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+                  workflowDetailLink.href,
+                  workflow,
+                  {
+                    definitionIssue: null
+                  }
+                );
 
                 return (
                   <WorkflowChipLink
                     key={`editor-${workflow.id}`}
                     workflow={workflow}
-                    href={workflowDetailLink.href}
+                    href={workflowDetailHref}
                   />
                 );
               })}

@@ -21,7 +21,10 @@ import {
   getWorkflowBusinessTrack,
   WORKFLOW_BUSINESS_TRACKS
 } from "@/lib/workflow-business-tracks";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
+import {
+  appendWorkflowLibraryViewState,
+  appendWorkflowLibraryViewStateForWorkflow
+} from "@/lib/workflow-library-query";
 import {
   buildWorkflowDefinitionSandboxGovernanceBadges,
   describeWorkflowDefinitionSandboxDependency
@@ -758,12 +761,19 @@ export function WorkflowCreateWizard({
                   workflowId: workflow.id,
                   viewState: workspaceStarterGovernanceScope
                 });
+                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+                  workflowDetailLink.href,
+                  workflow,
+                  {
+                    definitionIssue: null
+                  }
+                );
 
                 return (
                   <WorkflowChipLink
                     key={workflow.id}
                     workflow={workflow}
-                    href={workflowDetailLink.href}
+                    href={workflowDetailHref}
                   />
                 );
               })}

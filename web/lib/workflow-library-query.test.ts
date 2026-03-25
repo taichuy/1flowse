@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendWorkflowLibraryViewStateForWorkflow,
   appendWorkflowLibraryViewState,
   buildWorkflowLibrarySearchParams,
-  readWorkflowLibraryViewState
+  readWorkflowLibraryViewState,
+  resolveWorkflowLibraryViewStateForWorkflow
 } from "@/lib/workflow-library-query";
 
 describe("workflow-library-query", () => {
@@ -65,5 +67,64 @@ describe("workflow-library-query", () => {
         }
       )
     ).toBe("/workflows?starter=starter-openclaw");
+  });
+
+  it("defaults workflow detail links to missing-tool scope when the workflow has a catalog gap", () => {
+    expect(
+      resolveWorkflowLibraryViewStateForWorkflow(
+        {
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: [" native.catalog-gap ", "native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        {
+          definitionIssue: null
+        }
+      )
+    ).toEqual({
+      definitionIssue: "missing_tool"
+    });
+    expect(
+      appendWorkflowLibraryViewStateForWorkflow(
+        "/workflows/workflow-gap?starter=starter-openclaw",
+        {
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        {
+          definitionIssue: null
+        }
+      )
+    ).toBe(
+      "/workflows/workflow-gap?starter=starter-openclaw&definition_issue=missing_tool"
+    );
+  });
+
+  it("preserves an explicit workflow library scope when the workflow already has one", () => {
+    expect(
+      appendWorkflowLibraryViewStateForWorkflow(
+        "/workflows/workflow-auth?starter=starter-openclaw",
+        {
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        {
+          definitionIssue: "legacy_publish_auth"
+        }
+      )
+    ).toBe(
+      "/workflows/workflow-auth?starter=starter-openclaw&definition_issue=legacy_publish_auth"
+    );
   });
 });

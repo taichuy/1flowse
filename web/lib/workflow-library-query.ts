@@ -1,3 +1,6 @@
+import type { WorkflowListItem } from "@/lib/get-workflows";
+import { hasWorkflowMissingToolIssues } from "@/lib/workflow-definition-governance";
+
 const workflowListDefinitionIssueFilters = ["legacy_publish_auth", "missing_tool"] as const;
 
 export type WorkflowListDefinitionIssueFilter =
@@ -71,4 +74,29 @@ export function appendWorkflowLibraryViewState(
 
   const normalizedQuery = searchParams.toString();
   return normalizedQuery ? `${pathname}?${normalizedQuery}` : pathname;
+}
+
+export function resolveWorkflowLibraryViewStateForWorkflow(
+  workflow: Pick<WorkflowListItem, "tool_governance">,
+  viewState: WorkflowLibraryViewState
+): WorkflowLibraryViewState {
+  if (viewState.definitionIssue) {
+    return viewState;
+  }
+
+  return {
+    ...viewState,
+    definitionIssue: hasWorkflowMissingToolIssues(workflow) ? "missing_tool" : null
+  };
+}
+
+export function appendWorkflowLibraryViewStateForWorkflow(
+  href: string,
+  workflow: Pick<WorkflowListItem, "tool_governance">,
+  viewState: WorkflowLibraryViewState
+): string {
+  return appendWorkflowLibraryViewState(
+    href,
+    resolveWorkflowLibraryViewStateForWorkflow(workflow, viewState)
+  );
 }

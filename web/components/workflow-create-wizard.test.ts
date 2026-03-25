@@ -21,6 +21,107 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("WorkflowCreateWizard", () => {
+  it("adds missing-tool scope to existing workflow chips when the draft already has a catalog gap", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCreateWizard, {
+        catalogToolCount: 0,
+        governanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " drift ",
+          selectedTemplateId: "workspace-starter-1"
+        },
+        workflows: [
+          {
+            id: "workflow-gap",
+            name: "Catalog Gap Workflow",
+            status: "draft",
+            version: "0.3.0",
+            node_count: 1,
+            tool_governance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            }
+          }
+        ],
+        starterSourceLanes: [],
+        nodeCatalog: [
+          {
+            type: "trigger",
+            label: "Trigger",
+            description: "Trigger node",
+            ecosystem: "native",
+            source: {
+              kind: "node",
+              scope: "builtin",
+              status: "available",
+              governance: "repo",
+              ecosystem: "native",
+              label: "Native node catalog",
+              shortLabel: "native nodes",
+              summary: "Native nodes"
+            },
+            capabilityGroup: "entry",
+            businessTrack: "应用新建编排",
+            tags: [],
+            supportStatus: "available",
+            supportSummary: "",
+            bindingRequired: false,
+            bindingSourceLanes: [],
+            palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
+            defaults: { name: "Trigger", config: {} }
+          }
+        ],
+        tools: [],
+        starters: [
+          {
+            id: "workspace-starter-1",
+            origin: "workspace",
+            workspaceId: "default",
+            name: "Workspace starter",
+            description: "Starter description",
+            businessTrack: "应用新建编排",
+            defaultWorkflowName: "Catalog Gap Workflow",
+            workflowFocus: "Create from starter",
+            recommendedNextStep: "Create workflow",
+            tags: [],
+            definition: {
+              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              edges: [],
+              variables: [],
+              publish: []
+            },
+            source: {
+              kind: "starter",
+              scope: "workspace",
+              status: "available",
+              governance: "workspace",
+              ecosystem: "native",
+              label: "Workspace starters",
+              shortLabel: "workspace ready",
+              summary: "Workspace starter library"
+            },
+            archived: false,
+            sourceGovernance: {
+              kind: "drifted",
+              statusLabel: "建议 refresh",
+              summary: "当前主要是来源快照漂移。",
+              sourceWorkflowId: "workflow-gap",
+              sourceWorkflowName: "Catalog Gap Workflow"
+            }
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain(
+      '/workflows/workflow-gap?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=missing_tool'
+    );
+  });
+
   it("surfaces workspace starter source governance follow-up in the create flow", () => {
     const surfaceCopy = buildWorkflowCreateWizardSurfaceCopy({
       starterGovernanceHref:
