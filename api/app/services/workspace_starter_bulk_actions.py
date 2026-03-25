@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app.models.workflow import Workflow
+from app.schemas.plugin import PluginToolItem
 from app.schemas.workspace_starter import (
     WorkspaceStarterBulkActionPreview,
     WorkspaceStarterBulkActionRequest,
@@ -25,7 +26,13 @@ from app.schemas.workspace_starter import (
     WorkspaceStarterSourceDiffSummary,
     WorkspaceStarterTemplateItem,
 )
-from app.services.workflow_definitions import WorkflowDefinitionValidationError
+from app.services.workflow_definition_governance import (
+    summarize_workflow_definition_tool_governance,
+)
+from app.services.workflow_definitions import (
+    WorkflowDefinitionValidationError,
+    build_workflow_tool_reference_index,
+)
 from app.services.workspace_starter_bulk_result_explanations import (
     build_workspace_starter_bulk_follow_up_template_ids,
     build_workspace_starter_bulk_outcome_explanation,
@@ -41,6 +48,7 @@ from app.services.workspace_starter_templates import (
 
 @dataclass
 class WorkspaceStarterBulkActionAccumulator:
+    tool_index: dict[str, PluginToolItem] = field(default_factory=dict)
     updated_items: list[WorkspaceStarterTemplateItem] = field(default_factory=list)
     deleted_items: list[WorkspaceStarterBulkDeletedItem] = field(default_factory=list)
     skipped_items: list[WorkspaceStarterBulkSkippedItem] = field(default_factory=list)
@@ -79,6 +87,7 @@ class WorkspaceStarterBulkActionAccumulator:
                 skipped_reason_summary=skipped_reason_summary,
                 sandbox_dependency_changes=sandbox_dependency_changes,
                 sandbox_dependency_item_count=len(self.sandbox_dependency_items),
+                receipt_items=self.receipt_items,
             ),
             follow_up_template_ids=build_workspace_starter_bulk_follow_up_template_ids(
                 action=payload.action,
@@ -94,11 +103,16 @@ def _build_result_receipt_item(
     record=None,
     source_workflow: Workflow | None = None,
     diff: WorkspaceStarterSourceDiff | None = None,
+    tool_index: dict[str, PluginToolItem] | None = None,
     reason: str | None = None,
     detail: str | None = None,
     changed: bool | None = None,
     rebase_fields: list[str] | None = None,
 ) -> WorkspaceStarterBulkReceiptItem:
+    tool_governance = summarize_workflow_definition_tool_governance(
+        getattr(record, "definition", None),
+        tool_index=tool_index or {},
+    )
     return WorkspaceStarterBulkReceiptItem(
         template_id=template_id,
         name=getattr(record, "name", None),
@@ -127,6 +141,7 @@ def _build_result_receipt_item(
             if diff is not None and diff.sandbox_dependency_entries
             else []
         ),
+        tool_governance=tool_governance,
         changed=changed,
         rebase_fields=list(rebase_fields or []),
     )
@@ -179,6 +194,7 @@ def _append_skipped_item(
             record=record,
             source_workflow=source_workflow,
             diff=diff,
+            tool_index=accumulator.tool_index,
             reason=reason,
             detail=detail,
             changed=False,
@@ -204,6 +220,7 @@ def _append_updated_receipt_item(
             record=record,
             source_workflow=source_workflow,
             diff=diff,
+            tool_index=accumulator.tool_index,
             detail=detail,
             changed=changed,
             rebase_fields=rebase_fields,
@@ -223,6 +240,7 @@ def _append_deleted_receipt_item(
             template_id,
             outcome="deleted",
             record=record,
+            tool_index=accumulator.tool_index,
             detail=detail,
             changed=True,
         )
@@ -250,7 +268,12 @@ def execute_workspace_starter_bulk_action(
         workspace_id=payload.workspace_id,
     )
     record_map = {record.id: record for record in records}
-    accumulator = WorkspaceStarterBulkActionAccumulator()
+    accumulator = WorkspaceStarterBulkActionAccumulator(
+        tool_index=build_workflow_tool_reference_index(
+            db,
+            workspace_id=payload.workspace_id,
+        )
+    )
     source_context_map = (
         {
             record.id: _build_source_preview_context(db, starter_service, record)
@@ -1165,4 +1188,3 @@ def _rebase_template_from_workflow(
         changed=diff.changed,
         rebase_fields=diff.rebase_fields,
     )
-

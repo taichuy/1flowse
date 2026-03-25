@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.models.workspace_starter import WorkspaceStarterTemplateRecord
 from app.services import workflow_definitions, workflow_library
 from app.services.plugin_runtime import PluginRegistry, PluginToolDefinition
 from app.services.sandbox_backends import (
@@ -2083,6 +2084,12 @@ def test_workspace_starter_bulk_delete_requires_archive_and_removes_archived_ite
             "action_decision": None,
             "sandbox_dependency_changes": None,
             "sandbox_dependency_nodes": [],
+            "tool_governance": {
+                "referenced_tool_ids": [],
+                "missing_tool_ids": [],
+                "governed_tool_count": 0,
+                "strong_isolation_tool_count": 0,
+            },
             "changed": False,
             "rebase_fields": [],
         },
@@ -2098,6 +2105,12 @@ def test_workspace_starter_bulk_delete_requires_archive_and_removes_archived_ite
             "action_decision": None,
             "sandbox_dependency_changes": None,
             "sandbox_dependency_nodes": [],
+            "tool_governance": {
+                "referenced_tool_ids": [],
+                "missing_tool_ids": [],
+                "governed_tool_count": 0,
+                "strong_isolation_tool_count": 0,
+            },
             "changed": True,
             "rebase_fields": [],
         },
@@ -2336,6 +2349,12 @@ def test_workspace_starter_bulk_refresh_skips_source_workflow_with_unavailable_n
             "action_decision": skipped_item["action_decision"],
             "sandbox_dependency_changes": None,
             "sandbox_dependency_nodes": [],
+            "tool_governance": {
+                "referenced_tool_ids": [],
+                "missing_tool_ids": [],
+                "governed_tool_count": 0,
+                "strong_isolation_tool_count": 0,
+            },
             "changed": False,
             "rebase_fields": [],
         }
@@ -2405,6 +2424,12 @@ def test_workspace_starter_bulk_rebase_skips_source_workflow_with_unavailable_no
             "action_decision": skipped_item["action_decision"],
             "sandbox_dependency_changes": None,
             "sandbox_dependency_nodes": [],
+            "tool_governance": {
+                "referenced_tool_ids": [],
+                "missing_tool_ids": [],
+                "governed_tool_count": 0,
+                "strong_isolation_tool_count": 0,
+            },
             "changed": False,
             "rebase_fields": [],
         }
@@ -2957,6 +2982,105 @@ def test_workspace_starter_bulk_refresh_reuses_preview_blockers_in_result_receip
     assert refresh_result["follow_up_template_ids"] == [
         name_only["id"],
         refresh_candidate["id"],
+    ]
+
+
+def test_workspace_starter_bulk_refresh_prioritizes_catalog_gap_follow_up(
+    client: TestClient,
+    sqlite_session: Session,
+    sample_workflow,
+) -> None:
+    catalog_gap_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Result Catalog Gap Starter",
+            "description": "Template whose current starter still references a missing tool",
+            "business_track": "应用新建编排",
+            "default_workflow_name": sample_workflow.name,
+            "workflow_focus": "bulk result catalog gap",
+            "recommended_next_step": "bulk result catalog gap next",
+            "tags": ["bulk-result", "catalog-gap"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert catalog_gap_response.status_code == 201
+    catalog_gap = catalog_gap_response.json()
+
+    name_only_response = client.post(
+        "/api/workspace-starters",
+        json={
+            "workspace_id": "default",
+            "name": "Bulk Result Catalog Gap Name Drift",
+            "description": "Template with name-only drift remains in the same receipt.",
+            "business_track": "应用新建编排",
+            "default_workflow_name": "Demo Workflow",
+            "workflow_focus": "bulk result catalog gap name drift",
+            "recommended_next_step": "bulk result catalog gap name drift next",
+            "tags": ["bulk-result", "name-drift"],
+            "definition": sample_workflow.definition,
+            "created_from_workflow_id": sample_workflow.id,
+            "created_from_workflow_version": sample_workflow.version,
+        },
+    )
+    assert name_only_response.status_code == 201
+    name_only = name_only_response.json()
+
+    missing_tool_definition = {
+        "nodes": [
+            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {
+                "id": "catalog_gap_tool",
+                "type": "tool",
+                "name": "Catalog gap tool",
+                "config": {"tool": {"toolId": "native.catalog-gap"}},
+            },
+            {"id": "output", "type": "output", "name": "Output", "config": {}},
+        ],
+        "edges": [
+            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "catalog_gap_tool"},
+            {"id": "e2", "sourceNodeId": "catalog_gap_tool", "targetNodeId": "output"},
+        ],
+    }
+    catalog_gap_record = sqlite_session.get(
+        WorkspaceStarterTemplateRecord,
+        catalog_gap["id"],
+    )
+    assert catalog_gap_record is not None
+    catalog_gap_record.definition = missing_tool_definition
+
+    sample_workflow.version = "0.2.0"
+    sample_workflow.definition = missing_tool_definition
+    sqlite_session.add(catalog_gap_record)
+    sqlite_session.add(sample_workflow)
+    sqlite_session.commit()
+
+    refresh_response = client.post(
+        "/api/workspace-starters/bulk",
+        json={
+            "workspace_id": "default",
+            "action": "refresh",
+            "template_ids": [catalog_gap["id"], name_only["id"]],
+        },
+    )
+
+    assert refresh_response.status_code == 200
+    refresh_result = refresh_response.json()
+
+    assert refresh_result["receipt_items"][0]["reason"] == "source_workflow_invalid"
+    assert refresh_result["receipt_items"][0]["tool_governance"] == {
+        "referenced_tool_ids": ["native.catalog-gap"],
+        "missing_tool_ids": ["native.catalog-gap"],
+        "governed_tool_count": 0,
+        "strong_isolation_tool_count": 0,
+    }
+    assert "缺少 catalog tool 绑定" in refresh_result["outcome_explanation"]["primary_signal"]
+    assert "补齐 tool binding" in refresh_result["outcome_explanation"]["follow_up"]
+    assert refresh_result["follow_up_template_ids"] == [
+        catalog_gap["id"],
+        name_only["id"],
     ]
 
 

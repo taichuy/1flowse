@@ -450,6 +450,150 @@ describe("WorkspaceStarterBulkGovernanceCard", () => {
     expect(message).toContain("涉及 2 个 starter / 3 个 sandbox 依赖漂移节点");
   });
 
+  it("renders catalog gap as the primary bulk result follow-up when receipt items still miss tools", () => {
+    const templates: WorkspaceStarterTemplateItem[] = [
+      {
+        id: "starter-catalog-gap",
+        workspace_id: "default",
+        name: "Catalog gap starter",
+        description: "Starter still pointing at a removed tool.",
+        business_track: "应用新建编排",
+        default_workflow_name: "Catalog Gap Workflow",
+        workflow_focus: "Keep authoring fail-closed.",
+        recommended_next_step: "Repair the missing tool binding.",
+        tags: ["catalog-gap"],
+        definition: { nodes: [], edges: [] },
+        created_from_workflow_id: "wf-gap",
+        created_from_workflow_version: "0.4.0",
+        archived: false,
+        archived_at: null,
+        created_at: "2026-03-21T12:00:00Z",
+        updated_at: "2026-03-21T12:30:00Z",
+        source_governance: {
+          kind: "drifted",
+          status_label: "来源漂移",
+          summary: "当前 starter 与来源 workflow 版本不一致。",
+          source_workflow_id: "wf-gap",
+          source_workflow_name: "Catalog Gap Workflow",
+          template_version: "0.3.0",
+          source_version: "0.4.0",
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "当前主要是来源快照漂移。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["source 0.4.0"]
+          },
+          outcome_explanation: {
+            primary_signal: "当前 starter 与来源 workflow 版本不一致。",
+            follow_up: "先看 source diff，再决定 refresh 还是 rebase。"
+          }
+        }
+      }
+    ];
+    const lastResult: WorkspaceStarterBulkActionResult = {
+      workspace_id: "default",
+      action: "refresh",
+      requested_count: 1,
+      updated_count: 0,
+      skipped_count: 1,
+      updated_items: [],
+      deleted_items: [],
+      skipped_items: [],
+      skipped_reason_summary: [
+        {
+          reason: "source_workflow_invalid",
+          count: 1,
+          detail: "Source workflow is not valid."
+        }
+      ],
+      sandbox_dependency_changes: null,
+      sandbox_dependency_items: [],
+      receipt_items: [
+        {
+          template_id: "starter-catalog-gap",
+          name: "Catalog gap starter",
+          outcome: "skipped",
+          archived: false,
+          reason: "source_workflow_invalid",
+          detail: "Source workflow is not valid.",
+          source_workflow_id: "wf-gap",
+          source_workflow_version: "0.4.0",
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "当前主要是来源快照漂移。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["source 0.4.0"]
+          },
+          sandbox_dependency_changes: null,
+          sandbox_dependency_nodes: [],
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          changed: false,
+          rebase_fields: []
+        }
+      ],
+      outcome_explanation: {
+        primary_signal: "其中 1 个 starter 仍缺少 catalog tool 绑定。",
+        follow_up: "优先回到仍缺 catalog tool 的 starter 或其来源 workflow。"
+      },
+      follow_up_template_ids: ["starter-catalog-gap"]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceStarterBulkGovernanceCard, {
+        inScopeCount: 1,
+        sourceGovernanceScope: null,
+        sourceGovernancePrimaryFollowUp: null,
+        sourceGovernanceFocusTargets: [],
+        preview: {
+          workspace_id: "default",
+          requested_count: 1,
+          previews: {
+            archive: emptyBulkPreviewAction("archive"),
+            restore: emptyBulkPreviewAction("restore"),
+            refresh: emptyBulkPreviewAction("refresh"),
+            rebase: emptyBulkPreviewAction("rebase"),
+            delete: emptyBulkPreviewAction("delete")
+          }
+        },
+        previewNotice: null,
+        isMutating: false,
+        isLoadingPreview: false,
+        isLoadingSourceGovernanceScope: false,
+        lastResult,
+        previewFocusTargets: [],
+        resultFocusTargets: buildWorkspaceStarterBulkResultFocusTargets(lastResult, templates),
+        selectedTemplateId: "starter-catalog-gap",
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "all",
+          needsFollowUp: true,
+          searchQuery: "catalog",
+          selectedTemplateId: "starter-catalog-gap"
+        },
+        onSelectQueuedTemplate: () => {},
+        onFocusTemplate: () => {},
+        onAction: () => {}
+      })
+    );
+
+    expect(html).toContain("catalog gap");
+    expect(html).toContain("native.catalog-gap");
+    expect(html).toContain(
+      "Primary governed starter: Catalog gap starter · missing tool native.catalog-gap · source 0.4.0."
+    );
+    expect(html).toContain("打开源 workflow");
+    expect(html).toContain("definition_issue=missing_tool");
+  });
+
   it("builds focus targets from bulk sandbox drift items", () => {
     const templates: WorkspaceStarterTemplateItem[] = [
       {

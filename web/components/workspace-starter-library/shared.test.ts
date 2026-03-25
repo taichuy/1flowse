@@ -1085,6 +1085,175 @@ describe("workspace starter source action decision", () => {
     });
   });
 
+  it("prioritizes catalog gap on bulk result surfaces and scoped entry links", () => {
+    const focusTemplates: WorkspaceStarterTemplateItem[] = [
+      {
+        id: "starter-catalog-gap",
+        workspace_id: "default",
+        name: "Catalog gap starter",
+        description: "Starter still pointing at a removed tool.",
+        business_track: "应用新建编排",
+        default_workflow_name: "Catalog Gap Workflow",
+        workflow_focus: "Keep authoring fail-closed.",
+        recommended_next_step: "Repair the missing tool binding.",
+        tags: ["catalog-gap"],
+        definition: { nodes: [], edges: [] },
+        created_from_workflow_id: "wf-gap",
+        created_from_workflow_version: "0.4.0",
+        archived: false,
+        archived_at: null,
+        created_at: "2026-03-21T12:00:00Z",
+        updated_at: "2026-03-21T12:30:00Z"
+      },
+      {
+        id: "starter-name-only",
+        workspace_id: "default",
+        name: "Name drift starter",
+        description: "Starter with name-only drift.",
+        business_track: "应用新建编排",
+        default_workflow_name: "Name Drift Workflow",
+        workflow_focus: "Keep authoring fail-closed.",
+        recommended_next_step: "Repair the starter drift.",
+        tags: ["name-drift"],
+        definition: { nodes: [], edges: [] },
+        created_from_workflow_id: "wf-gap",
+        created_from_workflow_version: "0.4.0",
+        archived: false,
+        archived_at: null,
+        created_at: "2026-03-21T12:00:00Z",
+        updated_at: "2026-03-21T12:30:00Z"
+      }
+    ];
+
+    const result: WorkspaceStarterBulkActionResult = {
+      workspace_id: "default",
+      action: "refresh",
+      requested_count: 2,
+      updated_count: 0,
+      skipped_count: 2,
+      updated_items: [],
+      deleted_items: [],
+      skipped_items: [],
+      skipped_reason_summary: [
+        {
+          reason: "source_workflow_invalid",
+          count: 1,
+          detail: "Source workflow is not valid."
+        },
+        {
+          reason: "name_drift_only",
+          count: 1,
+          detail: "Name drift only."
+        }
+      ],
+      sandbox_dependency_changes: null,
+      sandbox_dependency_items: [],
+      receipt_items: [
+        {
+          template_id: "starter-catalog-gap",
+          name: "Catalog gap starter",
+          outcome: "skipped",
+          archived: false,
+          reason: "source_workflow_invalid",
+          detail: "Source workflow is not valid.",
+          source_workflow_id: "wf-gap",
+          source_workflow_version: "0.4.0",
+          action_decision: {
+            recommended_action: "refresh",
+            status_label: "建议 refresh",
+            summary: "当前主要是来源快照漂移。",
+            can_refresh: true,
+            can_rebase: true,
+            fact_chips: ["source 0.4.0"]
+          },
+          sandbox_dependency_changes: null,
+          sandbox_dependency_nodes: [],
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          changed: false,
+          rebase_fields: []
+        },
+        {
+          template_id: "starter-name-only",
+          name: "Name drift starter",
+          outcome: "skipped",
+          archived: false,
+          reason: "name_drift_only",
+          detail: "Name drift only.",
+          source_workflow_id: "wf-gap",
+          source_workflow_version: "0.4.0",
+          action_decision: {
+            recommended_action: "rebase",
+            status_label: "建议 rebase",
+            summary: "Name drift only.",
+            can_refresh: false,
+            can_rebase: true,
+            fact_chips: ["name drift"]
+          },
+          sandbox_dependency_changes: null,
+          sandbox_dependency_nodes: [],
+          tool_governance: {
+            referenced_tool_ids: [],
+            missing_tool_ids: [],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          changed: false,
+          rebase_fields: []
+        }
+      ],
+      outcome_explanation: {
+        primary_signal: "其中 1 个 starter 仍缺少 catalog tool 绑定。",
+        follow_up: "优先回到仍缺 catalog tool 的 starter 或其来源 workflow。"
+      },
+      follow_up_template_ids: ["starter-catalog-gap", "starter-name-only"]
+    };
+
+    expect(
+      buildWorkspaceStarterBulkResultSurface(result, {
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "all",
+          needsFollowUp: true,
+          searchQuery: "catalog",
+          selectedTemplateId: "starter-catalog-gap"
+        }
+      })
+    ).toMatchObject({
+      primarySignal: "其中 1 个 starter 仍缺少 catalog tool 绑定。",
+      recommendedNextStep: {
+        action: "review_result_receipt",
+        label: "catalog gap",
+        detail:
+          "当前 starter 仍引用目录里不存在的 tool：native.catalog-gap；先回源 workflow 补齐 tool binding，再回来继续复用或创建。",
+        primaryResourceSummary:
+          "Catalog gap starter · missing tool native.catalog-gap · source 0.4.0",
+        focusTemplateId: "starter-catalog-gap",
+        focusLabel: "优先聚焦 starter：Catalog gap starter",
+        entryKey: "workflowLibrary",
+        entryOverride: expect.objectContaining({
+          href: expect.stringContaining("definition_issue=missing_tool"),
+          label: "打开源 workflow"
+        })
+      }
+    });
+
+    expect(buildWorkspaceStarterBulkResultFocusTargets(result, focusTemplates)).toMatchObject([
+      {
+        templateId: "starter-catalog-gap",
+        statusLabel: "catalog gap"
+      },
+      {
+        templateId: "starter-name-only",
+        statusLabel: "仅名称漂移"
+      }
+    ]);
+  });
+
   it("builds structured history payload snapshots without raw governance blobs", () => {
     expect(
       buildWorkspaceStarterHistoryPayloadSnapshot({

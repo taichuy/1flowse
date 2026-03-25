@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.explanations import SignalFollowUpExplanation
+from app.schemas.workflow import WorkflowToolGovernanceSummary
 
 WorkflowBusinessTrack = Literal[
     "应用新建编排",
@@ -362,6 +363,9 @@ class WorkspaceStarterBulkReceiptItem(BaseModel):
     action_decision: WorkspaceStarterSourceActionDecision | None = None
     sandbox_dependency_changes: WorkspaceStarterSourceDiffSummary | None = None
     sandbox_dependency_nodes: list[str] = Field(default_factory=list)
+    tool_governance: WorkflowToolGovernanceSummary = Field(
+        default_factory=WorkflowToolGovernanceSummary
+    )
     changed: bool | None = None
     rebase_fields: list[str] = Field(default_factory=list)
 

@@ -50,12 +50,18 @@ def build_workspace_starter_bulk_outcome_explanation(
     skipped_reason_summary: list[WorkspaceStarterBulkSkippedSummary],
     sandbox_dependency_changes: WorkspaceStarterSourceDiffSummary | None,
     sandbox_dependency_item_count: int,
+    receipt_items: list[WorkspaceStarterBulkReceiptItem],
 ) -> SignalFollowUpExplanation:
     action_label = _ACTION_LABELS[action]
     skipped_count = sum(item.count for item in skipped_reason_summary)
     skip_summary_text = _format_skip_summary(skipped_reason_summary)
     sandbox_node_count = _count_summary_changes(sandbox_dependency_changes)
     sandbox_template_count = sandbox_dependency_item_count
+    missing_tool_template_count = sum(
+        1
+        for item in receipt_items
+        if item.outcome != "deleted" and item.tool_governance.missing_tool_ids
+    )
 
     primary_parts = [
         f"本次批量{action_label}请求 {requested_count} 个 starter；"
@@ -72,6 +78,10 @@ def build_workspace_starter_bulk_outcome_explanation(
             "其中 "
             f"{sandbox_template_count} 个 starter / {sandbox_node_count} 个 "
             "sandbox 依赖漂移节点已沉淀进同一份 result receipt。"
+        )
+    if missing_tool_template_count > 0:
+        primary_parts.append(
+            f"其中 {missing_tool_template_count} 个 starter 仍缺少 catalog tool 绑定。"
         )
 
     follow_up_parts: list[str] = []
@@ -90,6 +100,11 @@ def build_workspace_starter_bulk_outcome_explanation(
     ):
         follow_up_parts.append(
             f"先修复来源 workflow 的缺失或无效问题，再重新执行批量{action_label}。"
+        )
+    if missing_tool_template_count > 0:
+        follow_up_parts.append(
+            "优先回到仍缺 catalog tool 的 starter 或其来源 workflow，"
+            "补齐 tool binding 后再继续批量治理或创建 workflow。"
         )
     if sandbox_node_count > 0:
         follow_up_parts.append(
@@ -161,6 +176,9 @@ def _resolve_follow_up_priority(
     action: WorkspaceStarterBulkAction,
     item: WorkspaceStarterBulkReceiptItem,
 ) -> int | None:
+    if item.outcome != "deleted" and item.tool_governance.missing_tool_ids:
+        return -1
+
     if item.outcome == "skipped":
         reason = item.reason or ""
         priority = _FOLLOW_UP_REASON_PRIORITY.get(reason, 8)

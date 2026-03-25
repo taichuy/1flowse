@@ -1,7 +1,8 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type {
   WorkflowDefinitionPreflightIssue,
-  WorkflowDetail
+  WorkflowDetail,
+  WorkflowToolGovernanceSummary
 } from "@/lib/get-workflows";
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 
@@ -222,6 +223,7 @@ export type WorkspaceStarterBulkReceiptItem = {
   action_decision?: WorkspaceStarterSourceActionDecisionPayload | null;
   sandbox_dependency_changes?: WorkspaceStarterSourceDiffSummary | null;
   sandbox_dependency_nodes: string[];
+  tool_governance?: WorkflowToolGovernanceSummary | null;
   changed?: boolean | null;
   rebase_fields: string[];
 };

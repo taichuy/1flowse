@@ -1202,6 +1202,46 @@ function resolveWorkspaceStarterBulkResultCreateWorkflowActionLabel(
   return null;
 }
 
+function buildWorkspaceStarterBulkResultMissingToolRecommendedNextStep(
+  item: WorkspaceStarterBulkReceiptItem,
+  {
+    workspaceStarterGovernanceQueryScope = null
+  }: {
+    workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
+  } = {}
+): WorkspaceStarterGovernanceRecommendedNextStep | null {
+  const missingToolIds = item.tool_governance?.missing_tool_ids ?? [];
+  const missingToolSurface = buildWorkspaceStarterMissingToolGovernanceSurface({
+    template: {
+      id: item.template_id,
+      name: item.name?.trim() || item.template_id,
+      archived: item.archived,
+      created_from_workflow_id: item.source_workflow_id,
+      created_from_workflow_version: item.source_workflow_version,
+      source_governance: null
+    },
+    missingToolIds,
+    workspaceStarterGovernanceQueryScope
+  });
+
+  if (!missingToolSurface) {
+    return null;
+  }
+
+  const focusTemplateName = normalizeString(item.name) ?? item.template_id;
+
+  return {
+    action: "review_result_receipt",
+    label: missingToolSurface.label,
+    detail: missingToolSurface.detail,
+    primaryResourceSummary: missingToolSurface.primaryResourceSummary,
+    focusTemplateId: item.template_id,
+    focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null,
+    entryKey: missingToolSurface.entryKey,
+    entryOverride: missingToolSurface.entryOverride
+  };
+}
+
 export function buildWorkspaceStarterBulkResultRecommendedNextStep(
   result: Pick<
     WorkspaceStarterBulkActionResult,
@@ -1243,6 +1283,14 @@ export function buildWorkspaceStarterBulkResultRecommendedNextStep(
           focusLabel: null
         }
       : null;
+  }
+
+  const missingToolNextStep =
+    buildWorkspaceStarterBulkResultMissingToolRecommendedNextStep(primaryReceiptItem, {
+      workspaceStarterGovernanceQueryScope
+    });
+  if (missingToolNextStep) {
+    return missingToolNextStep;
   }
 
   const actionDecision = normalizeSourceActionDecision(primaryReceiptItem.action_decision);
@@ -1404,10 +1452,15 @@ export function buildWorkspaceStarterBulkResultFocusTargets(
     const driftNodeCount = countSummaryChanges(
       normalizeSourceDiffSummary(item.sandbox_dependency_changes)
     );
+    const missingToolCount = item.tool_governance?.missing_tool_ids.length ?? 0;
     const outcomeLabel = getWorkspaceStarterBulkResultOutcomeLabel(result.action, item);
     const decisionLabel = normalizeString(item.action_decision?.status_label);
     const statusLabel =
-      item.outcome === "updated" && decisionLabel ? `${outcomeLabel} · ${decisionLabel}` : outcomeLabel;
+      missingToolCount > 0
+        ? "catalog gap"
+        : item.outcome === "updated" && decisionLabel
+          ? `${outcomeLabel} · ${decisionLabel}`
+          : outcomeLabel;
 
     return [
       {
