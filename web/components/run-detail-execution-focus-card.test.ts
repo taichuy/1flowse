@@ -468,6 +468,50 @@ describe("RunDetailExecutionFocusCard", () => {
             execution_focus_skill_trace: null
           },
           callback_tickets: [],
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: {
+            generated_at: "2026-03-20T10:00:00Z",
+            workflow_count: 1,
+            binding_count: 1,
+            auth_mode_contract: {
+              supported_auth_modes: ["api_key", "internal"],
+              retired_legacy_auth_modes: ["token"],
+              summary: "支持的 draft 鉴权模式：api_key、internal；遗留模式：token。",
+              follow_up: "支持的 draft 鉴权模式：api_key、internal；遗留模式：token。"
+            },
+            summary: {
+              draft_candidate_count: 0,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            },
+            checklist: [],
+            workflows: [
+              {
+                workflow_id: "workflow-1",
+                workflow_name: "Workflow 1",
+                binding_count: 1,
+                draft_candidate_count: 0,
+                published_blocker_count: 1,
+                offline_inventory_count: 0,
+                tool_governance: {
+                  referenced_tool_ids: ["native.catalog-gap"],
+                  missing_tool_ids: ["native.catalog-gap"],
+                  governed_tool_count: 0,
+                  strong_isolation_tool_count: 0
+                }
+              }
+            ],
+            buckets: {
+              draft_candidates: [],
+              published_blockers: [],
+              offline_inventory: []
+            }
+          },
           sensitive_access_entries: [
             {
               request: {
@@ -531,6 +575,14 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("先处理审批票据，再回来继续看 callback waiting。");
     expect(html).toContain("Open approval inbox");
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain(
+      "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 callback summary、execution focus 与 trace。"
+    );
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
     expect(html).toContain(
       'href="/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-1&amp;node_run_id=node-run-1&amp;access_request_id=access-request-1&amp;approval_ticket_id=approval-ticket-1"'
     );

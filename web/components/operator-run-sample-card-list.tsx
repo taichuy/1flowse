@@ -5,9 +5,9 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
-import { buildLegacyPublishAuthGovernanceSurfaceCopy } from "@/lib/legacy-publish-auth-governance-presenters";
 import type { OperatorRunSampleCard } from "@/lib/operator-run-sample-cards";
 import {
   buildOperatorRecommendedNextStep,
@@ -39,7 +39,6 @@ export function OperatorRunSampleCardList({
   sandboxReadiness = null
 }: OperatorRunSampleCardListProps) {
   const surfaceCopy = buildOperatorFollowUpSurfaceCopy();
-  const legacyAuthSurfaceCopy = buildLegacyPublishAuthGovernanceSurfaceCopy();
 
   if (cards.length === 0) {
     return null;
@@ -112,38 +111,12 @@ export function OperatorRunSampleCardList({
             <p className="binding-meta">{sample.summary}</p>
           ) : null}
 
-          {sample.workflowCatalogGapSummary ? (
-            <div className="entry-card compact-card">
-              <div className="payload-card-header">
-                <span className="status-meta">Workflow governance</span>
-                <span className="event-chip">{sample.workflowCatalogGapSummary}</span>
-              </div>
-              {sample.workflowCatalogGapDetail ? (
-                <p className="section-copy entry-copy">{sample.workflowCatalogGapDetail}</p>
-              ) : null}
-              {sample.workflowGovernanceHref ? (
-                <Link className="inline-link" href={sample.workflowGovernanceHref}>
-                  回到 workflow 编辑器处理 catalog gap
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
-
-          {sample.legacyAuthHandoff ? (
-            <div className="entry-card compact-card">
-              <div className="payload-card-header">
-                <span className="status-meta">{legacyAuthSurfaceCopy.title}</span>
-                <span className="event-chip">{sample.legacyAuthHandoff.bindingChipLabel}</span>
-                <span className="event-chip">{sample.legacyAuthHandoff.statusChipLabel}</span>
-              </div>
-              <p className="section-copy entry-copy">{sample.legacyAuthHandoff.detail}</p>
-              {sample.workflowGovernanceHref ? (
-                <Link className="inline-link" href={sample.workflowGovernanceHref}>
-                  回到 workflow 编辑器处理 publish auth contract
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
+          <WorkflowGovernanceHandoffCards
+            workflowCatalogGapSummary={sample.workflowCatalogGapSummary}
+            workflowCatalogGapDetail={sample.workflowCatalogGapDetail}
+            workflowGovernanceHref={sample.workflowGovernanceHref}
+            legacyAuthHandoff={sample.legacyAuthHandoff}
+          />
 
           {snapshotMetaRows.length ? (
             <dl className="compact-meta-list">

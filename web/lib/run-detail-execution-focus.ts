@@ -9,11 +9,21 @@ import type {
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
+import {
+  buildLegacyPublishAuthWorkflowHandoff,
+  type LegacyPublishAuthWorkflowHandoff
+} from "@/lib/legacy-publish-auth-governance-presenters";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 import {
   formatExecutionFocusFollowUp,
   formatExecutionFocusPrimarySignal
 } from "@/lib/run-execution-focus-presenters";
+import {
+  formatCatalogGapToolSummary,
+  formatWorkflowMissingToolSummary
+} from "@/lib/workflow-definition-governance";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
+import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 type RunDetailFocusEvidence = {
   artifact_refs: string[];
@@ -54,6 +64,10 @@ export type RunDetailExecutionFocusViewModel = {
   skillReferencePhaseCounts: Record<string, number>;
   skillReferenceSourceCounts: Record<string, number>;
   skillReferenceLoads: SkillReferenceLoadItem[];
+  workflowGovernanceHref: string | null;
+  workflowCatalogGapSummary: string | null;
+  workflowCatalogGapDetail: string | null;
+  legacyAuthHandoff: LegacyPublishAuthWorkflowHandoff | null;
   hasCallbackSummary: boolean;
 };
 
@@ -76,6 +90,49 @@ function normalizeSkillReferenceLoads(
       Array.isArray(load.references) &&
       load.references.length > 0
   );
+}
+
+function resolveWorkflowGovernanceHref({
+  workflowId,
+  toolGovernance
+}: {
+  workflowId: string | null;
+  toolGovernance: RunDetail["tool_governance"];
+}) {
+  if (!workflowId) {
+    return null;
+  }
+
+  const workflowDetailHref = buildAuthorFacingWorkflowDetailLinkSurface({
+    workflowId,
+    variant: "editor"
+  }).href;
+
+  return toolGovernance
+    ? appendWorkflowLibraryViewStateForWorkflow(
+        workflowDetailHref,
+        { tool_governance: toolGovernance },
+        { definitionIssue: null }
+      )
+    : workflowDetailHref;
+}
+
+function buildWorkflowCatalogGapDetail(toolGovernance: RunDetail["tool_governance"]) {
+  const workflowCatalogGapSummary = toolGovernance
+    ? formatWorkflowMissingToolSummary({ tool_governance: toolGovernance })
+    : null;
+  const workflowCatalogGapToolCopy = formatCatalogGapToolSummary(
+    toolGovernance?.missing_tool_ids ?? []
+  );
+
+  return {
+    workflowCatalogGapSummary,
+    workflowCatalogGapDetail: workflowCatalogGapSummary
+      ? workflowCatalogGapToolCopy
+        ? `当前 callback summary 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 callback summary、execution focus 与 trace。`
+        : "当前 callback summary 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 callback summary、execution focus 与 trace。"
+      : null
+  };
 }
 
 function matchesSensitiveAccessEntryNodeRun(
@@ -197,6 +254,23 @@ export function buildRunDetailExecutionFocusViewModel(
   const callbackSummarySample = resolveCallbackSummarySample(run, focusNode);
   const callbackTickets = callbackSummarySample?.callback_tickets ?? [];
   const sensitiveAccessEntries = callbackSummarySample?.sensitive_access_entries ?? [];
+  const toolGovernance = callbackSummarySample?.tool_governance ?? run.tool_governance ?? null;
+  const legacyAuthGovernance =
+    callbackSummarySample?.legacy_auth_governance ?? run.legacy_auth_governance ?? null;
+  const workflowId =
+    trimOrNull(callbackSummarySample?.snapshot?.workflow_id) ??
+    trimOrNull(run.workflow_id) ??
+    trimOrNull(legacyAuthGovernance?.workflows[0]?.workflow_id);
+  const workflowGovernanceHref = resolveWorkflowGovernanceHref({
+    workflowId,
+    toolGovernance
+  });
+  const { workflowCatalogGapSummary, workflowCatalogGapDetail } = buildWorkflowCatalogGapDetail(
+    toolGovernance
+  );
+  const legacyAuthHandoff = workflowId
+    ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance, workflowId)
+    : null;
 
   return {
     nodeId: focusNode.node_id,
@@ -240,6 +314,10 @@ export function buildRunDetailExecutionFocusViewModel(
     skillReferencePhaseCounts: run.execution_focus_skill_trace?.phase_counts ?? {},
     skillReferenceSourceCounts: run.execution_focus_skill_trace?.source_counts ?? {},
     skillReferenceLoads,
+    workflowGovernanceHref,
+    workflowCatalogGapSummary,
+    workflowCatalogGapDetail,
+    legacyAuthHandoff,
     hasCallbackSummary: hasExecutionNodeCallbackWaitingSummaryFacts({
       callback_waiting_explanation: focusNode.callback_waiting_explanation ?? null,
       callback_waiting_lifecycle: focusNode.callback_waiting_lifecycle ?? null,

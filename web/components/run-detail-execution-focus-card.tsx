@@ -6,6 +6,7 @@ import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
 import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import type { RunDetail } from "@/lib/get-run-detail";
@@ -208,6 +209,15 @@ export function RunDetailExecutionFocusCard({
             showFocusExecutionFacts={shouldDeferToCallbackWaitingSummary}
             showInlineActions={false}
             waitingReason={focus.waitingReason}
+          />
+        ) : null}
+
+        {focus.hasCallbackSummary ? (
+          <WorkflowGovernanceHandoffCards
+            workflowCatalogGapSummary={focus.workflowCatalogGapSummary}
+            workflowCatalogGapDetail={focus.workflowCatalogGapDetail}
+            workflowGovernanceHref={focus.workflowGovernanceHref}
+            legacyAuthHandoff={focus.legacyAuthHandoff}
           />
         ) : null}
 
