@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
 import type { RunDetail } from "@/lib/get-run-detail";
+import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
@@ -70,6 +71,57 @@ function buildCallbackWaitingAutomation(): CallbackWaitingAutomationCheck {
       label: "Open run library"
     },
     steps: []
+  };
+}
+
+function buildSensitiveAccessEntry(): SensitiveAccessTimelineEntry {
+  return {
+    request: {
+      id: "request-1",
+      run_id: "run-1",
+      node_run_id: "node-run-1",
+      requester_type: "tool",
+      requester_id: "native.search",
+      resource_id: "resource-1",
+      action_type: "invoke",
+      purpose_text: "fetch remote search results",
+      decision: "require_approval",
+      decision_label: "Require approval",
+      reason_code: "policy_requires_approval",
+      reason_label: "Policy requires approval",
+      policy_summary: "High-risk remote search requires operator approval.",
+      created_at: "2026-03-20T10:00:00Z",
+      decided_at: null
+    },
+    resource: {
+      id: "resource-1",
+      label: "Remote search capability",
+      description: "External search adapter",
+      sensitivity_level: "L2",
+      source: "local_capability",
+      metadata: {},
+      created_at: "2026-03-20T09:00:00Z",
+      updated_at: "2026-03-20T09:00:00Z"
+    },
+    approval_ticket: {
+      id: "ticket-1",
+      access_request_id: "request-1",
+      run_id: "run-1",
+      node_run_id: "node-run-1",
+      status: "pending",
+      waiting_status: "waiting",
+      approved_by: null,
+      decided_at: null,
+      expires_at: "2026-03-20T10:30:00Z",
+      created_at: "2026-03-20T10:00:00Z"
+    },
+    notifications: [],
+    outcome_explanation: {
+      primary_signal: "当前阻断来自敏感访问审批票据。",
+      follow_up: "下一步：优先处理审批票据，再观察 waiting 节点是否恢复。"
+    },
+    run_snapshot: null,
+    run_follow_up: null
   };
 }
 
@@ -627,7 +679,7 @@ describe("RunDetailExecutionFocusCard", () => {
           run_id: "run-1",
           snapshot: null,
           callback_tickets: [],
-          sensitive_access_entries: []
+          sensitive_access_entries: [buildSensitiveAccessEntry()]
         }
       ],
       explanation: {
@@ -647,6 +699,7 @@ describe("RunDetailExecutionFocusCard", () => {
     expect(html).toContain("approval blocker");
     expect(html).toContain("先处理审批票据，再回来继续看 execution focus。");
     expect(html).toContain("open approval inbox slice");
+    expect(html).toContain("Primary governed resource: Remote search capability.");
   });
 
   it("renders the shared skill trace narrative when focus references are present", () => {

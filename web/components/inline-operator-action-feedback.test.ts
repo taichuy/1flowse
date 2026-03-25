@@ -586,6 +586,7 @@ describe("InlineOperatorActionFeedback", () => {
     expect(html).toContain("approval blocker");
     expect(html).toContain("open approval inbox slice");
     expect(html).toContain("approval_ticket_id=ticket-1");
+    expect(html).toContain("Primary governed resource: Remote search capability.");
   });
 
   it("drops self-links from inline feedback when the current page already matches the inbox slice", () => {

@@ -3,12 +3,15 @@ import Link from "next/link";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SensitiveAccessLegacyAuthGovernanceCompactCard } from "@/components/sensitive-access-legacy-auth-governance-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
+import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import {
   buildOperatorInlineActionSampleInboxContext,
   buildExecutionFocusExplainableNode,
@@ -17,6 +20,7 @@ import {
 } from "@/lib/operator-inline-action-feedback";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { buildOperatorRunSampleCards } from "@/lib/operator-run-sample-cards";
+import { resolveOperatorRunFollowUpSample } from "@/lib/operator-run-follow-up-samples";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import {
   buildOperatorRecommendedActionCandidate,
@@ -78,6 +82,16 @@ export function InlineOperatorActionFeedback({
   const executionFactBadges = listExecutionFocusRuntimeFactBadges(callbackWaitingFocusNode);
   const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshot);
   const executionSurfaceCopy = buildRunDetailExecutionFocusSurfaceCopy();
+  const sampledRunFollowUp = resolveOperatorRunFollowUpSample(runFollowUp, runId);
+  const callbackWaitingPrimaryResourceSummary = formatSensitiveResourceGovernanceSummary(
+    pickCallbackWaitingInlineSensitiveAccessEntry(
+      callbackWaitingSummaryProps?.sensitiveAccessEntries ??
+        sampledRunFollowUp?.sensitiveAccessEntries ??
+        []
+    )?.resource ?? callbackWaitingSummaryProps?.sensitiveAccessSummary?.primary_resource ?? null
+  );
+  const recommendedNextStepPrimaryResourceSummary =
+    model.primaryResourceSummary ?? callbackWaitingPrimaryResourceSummary;
   const scopedRunDetailHref = runId ? resolveRunDetailHref?.(runId) ?? null : null;
   const runDetailLink = buildOperatorRunDetailLinkSurface({
     runId,
@@ -134,6 +148,7 @@ export function InlineOperatorActionFeedback({
     action: runFollowUp?.recommendedAction ?? null,
     detail: model.runFollowUpFollowUp,
     fallbackDetail: callbackFallbackDetail,
+    primaryResourceSummary: recommendedNextStepPrimaryResourceSummary,
     scope: "callback",
     surfaceCopy
   });
@@ -154,6 +169,7 @@ export function InlineOperatorActionFeedback({
         },
         detail: model.runFollowUpFollowUp,
         fallbackDetail: callbackFallbackDetail,
+        primaryResourceSummary: recommendedNextStepPrimaryResourceSummary,
         scope: "callback",
         surfaceCopy
       })
@@ -169,12 +185,14 @@ export function InlineOperatorActionFeedback({
     detail: canonicalCallbackOperatorFollowUp,
     hrefLabel: callbackWaitingSummaryProps?.inboxHref ? surfaceCopy.openInboxSliceLabel : null,
     fallbackDetail: callbackFallbackDetail,
+    primaryResourceSummary: recommendedNextStepPrimaryResourceSummary,
     surfaceCopy
   });
   const canonicalExecutionCandidate = buildOperatorRecommendedActionCandidate({
     action: runFollowUp?.recommendedAction ?? null,
     detail: model.runFollowUpFollowUp,
     fallbackDetail: model.runSnapshotSummary ?? executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    primaryResourceSummary: recommendedNextStepPrimaryResourceSummary,
     scope: "execution",
     surfaceCopy
   });
@@ -187,6 +205,7 @@ export function InlineOperatorActionFeedback({
     label: runId ? "run detail" : "execution follow-up",
     detail: model.runFollowUpFollowUp,
     fallbackDetail: model.runSnapshotSummary ?? executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    primaryResourceSummary: recommendedNextStepPrimaryResourceSummary,
     surfaceCopy
   });
   const recommendedNextStep =
@@ -207,6 +226,10 @@ export function InlineOperatorActionFeedback({
     Boolean(model.runFollowUpFollowUp) &&
     model.runFollowUpFollowUp !== callbackWaitingFollowUp &&
     model.runFollowUpFollowUp !== recommendedNextStep?.detail;
+  const shouldRenderPrimaryResourceDetail =
+    Boolean(model.primaryResourceDetail) &&
+    model.primaryResourceDetail !== model.blockerDeltaSummary &&
+    model.primaryResourceSummary !== recommendedNextStep?.primaryResourceSummary;
   const snapshotMetaRows = buildOperatorRunSnapshotMetaRows({
     runStatus: model.runStatus,
     currentNodeId: model.currentNodeId,
@@ -241,22 +264,12 @@ export function InlineOperatorActionFeedback({
       {model.headline && model.headline !== callbackWaitingSnapshotSummary ? (
         <p className="section-copy entry-copy">{model.headline}</p>
       ) : null}
-      {recommendedNextStep ? (
-        <div className="entry-card compact-card">
-          <div className="payload-card-header">
-            <span className="status-meta">{surfaceCopy.recommendedNextStepTitle}</span>
-            <span className="event-chip">{recommendedNextStep.label}</span>
-            {recommendedNextStep.href && recommendedNextStep.href_label ? (
-              <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
-                {recommendedNextStep.href_label}
-              </Link>
-            ) : null}
-          </div>
-          <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
-        </div>
-      ) : null}
+      <OperatorRecommendedNextStepCard
+        recommendedNextStep={recommendedNextStep}
+        surfaceCopy={surfaceCopy}
+      />
       {shouldRenderOutcomeFollowUp ? <p className="binding-meta">{model.outcomeFollowUp}</p> : null}
-      {model.primaryResourceDetail && model.primaryResourceDetail !== model.blockerDeltaSummary ? (
+      {shouldRenderPrimaryResourceDetail ? (
         <p className="binding-meta">{model.primaryResourceDetail}</p>
       ) : null}
       {model.blockerDeltaSummary ? <p className="binding-meta">{model.blockerDeltaSummary}</p> : null}

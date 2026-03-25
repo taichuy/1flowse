@@ -3,8 +3,11 @@ import Link from "next/link";
 
 import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summary-card";
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
+import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
+import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type {
   CallbackWaitingAutomationCheck,
@@ -72,6 +75,9 @@ export function RunDetailExecutionFocusCard({
     blockedExecution: focus.reason === "blocked_execution",
     signals: [focus.primarySignal, explicitExecutionFollowUp, focus.nodeType]
   });
+  const primaryResourceSummary = formatSensitiveResourceGovernanceSummary(
+    pickCallbackWaitingInlineSensitiveAccessEntry(focus.sensitiveAccessEntries)?.resource ?? null
+  );
   const sharedSandboxCandidate = executionNeedsSharedSandboxFollowUp
     ? buildSandboxReadinessFollowUpCandidate(sandboxReadiness, "sandbox readiness")
     : null;
@@ -80,6 +86,7 @@ export function RunDetailExecutionFocusCard({
     action: run.run_follow_up?.recommended_action ?? null,
     detail: explicitExecutionFollowUp ?? run.run_follow_up?.explanation?.follow_up ?? null,
     fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    primaryResourceSummary,
     scope: "any",
     surfaceCopy: operatorSurfaceCopy
   });
@@ -93,6 +100,7 @@ export function RunDetailExecutionFocusCard({
     detail: explicitExecutionFollowUp ?? run.run_follow_up?.explanation?.follow_up ?? null,
     hrefLabel: localRecommendedNextStepHrefLabel,
     fallbackDetail: executionSurfaceCopy.recommendedNextStepFallbackDetail,
+    primaryResourceSummary,
     surfaceCopy: operatorSurfaceCopy
   });
   const recommendedNextStep = !shouldDeferToCallbackWaitingSummary
@@ -129,20 +137,10 @@ export function RunDetailExecutionFocusCard({
         {shouldRenderStandaloneExecutionFollowUp ? (
           <p className="section-copy entry-copy">{explicitExecutionFollowUp}</p>
         ) : null}
-        {recommendedNextStep ? (
-          <div className="entry-card compact-card">
-            <div className="payload-card-header">
-              <span className="status-meta">{operatorSurfaceCopy.recommendedNextStepTitle}</span>
-              <span className="event-chip">{recommendedNextStep.label}</span>
-              {recommendedNextStep.href && recommendedNextStep.href_label ? (
-                <Link className="event-chip inbox-filter-link" href={recommendedNextStep.href}>
-                  {recommendedNextStep.href_label}
-                </Link>
-              ) : null}
-            </div>
-            <p className="section-copy entry-copy">{recommendedNextStep.detail}</p>
-          </div>
-        ) : null}
+        <OperatorRecommendedNextStepCard
+          recommendedNextStep={recommendedNextStep}
+          surfaceCopy={operatorSurfaceCopy}
+        />
 
         <div className="tool-badge-row">
           <span className="event-chip">{focus.nodeName}</span>
