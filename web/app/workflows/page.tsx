@@ -4,11 +4,21 @@ import Link from "next/link";
 import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
-import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import {
+  WorkbenchEntryLink,
+  WorkbenchEntryLinks,
+  type WorkbenchEntryLinkKey,
+  type WorkbenchEntryLinkOverride
+} from "@/components/workbench-entry-links";
+import { WorkspaceStarterFollowUpCard } from "@/components/workspace-starter-library/follow-up-card";
+import {
+  buildWorkspaceStarterSourceGovernanceSurface
+} from "@/components/workspace-starter-library/shared";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowLibraryLegacyAuthGovernanceCard } from "@/components/workflow-library-legacy-auth-governance-card";
 import { buildCrossEntryRiskDigest } from "@/lib/cross-entry-risk-digest";
 import { getSensitiveAccessInboxSnapshot } from "@/lib/get-sensitive-access";
+import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import {
   getWorkflowLibrarySnapshot,
   type WorkflowLibraryStarterItem
@@ -117,11 +127,17 @@ export default async function WorkflowsPage({
     sensitiveAccessSummary: sensitiveAccessInbox.summary,
     callbackWaitingAutomation: systemOverview.callback_waiting_automation,
     sandboxReadiness: systemOverview.sandbox_readiness,
-    starters: workflowLibrary.starters,
     currentHref: workflowLibraryHref,
     workspaceStarterViewState,
     workflowLibraryViewState
   });
+  const emptyStateStarterFollowUp =
+    workflows.length === 0
+      ? buildWorkflowLibraryEmptyStateStarterFollowUp({
+          starters: workflowLibrary.starters,
+          workspaceStarterViewState
+        })
+      : null;
   const crossEntryRiskDigest = buildCrossEntryRiskDigest({
     sandboxReadiness: systemOverview.sandbox_readiness,
     callbackWaitingAutomation: systemOverview.callback_waiting_automation,
@@ -226,6 +242,23 @@ export default async function WorkflowsPage({
                 <Link className="inline-link" href={clearWorkflowLibraryFilterHref}>
                   清除筛选
                 </Link>
+              ) : emptyStateStarterFollowUp ? (
+                <WorkspaceStarterFollowUpCard
+                  detail={emptyStateStarterFollowUp.detail}
+                  headline={emptyStateStarterFollowUp.headline}
+                  label={emptyStateStarterFollowUp.label}
+                  primaryResourceSummary={emptyStateStarterFollowUp.primaryResourceSummary}
+                  actions={
+                    emptyStateStarterFollowUp.entryKey ? (
+                      <WorkbenchEntryLink
+                        className="inline-link"
+                        currentHref={workflowLibraryHref}
+                        linkKey={emptyStateStarterFollowUp.entryKey}
+                        override={emptyStateStarterFollowUp.entryOverride}
+                      />
+                    ) : null
+                  }
+                />
               ) : recommendedNextStep ? (
                 <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
               ) : (
@@ -395,7 +428,6 @@ function buildWorkflowLibraryRecommendedNextStep({
   sensitiveAccessSummary,
   callbackWaitingAutomation,
   sandboxReadiness,
-  starters,
   currentHref,
   workspaceStarterViewState,
   workflowLibraryViewState
@@ -405,7 +437,6 @@ function buildWorkflowLibraryRecommendedNextStep({
   sensitiveAccessSummary: Awaited<ReturnType<typeof getSensitiveAccessInboxSnapshot>>["summary"];
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
-  starters: WorkflowLibraryStarterItem[];
   currentHref?: string;
   workspaceStarterViewState: Parameters<
     typeof buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState
@@ -486,76 +517,173 @@ function buildWorkflowLibraryRecommendedNextStep({
     };
   }
 
-  if (summary.workflowCount === 0) {
-    return buildWorkflowLibraryEmptyStateRecommendedNextStep(
-      starters,
-      workspaceStarterViewState
-    );
-  }
-
   return null;
 }
 
-function buildWorkflowLibraryEmptyStateRecommendedNextStep(
-  starters: WorkflowLibraryStarterItem[],
+type WorkflowLibraryEmptyStateStarterFollowUp = {
+  label: string;
+  headline?: string | null;
+  detail: string;
+  primaryResourceSummary?: string | null;
+  entryKey?: WorkbenchEntryLinkKey;
+  entryOverride?: WorkbenchEntryLinkOverride;
+};
+
+type WorkspaceStarterFollowUpViewState = Parameters<
+  typeof buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState
+>[0];
+
+function buildWorkflowLibraryEmptyStateStarterFollowUp({
+  starters,
+  workspaceStarterViewState
+}: {
+  starters: WorkflowLibraryStarterItem[];
   workspaceStarterViewState: Parameters<
     typeof buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState
-  >[0]["viewState"]
-): OperatorRecommendedNextStep {
+  >[0]["viewState"];
+}): WorkflowLibraryEmptyStateStarterFollowUp | null {
   const activeStarters = starters.filter((starter) => !starter.archived);
-  const starterRequiringGovernanceFollowUp =
+  if (activeStarters.length === 0) {
+    return null;
+  }
+
+  const starterRequiringFollowUp =
     activeStarters.find(
       (starter) =>
         starter.sourceGovernance?.kind === "missing_source" ||
         starter.sourceGovernance?.kind === "drifted"
     ) ?? null;
 
-  if (starterRequiringGovernanceFollowUp) {
-    const governanceKind = starterRequiringGovernanceFollowUp.sourceGovernance?.kind ?? "all";
+  if (starterRequiringFollowUp) {
+    const followUpSourceGovernanceKind =
+      starterRequiringFollowUp.sourceGovernance?.kind === "missing_source" ||
+      starterRequiringFollowUp.sourceGovernance?.kind === "drifted"
+        ? starterRequiringFollowUp.sourceGovernance.kind
+        : "all";
+    const followUpViewState: WorkspaceStarterFollowUpViewState = {
+      ...workspaceStarterViewState,
+      activeTrack: starterRequiringFollowUp.businessTrack,
+      sourceGovernanceKind: followUpSourceGovernanceKind,
+      needsFollowUp: true,
+      selectedTemplateId: starterRequiringFollowUp.id
+    };
+    const sourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
+      template: toWorkspaceStarterTemplateItem(starterRequiringFollowUp),
+      workspaceStarterGovernanceQueryScope: followUpViewState
+    });
 
     return {
-      label: "starter governance",
+      label:
+        sourceGovernanceSurface.recommendedNextStep?.label ??
+        sourceGovernanceSurface.presenter.actionStatusLabel ??
+        sourceGovernanceSurface.presenter.statusLabel,
+      headline: `${starterRequiringFollowUp.name} 当前是 workflow library 空态下最先需要处理的 starter。`,
       detail:
-        `当前还没有可编辑 workflow，而 workspace starter ${starterRequiringGovernanceFollowUp.name} ` +
-        `仍处于${starterRequiringGovernanceFollowUp.sourceGovernance?.statusLabel ?? "待治理"}；` +
-        "先回到治理页收口来源问题，再从该 starter 创建第一个 workflow。",
-      href: buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState({
-        activeTrack: starterRequiringGovernanceFollowUp.businessTrack,
-        sourceGovernanceKind: governanceKind,
-        needsFollowUp: true,
-        searchQuery: "",
-        selectedTemplateId: starterRequiringGovernanceFollowUp.id
-      }),
-      href_label: "回到治理页"
+        sourceGovernanceSurface.recommendedNextStep?.detail ??
+        sourceGovernanceSurface.presenter.followUp ??
+        sourceGovernanceSurface.presenter.summary,
+      primaryResourceSummary:
+        sourceGovernanceSurface.recommendedNextStep?.primaryResourceSummary,
+      entryKey:
+        sourceGovernanceSurface.recommendedNextStep?.entryKey ?? "workspaceStarterLibrary",
+      entryOverride:
+        sourceGovernanceSurface.recommendedNextStep?.entryOverride ?? {
+          href: buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
+            followUpViewState
+          ),
+          label: "回到治理页"
+        }
     };
   }
 
   const starterForCreate = activeStarters[0] ?? null;
   if (starterForCreate) {
+    const createViewState: WorkspaceStarterFollowUpViewState = {
+      ...workspaceStarterViewState,
+      activeTrack: starterForCreate.businessTrack,
+      sourceGovernanceKind: "all" as const,
+      needsFollowUp: false,
+      selectedTemplateId: starterForCreate.id
+    };
+    const sourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({
+      template: toWorkspaceStarterTemplateItem(starterForCreate),
+      workspaceStarterGovernanceQueryScope: createViewState
+    });
+
+    if (sourceGovernanceSurface.recommendedNextStep) {
+      return {
+        label: sourceGovernanceSurface.recommendedNextStep.label,
+        headline: `${starterForCreate.name} 当前是 workflow library 空态下最先可继续推进的 starter。`,
+        detail: sourceGovernanceSurface.recommendedNextStep.detail,
+        primaryResourceSummary:
+          sourceGovernanceSurface.recommendedNextStep.primaryResourceSummary,
+        entryKey:
+          sourceGovernanceSurface.recommendedNextStep.entryKey ?? "createWorkflow",
+        entryOverride:
+          sourceGovernanceSurface.recommendedNextStep.entryOverride ?? {
+            href: buildWorkflowCreateHrefFromWorkspaceStarterViewState(createViewState),
+            label: sourceGovernanceSurface.recommendedNextStep.label
+          }
+      };
+    }
+
     return {
       label: "first workflow",
       detail:
         `当前还没有可编辑 workflow；优先从 starter ${starterForCreate.name} 创建首个草稿，` +
         "把作者入口继续从 starter 推进到 editor。",
-      href: buildWorkflowCreateHrefFromWorkspaceStarterViewState({
-        activeTrack: starterForCreate.businessTrack,
-        sourceGovernanceKind: "all",
-        needsFollowUp: false,
-        searchQuery: "",
-        selectedTemplateId: starterForCreate.id
-      }),
-      href_label: "用这个 starter 创建 workflow"
+      entryKey: "createWorkflow",
+      entryOverride: {
+        href: buildWorkflowCreateHrefFromWorkspaceStarterViewState({
+          activeTrack: starterForCreate.businessTrack,
+          sourceGovernanceKind: "all",
+          needsFollowUp: false,
+          searchQuery: "",
+          selectedTemplateId: starterForCreate.id
+        }),
+        label: "用这个 starter 创建 workflow"
+      }
     };
   }
 
+  return null;
+}
+
+function toWorkspaceStarterTemplateItem(
+  starter: WorkflowLibraryStarterItem
+): WorkspaceStarterTemplateItem {
   return {
-    label: "starter library",
-    detail:
-      "当前 workflow 列表仍为空，workspace starter library 里也还没有可直接复用的 active starter；先准备第一个 starter，再回到创建页继续主链。",
-    href: buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
-      workspaceStarterViewState
-    ),
-    href_label: "打开 workspace starter library"
+    id: starter.id,
+    workspace_id: starter.workspaceId ?? "default",
+    name: starter.name,
+    description: starter.description,
+    business_track: starter.businessTrack,
+    default_workflow_name: starter.defaultWorkflowName,
+    workflow_focus: starter.workflowFocus,
+    recommended_next_step: starter.recommendedNextStep,
+    tags: starter.tags,
+    definition: starter.definition,
+    created_from_workflow_id:
+      starter.createdFromWorkflowId ?? starter.sourceGovernance?.sourceWorkflowId ?? null,
+    created_from_workflow_version:
+      starter.createdFromWorkflowVersion ?? starter.sourceGovernance?.sourceVersion ?? null,
+    archived: starter.archived,
+    archived_at: starter.archivedAt ?? null,
+    created_at: starter.createdAt ?? "",
+    updated_at: starter.updatedAt ?? starter.createdAt ?? "",
+    source_governance: starter.sourceGovernance
+      ? {
+          kind: starter.sourceGovernance.kind,
+          status_label: starter.sourceGovernance.statusLabel,
+          summary: starter.sourceGovernance.summary,
+          source_workflow_id: starter.sourceGovernance.sourceWorkflowId ?? null,
+          source_workflow_name: starter.sourceGovernance.sourceWorkflowName ?? null,
+          template_version: starter.sourceGovernance.templateVersion ?? null,
+          source_version: starter.sourceGovernance.sourceVersion ?? null,
+          action_decision: starter.sourceGovernance.actionDecision ?? null,
+          outcome_explanation: starter.sourceGovernance.outcomeExplanation ?? null
+        }
+      : null
   };
 }
 

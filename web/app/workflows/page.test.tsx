@@ -642,10 +642,13 @@ describe("WorkflowsPage", () => {
     const html = renderToStaticMarkup(await WorkflowsPage());
 
     expect(html).toContain("当前还没有可编辑的 workflow");
-    expect(html).toContain("starter governance");
-    expect(html).toContain("仍处于来源缺失");
-    expect(html).toContain("回到治理页");
-    expect(html).toContain("/workspace-starters?needs_follow_up=true&amp;source_governance_kind=missing_source&amp;starter=starter-governed");
+    expect(html).toContain("Governed starter 当前是 workflow library 空态下最先需要处理的 starter。");
+    expect(html).toContain("Primary governed starter: Governed starter · 来源缺失 · source Source workflow.");
+    expect(html).toContain("确认模板后带此 starter 回到创建页");
+    expect(html).toContain(
+      "/workflows/new?needs_follow_up=true&amp;source_governance_kind=missing_source&amp;starter=starter-governed&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+    );
+    expect(html.match(/Recommended next step/g)).toHaveLength(1);
     expect(html).toContain("没有缺失 catalog tool");
   });
 
@@ -663,10 +666,11 @@ describe("WorkflowsPage", () => {
 
     const html = renderToStaticMarkup(await WorkflowsPage());
 
-    expect(html).toContain("first workflow");
-    expect(html).toContain("优先从 starter OpenClaw starter 创建首个草稿");
-    expect(html).toContain("用这个 starter 创建 workflow");
+    expect(html).toContain("OpenClaw starter 当前是 workflow library 空态下最先可继续推进的 starter。");
+    expect(html).toContain("带此 starter 回到创建页");
+    expect(html).toContain("Primary governed starter: OpenClaw starter · 无来源.");
     expect(html).toContain("/workflows/new?starter=starter-openclaw&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92");
+    expect(html.match(/Recommended next step/g)).toHaveLength(1);
   });
 
   it("preserves workspace starter scope across workflow library links", async () => {
