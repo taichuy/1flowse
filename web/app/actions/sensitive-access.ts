@@ -182,7 +182,9 @@ function toBulkRunSamples(summary?: OperatorRunFollowUpBody | null) {
     callbackTickets: Array.isArray(item.callback_tickets) ? item.callback_tickets : [],
     sensitiveAccessEntries: Array.isArray(item.sensitive_access_entries)
       ? item.sensitive_access_entries
-      : []
+      : [],
+    toolGovernance: item.tool_governance ?? null,
+    legacyAuthGovernance: item.legacy_auth_governance ?? null
   }));
 }
 

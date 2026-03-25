@@ -430,6 +430,7 @@ export function InlineOperatorActionFeedback({
           <OperatorRunSampleCardList
             cards={sampledRunCards}
             callbackWaitingSummaryProps={{
+              ...callbackWaitingSummaryProps,
               recommendedAction: canonicalCallbackRecommendedAction,
               operatorFollowUp: canonicalCallbackOperatorFollowUp,
               currentHref: currentHref ?? callbackWaitingSummaryProps?.currentHref ?? null,

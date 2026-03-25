@@ -362,7 +362,14 @@ describe("sensitive access actions", () => {
                   primary_signal: "仍在等待审批结果。",
                   follow_up: "继续观察审批与 callback。"
                 }
-              }
+              },
+              tool_governance: {
+                referenced_tool_ids: ["native.catalog-gap"],
+                missing_tool_ids: ["native.catalog-gap"],
+                governed_tool_count: 0,
+                strong_isolation_tool_count: 0
+              },
+              legacy_auth_governance: buildLegacyAuthGovernanceSnapshot()
             }
           ]
         }
@@ -420,11 +427,44 @@ describe("sensitive access actions", () => {
               waitingReason: null,
               executionFocusReason: null
             },
+            toolGovernance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            },
+            legacyAuthGovernance: expect.objectContaining({
+              workflows: expect.arrayContaining([
+                expect.objectContaining({
+                  workflow_id: "wf-1"
+                })
+              ])
+            }),
             callbackTickets: [],
             sensitiveAccessEntries: []
           })
         ])
       })
+    );
+    expect(result.sampledRuns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          runId: "run-1",
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacyAuthGovernance: expect.objectContaining({
+            workflows: expect.arrayContaining([
+              expect.objectContaining({
+                workflow_id: "wf-1"
+              })
+            ])
+          })
+        })
+      ])
     );
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });

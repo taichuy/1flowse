@@ -50,6 +50,14 @@ export function OperatorRunSampleCardList({
         const showHeaderExecutionFacts =
           sample.executionFactBadges.length > 0 && !sample.hasCallbackWaitingSummary;
         const shouldRenderCallbackWorkflowGovernance = sample.hasCallbackWaitingSummary;
+        const resolvedWorkflowCatalogGapSummary =
+          sample.workflowCatalogGapSummary ?? callbackWaitingSummaryProps?.workflowCatalogGapSummary ?? null;
+        const resolvedWorkflowCatalogGapDetail =
+          sample.workflowCatalogGapDetail ?? callbackWaitingSummaryProps?.workflowCatalogGapDetail ?? null;
+        const resolvedWorkflowGovernanceHref =
+          sample.workflowGovernanceHref ?? callbackWaitingSummaryProps?.workflowGovernanceHref ?? null;
+        const resolvedLegacyAuthHandoff =
+          sample.legacyAuthHandoff ?? callbackWaitingSummaryProps?.legacyAuthHandoff ?? null;
         const scopedRunDetailHref = resolveRunDetailHref?.(sample.runId) ?? null;
         const runDetailLink = buildOperatorRunDetailLinkSurface({
           runId: sample.runId,
@@ -114,10 +122,10 @@ export function OperatorRunSampleCardList({
 
           {!shouldRenderCallbackWorkflowGovernance ? (
             <WorkflowGovernanceHandoffCards
-              workflowCatalogGapSummary={sample.workflowCatalogGapSummary}
-              workflowCatalogGapDetail={sample.workflowCatalogGapDetail}
-              workflowGovernanceHref={sample.workflowGovernanceHref}
-              legacyAuthHandoff={sample.legacyAuthHandoff}
+              workflowCatalogGapSummary={resolvedWorkflowCatalogGapSummary}
+              workflowCatalogGapDetail={resolvedWorkflowCatalogGapDetail}
+              workflowGovernanceHref={resolvedWorkflowGovernanceHref}
+              legacyAuthHandoff={resolvedLegacyAuthHandoff}
             />
           ) : null}
 
@@ -201,16 +209,16 @@ export function OperatorRunSampleCardList({
             waitingReason={sample.waitingReason}
             focusEvidenceDrilldownLink={focusEvidenceDrilldownLink}
             workflowCatalogGapSummary={
-              shouldRenderCallbackWorkflowGovernance ? sample.workflowCatalogGapSummary : null
+              shouldRenderCallbackWorkflowGovernance ? resolvedWorkflowCatalogGapSummary : null
             }
             workflowCatalogGapDetail={
-              shouldRenderCallbackWorkflowGovernance ? sample.workflowCatalogGapDetail : null
+              shouldRenderCallbackWorkflowGovernance ? resolvedWorkflowCatalogGapDetail : null
             }
             workflowGovernanceHref={
-              shouldRenderCallbackWorkflowGovernance ? sample.workflowGovernanceHref : null
+              shouldRenderCallbackWorkflowGovernance ? resolvedWorkflowGovernanceHref : null
             }
             legacyAuthHandoff={
-              shouldRenderCallbackWorkflowGovernance ? sample.legacyAuthHandoff : null
+              shouldRenderCallbackWorkflowGovernance ? resolvedLegacyAuthHandoff : null
             }
           />
 

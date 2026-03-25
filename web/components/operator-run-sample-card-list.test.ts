@@ -604,4 +604,43 @@ describe("OperatorRunSampleCardList", () => {
     expect(html.match(/Workflow governance/g)?.length ?? 0).toBe(1);
     expect(html.match(/Legacy publish auth handoff/g)?.length ?? 0).toBe(1);
   });
+
+  it("falls back to parent callback summary workflow governance when sampled runs omit it", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorRunSampleCardList, {
+        cards: [buildSampleCard()],
+        callbackWaitingSummaryProps: {
+          workflowGovernanceHref: "/workflows/workflow-parent?definition_issue=missing_tool",
+          workflowCatalogGapSummary: "catalog gap · native.parent-gap",
+          workflowCatalogGapDetail:
+            "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.parent-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy。",
+          legacyAuthHandoff: {
+            bindingChipLabel: "1 legacy bindings",
+            statusChipLabel: "publish auth blocker",
+            detail: "先替换 live published blockers。",
+            workflowSummary: {
+              workflow_id: "workflow-parent",
+              workflow_name: "Parent Workflow",
+              binding_count: 1,
+              draft_candidate_count: 0,
+              published_blocker_count: 1,
+              offline_inventory_count: 0,
+              tool_governance: {
+                referenced_tool_ids: ["native.parent-gap"],
+                missing_tool_ids: ["native.parent-gap"],
+                governed_tool_count: 0,
+                strong_isolation_tool_count: 0
+              }
+            }
+          }
+        },
+        skillTraceDescription: "skill trace"
+      })
+    );
+
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.parent-gap");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain('href="/workflows/workflow-parent?definition_issue=missing_tool"');
+  });
 });
