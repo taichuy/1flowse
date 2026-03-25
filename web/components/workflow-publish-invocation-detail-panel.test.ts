@@ -471,6 +471,79 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html.match(/Focused skill trace/g)?.length ?? 0).toBe(1);
   });
 
+  it("surfaces sampled workflow governance handoff inside publish detail sample cards", () => {
+    const detail = buildDetail();
+    detail.legacy_auth_governance = null;
+    detail.run_follow_up!.sampled_runs[0] = {
+      ...detail.run_follow_up!.sampled_runs[0],
+      snapshot: {
+        ...detail.run_follow_up!.sampled_runs[0].snapshot,
+        workflow_id: "workflow-1"
+      },
+      tool_governance: {
+        referenced_tool_ids: ["native.catalog-gap"],
+        missing_tool_ids: ["native.catalog-gap"],
+        governed_tool_count: 0,
+        strong_isolation_tool_count: 0
+      },
+      legacy_auth_governance: {
+        generated_at: "2026-03-20T12:00:00Z",
+        auth_mode_contract: {
+          supported_auth_modes: ["api_key", "internal"],
+          retired_legacy_auth_modes: ["token"],
+          summary: "supported api_key / internal, legacy token",
+          follow_up: "replace token bindings"
+        },
+        workflow_count: 1,
+        binding_count: 2,
+        summary: {
+          draft_candidate_count: 1,
+          published_blocker_count: 1,
+          offline_inventory_count: 0
+        },
+        checklist: [],
+        workflows: [
+          {
+            workflow_id: "workflow-1",
+            workflow_name: "Workflow 1",
+            binding_count: 2,
+            draft_candidate_count: 1,
+            published_blocker_count: 1,
+            offline_inventory_count: 0,
+            tool_governance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            }
+          }
+        ],
+        buckets: {
+          draft_candidates: [],
+          published_blockers: [],
+          offline_inventory: []
+        }
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishInvocationDetailPanel, {
+        detail,
+        clearHref: "/published?clear=1",
+        tools: [],
+        callbackWaitingAutomation
+      })
+    );
+
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("当前 sampled run 对应的 workflow 版本仍有 catalog gap");
+    expect(html).toContain("2 legacy bindings");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain("当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory。");
+    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+  });
+
   it("renders the shared workflow legacy auth handoff in publish audit detail", () => {
     const detail = buildDetail();
     detail.legacy_auth_governance = {

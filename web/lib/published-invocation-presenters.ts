@@ -47,8 +47,16 @@ import {
 } from "@/lib/operator-follow-up-presenters";
 import { formatRunSnapshotSummary } from "@/lib/operator-action-result-presenters";
 import { formatKeyList, formatTimestamp } from "@/lib/runtime-presenters";
-import { formatCatalogGapSummary } from "@/lib/workflow-definition-governance";
-import { buildLegacyPublishAuthGovernanceSurfaceCopy } from "@/lib/legacy-publish-auth-governance-presenters";
+import {
+  formatCatalogGapSummary,
+  formatCatalogGapToolSummary,
+  formatWorkflowMissingToolSummary
+} from "@/lib/workflow-definition-governance";
+import {
+  buildLegacyPublishAuthGovernanceSurfaceCopy,
+  buildLegacyPublishAuthWorkflowHandoff,
+  type LegacyPublishAuthWorkflowHandoff
+} from "@/lib/legacy-publish-auth-governance-presenters";
 import {
   buildCallbackWaitingAutomationSystemFollowUp,
   buildSandboxReadinessSystemFollowUp,
@@ -170,12 +178,16 @@ type PublishedInvocationRunFollowUpSample =
 
 export type PublishedInvocationRunFollowUpSampleView = {
   run_id: string;
+  workflow_id: string | null;
   status: string | null;
   current_node_id: string | null;
   waiting_reason: string | null;
   run_snapshot: RunSnapshot;
   callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
+  workflow_catalog_gap_summary: string | null;
+  workflow_catalog_gap_detail: string | null;
+  legacy_auth_handoff: LegacyPublishAuthWorkflowHandoff | null;
   explanation_source: "callback_waiting" | "execution_focus" | null;
   explanation: RunExecutionFocusExplanation | null;
   snapshot_summary: string | null;
@@ -3219,6 +3231,44 @@ export function resolvePublishedInvocationRunFollowUpSampleExplanationSource(
   return null;
 }
 
+function normalizePublishedInvocationSampleText(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function resolvePublishedInvocationRunFollowUpSampleWorkflowId(
+  sample?: PublishedInvocationRunFollowUpSample | null
+) {
+  return (
+    normalizePublishedInvocationSampleText(sample?.snapshot?.workflow_id) ??
+    normalizePublishedInvocationSampleText(sample?.legacy_auth_governance?.workflows[0]?.workflow_id)
+  );
+}
+
+function formatPublishedInvocationRunFollowUpSampleCatalogGapDetail(
+  sample?: PublishedInvocationRunFollowUpSample | null
+) {
+  const toolGovernance = sample?.tool_governance;
+  const summary = toolGovernance
+    ? formatWorkflowMissingToolSummary({ tool_governance: toolGovernance })
+    : null;
+
+  if (!summary) {
+    return {
+      summary: null,
+      detail: null
+    };
+  }
+
+  const toolSummary = formatCatalogGapToolSummary(toolGovernance?.missing_tool_ids ?? []);
+  return {
+    summary,
+    detail: toolSummary
+      ? `当前 sampled run 对应的 workflow 版本仍有 catalog gap（${toolSummary}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 publish sampled snapshot。`
+      : "当前 sampled run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 publish sampled snapshot。"
+  };
+}
+
 export function listPublishedInvocationRunFollowUpSampleViews(
   runFollowUp?: PublishedInvocationRunFollowUpSummary | null
 ): PublishedInvocationRunFollowUpSampleView[] {
@@ -3228,15 +3278,25 @@ export function listPublishedInvocationRunFollowUpSampleViews(
     const runSnapshot = buildPublishedInvocationRunFollowUpSampleSnapshot(sample, explanationSource);
     const snapshotSummary = formatRunSnapshotSummary(runSnapshot);
     const focusEvidenceModel = buildOperatorInlineActionFeedbackModel({ runSnapshot });
+    const workflowId = resolvePublishedInvocationRunFollowUpSampleWorkflowId(sample);
+    const { summary: workflowCatalogGapSummary, detail: workflowCatalogGapDetail } =
+      formatPublishedInvocationRunFollowUpSampleCatalogGapDetail(sample);
+    const legacyAuthHandoff = workflowId
+      ? buildLegacyPublishAuthWorkflowHandoff(sample.legacy_auth_governance ?? null, workflowId)
+      : null;
 
     return {
       run_id: sample.run_id,
+      workflow_id: workflowId,
       status: sample.snapshot?.status?.trim() || null,
       current_node_id: sample.snapshot?.current_node_id?.trim() || null,
       waiting_reason: sample.snapshot?.waiting_reason?.trim() || null,
       run_snapshot: runSnapshot,
       callback_tickets: sample.callback_tickets ?? [],
       sensitive_access_entries: sample.sensitive_access_entries ?? [],
+      workflow_catalog_gap_summary: workflowCatalogGapSummary,
+      workflow_catalog_gap_detail: workflowCatalogGapDetail,
+      legacy_auth_handoff: legacyAuthHandoff,
       explanation_source: explanationSource,
       explanation,
       snapshot_summary: snapshotSummary,

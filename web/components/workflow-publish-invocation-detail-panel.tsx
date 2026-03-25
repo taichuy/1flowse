@@ -68,7 +68,10 @@ import {
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
-import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
+import {
+  appendWorkflowLibraryViewState,
+  appendWorkflowLibraryViewStateForWorkflow
+} from "@/lib/workflow-library-query";
 import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
@@ -368,6 +371,25 @@ export function WorkflowPublishInvocationDetailPanel({
               {runFollowUpSamples.map((sample) => {
                 const samplePrimarySignal = sample.explanation?.primary_signal?.trim() || null;
                 const sampleFollowUp = sample.explanation?.follow_up?.trim() || null;
+                  const sampleWorkflowDetailLink = sample.workflow_id
+                    ? workspaceStarterGovernanceQueryScope
+                      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                          workflowId: sample.workflow_id,
+                          viewState: workspaceStarterGovernanceQueryScope,
+                          variant: "editor"
+                        })
+                      : buildAuthorFacingWorkflowDetailLinkSurface({
+                          workflowId: sample.workflow_id,
+                          variant: "editor"
+                        })
+                    : null;
+                  const sampleWorkflowDetailHref = sampleWorkflowDetailLink
+                    ? sample.workflow_catalog_gap_summary
+                      ? appendWorkflowLibraryViewState(sampleWorkflowDetailLink.href, {
+                          definitionIssue: "missing_tool"
+                        })
+                      : sampleWorkflowDetailLink.href
+                    : null;
                   const sampleFocusNodeEvidence = buildExecutionFocusExplainableNode(
                     sample.run_snapshot
                   );
@@ -458,6 +480,46 @@ export function WorkflowPublishInvocationDetailPanel({
                     ) : null}
                     {sample.snapshot_summary && !sample.has_callback_waiting_summary ? (
                       <p className="binding-meta">{sample.snapshot_summary}</p>
+                    ) : null}
+                    {sample.workflow_catalog_gap_summary || sample.legacy_auth_handoff ? (
+                      <div className="entry-card compact-card">
+                        <div className="payload-card-header">
+                          <span className="status-meta">Workflow governance</span>
+                          {sampleWorkflowDetailHref && sampleWorkflowDetailLink ? (
+                            <Link
+                              className="event-chip inbox-filter-link"
+                              href={sampleWorkflowDetailHref}
+                            >
+                              {sampleWorkflowDetailLink.label}
+                            </Link>
+                          ) : null}
+                        </div>
+                        {sample.workflow_catalog_gap_summary ? (
+                          <>
+                            <div className="tool-badge-row">
+                              <span className="event-chip">
+                                {sample.workflow_catalog_gap_summary}
+                              </span>
+                            </div>
+                            {sample.workflow_catalog_gap_detail ? (
+                              <p className="binding-meta">{sample.workflow_catalog_gap_detail}</p>
+                            ) : null}
+                          </>
+                        ) : null}
+                        {sample.legacy_auth_handoff ? (
+                          <>
+                            <div className="tool-badge-row">
+                              <span className="event-chip">
+                                {sample.legacy_auth_handoff.bindingChipLabel}
+                              </span>
+                              <span className="event-chip">
+                                {sample.legacy_auth_handoff.statusChipLabel}
+                              </span>
+                            </div>
+                            <p className="binding-meta">{sample.legacy_auth_handoff.detail}</p>
+                          </>
+                        ) : null}
+                      </div>
                     ) : null}
                     {sampleReadinessNode ? (
                       <SandboxExecutionReadinessCard

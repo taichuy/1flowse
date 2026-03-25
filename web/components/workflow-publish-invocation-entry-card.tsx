@@ -46,9 +46,14 @@ import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readines
 import { formatDurationMs, formatTimestamp } from "@/lib/runtime-presenters";
 import {
   buildRunDetailHrefFromWorkspaceStarterViewState,
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
-import { buildAuthorFacingRunDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
+import {
+  buildAuthorFacingRunDetailLinkSurface,
+  buildAuthorFacingWorkflowDetailLinkSurface
+} from "@/lib/workbench-entry-surfaces";
 
 type PublishedInvocationItem = PublishedEndpointInvocationListResponse["items"][number];
 
@@ -212,6 +217,25 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpEvidenceChips = runFollowUpSample
     ? listPublishedInvocationRunFollowUpEvidenceChips(runFollowUpSample)
     : [];
+  const runFollowUpSampleWorkflowDetailLink = runFollowUpSample?.workflow_id
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+          workflowId: runFollowUpSample.workflow_id,
+          viewState: workspaceStarterGovernanceQueryScope,
+          variant: "editor"
+        })
+      : buildAuthorFacingWorkflowDetailLinkSurface({
+          workflowId: runFollowUpSample.workflow_id,
+          variant: "editor"
+        })
+    : null;
+  const runFollowUpSampleWorkflowDetailHref = runFollowUpSampleWorkflowDetailLink
+    ? runFollowUpSample?.workflow_catalog_gap_summary
+      ? appendWorkflowLibraryViewState(runFollowUpSampleWorkflowDetailLink.href, {
+          definitionIssue: "missing_tool"
+        })
+      : runFollowUpSampleWorkflowDetailLink.href
+    : null;
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId: item.run_id ?? null,
     canonicalFollowUp,
@@ -337,6 +361,48 @@ export function WorkflowPublishInvocationEntryCard({
           ) : null}
           {runFollowUpSample?.snapshot_summary && !shouldDeferToSharedCallbackWaitingSummary ? (
             <p className="binding-meta">{runFollowUpSample.snapshot_summary}</p>
+          ) : null}
+          {runFollowUpSample?.workflow_catalog_gap_summary || runFollowUpSample?.legacy_auth_handoff ? (
+            <div className="entry-card compact-card">
+              <div className="payload-card-header">
+                <span className="status-meta">Workflow governance</span>
+                {runFollowUpSampleWorkflowDetailHref && runFollowUpSampleWorkflowDetailLink ? (
+                  <Link
+                    className="event-chip inbox-filter-link"
+                    href={runFollowUpSampleWorkflowDetailHref}
+                  >
+                    {runFollowUpSampleWorkflowDetailLink.label}
+                  </Link>
+                ) : null}
+              </div>
+              {runFollowUpSample.workflow_catalog_gap_summary ? (
+                <>
+                  <div className="tool-badge-row">
+                    <span className="event-chip">
+                      {runFollowUpSample.workflow_catalog_gap_summary}
+                    </span>
+                  </div>
+                  {runFollowUpSample.workflow_catalog_gap_detail ? (
+                    <p className="binding-meta">
+                      {runFollowUpSample.workflow_catalog_gap_detail}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+              {runFollowUpSample.legacy_auth_handoff ? (
+                <>
+                  <div className="tool-badge-row">
+                    <span className="event-chip">
+                      {runFollowUpSample.legacy_auth_handoff.bindingChipLabel}
+                    </span>
+                    <span className="event-chip">
+                      {runFollowUpSample.legacy_auth_handoff.statusChipLabel}
+                    </span>
+                  </div>
+                  <p className="binding-meta">{runFollowUpSample.legacy_auth_handoff.detail}</p>
+                </>
+              ) : null}
+            </div>
           ) : null}
           {readinessNode ? (
             <SandboxExecutionReadinessCard

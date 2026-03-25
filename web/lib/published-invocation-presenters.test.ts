@@ -837,6 +837,83 @@ describe("published invocation presenters", () => {
     ]);
   });
 
+  it("保留 publish sampled run 的 workflow governance handoff", () => {
+    const sample = listPublishedInvocationRunFollowUpSampleViews({
+      affected_run_count: 1,
+      sampled_run_count: 1,
+      waiting_run_count: 1,
+      running_run_count: 0,
+      succeeded_run_count: 0,
+      failed_run_count: 0,
+      unknown_run_count: 0,
+      explanation: null,
+      sampled_runs: [
+        {
+          run_id: "run-1",
+          snapshot: {
+            workflow_id: "workflow-1",
+            status: "waiting"
+          },
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: {
+            generated_at: "2026-03-20T12:00:00Z",
+            auth_mode_contract: {
+              supported_auth_modes: ["api_key", "internal"],
+              retired_legacy_auth_modes: ["token"],
+              summary: "supported api_key / internal, legacy token",
+              follow_up: "replace token bindings"
+            },
+            workflow_count: 1,
+            binding_count: 2,
+            summary: {
+              draft_candidate_count: 1,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            },
+            checklist: [],
+            workflows: [
+              {
+                workflow_id: "workflow-1",
+                workflow_name: "Workflow 1",
+                binding_count: 2,
+                draft_candidate_count: 1,
+                published_blocker_count: 1,
+                offline_inventory_count: 0,
+                tool_governance: {
+                  referenced_tool_ids: ["native.catalog-gap"],
+                  missing_tool_ids: ["native.catalog-gap"],
+                  governed_tool_count: 0,
+                  strong_isolation_tool_count: 0
+                }
+              }
+            ],
+            buckets: {
+              draft_candidates: [],
+              published_blockers: [],
+              offline_inventory: []
+            }
+          }
+        }
+      ]
+    } as never)[0];
+
+    expect(sample.workflow_id).toBe("workflow-1");
+    expect(sample.workflow_catalog_gap_summary).toBe("catalog gap · native.catalog-gap");
+    expect(sample.workflow_catalog_gap_detail).toContain("catalog gap（native.catalog-gap）");
+    expect(sample.legacy_auth_handoff).toMatchObject({
+      bindingChipLabel: "2 legacy bindings",
+      statusChipLabel: "publish auth blocker"
+    });
+    expect(sample.legacy_auth_handoff?.detail).toContain(
+      "当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory。"
+    );
+  });
+
   it("为 publish activity insights 提供统一辅助文案", () => {
     expect(
       buildPublishedInvocationActivityInsightsSurfaceCopy({
