@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.routes import runs as run_routes
-from app.models.run import Run, RunCallbackTicket, RunEvent
+from app.models.run import NodeRun, Run, RunCallbackTicket, RunEvent
 from app.models.workflow import Workflow, WorkflowPublishedEndpoint, WorkflowVersion
 from app.schemas.explanations import SignalFollowUpExplanation
 from app.schemas.operator_follow_up import (
@@ -167,6 +167,39 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
     )
     sqlite_session.commit()
 
+    target_node_run = sqlite_session.scalar(
+        select(NodeRun)
+        .where(NodeRun.run_id == run_id)
+        .order_by(NodeRun.created_at.asc())
+    )
+    assert target_node_run is not None
+
+    resource_response = client.post(
+        "/api/sensitive-access/resources",
+        json={
+            "label": "Run legacy auth handoff secret",
+            "sensitivity_level": "L3",
+            "source": "published_secret",
+            "metadata": {"endpoint_id": "endpoint-run-handoff"},
+        },
+    )
+    assert resource_response.status_code == 201
+    resource_id = resource_response.json()["id"]
+
+    request_response = client.post(
+        "/api/sensitive-access/requests",
+        json={
+            "run_id": run_id,
+            "node_run_id": target_node_run.id,
+            "requester_type": "ai",
+            "requester_id": "assistant-run-handoff",
+            "resource_id": resource_id,
+            "action_type": "read",
+            "purpose_text": "seed run legacy auth handoff",
+        },
+    )
+    assert request_response.status_code == 201
+
     execution_view_response = client.get(f"/api/runs/{run_id}/execution-view")
 
     assert execution_view_response.status_code == 200
@@ -210,6 +243,15 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
             },
         }
     ]
+    node_with_sensitive_access = next(
+        node
+        for node in execution_view["nodes"]
+        if node["node_run_id"] == target_node_run.id
+    )
+    assert (
+        node_with_sensitive_access["sensitive_access_entries"][0]["legacy_auth_governance"]
+        == governance
+    )
 
     run_detail_response = client.get(
         f"/api/runs/{run_id}",

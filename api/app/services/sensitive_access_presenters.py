@@ -13,6 +13,9 @@ from app.schemas.sensitive_access import (
     SensitiveAccessTimelineEntryItem,
     SensitiveResourceItem,
 )
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
 from app.services.credential_governance import (
     build_credential_governance_summary_from_sensitive_resource,
 )
@@ -100,6 +103,7 @@ def serialize_sensitive_access_timeline_entry(
     *,
     run_snapshot=None,
     run_follow_up=None,
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None,
 ) -> SensitiveAccessTimelineEntryItem:
     return SensitiveAccessTimelineEntryItem(
         request=serialize_sensitive_access_request(bundle.access_request),
@@ -116,4 +120,5 @@ def serialize_sensitive_access_timeline_entry(
         outcome_explanation=build_sensitive_access_timeline_outcome_explanation(bundle),
         run_snapshot=run_snapshot,
         run_follow_up=run_follow_up,
+        legacy_auth_governance=legacy_auth_governance,
     )

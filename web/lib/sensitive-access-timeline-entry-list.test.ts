@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 let mockPathname = "/runs/run-1";
 let mockSearchParams = "";
@@ -183,7 +184,8 @@ describe("SensitiveAccessTimelineEntryList", () => {
                 primary_signal: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。",
                 follow_up: "run run-1：当前 run 状态：waiting。"
               }
-            }
+            },
+            legacy_auth_governance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture()
           })
         ],
         emptyCopy: "empty",
@@ -195,6 +197,9 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(markup).toContain("Waiting node focus evidence");
     expect(markup).toContain("tool calls 1");
     expect(markup).toContain("Injected references");
+    expect(markup).toContain("Workflow handoff");
+    expect(markup).toContain("Publish auth contract");
+    expect(markup).toContain("Legacy Auth workflow");
     expect(markup).not.toContain("敏感访问请求仍在等待审批，对应 waiting 链路会继续保持 blocked。");
     expect(markup).not.toContain(
       "最近 1 条通知投递失败，请优先重试通知或更换目标。 审批完成后再继续回看 run / inbox slice。"

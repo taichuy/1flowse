@@ -544,6 +544,7 @@ export function SensitiveAccessTimelineEntryList({
                 <InlineOperatorActionFeedback
                   callbackWaitingSummaryProps={callbackWaitingSummaryProps}
                   currentHref={currentHref}
+                  legacyAuthGovernance={entry.legacy_auth_governance ?? null}
                   message=""
                   outcomeExplanation={shouldRenderCallbackWaitingSummary ? null : canonicalOutcomeExplanation}
                   recommendedNextStep={

@@ -116,9 +116,9 @@ def _serialize_access_bundle(
     *,
     db: Session,
 ) -> SensitiveAccessRequestResponse:
-    timeline_entry = serialize_sensitive_access_timeline_entry(bundle)
     run_follow_up = None
     run_snapshot = None
+    legacy_auth_governance = None
     run_id = resolve_sensitive_access_run_id(
         run_id=bundle.access_request.run_id,
         node_run_id=bundle.access_request.node_run_id,
@@ -132,15 +132,17 @@ def _serialize_access_bundle(
             run_id=run_id,
             node_run_id=bundle.access_request.node_run_id,
         )
-    return SensitiveAccessRequestResponse(
-        request=timeline_entry.request,
-        resource=timeline_entry.resource,
-        approval_ticket=timeline_entry.approval_ticket,
-        notifications=timeline_entry.notifications,
-        outcome_explanation=timeline_entry.outcome_explanation,
+        legacy_auth_governance = _build_sensitive_access_legacy_auth_governance_snapshot(
+            db,
+            workflow_ids=[run_snapshot.workflow_id if run_snapshot is not None else None],
+        )
+    timeline_entry = serialize_sensitive_access_timeline_entry(
+        bundle,
         run_snapshot=run_snapshot,
         run_follow_up=run_follow_up,
+        legacy_auth_governance=legacy_auth_governance,
     )
+    return SensitiveAccessRequestResponse(**timeline_entry.model_dump())
 
 
 def _serialize_approval_bundle(

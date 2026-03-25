@@ -201,6 +201,7 @@ class SensitiveAccessTimelineEntryItem(BaseModel):
     outcome_explanation: SignalFollowUpExplanation | None = None
     run_snapshot: OperatorRunSnapshot | None = None
     run_follow_up: OperatorRunFollowUpSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 class SensitiveAccessInboxEntryItem(BaseModel):

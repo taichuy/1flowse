@@ -1942,6 +1942,17 @@ def test_sensitive_access_inbox_returns_filtered_entries_and_run_snapshots(
             endpoint_name="Inbox Handoff Endpoint",
         )
     )
+    assert request_body["legacy_auth_governance"] == (
+        legacy_auth_governance_snapshot_for_single_published_blocker(
+            generated_at=request_body["legacy_auth_governance"]["generated_at"],
+            workflow_id=sample_workflow.id,
+            workflow_name="Demo Workflow",
+            workflow_version=sample_workflow.version,
+            binding_id="binding-inbox-handoff",
+            endpoint_id="endpoint-inbox-handoff",
+            endpoint_name="Inbox Handoff Endpoint",
+        )
+    )
     assert body["execution_views"] == []
     assert body["summary"] == {
         "ticket_count": 1,

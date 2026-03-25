@@ -25,8 +25,8 @@ from app.services.run_view_serializers import (
 from app.services.runtime import RuntimeService
 from app.services.runtime_records import ExecutionArtifacts
 from app.services.sensitive_access_timeline import load_sensitive_access_timeline
-from app.services.workflow_views import load_workflow_run_tool_governance_summary
 from app.services.workflow_publish import WorkflowPublishBindingService
+from app.services.workflow_views import load_workflow_run_tool_governance_summary
 
 workflow_publish_service = WorkflowPublishBindingService()
 
@@ -40,6 +40,80 @@ def _load_run_legacy_auth_governance(
         workflow_id=workflow_id,
     )
     return snapshot if snapshot.binding_count > 0 else None
+
+
+def _hydrate_sensitive_access_legacy_auth_entries(entries, legacy_auth_governance):
+    return [
+        entry.model_copy(update={"legacy_auth_governance": legacy_auth_governance})
+        for entry in entries
+    ]
+
+
+def _hydrate_sensitive_access_legacy_auth_payloads(entries, legacy_auth_governance_payload):
+    return [
+        {
+            **entry,
+            "legacy_auth_governance": legacy_auth_governance_payload,
+        }
+        for entry in entries
+    ]
+
+
+def _attach_run_legacy_auth_governance_to_execution_view(
+    execution_view: RunExecutionView,
+    legacy_auth_governance,
+) -> None:
+    if legacy_auth_governance is None:
+        return
+
+    execution_view.nodes = [
+        node.model_copy(
+            update={
+                "sensitive_access_entries": _hydrate_sensitive_access_legacy_auth_entries(
+                    node.sensitive_access_entries,
+                    legacy_auth_governance,
+                )
+            }
+        )
+        if node.sensitive_access_entries
+        else node
+        for node in execution_view.nodes
+    ]
+
+    if (
+        execution_view.execution_focus_node is not None
+        and execution_view.execution_focus_node.sensitive_access_entries
+    ):
+        execution_view.execution_focus_node = execution_view.execution_focus_node.model_copy(
+            update={
+                "sensitive_access_entries": _hydrate_sensitive_access_legacy_auth_entries(
+                    execution_view.execution_focus_node.sensitive_access_entries,
+                    legacy_auth_governance,
+                )
+            }
+        )
+
+    if execution_view.run_follow_up is not None:
+        legacy_auth_governance_payload = legacy_auth_governance.model_dump(mode="json")
+        execution_view.run_follow_up = execution_view.run_follow_up.model_copy(
+            update={
+                "sampled_runs": [
+                    sample.model_copy(
+                        update={
+                            "sensitive_access_entries": (
+                                _hydrate_sensitive_access_legacy_auth_payloads(
+                                    sample.sensitive_access_entries,
+                                    legacy_auth_governance_payload,
+                                )
+                            )
+                        }
+                    )
+                    if sample.sensitive_access_entries
+                    else sample
+                    for sample in execution_view.run_follow_up.sampled_runs
+                ]
+            }
+        )
 
 
 def _serialize_run_detail_execution_focus_node(
@@ -210,9 +284,14 @@ def build_run_execution_view_for_artifacts(
         callback_tickets,
         sensitive_access_timeline,
     )
-    execution_view.legacy_auth_governance = _load_run_legacy_auth_governance(
+    legacy_auth_governance = _load_run_legacy_auth_governance(
         db,
         artifacts.run.workflow_id,
+    )
+    execution_view.legacy_auth_governance = legacy_auth_governance
+    _attach_run_legacy_auth_governance_to_execution_view(
+        execution_view,
+        legacy_auth_governance,
     )
     return execution_view
 

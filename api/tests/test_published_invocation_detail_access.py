@@ -506,6 +506,11 @@ def test_get_published_invocation_detail_includes_workflow_legacy_auth_handoff(
         client,
         sqlite_session,
     )
+    _seed_pending_blocking_sensitive_access(
+        sqlite_session,
+        run_id=run.id,
+        node_run_id=node_run.id,
+    )
     binding_record = sqlite_session.get(WorkflowPublishedEndpoint, binding["id"])
     assert binding_record is not None
 
@@ -552,6 +557,7 @@ def test_get_published_invocation_detail_includes_workflow_legacy_auth_handoff(
         endpoint_id="legacy-auth-endpoint",
         endpoint_name="Legacy Auth Endpoint",
     )
+    assert detail_body["sensitive_access_entries"][0]["legacy_auth_governance"] == governance
 
 
 def test_get_published_invocation_detail_maps_blocking_sensitive_access_from_execution_view(

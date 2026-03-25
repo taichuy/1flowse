@@ -214,6 +214,7 @@ export type SensitiveAccessTimelineEntry = {
   notifications: NotificationDispatchItem[];
   outcome_explanation?: SignalFollowUpExplanation | null;
   run_snapshot?: OperatorRunSnapshotSummary | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   run_follow_up?: {
     affected_run_count: number;
     sampled_run_count: number;

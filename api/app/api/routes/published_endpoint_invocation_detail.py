@@ -65,6 +65,7 @@ def _serialize_blocking_sensitive_access_entries(
     sensitive_access_timeline,
     run_snapshot=None,
     run_follow_up=None,
+    legacy_auth_governance=None,
 ) -> list:
     if not blocking_node_run_id:
         return []
@@ -73,6 +74,7 @@ def _serialize_blocking_sensitive_access_entries(
             bundle,
             run_snapshot=run_snapshot,
             run_follow_up=run_follow_up,
+            legacy_auth_governance=legacy_auth_governance,
         )
         for bundle in sensitive_access_timeline.by_node_run.get(blocking_node_run_id, [])
     ]
@@ -194,6 +196,13 @@ def get_published_endpoint_invocation_detail(
     execution_focus_explanation = None
     run_follow_up = None
     timeline_run_snapshot = None
+    legacy_auth_governance = workflow_publish_service.build_legacy_auth_governance_snapshot(
+        db,
+        workflow_id=workflow_id,
+    )
+    timeline_legacy_auth_governance = (
+        legacy_auth_governance if legacy_auth_governance.binding_count > 0 else None
+    )
     if record.run_id:
         node_runs = (
             db.scalars(select(NodeRun).where(NodeRun.run_id == record.run_id)).all()
@@ -256,6 +265,7 @@ def get_published_endpoint_invocation_detail(
                     bundle,
                     run_snapshot=timeline_run_snapshot,
                     run_follow_up=run_follow_up,
+                    legacy_auth_governance=timeline_legacy_auth_governance,
                 )
                 for bundle in sensitive_access_timeline.bundles
             ]
@@ -265,6 +275,7 @@ def get_published_endpoint_invocation_detail(
                     sensitive_access_timeline=sensitive_access_timeline,
                     run_snapshot=timeline_run_snapshot,
                     run_follow_up=run_follow_up,
+                    legacy_auth_governance=timeline_legacy_auth_governance,
                 )
             )
 
@@ -319,10 +330,7 @@ def get_published_endpoint_invocation_detail(
         ),
         run_snapshot=timeline_run_snapshot,
         run_follow_up=run_follow_up,
-        legacy_auth_governance=workflow_publish_service.build_legacy_auth_governance_snapshot(
-            db,
-            workflow_id=workflow_id,
-        ),
+        legacy_auth_governance=legacy_auth_governance,
         callback_tickets=callback_ticket_items,
         blocking_node_run_id=blocking_node_run_id,
         execution_focus_reason=execution_focus_reason,
