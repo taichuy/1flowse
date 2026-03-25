@@ -263,6 +263,11 @@ def test_run_routes_include_workflow_legacy_auth_governance_handoff(
     assert run_detail["legacy_auth_governance"]["binding_count"] == 1
     assert run_detail["legacy_auth_governance"]["summary"]["published_blocker_count"] == 1
     assert run_detail["legacy_auth_governance"]["workflows"][0]["workflow_id"] == sample_workflow.id
+    sampled_run = run_detail["run_follow_up"]["sampled_runs"][0]
+    assert sampled_run["legacy_auth_governance"] == run_detail["legacy_auth_governance"]
+    assert sampled_run["tool_governance"] == run_detail["legacy_auth_governance"]["workflows"][0][
+        "tool_governance"
+    ]
 
     trace_response = client.get(f"/api/runs/{run_id}/trace", params={"limit": 2})
 

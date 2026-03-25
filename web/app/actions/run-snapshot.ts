@@ -4,7 +4,9 @@ import type {
   RunCallbackTicketItem,
   SkillReferenceLoadItem
 } from "@/lib/get-run-views";
+import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type RunSnapshot = {
   status?: string | null;
@@ -89,6 +91,8 @@ export type RunSnapshotWithId = {
   snapshot: RunSnapshot | null;
   callbackTickets?: RunCallbackTicketItem[];
   sensitiveAccessEntries?: SensitiveAccessTimelineEntry[];
+  toolGovernance?: WorkflowToolGovernanceSummary | null;
+  legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
 };
 
 function createEmptyRunSnapshotWithId(runId: string): RunSnapshotWithId {
@@ -96,7 +100,9 @@ function createEmptyRunSnapshotWithId(runId: string): RunSnapshotWithId {
     runId,
     snapshot: null,
     callbackTickets: [],
-    sensitiveAccessEntries: []
+    sensitiveAccessEntries: [],
+    toolGovernance: null,
+    legacyAuthGovernance: null
   };
 }
 
@@ -196,6 +202,8 @@ export type OperatorRunFollowUpBody = {
     snapshot?: OperatorRunSnapshotBody | null;
     callback_tickets?: RunCallbackTicketItem[];
     sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+    tool_governance?: WorkflowToolGovernanceSummary | null;
+    legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   }>;
 };
 
@@ -761,7 +769,9 @@ export function normalizeOperatorRunFollowUp(
         callbackTickets: Array.isArray(item.callback_tickets) ? item.callback_tickets : [],
         sensitiveAccessEntries: Array.isArray(item.sensitive_access_entries)
           ? item.sensitive_access_entries
-          : []
+          : [],
+        toolGovernance: item.tool_governance ?? null,
+        legacyAuthGovernance: item.legacy_auth_governance ?? null
       }))
   };
 }

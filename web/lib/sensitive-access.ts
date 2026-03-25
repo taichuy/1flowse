@@ -2,6 +2,7 @@ import type {
   OperatorRunFollowUpBody,
   OperatorRunSnapshotBody
 } from "@/app/actions/run-snapshot";
+import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
 import {
   normalizeOperatorRunFollowUp,
   normalizeOperatorRunSnapshot
@@ -12,6 +13,7 @@ import type {
   SensitiveAccessTimelineEntry,
   SignalFollowUpExplanation
 } from "@/lib/get-sensitive-access";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 type SensitiveAccessRunIdSample = {
   runId?: string | null;
@@ -99,6 +101,8 @@ type SensitiveAccessBlockingPayloadBody = Omit<
           snapshot?: OperatorRunSnapshotBody | OperatorRunSnapshotSummary | null;
           callback_tickets?: unknown[] | null;
           sensitive_access_entries?: SensitiveAccessTimelineEntry[] | null;
+          tool_governance?: WorkflowToolGovernanceSummary | null;
+          legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
         }>;
       })
     | null;

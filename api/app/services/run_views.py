@@ -42,36 +42,83 @@ def _load_run_legacy_auth_governance(
     return snapshot if snapshot.binding_count > 0 else None
 
 
-def _hydrate_sensitive_access_legacy_auth_entries(entries, legacy_auth_governance):
-    return [
-        entry.model_copy(update={"legacy_auth_governance": legacy_auth_governance})
-        for entry in entries
-    ]
+def _hydrate_sampled_run_follow_up(
+    run_follow_up,
+    *,
+    legacy_auth_governance=None,
+    tool_governance: WorkflowToolGovernanceSummary | None = None,
+):
+    if run_follow_up is None:
+        return None
+
+    sampled_runs = []
+    for sample in run_follow_up.sampled_runs:
+        updates = {}
+        if tool_governance is not None:
+            updates["tool_governance"] = tool_governance
+        if legacy_auth_governance is not None:
+            updates["legacy_auth_governance"] = legacy_auth_governance
+        sampled_runs.append(sample.model_copy(update=updates) if updates else sample)
+
+    return run_follow_up.model_copy(update={"sampled_runs": sampled_runs})
 
 
-def _hydrate_sensitive_access_legacy_auth_payloads(entries, legacy_auth_governance_payload):
-    return [
-        {
-            **entry,
-            "legacy_auth_governance": legacy_auth_governance_payload,
+def _hydrate_sensitive_access_entries(
+    entries,
+    *,
+    legacy_auth_governance=None,
+    tool_governance: WorkflowToolGovernanceSummary | None = None,
+):
+    hydrated_entries = []
+    for entry in entries:
+        updates = {
+            "run_follow_up": _hydrate_sampled_run_follow_up(
+                entry.run_follow_up,
+                legacy_auth_governance=legacy_auth_governance,
+                tool_governance=tool_governance,
+            )
         }
-        for entry in entries
-    ]
+        if legacy_auth_governance is not None:
+            updates["legacy_auth_governance"] = legacy_auth_governance
+        hydrated_entries.append(entry.model_copy(update=updates))
+    return hydrated_entries
 
 
-def _attach_run_legacy_auth_governance_to_execution_view(
+def _hydrate_sensitive_access_payloads(
+    entries,
+    *,
+    legacy_auth_governance_payload: dict | None = None,
+):
+    hydrated_entries = []
+    for entry in entries:
+        updated_entry = {**entry}
+        if legacy_auth_governance_payload is not None:
+            updated_entry["legacy_auth_governance"] = legacy_auth_governance_payload
+        hydrated_entries.append(updated_entry)
+    return hydrated_entries
+
+
+def _attach_run_governance_to_execution_view(
     execution_view: RunExecutionView,
-    legacy_auth_governance,
+    *,
+    legacy_auth_governance=None,
+    tool_governance: WorkflowToolGovernanceSummary | None = None,
 ) -> None:
-    if legacy_auth_governance is None:
+    if legacy_auth_governance is None and tool_governance is None:
         return
 
+    legacy_auth_governance_payload = (
+        legacy_auth_governance.model_dump(mode="json")
+        if legacy_auth_governance is not None
+        else None
+    )
     execution_view.nodes = [
         node.model_copy(
             update={
-                "sensitive_access_entries": _hydrate_sensitive_access_legacy_auth_entries(
+                "sensitive_access_entries": _hydrate_sensitive_access_entries(
                     node.sensitive_access_entries,
-                    legacy_auth_governance,
+                    legacy_auth_governance=legacy_auth_governance,
+                    tool_governance=tool_governance,
                 )
             }
         )
@@ -86,34 +133,34 @@ def _attach_run_legacy_auth_governance_to_execution_view(
     ):
         execution_view.execution_focus_node = execution_view.execution_focus_node.model_copy(
             update={
-                "sensitive_access_entries": _hydrate_sensitive_access_legacy_auth_entries(
+                "sensitive_access_entries": _hydrate_sensitive_access_entries(
                     execution_view.execution_focus_node.sensitive_access_entries,
-                    legacy_auth_governance,
+                    legacy_auth_governance=legacy_auth_governance,
+                    tool_governance=tool_governance,
                 )
             }
         )
 
-    if execution_view.run_follow_up is not None:
-        legacy_auth_governance_payload = legacy_auth_governance.model_dump(mode="json")
-        execution_view.run_follow_up = execution_view.run_follow_up.model_copy(
-            update={
-                "sampled_runs": [
-                    sample.model_copy(
-                        update={
-                            "sensitive_access_entries": (
-                                _hydrate_sensitive_access_legacy_auth_payloads(
-                                    sample.sensitive_access_entries,
-                                    legacy_auth_governance_payload,
-                                )
-                            )
-                        }
-                    )
-                    if sample.sensitive_access_entries
-                    else sample
-                    for sample in execution_view.run_follow_up.sampled_runs
-                ]
-            }
-        )
+    if execution_view.run_follow_up is None:
+        return
+
+    sampled_runs = []
+    for sample in execution_view.run_follow_up.sampled_runs:
+        updates = {}
+        if tool_governance is not None:
+            updates["tool_governance"] = tool_governance
+        if legacy_auth_governance is not None:
+            updates["legacy_auth_governance"] = legacy_auth_governance
+        if sample.sensitive_access_entries:
+            updates["sensitive_access_entries"] = _hydrate_sensitive_access_payloads(
+                sample.sensitive_access_entries,
+                legacy_auth_governance_payload=legacy_auth_governance_payload,
+            )
+        sampled_runs.append(sample.model_copy(update=updates) if updates else sample)
+
+    execution_view.run_follow_up = execution_view.run_follow_up.model_copy(
+        update={"sampled_runs": sampled_runs}
+    )
 
 
 def _serialize_run_detail_execution_focus_node(
@@ -288,10 +335,16 @@ def build_run_execution_view_for_artifacts(
         db,
         artifacts.run.workflow_id,
     )
+    tool_governance = load_workflow_run_tool_governance_summary(
+        db,
+        artifacts.run.workflow_id,
+        artifacts.run.workflow_version,
+    )
     execution_view.legacy_auth_governance = legacy_auth_governance
-    _attach_run_legacy_auth_governance_to_execution_view(
+    _attach_run_governance_to_execution_view(
         execution_view,
-        legacy_auth_governance,
+        legacy_auth_governance=legacy_auth_governance,
+        tool_governance=tool_governance,
     )
     return execution_view
 

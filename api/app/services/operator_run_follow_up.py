@@ -16,6 +16,7 @@ from app.services.operator_follow_up_snapshots import (
     build_waiting_reason_lookup,
 )
 from app.services.run_views import RunViewService
+from app.services.workflow_views import load_workflow_run_tool_governance_summary
 
 run_view_service = RunViewService()
 
@@ -161,6 +162,7 @@ def build_operator_run_follow_up_summary(
     )
 
     return _build_operator_run_follow_up_summary(
+        db,
         normalized_run_ids,
         run_lookup=run_lookup,
         waiting_reason_lookup=waiting_reason_lookup,
@@ -192,6 +194,7 @@ def build_operator_run_follow_up_summary_map(
 
     return {
         run_id: _build_operator_run_follow_up_summary(
+            db,
             [run_id],
             run_lookup=run_lookup,
             waiting_reason_lookup=waiting_reason_lookup,
@@ -203,6 +206,7 @@ def build_operator_run_follow_up_summary_map(
 
 
 def _build_operator_run_follow_up_summary(
+    db: Session,
     normalized_run_ids: list[str],
     *,
     run_lookup: dict[str, Run],
@@ -236,13 +240,23 @@ def _build_operator_run_follow_up_summary(
 
     for run_id in sampled_run_ids:
         execution_view = execution_view_map.get(run_id)
+        run_record = run_lookup.get(run_id)
         snapshot = build_operator_run_snapshot(
-            run_lookup.get(run_id),
+            run_record,
             waiting_reason=waiting_reason_lookup.get(run_id),
             execution_view=execution_view,
         )
         callback_tickets, sensitive_access_entries = _serialize_sample_focus_context(
             execution_view
+        )
+        tool_governance = (
+            load_workflow_run_tool_governance_summary(
+                db,
+                run_record.workflow_id,
+                run_record.workflow_version,
+            )
+            if run_record is not None
+            else None
         )
         summary.sampled_runs.append(
             OperatorRunSnapshotSample(
@@ -250,6 +264,12 @@ def _build_operator_run_follow_up_summary(
                 snapshot=snapshot,
                 callback_tickets=callback_tickets,
                 sensitive_access_entries=sensitive_access_entries,
+                tool_governance=tool_governance,
+                legacy_auth_governance=(
+                    execution_view.legacy_auth_governance
+                    if execution_view is not None
+                    else None
+                ),
             )
         )
 

@@ -92,6 +92,9 @@ def _assert_single_sensitive_access_focus_entry(
 def _normalize_sampled_run_legacy_auth_generated_at(run_follow_up: dict) -> dict:
     normalized = deepcopy(run_follow_up)
     for sampled_run in normalized.get("sampled_runs", []):
+        governance = sampled_run.get("legacy_auth_governance")
+        if isinstance(governance, dict) and governance.get("generated_at"):
+            governance["generated_at"] = "<generated_at>"
         for entry in sampled_run.get("sensitive_access_entries", []):
             governance = entry.get("legacy_auth_governance")
             if isinstance(governance, dict) and governance.get("generated_at"):
@@ -1096,6 +1099,14 @@ def test_bulk_decide_approval_tickets_allows_partial_success(
         endpoint_id="endpoint-bulk-approval-handoff",
         endpoint_name="Bulk Approval Handoff Endpoint",
     )
+    sampled_run_legacy_auth = deepcopy(sampled_run["legacy_auth_governance"])
+    sampled_run_legacy_auth["generated_at"] = "<generated_at>"
+    body_legacy_auth = deepcopy(body["legacy_auth_governance"])
+    body_legacy_auth["generated_at"] = "<generated_at>"
+    assert sampled_run_legacy_auth == body_legacy_auth
+    assert sampled_run["tool_governance"] == body["legacy_auth_governance"]["workflows"][0][
+        "tool_governance"
+    ]
 
     stored_ticket = sqlite_session.get(ApprovalTicketRecord, ticket_id)
     assert stored_ticket is not None

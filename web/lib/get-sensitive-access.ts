@@ -19,6 +19,7 @@ import {
   type SensitiveAccessInboxExecutionContext
 } from "@/lib/sensitive-access-inbox-execution-context";
 import { resolveSensitiveAccessCanonicalRunSnapshot } from "@/lib/sensitive-access";
+import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type SensitiveResourceItem = {
@@ -234,6 +235,8 @@ export type SensitiveAccessTimelineEntry = {
       snapshot?: OperatorRunSnapshotSummary | null;
       callback_tickets?: RunCallbackTicketItem[];
       sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+      tool_governance?: WorkflowToolGovernanceSummary | null;
+      legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
     }>;
     explanation?: SignalFollowUpExplanation | null;
   } | null;

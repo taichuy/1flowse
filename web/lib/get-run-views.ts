@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export type RunArtifactItem = {
@@ -225,6 +226,8 @@ export type OperatorRunSnapshotSample = {
   snapshot?: OperatorRunSnapshot | null;
   callback_tickets?: RunCallbackTicketItem[];
   sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+  tool_governance?: WorkflowToolGovernanceSummary | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
 };
 
 export type OperatorRunFollowUpSummary = {

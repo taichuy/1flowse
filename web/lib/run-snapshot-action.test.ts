@@ -8,6 +8,7 @@ import {
   normalizeOperatorRunSnapshot,
   resolveCanonicalOperatorRunSnapshot
 } from "@/app/actions/run-snapshot";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 type MockJsonResponse = {
   ok: boolean;
@@ -151,14 +152,28 @@ describe("fetchRunSnapshot", () => {
   });
 
   it("normalizeOperatorRunFollowUp 会保留 sampled run 的 callback 与审批上下文", () => {
+    const legacyAuthGovernance = buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+      binding: {
+        workflow_id: "workflow-sampled",
+        workflow_name: "Sampled Workflow"
+      }
+    });
     const summary = normalizeOperatorRunFollowUp({
       sampled_runs: [
         {
           run_id: "run-1",
           snapshot: {
+            workflow_id: "workflow-sampled",
             status: "waiting",
             current_node_id: "approval_gate"
           },
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: legacyAuthGovernance,
           callback_tickets: [
             {
               ticket: "callback-ticket-1",
@@ -195,6 +210,15 @@ describe("fetchRunSnapshot", () => {
 
     expect(summary?.sampledRuns[0]).toMatchObject({
       runId: "run-1",
+      toolGovernance: {
+        missing_tool_ids: ["native.catalog-gap"]
+      },
+      legacyAuthGovernance: {
+        binding_count: 1,
+        workflows: [
+          expect.objectContaining({ workflow_id: "workflow-sampled" })
+        ]
+      },
       callbackTickets: [
         expect.objectContaining({
           ticket: "callback-ticket-1",

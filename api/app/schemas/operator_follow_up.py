@@ -4,6 +4,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.explanations import SignalFollowUpExplanation
+from app.schemas.workflow import WorkflowToolGovernanceSummary
+from app.schemas.workflow_legacy_auth_governance import (
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+)
 
 OperatorRunExecutionFocusReason = Literal[
     "blocking_node_run",
@@ -161,6 +165,8 @@ class OperatorRunSnapshotSample(BaseModel):
     snapshot: OperatorRunSnapshot | None = None
     callback_tickets: list[dict[str, Any]] = Field(default_factory=list)
     sensitive_access_entries: list[dict[str, Any]] = Field(default_factory=list)
+    tool_governance: WorkflowToolGovernanceSummary | None = None
+    legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | None = None
 
 
 OperatorRunRecommendedActionEntryKey = Literal["runLibrary", "operatorInbox"]

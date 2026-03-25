@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildOperatorRunSampleCards } from "@/lib/operator-run-sample-cards";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 function buildSampleApprovalEntry(): SensitiveAccessTimelineEntry {
   return {
@@ -99,5 +100,47 @@ describe("buildOperatorRunSampleCards", () => {
       inboxHref:
         "/sensitive-access?status=pending&waiting_status=waiting&run_id=run-1&node_run_id=node-run-1&access_request_id=request-1&approval_ticket_id=approval-ticket-1"
     });
+  });
+
+  it("keeps workflow governance handoff on sampled run cards", () => {
+    const cards = buildOperatorRunSampleCards([
+      {
+        runId: "run-1",
+        snapshot: {
+          workflowId: "workflow-sampled",
+          status: "waiting",
+          currentNodeId: "approval_gate",
+          executionFocusArtifactRefs: [],
+          executionFocusArtifacts: [],
+          executionFocusToolCalls: [],
+          executionFocusSkillTrace: null
+        },
+        callbackTickets: [],
+        sensitiveAccessEntries: [],
+        toolGovernance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        legacyAuthGovernance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+          binding: {
+            workflow_id: "workflow-sampled",
+            workflow_name: "Sampled Workflow"
+          }
+        })
+      }
+    ]);
+
+    expect(cards[0]).toMatchObject({
+      workflowGovernanceHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+      workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+      legacyAuthHandoff: {
+        bindingChipLabel: "1 legacy bindings",
+        statusChipLabel: "publish auth blocker"
+      }
+    });
+    expect(cards[0].workflowCatalogGapDetail).toContain("catalog gap（native.catalog-gap）");
+    expect(cards[0].legacyAuthHandoff?.detail).toContain("published blocker");
   });
 });

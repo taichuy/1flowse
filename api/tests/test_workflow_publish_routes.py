@@ -21,6 +21,8 @@ from app.services.plugin_runtime import PluginToolDefinition, reset_plugin_regis
 from app.services.published_invocations import PublishedInvocationService
 from tests.workflow_publish_helpers import (
     legacy_auth_mode_contract,
+)
+from tests.workflow_publish_helpers import (
     publishable_definition as _publishable_definition,
 )
 from tests.workflow_publish_helpers import (
@@ -1597,7 +1599,10 @@ def test_publish_binding_rejects_legacy_unsupported_auth_mode(
     )
     assert publish_response.status_code == 422
     assert "unsupported legacy auth mode 'token'" in publish_response.json()["detail"]
-    assert "Publish auth contract: supported api_key / internal; legacy token." in publish_response.json()["detail"]
+    assert (
+        "Publish auth contract: supported api_key / internal; legacy token."
+        in publish_response.json()["detail"]
+    )
 
     list_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints",
@@ -2078,6 +2083,19 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
     assert detail_body["run_follow_up"]["sampled_run_count"] == 1
     assert detail_body["run_follow_up"]["waiting_run_count"] == 1
     assert detail_body["run_follow_up"]["sampled_runs"][0]["run_id"] == run.id
+    assert detail_body["run_follow_up"]["sampled_runs"][0]["legacy_auth_governance"] is None
+    assert activity_body["items"][0]["run_follow_up"]["sampled_runs"][0][
+        "legacy_auth_governance"
+    ] is None
+    assert detail_body["run_follow_up"]["sampled_runs"][0]["tool_governance"] == activity_body[
+        "items"
+    ][0]["run_follow_up"]["sampled_runs"][0]["tool_governance"]
+    assert detail_body["run_follow_up"]["sampled_runs"][0]["tool_governance"] == {
+        "referenced_tool_ids": [],
+        "missing_tool_ids": [],
+        "governed_tool_count": 0,
+        "strong_isolation_tool_count": 0,
+    }
     assert detail_body["run_follow_up"]["sampled_runs"][0]["snapshot"] == {
         "workflow_id": workflow_id,
         "status": "waiting",

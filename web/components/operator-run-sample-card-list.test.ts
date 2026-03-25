@@ -132,6 +132,10 @@ function buildSampleCard(
     focusNodeLabel: "Callback node",
     focusNodeRunId: "node-run-1",
     waitingReason: "callback pending",
+    workflowGovernanceHref: null,
+    workflowCatalogGapSummary: null,
+    workflowCatalogGapDetail: null,
+    legacyAuthHandoff: null,
     executionFactBadges: [
       "effective sandbox",
       "executor tool:compat-adapter:dify-default",
@@ -511,5 +515,50 @@ describe("OperatorRunSampleCardList", () => {
     expect(html).toContain("当前 callback recovery 仍影响 3 个 run / 2 个 workflow");
     expect(html).toContain("Open run library");
     expect(html).toContain('/runs?focus=callback-waiting');
+  });
+
+  it("renders workflow governance handoff inside sampled run cards", () => {
+    const html = renderToStaticMarkup(
+      createElement(OperatorRunSampleCardList, {
+        cards: [
+          buildSampleCard({
+            hasCallbackWaitingSummary: false,
+            workflowGovernanceHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+            workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+            workflowCatalogGapDetail:
+              "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 compact snapshot 与 callback 事实。",
+            legacyAuthHandoff: {
+              bindingChipLabel: "1 legacy bindings",
+              statusChipLabel: "publish auth blocker",
+              detail:
+                "当前 workflow 仍有 0 条 draft cleanup、1 条 published blocker、0 条 offline inventory。支持的 draft 鉴权模式：api_key、internal；遗留模式：token。",
+              workflowSummary: {
+                workflow_id: "workflow-sampled",
+                workflow_name: "Sampled Workflow",
+                binding_count: 1,
+                draft_candidate_count: 0,
+                published_blocker_count: 1,
+                offline_inventory_count: 0,
+                tool_governance: {
+                  referenced_tool_ids: ["native.catalog-gap"],
+                  missing_tool_ids: ["native.catalog-gap"],
+                  governed_tool_count: 0,
+                  strong_isolation_tool_count: 0
+                }
+              }
+            }
+          })
+        ],
+        skillTraceDescription: "skill trace"
+      })
+    );
+
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain('href="/workflows/workflow-sampled?definition_issue=missing_tool"');
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
   });
 });

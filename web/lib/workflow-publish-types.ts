@@ -344,6 +344,8 @@ export type OperatorRunFollowUpSnapshotSample = {
   snapshot?: OperatorRunFollowUpSnapshot | null;
   callback_tickets?: RunCallbackTicketItem[];
   sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+  tool_governance?: WorkflowToolGovernanceSummary | null;
+  legacy_auth_governance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
 };
 
 export type OperatorRunFollowUpSummary = {
