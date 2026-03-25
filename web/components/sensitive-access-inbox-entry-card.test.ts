@@ -6,7 +6,9 @@ import { SensitiveAccessInboxEntryCard } from "@/components/sensitive-access-inb
 import type { SensitiveAccessInboxEntry } from "@/lib/get-sensitive-access";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { CallbackWaitingLifecycleSummary } from "@/lib/get-run-views";
+import { buildLegacyPublishAuthWorkflowHandoff } from "@/lib/legacy-publish-auth-governance-presenters";
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 import { buildSensitiveAccessInboxEntryExecutionSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 
 vi.mock("next/link", () => ({
@@ -561,6 +563,45 @@ describe("SensitiveAccessInboxEntryCard", () => {
     expect(html.indexOf("Callback waiting follow-up")).toBeLessThan(
       html.indexOf("effective sandbox")
     );
+  });
+
+  it("renders workflow governance handoff inside the shared callback summary", () => {
+    const entry = buildEntry();
+    const legacyAuthGovernance = buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+      binding: {
+        workflow_id: "workflow-1",
+        workflow_name: "Inbox workflow"
+      }
+    });
+    entry.callbackWaitingContext = {
+      runId: "run-1",
+      displayNodeRunId: "node-run-1",
+      actionNodeRunId: "node-run-1",
+      callbackTickets: [],
+      callbackWaitingExplanation: {
+        primary_signal: "当前 callback waiting 仍卡在审批恢复阶段。",
+        follow_up: "先处理 workflow definition issue，再回来看 inbox slice。"
+      },
+      lifecycle: null,
+      sensitiveAccessEntries: [],
+      waitingReason: "approval pending",
+      workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+      workflowCatalogGapDetail:
+        "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理当前 sensitive access inbox slice 与 callback waiting。",
+      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      legacyAuthHandoff: buildLegacyPublishAuthWorkflowHandoff(
+        legacyAuthGovernance,
+        "workflow-1"
+      )
+    };
+
+    const html = renderToStaticMarkup(createElement(SensitiveAccessInboxEntryCard, { entry }));
+
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
   });
 
   it("surfaces live sandbox readiness for blocked execution focus entries", () => {

@@ -1,4 +1,10 @@
 import type { RunSnapshot } from "@/app/actions/run-snapshot";
+import type { LegacyPublishAuthWorkflowHandoff } from "@/lib/legacy-publish-auth-governance-presenters";
+import { resolveOperatorRunFollowUpSample } from "@/lib/operator-run-follow-up-samples";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import type {
   SensitiveAccessInboxEntry,
   SensitiveAccessTimelineEntry
@@ -20,6 +26,10 @@ export type SensitiveAccessInboxCallbackContext = {
   scheduledResumeDueAt?: string | null;
   scheduledResumeRequeuedAt?: string | null;
   scheduledResumeRequeueSource?: string | null;
+  workflowCatalogGapSummary?: string | null;
+  workflowCatalogGapDetail?: string | null;
+  workflowGovernanceHref?: string | null;
+  legacyAuthHandoff?: LegacyPublishAuthWorkflowHandoff | null;
 };
 
 function trimOrNull(value?: string | null) {
@@ -69,9 +79,28 @@ export function buildSensitiveAccessInboxEntryCallbackContext(
     trimOrNull(runSnapshot?.executionFocusNodeRunId) ??
     actionNodeRunId;
   const inlineSensitiveAccessEntries = buildInlineSensitiveAccessEntries(entry);
+  const workflowGovernanceSample = resolveOperatorRunFollowUpSample(entry.runFollowUp, runId);
   if (!runId || !displayNodeRunId || !hasCallbackSignals(runSnapshot)) {
     return null;
   }
+
+  const workflowId =
+    trimOrNull(runSnapshot?.workflowId) ??
+    trimOrNull(workflowGovernanceSample?.snapshot?.workflowId) ??
+    null;
+  const workflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+    toolGovernance: workflowGovernanceSample?.toolGovernance ?? null,
+    subjectLabel: "callback summary",
+    returnDetail:
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理当前 sensitive access inbox slice 与 callback waiting。"
+  });
+  const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId,
+    toolGovernance: workflowGovernanceSample?.toolGovernance ?? null,
+    legacyAuthGovernance:
+      workflowGovernanceSample?.legacyAuthGovernance ?? entry.legacyAuthGovernance ?? null,
+    workflowCatalogGapDetail
+  });
 
   return {
     runId,
@@ -88,6 +117,10 @@ export function buildSensitiveAccessInboxEntryCallbackContext(
     scheduledResumeScheduledAt: runSnapshot?.scheduledResumeScheduledAt ?? null,
     scheduledResumeDueAt: runSnapshot?.scheduledResumeDueAt ?? null,
     scheduledResumeRequeuedAt: runSnapshot?.scheduledResumeRequeuedAt ?? null,
-    scheduledResumeRequeueSource: runSnapshot?.scheduledResumeRequeueSource ?? null
+    scheduledResumeRequeueSource: runSnapshot?.scheduledResumeRequeueSource ?? null,
+    workflowCatalogGapSummary: workflowGovernanceHandoff.workflowCatalogGapSummary,
+    workflowCatalogGapDetail: workflowGovernanceHandoff.workflowCatalogGapDetail,
+    workflowGovernanceHref: workflowGovernanceHandoff.workflowGovernanceHref,
+    legacyAuthHandoff: workflowGovernanceHandoff.legacyAuthHandoff
   };
 }

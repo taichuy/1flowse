@@ -356,6 +356,10 @@ export function SensitiveAccessInboxEntryCard({
             waitingReason={callbackWaitingContext.waitingReason}
             focusSkillReferenceNodeId={executionContext?.focusNode.node_id ?? null}
             focusSkillReferenceNodeName={executionContext?.focusNode.node_name ?? null}
+            workflowCatalogGapSummary={callbackWaitingContext.workflowCatalogGapSummary}
+            workflowCatalogGapDetail={callbackWaitingContext.workflowCatalogGapDetail}
+            workflowGovernanceHref={callbackWaitingContext.workflowGovernanceHref}
+            legacyAuthHandoff={callbackWaitingContext.legacyAuthHandoff}
           />
         </div>
       ) : null}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SensitiveAccessInboxEntry } from "./get-sensitive-access";
 import { buildSensitiveAccessInboxEntryCallbackContext } from "./sensitive-access-inbox-callback-context";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "./workflow-publish-legacy-auth-test-fixtures";
 
 function createInboxEntry(
   overrides: Partial<SensitiveAccessInboxEntry> = {}
@@ -238,5 +239,56 @@ describe("sensitive access inbox callback context", () => {
     expect(context).not.toBeNull();
     expect(context?.displayNodeRunId).toBe("node-run-focus");
     expect(context?.actionNodeRunId).toBe("node-run-1");
+  });
+
+  it("把 sampled run 的 workflow governance handoff 并入 callback summary context", () => {
+    const context = buildSensitiveAccessInboxEntryCallbackContext(
+      createInboxEntry({
+        legacyAuthGovernance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+          binding: {
+            workflow_id: "wf-1",
+            workflow_name: "Callback workflow"
+          }
+        }),
+        runFollowUp: {
+          affectedRunCount: 1,
+          sampledRunCount: 1,
+          waitingRunCount: 1,
+          runningRunCount: 0,
+          succeededRunCount: 0,
+          failedRunCount: 0,
+          unknownRunCount: 0,
+          sampledRuns: [
+            {
+              runId: "run-1",
+              snapshot: createRunSnapshot(),
+              toolGovernance: {
+                referenced_tool_ids: ["native.catalog-gap"],
+                missing_tool_ids: ["native.catalog-gap"],
+                governed_tool_count: 0,
+                strong_isolation_tool_count: 0
+              },
+              legacyAuthGovernance:
+                buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+                  binding: {
+                    workflow_id: "wf-1",
+                    workflow_name: "Callback workflow"
+                  }
+                })
+            }
+          ]
+        }
+      }),
+      createRunSnapshot()
+    );
+
+    expect(context).not.toBeNull();
+    expect(context?.workflowCatalogGapSummary).toBe("catalog gap · native.catalog-gap");
+    expect(context?.workflowCatalogGapDetail).toContain("当前 callback summary 对应的 workflow 版本仍有 catalog gap");
+    expect(context?.workflowGovernanceHref).toBe("/workflows/wf-1?definition_issue=missing_tool");
+    expect(context?.legacyAuthHandoff).toMatchObject({
+      bindingChipLabel: "1 legacy bindings",
+      statusChipLabel: "publish auth blocker"
+    });
   });
 });
