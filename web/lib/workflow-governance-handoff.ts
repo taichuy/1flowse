@@ -51,31 +51,35 @@ export function buildWorkflowCatalogGapDetail({
 
 export function buildWorkflowGovernanceHandoff({
   workflowId,
+  workflowDetailHref,
   toolGovernance,
   legacyAuthGovernance,
   workflowCatalogGapDetail = null
 }: {
   workflowId?: string | null;
+  workflowDetailHref?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   workflowCatalogGapDetail?: string | null;
 }): WorkflowGovernanceHandoff {
   const resolvedWorkflowId =
     normalizeText(workflowId) ?? normalizeText(legacyAuthGovernance?.workflows[0]?.workflow_id);
-  const workflowDetailHref = resolvedWorkflowId
+  const resolvedWorkflowDetailHref =
+    normalizeText(workflowDetailHref) ??
+    (resolvedWorkflowId
     ? buildAuthorFacingWorkflowDetailLinkSurface({
         workflowId: resolvedWorkflowId,
         variant: "editor"
       }).href
-    : null;
-  const workflowGovernanceHref = workflowDetailHref
+    : null);
+  const workflowGovernanceHref = resolvedWorkflowDetailHref
     ? toolGovernance
       ? appendWorkflowLibraryViewStateForWorkflow(
-          workflowDetailHref,
+          resolvedWorkflowDetailHref,
           { tool_governance: toolGovernance },
           { definitionIssue: null }
         )
-      : workflowDetailHref
+      : resolvedWorkflowDetailHref
     : null;
   const workflowCatalogGapSummary = toolGovernance
     ? formatWorkflowMissingToolSummary({ tool_governance: toolGovernance })

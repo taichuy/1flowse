@@ -1,13 +1,13 @@
+import React from "react";
 import Link from "next/link";
 
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { RecentRunCheck } from "@/lib/get-system-overview";
-import { buildLegacyPublishAuthWorkflowHandoff } from "@/lib/legacy-publish-auth-governance-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import {
-  formatCatalogGapToolSummary,
-  formatWorkflowMissingToolSummary,
-  hasWorkflowMissingToolIssues
+  formatCatalogGapToolSummary
 } from "@/lib/workflow-definition-governance";
+import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
 
 type RecentRunEntryCardProps = {
   run: RecentRunCheck;
@@ -25,32 +25,31 @@ export function RecentRunEntryCard({
   workflowLinkLabel
 }: RecentRunEntryCardProps) {
   const workflowLabel = run.workflow_name?.trim() || run.workflow_id;
-  const legacyAuthHandoff = buildLegacyPublishAuthWorkflowHandoff(
-    run.legacy_auth_governance,
-    run.workflow_id
-  );
   const toolGovernance = run.tool_governance ?? {
     referenced_tool_ids: [],
     missing_tool_ids: [],
     governed_tool_count: 0,
     strong_isolation_tool_count: 0
   };
-  const missingToolSummary = formatWorkflowMissingToolSummary({
-    tool_governance: toolGovernance
-  });
-  const hasMissingToolIssues = hasWorkflowMissingToolIssues({
-    tool_governance: toolGovernance
-  });
   const catalogGapToolCopy = formatCatalogGapToolSummary(toolGovernance.missing_tool_ids);
-  const missingToolDetail = catalogGapToolCopy
-    ? `当前 workflow 仍有 catalog gap（${catalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。`
-    : "当前 workflow 仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。";
+  const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: run.workflow_id,
+    workflowDetailHref: workflowHref,
+    toolGovernance,
+    legacyAuthGovernance: run.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: catalogGapToolCopy
+      ? `当前 workflow 仍有 catalog gap（${catalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。`
+      : "当前 workflow 仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
+  });
+  const workflowGovernanceHref = workflowHref
+    ? workflowGovernanceHandoff.workflowGovernanceHref
+    : null;
   const missingWorkflowLinkFallback =
-    hasMissingToolIssues && legacyAuthHandoff
+    workflowGovernanceHandoff.workflowCatalogGapSummary && workflowGovernanceHandoff.legacyAuthHandoff
       ? "当前入口还没有可用的 workflow deep link，请回到 workflow library 继续处理 catalog gap / publish auth contract backlog。"
-      : hasMissingToolIssues
+      : workflowGovernanceHandoff.workflowCatalogGapSummary
         ? "当前入口还没有可用的 workflow deep link，请回到 workflow library 继续处理 catalog gap。"
-        : legacyAuthHandoff
+        : workflowGovernanceHandoff.legacyAuthHandoff
           ? "当前入口还没有可用的 workflow deep link，请回到 workflow library 继续处理 publish auth contract backlog。"
           : null;
 
@@ -68,23 +67,13 @@ export function RecentRunEntryCard({
       <p className="activity-copy">
         Created {formatTimestamp(run.created_at)} · events {run.event_count}
       </p>
-      {missingToolSummary ? (
-        <>
-          <div className="event-type-strip">
-            <span className="event-chip">{missingToolSummary}</span>
-          </div>
-          <p className="activity-copy">{missingToolDetail}</p>
-        </>
-      ) : null}
-      {legacyAuthHandoff ? (
-        <>
-          <div className="event-type-strip">
-            <span className="event-chip">{legacyAuthHandoff.bindingChipLabel}</span>
-            <span className="event-chip">{legacyAuthHandoff.statusChipLabel}</span>
-          </div>
-          <p className="activity-copy">{legacyAuthHandoff.detail}</p>
-        </>
-      ) : null}
+      <WorkflowGovernanceHandoffCards
+        workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+        workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+        workflowGovernanceHref={workflowGovernanceHref}
+        legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+        cardClassName="payload-card compact-card"
+      />
       <div className="section-actions">
         <Link className="activity-link" href={runHref}>
           {runLinkLabel}

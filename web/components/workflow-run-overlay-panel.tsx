@@ -7,15 +7,12 @@ import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import { InlineOperatorActionFeedback } from "@/components/inline-operator-action-feedback";
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
-import {
-  buildLegacyPublishAuthGovernanceSurfaceCopy,
-  buildLegacyPublishAuthWorkflowHandoff
-} from "@/lib/legacy-publish-auth-governance-presenters";
 import {
   DEFAULT_RUN_TRACE_LIMIT,
   type RunTrace
@@ -30,11 +27,8 @@ import {
   buildWorkflowGovernanceHandoff
 } from "@/lib/workflow-governance-handoff";
 import {
-  formatCatalogGapToolSummary,
-  formatWorkflowMissingToolSummary,
-  hasWorkflowMissingToolIssues
+  formatCatalogGapToolSummary
 } from "@/lib/workflow-definition-governance";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
 import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
@@ -146,20 +140,20 @@ export function WorkflowRunOverlayPanel({
           variant: "editor"
         }).href
     : null;
-  const workflowGovernanceHref =
-    run && baseWorkflowDetailHref && hasWorkflowMissingToolIssues(run)
-      ? appendWorkflowLibraryViewState(baseWorkflowDetailHref, {
-          definitionIssue: "missing_tool"
-        })
-      : baseWorkflowDetailHref;
-  const workflowCatalogGapSummary = run ? formatWorkflowMissingToolSummary(run) : null;
   const workflowCatalogGapToolCopy = formatCatalogGapToolSummary(
     run?.tool_governance?.missing_tool_ids ?? []
   );
-  const legacyAuthSurfaceCopy = buildLegacyPublishAuthGovernanceSurfaceCopy();
-  const legacyAuthHandoff = run
-    ? buildLegacyPublishAuthWorkflowHandoff(run.legacy_auth_governance, run.workflow_id)
-    : null;
+  const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: run?.workflow_id ?? null,
+    workflowDetailHref: baseWorkflowDetailHref,
+    toolGovernance: run?.tool_governance ?? null,
+    legacyAuthGovernance: run?.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: run
+      ? workflowCatalogGapToolCopy
+        ? `当前这条 run 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。`
+        : "当前这条 run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。"
+      : null
+  });
 
   return (
     <article className="diagnostic-panel editor-panel">
@@ -226,40 +220,13 @@ export function WorkflowRunOverlayPanel({
                 {run.workflow_version}
               </p>
 
-              {workflowCatalogGapSummary ? (
-                <div className="payload-card compact-card runtime-overlay-governance-card">
-                  <div className="payload-card-header">
-                    <span className="status-meta">Workflow governance</span>
-                    <span className="event-chip">{workflowCatalogGapSummary}</span>
-                  </div>
-                  <p className="section-copy entry-copy">
-                    {workflowCatalogGapToolCopy
-                      ? `当前这条 run 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。`
-                      : "当前这条 run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。"}
-                  </p>
-                  {workflowGovernanceHref ? (
-                    <Link className="inline-link" href={workflowGovernanceHref}>
-                      回到 workflow 编辑器处理 catalog gap
-                    </Link>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {legacyAuthHandoff ? (
-                <div className="payload-card compact-card runtime-overlay-governance-card">
-                  <div className="payload-card-header">
-                    <span className="status-meta">{legacyAuthSurfaceCopy.title}</span>
-                    <span className="event-chip">{legacyAuthHandoff.bindingChipLabel}</span>
-                    <span className="event-chip">{legacyAuthHandoff.statusChipLabel}</span>
-                  </div>
-                  <p className="section-copy entry-copy">{legacyAuthHandoff.detail}</p>
-                  {workflowGovernanceHref ? (
-                    <Link className="inline-link" href={workflowGovernanceHref}>
-                      回到 workflow 编辑器处理 publish auth contract
-                    </Link>
-                  ) : null}
-                </div>
-              ) : null}
+              <WorkflowGovernanceHandoffCards
+                workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+                workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+                workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
+                legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+                cardClassName="payload-card compact-card runtime-overlay-governance-card"
+              />
 
               <div className="hero-actions">
                 {runDrilldownLink ? (
