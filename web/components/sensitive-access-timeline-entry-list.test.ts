@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SensitiveAccessTimelineEntryList } from "@/components/sensitive-access-timeline-entry-list";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
 import { buildOperatorFollowUpSurfaceCopy } from "@/lib/operator-follow-up-presenters";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 const inlineFeedbackProps: Array<Record<string, unknown>> = [];
 const callbackSummaryProps: Array<Record<string, unknown>> = [];
@@ -203,6 +204,87 @@ describe("SensitiveAccessTimelineEntryList", () => {
       )?.primary_signal
     ).toBe("当前阻断来自敏感访问审批票据。");
     expect(callbackSummaryProps[0]?.showInlineActions).toBe(false);
+  });
+
+  it("carries workflow governance handoff through shared callback summary surfaces", () => {
+    const entry = buildEntry();
+
+    renderToStaticMarkup(
+      createElement(SensitiveAccessTimelineEntryList, {
+        entries: [
+          {
+            ...entry,
+            run_follow_up: {
+              ...entry.run_follow_up!,
+              explanation: {
+                primary_signal: "本次影响 1 个 run；shared callback summary 还要带回 workflow governance。",
+                follow_up: "先看共享 callback summary，再回到 workflow detail 补齐定义问题。"
+              },
+              sampled_runs: [
+                {
+                  run_id: "run-current",
+                  snapshot: {
+                    workflowId: "workflow-timeline",
+                    status: "waiting",
+                    currentNodeId: "current-node",
+                    executionFocusNodeId: "current-node",
+                    executionFocusNodeRunId: "node-run-current",
+                    executionFocusNodeName: "Current Node"
+                  },
+                  callback_tickets: [],
+                  sensitive_access_entries: [],
+                  tool_governance: {
+                    referenced_tool_ids: ["native.timeline-gap"],
+                    missing_tool_ids: ["native.timeline-gap"],
+                    governed_tool_count: 0,
+                    strong_isolation_tool_count: 0
+                  },
+                  legacy_auth_governance:
+                    buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+                      binding: {
+                        workflow_id: "workflow-timeline",
+                        workflow_name: "Workflow Timeline"
+                      }
+                    })
+                }
+              ]
+            }
+          }
+        ],
+        emptyCopy: "no entries"
+      })
+    );
+
+    expect(inlineFeedbackProps).toHaveLength(1);
+    expect(callbackSummaryProps).toHaveLength(1);
+    expect(sensitiveAccessInlineActionProps).toHaveLength(1);
+    expect(callbackSummaryProps[0]).toMatchObject({
+      workflowCatalogGapSummary: "catalog gap · native.timeline-gap",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      legacyAuthHandoff: {
+        bindingChipLabel: "1 legacy bindings",
+        statusChipLabel: "publish auth blocker"
+      }
+    });
+    expect(String(callbackSummaryProps[0]?.workflowCatalogGapDetail ?? "")).toContain(
+      "当前 timeline callback summary 对应的 workflow 版本仍有 catalog gap（native.timeline-gap）"
+    );
+    expect(inlineFeedbackProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      workflowCatalogGapSummary: "catalog gap · native.timeline-gap",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      legacyAuthHandoff: {
+        bindingChipLabel: "1 legacy bindings",
+        statusChipLabel: "publish auth blocker"
+      }
+    });
+    expect(sensitiveAccessInlineActionProps[0]?.callbackWaitingSummaryProps).toMatchObject({
+      workflowCatalogGapSummary: "catalog gap · native.timeline-gap",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      legacyAuthHandoff: {
+        bindingChipLabel: "1 legacy bindings",
+        statusChipLabel: "publish auth blocker"
+      }
+    });
   });
 
   it("renders credential governance summary when the timeline entry is backed by a credential", () => {

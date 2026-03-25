@@ -26,6 +26,10 @@ import {
   getSensitiveAccessBlockedPolicySummary
 } from "@/lib/sensitive-access-presenters";
 import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
+import {
   buildOperatorFollowUpSurfaceCopy,
   buildOperatorInboxSliceLinkSurface
 } from "@/lib/operator-follow-up-presenters";
@@ -154,6 +158,30 @@ export function SensitiveAccessBlockedCard({
     callbackWaitingActive,
     sandboxReadiness
   });
+  const callbackSummaryWorkflowGovernanceSample =
+    payload.run_follow_up?.sampledRuns.find((sample) => sample.runId === runId) ??
+    payload.run_follow_up?.sampledRuns.find(
+      (sample) =>
+        Boolean(
+          sample.toolGovernance || sample.legacyAuthGovernance || sample.snapshot?.workflowId
+        )
+    ) ??
+    null;
+  const callbackSummaryWorkflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+    toolGovernance: callbackSummaryWorkflowGovernanceSample?.toolGovernance ?? null,
+    subjectLabel: "sensitive-access callback summary",
+    returnDetail:
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理敏感访问审批、callback summary 与 run focus。"
+  });
+  const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId:
+      payload.run_snapshot?.workflowId ??
+      callbackSummaryWorkflowGovernanceSample?.snapshot?.workflowId ??
+      null,
+    toolGovernance: callbackSummaryWorkflowGovernanceSample?.toolGovernance ?? null,
+    legacyAuthGovernance: callbackSummaryWorkflowGovernanceSample?.legacyAuthGovernance ?? null,
+    workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
+  });
   const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
     currentHref,
     inboxHref,
@@ -161,7 +189,14 @@ export function SensitiveAccessBlockedCard({
     showSensitiveAccessInlineActions: false,
     recommendedAction: canonicalCallbackRecommendedAction,
     operatorFollowUp: payload.run_follow_up?.explanation?.follow_up ?? null,
-    preferCanonicalRecommendedNextStep: true
+    preferCanonicalRecommendedNextStep: true,
+    workflowCatalogGapSummary:
+      callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary,
+    workflowCatalogGapDetail:
+      callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail,
+    workflowGovernanceHref:
+      callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref,
+    legacyAuthHandoff: callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff
   };
 
   return (

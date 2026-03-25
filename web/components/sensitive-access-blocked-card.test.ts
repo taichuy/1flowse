@@ -1,13 +1,15 @@
 ﻿import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { SensitiveAccessBlockingPayload } from "@/lib/sensitive-access";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 let mockPathname = "/workflows/workflow-1";
 let mockSearchParams = "";
+const sensitiveAccessInlineActionProps: Array<Record<string, unknown>> = [];
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -20,8 +22,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/sensitive-access-inline-actions", () => ({
-  SensitiveAccessInlineActions: () =>
-    createElement("div", { "data-testid": "sensitive-access-inline-actions" })
+  SensitiveAccessInlineActions: (props: Record<string, unknown>) => {
+    sensitiveAccessInlineActionProps.push(props);
+    return createElement("div", { "data-testid": "sensitive-access-inline-actions" });
+  }
 }));
 
 function buildSandboxReadiness(): SandboxReadinessCheck {
@@ -67,6 +71,12 @@ function buildSandboxReadiness(): SandboxReadinessCheck {
 }
 
 describe("SensitiveAccessBlockedCard", () => {
+  beforeEach(() => {
+    mockPathname = "/workflows/workflow-1";
+    mockSearchParams = "";
+    sensitiveAccessInlineActionProps.length = 0;
+  });
+
   it("renders canonical follow-up and run snapshot evidence", () => {
     const payload: SensitiveAccessBlockingPayload = {
       detail: "Published invocation detail requires approval before the payload can be viewed.",
@@ -207,6 +217,107 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(html).toContain("sampled 1");
     expect(html).toContain("still waiting 1");
     expect(html).toContain("/runs/run-1");
+  });
+
+  it("passes workflow governance handoff into blocked callback summary props", () => {
+    const payload: SensitiveAccessBlockingPayload = {
+      detail: "Blocked export still needs workflow governance follow-up.",
+      resource: {
+        id: "resource-blocked",
+        label: "Trace export",
+        description: "Sensitive workflow trace export",
+        sensitivity_level: "L3",
+        source: "workspace_resource",
+        metadata: {}
+      },
+      access_request: {
+        id: "request-blocked",
+        run_id: "run-blocked",
+        node_run_id: "node-run-blocked",
+        requester_type: "human",
+        requester_id: "ops-reviewer",
+        resource_id: "resource-blocked",
+        action_type: "read",
+        decision: "require_approval"
+      },
+      approval_ticket: {
+        id: "ticket-blocked",
+        access_request_id: "request-blocked",
+        run_id: "run-blocked",
+        node_run_id: "node-run-blocked",
+        status: "pending",
+        waiting_status: "waiting",
+        approved_by: null
+      },
+      notifications: [],
+      outcome_explanation: {
+        primary_signal: "当前阻断仍需要先处理审批。",
+        follow_up: "处理审批后，还要回到 workflow governance 入口补齐定义问题。"
+      },
+      run_snapshot: null,
+      run_follow_up: {
+        affectedRunCount: 1,
+        sampledRunCount: 1,
+        waitingRunCount: 1,
+        runningRunCount: 0,
+        succeededRunCount: 0,
+        failedRunCount: 0,
+        unknownRunCount: 0,
+        explanation: {
+          primary_signal: "本次影响 1 个 run；sampled run 已暴露 workflow governance blocker。",
+          follow_up: "先处理审批，再回到 workflow detail 补齐 catalog gap 和 publish auth。"
+        },
+        sampledRuns: [
+          {
+            runId: "run-blocked",
+            snapshot: {
+              workflowId: "workflow-blocked",
+              status: "waiting",
+              currentNodeId: "approval_wait",
+              executionFocusNodeId: "approval_wait",
+              executionFocusNodeRunId: "node-run-blocked",
+              executionFocusNodeName: "Approval Wait"
+            },
+            toolGovernance: {
+              referenced_tool_ids: ["native.blocked-gap"],
+              missing_tool_ids: ["native.blocked-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            },
+            legacyAuthGovernance:
+              buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+                binding: {
+                  workflow_id: "workflow-blocked",
+                  workflow_name: "Workflow Blocked"
+                }
+              })
+          }
+        ]
+      }
+    };
+
+    renderToStaticMarkup(
+      createElement(SensitiveAccessBlockedCard, {
+        title: "Sensitive access blocked",
+        payload
+      })
+    );
+
+    const callbackWaitingSummaryProps = (sensitiveAccessInlineActionProps[0]?.callbackWaitingSummaryProps ??
+      null) as Record<string, unknown> | null;
+
+    expect(callbackWaitingSummaryProps).not.toBeNull();
+    expect(callbackWaitingSummaryProps).toMatchObject({
+      workflowCatalogGapSummary: "catalog gap · native.blocked-gap",
+      workflowGovernanceHref: "/workflows/workflow-blocked?definition_issue=missing_tool",
+      legacyAuthHandoff: {
+        bindingChipLabel: "1 legacy bindings",
+        statusChipLabel: "publish auth blocker"
+      }
+    });
+    expect(String(callbackWaitingSummaryProps?.workflowCatalogGapDetail ?? "")).toContain(
+      "当前 sensitive-access callback summary 对应的 workflow 版本仍有 catalog gap（native.blocked-gap）"
+    );
   });
 
   it("falls back to sampled run context when request and ticket run_id are missing", () => {

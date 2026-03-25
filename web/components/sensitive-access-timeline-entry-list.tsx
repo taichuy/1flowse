@@ -47,6 +47,10 @@ import {
 } from "@/lib/sensitive-access-presenters";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
+import {
   buildRunDetailHrefFromWorkspaceStarterViewState,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
@@ -449,6 +453,35 @@ export function SensitiveAccessTimelineEntryList({
               : operatorSurfaceCopy.openInboxSliceLabel;
           const shouldRenderStandaloneRecommendedNextStep =
             !shouldRenderCallbackWaitingSummary && !hasStructuredOperatorFeedback && recommendedNextStep;
+          const callbackSummaryWorkflowGovernanceSample =
+            runContext.runFollowUp?.sampledRuns.find((sample) => sample.runId === runId) ??
+            runContext.runFollowUp?.sampledRuns.find(
+              (sample) =>
+                Boolean(
+                  sample.toolGovernance ||
+                    sample.legacyAuthGovernance ||
+                    sample.snapshot?.workflowId
+                )
+            ) ??
+            null;
+          const callbackSummaryWorkflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+            toolGovernance: callbackSummaryWorkflowGovernanceSample?.toolGovernance ?? null,
+            subjectLabel: "timeline callback summary",
+            returnDetail:
+              "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理当前敏感访问条目、callback summary 与 sampled run 事实。"
+          });
+          const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+            workflowId:
+              runContext.snapshot?.workflowId ??
+              callbackSummaryWorkflowGovernanceSample?.snapshot?.workflowId ??
+              null,
+            toolGovernance: callbackSummaryWorkflowGovernanceSample?.toolGovernance ?? null,
+            legacyAuthGovernance:
+              callbackSummaryWorkflowGovernanceSample?.legacyAuthGovernance ??
+              entry.legacy_auth_governance ??
+              null,
+            workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
+          });
           const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = {
             inboxHref: callbackSummaryInboxHref,
             callbackTickets: callbackSummaryCallbackTickets,
@@ -465,7 +498,14 @@ export function SensitiveAccessTimelineEntryList({
               runContext.runFollowUp?.explanation?.follow_up ??
               canonicalOutcomeExplanation?.follow_up ??
               null,
-            preferCanonicalRecommendedNextStep: true
+            preferCanonicalRecommendedNextStep: true,
+            workflowCatalogGapSummary:
+              callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary,
+            workflowCatalogGapDetail:
+              callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail,
+            workflowGovernanceHref:
+              callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref,
+            legacyAuthHandoff: callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff
           };
 
           return (
@@ -602,6 +642,16 @@ export function SensitiveAccessTimelineEntryList({
                   runId={runId}
                   sensitiveAccessEntries={[entry]}
                   showInlineActions={false}
+                  workflowCatalogGapSummary={
+                    callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary
+                  }
+                  workflowCatalogGapDetail={
+                    callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
+                  }
+                  workflowGovernanceHref={
+                    callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
+                  }
+                  legacyAuthHandoff={callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff}
                 />
               ) : null}
 

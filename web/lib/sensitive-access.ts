@@ -239,7 +239,9 @@ export function normalizeSensitiveAccessRunFollowUp(
             callbackTickets: Array.isArray(item?.callbackTickets) ? item.callbackTickets : [],
             sensitiveAccessEntries: Array.isArray(item?.sensitiveAccessEntries)
               ? item.sensitiveAccessEntries
-              : []
+              : [],
+            toolGovernance: item?.toolGovernance ?? null,
+            legacyAuthGovernance: item?.legacyAuthGovernance ?? null
           }))
         : []
     };
@@ -265,7 +267,9 @@ export function normalizeSensitiveAccessRunFollowUp(
               callbackTickets: Array.isArray(item.callback_tickets) ? item.callback_tickets : [],
               sensitiveAccessEntries: Array.isArray(item.sensitive_access_entries)
                 ? item.sensitive_access_entries
-                : []
+                : [],
+              toolGovernance: item.tool_governance ?? null,
+              legacyAuthGovernance: item.legacy_auth_governance ?? null
             }))
         : normalized.sampledRuns,
       explanation: normalizeSignalFollowUpExplanation(summary.explanation ?? null)

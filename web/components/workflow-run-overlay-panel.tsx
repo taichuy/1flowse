@@ -26,6 +26,10 @@ import { buildOperatorRunSampleInboxHref } from "@/lib/operator-run-sample-cards
 import { buildExecutionFocusSurfaceDescription } from "@/lib/run-execution-focus-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
+import {
   formatCatalogGapToolSummary,
   formatWorkflowMissingToolSummary,
   hasWorkflowMissingToolIssues
@@ -87,13 +91,32 @@ export function WorkflowRunOverlayPanel({
   const tracePreview = trace?.events.slice(-6) ?? [];
   const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshotModel);
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const callbackSummaryWorkflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+    toolGovernance: runSnapshot?.toolGovernance ?? run?.tool_governance ?? null,
+    subjectLabel: "overlay callback summary",
+    returnDetail:
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 overlay focus、callback summary 与 trace。"
+  });
+  const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: runSnapshot?.snapshot?.workflowId ?? run?.workflow_id ?? null,
+    toolGovernance: runSnapshot?.toolGovernance ?? run?.tool_governance ?? null,
+    legacyAuthGovernance: runSnapshot?.legacyAuthGovernance ?? run?.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
+  });
   const callbackWaitingSummaryProps = runSnapshot
     ? {
         inboxHref: buildOperatorRunSampleInboxHref(runSnapshot),
         callbackTickets: runSnapshot.callbackTickets ?? [],
         callbackWaitingAutomation,
         sensitiveAccessEntries: runSnapshot.sensitiveAccessEntries ?? [],
-        showSensitiveAccessInlineActions: false
+        showSensitiveAccessInlineActions: false,
+        workflowCatalogGapSummary:
+          callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary,
+        workflowCatalogGapDetail:
+          callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail,
+        workflowGovernanceHref:
+          callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref,
+        legacyAuthHandoff: callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff
       }
     : undefined;
   const resolveRunDetailHref = React.useCallback(

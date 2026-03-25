@@ -7,6 +7,7 @@ import {
   type SensitiveAccessBlockingPayload
 } from "@/lib/sensitive-access";
 import type { SensitiveAccessTimelineEntry } from "@/lib/get-sensitive-access";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 type RawBlockingPayload = Omit<
   SensitiveAccessBlockingPayload,
@@ -53,6 +54,15 @@ type RawBlockingPayload = Omit<
         created_at: string;
       }>;
       sensitive_access_entries?: SensitiveAccessTimelineEntry[];
+      tool_governance?: {
+        referenced_tool_ids: string[];
+        missing_tool_ids: string[];
+        governed_tool_count: number;
+        strong_isolation_tool_count: number;
+      };
+      legacy_auth_governance?: ReturnType<
+        typeof buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture
+      >;
     }>;
   };
 };
@@ -202,7 +212,19 @@ function buildBlockingPayload(): RawBlockingPayload {
               run_snapshot: null,
               run_follow_up: null
             }
-          ]
+          ],
+          tool_governance: {
+            referenced_tool_ids: ["native.trace-export"],
+            missing_tool_ids: ["native.trace-export"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+            binding: {
+              workflow_id: "workflow-1",
+              workflow_name: "Workflow 1"
+            }
+          })
         }
       ]
     }
@@ -233,6 +255,12 @@ describe("parseSensitiveAccessBlockingResponse", () => {
     );
     expect(parsed?.payload.run_follow_up?.sampledRuns[0]?.callbackTickets).toHaveLength(1);
     expect(parsed?.payload.run_follow_up?.sampledRuns[0]?.sensitiveAccessEntries).toHaveLength(1);
+    expect(parsed?.payload.run_follow_up?.sampledRuns[0]?.toolGovernance).toMatchObject({
+      missing_tool_ids: ["native.trace-export"]
+    });
+    expect(parsed?.payload.run_follow_up?.sampledRuns[0]?.legacyAuthGovernance).toMatchObject({
+      binding_count: 1
+    });
     expect(parsed?.payload.resource.credential_governance?.credential_name).toBe("Trace Export Key");
   });
 

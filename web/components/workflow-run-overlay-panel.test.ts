@@ -413,6 +413,122 @@ describe("WorkflowRunOverlayPanel", () => {
     expect(html).toContain("scheduler is currently backlogged.");
   });
 
+  it("forwards workflow governance handoff into overlay callback summaries", async () => {
+    vi.resetModules();
+
+    const inlineOperatorActionFeedbackProps: Array<Record<string, unknown>> = [];
+
+    vi.doMock("next/link", () => ({
+      default: ({
+        children,
+        href,
+        ...props
+      }: {
+        children: ReactNode;
+        href?: string;
+      } & Record<string, unknown>) => createElement("a", { href: href ?? "#", ...props }, children)
+    }));
+    vi.doMock("@/components/inline-operator-action-feedback", () => ({
+      InlineOperatorActionFeedback: (props: Record<string, unknown>) => {
+        inlineOperatorActionFeedbackProps.push(props);
+        return createElement("div", { "data-testid": "inline-operator-action-feedback" });
+      }
+    }));
+    vi.doMock("@/components/run-trace-export-actions", () => ({
+      RunTraceExportActions: () =>
+        createElement("div", { "data-testid": "run-trace-export-actions" })
+    }));
+    vi.doMock("@/components/sandbox-execution-readiness-card", () => ({
+      SandboxExecutionReadinessCard: () =>
+        createElement("div", { "data-testid": "sandbox-execution-readiness-card" })
+    }));
+
+    try {
+      const { WorkflowRunOverlayPanel: IsolatedWorkflowRunOverlayPanel } = await import(
+        "@/components/workflow-run-overlay-panel"
+      );
+
+      renderToStaticMarkup(
+        createElement(IsolatedWorkflowRunOverlayPanel, {
+          runs: [
+            {
+              id: "run-1",
+              workflow_id: "workflow-1",
+              workflow_version: "v1",
+              status: "waiting",
+              started_at: "2026-03-20T10:00:00Z",
+              finished_at: null,
+              created_at: "2026-03-20T10:00:00Z",
+              node_run_count: 1,
+              event_count: 0,
+              last_event_at: null
+            }
+          ],
+          selectedRunId: "run-1",
+          run: buildRunDetail(),
+          runSnapshot: {
+            ...buildRunSnapshot(),
+            snapshot: {
+              ...buildRunSnapshot().snapshot,
+              status: "waiting",
+              waitingReason: "waiting callback",
+              callbackWaitingExplanation: {
+                primary_signal: "当前 callback waiting 仍需要 operator 回到 workflow 治理入口。",
+                follow_up: "先打开 workflow governance handoff，再回来继续处理 callback。"
+              }
+            },
+            toolGovernance: {
+              referenced_tool_ids: ["native.overlay-gap"],
+              missing_tool_ids: ["native.overlay-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            },
+            legacyAuthGovernance:
+              buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+                binding: {
+                  workflow_id: "workflow-1",
+                  workflow_name: "Workflow 1"
+                }
+              })
+          },
+          trace: null,
+          traceError: null,
+          selectedNodeId: null,
+          callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+          sandboxReadiness: buildSandboxReadiness(),
+          isLoading: false,
+          isRefreshingRuns: false,
+          onSelectRunId: () => undefined,
+          onRefreshRuns: () => undefined
+        })
+      );
+
+      const callbackWaitingSummaryProps = (inlineOperatorActionFeedbackProps[0]?.callbackWaitingSummaryProps ??
+        null) as Record<string, unknown> | null;
+
+      expect(callbackWaitingSummaryProps).not.toBeNull();
+      expect(callbackWaitingSummaryProps?.workflowCatalogGapSummary).toBe(
+        "catalog gap · native.overlay-gap"
+      );
+      expect(String(callbackWaitingSummaryProps?.workflowCatalogGapDetail ?? "")).toContain(
+        "当前 overlay callback summary 对应的 workflow 版本仍有 catalog gap（native.overlay-gap）"
+      );
+      expect(callbackWaitingSummaryProps?.workflowGovernanceHref).toBe(
+        "/workflows/workflow-1?definition_issue=missing_tool"
+      );
+      expect(callbackWaitingSummaryProps?.legacyAuthHandoff).toMatchObject({
+        bindingChipLabel: "1 legacy bindings",
+        statusChipLabel: "publish auth blocker"
+      });
+    } finally {
+      vi.doUnmock("@/components/sandbox-execution-readiness-card");
+      vi.doUnmock("@/components/run-trace-export-actions");
+      vi.doUnmock("@/components/inline-operator-action-feedback");
+      vi.doUnmock("next/link");
+      vi.resetModules();
+    }
+  });
+
   it("surfaces workflow catalog-gap handoff for the selected run", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowRunOverlayPanel, {
