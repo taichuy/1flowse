@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
 import { SensitiveAccessLegacyAuthGovernanceCompactCard } from "@/components/sensitive-access-legacy-auth-governance-card";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { CallbackWaitingSummaryProps } from "@/lib/callback-waiting-summary-props";
 import type {
   SensitiveAccessBulkAction,
@@ -14,7 +15,8 @@ import type {
 import {
   buildSensitiveAccessBulkRecommendedNextStep,
   buildSensitiveAccessBulkResultNarrative,
-  buildSensitiveAccessBulkRunSampleCards
+  buildSensitiveAccessBulkRunSampleCards,
+  buildSensitiveAccessBulkWorkflowGovernanceSummary
 } from "@/lib/sensitive-access-bulk-result-presenters";
 import {
   buildRunDetailHrefFromWorkspaceStarterViewState,
@@ -74,14 +76,29 @@ export function SensitiveAccessBulkGovernanceCard({
   const recommendedNextStep = lastResult
     ? buildSensitiveAccessBulkRecommendedNextStep(lastResult, { currentHref })
     : null;
-  const narrativeItems = lastResult ? buildSensitiveAccessBulkResultNarrative(lastResult) : [];
   const sampledRunCards = lastResult ? buildSensitiveAccessBulkRunSampleCards(lastResult) : [];
+  const workflowGovernanceSummary = lastResult
+    ? buildSensitiveAccessBulkWorkflowGovernanceSummary(lastResult, { sampledRunCards })
+    : null;
+  const narrativeItems = lastResult ? buildSensitiveAccessBulkResultNarrative(lastResult) : [];
   const callbackWaitingSummaryProps: CallbackWaitingSummaryProps = React.useMemo(
-    () => ({ currentHref }),
-    [currentHref]
+    () => ({
+      currentHref,
+      workflowCatalogGapSummary: workflowGovernanceSummary?.workflowCatalogGapSummary ?? null,
+      workflowCatalogGapDetail: workflowGovernanceSummary?.workflowCatalogGapDetail ?? null,
+      workflowGovernanceHref: workflowGovernanceSummary?.workflowGovernanceHref ?? null,
+      legacyAuthHandoff: workflowGovernanceSummary?.legacyAuthHandoff ?? null
+    }),
+    [currentHref, workflowGovernanceSummary]
   );
   const hasStructuredResultSections =
     Boolean(recommendedNextStep) || narrativeItems.length > 0 || sampledRunCards.length > 0;
+  const renderSharedWorkflowGovernanceCard =
+    sampledRunCards.length > 1 &&
+    Boolean(
+      workflowGovernanceSummary?.workflowCatalogGapSummary ||
+        (!lastResult?.legacyAuthGovernance && workflowGovernanceSummary?.legacyAuthHandoff)
+    );
   const shouldShowMessage =
     Boolean(message) &&
     (isMutating || !lastResult || lastResult.status === "error" || !hasStructuredResultSections);
@@ -205,6 +222,21 @@ export function SensitiveAccessBulkGovernanceCard({
                   {item.text}
                 </p>
               ))}
+            </div>
+          ) : null}
+
+          {renderSharedWorkflowGovernanceCard ? (
+            <div className="binding-section">
+              <WorkflowGovernanceHandoffCards
+                workflowCatalogGapSummary={workflowGovernanceSummary?.workflowCatalogGapSummary}
+                workflowCatalogGapDetail={workflowGovernanceSummary?.workflowCatalogGapDetail}
+                workflowGovernanceHref={workflowGovernanceSummary?.workflowGovernanceHref}
+                legacyAuthHandoff={
+                  lastResult?.legacyAuthGovernance
+                    ? null
+                    : workflowGovernanceSummary?.legacyAuthHandoff ?? null
+                }
+              />
             </div>
           ) : null}
 

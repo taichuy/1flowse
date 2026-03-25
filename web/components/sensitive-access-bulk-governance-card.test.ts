@@ -553,4 +553,99 @@ describe("SensitiveAccessBulkGovernanceCard", () => {
     expect(html.match(/Workflow governance/g)?.length ?? 0).toBe(1);
     expect(html.match(/Legacy publish auth handoff/g)?.length ?? 0).toBe(1);
   });
+
+  it("surfaces aggregate workflow governance handoff for multi-sampled bulk results", () => {
+    const lastResult: SensitiveAccessBulkActionResult = {
+      action: "retry",
+      status: "success",
+      message: "批量重试已提交。",
+      requestedCount: 2,
+      updatedCount: 2,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 2,
+      sampledRunCount: 2,
+      waitingRunCount: 2,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      legacyAuthGovernance: buildLegacyAuthGovernanceSnapshot(),
+      sampledRuns: [
+        {
+          runId: "run-shared-1",
+          snapshot: {
+            workflowId: "wf-demo",
+            executionFocusNodeId: "callback-node-1",
+            executionFocusNodeName: "Callback node 1",
+            executionFocusNodeRunId: "node-run-1",
+            callbackWaitingExplanation: {
+              primary_signal: "第一个 waiting 节点仍在等待 callback。",
+              follow_up: "优先观察定时恢复是否已重新排队。"
+            },
+            scheduledResumeDelaySeconds: 30,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          },
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        {
+          runId: "run-shared-2",
+          snapshot: {
+            workflowId: "wf-demo",
+            executionFocusNodeId: "callback-node-2",
+            executionFocusNodeName: "Callback node 2",
+            executionFocusNodeRunId: "node-run-2",
+            callbackWaitingExplanation: {
+              primary_signal: "第二个 waiting 节点仍在等待 callback。",
+              follow_up: "优先观察定时恢复是否已重新排队。"
+            },
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          },
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        }
+      ]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(SensitiveAccessBulkGovernanceCard, {
+        inScopeCount: 2,
+        decisionCandidateCount: 0,
+        retryCandidateCount: 2,
+        operatorValue: "ops-reviewer",
+        onOperatorChange: () => {},
+        isMutating: false,
+        lastResult,
+        message: lastResult.message,
+        messageTone: "success",
+        onAction: () => {}
+      })
+    );
+
+    expect(html).toContain(
+      "已回读 2 个 sampled run；workflow catalog gap 已收口到共享 handoff（catalog gap · native.catalog-gap）；legacy publish auth handoff 已在 bulk 回执保留。 bulk 回执顶部已给出直接回到 workflow 编辑器的入口。"
+    );
+    expect(html).toContain(
+      "bulk 回执当前回读的 2 个 sampled run 都指向同一条 workflow catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 bulk 回执与 callback 事实。"
+    );
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain("published blockers 1");
+  });
 });

@@ -4,8 +4,10 @@ import type { SensitiveAccessBulkActionResult } from "@/lib/get-sensitive-access
 import {
   buildSensitiveAccessBulkRecommendedNextStep,
   buildSensitiveAccessBulkResultNarrative,
-  buildSensitiveAccessBulkRunSampleCards
+  buildSensitiveAccessBulkRunSampleCards,
+  buildSensitiveAccessBulkWorkflowGovernanceSummary
 } from "./sensitive-access-bulk-result-presenters";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "./workflow-publish-legacy-auth-test-fixtures";
 
 describe("buildSensitiveAccessBulkResultNarrative", () => {
   it("优先暴露后端 canonical explanation 与 run follow-up", () => {
@@ -140,6 +142,87 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
         text: "本次影响 1 个 run；整体状态分布：waiting 1。已回读 1 个样本。"
       }
     ]);
+  });
+
+  it("为多样本 bulk 结果补上聚合后的 workflow governance narrative", () => {
+    const items = buildSensitiveAccessBulkResultNarrative({
+      action: "retry",
+      status: "success",
+      message: "fallback",
+      requestedCount: 2,
+      updatedCount: 2,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 2,
+      sampledRunCount: 2,
+      waitingRunCount: 2,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      legacyAuthGovernance:
+        buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+          binding: {
+            workflow_id: "workflow-shared",
+            workflow_name: "Shared Workflow",
+            binding_id: "binding-demo",
+            endpoint_id: "endpoint-demo",
+            endpoint_name: "Demo Endpoint",
+            workflow_version: "v1"
+          }
+        }),
+      sampledRuns: [
+        {
+          runId: "run-shared-1",
+          snapshot: {
+            workflowId: "workflow-shared",
+            callbackWaitingExplanation: {
+              primary_signal: "waiting 仍在排队。",
+              follow_up: "继续观察定时恢复。"
+            },
+            scheduledResumeDelaySeconds: 30,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          },
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        {
+          runId: "run-shared-2",
+          snapshot: {
+            workflowId: "workflow-shared",
+            callbackWaitingExplanation: {
+              primary_signal: "第二个 waiting 仍在排队。",
+              follow_up: "继续观察定时恢复。"
+            },
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          },
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        }
+      ]
+    });
+
+    expect(items).toContainEqual({
+      label: "Workflow governance",
+      text:
+        "已回读 2 个 sampled run；workflow catalog gap 已收口到共享 handoff（catalog gap · native.catalog-gap）；legacy publish auth handoff 已在 bulk 回执保留。 bulk 回执顶部已给出直接回到 workflow 编辑器的入口。"
+    });
   });
 
   it("已有稳定 recommended_action 时，不再把 follow_up 继续投影成 narrative next step", () => {
@@ -473,5 +556,93 @@ describe("buildSensitiveAccessBulkResultNarrative", () => {
     });
 
     expect(cards).toEqual([]);
+  });
+});
+
+describe("buildSensitiveAccessBulkWorkflowGovernanceSummary", () => {
+  it("only exposes shared workflow handoff for multi-sampled bulk results", () => {
+    const summary = buildSensitiveAccessBulkWorkflowGovernanceSummary({
+      action: "retry",
+      status: "success",
+      message: "fallback",
+      requestedCount: 2,
+      updatedCount: 2,
+      skippedCount: 0,
+      skippedReasonSummary: [],
+      affectedRunCount: 2,
+      sampledRunCount: 2,
+      waitingRunCount: 2,
+      runningRunCount: 0,
+      succeededRunCount: 0,
+      failedRunCount: 0,
+      unknownRunCount: 0,
+      blockerSampleCount: 0,
+      blockerChangedCount: 0,
+      blockerClearedCount: 0,
+      blockerFullyClearedCount: 0,
+      blockerStillBlockedCount: 0,
+      legacyAuthGovernance:
+        buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+          binding: {
+            workflow_id: "workflow-shared",
+            workflow_name: "Shared Workflow",
+            binding_id: "binding-demo",
+            endpoint_id: "endpoint-demo",
+            endpoint_name: "Demo Endpoint",
+            workflow_version: "v1"
+          }
+        }),
+      sampledRuns: [
+        {
+          runId: "run-shared-1",
+          snapshot: {
+            workflowId: "workflow-shared",
+            callbackWaitingExplanation: {
+              primary_signal: "waiting 仍在排队。",
+              follow_up: "继续观察定时恢复。"
+            },
+            scheduledResumeDelaySeconds: 30,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          },
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        },
+        {
+          runId: "run-shared-2",
+          snapshot: {
+            workflowId: "workflow-shared",
+            callbackWaitingExplanation: {
+              primary_signal: "第二个 waiting 仍在排队。",
+              follow_up: "继续观察定时恢复。"
+            },
+            scheduledResumeDelaySeconds: 45,
+            scheduledResumeSource: "runtime_retry",
+            scheduledWaitingStatus: "waiting_callback"
+          },
+          toolGovernance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          }
+        }
+      ]
+    });
+
+    expect(summary).toMatchObject({
+      workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+      workflowCatalogGapDetail:
+        "bulk 回执当前回读的 2 个 sampled run 都指向同一条 workflow catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 bulk 回执与 callback 事实。",
+      workflowGovernanceHref: "/workflows/workflow-shared?definition_issue=missing_tool"
+    });
+    expect(summary?.legacyAuthHandoff).toMatchObject({
+      bindingChipLabel: "1 legacy bindings",
+      statusChipLabel: "publish auth blocker"
+    });
   });
 });
