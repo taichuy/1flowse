@@ -5,6 +5,7 @@ import { CallbackWaitingSummaryCard } from "@/components/callback-waiting-summar
 import { OperatorFocusEvidenceCard } from "@/components/operator-focus-evidence-card";
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
 import { SkillReferenceLoadList } from "@/components/skill-reference-load-list";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { pickCallbackWaitingInlineSensitiveAccessEntry } from "@/lib/callback-waiting-presenters";
 import { formatSensitiveResourceGovernanceSummary } from "@/lib/credential-governance";
@@ -39,6 +40,10 @@ import {
 } from "@/lib/run-execution-focus-presenters";
 import { buildRunDiagnosticsExecutionTimelineHref } from "@/lib/run-diagnostics-links";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import {
   buildRunDetailExecutionFocusSurfaceCopy,
   buildRunDiagnosticsOperatorFollowUpSurfaceCopy
@@ -250,6 +255,19 @@ export function RunDiagnosticsOperatorFollowUpCard({
     callbackSummaryFocusNode?.node_name ??
     sampledFollowUp?.snapshot?.executionFocusNodeName ??
     null;
+  const callbackSummaryWorkflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+    toolGovernance: sampledFollowUp?.toolGovernance ?? null,
+    subjectLabel: "callback summary",
+    returnDetail:
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 callback summary、execution focus 与 timeline。"
+  });
+  const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: sampledFollowUp?.snapshot?.workflowId ?? executionView.workflow_id,
+    toolGovernance: sampledFollowUp?.toolGovernance ?? null,
+    legacyAuthGovernance:
+      sampledFollowUp?.legacyAuthGovernance ?? executionView.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
+  });
 
   return (
     <section>
@@ -314,6 +332,20 @@ export function RunDiagnosticsOperatorFollowUpCard({
           sensitiveAccessEntries={callbackSummarySensitiveAccessEntries}
           showFocusExecutionFacts
           showInlineActions={false}
+        />
+      ) : null}
+      {snapshot ? (
+        <WorkflowGovernanceHandoffCards
+          workflowCatalogGapSummary={
+            callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary
+          }
+          workflowCatalogGapDetail={
+            callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
+          }
+          workflowGovernanceHref={
+            callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
+          }
+          legacyAuthHandoff={callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff}
         />
       ) : null}
       {focusNodeEvidence ? (

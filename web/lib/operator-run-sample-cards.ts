@@ -1,10 +1,7 @@
 import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import { buildCallbackTicketInboxHref } from "@/lib/callback-ticket-links";
 import { hasCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
-import {
-  buildLegacyPublishAuthWorkflowHandoff,
-  type LegacyPublishAuthWorkflowHandoff
-} from "@/lib/legacy-publish-auth-governance-presenters";
+import type { LegacyPublishAuthWorkflowHandoff } from "@/lib/legacy-publish-auth-governance-presenters";
 import { buildSensitiveAccessTimelineInboxHref } from "@/lib/sensitive-access-links";
 import type { SkillReferenceLoadItem } from "@/lib/get-run-views";
 import {
@@ -13,16 +10,14 @@ import {
   type OperatorInlineFocusArtifactPreview
 } from "@/lib/operator-inline-action-feedback";
 import {
-  formatCatalogGapToolSummary,
-  formatWorkflowMissingToolSummary
-} from "@/lib/workflow-definition-governance";
-import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import {
   listExecutionFocusRuntimeFactBadges,
   type ExecutionFocusToolCallSummary
 } from "@/lib/run-execution-focus-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
-import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 export type OperatorRunSampleCard = {
   runId: string;
@@ -72,28 +67,6 @@ function normalizeText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
-function resolveSampleWorkflowGovernanceHref(sample: RunSnapshotWithId) {
-  const workflowId =
-    normalizeText(sample.snapshot?.workflowId) ??
-    normalizeText(sample.legacyAuthGovernance?.workflows[0]?.workflow_id);
-  if (!workflowId) {
-    return null;
-  }
-
-  const workflowDetailHref = buildAuthorFacingWorkflowDetailLinkSurface({
-    workflowId,
-    variant: "editor"
-  }).href;
-
-  return sample.toolGovernance
-    ? appendWorkflowLibraryViewStateForWorkflow(
-        workflowDetailHref,
-        { tool_governance: sample.toolGovernance },
-        { definitionIssue: null }
-      )
-    : workflowDetailHref;
-}
-
 export function buildOperatorRunSampleInboxHref(sample: RunSnapshotWithId) {
   const sensitiveAccessEntries = sample.sensitiveAccessEntries ?? [];
   const latestApprovalEntry = sensitiveAccessEntries.find((entry) => entry.approval_ticket) ?? null;
@@ -121,25 +94,18 @@ export function buildOperatorRunSampleCards(
       const snapshot = sample.snapshot ?? null;
       const callbackTickets = sample.callbackTickets ?? [];
       const sensitiveAccessEntries = sample.sensitiveAccessEntries ?? [];
-      const workflowGovernanceHref = resolveSampleWorkflowGovernanceHref(sample);
-      const workflowCatalogGapSummary = sample.toolGovernance
-        ? formatWorkflowMissingToolSummary({ tool_governance: sample.toolGovernance })
-        : null;
-      const workflowCatalogGapToolCopy = formatCatalogGapToolSummary(
-        sample.toolGovernance?.missing_tool_ids ?? []
-      );
-      const workflowCatalogGapDetail = workflowCatalogGapSummary
-        ? workflowCatalogGapToolCopy
-          ? `当前 sampled run 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 compact snapshot 与 callback 事实。`
-          : "当前 sampled run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 compact snapshot 与 callback 事实。"
-        : null;
-      const workflowId =
-        normalizeText(snapshot?.workflowId) ??
-        normalizeText(sample.legacyAuthGovernance?.workflows[0]?.workflow_id) ??
-        "";
-      const legacyAuthHandoff = workflowId
-        ? buildLegacyPublishAuthWorkflowHandoff(sample.legacyAuthGovernance ?? null, workflowId)
-        : null;
+      const workflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+        toolGovernance: sample.toolGovernance,
+        subjectLabel: "sampled run",
+        returnDetail:
+          "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 compact snapshot 与 callback 事实。"
+      });
+      const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+        workflowId: normalizeText(snapshot?.workflowId),
+        toolGovernance: sample.toolGovernance,
+        legacyAuthGovernance: sample.legacyAuthGovernance,
+        workflowCatalogGapDetail
+      });
       const model = buildOperatorInlineActionFeedbackModel({ runSnapshot: snapshot });
       const focusNodeEvidence = buildExecutionFocusExplainableNode(snapshot);
       const callbackWaitingExplanation = snapshot?.callbackWaitingExplanation ?? null;
@@ -178,10 +144,10 @@ export function buildOperatorRunSampleCards(
         focusNodeLabel: model.focusNodeLabel,
         focusNodeRunId: normalizeText(snapshot?.executionFocusNodeRunId),
         waitingReason: model.waitingReason,
-        workflowGovernanceHref,
-        workflowCatalogGapSummary,
-        workflowCatalogGapDetail,
-        legacyAuthHandoff,
+        workflowGovernanceHref: workflowGovernanceHandoff.workflowGovernanceHref,
+        workflowCatalogGapSummary: workflowGovernanceHandoff.workflowCatalogGapSummary,
+        workflowCatalogGapDetail: workflowGovernanceHandoff.workflowCatalogGapDetail,
+        legacyAuthHandoff: workflowGovernanceHandoff.legacyAuthHandoff,
         executionFactBadges: listExecutionFocusRuntimeFactBadges(focusNodeEvidence),
         callbackWaitingExplanation,
         callbackWaitingLifecycle,

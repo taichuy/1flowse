@@ -423,7 +423,16 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
       executionView.run_follow_up.sampled_runs = [
         {
           run_id: "run-123",
-          snapshot: null,
+          snapshot: {
+            workflow_id: "workflow-1",
+            execution_focus_artifact_count: 0,
+            execution_focus_artifact_ref_count: 0,
+            execution_focus_tool_call_count: 0,
+            execution_focus_raw_ref_count: 0,
+            execution_focus_artifact_refs: [],
+            execution_focus_artifacts: [],
+            execution_focus_tool_calls: []
+          },
           callback_tickets: [
             {
               ticket: "callback-ticket-1",
@@ -466,7 +475,51 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
               },
               notifications: []
             }
-          ]
+          ],
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: {
+            generated_at: "2026-03-20T10:00:00Z",
+            workflow_count: 1,
+            binding_count: 1,
+            auth_mode_contract: {
+              supported_auth_modes: ["api_key", "internal"],
+              retired_legacy_auth_modes: ["token"],
+              summary: "支持的 draft 鉴权模式：api_key、internal；遗留模式：token。",
+              follow_up: "支持的 draft 鉴权模式：api_key、internal；遗留模式：token。"
+            },
+            summary: {
+              draft_candidate_count: 0,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            },
+            checklist: [],
+            workflows: [
+              {
+                workflow_id: "workflow-1",
+                workflow_name: "Workflow 1",
+                binding_count: 1,
+                draft_candidate_count: 0,
+                published_blocker_count: 1,
+                offline_inventory_count: 0,
+                tool_governance: {
+                  referenced_tool_ids: ["native.catalog-gap"],
+                  missing_tool_ids: ["native.catalog-gap"],
+                  governed_tool_count: 0,
+                  strong_isolation_tool_count: 0
+                }
+              }
+            ],
+            buckets: {
+              draft_candidates: [],
+              published_blockers: [],
+              offline_inventory: []
+            }
+          }
         }
       ];
     }
@@ -482,6 +535,14 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("approval blocker");
     expect(html).toContain("open approval inbox slice");
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain(
+      "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 callback summary、execution focus 与 timeline。"
+    );
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
     expect(html).toContain(
       'href="/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-123&amp;node_run_id=node-run-1&amp;access_request_id=access-request-1&amp;approval_ticket_id=approval-ticket-1"'
     );
