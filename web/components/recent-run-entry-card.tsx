@@ -41,9 +41,7 @@ export function RecentRunEntryCard({
       ? `当前 workflow 仍有 catalog gap（${catalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。`
       : "当前 workflow 仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
   });
-  const workflowGovernanceHref = workflowHref
-    ? workflowGovernanceHandoff.workflowGovernanceHref
-    : null;
+  const scopedWorkflowHref = workflowGovernanceHandoff.workflowGovernanceHref;
   const missingWorkflowLinkFallback =
     workflowGovernanceHandoff.workflowCatalogGapSummary && workflowGovernanceHandoff.legacyAuthHandoff
       ? "当前入口还没有可用的 workflow deep link，请回到 workflow library 继续处理 catalog gap / publish auth contract backlog。"
@@ -70,7 +68,8 @@ export function RecentRunEntryCard({
       <WorkflowGovernanceHandoffCards
         workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
         workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
-        workflowGovernanceHref={workflowGovernanceHref}
+        workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
+        workflowGovernanceHref={scopedWorkflowHref}
         legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
         cardClassName="payload-card compact-card"
       />
@@ -78,13 +77,13 @@ export function RecentRunEntryCard({
         <Link className="activity-link" href={runHref}>
           {runLinkLabel}
         </Link>
-        {workflowHref && workflowLinkLabel ? (
-          <Link className="inline-link secondary" href={workflowHref}>
+        {scopedWorkflowHref && workflowLinkLabel ? (
+          <Link className="inline-link secondary" href={scopedWorkflowHref}>
             {workflowLinkLabel}
           </Link>
         ) : null}
       </div>
-      {!workflowHref && missingWorkflowLinkFallback ? (
+      {!scopedWorkflowHref && missingWorkflowLinkFallback ? (
         <p className="section-copy">{missingWorkflowLinkFallback}</p>
       ) : null}
     </article>

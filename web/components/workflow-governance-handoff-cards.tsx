@@ -9,6 +9,7 @@ import {
 type WorkflowGovernanceHandoffCardsProps = {
   workflowCatalogGapSummary?: string | null;
   workflowCatalogGapDetail?: string | null;
+  workflowCatalogGapHref?: string | null;
   workflowGovernanceHref?: string | null;
   legacyAuthHandoff?: LegacyPublishAuthWorkflowHandoff | null;
   cardClassName?: string;
@@ -17,6 +18,7 @@ type WorkflowGovernanceHandoffCardsProps = {
 export function WorkflowGovernanceHandoffCards({
   workflowCatalogGapSummary = null,
   workflowCatalogGapDetail = null,
+  workflowCatalogGapHref = null,
   workflowGovernanceHref = null,
   legacyAuthHandoff = null,
   cardClassName = "entry-card compact-card"
@@ -38,8 +40,11 @@ export function WorkflowGovernanceHandoffCards({
           {workflowCatalogGapDetail ? (
             <p className="section-copy entry-copy">{workflowCatalogGapDetail}</p>
           ) : null}
-          {workflowGovernanceHref ? (
-            <Link className="inline-link" href={workflowGovernanceHref}>
+          {workflowCatalogGapHref ?? workflowGovernanceHref ? (
+            <Link
+              className="inline-link"
+              href={workflowCatalogGapHref ?? workflowGovernanceHref ?? "#"}
+            >
               回到 workflow 编辑器处理 catalog gap
             </Link>
           ) : null}

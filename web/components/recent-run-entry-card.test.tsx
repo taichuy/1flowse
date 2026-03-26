@@ -45,13 +45,17 @@ describe("RecentRunEntryCard", () => {
         }),
         runHref: "/runs/run-1?track=author",
         runLinkLabel: "查看 run 诊断面板",
-        workflowHref: "/workflows/workflow-1?track=author",
+        workflowHref:
+          "/workflows/workflow-1?track=author&definition_issue=legacy_publish_auth",
         workflowLinkLabel: "回到 workflow 编辑器"
       })
     );
 
     expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain("publish auth blocker");
+    expect(html).toContain(
+      '/workflows/workflow-1?track=author&amp;definition_issue=missing_tool'
+    );
     expect(html).toContain(
       '/workflows/workflow-1?track=author&amp;definition_issue=legacy_publish_auth'
     );

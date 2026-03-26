@@ -306,11 +306,14 @@ describe("InlineOperatorActionFeedback", () => {
   it("forwards callback waiting summary context to the shared summary card", () => {
     const inboxHref = "/sensitive-access?run_id=run-1&approval_ticket_id=ticket-1";
     const callbackWaitingAutomation = buildCallbackWaitingAutomation();
+    const workflowCatalogGapHref = "/workflows/workflow-1?definition_issue=missing_tool";
+    const workflowGovernanceHref = "/workflows/workflow-1?definition_issue=legacy_publish_auth";
     const workflowSummaryProps = {
+      workflowCatalogGapHref,
       workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
       workflowCatalogGapDetail:
         "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy。",
-      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflowGovernanceHref,
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker",
@@ -402,9 +405,8 @@ describe("InlineOperatorActionFeedback", () => {
     expect(callbackSummaryProps[0]?.workflowCatalogGapSummary).toBe(
       workflowSummaryProps.workflowCatalogGapSummary
     );
-    expect(callbackSummaryProps[0]?.workflowGovernanceHref).toBe(
-      workflowSummaryProps.workflowGovernanceHref
-    );
+    expect(callbackSummaryProps[0]?.workflowCatalogGapHref).toBe(workflowCatalogGapHref);
+    expect(callbackSummaryProps[0]?.workflowGovernanceHref).toBe(workflowGovernanceHref);
     expect(callbackSummaryProps[0]?.legacyAuthHandoff).toMatchObject({
       bindingChipLabel: workflowSummaryProps.legacyAuthHandoff.bindingChipLabel
     });
@@ -429,10 +431,11 @@ describe("InlineOperatorActionFeedback", () => {
           executionFocusNodeName: "Tool Call"
         },
         callbackWaitingSummaryProps: {
+          workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
           workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
           workflowCatalogGapDetail:
             "当前 action result 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy。",
-          workflowGovernanceHref: "/workflows/workflow-1?definition_issue=missing_tool",
+          workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
           legacyAuthHandoff: {
             bindingChipLabel: "1 legacy bindings",
             statusChipLabel: "publish auth blocker",
@@ -463,6 +466,7 @@ describe("InlineOperatorActionFeedback", () => {
       "当前 action result 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy。"
     );
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
   });
 
@@ -568,10 +572,11 @@ describe("InlineOperatorActionFeedback", () => {
 
   it("forwards canonical callback follow-up into sampled run cards", () => {
     const workflowSummaryProps = {
+      workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
       workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
       workflowCatalogGapDetail:
         "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy。",
-      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker",
@@ -652,6 +657,7 @@ describe("InlineOperatorActionFeedback", () => {
       },
       operatorFollowUp: "Open the approval inbox first.",
       preferCanonicalRecommendedNextStep: true,
+      workflowCatalogGapHref: workflowSummaryProps.workflowCatalogGapHref,
       workflowCatalogGapSummary: workflowSummaryProps.workflowCatalogGapSummary,
       workflowGovernanceHref: workflowSummaryProps.workflowGovernanceHref,
       legacyAuthHandoff: expect.objectContaining({
@@ -942,7 +948,7 @@ describe("InlineOperatorActionFeedback", () => {
     expect(html).not.toContain("回到 workflow 编辑器处理 publish auth contract");
   });
 
-  it("keeps inline workflow handoff inside missing-tool scope when the workflow still has a catalog gap", () => {
+  it("keeps inline workflow handoff inside legacy-auth scope when the result only renders legacy auth handoff", () => {
     const legacyAuthGovernance = buildLegacyAuthGovernanceSnapshot();
     legacyAuthGovernance.workflows[0] = {
       ...legacyAuthGovernance.workflows[0],
@@ -963,7 +969,7 @@ describe("InlineOperatorActionFeedback", () => {
       })
     );
 
-    expect(html).toContain('href="/workflows/wf-demo?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/wf-demo?definition_issue=legacy_publish_auth"');
   });
 
   it("renders the primary governed resource when the action keeps governance context", () => {

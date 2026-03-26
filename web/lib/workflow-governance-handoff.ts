@@ -8,8 +8,10 @@ import {
   formatWorkflowMissingToolSummary
 } from "@/lib/workflow-definition-governance";
 import {
+  appendWorkflowLibraryViewState,
   appendWorkflowLibraryViewStateForWorkflow,
-  readWorkflowLibraryViewState
+  readWorkflowLibraryViewState,
+  type WorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
@@ -17,6 +19,7 @@ import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entr
 export type WorkflowGovernanceHandoff = {
   workflowId: string | null;
   workflowGovernanceHref: string | null;
+  workflowCatalogGapHref: string | null;
   workflowCatalogGapSummary: string | null;
   workflowCatalogGapDetail: string | null;
   legacyAuthHandoff: LegacyPublishAuthWorkflowHandoff | null;
@@ -70,46 +73,55 @@ export function buildWorkflowGovernanceHandoff({
   const resolvedWorkflowDetailHref =
     normalizeText(workflowDetailHref) ??
     (resolvedWorkflowId
-    ? buildAuthorFacingWorkflowDetailLinkSurface({
-        workflowId: resolvedWorkflowId,
-        variant: "editor"
-      }).href
-    : null);
+      ? buildAuthorFacingWorkflowDetailLinkSurface({
+          workflowId: resolvedWorkflowId,
+          variant: "editor"
+        }).href
+      : null);
   const workflowCatalogGapSummary = toolGovernance
     ? formatWorkflowMissingToolSummary({ tool_governance: toolGovernance })
     : null;
-  const workflowLibraryViewState = resolvedWorkflowDetailHref
+  const workflowLibraryWorkflow = {
+    workflow_id: resolvedWorkflowId,
+    definition_issues: [],
+    tool_governance: toolGovernance ?? null,
+    legacy_auth_governance: legacyAuthGovernance ?? null
+  };
+  const workflowLibraryViewState: WorkflowLibraryViewState = resolvedWorkflowDetailHref
     ? readWorkflowLibraryViewState(
         new URLSearchParams(resolvedWorkflowDetailHref.split("?")[1] ?? "")
       )
     : { definitionIssue: null };
-  const preferredWorkflowLibraryViewState = workflowLibraryViewState.definitionIssue
-    ? workflowLibraryViewState
-    : {
-        definitionIssue: workflowCatalogGapSummary ? "missing_tool" : null
-      };
+  const legacyAuthHandoff = resolvedWorkflowId
+    ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance ?? null, resolvedWorkflowId)
+    : null;
   const workflowGovernanceHref = resolvedWorkflowDetailHref
-    ? toolGovernance || legacyAuthGovernance
-      ? appendWorkflowLibraryViewStateForWorkflow(
-          resolvedWorkflowDetailHref,
-          {
-            workflow_id: resolvedWorkflowId,
-            definition_issues: [],
-            tool_governance: toolGovernance ?? null,
-            legacy_auth_governance: legacyAuthGovernance ?? null
-          },
-          preferredWorkflowLibraryViewState
-        )
+    ? workflowCatalogGapSummary || legacyAuthHandoff
+      ? workflowLibraryViewState.definitionIssue
+        ? appendWorkflowLibraryViewState(
+            resolvedWorkflowDetailHref,
+            workflowLibraryViewState
+          )
+        : appendWorkflowLibraryViewStateForWorkflow(
+            resolvedWorkflowDetailHref,
+            workflowLibraryWorkflow,
+            workflowLibraryViewState
+          )
       : resolvedWorkflowDetailHref
     : null;
+  const workflowCatalogGapHref =
+    resolvedWorkflowDetailHref && workflowCatalogGapSummary
+      ? appendWorkflowLibraryViewState(resolvedWorkflowDetailHref, {
+          definitionIssue: "missing_tool"
+        })
+      : null;
 
   return {
     workflowId: resolvedWorkflowId,
     workflowGovernanceHref,
+    workflowCatalogGapHref,
     workflowCatalogGapSummary,
     workflowCatalogGapDetail: workflowCatalogGapSummary ? workflowCatalogGapDetail : null,
-    legacyAuthHandoff: resolvedWorkflowId
-      ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance ?? null, resolvedWorkflowId)
-      : null
+    legacyAuthHandoff
   };
 }
