@@ -30,6 +30,7 @@ function buildWorkflow(
       governed_tool_count: 1,
       strong_isolation_tool_count: 0
     },
+    legacy_auth_governance: null,
     ...overrides
   };
 }
@@ -76,6 +77,32 @@ describe("WorkflowLibraryMissingToolGovernanceCard", () => {
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
     expect(html).toContain('/workflows/workflow-2?definition_issue=missing_tool');
     expect(html).toContain('/workflows?definition_issue=missing_tool');
+  });
+
+  it("keeps legacy publish auth handoff visible for mixed blocker workflows", () => {
+    const html = renderToStaticMarkup(
+      <WorkflowLibraryMissingToolGovernanceCard
+        workflows={[
+          buildWorkflow({
+            legacy_auth_governance: {
+              binding_count: 2,
+              draft_candidate_count: 1,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            }
+          })
+        ]}
+        workflowDetailHrefsById={{
+          "workflow-1": "/workflows/workflow-1?definition_issue=missing_tool"
+        }}
+        workflowLibraryFilterHref="/workflows?definition_issue=missing_tool"
+      />
+    );
+
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain("2 legacy bindings");
+    expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
   });
 
   it("returns no markup when the workflow range has no missing-tool blockers", () => {

@@ -28,6 +28,51 @@ type WorkflowLegacyAuthGovernanceHandoffInput =
   | WorkflowLegacyAuthGovernanceSummary
   | WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot;
 
+function buildSingleWorkflowLegacyAuthSnapshot({
+  workflowId,
+  workflowName,
+  toolGovernance,
+  legacyAuthGovernance
+}: {
+  workflowId: string;
+  workflowName?: string | null;
+  toolGovernance?: WorkflowToolGovernanceSummary | null;
+  legacyAuthGovernance: WorkflowLegacyAuthGovernanceSummary;
+}): WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot {
+  return {
+    generated_at: "",
+    workflow_count: 1,
+    binding_count: legacyAuthGovernance.binding_count,
+    summary: {
+      draft_candidate_count: legacyAuthGovernance.draft_candidate_count,
+      published_blocker_count: legacyAuthGovernance.published_blocker_count,
+      offline_inventory_count: legacyAuthGovernance.offline_inventory_count
+    },
+    checklist: [],
+    workflows: [
+      {
+        workflow_id: workflowId,
+        workflow_name: normalizeText(workflowName) ?? workflowId,
+        binding_count: legacyAuthGovernance.binding_count,
+        draft_candidate_count: legacyAuthGovernance.draft_candidate_count,
+        published_blocker_count: legacyAuthGovernance.published_blocker_count,
+        offline_inventory_count: legacyAuthGovernance.offline_inventory_count,
+        tool_governance: toolGovernance ?? {
+          referenced_tool_ids: [],
+          missing_tool_ids: [],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        }
+      }
+    ],
+    buckets: {
+      draft_candidates: [],
+      published_blockers: [],
+      offline_inventory: []
+    }
+  };
+}
+
 export type WorkflowGovernanceHandoff = {
   workflowId: string | null;
   workflowGovernanceHref: string | null;
@@ -186,22 +231,32 @@ export function buildWorkflowCatalogGapDetail({
 
 export function buildWorkflowGovernanceHandoff({
   workflowId,
+  workflowName,
   workflowDetailHref,
   toolGovernance,
   legacyAuthGovernance,
   workflowCatalogGapDetail = null
 }: {
   workflowId?: string | null;
+  workflowName?: string | null;
   workflowDetailHref?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
   legacyAuthGovernance?: WorkflowLegacyAuthGovernanceHandoffInput | null;
   workflowCatalogGapDetail?: string | null;
 }): WorkflowGovernanceHandoff {
+  const normalizedWorkflowId = normalizeText(workflowId);
   const legacyAuthSnapshot = isLegacyAuthGovernanceSnapshot(legacyAuthGovernance)
     ? legacyAuthGovernance
-    : null;
+    : legacyAuthGovernance && normalizedWorkflowId
+      ? buildSingleWorkflowLegacyAuthSnapshot({
+          workflowId: normalizedWorkflowId,
+          workflowName,
+          toolGovernance,
+          legacyAuthGovernance
+        })
+      : null;
   const resolvedWorkflowId =
-    normalizeText(workflowId) ?? normalizeText(legacyAuthSnapshot?.workflows[0]?.workflow_id);
+    normalizedWorkflowId ?? normalizeText(legacyAuthSnapshot?.workflows[0]?.workflow_id);
   const resolvedWorkflowDetailHref =
     normalizeText(workflowDetailHref) ??
     (resolvedWorkflowId

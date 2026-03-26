@@ -14,7 +14,6 @@ import {
   buildWorkflowCatalogGapDetail,
   buildWorkflowGovernanceHandoff
 } from "@/lib/workflow-governance-handoff";
-import { buildLegacyPublishAuthWorkflowHandoffFromWorkflowSummary } from "@/lib/legacy-publish-auth-governance-presenters";
 import { buildWorkflowDetailHref } from "@/lib/workbench-links";
 
 type WorkflowToolBindingPanelProps = {
@@ -64,6 +63,7 @@ export function WorkflowToolBindingPanel({
   const workflowGovernanceHandoff = selectedWorkflow
     ? buildWorkflowGovernanceHandoff({
         workflowId: selectedWorkflow.id,
+        workflowName: selectedWorkflow.name,
         workflowDetailHref: buildWorkflowDetailHref(selectedWorkflow.id),
         toolGovernance: selectedWorkflow.tool_governance,
         legacyAuthGovernance: selectedWorkflow.legacy_auth_governance ?? null,
@@ -79,19 +79,9 @@ export function WorkflowToolBindingPanel({
         })
       })
     : null;
-  const legacyAuthHandoff = selectedWorkflow?.legacy_auth_governance
-    ? buildLegacyPublishAuthWorkflowHandoffFromWorkflowSummary({
-        workflow_id: selectedWorkflow.id,
-        workflow_name: selectedWorkflow.name,
-        binding_count: selectedWorkflow.legacy_auth_governance.binding_count,
-        draft_candidate_count: selectedWorkflow.legacy_auth_governance.draft_candidate_count,
-        published_blocker_count: selectedWorkflow.legacy_auth_governance.published_blocker_count,
-        offline_inventory_count: selectedWorkflow.legacy_auth_governance.offline_inventory_count,
-        tool_governance: selectedWorkflow.tool_governance
-      })
-    : null;
   const hasWorkflowGovernanceHandoff = Boolean(
-    workflowGovernanceHandoff?.workflowCatalogGapSummary || legacyAuthHandoff
+    workflowGovernanceHandoff?.workflowCatalogGapSummary ||
+      workflowGovernanceHandoff?.legacyAuthHandoff
   );
 
   return (
@@ -173,7 +163,7 @@ export function WorkflowToolBindingPanel({
                         workflowCatalogGapDetail={workflowGovernanceHandoff?.workflowCatalogGapDetail}
                         workflowCatalogGapHref={workflowGovernanceHandoff?.workflowCatalogGapHref}
                         workflowGovernanceHref={workflowGovernanceHandoff?.workflowGovernanceHref}
-                        legacyAuthHandoff={legacyAuthHandoff}
+                        legacyAuthHandoff={workflowGovernanceHandoff?.legacyAuthHandoff}
                         cardClassName="payload-card compact-card"
                       />
                       {workflowMissingToolIds.length > 0 ? (

@@ -1,11 +1,13 @@
 import Link from "next/link";
 
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
   formatCatalogGapSummary,
   formatCatalogGapToolSummary,
   getWorkflowMissingToolIds
 } from "@/lib/workflow-definition-governance";
+import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
 
 type WorkflowLibraryMissingToolGovernanceCardProps = {
   workflows: WorkflowListItem[];
@@ -43,6 +45,31 @@ export function WorkflowLibraryMissingToolGovernanceCard({
   );
   const primaryEntry = entries[0];
   const remainingWorkflowCount = Math.max(entries.length - 1, 0);
+  const primaryEntryWorkflowHref = workflowDetailHrefsById[primaryEntry.workflow.id] ?? null;
+  const primaryEntryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: primaryEntry.workflow.id,
+    workflowName: primaryEntry.workflow.name,
+    workflowDetailHref: primaryEntryWorkflowHref,
+    toolGovernance: primaryEntry.workflow.tool_governance,
+    legacyAuthGovernance: primaryEntry.workflow.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: buildPrimaryFollowUpDetail(primaryEntry, remainingWorkflowCount)
+  });
+  const workflowHandoffEntries = entries.map((entry) => {
+    const workflowHref = workflowDetailHrefsById[entry.workflow.id] ?? null;
+
+    return {
+      entry,
+      workflowHref,
+      workflowGovernanceHandoff: buildWorkflowGovernanceHandoff({
+        workflowId: entry.workflow.id,
+        workflowName: entry.workflow.name,
+        workflowDetailHref: workflowHref,
+        toolGovernance: entry.workflow.tool_governance,
+        legacyAuthGovernance: entry.workflow.legacy_auth_governance ?? null,
+        workflowCatalogGapDetail: buildWorkflowHandoffDetail(entry)
+      })
+    };
+  });
 
   return (
     <article className="payload-card compact-card">
@@ -87,23 +114,30 @@ export function WorkflowLibraryMissingToolGovernanceCard({
             <span className="status-meta">
               {formatCatalogGapSummary(primaryEntry.missingToolIds, 3) ?? "catalog gap"}
             </span>
-            {workflowDetailHrefsById[primaryEntry.workflow.id] ? (
+            {primaryEntryWorkflowHref ? (
               <Link
                 className="event-chip inbox-filter-link"
-                href={workflowDetailHrefsById[primaryEntry.workflow.id]}
+                href={primaryEntryWorkflowHref}
               >
                 回到 workflow 编辑器
               </Link>
             ) : null}
           </div>
           <p className="binding-meta">{primaryEntry.workflow.name}</p>
-          <p className="section-copy entry-copy">
-            {buildPrimaryFollowUpDetail(primaryEntry, remainingWorkflowCount)}
-          </p>
+          <p className="section-copy entry-copy">{buildWorkflowMetadataDetail(primaryEntry)}</p>
           <div className="event-type-strip">
             {renderMissingToolChips(primaryEntry.missingToolIds)}
           </div>
         </article>
+
+        <WorkflowGovernanceHandoffCards
+          workflowCatalogGapSummary={primaryEntryWorkflowGovernanceHandoff.workflowCatalogGapSummary}
+          workflowCatalogGapDetail={primaryEntryWorkflowGovernanceHandoff.workflowCatalogGapDetail}
+          workflowCatalogGapHref={primaryEntryWorkflowGovernanceHandoff.workflowCatalogGapHref}
+          workflowGovernanceHref={primaryEntryWorkflowGovernanceHandoff.workflowGovernanceHref}
+          legacyAuthHandoff={primaryEntryWorkflowGovernanceHandoff.legacyAuthHandoff}
+          cardClassName="payload-card compact-card"
+        />
       </div>
 
       <div className="publish-key-list">
@@ -115,29 +149,36 @@ export function WorkflowLibraryMissingToolGovernanceCard({
           </p>
         </div>
 
-        {entries.map((entry) => {
-          const workflowHref = workflowDetailHrefsById[entry.workflow.id] ?? null;
-
+        {workflowHandoffEntries.map(({ entry, workflowHref, workflowGovernanceHandoff }) => {
           return (
-            <article className="payload-card compact-card" key={entry.workflow.id}>
-              <div className="payload-card-header">
-                <span className="status-meta">
-                  {formatCatalogGapSummary(entry.missingToolIds, 3) ?? "catalog gap"}
-                </span>
-                {workflowHref ? (
-                  <Link className="event-chip inbox-filter-link" href={workflowHref}>
-                    回到 workflow 编辑器
-                  </Link>
-                ) : null}
-              </div>
-              <p className="binding-meta">{entry.workflow.name}</p>
-              <p className="section-copy entry-copy">
-                {buildWorkflowHandoffDetail(entry)}
-              </p>
-              <div className="event-type-strip">
-                {renderMissingToolChips(entry.missingToolIds)}
-              </div>
-            </article>
+            <div key={entry.workflow.id}>
+              <article className="payload-card compact-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">
+                    {formatCatalogGapSummary(entry.missingToolIds, 3) ?? "catalog gap"}
+                  </span>
+                  {workflowHref ? (
+                    <Link className="event-chip inbox-filter-link" href={workflowHref}>
+                      回到 workflow 编辑器
+                    </Link>
+                  ) : null}
+                </div>
+                <p className="binding-meta">{entry.workflow.name}</p>
+                <p className="section-copy entry-copy">{buildWorkflowMetadataDetail(entry)}</p>
+                <div className="event-type-strip">
+                  {renderMissingToolChips(entry.missingToolIds)}
+                </div>
+              </article>
+
+              <WorkflowGovernanceHandoffCards
+                workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+                workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+                workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
+                workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
+                legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+                cardClassName="payload-card compact-card"
+              />
+            </div>
           );
         })}
       </div>
@@ -177,13 +218,15 @@ function buildPrimaryFollowUpDetail(
 }
 
 function buildWorkflowHandoffDetail(entry: MissingToolWorkflowEntry) {
-  const governedToolCount = entry.workflow.tool_governance?.governed_tool_count ?? 0;
   const catalogGapSummary = formatCatalogGapSummary(entry.missingToolIds, 3) ?? "catalog gap";
 
-  return (
-    `${entry.workflow.version} · ${entry.workflow.status} · ${entry.workflow.node_count} nodes · ` +
-    `${governedToolCount} governed tools。 当前 workflow 仍有 ${catalogGapSummary}。`
-  );
+  return `${buildWorkflowMetadataDetail(entry)} 当前 workflow 仍有 ${catalogGapSummary}。`;
+}
+
+function buildWorkflowMetadataDetail(entry: MissingToolWorkflowEntry) {
+  const governedToolCount = entry.workflow.tool_governance?.governed_tool_count ?? 0;
+
+  return `${entry.workflow.version} · ${entry.workflow.status} · ${entry.workflow.node_count} nodes · ${governedToolCount} governed tools。`;
 }
 
 function renderMissingToolChips(missingToolIds: string[]) {

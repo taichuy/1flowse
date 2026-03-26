@@ -225,9 +225,10 @@ describe("workflow-governance-handoff", () => {
     expect(handoff.workflowCatalogGapHref).toBeNull();
   });
 
-  it("accepts workflow-library legacy auth summaries when source handoff lacks a publish snapshot", () => {
+  it("builds legacy-auth handoff cards from workflow-library summaries", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-summary",
+      workflowName: "Summary workflow",
       workflowDetailHref: "/workflows/workflow-summary?starter=starter-openclaw",
       toolGovernance: {
         referenced_tool_ids: ["native.catalog-gap"],
@@ -249,7 +250,9 @@ describe("workflow-governance-handoff", () => {
     expect(handoff.workflowCatalogGapHref).toBe(
       "/workflows/workflow-summary?starter=starter-openclaw&definition_issue=missing_tool"
     );
-    expect(handoff.legacyAuthHandoff).toBeNull();
+    expect(handoff.legacyAuthHandoff?.bindingChipLabel).toBe("2 legacy bindings");
+    expect(handoff.legacyAuthHandoff?.statusChipLabel).toBe("publish auth blocker");
+    expect(handoff.legacyAuthHandoff?.detail).toContain("1 条 published blocker");
   });
 
   it("keeps an explicit legacy-auth scope while preserving the catalog-gap shortcut", () => {
