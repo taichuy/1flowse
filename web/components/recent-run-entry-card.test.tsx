@@ -65,4 +65,42 @@ describe("RecentRunEntryCard", () => {
     expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
   });
+
+  it("upgrades the main workflow link to legacy auth even when the incoming scope is missing_tool", () => {
+    const html = renderToStaticMarkup(
+      createElement(RecentRunEntryCard, {
+        run: buildRun({
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+            binding: {
+              workflow_id: "workflow-1",
+              workflow_name: "Run Workflow"
+            }
+          })
+        }),
+        runHref: "/runs/run-1?track=author",
+        runLinkLabel: "查看 run 诊断面板",
+        workflowHref: "/workflows/workflow-1?track=author&definition_issue=missing_tool",
+        workflowLinkLabel: "回到 workflow 编辑器"
+      })
+    );
+
+    expect(html).toContain(
+      'href="/workflows/workflow-1?track=author&amp;definition_issue=missing_tool"'
+    );
+    expect(html).toContain(
+      'href="/workflows/workflow-1?track=author&amp;definition_issue=legacy_publish_auth"'
+    );
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
+    expect(html).toContain(
+      'href="/workflows/workflow-1?track=author&amp;definition_issue=legacy_publish_auth"'
+    );
+    expect(html).toContain('class="inline-link secondary"');
+  });
 });
