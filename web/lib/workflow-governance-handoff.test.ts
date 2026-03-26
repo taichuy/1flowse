@@ -13,10 +13,10 @@ describe("workflow-governance-handoff", () => {
       buildWorkflowGovernanceDetailHrefFromCurrentHref({
         workflowId: "workflow-same",
         currentHref:
-          "/workflows/workflow-same?starter=starter-openclaw&definition_issue=missing_tool&q=drift"
+          "/workflows/workflow-same?needs_follow_up=true&starter=starter-openclaw&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool&q=drift"
       })
     ).toBe(
-      "/workflows/workflow-same?q=drift&starter=starter-openclaw&definition_issue=missing_tool"
+      "/workflows/workflow-same?needs_follow_up=true&q=drift&starter=starter-openclaw&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool"
     );
   });
 
@@ -39,6 +39,16 @@ describe("workflow-governance-handoff", () => {
         currentHref: "/sensitive-access?run_id=run-1&definition_issue=missing_tool"
       })
     ).toBe("/workflows/workflow-same");
+  });
+
+  it("does not leak current workflow scope onto a different workflow detail link", () => {
+    expect(
+      buildWorkflowGovernanceDetailHrefFromCurrentHref({
+        workflowId: "workflow-target",
+        currentHref:
+          "/workflows/workflow-current?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=starter-openclaw&definition_issue=missing_tool"
+      })
+    ).toBe("/workflows/workflow-target");
   });
 
   it("builds shared catalog-gap detail for recent-run style surfaces", () => {

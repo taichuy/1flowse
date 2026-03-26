@@ -18,6 +18,7 @@ import {
   type WorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
 import {
+  DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE,
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
@@ -70,11 +71,41 @@ export function buildWorkflowGovernanceDetailHrefFromCurrentHref({
     const [, currentWorkflowId] = currentUrl.pathname.split("/").filter(Boolean);
 
     if (currentUrl.pathname.startsWith("/workflows/") && currentWorkflowId === resolvedWorkflowId) {
-      const workflowDetailHref = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
-        workflowId: resolvedWorkflowId,
-        viewState: readWorkspaceStarterLibraryViewState(currentUrl.searchParams),
-        variant: "editor"
-      }).href;
+      const workspaceStarterViewState = readWorkspaceStarterLibraryViewState(currentUrl.searchParams);
+      const scopedWorkflowSearchParams = new URLSearchParams();
+
+      if (
+        workspaceStarterViewState.activeTrack !==
+        DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.activeTrack
+      ) {
+        scopedWorkflowSearchParams.set("track", workspaceStarterViewState.activeTrack);
+      }
+      if (
+        workspaceStarterViewState.sourceGovernanceKind !==
+        DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE.sourceGovernanceKind
+      ) {
+        scopedWorkflowSearchParams.set(
+          "source_governance_kind",
+          workspaceStarterViewState.sourceGovernanceKind
+        );
+      }
+      if (workspaceStarterViewState.needsFollowUp) {
+        scopedWorkflowSearchParams.set("needs_follow_up", "true");
+      }
+
+      const normalizedSearchQuery = workspaceStarterViewState.searchQuery.trim();
+      if (normalizedSearchQuery) {
+        scopedWorkflowSearchParams.set("q", normalizedSearchQuery);
+      }
+      if (workspaceStarterViewState.selectedTemplateId) {
+        scopedWorkflowSearchParams.set("starter", workspaceStarterViewState.selectedTemplateId);
+      }
+
+      scopedWorkflowSearchParams.sort();
+      const scopedWorkflowQuery = scopedWorkflowSearchParams.toString();
+      const workflowDetailHref = scopedWorkflowQuery
+        ? `${fallbackHref}?${scopedWorkflowQuery}`
+        : fallbackHref;
 
       return appendWorkflowLibraryViewState(
         workflowDetailHref,
