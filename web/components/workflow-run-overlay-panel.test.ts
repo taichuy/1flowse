@@ -335,7 +335,7 @@ describe("WorkflowRunOverlayPanel", () => {
     expect(html).toContain(
       "当前 workflow 仍有 0 条 draft cleanup、1 条 published blocker、0 条 offline inventory。Publish auth contract：supported api_key / internal；legacy token。"
     );
-    expect(html).toContain('href="/workflows/workflow-1"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
   });
 
   it("preserves callback inbox context when overlay hydration carries callback tickets", () => {
@@ -515,8 +515,11 @@ describe("WorkflowRunOverlayPanel", () => {
       expect(String(callbackWaitingSummaryProps?.workflowCatalogGapDetail ?? "")).toContain(
         "当前 overlay callback summary 对应的 workflow 版本仍有 catalog gap（native.overlay-gap）"
       );
-      expect(callbackWaitingSummaryProps?.workflowGovernanceHref).toBe(
+      expect(callbackWaitingSummaryProps?.workflowCatalogGapHref).toBe(
         "/workflows/workflow-1?definition_issue=missing_tool"
+      );
+      expect(callbackWaitingSummaryProps?.workflowGovernanceHref).toBe(
+        "/workflows/workflow-1?definition_issue=legacy_publish_auth"
       );
       expect(callbackWaitingSummaryProps?.legacyAuthHandoff).toMatchObject({
         bindingChipLabel: "1 legacy bindings",
@@ -641,13 +644,22 @@ describe("WorkflowRunOverlayPanel", () => {
       searchQuery: "starter",
       selectedTemplateId: "starter-1"
     };
-    const workflowGovernanceHref = appendWorkflowLibraryViewState(
+    const workflowCatalogGapHref = appendWorkflowLibraryViewState(
       buildWorkflowEditorHrefFromWorkspaceStarterViewState(
         "workflow-1",
         workspaceStarterGovernanceQueryScope
       ),
       {
         definitionIssue: "missing_tool"
+      }
+    ).replaceAll("&", "&amp;");
+    const workflowGovernanceHref = appendWorkflowLibraryViewState(
+      buildWorkflowEditorHrefFromWorkspaceStarterViewState(
+        "workflow-1",
+        workspaceStarterGovernanceQueryScope
+      ),
+      {
+        definitionIssue: "legacy_publish_auth"
       }
     ).replaceAll("&", "&amp;");
     const html = renderToStaticMarkup(
@@ -697,6 +709,7 @@ describe("WorkflowRunOverlayPanel", () => {
 
     expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
+    expect(html).toContain(`href="${workflowCatalogGapHref}"`);
     expect(html).toContain(`href="${workflowGovernanceHref}"`);
   });
 });

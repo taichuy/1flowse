@@ -69,6 +69,11 @@ export type WorkflowPublishLegacyAuthCleanupExportPayload = {
   };
 };
 
+export type WorkflowPublishLegacyAuthCleanupWorkflowLike = Pick<
+  WorkflowDetail,
+  "definition_issues" | "tool_governance" | "legacy_auth_governance"
+>;
+
 export type WorkflowPublishLegacyAuthCleanupSurface = {
   shouldRender: boolean;
   title: string;
@@ -110,7 +115,7 @@ function buildWorkflowPublishLegacyAuthCleanupWorkflowFollowUp({
   workflow,
 }: {
   workflowId: string;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
 }): WorkflowPublishLegacyAuthCleanupWorkflowFollowUp {
   if (!workflow) {
     return buildWorkflowPublishLegacyAuthCleanupDefaultWorkflowFollowUp(workflowId);
@@ -408,7 +413,7 @@ export function buildWorkflowPublishLegacyAuthCleanupExportPayload({
 }: {
   workflowId: string;
   workflowName: string;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
   bindings: WorkflowPublishedEndpointItem[];
   exportedAt?: string;
 }): WorkflowPublishLegacyAuthCleanupExportPayload {

@@ -1,4 +1,7 @@
-import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
+import type {
+  WorkflowLegacyAuthGovernanceSummary,
+  WorkflowToolGovernanceSummary
+} from "@/lib/get-workflows";
 import {
   buildLegacyPublishAuthWorkflowHandoff,
   type LegacyPublishAuthWorkflowHandoff
@@ -17,6 +20,10 @@ import {
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
+type WorkflowLegacyAuthGovernanceHandoffInput =
+  | WorkflowLegacyAuthGovernanceSummary
+  | WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot;
+
 export type WorkflowGovernanceHandoff = {
   workflowId: string | null;
   workflowGovernanceHref: string | null;
@@ -29,6 +36,12 @@ export type WorkflowGovernanceHandoff = {
 function normalizeText(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function isLegacyAuthGovernanceSnapshot(
+  legacyAuthGovernance: WorkflowLegacyAuthGovernanceHandoffInput | null | undefined
+): legacyAuthGovernance is WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot {
+  return Boolean(legacyAuthGovernance && "workflows" in legacyAuthGovernance);
 }
 
 export function buildWorkflowCatalogGapDetail({
@@ -66,11 +79,14 @@ export function buildWorkflowGovernanceHandoff({
   workflowId?: string | null;
   workflowDetailHref?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
-  legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
+  legacyAuthGovernance?: WorkflowLegacyAuthGovernanceHandoffInput | null;
   workflowCatalogGapDetail?: string | null;
 }): WorkflowGovernanceHandoff {
+  const legacyAuthSnapshot = isLegacyAuthGovernanceSnapshot(legacyAuthGovernance)
+    ? legacyAuthGovernance
+    : null;
   const resolvedWorkflowId =
-    normalizeText(workflowId) ?? normalizeText(legacyAuthGovernance?.workflows[0]?.workflow_id);
+    normalizeText(workflowId) ?? normalizeText(legacyAuthSnapshot?.workflows[0]?.workflow_id);
   const resolvedWorkflowDetailHref =
     normalizeText(workflowDetailHref) ??
     (resolvedWorkflowId
@@ -126,7 +142,7 @@ export function buildWorkflowGovernanceHandoff({
     workflowCatalogGapSummary,
     workflowCatalogGapDetail: workflowCatalogGapSummary ? workflowCatalogGapDetail : null,
     legacyAuthHandoff: resolvedWorkflowId
-      ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance ?? null, resolvedWorkflowId)
+      ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthSnapshot, resolvedWorkflowId)
       : null
   };
 }

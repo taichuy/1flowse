@@ -11,6 +11,7 @@ import type {
   WorkspaceStarterSourceGovernanceScopeSummary,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import { buildWorkspaceStarterTemplateListSurfaceCopy } from "@/lib/workbench-entry-surfaces";
 import {
   getWorkflowBusinessTrack,
@@ -38,6 +39,7 @@ import { WorkspaceStarterFollowUpCard } from "./follow-up-card";
 type WorkspaceStarterTemplateListPanelProps = {
   templates: WorkspaceStarterTemplateItem[];
   filteredTemplates: WorkspaceStarterTemplateItem[];
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   selectedTemplateId: string | null;
   activeTrack: TrackFilter;
   archiveFilter: ArchiveFilter;
@@ -70,6 +72,7 @@ type WorkspaceStarterTemplateListPanelProps = {
 export function WorkspaceStarterTemplateListPanel({
   templates,
   filteredTemplates,
+  sourceWorkflowSummariesById = null,
   selectedTemplateId,
   activeTrack,
   archiveFilter,
@@ -271,6 +274,7 @@ export function WorkspaceStarterTemplateListPanel({
           previewFocusTargets={previewFocusTargets}
           resultFocusTargets={resultFocusTargets}
           selectedTemplateId={selectedTemplateId}
+          sourceWorkflowSummariesById={sourceWorkflowSummariesById}
           workspaceStarterGovernanceQueryScope={{
             activeTrack,
             sourceGovernanceKind,
@@ -320,6 +324,7 @@ export function WorkspaceStarterTemplateListPanel({
             const missingToolGovernanceSurface = buildWorkspaceStarterMissingToolGovernanceSurface({
               template,
               missingToolIds: toolGovernance?.missingToolIds ?? [],
+              sourceWorkflowSummariesById,
               workspaceStarterGovernanceQueryScope: {
                 activeTrack,
                 sourceGovernanceKind,

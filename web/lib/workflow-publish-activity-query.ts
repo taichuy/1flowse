@@ -38,9 +38,14 @@ export type WorkflowPublishActivityResolvedFilters = {
   selectedInvocationId: string | null;
 };
 
+export type WorkflowPublishActivityWorkflowLike = Pick<
+  WorkflowListItem,
+  "definition_issues" | "tool_governance" | "legacy_auth_governance"
+>;
+
 type WorkflowPublishActivityHrefOptions = {
   workflowId: string;
-  workflow?: Pick<WorkflowListItem, "tool_governance"> | null;
+  workflow?: WorkflowPublishActivityWorkflowLike | null;
   bindingId?: string | null;
   activeInvocationFilter?: WorkflowPublishInvocationActiveFilter | null;
   invocationId?: string | null;
@@ -206,6 +211,47 @@ export function buildWorkflowPublishActivityHref({
   });
 
   return appendSearchParamsToHref(workflowHref, searchParams);
+}
+
+export function buildWorkflowDetailHrefFromPublishActivityCurrentHref(
+  workflowId: string,
+  currentHref?: string | null
+) {
+  const normalizedWorkflowId = normalizeOptionalQueryValue(workflowId);
+
+  if (!normalizedWorkflowId) {
+    return null;
+  }
+
+  const fallbackHref = buildAuthorFacingWorkflowDetailLinkSurface({
+    workflowId: normalizedWorkflowId,
+    variant: "editor"
+  }).href;
+  const normalizedCurrentHref = normalizeOptionalQueryValue(currentHref);
+
+  if (!normalizedCurrentHref) {
+    return fallbackHref;
+  }
+
+  try {
+    const currentUrl = new URL(normalizedCurrentHref, "https://7flows.local");
+
+    if (!currentUrl.pathname.startsWith("/workflows/")) {
+      return fallbackHref;
+    }
+
+    const workflowSearchParams = new URLSearchParams(currentUrl.search);
+
+    for (const key of Array.from(workflowSearchParams.keys())) {
+      if (key.startsWith("publish_")) {
+        workflowSearchParams.delete(key);
+      }
+    }
+
+    return appendSearchParamsToHref(fallbackHref, workflowSearchParams);
+  } catch {
+    return fallbackHref;
+  }
 }
 
 export function resolveWorkflowPublishActivityFilters(

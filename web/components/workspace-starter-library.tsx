@@ -134,6 +134,7 @@ export function WorkspaceStarterLibrary({
         <WorkspaceStarterTemplateListPanel
           templates={templates}
           filteredTemplates={filteredTemplates}
+          sourceWorkflowSummariesById={sourceWorkflowSummariesById}
           selectedTemplateId={selectedTemplateId}
           activeTrack={activeTrack}
           archiveFilter={archiveFilter}
@@ -187,6 +188,7 @@ export function WorkspaceStarterLibrary({
             selectedTemplate={selectedTemplate}
             selectedTemplateSandboxGovernance={selectedTemplateSandboxGovernance}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
+            sourceWorkflowSummariesById={sourceWorkflowSummariesById}
             sourceGovernance={sourceGovernance}
             sourceDiff={sourceDiff}
             isLoadingSourceDiff={isLoadingSourceDiff}
@@ -205,6 +207,7 @@ export function WorkspaceStarterLibrary({
             isLoading={isLoadingHistory}
             createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
+            sourceWorkflowSummariesById={sourceWorkflowSummariesById}
             workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             emptyStateFollowUp={emptyStateFollowUp}
           />
@@ -215,6 +218,7 @@ export function WorkspaceStarterLibrary({
             isRebasing={isRebasing}
             createWorkflowHref={selectedTemplate?.archived ? null : createWorkflowHref}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
+            sourceWorkflowSummariesById={sourceWorkflowSummariesById}
             workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             emptyStateFollowUp={emptyStateFollowUp}
             onRebase={handleRebaseFromSource}

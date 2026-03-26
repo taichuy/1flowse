@@ -370,6 +370,7 @@ export function SensitiveAccessInboxEntryCard({
             focusSkillReferenceNodeName={executionContext?.focusNode.node_name ?? null}
             workflowCatalogGapSummary={callbackWaitingContext.workflowCatalogGapSummary}
             workflowCatalogGapDetail={callbackWaitingContext.workflowCatalogGapDetail}
+            workflowCatalogGapHref={callbackWaitingContext.workflowCatalogGapHref}
             workflowGovernanceHref={callbackWaitingContext.workflowGovernanceHref}
             legacyAuthHandoff={callbackWaitingContext.legacyAuthHandoff}
           />
@@ -380,6 +381,7 @@ export function SensitiveAccessInboxEntryCard({
         <WorkflowGovernanceHandoffCards
           workflowCatalogGapSummary={standaloneWorkflowGovernanceHandoff?.workflowCatalogGapSummary}
           workflowCatalogGapDetail={standaloneWorkflowGovernanceHandoff?.workflowCatalogGapDetail}
+          workflowCatalogGapHref={standaloneWorkflowGovernanceHandoff?.workflowCatalogGapHref}
           workflowGovernanceHref={standaloneWorkflowGovernanceHandoff?.workflowGovernanceHref}
           legacyAuthHandoff={standaloneWorkflowGovernanceHandoff?.legacyAuthHandoff}
         />

@@ -54,6 +54,8 @@ export function OperatorRunSampleCardList({
           sample.workflowCatalogGapSummary ?? callbackWaitingSummaryProps?.workflowCatalogGapSummary ?? null;
         const resolvedWorkflowCatalogGapDetail =
           sample.workflowCatalogGapDetail ?? callbackWaitingSummaryProps?.workflowCatalogGapDetail ?? null;
+        const resolvedWorkflowCatalogGapHref =
+          sample.workflowCatalogGapHref ?? callbackWaitingSummaryProps?.workflowCatalogGapHref ?? null;
         const resolvedWorkflowGovernanceHref =
           sample.workflowGovernanceHref ?? callbackWaitingSummaryProps?.workflowGovernanceHref ?? null;
         const resolvedLegacyAuthHandoff =
@@ -124,6 +126,7 @@ export function OperatorRunSampleCardList({
             <WorkflowGovernanceHandoffCards
               workflowCatalogGapSummary={resolvedWorkflowCatalogGapSummary}
               workflowCatalogGapDetail={resolvedWorkflowCatalogGapDetail}
+              workflowCatalogGapHref={resolvedWorkflowCatalogGapHref}
               workflowGovernanceHref={resolvedWorkflowGovernanceHref}
               legacyAuthHandoff={resolvedLegacyAuthHandoff}
             />
@@ -213,6 +216,9 @@ export function OperatorRunSampleCardList({
             }
             workflowCatalogGapDetail={
               shouldRenderCallbackWorkflowGovernance ? resolvedWorkflowCatalogGapDetail : null
+            }
+            workflowCatalogGapHref={
+              shouldRenderCallbackWorkflowGovernance ? resolvedWorkflowCatalogGapHref : null
             }
             workflowGovernanceHref={
               shouldRenderCallbackWorkflowGovernance ? resolvedWorkflowGovernanceHref : null

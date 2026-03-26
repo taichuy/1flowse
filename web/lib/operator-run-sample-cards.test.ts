@@ -102,7 +102,7 @@ describe("buildOperatorRunSampleCards", () => {
     });
   });
 
-  it("keeps workflow governance handoff on sampled run cards", () => {
+  it("prioritizes legacy publish auth workflow handoff on sampled run cards", () => {
     const cards = buildOperatorRunSampleCards([
       {
         runId: "run-1",
@@ -133,7 +133,7 @@ describe("buildOperatorRunSampleCards", () => {
     ]);
 
     expect(cards[0]).toMatchObject({
-      workflowGovernanceHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-sampled?definition_issue=legacy_publish_auth",
       workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",

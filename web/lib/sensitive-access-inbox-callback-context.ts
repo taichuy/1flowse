@@ -24,6 +24,7 @@ export type SensitiveAccessInboxCallbackContext = {
   scheduledResumeRequeueSource?: string | null;
   workflowCatalogGapSummary?: string | null;
   workflowCatalogGapDetail?: string | null;
+  workflowCatalogGapHref?: string | null;
   workflowGovernanceHref?: string | null;
   legacyAuthHandoff?: LegacyPublishAuthWorkflowHandoff | null;
 };
@@ -107,6 +108,7 @@ export function buildSensitiveAccessInboxEntryCallbackContext(
     scheduledResumeRequeueSource: runSnapshot?.scheduledResumeRequeueSource ?? null,
     workflowCatalogGapSummary: workflowGovernanceHandoff.workflowCatalogGapSummary,
     workflowCatalogGapDetail: workflowGovernanceHandoff.workflowCatalogGapDetail,
+    workflowCatalogGapHref: workflowGovernanceHandoff.workflowCatalogGapHref,
     workflowGovernanceHref: workflowGovernanceHandoff.workflowGovernanceHref,
     legacyAuthHandoff: workflowGovernanceHandoff.legacyAuthHandoff
   };

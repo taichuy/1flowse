@@ -13,6 +13,10 @@ const { traceFiltersSectionSpy } = vi.hoisted(() => ({
   traceFiltersSectionSpy: vi.fn()
 }));
 
+const { executionSectionsSpy } = vi.hoisted(() => ({
+  executionSectionsSpy: vi.fn()
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
@@ -30,8 +34,10 @@ vi.mock("@/components/run-diagnostics-panel/trace-filters-section", () => ({
 }));
 
 vi.mock("@/components/run-diagnostics-execution-sections", () => ({
-  RunDiagnosticsExecutionSections: () =>
-    createElement("div", { "data-testid": "execution-sections" })
+  RunDiagnosticsExecutionSections: (props: Record<string, unknown>) => {
+    executionSectionsSpy(props);
+    return createElement("div", { "data-testid": "execution-sections" });
+  }
 }));
 
 vi.mock("@/components/run-diagnostics-panel/trace-results-section", () => ({
@@ -195,5 +201,149 @@ describe("RunDiagnosticsPanel", () => {
     );
 
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+  });
+
+  it("when the run still has legacy auth backlog, hero handoff deep-links back to legacy-auth workflow editor", () => {
+    const html = renderToStaticMarkup(
+      createElement(RunDiagnosticsPanel, {
+        run: buildRunDetail({
+          legacy_auth_governance: {
+            generated_at: "2026-03-20T12:00:00Z",
+            auth_mode_contract: {
+              supported_auth_modes: ["api_key", "internal"],
+              retired_legacy_auth_modes: ["token"],
+              summary: "supported api_key / internal, legacy token",
+              follow_up: "replace token bindings"
+            },
+            workflow_count: 1,
+            binding_count: 1,
+            summary: {
+              draft_candidate_count: 0,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            },
+            checklist: [],
+            workflows: [
+              {
+                workflow_id: "workflow-1",
+                workflow_name: "Workflow 1",
+                binding_count: 1,
+                draft_candidate_count: 0,
+                published_blocker_count: 1,
+                offline_inventory_count: 0,
+                tool_governance: {
+                  referenced_tool_ids: [],
+                  missing_tool_ids: [],
+                  governed_tool_count: 0,
+                  strong_isolation_tool_count: 0
+                }
+              }
+            ],
+            buckets: {
+              draft_candidates: [],
+              published_blockers: [],
+              offline_inventory: []
+            }
+          }
+        }),
+        trace: null,
+        traceError: null,
+        traceQuery: {
+          limit: 200,
+          order: "asc"
+        },
+        executionView: null,
+        evidenceView: null,
+        callbackWaitingAutomation: {
+          status: "healthy",
+          scheduler_required: true,
+          detail: "callback waiting automation healthy",
+          scheduler_health_status: "healthy",
+          scheduler_health_detail: "scheduler loop is healthy",
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
+  });
+
+  it("passes the resolved workflow governance href into execution sections", () => {
+    renderToStaticMarkup(
+      createElement(RunDiagnosticsPanel, {
+        run: buildRunDetail({
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          legacy_auth_governance: {
+            generated_at: "2026-03-20T12:00:00Z",
+            auth_mode_contract: {
+              supported_auth_modes: ["api_key", "internal"],
+              retired_legacy_auth_modes: ["token"],
+              summary: "supported api_key / internal, legacy token",
+              follow_up: "replace token bindings"
+            },
+            workflow_count: 1,
+            binding_count: 1,
+            summary: {
+              draft_candidate_count: 0,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            },
+            checklist: [],
+            workflows: [
+              {
+                workflow_id: "workflow-1",
+                workflow_name: "Workflow 1",
+                binding_count: 1,
+                draft_candidate_count: 0,
+                published_blocker_count: 1,
+                offline_inventory_count: 0,
+                tool_governance: {
+                  referenced_tool_ids: ["native.catalog-gap"],
+                  missing_tool_ids: ["native.catalog-gap"],
+                  governed_tool_count: 0,
+                  strong_isolation_tool_count: 0
+                }
+              }
+            ],
+            buckets: {
+              draft_candidates: [],
+              published_blockers: [],
+              offline_inventory: []
+            }
+          }
+        }),
+        trace: null,
+        traceError: null,
+        traceQuery: {
+          limit: 200,
+          order: "asc"
+        },
+        executionView: null,
+        evidenceView: null,
+        callbackWaitingAutomation: {
+          status: "healthy",
+          scheduler_required: true,
+          detail: "callback waiting automation healthy",
+          scheduler_health_status: "healthy",
+          scheduler_health_detail: "scheduler loop is healthy",
+          steps: []
+        },
+        sandboxReadiness: buildSandboxReadiness(),
+        workflowDetailHref: "/workflows/workflow-1?starter=starter-openclaw"
+      })
+    );
+
+    expect(executionSectionsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowDetailHref:
+          "/workflows/workflow-1?starter=starter-openclaw&definition_issue=legacy_publish_auth"
+      })
+    );
   });
 });

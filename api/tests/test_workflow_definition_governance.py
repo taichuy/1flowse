@@ -1,7 +1,9 @@
 ﻿from app.schemas.plugin import PluginToolItem
+from app.schemas.workflow import WorkflowLegacyAuthGovernanceSummary
 from app.services.workflow_definition_governance import (
     collect_workflow_definition_tool_ids,
     count_workflow_nodes,
+    resolve_primary_workflow_definition_issue,
     summarize_workflow_definition_tool_governance,
 )
 
@@ -114,3 +116,41 @@ def test_summarize_workflow_definition_tool_governance_counts_governed_strong_an
     assert summary.missing_tool_ids == ["native.missing"]
     assert summary.governed_tool_count == 2
     assert summary.strong_isolation_tool_count == 2
+
+
+def test_resolve_primary_workflow_definition_issue_prioritizes_legacy_publish_auth() -> None:
+    issue = resolve_primary_workflow_definition_issue(
+        tool_governance={
+            "referenced_tool_ids": ["native.catalog-gap"],
+            "missing_tool_ids": ["native.catalog-gap"],
+            "governed_tool_count": 0,
+            "strong_isolation_tool_count": 0,
+        },
+        legacy_auth_governance=WorkflowLegacyAuthGovernanceSummary(
+            binding_count=1,
+            draft_candidate_count=0,
+            published_blocker_count=1,
+            offline_inventory_count=0,
+        ),
+    )
+
+    assert issue == "legacy_publish_auth"
+
+
+def test_resolve_primary_definition_issue_returns_missing_tool_without_legacy_auth() -> None:
+    issue = resolve_primary_workflow_definition_issue(
+        tool_governance={
+            "referenced_tool_ids": ["native.catalog-gap"],
+            "missing_tool_ids": ["native.catalog-gap"],
+            "governed_tool_count": 0,
+            "strong_isolation_tool_count": 0,
+        },
+        legacy_auth_governance={
+            "binding_count": 0,
+            "draft_candidate_count": 0,
+            "published_blocker_count": 0,
+            "offline_inventory_count": 0,
+        },
+    )
+
+    assert issue == "missing_tool"

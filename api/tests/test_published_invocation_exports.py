@@ -11,10 +11,14 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationItem,
     PublishedEndpointInvocationListResponse,
     PublishedEndpointInvocationSummary,
+    WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
 )
 from app.services.published_invocation_exports import (
     build_published_invocation_export_payload,
     serialize_published_invocation_export_jsonl,
+)
+from tests.workflow_publish_helpers import (
+    legacy_auth_governance_snapshot_for_single_published_blocker,
 )
 
 
@@ -115,7 +119,7 @@ def build_response() -> PublishedEndpointInvocationListResponse:
     )
 
 
-def test_build_published_invocation_export_payload_preserves_canonical_run_snapshot_execution_facts() -> None:
+def test_export_payload_preserves_canonical_run_snapshot_execution_facts() -> None:
     payload = build_published_invocation_export_payload(
         binding=build_binding(),
         export_format="json",
@@ -163,6 +167,48 @@ def test_build_published_invocation_export_payload_preserves_canonical_run_snaps
         "response_content_type": "application/json",
         "raw_ref": None,
     }
+
+
+def test_export_payload_prioritizes_legacy_auth_workflow_follow_up() -> None:
+    snapshot = legacy_auth_governance_snapshot_for_single_published_blocker(
+        generated_at="2026-03-20T10:00:00Z",
+        workflow_id="workflow-1",
+        workflow_name="Published Search Workflow",
+        workflow_version="1.0.0",
+        binding_id="binding-1",
+        endpoint_id="endpoint-1",
+        endpoint_name="Published Search",
+    )
+    snapshot["workflows"][0]["tool_governance"] = {
+        "referenced_tool_ids": ["native.catalog-gap"],
+        "missing_tool_ids": ["native.catalog-gap"],
+        "governed_tool_count": 0,
+        "strong_isolation_tool_count": 0,
+    }
+    legacy_auth_governance = WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot.model_validate(
+        snapshot
+    )
+
+    payload = build_published_invocation_export_payload(
+        binding=build_binding(),
+        export_format="json",
+        limit=50,
+        response=build_response(),
+        legacy_auth_governance=legacy_auth_governance,
+    )
+
+    workflow_follow_up = payload["legacy_auth_governance"]["workflow"]["workflow_follow_up"]
+    assert workflow_follow_up == {
+        "workflow_detail_href": "/workflows/workflow-1?definition_issue=legacy_publish_auth",
+        "workflow_detail_label": "回到 workflow 编辑器",
+        "definition_issue": "legacy_publish_auth",
+    }
+    assert payload["legacy_auth_governance"]["workflow"]["tool_governance"]["missing_tool_ids"] == [
+        "native.catalog-gap"
+    ]
+    assert payload["legacy_auth_governance"]["buckets"]["published_blockers"][0][
+        "workflow_follow_up"
+    ] == workflow_follow_up
 
 
 def test_serialize_published_invocation_export_jsonl_keeps_run_snapshot_execution_facts() -> None:

@@ -17,7 +17,8 @@ import type {
 } from "@/lib/get-system-overview";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { PublishedEndpointInvocationDetailResponse } from "@/lib/get-workflow-publish";
-import type { WorkflowDetail } from "@/lib/get-workflows";
+import type { WorkflowPublishActivityWorkflowLike } from "@/lib/workflow-publish-activity-query";
+import { buildWorkflowDetailHrefFromPublishActivityCurrentHref } from "@/lib/workflow-publish-activity-query";
 import { hasExecutionNodeCallbackWaitingSummaryFacts } from "@/lib/callback-waiting-facts";
 import { buildExecutionFocusExplainableNode } from "@/lib/operator-inline-action-feedback";
 import {
@@ -30,6 +31,7 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationSkillTraceSurface,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff,
   resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
@@ -69,10 +71,7 @@ import {
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
-import {
-  appendWorkflowLibraryViewState,
-  appendWorkflowLibraryViewStateForWorkflow
-} from "@/lib/workflow-library-query";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
@@ -80,7 +79,7 @@ import {
 
 type WorkflowPublishInvocationDetailPanelProps = {
   detail: PublishedEndpointInvocationDetailResponse;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishActivityWorkflowLike | null;
   clearHref: string;
   currentHref?: string | null;
   tools: PluginToolRegistryItem[];
@@ -159,7 +158,15 @@ export function WorkflowPublishInvocationDetailPanel({
     : null;
   const runFollowUpSamples = listPublishedInvocationRunFollowUpSampleViews(runFollowUp, {
     fallbackWorkflowId: invocation.workflow_id,
-    fallbackLegacyAuthGovernance: legacyAuthSnapshot
+    fallbackLegacyAuthGovernance: legacyAuthSnapshot,
+    resolveWorkflowDetailHref: (workflowId) =>
+      workspaceStarterGovernanceQueryScope
+        ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+            workflowId,
+            viewState: workspaceStarterGovernanceQueryScope,
+            variant: "editor"
+          }).href
+        : buildWorkflowDetailHrefFromPublishActivityCurrentHref(workflowId, currentHref)
   });
   const recommendedNextStepSample =
     runFollowUpSamples.find((sample) => sample.run_id === runId) ?? runFollowUpSamples[0] ?? null;
@@ -387,13 +394,10 @@ export function WorkflowPublishInvocationDetailPanel({
                           variant: "editor"
                         })
                     : null;
-                  const sampleWorkflowDetailHref = sampleWorkflowDetailLink
-                    ? sample.workflow_catalog_gap_summary
-                      ? appendWorkflowLibraryViewState(sampleWorkflowDetailLink.href, {
-                          definitionIssue: "missing_tool"
-                        })
-                      : sampleWorkflowDetailLink.href
-                    : null;
+                  const sampleWorkflowGovernanceHandoff =
+                    buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(sample, {
+                      workflowDetailHref: sampleWorkflowDetailLink?.href ?? null
+                    });
                   const sampleFocusNodeEvidence = buildExecutionFocusExplainableNode(
                     sample.run_snapshot
                   );
@@ -489,8 +493,9 @@ export function WorkflowPublishInvocationDetailPanel({
                       <WorkflowGovernanceHandoffCards
                         workflowCatalogGapSummary={sample.workflow_catalog_gap_summary}
                         workflowCatalogGapDetail={sample.workflow_catalog_gap_detail}
-                        workflowGovernanceHref={sampleWorkflowDetailHref}
-                        legacyAuthHandoff={sample.legacy_auth_handoff}
+                        workflowCatalogGapHref={sampleWorkflowGovernanceHandoff.workflowCatalogGapHref}
+                        workflowGovernanceHref={sampleWorkflowGovernanceHandoff.workflowGovernanceHref}
+                        legacyAuthHandoff={sampleWorkflowGovernanceHandoff.legacyAuthHandoff}
                       />
                     ) : null}
                     {sampleReadinessNode ? (
@@ -593,8 +598,9 @@ export function WorkflowPublishInvocationDetailPanel({
                         sensitiveAccessEntries={sample.sensitive_access_entries}
                         workflowCatalogGapSummary={sample.workflow_catalog_gap_summary}
                         workflowCatalogGapDetail={sample.workflow_catalog_gap_detail}
-                        workflowGovernanceHref={sampleWorkflowDetailHref}
-                        legacyAuthHandoff={sample.legacy_auth_handoff}
+                        workflowCatalogGapHref={sampleWorkflowGovernanceHandoff.workflowCatalogGapHref}
+                        workflowGovernanceHref={sampleWorkflowGovernanceHandoff.workflowGovernanceHref}
+                        legacyAuthHandoff={sampleWorkflowGovernanceHandoff.legacyAuthHandoff}
                         showInlineActions={false}
                         waitingReason={sample.run_snapshot.waitingReason ?? null}
                       />
@@ -763,6 +769,7 @@ export function WorkflowPublishInvocationDetailPanel({
         callbackWaitingExplanation={callbackWaitingExplanation}
         executionFocusNode={executionFocusNode}
         legacyAuthGovernance={legacyAuthSnapshot}
+        workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
       />
 
       {skillTrace && skillTraceSurface ? (

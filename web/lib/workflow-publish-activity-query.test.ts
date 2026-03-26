@@ -234,4 +234,41 @@ describe("workflow publish activity query", () => {
       "/workflows/workflow-1?definition_issue=missing_tool&publish_binding=binding-1&publish_status=failed&publish_request_source=path&publish_request_surface=openai.responses&publish_cache_status=hit&publish_run_status=waiting_callback&publish_window=24h&publish_invocation=invocation-1"
     );
   });
+
+  it("prefers legacy auth scope when publish activity facts include both legacy auth and catalog gap", () => {
+    expect(
+      buildWorkflowPublishActivityHref({
+        workflowId: "workflow-1",
+        workflow: {
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0,
+          },
+          legacy_auth_governance: {
+            binding_count: 2,
+            draft_candidate_count: 0,
+            published_blocker_count: 1,
+            offline_inventory_count: 1,
+          },
+        },
+        bindingId: "binding-1",
+        activeInvocationFilter: {
+          bindingId: "binding-1",
+          status: "failed",
+          requestSource: "path",
+          requestSurface: "openai.responses",
+          cacheStatus: "hit",
+          runStatus: "waiting_callback",
+          apiKeyId: null,
+          reasonCode: null,
+          timeWindow: "24h",
+        },
+        invocationId: "invocation-1",
+      })
+    ).toBe(
+      "/workflows/workflow-1?definition_issue=legacy_publish_auth&publish_binding=binding-1&publish_status=failed&publish_request_source=path&publish_request_surface=openai.responses&publish_cache_status=hit&publish_run_status=waiting_callback&publish_window=24h&publish_invocation=invocation-1"
+    );
+  });
 });

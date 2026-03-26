@@ -86,6 +86,7 @@ export function SensitiveAccessBulkGovernanceCard({
       currentHref,
       workflowCatalogGapSummary: workflowGovernanceSummary?.workflowCatalogGapSummary ?? null,
       workflowCatalogGapDetail: workflowGovernanceSummary?.workflowCatalogGapDetail ?? null,
+      workflowCatalogGapHref: workflowGovernanceSummary?.workflowCatalogGapHref ?? null,
       workflowGovernanceHref: workflowGovernanceSummary?.workflowGovernanceHref ?? null,
       legacyAuthHandoff: workflowGovernanceSummary?.legacyAuthHandoff ?? null
     }),
@@ -230,6 +231,7 @@ export function SensitiveAccessBulkGovernanceCard({
               <WorkflowGovernanceHandoffCards
                 workflowCatalogGapSummary={workflowGovernanceSummary?.workflowCatalogGapSummary}
                 workflowCatalogGapDetail={workflowGovernanceSummary?.workflowCatalogGapDetail}
+                workflowCatalogGapHref={workflowGovernanceSummary?.workflowCatalogGapHref}
                 workflowGovernanceHref={workflowGovernanceSummary?.workflowGovernanceHref}
                 legacyAuthHandoff={
                   lastResult?.legacyAuthGovernance

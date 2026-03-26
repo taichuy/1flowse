@@ -9,7 +9,6 @@ import {
 } from "@/app/actions/publish";
 import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
-import type { WorkflowDetail } from "@/lib/get-workflows";
 import {
   buildWorkflowPublishLegacyAuthCleanupExportActionSurface,
   buildWorkflowPublishLegacyAuthCleanupExportErrorMessage,
@@ -19,12 +18,13 @@ import {
   buildWorkflowPublishLegacyAuthCleanupSurface,
   serializeWorkflowPublishLegacyAuthCleanupExportJsonl,
   type WorkflowPublishLegacyAuthCleanupExportFormat,
+  type WorkflowPublishLegacyAuthCleanupWorkflowLike,
 } from "@/lib/workflow-publish-legacy-auth-cleanup";
 
 type WorkflowPublishLegacyAuthCleanupCardProps = {
   workflowId: string;
   workflowName?: string;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
   bindings: WorkflowPublishedEndpointItem[];
   action?: (
     state: CleanupLegacyPublishedEndpointBindingsState,

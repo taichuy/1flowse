@@ -18,8 +18,11 @@ import {
   buildPublishedInvocationInboxHref,
   resolvePublishedInvocationRunFollowUpSampleView
 } from "@/lib/published-invocation-presenters";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
-import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import { buildWorkflowDetailHrefFromPublishActivityCurrentHref } from "@/lib/workflow-publish-activity-query";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 
 type WorkflowPublishInvocationCallbackSectionProps = {
   currentHref?: string | null;
@@ -30,6 +33,7 @@ type WorkflowPublishInvocationCallbackSectionProps = {
   callbackWaitingExplanation?: RunExecutionFocusExplanation | null;
   executionFocusNode?: PublishedEndpointInvocationDetailResponse["execution_focus_node"];
   legacyAuthGovernance?: PublishedEndpointInvocationDetailResponse["legacy_auth_governance"];
+  workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 };
 
 export function WorkflowPublishInvocationCallbackSection({
@@ -40,7 +44,8 @@ export function WorkflowPublishInvocationCallbackSection({
   callbackWaitingAutomation,
   callbackWaitingExplanation,
   executionFocusNode,
-  legacyAuthGovernance = null
+  legacyAuthGovernance = null,
+  workspaceStarterGovernanceQueryScope = null
 }: WorkflowPublishInvocationCallbackSectionProps) {
   const waitingLifecycle = invocation.run_waiting_lifecycle;
   const callbackLifecycle = waitingLifecycle?.callback_waiting_lifecycle;
@@ -74,21 +79,18 @@ export function WorkflowPublishInvocationCallbackSection({
     sensitiveAccessEntries
   });
   const runFollowUpSample = resolvePublishedInvocationRunFollowUpSampleView(invocation, {
-    fallbackLegacyAuthGovernance: legacyAuthGovernance
+    fallbackLegacyAuthGovernance: legacyAuthGovernance,
+    resolveWorkflowDetailHref: (workflowId) =>
+      workspaceStarterGovernanceQueryScope
+        ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+            workflowId,
+            viewState: workspaceStarterGovernanceQueryScope,
+            variant: "editor"
+          }).href
+        : buildWorkflowDetailHrefFromPublishActivityCurrentHref(workflowId, currentHref)
   });
-  const runFollowUpSampleWorkflowDetailLink = runFollowUpSample?.workflow_id
-    ? buildAuthorFacingWorkflowDetailLinkSurface({
-        workflowId: runFollowUpSample.workflow_id,
-        variant: "editor"
-      })
-    : null;
-  const runFollowUpSampleWorkflowDetailHref = runFollowUpSampleWorkflowDetailLink
-    ? runFollowUpSample?.workflow_catalog_gap_summary
-      ? appendWorkflowLibraryViewState(runFollowUpSampleWorkflowDetailLink.href, {
-          definitionIssue: "missing_tool"
-        })
-      : runFollowUpSampleWorkflowDetailLink.href
-    : null;
+  const runFollowUpSampleWorkflowGovernanceHandoff =
+    runFollowUpSample?.workflow_governance_handoff ?? null;
   const focusEvidenceDrilldownLink = buildOperatorTraceSliceLinkSurface({
     runId: invocation.run_id ?? null,
     currentHref,
@@ -135,8 +137,9 @@ export function WorkflowPublishInvocationCallbackSection({
         recommendedAction={invocation.run_follow_up?.recommended_action ?? null}
         workflowCatalogGapSummary={runFollowUpSample?.workflow_catalog_gap_summary}
         workflowCatalogGapDetail={runFollowUpSample?.workflow_catalog_gap_detail}
-        workflowGovernanceHref={runFollowUpSampleWorkflowDetailHref}
-        legacyAuthHandoff={runFollowUpSample?.legacy_auth_handoff ?? null}
+        workflowCatalogGapHref={runFollowUpSampleWorkflowGovernanceHandoff?.workflowCatalogGapHref}
+        workflowGovernanceHref={runFollowUpSampleWorkflowGovernanceHandoff?.workflowGovernanceHref}
+        legacyAuthHandoff={runFollowUpSampleWorkflowGovernanceHandoff?.legacyAuthHandoff ?? null}
         preferCanonicalRecommendedNextStep
         focusEvidenceDrilldownLink={focusEvidenceDrilldownLink}
       />

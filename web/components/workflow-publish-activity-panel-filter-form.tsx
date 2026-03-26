@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { PublishedEndpointApiKeyItem } from "@/lib/get-workflow-publish";
-import type { WorkflowDetail } from "@/lib/get-workflows";
+import type { WorkflowPublishActivityWorkflowLike } from "@/lib/workflow-publish-activity-query";
 import {
   PUBLISHED_INVOCATION_CACHE_STATUSES,
   PUBLISHED_INVOCATION_REASON_CODES,
@@ -20,7 +20,7 @@ import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-start
 
 type WorkflowPublishActivityFilterFormProps = {
   workflowId: string;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishActivityWorkflowLike | null;
   bindingId: string;
   apiKeys: PublishedEndpointApiKeyItem[];
   activeInvocationFilter: WorkflowPublishActivityPanelProps["activeInvocationFilter"];

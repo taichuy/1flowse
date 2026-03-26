@@ -28,8 +28,7 @@ import {
   formatDuration,
   formatTimestamp
 } from "@/lib/runtime-presenters";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
-import { hasWorkflowMissingToolIssues } from "@/lib/workflow-definition-governance";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 type RunDiagnosticsPanelProps = {
@@ -87,11 +86,14 @@ export function RunDiagnosticsPanel({
     variant: "editor"
   });
   const baseWorkflowDetailHref = workflowDetailHref ?? workflowDetailLink.href;
-  const resolvedWorkflowDetailHref = hasWorkflowMissingToolIssues(run)
-    ? appendWorkflowLibraryViewState(baseWorkflowDetailHref, {
-        definitionIssue: "missing_tool"
-      })
-    : baseWorkflowDetailHref;
+  const resolvedWorkflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+    baseWorkflowDetailHref,
+    {
+      tool_governance: run.tool_governance ?? null,
+      legacy_auth_governance: run.legacy_auth_governance ?? null
+    },
+    { definitionIssue: null }
+  );
   const heroSurfaceCopy = buildRunDiagnosticsHeroSurfaceCopy();
 
   return (
@@ -180,6 +182,7 @@ export function RunDiagnosticsPanel({
         evidenceView={evidenceView}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
+        workflowDetailHref={resolvedWorkflowDetailHref}
         workflowId={run.workflow_id}
         toolGovernance={run.tool_governance ?? null}
         legacyAuthGovernance={run.legacy_auth_governance ?? null}

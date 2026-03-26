@@ -30,6 +30,7 @@ export type OperatorRunSampleCard = {
   focusNodeLabel: string | null;
   focusNodeRunId: string | null;
   waitingReason: string | null;
+  workflowCatalogGapHref: string | null;
   workflowGovernanceHref: string | null;
   workflowCatalogGapSummary: string | null;
   workflowCatalogGapDetail: string | null;
@@ -144,6 +145,7 @@ export function buildOperatorRunSampleCards(
         focusNodeLabel: model.focusNodeLabel,
         focusNodeRunId: normalizeText(snapshot?.executionFocusNodeRunId),
         waitingReason: model.waitingReason,
+        workflowCatalogGapHref: workflowGovernanceHandoff.workflowCatalogGapHref,
         workflowGovernanceHref: workflowGovernanceHandoff.workflowGovernanceHref,
         workflowCatalogGapSummary: workflowGovernanceHandoff.workflowCatalogGapSummary,
         workflowCatalogGapDetail: workflowGovernanceHandoff.workflowCatalogGapDetail,

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Literal
 
 from app.schemas.plugin import PluginToolItem
-from app.schemas.workflow import WorkflowToolGovernanceSummary
+from app.schemas.workflow import (
+    WorkflowLegacyAuthGovernanceSummary,
+    WorkflowToolGovernanceSummary,
+)
 
 STRONG_ISOLATION_EXECUTION_CLASSES = {"sandbox", "microvm"}
+WorkflowDefinitionIssueFilter = Literal["legacy_publish_auth", "missing_tool"]
 
 
 def count_workflow_nodes(definition: dict | None) -> int:
@@ -37,6 +42,52 @@ def summarize_workflow_definition_tool_governance(
             1 for tool in referenced_tools if _requires_strong_isolation(tool)
         ),
     )
+
+
+def has_workflow_missing_tool_issues(
+    tool_governance: WorkflowToolGovernanceSummary | Mapping[str, object] | None,
+) -> bool:
+    if isinstance(tool_governance, WorkflowToolGovernanceSummary):
+        missing_tool_ids = tool_governance.missing_tool_ids
+    elif isinstance(tool_governance, Mapping):
+        missing_tool_ids = tool_governance.get("missing_tool_ids")
+    else:
+        return False
+
+    return isinstance(missing_tool_ids, list) and any(
+        isinstance(item, str) and item.strip() for item in missing_tool_ids
+    )
+
+
+def has_workflow_legacy_publish_auth_issues(
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary | Mapping[str, object] | None,
+) -> bool:
+    if legacy_auth_governance is None:
+        return False
+
+    return any(
+        _read_governance_count(legacy_auth_governance, field) > 0
+        for field in (
+            "binding_count",
+            "draft_candidate_count",
+            "published_blocker_count",
+            "offline_inventory_count",
+        )
+    )
+
+
+def resolve_primary_workflow_definition_issue(
+    *,
+    tool_governance: WorkflowToolGovernanceSummary | Mapping[str, object] | None = None,
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary
+    | Mapping[str, object]
+    | None = None,
+) -> WorkflowDefinitionIssueFilter | None:
+    if has_workflow_legacy_publish_auth_issues(legacy_auth_governance):
+        return "legacy_publish_auth"
+    if has_workflow_missing_tool_issues(tool_governance):
+        return "missing_tool"
+    return None
 
 
 def collect_workflow_definition_tool_ids(definition: dict | None) -> list[str]:
@@ -86,6 +137,17 @@ def _push_tool_id(value: object, referenced_tool_ids: list[str], seen: set[str])
         return
     seen.add(normalized)
     referenced_tool_ids.append(normalized)
+
+
+def _read_governance_count(
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary | Mapping[str, object],
+    field: str,
+) -> int:
+    if isinstance(legacy_auth_governance, WorkflowLegacyAuthGovernanceSummary):
+        value = getattr(legacy_auth_governance, field, 0)
+    else:
+        value = legacy_auth_governance.get(field, 0)
+    return value if isinstance(value, int) and value > 0 else 0
 
 
 def _normalize_sensitivity_level(value: str | None) -> str | None:

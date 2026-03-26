@@ -8,6 +8,7 @@ import type {
   WorkspaceStarterHistoryItem,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
@@ -28,6 +29,7 @@ type WorkspaceStarterHistoryPanelProps = {
   isLoading: boolean;
   createWorkflowHref?: string | null;
   selectedTemplateToolGovernance?: WorkflowDefinitionToolGovernance | null;
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   emptyStateFollowUp?: WorkspaceStarterFollowUpSurface | null;
 };
@@ -38,6 +40,7 @@ export function WorkspaceStarterHistoryPanel({
   isLoading,
   createWorkflowHref = null,
   selectedTemplateToolGovernance = null,
+  sourceWorkflowSummariesById = null,
   workspaceStarterGovernanceQueryScope = null,
   emptyStateFollowUp = null
 }: WorkspaceStarterHistoryPanelProps) {
@@ -45,6 +48,7 @@ export function WorkspaceStarterHistoryPanel({
     ? buildWorkspaceStarterMissingToolGovernanceSurface({
         template: selectedTemplate,
         missingToolIds: selectedTemplateToolGovernance?.missingToolIds ?? [],
+        sourceWorkflowSummariesById,
         workspaceStarterGovernanceQueryScope
       })
     : null;

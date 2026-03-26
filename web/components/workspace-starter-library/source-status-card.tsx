@@ -7,6 +7,7 @@ import type {
   WorkspaceStarterSourceGovernance,
   WorkspaceStarterTemplateItem
 } from "@/lib/get-workspace-starters";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
@@ -27,6 +28,7 @@ type WorkspaceStarterSourceCardProps = {
   isRebasing: boolean;
   createWorkflowHref?: string | null;
   selectedTemplateToolGovernance?: WorkflowDefinitionToolGovernance | null;
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   onRefresh: () => void;
   onRebase: () => void;
@@ -41,6 +43,7 @@ export function WorkspaceStarterSourceCard({
   isRebasing,
   createWorkflowHref = null,
   selectedTemplateToolGovernance = null,
+  sourceWorkflowSummariesById = null,
   workspaceStarterGovernanceQueryScope = null,
   onRefresh,
   onRebase
@@ -50,6 +53,7 @@ export function WorkspaceStarterSourceCard({
   const missingToolGovernanceSurface = buildWorkspaceStarterMissingToolGovernanceSurface({
     template,
     missingToolIds: selectedTemplateToolGovernance?.missingToolIds ?? [],
+    sourceWorkflowSummariesById,
     workspaceStarterGovernanceQueryScope
   });
   const baseSourceGovernanceSurface = buildWorkspaceStarterSourceGovernanceSurface({

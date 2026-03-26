@@ -984,14 +984,14 @@ def test_export_published_endpoint_invocations_keep_missing_tool_scope_in_legacy
     governance_record = json.loads(jsonl_lines[1])
     governance_binding_record = json.loads(jsonl_lines[2])
     assert meta_record["legacy_auth_governance"]["workflow"]["workflow_follow_up"] == {
-        "workflow_detail_href": f"/workflows/{workflow_id}?definition_issue=missing_tool",
+        "workflow_detail_href": f"/workflows/{workflow_id}?definition_issue=legacy_publish_auth",
         "workflow_detail_label": "回到 workflow 编辑器",
-        "definition_issue": "missing_tool",
+        "definition_issue": "legacy_publish_auth",
     }
     assert governance_record["workflow"]["workflow_follow_up"] == {
-        "workflow_detail_href": f"/workflows/{workflow_id}?definition_issue=missing_tool",
+        "workflow_detail_href": f"/workflows/{workflow_id}?definition_issue=legacy_publish_auth",
         "workflow_detail_label": "回到 workflow 编辑器",
-        "definition_issue": "missing_tool",
+        "definition_issue": "legacy_publish_auth",
     }
     assert governance_binding_record == {
         "record_type": "workflow_legacy_auth_binding",

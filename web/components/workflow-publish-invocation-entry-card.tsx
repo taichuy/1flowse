@@ -20,6 +20,7 @@ import {
   buildPublishedInvocationEntryInboxLinkSurface,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff,
   resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
@@ -50,7 +51,7 @@ import {
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
+import { buildWorkflowDetailHrefFromPublishActivityCurrentHref } from "@/lib/workflow-publish-activity-query";
 import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
@@ -137,7 +138,16 @@ export function WorkflowPublishInvocationEntryCard({
         unknown: runFollowUp.unknown_run_count
       })
     : null;
-  const runFollowUpSample = resolvePublishedInvocationRunFollowUpSampleView(item);
+  const runFollowUpSample = resolvePublishedInvocationRunFollowUpSampleView(item, {
+    resolveWorkflowDetailHref: (workflowId) =>
+      workspaceStarterGovernanceQueryScope
+        ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+            workflowId,
+            viewState: workspaceStarterGovernanceQueryScope,
+            variant: "editor"
+          }).href
+        : buildWorkflowDetailHrefFromPublishActivityCurrentHref(workflowId, detailHref)
+  });
   const runFollowUpSampleHasCallbackWaitingSummary =
     runFollowUpSample?.has_callback_waiting_summary ?? false;
   const shouldDeferToSharedCallbackWaitingSummary = runFollowUpSampleHasCallbackWaitingSummary;
@@ -230,12 +240,10 @@ export function WorkflowPublishInvocationEntryCard({
           variant: "editor"
         })
     : null;
-  const runFollowUpSampleWorkflowDetailHref = runFollowUpSampleWorkflowDetailLink
-    ? runFollowUpSample?.workflow_catalog_gap_summary
-      ? appendWorkflowLibraryViewState(runFollowUpSampleWorkflowDetailLink.href, {
-          definitionIssue: "missing_tool"
-        })
-      : runFollowUpSampleWorkflowDetailLink.href
+  const runFollowUpSampleWorkflowGovernanceHandoff = runFollowUpSample
+    ? buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(runFollowUpSample, {
+        workflowDetailHref: runFollowUpSampleWorkflowDetailLink?.href ?? null
+      })
     : null;
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId: item.run_id ?? null,
@@ -367,8 +375,9 @@ export function WorkflowPublishInvocationEntryCard({
             <WorkflowGovernanceHandoffCards
               workflowCatalogGapSummary={runFollowUpSample.workflow_catalog_gap_summary}
               workflowCatalogGapDetail={runFollowUpSample.workflow_catalog_gap_detail}
-              workflowGovernanceHref={runFollowUpSampleWorkflowDetailHref}
-              legacyAuthHandoff={runFollowUpSample.legacy_auth_handoff}
+              workflowCatalogGapHref={runFollowUpSampleWorkflowGovernanceHandoff?.workflowCatalogGapHref}
+              workflowGovernanceHref={runFollowUpSampleWorkflowGovernanceHandoff?.workflowGovernanceHref}
+              legacyAuthHandoff={runFollowUpSampleWorkflowGovernanceHandoff?.legacyAuthHandoff ?? null}
             />
           ) : null}
           {readinessNode ? (
@@ -444,8 +453,9 @@ export function WorkflowPublishInvocationEntryCard({
                   sensitiveAccessEntries={runFollowUpSample.sensitive_access_entries}
                   workflowCatalogGapSummary={runFollowUpSample.workflow_catalog_gap_summary}
                   workflowCatalogGapDetail={runFollowUpSample.workflow_catalog_gap_detail}
-                  workflowGovernanceHref={runFollowUpSampleWorkflowDetailHref}
-                  legacyAuthHandoff={runFollowUpSample.legacy_auth_handoff}
+                  workflowCatalogGapHref={runFollowUpSampleWorkflowGovernanceHandoff?.workflowCatalogGapHref}
+                  workflowGovernanceHref={runFollowUpSampleWorkflowGovernanceHandoff?.workflowGovernanceHref}
+                  legacyAuthHandoff={runFollowUpSampleWorkflowGovernanceHandoff?.legacyAuthHandoff ?? null}
                   showFocusExecutionFacts={shouldDeferToSharedCallbackWaitingSummary}
                   showInlineActions={false}
                   waitingReason={runFollowUpSample.run_snapshot.waitingReason ?? null}

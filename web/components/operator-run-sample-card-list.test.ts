@@ -132,6 +132,7 @@ function buildSampleCard(
     focusNodeLabel: "Callback node",
     focusNodeRunId: "node-run-1",
     waitingReason: "callback pending",
+    workflowCatalogGapHref: null,
     workflowGovernanceHref: null,
     workflowCatalogGapSummary: null,
     workflowCatalogGapDetail: null,
@@ -523,7 +524,9 @@ describe("OperatorRunSampleCardList", () => {
         cards: [
           buildSampleCard({
             hasCallbackWaitingSummary: false,
-            workflowGovernanceHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+            workflowCatalogGapHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+            workflowGovernanceHref:
+              "/workflows/workflow-sampled?definition_issue=legacy_publish_auth",
             workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
             workflowCatalogGapDetail:
               "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 compact snapshot 与 callback 事实。",
@@ -558,6 +561,9 @@ describe("OperatorRunSampleCardList", () => {
     expect(html).toContain("Legacy publish auth handoff");
     expect(html).toContain("publish auth blocker");
     expect(html).toContain('href="/workflows/workflow-sampled?definition_issue=missing_tool"');
+    expect(html).toContain(
+      'href="/workflows/workflow-sampled?definition_issue=legacy_publish_auth"'
+    );
     expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
   });
@@ -567,7 +573,9 @@ describe("OperatorRunSampleCardList", () => {
       createElement(OperatorRunSampleCardList, {
         cards: [
           buildSampleCard({
-            workflowGovernanceHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+            workflowCatalogGapHref: "/workflows/workflow-sampled?definition_issue=missing_tool",
+            workflowGovernanceHref:
+              "/workflows/workflow-sampled?definition_issue=legacy_publish_auth",
             workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
             workflowCatalogGapDetail:
               "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 compact snapshot 与 callback 事实。",
@@ -610,7 +618,9 @@ describe("OperatorRunSampleCardList", () => {
       createElement(OperatorRunSampleCardList, {
         cards: [buildSampleCard()],
         callbackWaitingSummaryProps: {
-          workflowGovernanceHref: "/workflows/workflow-parent?definition_issue=missing_tool",
+          workflowCatalogGapHref: "/workflows/workflow-parent?definition_issue=missing_tool",
+          workflowGovernanceHref:
+            "/workflows/workflow-parent?definition_issue=legacy_publish_auth",
           workflowCatalogGapSummary: "catalog gap · native.parent-gap",
           workflowCatalogGapDetail:
             "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.parent-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy。",
@@ -642,5 +652,8 @@ describe("OperatorRunSampleCardList", () => {
     expect(html).toContain("catalog gap · native.parent-gap");
     expect(html).toContain("Legacy publish auth handoff");
     expect(html).toContain('href="/workflows/workflow-parent?definition_issue=missing_tool"');
+    expect(html).toContain(
+      'href="/workflows/workflow-parent?definition_issue=legacy_publish_auth"'
+    );
   });
 });

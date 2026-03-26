@@ -402,6 +402,7 @@ export function InlineOperatorActionFeedback({
           }
           workflowCatalogGapSummary={callbackWaitingSummaryProps?.workflowCatalogGapSummary}
           workflowCatalogGapDetail={callbackWaitingSummaryProps?.workflowCatalogGapDetail}
+          workflowCatalogGapHref={callbackWaitingSummaryProps?.workflowCatalogGapHref}
           workflowGovernanceHref={callbackWaitingSummaryProps?.workflowGovernanceHref}
           legacyAuthHandoff={callbackWaitingSummaryProps?.legacyAuthHandoff ?? null}
           focusEvidenceDrilldownLink={focusEvidenceDrilldownLink}
@@ -411,6 +412,7 @@ export function InlineOperatorActionFeedback({
           <WorkflowGovernanceHandoffCards
             workflowCatalogGapSummary={callbackWaitingSummaryProps?.workflowCatalogGapSummary}
             workflowCatalogGapDetail={callbackWaitingSummaryProps?.workflowCatalogGapDetail}
+            workflowCatalogGapHref={callbackWaitingSummaryProps?.workflowCatalogGapHref}
             workflowGovernanceHref={callbackWaitingSummaryProps?.workflowGovernanceHref}
             legacyAuthHandoff={standaloneWorkflowGovernanceLegacyAuthHandoff}
           />

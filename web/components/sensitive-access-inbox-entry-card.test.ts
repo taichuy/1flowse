@@ -588,7 +588,8 @@ describe("SensitiveAccessInboxEntryCard", () => {
       workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
       workflowCatalogGapDetail:
         "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理当前 sensitive access inbox slice 与 callback waiting。",
-      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: buildLegacyPublishAuthWorkflowHandoff(
         legacyAuthGovernance,
         "workflow-1"
@@ -602,6 +603,7 @@ describe("SensitiveAccessInboxEntryCard", () => {
     expect(html).toContain("Legacy publish auth handoff");
     expect(html).toContain("publish auth blocker");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
   });
 
   it("renders workflow governance handoff when callback summary context is unavailable", () => {

@@ -27,6 +27,7 @@ export type SensitiveAccessBulkWorkflowGovernanceSummary = {
   narrativeText: string | null;
   workflowCatalogGapSummary: string | null;
   workflowCatalogGapDetail: string | null;
+  workflowCatalogGapHref: string | null;
   workflowGovernanceHref: string | null;
   legacyAuthHandoff: LegacyPublishAuthWorkflowHandoff | null;
 };
@@ -133,7 +134,7 @@ export function buildSensitiveAccessBulkWorkflowGovernanceSummary(
   const legacyAuthCount = sampledRunCards.filter((card) => card.legacyAuthHandoff).length;
   const sharedCatalogGap = resolveSharedWorkflowGovernanceCard(sampledRunCards, (card) =>
     card.workflowCatalogGapSummary
-      ? `${card.workflowGovernanceHref ?? ""}::${card.workflowCatalogGapSummary}`
+      ? `${card.workflowCatalogGapHref ?? card.workflowGovernanceHref ?? ""}::${card.workflowCatalogGapSummary}`
       : null
   );
   const sharedSampleLegacyAuth = resolveSharedWorkflowGovernanceCard(sampledRunCards, (card) =>
@@ -156,6 +157,10 @@ export function buildSensitiveAccessBulkWorkflowGovernanceSummary(
   const sharedWorkflowCatalogGapDetail =
     sharedWorkflowCatalogGapSummary && sharedCatalogGap
       ? buildBulkWorkflowCatalogGapDetail(sharedCatalogGap.count)
+      : null;
+  const sharedWorkflowCatalogGapHref =
+    sampledRunCount > 1 && sharedCatalogGap?.appliesToAll
+      ? sharedCatalogGap.card.workflowCatalogGapHref ?? null
       : null;
   const sharedWorkflowGovernanceHref =
     sampledRunCount > 1 && sharedCatalogGap?.appliesToAll
@@ -202,6 +207,7 @@ export function buildSensitiveAccessBulkWorkflowGovernanceSummary(
     narrativeText,
     workflowCatalogGapSummary: sharedWorkflowCatalogGapSummary,
     workflowCatalogGapDetail: sharedWorkflowCatalogGapDetail,
+    workflowCatalogGapHref: sharedWorkflowCatalogGapHref,
     workflowGovernanceHref,
     legacyAuthHandoff: sharedLegacyAuthHandoff
   };

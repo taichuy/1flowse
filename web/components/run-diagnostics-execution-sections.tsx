@@ -1,3 +1,5 @@
+import React from "react";
+
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
@@ -20,6 +22,7 @@ type RunDiagnosticsExecutionSectionsProps = {
   evidenceView: RunEvidenceView | null;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowDetailHref?: string | null;
   workflowId?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
@@ -31,6 +34,7 @@ export function RunDiagnosticsExecutionSections({
   evidenceView,
   callbackWaitingAutomation,
   sandboxReadiness = null,
+  workflowDetailHref = null,
   workflowId = null,
   toolGovernance = null,
   legacyAuthGovernance = null,
@@ -55,6 +59,7 @@ export function RunDiagnosticsExecutionSections({
             executionView={executionView}
             callbackWaitingAutomation={callbackWaitingAutomation}
             sandboxReadiness={sandboxReadiness}
+            workflowDetailHref={workflowDetailHref}
             workflowId={workflowId}
             toolGovernance={toolGovernance}
             legacyAuthGovernance={legacyAuthGovernance}
@@ -104,6 +109,7 @@ export function RunDiagnosticsExecutionSections({
                   callbackWaitingAutomation={callbackWaitingAutomation}
                   sandboxReadiness={sandboxReadiness}
                   skillTrace={executionView.skill_trace ?? null}
+                  workflowDetailHref={workflowDetailHref}
                   workflowId={workflowId ?? executionView.workflow_id}
                   toolGovernance={toolGovernance}
                   legacyAuthGovernance={

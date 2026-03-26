@@ -324,10 +324,9 @@ def legacy_auth_export_snapshot_for_single_published_blocker(
     missing_tool_ids: list[str] | None = None,
 ) -> dict[str, object]:
     missing_tool_ids = missing_tool_ids or []
-    definition_issue = "missing_tool" if missing_tool_ids else None
     workflow_follow_up = legacy_auth_workflow_follow_up(
         workflow_id=workflow_id,
-        definition_issue=definition_issue,
+        definition_issue="legacy_publish_auth",
     )
     snapshot = legacy_auth_governance_snapshot_for_single_published_blocker(
         generated_at=generated_at,

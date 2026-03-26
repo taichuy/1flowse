@@ -128,24 +128,24 @@ describe("workflow library legacy auth governance helpers", () => {
     });
     expect(payload.summary.published_blocker_count).toBe(2);
     expect(payload.workflows[0]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=missing_tool",
+      workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: "missing_tool",
+      definition_issue: "legacy_publish_auth",
     });
     expect(payload.workflows[1]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-replacement",
+      workflow_detail_href: "/workflows/workflow-replacement?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: null,
+      definition_issue: "legacy_publish_auth",
     });
     expect(payload.buckets.draft_candidates[0]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=missing_tool",
+      workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: "missing_tool",
+      definition_issue: "legacy_publish_auth",
     });
     expect(payload.buckets.published_blockers[0]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-replacement",
+      workflow_detail_href: "/workflows/workflow-replacement?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: null,
+      definition_issue: "legacy_publish_auth",
     });
 
     const jsonl = serializeWorkflowLibraryLegacyAuthGovernanceExportJsonl(payload);
@@ -162,8 +162,8 @@ describe("workflow library legacy auth governance helpers", () => {
       record_type: "legacy_publish_auth_workflow",
       workflow_name: "Legacy Auth workflow",
       workflow_follow_up: {
-        workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=missing_tool",
-        definition_issue: "missing_tool",
+        workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=legacy_publish_auth",
+        definition_issue: "legacy_publish_auth",
       },
     });
     expect(lines[3]).toMatchObject({
@@ -171,8 +171,8 @@ describe("workflow library legacy auth governance helpers", () => {
       bucket: "draft_candidates",
       binding_id: "binding-draft",
       workflow_follow_up: {
-        workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=missing_tool",
-        definition_issue: "missing_tool",
+        workflow_detail_href: "/workflows/workflow-legacy-auth?definition_issue=legacy_publish_auth",
+        definition_issue: "legacy_publish_auth",
       },
     });
     expect(lines[4]).toMatchObject({
@@ -180,8 +180,8 @@ describe("workflow library legacy auth governance helpers", () => {
       bucket: "published_blockers",
       binding_id: "binding-live",
       workflow_follow_up: {
-        workflow_detail_href: "/workflows/workflow-replacement",
-        definition_issue: null,
+        workflow_detail_href: "/workflows/workflow-replacement?definition_issue=legacy_publish_auth",
+        definition_issue: "legacy_publish_auth",
       },
     });
   });

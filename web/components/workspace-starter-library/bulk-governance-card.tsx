@@ -9,6 +9,7 @@ import type {
   WorkspaceStarterBulkPreview,
   WorkspaceStarterSourceGovernanceScopeSummary
 } from "@/lib/get-workspace-starters";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 import {
   buildWorkspaceStarterBulkResultSurfaceCopy,
@@ -42,6 +43,7 @@ type WorkspaceStarterBulkGovernanceCardProps = {
   previewFocusTargets: WorkspaceStarterBulkPreviewFocusTarget[];
   resultFocusTargets: WorkspaceStarterBulkResultFocusTarget[];
   selectedTemplateId: string | null;
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   onSelectQueuedTemplate: (templateId: string) => void;
   onFocusTemplate: (templateId: string) => void;
@@ -70,6 +72,7 @@ export function WorkspaceStarterBulkGovernanceCard({
   previewFocusTargets,
   resultFocusTargets,
   selectedTemplateId,
+  sourceWorkflowSummariesById = null,
   workspaceStarterGovernanceQueryScope = null,
   onSelectQueuedTemplate,
   onFocusTemplate,
@@ -80,6 +83,7 @@ export function WorkspaceStarterBulkGovernanceCard({
   const primaryResultFocusTarget = resultFocusTargets[0] ?? null;
   const resultSurface = lastResult
     ? buildWorkspaceStarterBulkResultSurface(lastResult, {
+        sourceWorkflowSummariesById,
         workspaceStarterGovernanceQueryScope
       })
     : null;

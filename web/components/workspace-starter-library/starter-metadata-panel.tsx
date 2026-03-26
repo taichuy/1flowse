@@ -82,6 +82,7 @@ export function WorkspaceStarterMetadataPanel({
     ? buildWorkspaceStarterMissingToolGovernanceSurface({
         template: selectedTemplate,
         missingToolIds: selectedTemplateToolGovernance?.missingToolIds ?? [],
+        sourceWorkflowSummariesById,
         workspaceStarterGovernanceQueryScope
       })
     : null;

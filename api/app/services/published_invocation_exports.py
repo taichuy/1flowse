@@ -10,6 +10,9 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationListResponse,
     WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
 )
+from app.services.workflow_definition_governance import (
+    resolve_primary_workflow_definition_issue,
+)
 
 WORKFLOW_EDITOR_LINK_LABEL = "回到 workflow 编辑器"
 
@@ -142,12 +145,9 @@ def _build_legacy_auth_workflow_follow_up(
         if isinstance(workflow.get("tool_governance"), dict)
         else {}
     )
-    missing_tool_ids = tool_governance.get("missing_tool_ids")
-    definition_issue = (
-        "missing_tool"
-        if isinstance(missing_tool_ids, list)
-        and any(isinstance(item, str) and item for item in missing_tool_ids)
-        else None
+    definition_issue = resolve_primary_workflow_definition_issue(
+        tool_governance=tool_governance,
+        legacy_auth_governance=workflow,
     )
     if definition_issue is not None:
         workflow_detail_href = f"{workflow_detail_href}?definition_issue={definition_issue}"

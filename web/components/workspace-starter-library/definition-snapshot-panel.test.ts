@@ -121,6 +121,28 @@ describe("WorkspaceStarterDefinitionSnapshotPanel", () => {
           governedToolCount: 1,
           strongIsolationToolCount: 0
         },
+        sourceWorkflowSummariesById: {
+          "wf-gap": {
+            id: "wf-gap",
+            name: "Catalog gap workflow",
+            version: "0.4.0",
+            status: "draft",
+            node_count: 3,
+            definition_issues: [],
+            tool_governance: {
+              referenced_tool_ids: ["catalog.tool.missing"],
+              missing_tool_ids: ["catalog.tool.missing"],
+              governed_tool_count: 1,
+              strong_isolation_tool_count: 0
+            },
+            legacy_auth_governance: {
+              binding_count: 2,
+              draft_candidate_count: 1,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            }
+          }
+        },
         sourceGovernance: {
           kind: "synced",
           status_label: "已对齐",
@@ -162,7 +184,9 @@ describe("WorkspaceStarterDefinitionSnapshotPanel", () => {
     expect(html).toContain("Catalog gap starter");
     expect(html).toContain("Recommended next step");
     expect(html).toContain("catalog gap");
-    expect(html).toContain("当前 starter 仍有 catalog gap（catalog.tool.missing）");
+    expect(html).toContain(
+      "当前 starter 仍有 catalog gap（catalog.tool.missing）；来源 workflow 还保留 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory 的 publish auth blocker，先回源 workflow 统一收口 catalog gap / publish auth contract，再回来继续复用或创建。"
+    );
     expect(html).toContain(
       "Primary governed starter: Catalog gap starter · catalog gap · catalog.tool.missing · source 0.4.0."
     );

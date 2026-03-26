@@ -13,6 +13,7 @@ import type {
   OperatorRunFollowUpSnapshot,
   RunExecutionFocusExplanation
 } from "@/lib/get-workflow-publish";
+import type { WorkflowToolGovernanceSummary } from "@/lib/get-workflows";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
@@ -54,8 +55,11 @@ import {
   formatWorkflowMissingToolSummary
 } from "@/lib/workflow-definition-governance";
 import {
+  buildWorkflowGovernanceHandoff,
+  type WorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
+import {
   buildLegacyPublishAuthGovernanceSurfaceCopy,
-  buildLegacyPublishAuthWorkflowHandoff,
   type LegacyPublishAuthWorkflowHandoff
 } from "@/lib/legacy-publish-auth-governance-presenters";
 import {
@@ -186,8 +190,11 @@ export type PublishedInvocationRunFollowUpSampleView = {
   run_snapshot: RunSnapshot;
   callback_tickets: PublishedEndpointInvocationCallbackTicketItem[];
   sensitive_access_entries: SensitiveAccessTimelineEntry[];
+  tool_governance: WorkflowToolGovernanceSummary | null;
+  legacy_auth_governance: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
   workflow_catalog_gap_summary: string | null;
   workflow_catalog_gap_detail: string | null;
+  workflow_governance_handoff: WorkflowGovernanceHandoff;
   legacy_auth_handoff: LegacyPublishAuthWorkflowHandoff | null;
   explanation_source: "callback_waiting" | "execution_focus" | null;
   explanation: RunExecutionFocusExplanation | null;
@@ -209,6 +216,7 @@ export type PublishedInvocationRunFollowUpSampleView = {
 type PublishedInvocationRunFollowUpSampleViewOptions = {
   fallbackWorkflowId?: string | null;
   fallbackLegacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
+  resolveWorkflowDetailHref?: ((workflowId: string) => string | null) | null;
 };
 
 export type PublishedInvocationCanonicalFollowUpCopy = {
@@ -3277,6 +3285,27 @@ function formatPublishedInvocationRunFollowUpSampleCatalogGapDetail(
   };
 }
 
+export function buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(
+  sample: Pick<
+    PublishedInvocationRunFollowUpSampleView,
+    | "workflow_id"
+    | "tool_governance"
+    | "legacy_auth_governance"
+    | "workflow_catalog_gap_detail"
+  >,
+  options: {
+    workflowDetailHref?: string | null;
+  } = {}
+) {
+  return buildWorkflowGovernanceHandoff({
+    workflowId: sample.workflow_id,
+    workflowDetailHref: options.workflowDetailHref ?? null,
+    toolGovernance: sample.tool_governance,
+    legacyAuthGovernance: sample.legacy_auth_governance,
+    workflowCatalogGapDetail: sample.workflow_catalog_gap_detail
+  });
+}
+
 export function listPublishedInvocationRunFollowUpSampleViews(
   runFollowUp?: PublishedInvocationRunFollowUpSummary | null,
   options: PublishedInvocationRunFollowUpSampleViewOptions = {}
@@ -3287,6 +3316,7 @@ export function listPublishedInvocationRunFollowUpSampleViews(
     const runSnapshot = buildPublishedInvocationRunFollowUpSampleSnapshot(sample, explanationSource);
     const snapshotSummary = formatRunSnapshotSummary(runSnapshot);
     const focusEvidenceModel = buildOperatorInlineActionFeedbackModel({ runSnapshot });
+    const toolGovernance = sample?.tool_governance ?? null;
     const workflowId = resolvePublishedInvocationRunFollowUpSampleWorkflowId(
       sample,
       options.fallbackWorkflowId
@@ -3295,9 +3325,18 @@ export function listPublishedInvocationRunFollowUpSampleViews(
       formatPublishedInvocationRunFollowUpSampleCatalogGapDetail(sample);
     const legacyAuthGovernance =
       sample.legacy_auth_governance ?? options.fallbackLegacyAuthGovernance ?? null;
-    const legacyAuthHandoff = workflowId
-      ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance, workflowId)
-      : null;
+    const workflowDetailHref = workflowId ? options.resolveWorkflowDetailHref?.(workflowId) ?? null : null;
+    const workflowGovernanceHandoff = buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(
+      {
+        workflow_id: workflowId,
+        tool_governance: toolGovernance,
+        legacy_auth_governance: legacyAuthGovernance,
+        workflow_catalog_gap_detail: workflowCatalogGapDetail
+      },
+      {
+        workflowDetailHref
+      }
+    );
 
     return {
       run_id: sample.run_id,
@@ -3308,9 +3347,12 @@ export function listPublishedInvocationRunFollowUpSampleViews(
       run_snapshot: runSnapshot,
       callback_tickets: sample.callback_tickets ?? [],
       sensitive_access_entries: sample.sensitive_access_entries ?? [],
+      tool_governance: toolGovernance,
+      legacy_auth_governance: legacyAuthGovernance,
       workflow_catalog_gap_summary: workflowCatalogGapSummary,
       workflow_catalog_gap_detail: workflowCatalogGapDetail,
-      legacy_auth_handoff: legacyAuthHandoff,
+      workflow_governance_handoff: workflowGovernanceHandoff,
+      legacy_auth_handoff: workflowGovernanceHandoff.legacyAuthHandoff,
       explanation_source: explanationSource,
       explanation,
       snapshot_summary: snapshotSummary,
@@ -3336,7 +3378,8 @@ export function resolvePublishedInvocationRunFollowUpSampleView(
 ): PublishedInvocationRunFollowUpSampleView | null {
   const sampleViews = listPublishedInvocationRunFollowUpSampleViews(item.run_follow_up, {
     fallbackWorkflowId: item.workflow_id,
-    fallbackLegacyAuthGovernance: options.fallbackLegacyAuthGovernance ?? null
+    fallbackLegacyAuthGovernance: options.fallbackLegacyAuthGovernance ?? null,
+    resolveWorkflowDetailHref: options.resolveWorkflowDetailHref ?? null
   });
   const normalizedRunId = item.run_id?.trim() || null;
 

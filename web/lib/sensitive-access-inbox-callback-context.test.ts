@@ -285,7 +285,10 @@ describe("sensitive access inbox callback context", () => {
     expect(context).not.toBeNull();
     expect(context?.workflowCatalogGapSummary).toBe("catalog gap · native.catalog-gap");
     expect(context?.workflowCatalogGapDetail).toContain("当前 callback summary 对应的 workflow 版本仍有 catalog gap");
-    expect(context?.workflowGovernanceHref).toBe("/workflows/wf-1?definition_issue=missing_tool");
+    expect(context?.workflowCatalogGapHref).toBe("/workflows/wf-1?definition_issue=missing_tool");
+    expect(context?.workflowGovernanceHref).toBe(
+      "/workflows/wf-1?definition_issue=legacy_publish_auth"
+    );
     expect(context?.legacyAuthHandoff).toMatchObject({
       bindingChipLabel: "1 legacy bindings",
       statusChipLabel: "publish auth blocker"

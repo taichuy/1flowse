@@ -12,7 +12,6 @@ import type {
   PublishedEndpointInvocationListResponse,
   WorkflowPublishedEndpointItem
 } from "@/lib/get-workflow-publish";
-import type { WorkflowDetail } from "@/lib/get-workflows";
 import type {
   SensitiveAccessBlockingPayload,
   SensitiveAccessGuardedResult
@@ -40,14 +39,17 @@ import {
   type PublishedInvocationSelectedNextStepSurface,
   type PublishedInvocationUnavailableDetailSurfaceCopy
 } from "@/lib/published-invocation-presenters";
-import { buildWorkflowPublishActivityHref } from "@/lib/workflow-publish-activity-query";
+import {
+  buildWorkflowPublishActivityHref,
+  type WorkflowPublishActivityWorkflowLike
+} from "@/lib/workflow-publish-activity-query";
 import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 export { buildWorkflowPublishActivityHref };
 
 export type WorkflowPublishActivityPanelProps = {
   workflowId: string;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishActivityWorkflowLike | null;
   tools: PluginToolRegistryItem[];
   binding: WorkflowPublishedEndpointItem;
   apiKeys: PublishedEndpointApiKeyItem[];
@@ -64,7 +66,7 @@ export type WorkflowPublishActivityPanelProps = {
 
 type WorkflowPublishActivityDetailLinkOptions = {
   workflowId: string;
-  workflow?: Pick<WorkflowDetail, "tool_governance"> | null;
+  workflow?: WorkflowPublishActivityWorkflowLike | null;
   bindingId?: string | null;
   activeInvocationFilter?: WorkflowPublishInvocationActiveFilter | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;

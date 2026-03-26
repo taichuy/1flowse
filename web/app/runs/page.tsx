@@ -16,7 +16,7 @@ import {
   buildAuthorFacingRunDetailLinkSurface,
   buildRunLibrarySurfaceCopy
 } from "@/lib/workbench-entry-surfaces";
-import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { formatCountMap, formatTimestamp } from "@/lib/runtime-presenters";
 import {
@@ -151,17 +151,16 @@ export default async function RunsPage({ searchParams }: RunsPageProps = {}) {
                   workflowId: run.workflow_id,
                   variant: "editor"
                 });
-                const workflowDetailHref = appendWorkflowLibraryViewState(
+                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
                   buildWorkflowEditorHrefFromWorkspaceStarterViewState(
                     run.workflow_id,
                     workspaceStarterViewState
                   ),
                   {
-                    definitionIssue:
-                      (run.tool_governance?.missing_tool_ids.length ?? 0) > 0
-                        ? "missing_tool"
-                        : null
-                  }
+                    tool_governance: run.tool_governance ?? null,
+                    legacy_auth_governance: run.legacy_auth_governance ?? null
+                  },
+                  { definitionIssue: null }
                 );
 
                 return (

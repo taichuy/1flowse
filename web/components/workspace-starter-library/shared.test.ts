@@ -1239,6 +1239,28 @@ describe("workspace starter source action decision", () => {
 
     expect(
       buildWorkspaceStarterBulkResultSurface(result, {
+        sourceWorkflowSummariesById: {
+          "wf-gap": {
+            id: "wf-gap",
+            name: "Catalog Gap Workflow",
+            version: "0.4.0",
+            status: "draft",
+            node_count: 3,
+            definition_issues: [],
+            tool_governance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            },
+            legacy_auth_governance: {
+              binding_count: 2,
+              draft_candidate_count: 1,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            }
+          }
+        },
         workspaceStarterGovernanceQueryScope: {
           activeTrack: "应用新建编排",
           sourceGovernanceKind: "all",
@@ -1253,9 +1275,9 @@ describe("workspace starter source action decision", () => {
         action: "review_result_receipt",
         label: "catalog gap",
         detail:
-          "当前 starter 仍有 catalog gap（native.catalog-gap）；先回源 workflow 补齐 binding，再回来继续复用或创建。",
+          "当前 starter 仍有 catalog gap（native.catalog-gap）；来源 workflow 还保留 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory 的 publish auth blocker，先回源 workflow 统一收口 catalog gap / publish auth contract，再回来继续复用或创建。",
         primaryResourceSummary:
-          "Catalog gap starter · catalog gap · native.catalog-gap · source 0.4.0",
+          "Catalog gap starter · catalog gap · native.catalog-gap · publish auth blocker · source 0.4.0",
         focusTemplateId: "starter-catalog-gap",
         focusLabel: "优先聚焦 starter：Catalog gap starter",
         entryKey: "workflowLibrary",

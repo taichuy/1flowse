@@ -13,6 +13,7 @@ import {
   type WorkflowDefinitionSandboxGovernance,
   type WorkflowDefinitionSandboxGovernanceNode
 } from "@/lib/workflow-definition-sandbox-governance";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
 
 import {
@@ -28,6 +29,7 @@ type WorkspaceStarterDefinitionSnapshotPanelProps = {
   selectedTemplate: WorkspaceStarterTemplateItem | null;
   selectedTemplateSandboxGovernance: WorkflowDefinitionSandboxGovernance;
   selectedTemplateToolGovernance: WorkflowDefinitionToolGovernance;
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   sourceGovernance: WorkspaceStarterSourceGovernance | null;
   sourceDiff: WorkspaceStarterSourceDiff | null;
   isLoadingSourceDiff: boolean;
@@ -44,6 +46,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
   selectedTemplate,
   selectedTemplateSandboxGovernance,
   selectedTemplateToolGovernance,
+  sourceWorkflowSummariesById = null,
   sourceGovernance,
   sourceDiff,
   isLoadingSourceDiff,
@@ -68,6 +71,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
     ? buildWorkspaceStarterMissingToolGovernanceSurface({
         template: selectedTemplate,
         missingToolIds: selectedTemplateToolGovernance.missingToolIds,
+        sourceWorkflowSummariesById,
         workspaceStarterGovernanceQueryScope
       })
     : null;
@@ -168,6 +172,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             isRebasing={isRebasing}
             createWorkflowHref={createWorkflowHref}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
+            sourceWorkflowSummariesById={sourceWorkflowSummariesById}
             workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
             onRefresh={onRefresh}
             onRebase={onRebase}

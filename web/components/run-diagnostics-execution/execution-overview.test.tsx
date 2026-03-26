@@ -143,6 +143,29 @@ describe("RunDiagnosticsExecutionOverview", () => {
     expect(html).toContain("legacy auth detail");
   });
 
+  it("keeps explicit workflow detail query state on overview governance links", () => {
+    const html = renderToStaticMarkup(
+      createElement(RunDiagnosticsExecutionOverview, {
+        executionView: buildExecutionView(),
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        workflowDetailHref: "/workflows/workflow-1?starter=starter-openclaw",
+        toolGovernance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        }
+      })
+    );
+
+    expect(html).toContain(
+      'href="/workflows/workflow-1?starter=starter-openclaw&amp;definition_issue=missing_tool"'
+    );
+    expect(html).toContain(
+      'href="/workflows/workflow-1?starter=starter-openclaw&amp;definition_issue=legacy_publish_auth"'
+    );
+  });
+
   it("keeps legacy auth detail as the only governance card when there is no catalog gap", () => {
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsExecutionOverview, {

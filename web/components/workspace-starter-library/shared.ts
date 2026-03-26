@@ -21,6 +21,7 @@ import type {
   WorkspaceStarterTemplateItem,
   WorkspaceStarterValidationIssue
 } from "@/lib/get-workspace-starters";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type {
   WorkbenchEntryLinkKey,
   WorkbenchEntryLinkOverride
@@ -40,10 +41,14 @@ import {
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
 import {
+  formatWorkflowLegacyPublishAuthBacklogSummary,
   formatToolReferenceIssueSummary,
   formatCatalogGapSummary,
-  formatCatalogGapToolSummary
+  formatCatalogGapToolSummary,
+  getWorkflowLegacyPublishAuthStatusLabel
 } from "@/lib/workflow-definition-governance";
+import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
+import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export {
   DEFAULT_WORKSPACE_STARTER_LIBRARY_VIEW_STATE,
@@ -881,6 +886,7 @@ export function buildWorkspaceStarterEmptyStateFollowUp({
 export function buildWorkspaceStarterMissingToolGovernanceSurface({
   template,
   missingToolIds,
+  sourceWorkflowSummariesById = null,
   workspaceStarterGovernanceQueryScope = null
 }: {
   template: Pick<
@@ -893,10 +899,15 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
     | "source_governance"
   >;
   missingToolIds: string[];
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
 }): WorkspaceStarterFollowUpSurface | null {
   const normalizedMissingToolIds = Array.from(
-    new Set(missingToolIds.map((toolId) => normalizeString(toolId)).filter(Boolean))
+    new Set(
+      missingToolIds
+        .map((toolId) => normalizeString(toolId))
+        .filter((toolId): toolId is string => Boolean(toolId))
+    )
   );
 
   if (normalizedMissingToolIds.length === 0) {
@@ -906,10 +917,21 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
   const sourceWorkflowId =
     normalizeString(template.source_governance?.source_workflow_id) ??
     normalizeString(template.created_from_workflow_id);
+  const sourceWorkflowSummary = sourceWorkflowId
+    ? sourceWorkflowSummariesById?.[sourceWorkflowId] ?? null
+    : null;
+  const legacyAuthStatusLabel = sourceWorkflowSummary
+    ? getWorkflowLegacyPublishAuthStatusLabel(sourceWorkflowSummary)
+    : null;
+  const legacyAuthBacklogSummary = sourceWorkflowSummary
+    ? formatWorkflowLegacyPublishAuthBacklogSummary(sourceWorkflowSummary)
+    : null;
   const renderedToolSummary =
     formatCatalogGapToolSummary(normalizedMissingToolIds) ?? "unknown tool";
   const detail = sourceWorkflowId
-    ? `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先回源 workflow 补齐 binding，再回来继续复用或创建。`
+    ? legacyAuthBacklogSummary && legacyAuthStatusLabel
+      ? `当前 starter 仍有 catalog gap（${renderedToolSummary}）；来源 workflow 还保留 ${legacyAuthBacklogSummary} 的 ${legacyAuthStatusLabel}，先回源 workflow 统一收口 catalog gap / publish auth contract，再回来继续复用或创建。`
+      : `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先回源 workflow 补齐 binding，再回来继续复用或创建。`
     : `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先同步 workspace plugin catalog，或切换到仍可用的 starter。`;
 
   const sourceWorkflowLink = sourceWorkflowId
@@ -924,6 +946,22 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
           variant: "source"
         })
     : null;
+  const sourceWorkflowLegacyAuthGovernance = sourceWorkflowSummary
+    ? buildWorkspaceStarterLegacyAuthSnapshot(sourceWorkflowSummary)
+    : null;
+  const workflowGovernanceHandoff = sourceWorkflowLink
+    ? buildWorkflowGovernanceHandoff({
+        workflowId: sourceWorkflowId,
+        workflowDetailHref: sourceWorkflowLink.href,
+        toolGovernance: sourceWorkflowSummary?.tool_governance ?? {
+          referenced_tool_ids: normalizedMissingToolIds,
+          missing_tool_ids: normalizedMissingToolIds,
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        legacyAuthGovernance: sourceWorkflowLegacyAuthGovernance
+      })
+    : null;
 
   return {
     label: "catalog gap",
@@ -937,7 +975,10 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
       sourceWorkflowVersion:
         normalizeString(template.source_governance?.source_version) ??
         normalizeString(template.created_from_workflow_version),
-      statusLabels: [formatCatalogGapSummary(normalizedMissingToolIds)],
+      statusLabels: [
+        formatCatalogGapSummary(normalizedMissingToolIds),
+        legacyAuthStatusLabel
+      ],
       archived: template.archived
     }),
     focusTemplateId: null,
@@ -945,12 +986,52 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
     entryKey: sourceWorkflowLink ? "workflowLibrary" : undefined,
     entryOverride: sourceWorkflowLink
       ? {
-          href: appendWorkflowLibraryViewState(sourceWorkflowLink.href, {
-            definitionIssue: "missing_tool"
-          }),
+          href:
+            workflowGovernanceHandoff?.workflowCatalogGapHref ??
+            workflowGovernanceHandoff?.workflowGovernanceHref ??
+            appendWorkflowLibraryViewState(sourceWorkflowLink.href, {
+              definitionIssue: "missing_tool"
+            }),
           label: sourceWorkflowLink.label
         }
       : undefined
+  };
+}
+
+function buildWorkspaceStarterLegacyAuthSnapshot(
+  workflowSummary: WorkflowListItem
+): WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null {
+  const legacyAuthGovernance = workflowSummary.legacy_auth_governance;
+  if (!legacyAuthGovernance || legacyAuthGovernance.binding_count <= 0) {
+    return null;
+  }
+
+  return {
+    generated_at: "",
+    workflow_count: 1,
+    binding_count: legacyAuthGovernance.binding_count,
+    summary: {
+      draft_candidate_count: legacyAuthGovernance.draft_candidate_count,
+      published_blocker_count: legacyAuthGovernance.published_blocker_count,
+      offline_inventory_count: legacyAuthGovernance.offline_inventory_count
+    },
+    checklist: [],
+    workflows: [
+      {
+        workflow_id: workflowSummary.id,
+        workflow_name: workflowSummary.name,
+        binding_count: legacyAuthGovernance.binding_count,
+        draft_candidate_count: legacyAuthGovernance.draft_candidate_count,
+        published_blocker_count: legacyAuthGovernance.published_blocker_count,
+        offline_inventory_count: legacyAuthGovernance.offline_inventory_count,
+        tool_governance: workflowSummary.tool_governance
+      }
+    ],
+    buckets: {
+      draft_candidates: [],
+      published_blockers: [],
+      offline_inventory: []
+    }
   };
 }
 
@@ -1204,8 +1285,10 @@ function resolveWorkspaceStarterBulkResultCreateWorkflowActionLabel(
 function buildWorkspaceStarterBulkResultMissingToolRecommendedNextStep(
   item: WorkspaceStarterBulkReceiptItem,
   {
+    sourceWorkflowSummariesById = null,
     workspaceStarterGovernanceQueryScope = null
   }: {
+    sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
     workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   } = {}
 ): WorkspaceStarterGovernanceRecommendedNextStep | null {
@@ -1220,6 +1303,7 @@ function buildWorkspaceStarterBulkResultMissingToolRecommendedNextStep(
       source_governance: null
     },
     missingToolIds,
+    sourceWorkflowSummariesById,
     workspaceStarterGovernanceQueryScope
   });
 
@@ -1247,8 +1331,10 @@ export function buildWorkspaceStarterBulkResultRecommendedNextStep(
     "action" | "receipt_items" | "follow_up_template_ids" | "outcome_explanation"
   >,
   {
+    sourceWorkflowSummariesById = null,
     workspaceStarterGovernanceQueryScope = null
   }: {
+    sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
     workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   } = {}
 ): WorkspaceStarterGovernanceRecommendedNextStep | null {
@@ -1286,6 +1372,7 @@ export function buildWorkspaceStarterBulkResultRecommendedNextStep(
 
   const missingToolNextStep =
     buildWorkspaceStarterBulkResultMissingToolRecommendedNextStep(primaryReceiptItem, {
+      sourceWorkflowSummariesById,
       workspaceStarterGovernanceQueryScope
     });
   if (missingToolNextStep) {
@@ -1362,12 +1449,15 @@ export function buildWorkspaceStarterBulkResultRecommendedNextStep(
 export function buildWorkspaceStarterBulkResultSurface(
   result: WorkspaceStarterBulkActionResult,
   {
+    sourceWorkflowSummariesById = null,
     workspaceStarterGovernanceQueryScope = null
   }: {
+    sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
     workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   } = {}
 ): WorkspaceStarterBulkResultSurface {
   const recommendedNextStep = buildWorkspaceStarterBulkResultRecommendedNextStep(result, {
+    sourceWorkflowSummariesById,
     workspaceStarterGovernanceQueryScope
   });
   const primarySignal =
