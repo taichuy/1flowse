@@ -39,6 +39,7 @@ import {
 import {
   buildOperatorTraceSliceLinkSurface
 } from "@/lib/operator-follow-up-presenters";
+import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
 import {
   formatMetricSummary,
   listExecutionFocusRuntimeFactBadges
@@ -224,8 +225,27 @@ export function WorkflowPublishInvocationEntryCard({
   const runFollowUpEvidenceChips = runFollowUpSample
     ? listPublishedInvocationRunFollowUpEvidenceChips(runFollowUpSample)
     : [];
-  const runFollowUpSampleWorkflowGovernanceHandoff =
-    runFollowUpSample?.workflow_governance_handoff ?? null;
+  const runFollowUpSampleWorkflowDetailHref = runFollowUpSample?.workflow_id
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+          workflowId: runFollowUpSample.workflow_id,
+          viewState: workspaceStarterGovernanceQueryScope,
+          variant: "editor"
+        }).href
+      : buildWorkflowDetailHrefFromPublishActivityCurrentHref(
+          runFollowUpSample.workflow_id,
+          detailHref
+        )
+    : null;
+  const runFollowUpSampleWorkflowGovernanceHandoff = runFollowUpSample
+    ? buildWorkflowGovernanceHandoff({
+        workflowId: runFollowUpSample.workflow_id,
+        workflowDetailHref: runFollowUpSampleWorkflowDetailHref,
+        toolGovernance: runFollowUpSample.tool_governance,
+        legacyAuthGovernance: runFollowUpSample.legacy_auth_governance,
+        workflowCatalogGapDetail: runFollowUpSample.workflow_catalog_gap_detail
+      })
+    : null;
   const recommendedNextStep = buildPublishedInvocationRecommendedNextStep({
     runId: item.run_id ?? null,
     canonicalFollowUp,
