@@ -40,6 +40,24 @@ describe("workflow-governance-handoff", () => {
     ).toBeNull();
   });
 
+  it("keeps demonstrative run labels compact for diagnostics surfaces", () => {
+    expect(
+      buildWorkflowCatalogGapDetail({
+        toolGovernance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        subjectLabel: "这条 run",
+        returnDetail:
+          "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。"
+      })
+    ).toBe(
+      "当前这条 run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。"
+    );
+  });
+
   it("keeps legacy publish auth scope on workflow links without catalog-gap facts", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-legacy-auth",
