@@ -38,6 +38,46 @@ function normalizeText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
+export function buildWorkflowGovernanceDetailHrefFromCurrentHref({
+  workflowId,
+  currentHref
+}: {
+  workflowId?: string | null;
+  currentHref?: string | null;
+}) {
+  const resolvedWorkflowId = normalizeText(workflowId);
+
+  if (!resolvedWorkflowId) {
+    return null;
+  }
+
+  const fallbackHref = buildAuthorFacingWorkflowDetailLinkSurface({
+    workflowId: resolvedWorkflowId,
+    variant: "editor"
+  }).href;
+  const normalizedCurrentHref = normalizeText(currentHref);
+
+  if (!normalizedCurrentHref) {
+    return fallbackHref;
+  }
+
+  try {
+    const currentUrl = new URL(normalizedCurrentHref, "https://7flows.local");
+    const [, currentWorkflowId] = currentUrl.pathname.split("/").filter(Boolean);
+
+    if (currentUrl.pathname.startsWith("/workflows/") && currentWorkflowId === resolvedWorkflowId) {
+      return appendWorkflowLibraryViewState(
+        fallbackHref,
+        readWorkflowLibraryViewState(currentUrl.searchParams)
+      );
+    }
+  } catch {
+    return fallbackHref;
+  }
+
+  return fallbackHref;
+}
+
 function isLegacyAuthGovernanceSnapshot(
   legacyAuthGovernance: WorkflowLegacyAuthGovernanceHandoffInput | null | undefined
 ): legacyAuthGovernance is WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot {
@@ -114,15 +154,25 @@ export function buildWorkflowGovernanceHandoff({
         new URLSearchParams(resolvedWorkflowDetailHref.split("?")[1] ?? "")
       )
     : { definitionIssue: null };
-  const workflowGovernanceViewState: WorkflowLibraryViewState = workflowLibraryViewState.definitionIssue
-    ? workflowLibraryViewState
-    : {
-        definitionIssue: hasWorkflowLegacyPublishAuthIssues(workflowLibraryWorkflow)
-          ? "legacy_publish_auth"
-          : hasWorkflowMissingToolIssues(workflowLibraryWorkflow)
-            ? "missing_tool"
-            : null
-      };
+  const hasLegacyAuthIssues = hasWorkflowLegacyPublishAuthIssues(workflowLibraryWorkflow);
+  const hasMissingToolIssues = hasWorkflowMissingToolIssues(workflowLibraryWorkflow);
+  const workflowGovernanceDefinitionIssue =
+    workflowLibraryViewState.definitionIssue === "legacy_publish_auth"
+      ? "legacy_publish_auth"
+      : workflowLibraryViewState.definitionIssue === "missing_tool" &&
+          hasLegacyAuthIssues &&
+          hasMissingToolIssues
+        ? "legacy_publish_auth"
+        : workflowLibraryViewState.definitionIssue ??
+          (hasLegacyAuthIssues
+            ? "legacy_publish_auth"
+            : hasMissingToolIssues
+              ? "missing_tool"
+              : null);
+  const workflowGovernanceViewState: WorkflowLibraryViewState = {
+    ...workflowLibraryViewState,
+    definitionIssue: workflowGovernanceDefinitionIssue
+  };
   const hasWorkflowGovernanceIssues =
     workflowGovernanceViewState.definitionIssue !== null;
   const workflowGovernanceHref = resolvedWorkflowDetailHref
