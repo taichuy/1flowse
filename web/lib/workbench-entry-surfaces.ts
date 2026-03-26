@@ -260,6 +260,20 @@ export function buildAuthorFacingWorkflowDetailLinkSurface({
   };
 }
 
+export function buildAuthorFacingWorkflowFollowUpDetailHref(workflowId: string): string {
+  const workflowDetailHref = buildAuthorFacingWorkflowDetailLinkSurface({
+    workflowId,
+    variant: "editor"
+  }).href;
+  const [pathname, query = ""] = workflowDetailHref.split("?");
+  const searchParams = new URLSearchParams(query);
+
+  searchParams.set("needs_follow_up", "true");
+
+  const normalizedQuery = searchParams.toString();
+  return normalizedQuery ? `${pathname}?${normalizedQuery}` : pathname;
+}
+
 export function buildWorkflowLibrarySurfaceCopy({
   createWorkflowHref = "/workflows/new",
   workspaceStarterLibraryHref = "/workspace-starters"

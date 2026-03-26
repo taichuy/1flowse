@@ -382,6 +382,18 @@ export function WorkflowPublishInvocationDetailPanel({
               {runFollowUpSamples.map((sample) => {
                 const samplePrimarySignal = sample.explanation?.primary_signal?.trim() || null;
                 const sampleFollowUp = sample.explanation?.follow_up?.trim() || null;
+                const sampleWorkflowDetailLink = sample.workflow_id
+                  ? workspaceStarterGovernanceQueryScope
+                    ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                        workflowId: sample.workflow_id,
+                        viewState: workspaceStarterGovernanceQueryScope,
+                        variant: "editor"
+                      })
+                    : buildAuthorFacingWorkflowDetailLinkSurface({
+                        workflowId: sample.workflow_id,
+                        variant: "editor"
+                      })
+                  : null;
                 const sampleWorkflowGovernanceHandoff =
                   buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(sample, {
                     workflowDetailHref: sampleWorkflowDetailLink?.href ?? null
@@ -484,6 +496,7 @@ export function WorkflowPublishInvocationDetailPanel({
                         workflowCatalogGapHref={sampleWorkflowGovernanceHandoff.workflowCatalogGapHref}
                         workflowGovernanceHref={sampleWorkflowGovernanceHandoff.workflowGovernanceHref}
                         legacyAuthHandoff={sampleWorkflowGovernanceHandoff.legacyAuthHandoff}
+                        currentHref={currentHref}
                       />
                     ) : null}
                     {sampleReadinessNode ? (

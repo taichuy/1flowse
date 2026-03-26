@@ -459,6 +459,7 @@ export function InlineOperatorActionFeedback({
             workflowCatalogGapHref={callbackWaitingSummaryProps?.workflowCatalogGapHref}
             workflowGovernanceHref={callbackWaitingSummaryProps?.workflowGovernanceHref}
             legacyAuthHandoff={standaloneWorkflowGovernanceLegacyAuthHandoff}
+            currentHref={currentHref ?? callbackWaitingSummaryProps?.currentHref ?? null}
           />
 
           <OperatorFocusEvidenceCard

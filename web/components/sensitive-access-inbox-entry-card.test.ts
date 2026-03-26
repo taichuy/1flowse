@@ -651,6 +651,7 @@ describe("SensitiveAccessInboxEntryCard", () => {
     expect(html).toContain("publish auth blocker");
     expect(html).toContain("当前 sensitive access inbox entry 对应的 workflow 版本仍有 catalog gap");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
     expect(html).not.toContain("Callback waiting follow-up");
   });
 

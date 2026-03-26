@@ -319,6 +319,8 @@ describe("SensitiveAccessInboxPage", () => {
     expect(html).toContain("Demo Workflow");
     expect(html).toContain("Publish auth contract");
     expect(html).toContain("supported api_key / internal");
-    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain(
+      'href="/workflows/workflow-1?needs_follow_up=true&amp;definition_issue=missing_tool"'
+    );
   });
 });

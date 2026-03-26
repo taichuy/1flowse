@@ -129,6 +129,7 @@ export function OperatorRunSampleCardList({
               workflowCatalogGapHref={resolvedWorkflowCatalogGapHref}
               workflowGovernanceHref={resolvedWorkflowGovernanceHref}
               legacyAuthHandoff={resolvedLegacyAuthHandoff}
+              currentHref={currentHref ?? callbackWaitingSummaryProps?.currentHref ?? null}
             />
           ) : null}
 

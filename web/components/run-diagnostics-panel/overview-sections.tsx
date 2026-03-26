@@ -7,8 +7,10 @@ import type {
   SandboxReadinessCheck
 } from "@/lib/get-system-overview";
 import type { RunTraceQuery } from "@/lib/get-run-trace";
-import { formatCatalogGapToolSummary } from "@/lib/workflow-definition-governance";
-import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 
 import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
 import { PayloadCard, countErroredNodes } from "@/components/run-diagnostics-panel/shared";
@@ -35,12 +37,12 @@ export function RunDiagnosticsOverviewSections({
   sandboxReadiness = null,
   workflowDetailHref = null
 }: RunDiagnosticsOverviewSectionsProps) {
-  const workflowCatalogGapToolCopy = formatCatalogGapToolSummary(
-    run.tool_governance?.missing_tool_ids ?? []
-  );
-  const workflowCatalogGapDetail = workflowCatalogGapToolCopy
-    ? `当前这条 run 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 run 的 execution focus、node timeline 与 trace。`
-    : "当前这条 run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 run 的 execution focus、node timeline 与 trace。";
+  const workflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
+    toolGovernance: run.tool_governance ?? null,
+    subjectLabel: "这条 run",
+    returnDetail:
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 run 的 execution focus、node timeline 与 trace。"
+  });
   const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: run.workflow_id,
     workflowDetailHref,

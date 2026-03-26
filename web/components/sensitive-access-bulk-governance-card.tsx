@@ -253,6 +253,7 @@ export function SensitiveAccessBulkGovernanceCard({
                     ? null
                     : workflowGovernanceSummary?.legacyAuthHandoff ?? null
                 }
+                currentHref={currentHref}
               />
             </div>
           ) : null}

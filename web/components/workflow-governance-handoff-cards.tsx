@@ -5,6 +5,7 @@ import {
   buildLegacyPublishAuthGovernanceSurfaceCopy,
   type LegacyPublishAuthWorkflowHandoff
 } from "@/lib/legacy-publish-auth-governance-presenters";
+import { isCurrentWorkbenchHref } from "@/lib/workbench-entry-links";
 
 type WorkflowGovernanceHandoffCardsProps = {
   workflowCatalogGapSummary?: string | null;
@@ -13,7 +14,32 @@ type WorkflowGovernanceHandoffCardsProps = {
   workflowGovernanceHref?: string | null;
   legacyAuthHandoff?: LegacyPublishAuthWorkflowHandoff | null;
   cardClassName?: string;
+  currentHref?: string | null;
 };
+
+function renderWorkflowGovernanceLink({
+  href,
+  label,
+  currentHref
+}: {
+  href?: string | null;
+  label: string;
+  currentHref?: string | null;
+}) {
+  if (!href) {
+    return null;
+  }
+
+  return isCurrentWorkbenchHref(href, currentHref) ? (
+    <span aria-current="page" className="inline-link">
+      {label}
+    </span>
+  ) : (
+    <Link className="inline-link" href={href}>
+      {label}
+    </Link>
+  );
+}
 
 export function WorkflowGovernanceHandoffCards({
   workflowCatalogGapSummary = null,
@@ -21,7 +47,8 @@ export function WorkflowGovernanceHandoffCards({
   workflowCatalogGapHref = null,
   workflowGovernanceHref = null,
   legacyAuthHandoff = null,
-  cardClassName = "entry-card compact-card"
+  cardClassName = "entry-card compact-card",
+  currentHref = null
 }: WorkflowGovernanceHandoffCardsProps) {
   const legacyAuthSurfaceCopy = buildLegacyPublishAuthGovernanceSurfaceCopy();
 
@@ -40,14 +67,11 @@ export function WorkflowGovernanceHandoffCards({
           {workflowCatalogGapDetail ? (
             <p className="section-copy entry-copy">{workflowCatalogGapDetail}</p>
           ) : null}
-          {workflowCatalogGapHref ?? workflowGovernanceHref ? (
-            <Link
-              className="inline-link"
-              href={workflowCatalogGapHref ?? workflowGovernanceHref ?? "#"}
-            >
-              回到 workflow 编辑器处理 catalog gap
-            </Link>
-          ) : null}
+          {renderWorkflowGovernanceLink({
+            href: workflowCatalogGapHref ?? workflowGovernanceHref,
+            label: "回到 workflow 编辑器处理 catalog gap",
+            currentHref
+          })}
         </div>
       ) : null}
 
@@ -59,11 +83,11 @@ export function WorkflowGovernanceHandoffCards({
             <span className="event-chip">{legacyAuthHandoff.statusChipLabel}</span>
           </div>
           <p className="section-copy entry-copy">{legacyAuthHandoff.detail}</p>
-          {workflowGovernanceHref ? (
-            <Link className="inline-link" href={workflowGovernanceHref}>
-              回到 workflow 编辑器处理 publish auth contract
-            </Link>
-          ) : null}
+          {renderWorkflowGovernanceLink({
+            href: workflowGovernanceHref,
+            label: "回到 workflow 编辑器处理 publish auth contract",
+            currentHref
+          })}
         </div>
       ) : null}
     </>

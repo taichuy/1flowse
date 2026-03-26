@@ -110,6 +110,7 @@ export function CrossEntryRiskDigestPanel({
         }
         legacyAuthHandoff={digest.operatorWorkflowGovernanceHandoff?.legacyAuthHandoff ?? null}
         cardClassName="payload-card compact-card"
+        currentHref={currentHref}
       />
 
       <div className="activity-list">

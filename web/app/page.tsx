@@ -31,6 +31,7 @@ import {
   buildRuntimeActivityEventTypeTraceLinkSurface
 } from "@/lib/runtime-activity-trace-links";
 import {
+  buildAuthorFacingWorkflowFollowUpDetailHref,
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
 } from "@/lib/workbench-entry-surfaces";
@@ -89,7 +90,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     recentEvents,
     sensitiveAccessSummary: sensitiveAccessInbox.summary,
     channels: sensitiveAccessInbox.channels,
-    sensitiveAccessEntries: sensitiveAccessInbox.entries
+    sensitiveAccessEntries: sensitiveAccessInbox.entries,
+    resolveWorkflowDetailHref: (workflowId) =>
+      buildAuthorFacingWorkflowFollowUpDetailHref(workflowId)
   });
   const selectedWorkflowId = requestedWorkflowId || workflows[0]?.id || "";
   const selectedWorkflow = await getWorkflowDetail(selectedWorkflowId);

@@ -239,7 +239,9 @@ describe("HomePage", () => {
       })
     );
 
-    expect(html).toContain('href="/workflows/workflow-home-gap?definition_issue=missing_tool"');
+    expect(html).toContain(
+      'href="/workflows/workflow-home-gap?needs_follow_up=true&amp;definition_issue=missing_tool"'
+    );
   });
 
   it("surfaces workflow catalog-gap handoff on homepage recent runs", async () => {
@@ -296,7 +298,9 @@ describe("HomePage", () => {
     expect(html).toContain(
       "当前 run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
     );
-    expect(html).toContain('/workflows/workflow-home-gap-1?definition_issue=missing_tool');
+    expect(html).toContain(
+      '/workflows/workflow-home-gap-1?needs_follow_up=true&amp;definition_issue=missing_tool'
+    );
   });
 
   it("surfaces workflow legacy-auth handoff on homepage recent runs", async () => {
@@ -355,7 +359,7 @@ describe("HomePage", () => {
       "当前 workflow 仍有 0 条 draft cleanup、1 条 published blocker、0 条 offline inventory。Publish auth contract：supported api_key / internal；legacy token。"
     );
     expect(html).toContain(
-      'href="/workflows/workflow-home-legacy-1?definition_issue=legacy_publish_auth"'
+      'href="/workflows/workflow-home-legacy-1?needs_follow_up=true&amp;definition_issue=legacy_publish_auth"'
     );
   });
 

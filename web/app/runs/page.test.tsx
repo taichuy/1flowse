@@ -337,7 +337,81 @@ describe("RunsPage", () => {
       })
     );
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
-      buildSensitiveAccessInboxSnapshotFixture()
+      buildSensitiveAccessInboxSnapshotFixture({
+        summary: {
+          ticket_count: 1,
+          pending_ticket_count: 1,
+          waiting_ticket_count: 0,
+          failed_notification_count: 0,
+          pending_notification_count: 0,
+          affected_run_count: 1,
+          affected_workflow_count: 1
+        },
+        entries: [
+          buildSensitiveAccessInboxEntryFixture({
+            ticket: buildSensitiveAccessTicketFixture({
+              id: "ticket-governed-1",
+              access_request_id: "request-governed-1",
+              run_id: "run-governed",
+              node_run_id: "node-governed",
+              status: "pending",
+              waiting_status: "waiting",
+              created_at: "2026-03-22T10:00:00Z"
+            }),
+            request: buildSensitiveAccessRequestFixture({
+              id: "request-governed-1",
+              run_id: "run-governed",
+              node_run_id: "node-governed",
+              resource_id: "resource-governed",
+              created_at: "2026-03-22T09:59:00Z"
+            }),
+            resource: buildSensitiveAccessResourceFixture({
+              id: "resource-governed",
+              label: "Governed secret",
+              sensitivity_level: "L3",
+              source: "credential",
+              created_at: "2026-03-22T09:00:00Z",
+              updated_at: "2026-03-22T09:30:00Z"
+            }),
+            runSnapshot: {
+              workflowId: "workflow-governed"
+            },
+            runFollowUp: {
+              affectedRunCount: 1,
+              sampledRunCount: 1,
+              waitingRunCount: 1,
+              runningRunCount: 0,
+              succeededRunCount: 0,
+              failedRunCount: 0,
+              unknownRunCount: 0,
+              recommendedAction: null,
+              sampledRuns: [
+                {
+                  runId: "run-governed",
+                  snapshot: {
+                    workflowId: "workflow-governed"
+                  },
+                  callbackTickets: [],
+                  sensitiveAccessEntries: [],
+                  toolGovernance: {
+                    referenced_tool_ids: ["native.catalog-gap"],
+                    missing_tool_ids: ["native.catalog-gap"],
+                    governed_tool_count: 0,
+                    strong_isolation_tool_count: 0
+                  },
+                  legacyAuthGovernance:
+                    buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+                      binding: {
+                        workflow_id: "workflow-governed",
+                        workflow_name: "Governed workflow"
+                      }
+                    })
+                }
+              ]
+            }
+          })
+        ]
+      })
     );
 
     const html = renderToStaticMarkup(
@@ -362,6 +436,12 @@ describe("RunsPage", () => {
     );
     expect(html).toContain(
       '/runs/run-1?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;event_type=callback_waiting&amp;node_run_id=node-run-1#run-diagnostics-execution-timeline'
+    );
+    expect(html).toContain(
+      '/workflows/workflow-governed?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth'
+    );
+    expect(html).toContain(
+      '/workflows/workflow-governed?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=missing_tool'
     );
     expect(html).toContain("callback pending");
   });

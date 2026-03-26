@@ -74,7 +74,9 @@ export default async function RunsPage({ searchParams }: RunsPageProps = {}) {
     recentEvents,
     sensitiveAccessSummary: sensitiveAccessInbox.summary,
     channels: sensitiveAccessInbox.channels,
-    sensitiveAccessEntries: sensitiveAccessInbox.entries
+    sensitiveAccessEntries: sensitiveAccessInbox.entries,
+    resolveWorkflowDetailHref: (workflowId) =>
+      buildWorkflowEditorHrefFromWorkspaceStarterViewState(workflowId, workspaceStarterViewState)
   });
   const recommendedNextStep = buildRunLibraryRecommendedNextStep({
     runtimeActivity: overview.runtime_activity,

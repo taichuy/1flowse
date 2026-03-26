@@ -107,6 +107,34 @@ describe("workflow-governance-handoff", () => {
     expect(handoff.legacyAuthHandoff?.statusChipLabel).toBe("publish auth blocker");
   });
 
+  it("preserves full workspace-starter scope on both governance links", () => {
+    const handoff = buildWorkflowGovernanceHandoff({
+      workflowId: "workflow-mixed",
+      workflowDetailHref:
+        "/workflows/workflow-mixed?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+      toolGovernance: {
+        referenced_tool_ids: ["native.catalog-gap"],
+        missing_tool_ids: ["native.catalog-gap"],
+        governed_tool_count: 1,
+        strong_isolation_tool_count: 0
+      },
+      legacyAuthGovernance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+        binding: {
+          workflow_id: "workflow-mixed",
+          workflow_name: "Mixed workflow"
+        }
+      }),
+      workflowCatalogGapDetail: "当前 workflow 仍有 catalog gap。"
+    });
+
+    expect(handoff.workflowGovernanceHref).toBe(
+      "/workflows/workflow-mixed?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=legacy_publish_auth"
+    );
+    expect(handoff.workflowCatalogGapHref).toBe(
+      "/workflows/workflow-mixed?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool"
+    );
+  });
+
   it("upgrades an explicit missing-tool scope when legacy auth handoff also exists", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-mixed",

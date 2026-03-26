@@ -158,7 +158,14 @@ export default async function WorkflowsPage({
     recentEvents: systemOverview.runtime_activity.recent_events,
     sensitiveAccessSummary: sensitiveAccessInbox.summary,
     channels: sensitiveAccessInbox.channels,
-    sensitiveAccessEntries: sensitiveAccessInbox.entries
+    sensitiveAccessEntries: sensitiveAccessInbox.entries,
+    resolveWorkflowDetailHref: (workflowId) =>
+      buildFilteredWorkflowDetailLink({
+        workflowId,
+        viewState: workspaceStarterViewState,
+        workflowLibraryViewState: { definitionIssue: null },
+        variant: "editor"
+      }).href
   });
   const legacyAuthWorkflowDetailHrefsById = Object.fromEntries(
     (legacyAuthGovernanceSnapshot?.workflows ?? []).map((workflow) => [

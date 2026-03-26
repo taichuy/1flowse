@@ -16,6 +16,7 @@ import {
   buildPublishedInvocationCallbackDrilldownSurfaceCopy,
   buildPublishedInvocationCallbackTicketSurface,
   buildPublishedInvocationInboxHref,
+  buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff,
   resolvePublishedInvocationRunFollowUpSampleView
 } from "@/lib/published-invocation-presenters";
 import { buildWorkflowDetailHrefFromPublishActivityCurrentHref } from "@/lib/workflow-publish-activity-query";
@@ -89,8 +90,23 @@ export function WorkflowPublishInvocationCallbackSection({
           }).href
         : buildWorkflowDetailHrefFromPublishActivityCurrentHref(workflowId, currentHref)
   });
-  const runFollowUpSampleWorkflowGovernanceHandoff =
-    runFollowUpSample?.workflow_governance_handoff ?? null;
+  const runFollowUpSampleWorkflowDetailHref = runFollowUpSample?.workflow_id
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+          workflowId: runFollowUpSample.workflow_id,
+          viewState: workspaceStarterGovernanceQueryScope,
+          variant: "editor"
+        }).href
+      : buildWorkflowDetailHrefFromPublishActivityCurrentHref(
+          runFollowUpSample.workflow_id,
+          currentHref
+        )
+    : null;
+  const runFollowUpSampleWorkflowGovernanceHandoff = runFollowUpSample
+    ? buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(runFollowUpSample, {
+        workflowDetailHref: runFollowUpSampleWorkflowDetailHref
+      })
+    : null;
   const focusEvidenceDrilldownLink = buildOperatorTraceSliceLinkSurface({
     runId: invocation.run_id ?? null,
     currentHref,

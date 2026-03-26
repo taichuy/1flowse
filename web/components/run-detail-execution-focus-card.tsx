@@ -225,6 +225,7 @@ export function RunDetailExecutionFocusCard({
               workflowCatalogGapHref={focus.workflowCatalogGapHref}
               workflowGovernanceHref={focus.workflowGovernanceHref}
               legacyAuthHandoff={focus.legacyAuthHandoff}
+              currentHref={currentRunHref}
             />
 
             <OperatorFocusEvidenceCard

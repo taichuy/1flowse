@@ -27,9 +27,6 @@ import {
   buildWorkflowGovernanceHandoff
 } from "@/lib/workflow-governance-handoff";
 import {
-  formatCatalogGapToolSummary
-} from "@/lib/workflow-definition-governance";
-import {
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface
 } from "@/lib/workbench-entry-surfaces";
@@ -143,18 +140,18 @@ export function WorkflowRunOverlayPanel({
         runHref: resolveRunDetailHref(run.id)
       })
     : null;
-  const workflowCatalogGapToolCopy = formatCatalogGapToolSummary(
-    run?.tool_governance?.missing_tool_ids ?? []
-  );
   const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: run?.workflow_id ?? null,
     workflowDetailHref: baseWorkflowDetailHref,
     toolGovernance: run?.tool_governance ?? null,
     legacyAuthGovernance: run?.legacy_auth_governance ?? null,
     workflowCatalogGapDetail: run
-      ? workflowCatalogGapToolCopy
-        ? `当前这条 run 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。`
-        : "当前这条 run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。"
+      ? buildWorkflowCatalogGapDetail({
+          toolGovernance: run.tool_governance ?? null,
+          subjectLabel: "这条 run",
+          returnDetail:
+            "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 node timeline 与 trace。"
+        })
       : null
   });
 

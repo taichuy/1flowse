@@ -64,9 +64,14 @@ export function buildWorkflowCatalogGapDetail({
     return null;
   }
 
+  const normalizedSubjectLabel = subjectLabel.trim();
+  const renderedSubjectLabel = /^[这该此本]/.test(normalizedSubjectLabel)
+    ? normalizedSubjectLabel
+    : ` ${normalizedSubjectLabel}`;
+
   return workflowCatalogGapToolCopy
-    ? `当前 ${subjectLabel} 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；${returnDetail}`
-    : `当前 ${subjectLabel} 对应的 workflow 版本仍有 catalog gap；${returnDetail}`;
+    ? `当前${renderedSubjectLabel} 对应的 workflow 版本仍有 catalog gap（${workflowCatalogGapToolCopy}）；${returnDetail}`
+    : `当前${renderedSubjectLabel} 对应的 workflow 版本仍有 catalog gap；${returnDetail}`;
 }
 
 export function buildWorkflowGovernanceHandoff({

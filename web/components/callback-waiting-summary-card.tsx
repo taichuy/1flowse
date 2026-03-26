@@ -481,6 +481,7 @@ export function CallbackWaitingSummaryCard({
         workflowCatalogGapHref={workflowCatalogGapHref}
         workflowGovernanceHref={workflowGovernanceHref}
         legacyAuthHandoff={legacyAuthHandoff}
+        currentHref={currentHref}
       />
       {focusExecutionFactBadges.length ? (
         <div className="tool-badge-row">

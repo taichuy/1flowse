@@ -37,7 +37,10 @@ import {
 } from "@/lib/get-sensitive-access";
 import { buildSensitiveAccessInboxRecommendedNextStep } from "@/lib/operator-workbench-next-step";
 import { buildSensitiveAccessInboxLegacyAuthGovernanceSnapshot } from "@/lib/sensitive-access-legacy-auth-governance";
-import { buildSensitiveAccessInboxSurfaceCopy } from "@/lib/workbench-entry-surfaces";
+import {
+  buildAuthorFacingWorkflowFollowUpDetailHref,
+  buildSensitiveAccessInboxSurfaceCopy
+} from "@/lib/workbench-entry-surfaces";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { buildSensitiveAccessInboxHref } from "@/lib/sensitive-access-links";
 
@@ -157,7 +160,9 @@ export default async function SensitiveAccessInboxPage({
     recentEvents: systemOverview.runtime_activity.recent_events,
     sensitiveAccessSummary: snapshot.summary,
     channels: snapshot.channels,
-    sensitiveAccessEntries: snapshot.entries
+    sensitiveAccessEntries: snapshot.entries,
+    resolveWorkflowDetailHref: (workflowId) =>
+      buildAuthorFacingWorkflowFollowUpDetailHref(workflowId)
   });
   const currentInboxHref = buildSensitiveAccessInboxHref({
     status: filters.status,

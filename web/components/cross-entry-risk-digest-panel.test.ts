@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
+import { buildLegacyPublishAuthWorkflowHandoff } from "@/lib/legacy-publish-auth-governance-presenters";
 import type { CrossEntryRiskDigest } from "@/lib/cross-entry-risk-digest";
+import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 Object.assign(globalThis, { React });
 
@@ -86,13 +88,22 @@ function buildDigest(): CrossEntryRiskDigest {
 describe("CrossEntryRiskDigestPanel", () => {
   it("renders operator workflow governance handoff cards when digest exposes them", () => {
     const digest = buildDigest();
+    const legacyAuthGovernance = buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+      binding: {
+        workflow_id: "workflow-governed",
+        workflow_name: "Governed workflow"
+      }
+    });
     digest.operatorWorkflowGovernanceHandoff = {
       workflowId: "workflow-governed",
       workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
       workflowCatalogGapDetail: "当前 operator backlog 对应的 workflow 仍有 catalog gap。",
       workflowCatalogGapHref: "/workflows/workflow-governed?definition_issue=missing_tool",
       workflowGovernanceHref: "/workflows/workflow-governed?definition_issue=legacy_publish_auth",
-      legacyAuthHandoff: null
+      legacyAuthHandoff: buildLegacyPublishAuthWorkflowHandoff(
+        legacyAuthGovernance,
+        "workflow-governed"
+      )
     };
 
     const html = renderToStaticMarkup(
@@ -103,7 +114,11 @@ describe("CrossEntryRiskDigestPanel", () => {
     );
 
     expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("Legacy publish auth handoff");
     expect(html).toContain('href="/workflows/workflow-governed?definition_issue=missing_tool"');
+    expect(html).toContain(
+      'href="/workflows/workflow-governed?definition_issue=legacy_publish_auth"'
+    );
     expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
   });
   it("projects canonical CTA links into the primary follow-up and each focus area", () => {
@@ -137,4 +152,29 @@ describe("CrossEntryRiskDigestPanel", () => {
     expect(html).not.toContain('href="/sensitive-access?status=pending"');
     expect(html).toContain('href="/workflows?execution=sandbox"');
   });
+
+  it("drops workflow governance self links when the digest already points at the current workflow handoff", () => {
+    const digest = buildDigest();
+    digest.operatorWorkflowGovernanceHandoff = {
+      workflowId: "workflow-governed",
+      workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+      workflowCatalogGapDetail: "当前 operator backlog 对应的 workflow 仍有 catalog gap。",
+      workflowCatalogGapHref: "/workflows/workflow-governed?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-governed?definition_issue=legacy_publish_auth",
+      legacyAuthHandoff: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(CrossEntryRiskDigestPanel, {
+        digest,
+        intro: "统一展示跨入口 blocker。",
+        currentHref: "/workflows/workflow-governed?definition_issue=missing_tool"
+      })
+    );
+
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain('aria-current="page"');
+    expect(html).not.toContain('href="/workflows/workflow-governed?definition_issue=missing_tool"');
+  });
+
 });
