@@ -171,6 +171,157 @@ process.exit(1);
   }
 });
 
+test('main keeps dependency submission evidence in the step summary when graph visibility checks fail', () => {
+  const repoRoot = createFixtureRepo();
+  const binDir = path.join(repoRoot, 'bin');
+  const gitPath = path.join(binDir, 'git');
+  const ghPath = path.join(binDir, 'gh');
+  const reportPath = path.join(repoRoot, 'dependabot-drift.json');
+  const summaryPath = path.join(repoRoot, 'step-summary.md');
+  const originalPath = process.env.PATH;
+  const scriptPath = path.join(__dirname, 'check-dependabot-drift.js');
+
+  fs.mkdirSync(path.join(repoRoot, '.github', 'workflows'), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'dependency-graph-submission.yml'),
+    'name: Dependency Graph Submission\n',
+    'utf8',
+  );
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(
+    gitPath,
+    `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'ls-files') {
+  process.stdout.write([
+    '.github/workflows/dependency-graph-submission.yml',
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ].join('\n'));
+  process.exit(0);
+}
+if (args[0] === 'config' && args[1] === '--get' && args[2] === 'remote.origin.url') {
+  process.stdout.write('git@github.com:taichuy/7flows.git');
+  process.exit(0);
+}
+if (args[0] === 'symbolic-ref') {
+  process.stdout.write('origin/taichuy_dev');
+  process.exit(0);
+}
+process.stderr.write('unexpected git args: ' + args.join(' '));
+process.exit(1);
+`,
+    'utf8',
+  );
+  fs.writeFileSync(
+    ghPath,
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+
+const args = process.argv.slice(2);
+if (args[0] === 'api' && args[1] === 'graphql') {
+  process.stderr.write('gh: API rate limit exceeded for 127.0.0.1. (HTTP 403)');
+  process.exit(1);
+}
+if (args[0] === 'api' && args[1] === 'repos/taichuy/7flows') {
+  process.stdout.write(JSON.stringify({ security_and_analysis: {} }));
+  process.exit(0);
+}
+if (
+  args[0] === 'api' &&
+  args[1] === 'repos/taichuy/7flows/actions/workflows/dependency-graph-submission.yml/runs?per_page=3&branch=taichuy_dev'
+) {
+  process.stdout.write(
+    JSON.stringify({
+      workflow_runs: [
+        {
+          id: 123,
+          status: 'completed',
+          conclusion: 'failure',
+          event: 'schedule',
+          html_url: 'https://github.com/taichuy/7flows/actions/runs/123',
+          created_at: '2026-03-26T20:00:00.000Z',
+          updated_at: '2026-03-26T20:01:00.000Z',
+        },
+      ],
+    }),
+  );
+  process.exit(0);
+}
+if (args[0] === 'run' && args[1] === 'download' && args[2] === '123') {
+  const targetDir = args[args.indexOf('-D') + 1];
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(targetDir, 'dependency-submission.json'),
+    JSON.stringify({
+      repositoryBlocker: 'Dependency graph disabled in repository settings.',
+      repositoryBlockerEvidence: {
+        kind: 'dependency_graph_disabled',
+        status: 404,
+        rootLabels: ['api', 'web'],
+        message: 'Dependency graph is disabled for this repository.',
+      },
+      roots: [
+        {
+          rootLabel: 'api',
+          status: 'blocked',
+          blockedReason: 'Dependency graph disabled',
+        },
+        {
+          rootLabel: 'web',
+          status: 'submitted',
+          snapshotId: 'snapshot-web',
+        },
+      ],
+      dependencyGraphVisibility: {
+        defaultBranch: 'taichuy_dev',
+        manifestCount: 1,
+        visibleRoots: ['web'],
+        missingRoots: ['api'],
+      },
+    }),
+    'utf8',
+  );
+  process.exit(0);
+}
+process.stderr.write('unexpected gh args: ' + args.join(' '));
+process.exit(1);
+`,
+    'utf8',
+  );
+  fs.chmodSync(gitPath, 0o755);
+  fs.chmodSync(ghPath, 0o755);
+
+  try {
+    execFileSync(process.execPath, [scriptPath, '--report-output', 'dependabot-drift.json', '--allow-platform-state-exit-zero'], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        PATH: `${binDir}${path.delimiter}${originalPath || ''}`,
+        GITHUB_STEP_SUMMARY: summaryPath,
+      },
+      stdio: 'pipe',
+      encoding: 'utf8',
+    });
+
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    const summary = fs.readFileSync(summaryPath, 'utf8');
+
+    assert.equal(report.recommendedActions[0]?.code, 'enable_dependency_graph');
+    assert.match(summary, /Latest dependency submission evidence/);
+    assert.match(summary, /latest run: \[#123\]/);
+    assert.match(summary, /repository blocker API evidence: kind: `dependency_graph_disabled`/);
+    assert.match(summary, /blocked roots: `api`/);
+    assert.match(summary, /submitted roots: `web`（snapshot: `snapshot-web`）/);
+    assert.match(summary, /roots not yet visible: `api`/);
+  } finally {
+    process.env.PATH = originalPath;
+  }
+});
+
 test('buildWorkspaceManifestInventory groups pnpm and uv roots', () => {
   const inventory = buildWorkspaceManifestInventory([
     'api/pyproject.toml',
