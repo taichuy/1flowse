@@ -1,5 +1,9 @@
 import type { WorkflowDefinitionPreflightIssue, WorkflowListItem } from "@/lib/get-workflows";
 
+type WorkflowLegacyAuthGovernanceLike = Pick<
+  WorkflowListItem,
+  "definition_issues" | "legacy_auth_governance"
+>;
 type WorkflowMissingToolGovernanceLike = {
   tool_governance?: WorkflowListItem["tool_governance"] | null;
 };
@@ -17,10 +21,39 @@ export function getWorkflowLegacyPublishAuthIssues(
   return (workflow.definition_issues ?? []).filter(isLegacyPublishAuthModeIssue);
 }
 
+export function getWorkflowLegacyPublishAuthBlockerCount(
+  workflow: WorkflowLegacyAuthGovernanceLike
+): number {
+  const legacyAuthGovernance = workflow.legacy_auth_governance;
+  const publishDraftIssueCount = getWorkflowLegacyPublishAuthIssues(workflow).length;
+
+  return publishDraftIssueCount + (legacyAuthGovernance?.binding_count ?? 0);
+}
+
+export function formatWorkflowLegacyPublishAuthBacklogSummary(
+  workflow: WorkflowLegacyAuthGovernanceLike
+): string | null {
+  const legacyAuthGovernance = workflow.legacy_auth_governance;
+  const publishDraftIssueCount = getWorkflowLegacyPublishAuthIssues(workflow).length;
+
+  if (legacyAuthGovernance && legacyAuthGovernance.binding_count > 0) {
+    const summaryParts = [
+      publishDraftIssueCount > 0 ? `${publishDraftIssueCount} 个当前 publish draft` : null,
+      `${legacyAuthGovernance.draft_candidate_count} 条 draft cleanup`,
+      `${legacyAuthGovernance.published_blocker_count} 条 published blocker`,
+      `${legacyAuthGovernance.offline_inventory_count} 条 offline inventory`
+    ].filter((value): value is string => Boolean(value));
+
+    return summaryParts.join("、");
+  }
+
+  return publishDraftIssueCount > 0 ? `${publishDraftIssueCount} 个 publish draft` : null;
+}
+
 export function hasWorkflowLegacyPublishAuthIssues(
-  workflow: Pick<WorkflowListItem, "definition_issues">
+  workflow: WorkflowLegacyAuthGovernanceLike
 ): boolean {
-  return getWorkflowLegacyPublishAuthIssues(workflow).length > 0;
+  return getWorkflowLegacyPublishAuthBlockerCount(workflow) > 0;
 }
 
 export function hasOnlyLegacyPublishAuthModeIssues(

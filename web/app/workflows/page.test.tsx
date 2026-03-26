@@ -250,14 +250,13 @@ describe("WorkflowsPage", () => {
         version: "1.2.0",
         status: "draft",
         node_count: 5,
-        definition_issues: [
-          {
-            category: "publish_draft",
-            message: "Public Search 当前不能使用 authMode = token。",
-            path: "publish.0.authMode",
-            field: "authMode"
-          }
-        ],
+        definition_issues: [],
+        legacy_auth_governance: {
+          binding_count: 2,
+          draft_candidate_count: 0,
+          published_blocker_count: 1,
+          offline_inventory_count: 1
+        },
         tool_governance: {
           referenced_tool_ids: ["tool-1"],
           missing_tool_ids: [],
@@ -284,10 +283,10 @@ describe("WorkflowsPage", () => {
 
     expect(html).toContain("Publish auth workflows");
     expect(html).toContain("Legacy Auth workflow · publish auth blocker");
-    expect(html).toContain("1 publish auth blocker");
+    expect(html).toContain("2 publish auth blockers");
     expect(html).toContain("publish auth cleanup");
     expect(html).toContain(
-      "优先回到 Legacy Auth workflow 处理 1 个 publish draft：先把 workflow draft endpoint 切回 api_key/internal 并保存"
+      "优先回到 Legacy Auth workflow 处理 0 条 draft cleanup、1 条 published blocker、1 条 offline inventory：先把 workflow draft endpoint 切回 api_key/internal 并保存"
     );
     expect(html).toContain('/workflows/workflow-legacy-auth');
   });
@@ -574,14 +573,13 @@ describe("WorkflowsPage", () => {
         version: "1.2.0",
         status: "draft",
         node_count: 5,
-        definition_issues: [
-          {
-            category: "publish_draft",
-            message: "Public Search 当前不能使用 authMode = token。",
-            path: "publish.0.authMode",
-            field: "authMode"
-          }
-        ],
+        definition_issues: [],
+        legacy_auth_governance: {
+          binding_count: 1,
+          draft_candidate_count: 1,
+          published_blocker_count: 0,
+          offline_inventory_count: 0
+        },
         tool_governance: {
           referenced_tool_ids: ["tool-1"],
           missing_tool_ids: [],

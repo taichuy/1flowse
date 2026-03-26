@@ -13,6 +13,7 @@ export type WorkflowListItem = {
   node_count: number;
   definition_issues?: WorkflowDefinitionPreflightIssue[];
   tool_governance: WorkflowToolGovernanceSummary;
+  legacy_auth_governance?: WorkflowLegacyAuthGovernanceSummary | null;
 };
 
 export type WorkflowToolGovernanceSummary = {
@@ -20,6 +21,13 @@ export type WorkflowToolGovernanceSummary = {
   missing_tool_ids: string[];
   governed_tool_count: number;
   strong_isolation_tool_count: number;
+};
+
+export type WorkflowLegacyAuthGovernanceSummary = {
+  binding_count: number;
+  draft_candidate_count: number;
+  published_blocker_count: number;
+  offline_inventory_count: number;
 };
 
 export type WorkflowNodeItem = {

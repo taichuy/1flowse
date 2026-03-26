@@ -43,7 +43,8 @@ import { formatCountMap } from "@/lib/runtime-presenters";
 import {
   formatCatalogGapResourceSummary,
   formatCatalogGapToolSummary,
-  getWorkflowLegacyPublishAuthIssues
+  formatWorkflowLegacyPublishAuthBacklogSummary,
+  hasWorkflowLegacyPublishAuthIssues
 } from "@/lib/workflow-definition-governance";
 import {
   appendWorkflowLibraryViewStateForWorkflow,
@@ -461,7 +462,7 @@ function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
     governedToolCount += workflow.tool_governance?.governed_tool_count ?? 0;
     strongIsolationToolCount += workflow.tool_governance?.strong_isolation_tool_count ?? 0;
 
-    if (getWorkflowLegacyPublishAuthIssues(workflow).length > 0) {
+    if (hasWorkflowLegacyPublishAuthIssues(workflow)) {
       workflowsWithLegacyPublishAuth.push(workflow);
     }
     if ((workflow.tool_governance?.missing_tool_ids.length ?? 0) > 0) {
@@ -527,15 +528,15 @@ function buildWorkflowLibraryRecommendedNextStep({
       variant: "editor",
       workflowLibraryViewState
     });
-    const publishAuthIssueCount = getWorkflowLegacyPublishAuthIssues(
+    const publishAuthBacklogSummary = formatWorkflowLegacyPublishAuthBacklogSummary(
       workflowLegacyPublishAuth
-    ).length;
+    );
 
     return {
       label: "publish auth cleanup",
       detail:
         `当前 ${summary.workflowLegacyPublishAuthCount} 个 workflow 仍带着 legacy publish auth blocker；` +
-        `优先回到 ${workflowLegacyPublishAuth.name} 处理 ${publishAuthIssueCount} 个 publish draft：${buildLegacyPublishAuthModeFollowUp()}`,
+        `优先回到 ${workflowLegacyPublishAuth.name} 处理 ${publishAuthBacklogSummary ?? "publish auth backlog"}：${buildLegacyPublishAuthModeFollowUp()}`,
       href: workflowLink.href,
       href_label: workflowLink.label
     };

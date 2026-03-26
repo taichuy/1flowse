@@ -187,6 +187,13 @@ class WorkflowToolGovernanceSummary(BaseModel):
     strong_isolation_tool_count: int = Field(default=0, ge=0)
 
 
+class WorkflowLegacyAuthGovernanceSummary(BaseModel):
+    binding_count: int = Field(default=0, ge=0)
+    draft_candidate_count: int = Field(default=0, ge=0)
+    published_blocker_count: int = Field(default=0, ge=0)
+    offline_inventory_count: int = Field(default=0, ge=0)
+
+
 class WorkflowListItem(BaseModel):
     id: str
     name: str
@@ -196,6 +203,7 @@ class WorkflowListItem(BaseModel):
     tool_governance: WorkflowToolGovernanceSummary = Field(
         default_factory=WorkflowToolGovernanceSummary
     )
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary | None = None
     definition_issues: list[WorkflowDefinitionPreflightIssue] = Field(default_factory=list)
 
 

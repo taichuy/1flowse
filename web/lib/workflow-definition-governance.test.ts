@@ -5,8 +5,10 @@ import {
   formatCatalogGapResourceSummary,
   formatCatalogGapSummary,
   formatCatalogGapToolSummary,
+  formatWorkflowLegacyPublishAuthBacklogSummary,
   formatWorkflowMissingToolSummary,
   getToolReferenceMissingToolIds,
+  getWorkflowLegacyPublishAuthBlockerCount,
   getWorkflowLegacyPublishAuthIssues,
   getWorkflowMissingToolIds,
   hasOnlyLegacyPublishAuthModeIssues,
@@ -65,6 +67,24 @@ describe("workflow-definition-governance", () => {
         }
       ])
     ).toBe(false);
+  });
+
+  it("reuses persisted legacy auth backlog when workflow list items already carry governance summary", () => {
+    const workflow = {
+      definition_issues: [],
+      legacy_auth_governance: {
+        binding_count: 2,
+        draft_candidate_count: 0,
+        published_blocker_count: 1,
+        offline_inventory_count: 1
+      }
+    };
+
+    expect(getWorkflowLegacyPublishAuthBlockerCount(workflow)).toBe(2);
+    expect(hasWorkflowLegacyPublishAuthIssues(workflow)).toBe(true);
+    expect(formatWorkflowLegacyPublishAuthBacklogSummary(workflow)).toBe(
+      "0 条 draft cleanup、1 条 published blocker、1 条 offline inventory"
+    );
   });
 
   it("normalizes workflow missing tool ids into a shared catalog-gap summary", () => {

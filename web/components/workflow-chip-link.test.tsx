@@ -55,14 +55,13 @@ describe("WorkflowChipLink", () => {
           status: "draft",
           version: "0.5.0",
           node_count: 2,
-          definition_issues: [
-            {
-              category: "publish_draft",
-              message: "Public Search 当前不能使用 authMode = token。",
-              path: "publish.0.authMode",
-              field: "authMode"
-            }
-          ],
+          definition_issues: [],
+          legacy_auth_governance: {
+            binding_count: 2,
+            draft_candidate_count: 0,
+            published_blocker_count: 1,
+            offline_inventory_count: 1
+          },
           tool_governance: {
             referenced_tool_ids: ["native.catalog-gap"],
             missing_tool_ids: ["native.catalog-gap"],
@@ -73,7 +72,7 @@ describe("WorkflowChipLink", () => {
       })
     );
 
-    expect(html).toContain("1 publish auth blocker");
+    expect(html).toContain("2 publish auth blockers");
     expect(html).toContain("publish auth blocker");
     expect(html).toContain("catalog gap · native.catalog-gap");
   });

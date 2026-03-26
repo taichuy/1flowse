@@ -13,9 +13,14 @@ from app.schemas.run import WorkflowRunListItem
 from app.schemas.workflow import (
     WorkflowDefinitionPreflightIssue,
     WorkflowDetail,
+    WorkflowLegacyAuthGovernanceSummary,
     WorkflowListItem,
     WorkflowToolGovernanceSummary,
     WorkflowVersionItem,
+)
+from app.services.workflow_definition_governance import (
+    count_workflow_nodes,
+    summarize_workflow_definition_tool_governance,
 )
 from app.services.workflow_definitions import (
     CompatibilityAdapterRegistration,
@@ -27,16 +32,14 @@ from app.services.workflow_definitions import (
     build_workflow_tool_reference_index,
     validate_persistable_workflow_definition,
 )
-from app.services.workflow_definition_governance import (
-    count_workflow_nodes,
-    summarize_workflow_definition_tool_governance,
-)
 from app.services.workflow_library import get_workflow_library_service
-
-WorkflowListDefinitionIssueFilter = Literal["legacy_publish_auth", "missing_tool"]
+from app.services.workflow_publish import WorkflowPublishBindingService
 from app.services.workflow_publish_version_references import (
     build_allowed_publish_workflow_versions,
 )
+
+WorkflowListDefinitionIssueFilter = Literal["legacy_publish_auth", "missing_tool"]
+_WORKFLOW_PUBLISH_SERVICE = WorkflowPublishBindingService()
 
 
 def _normalize_datetime(value: datetime | None) -> datetime:
@@ -104,6 +107,7 @@ def serialize_workflow_detail(
     compiled_blueprints: dict[str, WorkflowCompiledBlueprint] | None = None,
     tool_index: dict[str, PluginToolItem] | None = None,
     definition_issues: list[WorkflowDefinitionPreflightIssue] | None = None,
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary | None = None,
 ) -> WorkflowDetail:
     compiled_blueprints = compiled_blueprints or {}
     tool_index = tool_index or {}
@@ -117,6 +121,7 @@ def serialize_workflow_detail(
             workflow.definition,
             tool_index=tool_index,
         ),
+        legacy_auth_governance=legacy_auth_governance,
         definition=workflow.definition,
         definition_issues=definition_issues or [],
         created_at=workflow.created_at,
@@ -137,6 +142,7 @@ def serialize_workflow_list_item(
     tool_index: dict[str, PluginToolItem] | None = None,
     tool_governance: WorkflowToolGovernanceSummary | None = None,
     definition_issues: list[WorkflowDefinitionPreflightIssue] | None = None,
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary | None = None,
 ) -> WorkflowListItem:
     tool_index = tool_index or {}
     tool_governance = tool_governance or summarize_workflow_definition_tool_governance(
@@ -150,8 +156,45 @@ def serialize_workflow_list_item(
         status=workflow.status,
         node_count=count_workflow_nodes(workflow.definition),
         tool_governance=tool_governance,
+        legacy_auth_governance=legacy_auth_governance,
         definition_issues=definition_issues or [],
     )
+
+
+def _serialize_workflow_legacy_auth_governance_summary(
+    *,
+    binding_count: int,
+    draft_candidate_count: int,
+    published_blocker_count: int,
+    offline_inventory_count: int,
+) -> WorkflowLegacyAuthGovernanceSummary:
+    return WorkflowLegacyAuthGovernanceSummary(
+        binding_count=binding_count,
+        draft_candidate_count=draft_candidate_count,
+        published_blocker_count=published_blocker_count,
+        offline_inventory_count=offline_inventory_count,
+    )
+
+
+def load_workflow_legacy_auth_governance_lookup(
+    db: Session,
+    *,
+    workflow_id: str | None = None,
+) -> dict[str, WorkflowLegacyAuthGovernanceSummary]:
+    snapshot = _WORKFLOW_PUBLISH_SERVICE.build_legacy_auth_governance_snapshot(
+        db,
+        workflow_id=workflow_id,
+    )
+    return {
+        item.workflow_id: _serialize_workflow_legacy_auth_governance_summary(
+            binding_count=item.binding_count,
+            draft_candidate_count=item.draft_candidate_count,
+            published_blocker_count=item.published_blocker_count,
+            offline_inventory_count=item.offline_inventory_count,
+        )
+        for item in snapshot.workflows
+        if item.binding_count > 0
+    }
 
 
 def load_workflow_view_tool_index(
@@ -211,12 +254,17 @@ def build_workflow_detail(db: Session, workflow: Workflow) -> WorkflowDetail:
     versions = db.scalars(
         select(WorkflowVersion).where(WorkflowVersion.workflow_id == workflow.id)
     ).all()
+    legacy_auth_governance = load_workflow_legacy_auth_governance_lookup(
+        db,
+        workflow_id=workflow.id,
+    ).get(workflow.id)
     return serialize_workflow_detail(
         workflow,
         sort_workflow_versions(versions),
         load_compiled_blueprint_lookup(db, workflow.id),
         load_workflow_view_tool_index(db),
         build_workflow_definition_issues(db, workflow),
+        legacy_auth_governance=legacy_auth_governance,
     )
 
 
@@ -263,6 +311,7 @@ def build_workflow_definition_issues(
 def _matches_workflow_definition_issue_filter(
     definition_issues: list[WorkflowDefinitionPreflightIssue],
     tool_governance: WorkflowToolGovernanceSummary,
+    legacy_auth_governance: WorkflowLegacyAuthGovernanceSummary | None,
     *,
     definition_issue: WorkflowListDefinitionIssueFilter | None,
 ) -> bool:
@@ -270,6 +319,9 @@ def _matches_workflow_definition_issue_filter(
         return any(
             issue.category == "publish_draft" and issue.field == "authMode"
             for issue in definition_issues
+        ) or (
+            legacy_auth_governance is not None
+            and legacy_auth_governance.binding_count > 0
         )
 
     if definition_issue == "missing_tool":
@@ -291,6 +343,7 @@ def list_workflow_items(
     adapters = build_workflow_adapter_reference_list(db)
     skill_index = build_workflow_skill_reference_index(db)
     skill_reference_ids_index = build_workflow_skill_reference_ids_index(db)
+    legacy_auth_governance_by_workflow_id = load_workflow_legacy_auth_governance_lookup(db)
 
     items: list[WorkflowListItem] = []
     for workflow in workflows:
@@ -298,6 +351,7 @@ def list_workflow_items(
             workflow.definition,
             tool_index=tool_index,
         )
+        legacy_auth_governance = legacy_auth_governance_by_workflow_id.get(workflow.id)
         definition_issues = build_workflow_definition_issues(
             db,
             workflow,
@@ -310,6 +364,7 @@ def list_workflow_items(
         if not _matches_workflow_definition_issue_filter(
             definition_issues,
             tool_governance,
+            legacy_auth_governance,
             definition_issue=definition_issue,
         ):
             continue
@@ -320,6 +375,7 @@ def list_workflow_items(
                 tool_index=tool_index,
                 tool_governance=tool_governance,
                 definition_issues=definition_issues,
+                legacy_auth_governance=legacy_auth_governance,
             )
         )
 

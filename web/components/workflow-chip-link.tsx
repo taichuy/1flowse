@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
+  getWorkflowLegacyPublishAuthBlockerCount,
   formatWorkflowMissingToolSummary,
-  getWorkflowLegacyPublishAuthIssues,
   hasWorkflowMissingToolIssues
 } from "@/lib/workflow-definition-governance";
 
@@ -22,7 +22,7 @@ export function WorkflowChipLink({
   const hasMissingToolIssues = hasWorkflowMissingToolIssues(workflow);
   const governedToolCount = workflow.tool_governance?.governed_tool_count ?? 0;
   const strongIsolationToolCount = workflow.tool_governance?.strong_isolation_tool_count ?? 0;
-  const legacyPublishAuthIssueCount = getWorkflowLegacyPublishAuthIssues(workflow).length;
+  const legacyPublishAuthIssueCount = getWorkflowLegacyPublishAuthBlockerCount(workflow);
 
   return (
     <Link className={`workflow-chip ${selected ? "selected" : ""}`} href={href}>

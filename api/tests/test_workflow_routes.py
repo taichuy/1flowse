@@ -3,7 +3,7 @@
 from fastapi.testclient import TestClient
 
 from app.models.run import NodeRun, Run, RunEvent
-from app.models.workflow import Workflow, WorkflowVersion
+from app.models.workflow import Workflow, WorkflowPublishedEndpoint, WorkflowVersion
 from app.schemas.plugin import PluginToolItem
 from app.schemas.workflow_published_endpoint import WorkflowPublishedEndpointDefinition
 from app.services import workflow_definitions, workflow_library, workflow_views
@@ -658,6 +658,25 @@ def _unsupported_publish_auth_mode_definition() -> dict:
     definition = _valid_publish_definition()
     definition["publish"][0]["authMode"] = "token"
     return definition
+
+
+def _mark_workflow_binding_as_legacy_auth(
+    sqlite_session,
+    workflow_id: str,
+    *,
+    lifecycle_status: str = "draft",
+) -> WorkflowPublishedEndpoint:
+    binding = (
+        sqlite_session.query(WorkflowPublishedEndpoint)
+        .filter(WorkflowPublishedEndpoint.workflow_id == workflow_id)
+        .one()
+    )
+    binding.auth_mode = "token"
+    binding.lifecycle_status = lifecycle_status
+    sqlite_session.add(binding)
+    sqlite_session.commit()
+    sqlite_session.refresh(binding)
+    return binding
 
 
 def test_create_workflow_persists_initial_version(client: TestClient) -> None:
@@ -2584,6 +2603,97 @@ def test_list_workflows_can_filter_legacy_publish_auth_definition_issues(
         and issue.get("field") == "authMode"
         for issue in body[0]["definition_issues"]
     )
+
+
+def test_get_workflow_detail_surfaces_legacy_auth_governance_for_binding_backlog(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={
+            "name": "Legacy Binding Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    _mark_workflow_binding_as_legacy_auth(
+        sqlite_session,
+        workflow_id,
+        lifecycle_status="published",
+    )
+
+    response = client.get(f"/api/workflows/{workflow_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["legacy_auth_governance"] == {
+        "binding_count": 1,
+        "draft_candidate_count": 0,
+        "published_blocker_count": 1,
+        "offline_inventory_count": 0,
+    }
+    assert body["definition_issues"] == []
+
+
+def test_list_workflows_can_filter_legacy_publish_auth_by_definition_or_binding_backlog(
+    client: TestClient,
+    sqlite_session,
+) -> None:
+    draft_issue = client.post(
+        "/api/workflows",
+        json={
+            "name": "Draft Issue Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert draft_issue.status_code == 201
+    draft_issue_workflow_id = draft_issue.json()["id"]
+
+    persisted_binding = client.post(
+        "/api/workflows",
+        json={
+            "name": "Persisted Binding Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert persisted_binding.status_code == 201
+    persisted_binding_workflow_id = persisted_binding.json()["id"]
+
+    clean = client.post(
+        "/api/workflows",
+        json={
+            "name": "Clean Publish Workflow",
+            "definition": _valid_publish_definition(),
+        },
+    )
+    assert clean.status_code == 201
+
+    draft_issue_workflow = sqlite_session.get(Workflow, draft_issue_workflow_id)
+    assert draft_issue_workflow is not None
+    draft_issue_workflow.definition = _unsupported_publish_auth_mode_definition()
+    sqlite_session.add(draft_issue_workflow)
+    sqlite_session.commit()
+
+    _mark_workflow_binding_as_legacy_auth(sqlite_session, persisted_binding_workflow_id)
+
+    response = client.get("/api/workflows?definition_issue=legacy_publish_auth")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body] == [
+        draft_issue_workflow_id,
+        persisted_binding_workflow_id,
+    ]
+    assert body[0]["legacy_auth_governance"] is None
+    assert body[1]["legacy_auth_governance"] == {
+        "binding_count": 1,
+        "draft_candidate_count": 1,
+        "published_blocker_count": 0,
+        "offline_inventory_count": 0,
+    }
 
 
 def test_list_workflows_can_filter_missing_tool_definition_issues(
