@@ -33,6 +33,10 @@ jobs:
       primary_recommended_action_roots_json: ${{ steps.submit.outputs.primary_recommended_action_roots_json }}
       primary_recommended_action_href: ${{ steps.submit.outputs.primary_recommended_action_href }}
       primary_recommended_action_href_label: ${{ steps.submit.outputs.primary_recommended_action_href_label }}
+      primary_recommended_action_manual_only: ${{ steps.submit.outputs.primary_recommended_action_manual_only }}
+      primary_recommended_action_manual_only_reason: ${{ steps.submit.outputs.primary_recommended_action_manual_only_reason }}
+      primary_recommended_action_documentation_href: ${{ steps.submit.outputs.primary_recommended_action_documentation_href }}
+      primary_recommended_action_documentation_href_label: ${{ steps.submit.outputs.primary_recommended_action_documentation_href_label }}
       dependency_graph_setting_status: ${{ steps.submit.outputs.dependency_graph_setting_status }}
       automatic_dependency_submission_setting_status: ${{ steps.submit.outputs.automatic_dependency_submission_setting_status }}
       dependabot_security_updates_status: ${{ steps.submit.outputs.dependabot_security_updates_status }}
@@ -40,6 +44,8 @@ jobs:
       repository_blocker_status: ${{ steps.submit.outputs.repository_blocker_status }}
       repository_blocker_roots_json: ${{ steps.submit.outputs.repository_blocker_roots_json }}
       repository_security_and_analysis_missing_fields_json: ${{ steps.submit.outputs.repository_security_and_analysis_missing_fields_json }}
+      repository_security_and_analysis_manual_verification_required: ${{ steps.submit.outputs.repository_security_and_analysis_manual_verification_required }}
+      repository_security_and_analysis_manual_verification_reason: ${{ steps.submit.outputs.repository_security_and_analysis_manual_verification_reason }}
       repository_security_and_analysis_check_error: ${{ steps.submit.outputs.repository_security_and_analysis_check_error }}
       dependency_graph_visible_roots_json: ${{ steps.submit.outputs.dependency_graph_visible_roots_json }}
       dependency_graph_missing_roots_json: ${{ steps.submit.outputs.dependency_graph_missing_roots_json }}

@@ -15,6 +15,16 @@ const manualVerificationMissingSecurityAndAnalysisFields = [
   'automatic_dependency_submission',
 ];
 
+const dependencyGraphDocsHref =
+  'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph';
+
+const automaticDependencySubmissionDocsHref =
+  'https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/configuring-automatic-dependency-submission-for-your-repository';
+
+function normalizeStringList(values) {
+  return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim()))].sort();
+}
+
 function normalizeRecommendedActions(actions) {
   return (Array.isArray(actions) ? actions : [])
     .map((action) => {
@@ -33,6 +43,22 @@ function normalizeRecommendedActions(actions) {
 
       if (typeof action?.hrefLabel === 'string' && action.hrefLabel.trim()) {
         normalizedAction.hrefLabel = action.hrefLabel.trim();
+      }
+
+      if (typeof action?.documentationHref === 'string' && action.documentationHref.trim()) {
+        normalizedAction.documentationHref = action.documentationHref.trim();
+      }
+
+      if (typeof action?.documentationHrefLabel === 'string' && action.documentationHrefLabel.trim()) {
+        normalizedAction.documentationHrefLabel = action.documentationHrefLabel.trim();
+      }
+
+      if (action?.manualOnly === true) {
+        normalizedAction.manualOnly = true;
+      }
+
+      if (typeof action?.manualOnlyReason === 'string' && action.manualOnlyReason.trim()) {
+        normalizedAction.manualOnlyReason = action.manualOnlyReason.trim();
       }
 
       return normalizedAction;
@@ -80,6 +106,22 @@ function createRecommendedAction(
 
   if (typeof options?.hrefLabel === 'string' && options.hrefLabel.trim()) {
     action.hrefLabel = options.hrefLabel.trim();
+  }
+
+  if (typeof options?.documentationHref === 'string' && options.documentationHref.trim()) {
+    action.documentationHref = options.documentationHref.trim();
+  }
+
+  if (typeof options?.documentationHrefLabel === 'string' && options.documentationHrefLabel.trim()) {
+    action.documentationHrefLabel = options.documentationHrefLabel.trim();
+  }
+
+  if (options?.manualOnly === true) {
+    action.manualOnly = true;
+  }
+
+  if (typeof options?.manualOnlyReason === 'string' && options.manualOnlyReason.trim()) {
+    action.manualOnlyReason = options.manualOnlyReason.trim();
   }
 
   return action;
@@ -145,9 +187,66 @@ function normalizeSecurityAndAnalysisStatus(value) {
   return status || null;
 }
 
+function isNormalizedRepositorySecurityAndAnalysis(securityAndAnalysis) {
+  if (!securityAndAnalysis || typeof securityAndAnalysis !== 'object' || Array.isArray(securityAndAnalysis)) {
+    return false;
+  }
+
+  return (
+    'dependencyGraphStatus' in securityAndAnalysis ||
+    'automaticDependencySubmissionStatus' in securityAndAnalysis ||
+    'dependabotSecurityUpdatesStatus' in securityAndAnalysis ||
+    'availableFields' in securityAndAnalysis ||
+    'missingFields' in securityAndAnalysis ||
+    'manualVerificationRequired' in securityAndAnalysis ||
+    'manualVerificationReason' in securityAndAnalysis
+  );
+}
+
 function normalizeRepositorySecurityAndAnalysis(securityAndAnalysis) {
   if (!securityAndAnalysis || typeof securityAndAnalysis !== 'object') {
     return null;
+  }
+
+  if (isNormalizedRepositorySecurityAndAnalysis(securityAndAnalysis)) {
+    const availableFields = normalizeStringList(securityAndAnalysis.availableFields);
+    const missingFields = normalizeStringList(securityAndAnalysis.missingFields);
+    const manualVerificationRequired =
+      securityAndAnalysis.manualVerificationRequired === true ||
+      manualVerificationMissingSecurityAndAnalysisFields.some((field) => missingFields.includes(field));
+
+    return {
+      checkedAt:
+        typeof securityAndAnalysis.checkedAt === 'string' ? securityAndAnalysis.checkedAt : null,
+      checkError:
+        typeof securityAndAnalysis.checkError === 'string' ? securityAndAnalysis.checkError : null,
+      dependencyGraphStatus:
+        typeof securityAndAnalysis.dependencyGraphStatus === 'string'
+          ? securityAndAnalysis.dependencyGraphStatus.trim() || null
+          : null,
+      automaticDependencySubmissionStatus:
+        typeof securityAndAnalysis.automaticDependencySubmissionStatus === 'string'
+          ? securityAndAnalysis.automaticDependencySubmissionStatus.trim() || null
+          : null,
+      dependabotSecurityUpdatesStatus:
+        typeof securityAndAnalysis.dependabotSecurityUpdatesStatus === 'string'
+          ? securityAndAnalysis.dependabotSecurityUpdatesStatus.trim() || null
+          : null,
+      availableFields,
+      missingFields,
+      manualVerificationRequired,
+      manualVerificationReason:
+        typeof securityAndAnalysis.manualVerificationReason === 'string' &&
+        securityAndAnalysis.manualVerificationReason.trim()
+          ? securityAndAnalysis.manualVerificationReason.trim()
+          : manualVerificationRequired
+            ? 'missing_dependency_graph_fields'
+            : null,
+      raw:
+        securityAndAnalysis.raw && typeof securityAndAnalysis.raw === 'object'
+          ? securityAndAnalysis.raw
+          : {},
+    };
   }
 
   const rawInput =
@@ -232,10 +331,9 @@ function buildRepositorySecurityAndAnalysisMarkdownLines(
   lines.push(
     `- automatic dependency submission: \`${normalized.automaticDependencySubmissionStatus || 'unknown'}\``,
   );
-
-  if (normalized.dependabotSecurityUpdatesStatus) {
-    lines.push(`- dependabot security updates: \`${normalized.dependabotSecurityUpdatesStatus}\``);
-  }
+  lines.push(
+    `- dependabot security updates: \`${normalized.dependabotSecurityUpdatesStatus || 'unknown'}\``,
+  );
 
   if (normalized.availableFields.length > 0) {
     lines.push(
@@ -252,6 +350,10 @@ function buildRepositorySecurityAndAnalysisMarkdownLines(
         .join('、')}`,
     );
 
+    if (normalized.manualVerificationReason) {
+      lines.push(`- manual verification reason: \`${normalized.manualVerificationReason}\``);
+    }
+
     if (
       normalized.missingFields.includes('dependency_graph') ||
       normalized.missingFields.includes('automatic_dependency_submission')
@@ -264,6 +366,9 @@ function buildRepositorySecurityAndAnalysisMarkdownLines(
         lines.push(
           '- 即使 `gh api -X PATCH repos/{owner}/{repo}` 返回成功响应，也不要把这一步当成完成信号；仍需到 `Settings -> Security & analysis` 人工确认，并用新的 submission artifact 复验 blocker 是否消失。',
         );
+        lines.push(
+          `- GitHub 官方文档当前同样只给出仓库设置页入口：[Enabling the dependency graph](${dependencyGraphDocsHref})、[Configuring automatic dependency submission](${automaticDependencySubmissionDocsHref})。`,
+        );
       }
     }
   }
@@ -271,17 +376,30 @@ function buildRepositorySecurityAndAnalysisMarkdownLines(
   return lines;
 }
 
-function buildRecommendedActionsMarkdownLines(actions) {
+function buildRecommendedActionsMarkdownLines(
+  actions,
+  { heading = '### Recommended next steps' } = {},
+) {
   const normalized = dedupeRecommendedActions(actions);
   if (normalized.length === 0) {
     return [];
   }
 
-  const lines = ['### Recommended next steps', ''];
+  const lines = [];
+  if (heading) {
+    lines.push(heading, '');
+  }
   normalized.forEach((action) => {
     lines.push(`- P${action.priority} [${action.audience}] \`${action.code}\`: ${action.summary}`);
     if (action.rationale) {
       lines.push(`  - rationale: ${action.rationale}`);
+    }
+    if (action.manualOnly) {
+      lines.push(
+        `  - execution: manual-only step${
+          action.manualOnlyReason ? ` (${action.manualOnlyReason})` : ''
+        }`,
+      );
     }
     if (action.roots.length > 0) {
       lines.push(`  - roots: ${action.roots.map((item) => `\`${item}\``).join('、')}`);
@@ -289,6 +407,10 @@ function buildRecommendedActionsMarkdownLines(actions) {
     if (action.href) {
       const label = action.hrefLabel || action.code;
       lines.push(`  - link: [${label}](${action.href})`);
+    }
+    if (action.documentationHref) {
+      const label = action.documentationHrefLabel || `${action.code} docs`;
+      lines.push(`  - docs: [${label}](${action.documentationHref})`);
     }
   });
 
@@ -310,6 +432,11 @@ function buildRecommendedActionsOutputs(actions) {
     primary_recommended_action_roots_json: JSON.stringify(primaryAction?.roots || []),
     primary_recommended_action_href: primaryAction?.href || '',
     primary_recommended_action_href_label: primaryAction?.hrefLabel || '',
+    primary_recommended_action_manual_only: primaryAction?.manualOnly ? 'true' : 'false',
+    primary_recommended_action_manual_only_reason: primaryAction?.manualOnlyReason || '',
+    primary_recommended_action_documentation_href: primaryAction?.documentationHref || '',
+    primary_recommended_action_documentation_href_label:
+      primaryAction?.documentationHrefLabel || '',
   };
 }
 
@@ -376,12 +503,16 @@ function buildSubmissionRecommendedActions({
         priority++,
         'repository_admin',
         'enable_dependency_graph',
-        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
-        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+        '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析；GitHub 官方文档当前也要求通过仓库设置页处理。',
         blockedRoots,
         {
           href: buildSecuritySettingsHref(repository),
           hrefLabel: '打开仓库安全设置',
+          documentationHref: dependencyGraphDocsHref,
+          documentationHrefLabel: '查看官方 Dependency graph 指引',
+          manualOnly: true,
+          manualOnlyReason: 'github_settings_ui',
         },
       ),
     );
@@ -509,12 +640,16 @@ function buildDriftRecommendedActions({
         priority++,
         'repository_admin',
         'enable_dependency_graph',
-        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
-        '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误。',
+        '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+        '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误；GitHub 官方文档当前也要求通过仓库设置页处理。',
         repositoryBlockedRoots,
         {
           href: buildSecuritySettingsHref(repository),
           hrefLabel: '打开仓库安全设置',
+          documentationHref: dependencyGraphDocsHref,
+          documentationHrefLabel: '查看官方 Dependency graph 指引',
+          manualOnly: true,
+          manualOnlyReason: 'github_settings_ui',
         },
       ),
     );

@@ -31,6 +31,11 @@ test('buildRecommendedActionsOutputs keeps priority order and top action stable'
       roots: ['api', 'web'],
       href: 'https://github.com/taichuy/7flows/settings/security_analysis',
       hrefLabel: '打开仓库安全设置',
+      documentationHref:
+        'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+      documentationHrefLabel: '查看官方 Dependency graph 指引',
+      manualOnly: true,
+      manualOnlyReason: 'github_settings_ui',
     },
   ]);
 
@@ -46,6 +51,16 @@ test('buildRecommendedActionsOutputs keeps priority order and top action stable'
     'https://github.com/taichuy/7flows/settings/security_analysis',
   );
   assert.equal(outputs.primary_recommended_action_href_label, '打开仓库安全设置');
+  assert.equal(outputs.primary_recommended_action_manual_only, 'true');
+  assert.equal(outputs.primary_recommended_action_manual_only_reason, 'github_settings_ui');
+  assert.equal(
+    outputs.primary_recommended_action_documentation_href,
+    'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+  );
+  assert.equal(
+    outputs.primary_recommended_action_documentation_href_label,
+    '查看官方 Dependency graph 指引',
+  );
   assert.deepEqual(JSON.parse(outputs.recommended_actions_json), [
     {
       priority: 1,
@@ -56,6 +71,11 @@ test('buildRecommendedActionsOutputs keeps priority order and top action stable'
       roots: ['api', 'web'],
       href: 'https://github.com/taichuy/7flows/settings/security_analysis',
       hrefLabel: '打开仓库安全设置',
+      documentationHref:
+        'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+      documentationHrefLabel: '查看官方 Dependency graph 指引',
+      manualOnly: true,
+      manualOnlyReason: 'github_settings_ui',
     },
     {
       priority: 2,
@@ -132,10 +152,33 @@ test('buildRepositorySecurityAndAnalysisMarkdownLines explains missing dependenc
   assert.match(lines.join('\n'), /Repository security & analysis snapshot/);
   assert.match(lines.join('\n'), /dependency graph: `unknown`/);
   assert.match(lines.join('\n'), /automatic dependency submission: `unknown`/);
+  assert.match(lines.join('\n'), /dependabot security updates: `disabled`/);
   assert.match(lines.join('\n'), /fields absent from repo API payload: `dependency_graph`、`automatic_dependency_submission`/);
+  assert.match(lines.join('\n'), /manual verification reason: `missing_dependency_graph_fields`/);
   assert.match(lines.join('\n'), /最终仍以 dependency submission blocker 与 manifest visibility 证据为准/);
   assert.match(lines.join('\n'), /gh api -X PATCH repos\/\{owner\}\/\{repo\}/);
   assert.match(lines.join('\n'), /仍需到 `Settings -> Security & analysis` 人工确认/);
+  assert.match(lines.join('\n'), /Enabling the dependency graph/);
+  assert.match(lines.join('\n'), /Configuring automatic dependency submission/);
+});
+
+test('buildRepositorySecurityAndAnalysisMarkdownLines accepts normalized report payloads', () => {
+  const lines = buildRepositorySecurityAndAnalysisMarkdownLines({
+    checkedAt: '2026-03-26T07:34:31.191Z',
+    dependencyGraphStatus: null,
+    automaticDependencySubmissionStatus: null,
+    dependabotSecurityUpdatesStatus: null,
+    availableFields: [],
+    missingFields: ['dependency_graph', 'automatic_dependency_submission'],
+    manualVerificationRequired: true,
+    manualVerificationReason: 'missing_dependency_graph_fields',
+  });
+
+  assert.match(lines.join('\n'), /dependency graph: `unknown`/);
+  assert.match(lines.join('\n'), /automatic dependency submission: `unknown`/);
+  assert.match(lines.join('\n'), /dependabot security updates: `unknown`/);
+  assert.match(lines.join('\n'), /manual verification reason: `missing_dependency_graph_fields`/);
+  assert.match(lines.join('\n'), /repo API 缺失这些字段时/);
 });
 
 test('buildDriftRecommendedActions prioritizes dependency graph blocker ahead of alerts token setup', () => {
@@ -167,6 +210,12 @@ test('buildDriftRecommendedActions prioritizes dependency graph blocker ahead of
     ],
   );
   assert.match(actions[1].rationale, /submission evidence 已先证明仓库设置阻塞/);
+  assert.equal(actions[0].manualOnly, true);
+  assert.equal(actions[0].manualOnlyReason, 'github_settings_ui');
+  assert.equal(
+    actions[0].documentationHref,
+    'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+  );
 });
 
 test('buildDriftRecommendedActions keeps alerts token first when no repository blocker evidence exists', () => {

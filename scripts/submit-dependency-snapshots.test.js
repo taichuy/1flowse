@@ -455,12 +455,17 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       audience: 'repository_admin',
       code: 'enable_dependency_graph',
       summary:
-        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+        '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
       rationale:
-        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析；GitHub 官方文档当前也要求通过仓库设置页处理。',
       roots: ['api'],
       href: 'https://github.com/taichuy/7flows/settings/security_analysis',
       hrefLabel: '打开仓库安全设置',
+      documentationHref:
+        'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+      documentationHrefLabel: '查看官方 Dependency graph 指引',
+      manualOnly: true,
+      manualOnlyReason: 'github_settings_ui',
     },
     {
       priority: 2,
@@ -755,12 +760,44 @@ test('buildSubmissionStepOutputs expose stable blocker and follow-up fields', ()
     'https://github.com/taichuy/7flows/settings/security_analysis',
   );
   assert.equal(outputs.primary_recommended_action_href_label, '打开仓库安全设置');
+  assert.equal(outputs.primary_recommended_action_manual_only, 'true');
+  assert.equal(outputs.primary_recommended_action_manual_only_reason, 'github_settings_ui');
+  assert.equal(
+    outputs.primary_recommended_action_documentation_href,
+    'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+  );
+  assert.equal(
+    outputs.primary_recommended_action_documentation_href_label,
+    '查看官方 Dependency graph 指引',
+  );
   assert.equal(outputs.repository_blocker_kind, 'dependency_graph_disabled');
   assert.equal(outputs.repository_blocker_status, '404');
   assert.equal(outputs.repository_blocker_roots_json, JSON.stringify(['api']));
   assert.equal(outputs.dependency_graph_visible_roots_json, JSON.stringify(['web']));
   assert.equal(outputs.dependency_graph_missing_roots_json, JSON.stringify(['api']));
   assert.equal(outputs.dependency_graph_check_error, '');
+});
+
+test('buildSubmissionStepOutputs expose manual verification when repo API omits dependency graph fields', () => {
+  const report = buildSubmissionReport([], {
+    repository: { owner: 'taichuy', repo: '7flows' },
+    sha: 'abc123',
+    ref: 'refs/heads/taichuy_dev',
+    repositorySecurityAndAnalysis: {
+      checkedAt: '2026-03-25T05:10:00.000Z',
+      raw: {
+        dependabot_security_updates: { status: 'disabled' },
+      },
+    },
+  });
+
+  const outputs = buildSubmissionStepOutputs(report);
+
+  assert.equal(outputs.repository_security_and_analysis_manual_verification_required, 'true');
+  assert.equal(
+    outputs.repository_security_and_analysis_manual_verification_reason,
+    'missing_dependency_graph_fields',
+  );
 });
 
 test('fetchRepositorySecurityAndAnalysis preserves partial repo settings payload', async () => {

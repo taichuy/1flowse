@@ -14,6 +14,7 @@ on:
       - '**/pnpm-lock.yaml'
       - 'scripts/dependency-governance-actions.js'
       - 'scripts/check-dependabot-drift.js'
+      - 'scripts/sync-github-security-drift-issue.js'
       - 'scripts/submit-dependency-snapshots.js'
       - '.github/workflows/github-security-drift.yml'
       - '.github/workflows/dependency-graph-submission.yml'
@@ -35,12 +36,19 @@ jobs:
       primary_recommended_action_roots_json: ${{ steps.drift.outputs.primary_recommended_action_roots_json }}
       primary_recommended_action_href: ${{ steps.drift.outputs.primary_recommended_action_href }}
       primary_recommended_action_href_label: ${{ steps.drift.outputs.primary_recommended_action_href_label }}
+      primary_recommended_action_manual_only: ${{ steps.drift.outputs.primary_recommended_action_manual_only }}
+      primary_recommended_action_manual_only_reason: ${{ steps.drift.outputs.primary_recommended_action_manual_only_reason }}
+      primary_recommended_action_documentation_href: ${{ steps.drift.outputs.primary_recommended_action_documentation_href }}
+      primary_recommended_action_documentation_href_label: ${{ steps.drift.outputs.primary_recommended_action_documentation_href_label }}
       dependency_graph_setting_status: ${{ steps.drift.outputs.dependency_graph_setting_status }}
       automatic_dependency_submission_setting_status: ${{ steps.drift.outputs.automatic_dependency_submission_setting_status }}
       dependabot_security_updates_status: ${{ steps.drift.outputs.dependabot_security_updates_status }}
       repository_blocker_kind: ${{ steps.drift.outputs.repository_blocker_kind }}
       repository_blocker_status: ${{ steps.drift.outputs.repository_blocker_status }}
+      repository_blocker_roots_json: ${{ steps.drift.outputs.repository_blocker_roots_json }}
       repository_security_and_analysis_missing_fields_json: ${{ steps.drift.outputs.repository_security_and_analysis_missing_fields_json }}
+      repository_security_and_analysis_manual_verification_required: ${{ steps.drift.outputs.repository_security_and_analysis_manual_verification_required }}
+      repository_security_and_analysis_manual_verification_reason: ${{ steps.drift.outputs.repository_security_and_analysis_manual_verification_reason }}
       repository_security_and_analysis_check_error: ${{ steps.drift.outputs.repository_security_and_analysis_check_error }}
       alerts_unavailable: ${{ steps.drift.outputs.alerts_unavailable }}
       open_alert_count: ${{ steps.drift.outputs.open_alert_count }}
@@ -50,6 +58,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      issues: write
       security-events: read
 
     steps:
@@ -88,7 +97,7 @@ jobs:
               echo "::warning::Dependabot open alerts drift from the current lockfile fact. Review the workflow summary and keep the evidence before dismissing alerts."
               ;;
             3)
-              echo "::warning::Workflow token cannot read Dependabot alerts. Review the summary, and add DEPENDABOT_ALERTS_TOKEN if you want full drift comparison inside GitHub Actions."
+              echo "::warning::Workflow token cannot read Dependabot alerts. Review the workflow summary for the primary blocker and next steps; if the repository blocker is already cleared, add DEPENDABOT_ALERTS_TOKEN to restore full drift comparison inside GitHub Actions."
               ;;
             *)
               echo "::error::Unexpected exit code: ${status}"
@@ -104,3 +113,9 @@ jobs:
           path: |
             dependabot-drift.txt
             dependabot-drift.json
+
+      - name: Sync security drift tracking issue
+        if: always() && hashFiles('dependabot-drift.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/sync-github-security-drift-issue.js --report dependabot-drift.json

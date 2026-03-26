@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 
 const {
+  buildAlertsUnavailableConclusion,
   buildDriftReport,
   buildDriftStepOutputs,
   buildMarkdownSummary,
@@ -493,10 +494,17 @@ test('buildMarkdownSummary surfaces latest dependency submission blocker evidenc
             audience: 'repository_admin',
             code: 'enable_dependency_graph',
             summary:
-              '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+              '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
             rationale:
-              'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+              'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析；GitHub 官方文档当前也要求通过仓库设置页处理。',
             roots: ['api', 'web'],
+            href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+            hrefLabel: '打开仓库安全设置',
+            documentationHref:
+              'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+            documentationHrefLabel: '查看官方 Dependency graph 指引',
+            manualOnly: true,
+            manualOnlyReason: 'github_settings_ui',
           },
         ],
         roots: [
@@ -551,6 +559,67 @@ test('buildMarkdownSummary hints actions read permission when submission evidenc
 
   assert.match(summary, /Resource not accessible by integration/);
   assert.match(summary, /actions: read/);
+});
+
+test('buildMarkdownSummary prioritizes dependency graph blocker when alerts are unavailable', () => {
+  const inventory = buildWorkspaceManifestInventory([
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ]);
+  const manifestCoverage = buildWorkspaceManifestCoverage(inventory, []);
+  const summary = buildMarkdownSummary({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: 'taichuy_dev',
+    manifestNodes: [],
+    workspaceManifestInventory: inventory,
+    manifestCoverage,
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    alertsUnavailable: true,
+    dependencySubmissionEvidence: {
+      workflowConfigured: true,
+      runAvailable: true,
+      report: {
+        repositoryBlocker:
+          'GitHub `Dependency graph` 未开启；workflow 已保留证据并降级为 warning，而不是把当前代码事实误判成实现失败。',
+        repositoryBlockerEvidence: {
+          kind: 'dependency_graph_disabled',
+          status: 404,
+          message: 'Dependency graph is disabled for this repository.',
+          rootLabels: ['api', 'web'],
+          consistentAcrossRoots: true,
+        },
+      },
+    },
+  });
+
+  assert.match(summary, /当前首要阻塞是 GitHub `Dependency graph` 仍未开启；workflow token 同时无法读取 Dependabot open alerts/);
+  assert.match(summary, /请先启用 `Dependency graph`；仓库设置阻塞解除后，再补 `DEPENDABOT_ALERTS_TOKEN` 恢复完整告警对照/);
+  assert.doesNotMatch(summary, /若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 `DEPENDABOT_ALERTS_TOKEN`/);
+});
+
+test('buildAlertsUnavailableConclusion keeps repository blocker ahead of token follow-up', () => {
+  assert.deepEqual(
+    buildAlertsUnavailableConclusion({
+      report: {
+        repositoryBlockerEvidence: {
+          kind: 'dependency_graph_disabled',
+        },
+      },
+    }),
+    {
+      exitCode: 3,
+      kind: 'repository_blocked_and_alerts_unavailable',
+      summary:
+        'GitHub `Dependency graph` 仍未开启，workflow token 同时无法读取 Dependabot alerts；请先解除仓库设置阻塞，再恢复告警对照。',
+    },
+  );
 });
 
 test('parseArgs accepts report output path', () => {
@@ -718,10 +787,17 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
             audience: 'repository_admin',
             code: 'enable_dependency_graph',
             summary:
-              '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+              '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
             rationale:
-              'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+              'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析；GitHub 官方文档当前也要求通过仓库设置页处理。',
             roots: ['api', 'web'],
+            href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+            hrefLabel: '打开仓库安全设置',
+            documentationHref:
+              'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+            documentationHrefLabel: '查看官方 Dependency graph 指引',
+            manualOnly: true,
+            manualOnlyReason: 'github_settings_ui',
           },
         ],
         roots: [
@@ -809,10 +885,17 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       audience: 'repository_admin',
       code: 'enable_dependency_graph',
       summary:
-        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+        '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
       rationale:
-        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析。',
+        'dependency submission API 已直接返回 `dependency_graph_disabled` / `404`，当前阻塞来自仓库设置而不是本地 lock 解析；GitHub 官方文档当前也要求通过仓库设置页处理。',
       roots: ['api', 'web'],
+      href: 'https://github.com/taichuy/7flows/settings/security_analysis',
+      hrefLabel: '打开仓库安全设置',
+      documentationHref:
+        'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+      documentationHrefLabel: '查看官方 Dependency graph 指引',
+      manualOnly: true,
+      manualOnlyReason: 'github_settings_ui',
     },
   ]);
   assert.deepEqual(
@@ -828,12 +911,17 @@ test('buildDriftReport emits machine-readable drift evidence', () => {
       audience: 'repository_admin',
       code: 'enable_dependency_graph',
       summary:
-        '在 `Settings -> Security & analysis` 启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
+        '在 GitHub 仓库设置页（`Settings -> Security & analysis`）手动启用 `Dependency graph`，必要时一并确认 `Automatic dependency submission`。',
       rationale:
-        '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误。',
+        '最新 submission evidence 已明确把 manifests 缺席归类为仓库设置阻塞，而不是 inventory / lock 解析错误；GitHub 官方文档当前也要求通过仓库设置页处理。',
       roots: ['api', 'web'],
       href: 'https://github.com/taichuy/7flows/settings/security_analysis',
       hrefLabel: '打开仓库安全设置',
+      documentationHref:
+        'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+      documentationHrefLabel: '查看官方 Dependency graph 指引',
+      manualOnly: true,
+      manualOnlyReason: 'github_settings_ui',
     },
     {
       priority: 2,
@@ -1076,10 +1164,75 @@ test('buildDriftStepOutputs expose top follow-up and blocker facts', () => {
     'https://github.com/taichuy/7flows/settings/security_analysis',
   );
   assert.equal(outputs.primary_recommended_action_href_label, '打开仓库安全设置');
+  assert.equal(outputs.primary_recommended_action_manual_only, 'true');
+  assert.equal(outputs.primary_recommended_action_manual_only_reason, 'github_settings_ui');
+  assert.equal(
+    outputs.primary_recommended_action_documentation_href,
+    'https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enabling-the-dependency-graph',
+  );
+  assert.equal(
+    outputs.primary_recommended_action_documentation_href_label,
+    '查看官方 Dependency graph 指引',
+  );
   assert.equal(outputs.repository_blocker_kind, 'dependency_graph_disabled');
   assert.equal(outputs.repository_blocker_status, '404');
+  assert.equal(outputs.repository_blocker_roots_json, JSON.stringify(['api', 'web']));
   assert.equal(outputs.dependency_submission_run_available, 'true');
   assert.equal(outputs.dependency_graph_missing_roots_json, JSON.stringify(['api']));
+});
+
+test('buildDriftStepOutputs expose manual verification when repo API omits dependency graph fields', () => {
+  const workspaceManifestInventory = buildWorkspaceManifestInventory([
+    'api/pyproject.toml',
+    'api/uv.lock',
+    'web/package.json',
+    'web/pnpm-lock.yaml',
+  ]);
+  const report = buildDriftReport({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: 'taichuy_dev',
+    manifestNodes: [],
+    workspaceManifestInventory,
+    manifestCoverage: buildWorkspaceManifestCoverage(workspaceManifestInventory, []),
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    repositorySecurityAndAnalysis: {
+      checkedAt: '2026-03-25T05:10:00.000Z',
+      raw: {
+        dependabot_security_updates: { status: 'disabled' },
+      },
+    },
+    dependencySubmissionEvidence: {
+      workflowConfigured: true,
+      runAvailable: true,
+      report: {
+        repositoryBlockerEvidence: {
+          kind: 'dependency_graph_disabled',
+          status: 404,
+          message: 'Dependency graph is disabled for this repository.',
+          rootLabels: ['api'],
+          consistentAcrossRoots: true,
+        },
+      },
+    },
+    conclusion: {
+      exitCode: 2,
+      kind: 'platform_drift',
+      summary: 'GitHub 平台侧事实仍未收口。',
+    },
+  });
+
+  const outputs = buildDriftStepOutputs(report);
+
+  assert.equal(outputs.repository_security_and_analysis_manual_verification_required, 'true');
+  assert.equal(
+    outputs.repository_security_and_analysis_manual_verification_reason,
+    'missing_dependency_graph_fields',
+  );
 });
 
 test('fetchRepositorySecurityAndAnalysis keeps partial gh api payload machine-readable', () => {

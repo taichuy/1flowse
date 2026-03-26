@@ -115,6 +115,36 @@ function buildGraphCoverageBuckets(manifestCoverage) {
   };
 }
 
+function hasDependencyGraphRepositoryBlocker(dependencySubmissionEvidence) {
+  const blockerKind = dependencySubmissionEvidence?.report?.repositoryBlockerEvidence?.kind;
+  if (blockerKind === 'dependency_graph_disabled') {
+    return true;
+  }
+
+  const repositoryBlocker = dependencySubmissionEvidence?.report?.repositoryBlocker;
+  return (
+    typeof repositoryBlocker === 'string' && repositoryBlocker.includes('Dependency graph')
+  );
+}
+
+function buildAlertsUnavailableConclusion(dependencySubmissionEvidence) {
+  if (hasDependencyGraphRepositoryBlocker(dependencySubmissionEvidence)) {
+    return {
+      exitCode: 3,
+      kind: 'repository_blocked_and_alerts_unavailable',
+      summary:
+        'GitHub `Dependency graph` 仍未开启，workflow token 同时无法读取 Dependabot alerts；请先解除仓库设置阻塞，再恢复告警对照。',
+    };
+  }
+
+  return {
+    exitCode: 3,
+    kind: 'alerts_unavailable',
+    summary:
+      '当前 workflow token 无法读取 Dependabot alerts；请补充 DEPENDABOT_ALERTS_TOKEN 或使用具备权限的 gh 凭证。',
+  };
+}
+
 function run(command, args, baseRepoRoot = repoRoot) {
   return execFileSync(command, args, {
     cwd: baseRepoRoot,
@@ -229,6 +259,30 @@ function normalizeRepositoryBlockerEvidence(repositoryBlockerEvidence) {
       : [],
     consistentAcrossRoots: repositoryBlockerEvidence.consistentAcrossRoots !== false,
   };
+}
+
+function mergeRecommendedActionMetadata(actions, fallbackActions) {
+  const normalizedActions = normalizeRecommendedActions(actions);
+  if (normalizedActions.length === 0) {
+    return normalizedActions;
+  }
+
+  const fallbackActionMap = new Map(
+    normalizeRecommendedActions(fallbackActions).map((action) => [`${action.audience}:${action.code}`, action]),
+  );
+
+  return normalizedActions.map((action) => {
+    const fallbackAction = fallbackActionMap.get(`${action.audience}:${action.code}`);
+    if (!fallbackAction) {
+      return action;
+    }
+
+    return {
+      ...fallbackAction,
+      ...action,
+      roots: action.roots.length > 0 ? action.roots : fallbackAction.roots,
+    };
+  });
 }
 
 function fetchRepositorySecurityAndAnalysis(repository) {
@@ -968,6 +1022,9 @@ function buildMarkdownSummary({
   const { missingNativeGraphRoots, dependencySubmissionRoots } = buildGraphCoverageBuckets(
     manifestCoverage,
   );
+  const dependencyGraphRepositoryBlocker = hasDependencyGraphRepositoryBlocker(
+    dependencySubmissionEvidence,
+  );
   const recommendedActions = buildDriftRecommendedActions({
     missingNativeGraphRoots,
     dependencySubmissionRoots,
@@ -1072,8 +1129,11 @@ function buildMarkdownSummary({
   lines.push('');
 
   if (alertsUnavailable) {
-    lines.push('- 当前 workflow token 只能继续复验 `dependencyGraphManifests` 等仓库事实，无法直接比较 Dependabot open alerts。');
-    lines.push('- 若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 `DEPENDABOT_ALERTS_TOKEN`。');
+    if (dependencyGraphRepositoryBlocker) {
+      lines.push('- 当前首要阻塞是 GitHub `Dependency graph` 仍未开启；workflow token 同时无法读取 Dependabot open alerts，因此完整 drift 对比暂不可用。');
+    } else {
+      lines.push('- 当前 workflow token 只能继续复验 `dependencyGraphManifests` 等仓库事实，无法直接比较 Dependabot open alerts。');
+    }
     if (missingNativeGraphRoots.length > 0) {
       lines.push('- GitHub 依赖图仍未覆盖本地 manifest roots，优先检查 `Security & analysis` 中的 `Dependency graph` 与 `Automatic dependency submission`。');
     }
@@ -1084,6 +1144,11 @@ function buildMarkdownSummary({
       lines.push(`- 最新 \`Dependency Graph Submission\` run 已明确给出 repository blocker：${dependencySubmissionEvidence.report.repositoryBlocker}`);
     } else if (dependencySubmissionEvidence?.runAvailable) {
       lines.push('- 仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
+    }
+    if (dependencyGraphRepositoryBlocker) {
+      lines.push('- 请先启用 `Dependency graph`；仓库设置阻塞解除后，再补 `DEPENDABOT_ALERTS_TOKEN` 恢复完整告警对照。');
+    } else {
+      lines.push('- 若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 `DEPENDABOT_ALERTS_TOKEN`。');
     }
     const recommendedActionLines = buildRecommendedActionsMarkdownLines(recommendedActions);
     if (recommendedActionLines.length > 0) {
@@ -1143,7 +1208,10 @@ function writeMarkdownSummary(params) {
   fs.writeFileSync(summaryPath, `${buildMarkdownSummary(params)}\n`, 'utf8');
 }
 
-function buildDependencySubmissionEvidenceReport(dependencySubmissionEvidence) {
+function buildDependencySubmissionEvidenceReport(
+  dependencySubmissionEvidence,
+  { recommendedActionFallbacks = [] } = {},
+) {
   if (!dependencySubmissionEvidence) {
     return null;
   }
@@ -1184,8 +1252,9 @@ function buildDependencySubmissionEvidenceReport(dependencySubmissionEvidence) {
     repositorySecurityAndAnalysis: normalizeRepositorySecurityAndAnalysis(
       dependencySubmissionEvidence.report?.repositorySecurityAndAnalysis,
     ),
-    recommendedActions: normalizeRecommendedActions(
+    recommendedActions: mergeRecommendedActionMetadata(
       dependencySubmissionEvidence.report?.recommendedActions,
+      recommendedActionFallbacks,
     ),
     roots: dependencySubmissionEvidence.report?.roots || [],
     blockedRoots: dependencySubmissionEvidence.report?.blockedRoots || [],
@@ -1275,9 +1344,9 @@ function buildDriftReport({
       })),
     },
     repositorySecurityAndAnalysis: normalizeRepositorySecurityAndAnalysis(repositorySecurityAndAnalysis),
-    dependencySubmissionEvidence: buildDependencySubmissionEvidenceReport(
-      dependencySubmissionEvidence,
-    ),
+    dependencySubmissionEvidence: buildDependencySubmissionEvidenceReport(dependencySubmissionEvidence, {
+      recommendedActionFallbacks: recommendedActions,
+    }),
     recommendedActions: normalizeRecommendedActions(recommendedActions),
     conclusion,
   };
@@ -1333,6 +1402,7 @@ function buildDriftStepOutputs(report) {
       Number.isInteger(repositoryBlockerEvidence?.status)
         ? String(repositoryBlockerEvidence.status)
         : '',
+    repository_blocker_roots_json: JSON.stringify(repositoryBlockerEvidence?.rootLabels || []),
     dependency_graph_missing_roots_json: JSON.stringify(
       dependencyGraphVisibility?.missingRoots || [],
     ),
@@ -1433,6 +1503,9 @@ function main() {
   const dependencySubmissionEvidenceLines = buildDependencySubmissionEvidenceLines(
     dependencySubmissionEvidence,
   );
+  const dependencyGraphRepositoryBlocker = hasDependencyGraphRepositoryBlocker(
+    dependencySubmissionEvidence,
+  );
   const repositorySecurityAndAnalysisLines = buildRepositorySecurityAndAnalysisMarkdownLines(
     repositorySecurityAndAnalysis,
     { heading: null },
@@ -1466,7 +1539,11 @@ function main() {
     console.log('请为 workflow 配置 DEPENDABOT_ALERTS_TOKEN，或在本地使用具备告警读取权限的 gh 凭证重新运行。');
     writeMarkdownSummary(sharedReportParams);
     printSection('结论');
-    console.log('当前 workflow token 只能继续复验 dependencyGraphManifests 等仓库事实，无法直接比较 Dependabot open alerts。');
+    if (dependencyGraphRepositoryBlocker) {
+      console.log('当前首要阻塞是 GitHub `Dependency graph` 仍未开启；workflow token 同时无法读取 Dependabot alerts，完整 drift 对比暂不可用。');
+    } else {
+      console.log('当前 workflow token 只能继续复验 dependencyGraphManifests 等仓库事实，无法直接比较 Dependabot open alerts。');
+    }
     if (missingNativeGraphRoots.length > 0) {
       console.log(`GitHub 依赖图尚未覆盖这些原生支持的 manifest roots: ${missingNativeGraphRoots.map((item) => `${item.rootLabel} (${item.ecosystem})`).join(', ')}`);
       console.log('优先检查仓库 Settings -> Security & analysis 中的 Dependency graph 与 Automatic dependency submission。');
@@ -1479,15 +1556,14 @@ function main() {
     } else if (dependencySubmissionEvidence?.runAvailable) {
       console.log('仓库已配置显式 dependency submission workflow；若 manifests 仍缺席，优先查看最新 run summary / artifact，再判断是平台阻塞还是刷新延迟。');
     }
-    console.log('若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 DEPENDABOT_ALERTS_TOKEN。');
+    if (dependencyGraphRepositoryBlocker) {
+      console.log('请先启用 Dependency graph；仓库设置阻塞解除后，再为 workflow secret 配置 DEPENDABOT_ALERTS_TOKEN，以恢复完整 drift 对比。');
+    } else {
+      console.log('若要在 workflow 中保留完整 drift 对比，请为仓库 secret 配置 DEPENDABOT_ALERTS_TOKEN。');
+    }
     const reportParams = {
       ...sharedReportParams,
-      conclusion: {
-        exitCode: 3,
-        kind: 'alerts_unavailable',
-        summary:
-          '当前 workflow token 无法读取 Dependabot alerts；请补充 DEPENDABOT_ALERTS_TOKEN 或使用具备权限的 gh 凭证。',
-      },
+      conclusion: buildAlertsUnavailableConclusion(dependencySubmissionEvidence),
     };
     writeDriftReport(options.reportOutputPath, reportParams);
     writeDriftStepOutputs(buildDriftReport(reportParams));
@@ -1566,6 +1642,7 @@ function main() {
 }
 
 module.exports = {
+  buildAlertsUnavailableConclusion,
   buildDriftReport,
   buildMarkdownSummary,
   buildDependencySubmissionEvidenceLines,
@@ -1581,6 +1658,7 @@ module.exports = {
   evaluateAlert,
   fetchRepositorySecurityAndAnalysis,
   fetchLatestDependencySubmissionEvidence,
+  hasDependencyGraphRepositoryBlocker,
   normalizePythonPackageName,
   normalizeVersion,
   parseArgs,
