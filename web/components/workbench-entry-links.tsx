@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import {
+  isCurrentWorkbenchHref,
   resolveWorkbenchEntryLink,
   resolveWorkbenchEntryLinks,
   type WorkbenchEntryLinkKey,
@@ -36,40 +37,6 @@ type WorkbenchEntryLinkProps = {
   children?: React.ReactNode;
   currentHref?: string | null;
 };
-
-function normalizeRelativeHref(href?: string | null) {
-  const normalized = href?.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  const url = new URL(normalized, "https://sevenflows.local");
-  const sortedParams = [...url.searchParams.entries()].sort(
-    ([leftKey, leftValue], [rightKey, rightValue]) => {
-      if (leftKey === rightKey) {
-        return leftValue.localeCompare(rightValue);
-      }
-
-      return leftKey.localeCompare(rightKey);
-    }
-  );
-  const params = new URLSearchParams();
-
-  for (const [key, value] of sortedParams) {
-    params.append(key, value);
-  }
-
-  const query = params.toString();
-
-  return query ? `${url.pathname}?${query}` : url.pathname;
-}
-
-function isCurrentWorkbenchHref(href?: string | null, currentHref?: string | null) {
-  const normalizedHref = normalizeRelativeHref(href);
-  const normalizedCurrentHref = normalizeRelativeHref(currentHref);
-
-  return Boolean(normalizedHref && normalizedCurrentHref && normalizedHref === normalizedCurrentHref);
-}
 
 export function WorkbenchEntryLink({
   linkKey,

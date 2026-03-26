@@ -58,6 +58,40 @@ export type WorkbenchEntryLinksConfig = {
   primaryKey?: WorkbenchEntryLinkKey;
 };
 
+export function normalizeWorkbenchRelativeHref(href?: string | null) {
+  const normalized = href?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const url = new URL(normalized, "https://sevenflows.local");
+  const sortedParams = [...url.searchParams.entries()].sort(
+    ([leftKey, leftValue], [rightKey, rightValue]) => {
+      if (leftKey === rightKey) {
+        return leftValue.localeCompare(rightValue);
+      }
+
+      return leftKey.localeCompare(rightKey);
+    }
+  );
+  const params = new URLSearchParams();
+
+  for (const [key, value] of sortedParams) {
+    params.append(key, value);
+  }
+
+  const query = params.toString();
+
+  return query ? `${url.pathname}?${query}` : url.pathname;
+}
+
+export function isCurrentWorkbenchHref(href?: string | null, currentHref?: string | null) {
+  const normalizedHref = normalizeWorkbenchRelativeHref(href);
+  const normalizedCurrentHref = normalizeWorkbenchRelativeHref(currentHref);
+
+  return Boolean(normalizedHref && normalizedCurrentHref && normalizedHref === normalizedCurrentHref);
+}
+
 export function normalizeWorkbenchEntryLinkKey(
   value?: string | null
 ): WorkbenchEntryLinkKey | null {

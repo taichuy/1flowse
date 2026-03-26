@@ -116,4 +116,22 @@ describe("workbench entry links", () => {
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('/workflows?execution=sandbox');
   });
+
+  it("treats reordered scoped query params as the current page", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkbenchEntryLink, {
+        linkKey: "workflowLibrary",
+        currentHref:
+          "/workflows/workflow-1?definition_issue=legacy_publish_auth&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92",
+        override: {
+          href: "/workflows/workflow-1?track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&starter=starter-1&definition_issue=legacy_publish_auth",
+          label: "回到当前 workflow"
+        }
+      })
+    );
+
+    expect(html).toContain("回到当前 workflow");
+    expect(html).toContain('aria-current="page"');
+    expect(html).not.toContain('href="/workflows/workflow-1');
+  });
 });
