@@ -165,6 +165,43 @@ function buildIssueUrl(repository, issueNumber) {
   )}/issues/${issueNumber}`;
 }
 
+function buildDependencySubmissionSnapshotLabel(dependencySubmissionEvidence) {
+  if (!dependencySubmissionEvidence || typeof dependencySubmissionEvidence !== 'object') {
+    return null;
+  }
+
+  const headBranch = normalizeOptionalString(dependencySubmissionEvidence.headBranch);
+  const headSha = normalizeOptionalString(dependencySubmissionEvidence.headSha);
+  if (!headBranch && !headSha) {
+    return null;
+  }
+
+  return [headBranch ? `branch=${formatCode(headBranch)}` : null, headSha ? `sha=${formatCode(headSha)}` : null]
+    .filter(Boolean)
+    .join('，');
+}
+
+function buildDependencySubmissionFreshnessLine(dependencySubmissionEvidence) {
+  if (!dependencySubmissionEvidence || typeof dependencySubmissionEvidence !== 'object') {
+    return null;
+  }
+
+  const currentRefName = normalizeOptionalString(dependencySubmissionEvidence.currentRefName);
+  const currentHeadSha = normalizeOptionalString(dependencySubmissionEvidence.currentHeadSha);
+  const headBranch = normalizeOptionalString(dependencySubmissionEvidence.headBranch);
+  const headSha = normalizeOptionalString(dependencySubmissionEvidence.headSha);
+
+  if (dependencySubmissionEvidence.currentRefMatches === false) {
+    return `- 注意：当前 drift ref 是 ${formatOptionalCode(currentRefName)}，但最新 submission 证据来自 ${formatOptionalCode(headBranch)}；这份 artifact 不能直接当作当前 ref 已重新提交 manifests。`;
+  }
+
+  if (dependencySubmissionEvidence.currentHeadShaMatches === false) {
+    return `- 注意：当前 drift head 是 ${formatOptionalCode(currentHeadSha)}，但最新 submission 证据仍停留在更早的 sha ${formatOptionalCode(headSha)}；如需复验 blocker 是否解除，请先重跑 \`Dependency Graph Submission\` workflow。`;
+  }
+
+  return null;
+}
+
 function buildIssueStateFingerprint(report, options = {}) {
   const dependencySubmissionEvidence =
     report?.dependencySubmissionEvidence && typeof report.dependencySubmissionEvidence === 'object'
@@ -414,6 +451,20 @@ function buildIssueBody(report, options = {}) {
 
   if (dependencySubmissionEvidence?.htmlUrl) {
     lines.push(`- 最新 dependency submission 证据：[打开 run #${dependencySubmissionEvidence.runId}](${dependencySubmissionEvidence.htmlUrl})`);
+  }
+
+  const dependencySubmissionSnapshotLabel = buildDependencySubmissionSnapshotLabel(
+    dependencySubmissionEvidence,
+  );
+  if (dependencySubmissionSnapshotLabel) {
+    lines.push(`- submission 证据快照：${dependencySubmissionSnapshotLabel}`);
+  }
+
+  const dependencySubmissionFreshnessLine = buildDependencySubmissionFreshnessLine(
+    dependencySubmissionEvidence,
+  );
+  if (dependencySubmissionFreshnessLine) {
+    lines.push(dependencySubmissionFreshnessLine);
   }
 
   if (dependencySubmissionEvidence?.repositoryBlocker) {
@@ -838,6 +889,20 @@ function buildIssueSyncSummaryLines(result = {}, report = {}) {
   const currentRunUrl = buildCurrentRunUrl(report?.repository);
   if (currentRunUrl) {
     lines.push(`- current workflow run：${currentRunUrl}`);
+  }
+
+  const dependencySubmissionSnapshotLabel = buildDependencySubmissionSnapshotLabel(
+    report?.dependencySubmissionEvidence,
+  );
+  if (dependencySubmissionSnapshotLabel) {
+    lines.push(`- latest submission snapshot：${dependencySubmissionSnapshotLabel}`);
+  }
+
+  const dependencySubmissionFreshnessLine = buildDependencySubmissionFreshnessLine(
+    report?.dependencySubmissionEvidence,
+  );
+  if (dependencySubmissionFreshnessLine) {
+    lines.push(dependencySubmissionFreshnessLine.replace(/^- 注意：/, '- '));
   }
 
   if (primaryAction) {

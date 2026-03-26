@@ -114,7 +114,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          node scripts/check-dependabot-drift.js --report-output dependabot-drift.json | tee dependabot-drift.txt
+          node scripts/check-dependabot-drift.js \
+          --report-output dependabot-drift.json \
+          --current-ref-name "${{ github.event.workflow_run.head_branch || github.ref_name }}" \
+          --current-head-sha "${{ github.event.workflow_run.head_sha || github.sha }}" | tee dependabot-drift.txt
           status=${PIPESTATUS[0]}
           echo "status=${status}" >> "$GITHUB_OUTPUT"
 

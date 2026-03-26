@@ -21,6 +21,10 @@ const dependencyGraphSupportByEcosystem = {
   uv: 'dependency_submission',
 };
 
+function normalizeOptionalString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function sleepSync(milliseconds) {
   if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
     return;
@@ -117,6 +121,42 @@ function buildGraphCoverageBuckets(manifestCoverage) {
 
 function isGitHubApiRateLimitError(message) {
   return typeof message === 'string' && /rate limit exceeded|secondary rate limit|rate limit/i.test(message);
+}
+
+function resolveCurrentDriftContext(options = {}, env = process.env) {
+  return {
+    currentRefName:
+      normalizeOptionalString(options.currentRefName) ||
+      normalizeOptionalString(env.GITHUB_HEAD_REF) ||
+      normalizeOptionalString(env.GITHUB_REF_NAME),
+    currentHeadSha:
+      normalizeOptionalString(options.currentHeadSha) ||
+      normalizeOptionalString(env.GITHUB_SHA),
+  };
+}
+
+function annotateDependencySubmissionEvidenceCurrentContext(evidence, currentContext = {}) {
+  if (!evidence || typeof evidence !== 'object' || evidence.runAvailable !== true) {
+    return evidence;
+  }
+
+  const headBranch = normalizeOptionalString(evidence.headBranch);
+  const headSha = normalizeOptionalString(evidence.headSha);
+  const currentRefName = normalizeOptionalString(currentContext.currentRefName);
+  const currentHeadSha = normalizeOptionalString(currentContext.currentHeadSha);
+  const currentRefMatches = currentRefName && headBranch ? currentRefName === headBranch : null;
+  const currentHeadShaMatches = currentHeadSha && headSha ? currentHeadSha === headSha : null;
+
+  return {
+    ...evidence,
+    headBranch,
+    headSha,
+    currentRefName,
+    currentHeadSha,
+    currentRefMatches,
+    currentHeadShaMatches,
+    staleForCurrentHead: currentHeadShaMatches === false,
+  };
 }
 
 function hasDependencyGraphRepositoryBlocker(dependencySubmissionEvidence) {
@@ -433,7 +473,7 @@ function parseDependencySubmissionReport(reportText) {
   });
 }
 
-function fetchLatestDependencySubmissionEvidence(repository, defaultBranch) {
+function fetchLatestDependencySubmissionEvidence(repository, defaultBranch, currentContext = {}) {
   if (!fileExists(repoRoot, dependencySubmissionWorkflowPath)) {
     return null;
   }
@@ -480,6 +520,8 @@ function fetchLatestDependencySubmissionEvidence(repository, defaultBranch) {
       htmlUrl: selectedRun.html_url,
       createdAt: selectedRun.created_at,
       updatedAt: selectedRun.updated_at || null,
+      headBranch: normalizeOptionalString(selectedRun.head_branch),
+      headSha: normalizeOptionalString(selectedRun.head_sha),
       waitApplied: waitResult.waitApplied,
       waitTimedOut: waitResult.timedOut,
       waitTimeoutSeconds: waitResult.waitApplied ? waitTimeoutSeconds : null,
@@ -506,7 +548,7 @@ function fetchLatestDependencySubmissionEvidence(repository, defaultBranch) {
       fs.rmSync(artifactDir, { recursive: true, force: true });
     }
 
-    return evidence;
+    return annotateDependencySubmissionEvidenceCurrentContext(evidence, currentContext);
   } catch (error) {
     return {
       workflowConfigured: true,
@@ -539,6 +581,27 @@ function buildDependencySubmissionEvidenceLines(evidence) {
   const lines = [
     `- latest run: [#${evidence.runId}](${evidence.htmlUrl})（status: \`${evidence.status || 'unknown'}\`，conclusion: \`${evidence.conclusion || 'unknown'}\`，event: \`${evidence.event || 'unknown'}\`）`,
   ];
+
+  if (evidence.headBranch || evidence.headSha) {
+    const refParts = [];
+    if (evidence.headBranch) {
+      refParts.push(`branch: \`${evidence.headBranch}\``);
+    }
+    if (evidence.headSha) {
+      refParts.push(`sha: \`${evidence.headSha}\``);
+    }
+    lines.push(`- submission ref snapshot: ${refParts.join('，')}`);
+  }
+
+  if (evidence.currentRefMatches === false) {
+    lines.push(
+      `- 当前 drift ref 是 \`${evidence.currentRefName || 'unknown'}\`，但最新 submission 证据来自 \`${evidence.headBranch || 'unknown'}\`；不能把这份 artifact 直接当成当前 ref 已重新提交 manifests。`,
+    );
+  } else if (evidence.currentHeadShaMatches === false) {
+    lines.push(
+      `- 当前 drift head 是 \`${evidence.currentHeadSha || 'unknown'}\`，但最新 submission 证据仍停留在更早的 sha \`${evidence.headSha || 'unknown'}\`；若要复验 blocker 是否解除，请先重跑 \`Dependency Graph Submission\`。`,
+    );
+  }
 
   if (evidence.waitApplied && evidence.waitTimedOut) {
     lines.push(
@@ -1013,6 +1076,8 @@ function parseArgs(argv) {
   const options = {
     reportOutputPath: null,
     allowPlatformStateExitZero: false,
+    currentRefName: null,
+    currentHeadSha: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -1029,6 +1094,18 @@ function parseArgs(argv) {
 
     if (argument === '--allow-platform-state-exit-zero') {
       options.allowPlatformStateExitZero = true;
+      continue;
+    }
+
+    if (argument === '--current-ref-name') {
+      options.currentRefName = argv[index + 1] || null;
+      index += 1;
+      continue;
+    }
+
+    if (argument === '--current-head-sha') {
+      options.currentHeadSha = argv[index + 1] || null;
+      index += 1;
       continue;
     }
 
@@ -1282,6 +1359,19 @@ function buildDependencySubmissionEvidenceReport(
     htmlUrl: dependencySubmissionEvidence.htmlUrl || null,
     createdAt: dependencySubmissionEvidence.createdAt || null,
     updatedAt: dependencySubmissionEvidence.updatedAt || null,
+    headBranch: normalizeOptionalString(dependencySubmissionEvidence.headBranch),
+    headSha: normalizeOptionalString(dependencySubmissionEvidence.headSha),
+    currentRefName: normalizeOptionalString(dependencySubmissionEvidence.currentRefName),
+    currentHeadSha: normalizeOptionalString(dependencySubmissionEvidence.currentHeadSha),
+    currentRefMatches:
+      typeof dependencySubmissionEvidence.currentRefMatches === 'boolean'
+        ? dependencySubmissionEvidence.currentRefMatches
+        : null,
+    currentHeadShaMatches:
+      typeof dependencySubmissionEvidence.currentHeadShaMatches === 'boolean'
+        ? dependencySubmissionEvidence.currentHeadShaMatches
+        : null,
+    staleForCurrentHead: dependencySubmissionEvidence.staleForCurrentHead === true,
     waitApplied: Boolean(dependencySubmissionEvidence.waitApplied),
     waitTimedOut: Boolean(dependencySubmissionEvidence.waitTimedOut),
     waitTimeoutSeconds:
@@ -1480,6 +1570,7 @@ function writeDriftStepOutputs(report) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
+  const currentDriftContext = resolveCurrentDriftContext(options);
   const trackedFiles = collectTrackedFiles(repoRoot);
   const workspaceManifestInventory = buildWorkspaceManifestInventory(trackedFiles);
   const remoteUrl = run('git', ['config', '--get', 'remote.origin.url']);
@@ -1525,6 +1616,7 @@ function main() {
     const dependencySubmissionEvidence = fetchLatestDependencySubmissionEvidence(
       repository,
       defaultBranch,
+      currentDriftContext,
     );
     printSection('仓库事实');
     console.log(`repo: ${repository.owner}/${repository.repo}`);
@@ -1643,6 +1735,7 @@ function main() {
     ? fetchLatestDependencySubmissionEvidence(
         repository,
         defaultBranch,
+        currentDriftContext,
       )
     : null;
 

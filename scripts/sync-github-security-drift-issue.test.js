@@ -287,6 +287,27 @@ test('buildIssueBody embeds parseable state metadata and history markers', () =>
   assert.match(parsedHistory[0], /external|外部阻塞/);
 });
 
+test('buildIssueBody calls out stale dependency submission evidence for the current drift head', () => {
+  const body = buildIssueBody(
+    createReport({
+      dependencySubmissionEvidence: {
+        ...createReport().dependencySubmissionEvidence,
+        headBranch: 'taichuy_dev',
+        headSha: '8cffe49393f7543676d9a12629e1f5abd23ce282',
+        currentRefName: 'taichuy_dev',
+        currentHeadSha: 'c36d5041548aceef36a567c5d1bc261b4b2641fc',
+        currentRefMatches: true,
+        currentHeadShaMatches: false,
+        staleForCurrentHead: true,
+      },
+    }),
+  );
+
+  assert.match(body, /submission 证据快照：branch=`taichuy_dev`，sha=`8cffe49393f7543676d9a12629e1f5abd23ce282`/);
+  assert.match(body, /当前 drift head 是 `c36d5041548aceef36a567c5d1bc261b4b2641fc`，但最新 submission 证据仍停留在更早的 sha `8cffe49393f7543676d9a12629e1f5abd23ce282`/);
+  assert.match(body, /先重跑 `Dependency Graph Submission` workflow/);
+});
+
 test('hasIssueTrackingStateChanged only flips when blocker semantics change', () => {
   const report = createReport();
   const sameState = buildIssueTrackingState(report, { resolved: false });
@@ -463,6 +484,35 @@ test('buildIssueSyncSummaryLines surface unchanged blocker state and primary man
   assert.match(summary, /\[repository_admin\] `enable_dependency_graph`/);
   assert.match(summary, /仅支持人工操作（`github_settings_ui`）/);
   assert.match(summary, /查看官方 Dependency graph 指引/);
+});
+
+test('buildIssueSyncSummaryLines surface stale submission evidence in the step summary', () => {
+  const report = createReport({
+    dependencySubmissionEvidence: {
+      ...createReport().dependencySubmissionEvidence,
+      headBranch: 'taichuy_dev',
+      headSha: '8cffe49393f7543676d9a12629e1f5abd23ce282',
+      currentRefName: 'taichuy_dev',
+      currentHeadSha: 'c36d5041548aceef36a567c5d1bc261b4b2641fc',
+      currentRefMatches: true,
+      currentHeadShaMatches: false,
+      staleForCurrentHead: true,
+    },
+  });
+  const lines = buildIssueSyncSummaryLines(
+    {
+      action: 'updated',
+      issueNumber: 9,
+      shouldTrack: true,
+      trackingState: buildIssueTrackingState(report, { resolved: false }),
+      trackingStateChanged: false,
+    },
+    report,
+  );
+
+  const summary = lines.join('\n');
+  assert.match(summary, /latest submission snapshot：branch=`taichuy_dev`，sha=`8cffe49393f7543676d9a12629e1f5abd23ce282`/);
+  assert.match(summary, /当前 drift head 是 `c36d5041548aceef36a567c5d1bc261b4b2641fc`，但最新 submission 证据仍停留在更早的 sha `8cffe49393f7543676d9a12629e1f5abd23ce282`/);
 });
 
 test('buildIssueSyncSummaryLines explain non-default branch skip without mutating issue', () => {

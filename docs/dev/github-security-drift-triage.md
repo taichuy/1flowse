@@ -41,6 +41,8 @@ node scripts/sync-github-security-drift-issue.js \
 
 如果仓库内已存在 `.github/workflows/dependency-graph-submission.yml`，脚本还会顺带查询默认分支最新一条 `Dependency Graph Submission` run，并优先读取其中的 `dependency-submission-report` artifact（`dependency-submission.json`，必要时回退到 `dependency-submission.txt`）把摘要串进当前结论里，避免 `GitHub Security Drift` 只停留在“manifests 还是 0”而说不清到底是平台设置阻塞、部分 root 已提交，还是平台刷新延迟。若在 GitHub Actions 中消费这条证据链，`GitHub Security Drift` job 还必须显式具备 `actions: read`，否则会在读取 workflow run / artifact 时得到 `Resource not accessible by integration` 的 403。
 
+如果 step summary / `dependabot-drift.json` / tracking issue 里额外提示“最新 submission 证据仍停留在更早的 sha”，说明这次 `GitHub Security Drift` run 没有配套的最新 `Dependency Graph Submission` artifact；此时不要把旧 artifact 误当成“当前 head 已重新提交 manifests”的证据，而应先重跑 `Dependency Graph Submission`，再用新的 drift run 复验 blocker 是否解除。
+
 如果本地或 workflow 里直接命中 `gh: API rate limit exceeded ... (HTTP 403)`，当前脚本会把结论收口为 `graph_visibility_check_failed`，并在 report / step outputs 中保留 `dependency_graph_check_error`。这时不要把 `dependency graph manifests = 0` 误读成仓库设置阻塞；应先使用具备更高配额的 `gh` 凭证或 Actions token 重跑，确认 `dependencyGraphManifests` 能正常返回后，再继续判断 `Dependency graph` / `Dependabot` 漂移。
 
 为避免 `push` 同时触发两条 workflow 时把 submission run 永久冻结在 `in_progress` 视角，脚本现在会在 GitHub Actions 中默认额外等待最多 `30` 秒，让最新 `Dependency Graph Submission` run 尽量先完成再冻结 drift 证据；本地 CLI 默认不等待，如需覆盖可设置 `CHECK_DEPENDABOT_DRIFT_SUBMISSION_WAIT_SECONDS`。

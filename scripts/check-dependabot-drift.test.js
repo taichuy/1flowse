@@ -7,6 +7,7 @@ const path = require('path');
 
 const {
   buildAlertsUnavailableConclusion,
+  buildDependencySubmissionEvidenceLines,
   buildDriftReport,
   buildDriftStepOutputs,
   buildMarkdownSummary,
@@ -248,6 +249,8 @@ if (
           status: 'completed',
           conclusion: 'failure',
           event: 'schedule',
+          head_branch: 'taichuy_dev',
+          head_sha: '8cffe49393f7543676d9a12629e1f5abd23ce282',
           html_url: 'https://github.com/taichuy/7flows/actions/runs/123',
           created_at: '2026-03-26T20:00:00.000Z',
           updated_at: '2026-03-26T20:01:00.000Z',
@@ -307,6 +310,8 @@ process.exit(1);
       env: {
         ...process.env,
         PATH: `${binDir}${path.delimiter}${originalPath || ''}`,
+        GITHUB_REF_NAME: 'taichuy_dev',
+        GITHUB_SHA: 'c36d5041548aceef36a567c5d1bc261b4b2641fc',
         GITHUB_STEP_SUMMARY: summaryPath,
       },
       stdio: 'pipe',
@@ -319,6 +324,8 @@ process.exit(1);
     assert.equal(report.recommendedActions[0]?.code, 'enable_dependency_graph');
     assert.match(summary, /Latest dependency submission evidence/);
     assert.match(summary, /latest run: \[#123\]/);
+    assert.match(summary, /submission ref snapshot: branch: `taichuy_dev`，sha: `8cffe49393f7543676d9a12629e1f5abd23ce282`/);
+    assert.match(summary, /当前 drift head 是 `c36d5041548aceef36a567c5d1bc261b4b2641fc`，但最新 submission 证据仍停留在更早的 sha `8cffe49393f7543676d9a12629e1f5abd23ce282`/);
     assert.match(summary, /repository blocker API evidence: kind: `dependency_graph_disabled`/);
     assert.match(summary, /blocked roots: `api`/);
     assert.match(summary, /submitted roots: `web`（snapshot: `snapshot-web`）/);
@@ -871,13 +878,51 @@ test('parseArgs accepts report output path', () => {
   assert.deepEqual(parseArgs(['--report-output', 'dependabot-drift.json']), {
     reportOutputPath: 'dependabot-drift.json',
     allowPlatformStateExitZero: false,
+    currentRefName: null,
+    currentHeadSha: null,
   });
   assert.deepEqual(parseArgs(['--report-output', 'dependabot-drift.json', '--allow-platform-state-exit-zero']), {
     reportOutputPath: 'dependabot-drift.json',
     allowPlatformStateExitZero: true,
+    currentRefName: null,
+    currentHeadSha: null,
+  });
+  assert.deepEqual(parseArgs([
+    '--report-output',
+    'dependabot-drift.json',
+    '--current-ref-name',
+    'taichuy_dev',
+    '--current-head-sha',
+    'c36d5041548aceef36a567c5d1bc261b4b2641fc',
+  ]), {
+    reportOutputPath: 'dependabot-drift.json',
+    allowPlatformStateExitZero: false,
+    currentRefName: 'taichuy_dev',
+    currentHeadSha: 'c36d5041548aceef36a567c5d1bc261b4b2641fc',
   });
   assert.throws(() => parseArgs(['--report-output']), /需要路径参数/);
   assert.throws(() => parseArgs(['--unknown']), /未知参数/);
+});
+
+test('buildDependencySubmissionEvidenceLines flags stale submission sha for the current drift head', () => {
+  const lines = buildDependencySubmissionEvidenceLines({
+    workflowConfigured: true,
+    runAvailable: true,
+    runId: 123,
+    htmlUrl: 'https://github.com/taichuy/7flows/actions/runs/123',
+    status: 'completed',
+    conclusion: 'success',
+    event: 'push',
+    headBranch: 'taichuy_dev',
+    headSha: '8cffe49393f7543676d9a12629e1f5abd23ce282',
+    currentRefName: 'taichuy_dev',
+    currentHeadSha: 'c36d5041548aceef36a567c5d1bc261b4b2641fc',
+    currentRefMatches: true,
+    currentHeadShaMatches: false,
+  });
+
+  assert.match(lines.join('\n'), /submission ref snapshot: branch: `taichuy_dev`，sha: `8cffe49393f7543676d9a12629e1f5abd23ce282`/);
+  assert.match(lines.join('\n'), /当前 drift head 是 `c36d5041548aceef36a567c5d1bc261b4b2641fc`，但最新 submission 证据仍停留在更早的 sha `8cffe49393f7543676d9a12629e1f5abd23ce282`/);
 });
 
 test('resolveProcessExitCode only softens platform-state outcomes', () => {

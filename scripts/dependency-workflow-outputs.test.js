@@ -67,6 +67,10 @@ test('GitHub Security Drift keeps workflow_run relays pinned to the upstream bra
     workflowSource,
     /--current-ref-name "\$\{\{ github\.event\.workflow_run\.head_branch \|\| github\.ref_name }}"/,
   );
+  assert.match(
+    workflowSource,
+    /--current-head-sha "\$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha }}"/,
+  );
 });
 
 test('GitHub Security Drift keeps workflow_run checkout and issue sync pinned to the submission branch facts', () => {
@@ -80,5 +84,9 @@ test('GitHub Security Drift keeps workflow_run checkout and issue sync pinned to
   assert.match(
     workflowSource,
     /--current-ref-name "\$\{\{ github\.event\.workflow_run\.head_branch \|\| github\.ref_name }}"/,
+  );
+  assert.match(
+    workflowSource,
+    /--current-head-sha "\$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha }}"/,
   );
 });
