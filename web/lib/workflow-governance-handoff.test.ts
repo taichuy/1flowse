@@ -1,12 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildWorkflowGovernanceDetailHrefFromCurrentHref,
   buildWorkflowCatalogGapDetail,
   buildWorkflowGovernanceHandoff
 } from "@/lib/workflow-governance-handoff";
 import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 describe("workflow-governance-handoff", () => {
+  it("preserves workflow-library definition scope when current href already points at the same workflow", () => {
+    expect(
+      buildWorkflowGovernanceDetailHrefFromCurrentHref({
+        workflowId: "workflow-same",
+        currentHref:
+          "/workflows/workflow-same?starter=starter-openclaw&definition_issue=missing_tool&q=drift"
+      })
+    ).toBe(
+      "/workflows/workflow-same?definition_issue=missing_tool"
+    );
+  });
+
   it("builds shared catalog-gap detail for recent-run style surfaces", () => {
     expect(
       buildWorkflowCatalogGapDetail({

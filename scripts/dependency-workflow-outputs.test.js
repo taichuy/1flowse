@@ -46,6 +46,6 @@ test('GitHub Security Drift keeps issue sync running after drift failures', () =
   assert.match(workflowSource, /- name: Sync security drift tracking issue/);
   assert.match(workflowSource, /id: sync_issue/);
   assert.match(workflowSource, /if: always\(\) && hashFiles\('dependabot-drift\.json'\) != ''/);
-  assert.match(workflowSource, /node scripts\/sync-github-security-drift-issue\.js --report dependabot-drift\.json/);
+  assert.match(workflowSource, /node scripts\/sync-github-security-drift-issue\.js\s+--report dependabot-drift\.json/);
   assert.match(workflowSource, /tracking_issue_url: \$\{\{ steps\.sync_issue\.outputs\.tracking_issue_url }}?/);
 });

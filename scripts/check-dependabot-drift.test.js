@@ -1021,6 +1021,82 @@ test('buildDriftReport keeps actions read blockers machine-readable', () => {
   ]);
 });
 
+test('buildDriftReport keeps graph visibility rate-limit failures machine-readable', () => {
+  const report = buildDriftReport({
+    repository: {
+      owner: 'taichuy',
+      repo: '7flows',
+    },
+    defaultBranch: null,
+    manifestNodes: [],
+    workspaceManifestInventory: buildWorkspaceManifestInventory([
+      'api/pyproject.toml',
+      'api/uv.lock',
+      'web/package.json',
+      'web/pnpm-lock.yaml',
+    ]),
+    manifestCoverage: [
+      {
+        rootLabel: 'api',
+        ecosystem: 'uv',
+        dependencyGraphSupport: 'dependency_submission',
+        dependencyGraphSupported: false,
+        graphVisible: null,
+        matchedGraphFilenames: [],
+      },
+      {
+        rootLabel: 'web',
+        ecosystem: 'pnpm',
+        dependencyGraphSupport: 'native',
+        dependencyGraphSupported: true,
+        graphVisible: null,
+        matchedGraphFilenames: [],
+      },
+    ],
+    manifestGraphCheckError:
+      'gh: API rate limit exceeded for 156.59.13.25. (HTTP 403)',
+    openAlerts: [],
+    results: [],
+    actionableAlerts: [],
+    conclusion: {
+      exitCode: 3,
+      kind: 'graph_visibility_check_failed',
+      summary:
+        '当前无法读取 GitHub `dependencyGraphManifests`，因为 API rate limit 已耗尽；请使用具备更高配额的 gh 凭证或等待配额恢复后重跑。',
+    },
+  });
+
+  assert.equal(report.manifestGraph.manifestCount, null);
+  assert.equal(
+    report.manifestGraph.checkError,
+    'gh: API rate limit exceeded for 156.59.13.25. (HTTP 403)',
+  );
+  assert.deepEqual(
+    report.manifestGraph.coverage.map((item) => item.graphVisible),
+    [null, null],
+  );
+  assert.deepEqual(report.recommendedActions, [
+    {
+      priority: 1,
+      audience: 'workflow_maintainer',
+      code: 'rerun_with_authenticated_github_api',
+      summary:
+        '使用具备更高 GitHub API 配额的 token / `gh` 凭证后重跑 `check-dependabot-drift`，避免 `dependencyGraphManifests` 因 rate limit 中断。',
+      rationale:
+        '当前 drift 检查在读取 `dependencyGraphManifests` 时直接命中 GitHub API rate limit，尚未形成可验证的 graph visibility 证据。',
+      roots: [],
+      href: 'https://github.com/taichuy/7flows/settings/secrets/actions',
+      hrefLabel: '打开 Actions secrets',
+    },
+  ]);
+
+  const outputs = buildDriftStepOutputs(report);
+  assert.equal(
+    outputs.dependency_graph_check_error,
+    'gh: API rate limit exceeded for 156.59.13.25. (HTTP 403)',
+  );
+});
+
 test('parseDependencySubmissionJsonReport keeps dependency graph visibility evidence', () => {
   const parsed = parseDependencySubmissionJsonReport(
     JSON.stringify({

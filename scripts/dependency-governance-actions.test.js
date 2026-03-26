@@ -259,3 +259,26 @@ test('buildDriftRecommendedActions ignores actions-read noise once submission ev
     ],
   );
 });
+
+test('buildDriftRecommendedActions surfaces rate-limit follow-up when graph visibility check fails', () => {
+  const actions = buildDriftRecommendedActions({
+    dependencyGraphVisibilityCheckError:
+      'gh: API rate limit exceeded for 156.59.13.25. (HTTP 403)',
+    repository: { owner: 'taichuy', repo: '7flows' },
+  });
+
+  assert.deepEqual(actions, [
+    {
+      priority: 1,
+      audience: 'workflow_maintainer',
+      code: 'rerun_with_authenticated_github_api',
+      summary:
+        '使用具备更高 GitHub API 配额的 token / `gh` 凭证后重跑 `check-dependabot-drift`，避免 `dependencyGraphManifests` 因 rate limit 中断。',
+      rationale:
+        '当前 drift 检查在读取 `dependencyGraphManifests` 时直接命中 GitHub API rate limit，尚未形成可验证的 graph visibility 证据。',
+      roots: [],
+      href: 'https://github.com/taichuy/7flows/settings/secrets/actions',
+      hrefLabel: '打开 Actions secrets',
+    },
+  ]);
+});
