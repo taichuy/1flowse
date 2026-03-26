@@ -35,7 +35,6 @@ import {
   buildAuthorFacingWorkflowDetailLinkSurface
 } from "@/lib/workbench-entry-surfaces";
 import {
-  appendWorkflowLibraryViewState,
   appendWorkflowLibraryViewStateForWorkflow
 } from "@/lib/workflow-library-query";
 
@@ -371,14 +370,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   workflowId: run.workflow_id,
                   variant: "recent"
                 });
-                const workflowDetailHref = appendWorkflowLibraryViewState(
+                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
                   workflowDetailLink.href,
                   {
-                    definitionIssue:
-                      (run.tool_governance?.missing_tool_ids.length ?? 0) > 0
-                        ? "missing_tool"
-                        : null
-                  }
+                    tool_governance: run.tool_governance ?? null,
+                    legacy_auth_governance: run.legacy_auth_governance ?? null
+                  },
+                  { definitionIssue: null }
                 );
 
                 return (

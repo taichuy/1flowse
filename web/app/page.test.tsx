@@ -354,7 +354,9 @@ describe("HomePage", () => {
     expect(html).toContain(
       "当前 workflow 仍有 0 条 draft cleanup、1 条 published blocker、0 条 offline inventory。Publish auth contract：supported api_key / internal；legacy token。"
     );
-    expect(html).toContain('href="/workflows/workflow-home-legacy-1"');
+    expect(html).toContain(
+      'href="/workflows/workflow-home-legacy-1?definition_issue=legacy_publish_auth"'
+    );
   });
 
   it("surfaces a shared cross-entry risk digest before separate operator panels", async () => {

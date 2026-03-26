@@ -53,7 +53,7 @@ describe("RecentRunEntryCard", () => {
     expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain("publish auth blocker");
     expect(html).toContain(
-      '/workflows/workflow-1?track=author&amp;definition_issue=missing_tool'
+      '/workflows/workflow-1?track=author&amp;definition_issue=legacy_publish_auth'
     );
     expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");

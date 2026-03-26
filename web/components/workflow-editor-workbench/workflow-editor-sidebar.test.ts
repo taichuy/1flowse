@@ -165,6 +165,74 @@ describe("WorkflowEditorSidebar", () => {
     );
   });
 
+  it("prioritizes legacy publish auth scope on workflow chips when publish auth backlog still exists", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [
+          {
+            id: "workflow alpha/beta",
+            name: "Governed workflow",
+            status: "draft",
+            version: "0.1.0",
+            node_count: 1,
+            tool_governance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            },
+            legacy_auth_governance: {
+              binding_count: 1,
+              draft_candidate_count: 0,
+              published_blocker_count: 1,
+              offline_inventory_count: 0
+            }
+          }
+        ],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " drift ",
+          selectedTemplateId: "workspace-starter-1"
+        },
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onWorkflowNameChange: () => undefined,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain(
+      'href="/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth"'
+    );
+  });
+
   it("shows execution preflight readiness before save when strong isolation is blocked", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {
