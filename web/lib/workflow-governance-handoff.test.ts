@@ -1,9 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import { buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 describe("workflow-governance-handoff", () => {
+  it("builds shared catalog-gap detail for recent-run style surfaces", () => {
+    expect(
+      buildWorkflowCatalogGapDetail({
+        toolGovernance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        subjectLabel: "run",
+        returnDetail:
+          "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
+      })
+    ).toBe(
+      "当前 run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
+    );
+  });
+
+  it("returns null shared catalog-gap detail when no missing tools remain", () => {
+    expect(
+      buildWorkflowCatalogGapDetail({
+        toolGovernance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: [],
+          governed_tool_count: 1,
+          strong_isolation_tool_count: 0
+        },
+        subjectLabel: "run",
+        returnDetail: "noop"
+      })
+    ).toBeNull();
+  });
+
   it("keeps legacy publish auth scope on workflow links without catalog-gap facts", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-legacy-auth",
