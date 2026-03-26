@@ -144,6 +144,7 @@ export function WorkspaceStarterBulkGovernanceCard({
               headline={sourceGovernancePrimaryFollowUp.headline}
               label={sourceGovernancePrimaryFollowUp.label}
               primaryResourceSummary={sourceGovernancePrimaryFollowUp.primaryResourceSummary}
+              workflowGovernanceHandoff={sourceGovernancePrimaryFollowUp.workflowGovernanceHandoff}
               actions={
                 sourceGovernancePrimaryFollowUp.entryKey ||
                 (sourceGovernancePrimaryFollowUp.focusTemplateId &&
@@ -305,6 +306,7 @@ export function WorkspaceStarterBulkGovernanceCard({
                   detail={recommendedNextStep.detail}
                   label={recommendedNextStep.label}
                   primaryResourceSummary={recommendedNextStep.primaryResourceSummary}
+                  workflowGovernanceHandoff={recommendedNextStep.workflowGovernanceHandoff}
                   actions={
                     recommendedNextStep.entryKey ||
                     (recommendedNextStep.focusTemplateId && recommendedNextStep.focusLabel) ||

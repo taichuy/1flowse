@@ -185,8 +185,13 @@ describe("WorkspaceStarterDefinitionSnapshotPanel", () => {
     expect(html).toContain("Recommended next step");
     expect(html).toContain("catalog gap");
     expect(html).toContain(
-      "当前 starter 仍有 catalog gap（catalog.tool.missing）；来源 workflow 还保留 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory 的 publish auth blocker，先回源 workflow 统一收口 catalog gap / publish auth contract，再回来继续复用或创建。"
+      "当前 starter 仍有 catalog gap（catalog.tool.missing）；先回源 workflow 补齐 binding，再回来继续复用或创建。"
     );
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain(
+      "当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory。"
+    );
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
     expect(html).toContain(
       "Primary governed starter: Catalog gap starter · catalog gap · catalog.tool.missing · publish auth blocker · source 0.4.0."
     );

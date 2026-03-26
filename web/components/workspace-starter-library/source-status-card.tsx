@@ -130,6 +130,7 @@ export function WorkspaceStarterSourceCard({
               detail={recommendedNextStep.detail}
               label={recommendedNextStep.label}
               primaryResourceSummary={recommendedNextStep.primaryResourceSummary}
+              workflowGovernanceHandoff={recommendedNextStep.workflowGovernanceHandoff}
             />
           ) : (
             <p className="section-copy starter-summary-copy">

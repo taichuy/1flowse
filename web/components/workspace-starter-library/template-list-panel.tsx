@@ -295,6 +295,7 @@ export function WorkspaceStarterTemplateListPanel({
             headline={resolvedEmptyStateFollowUp.headline}
             label={resolvedEmptyStateFollowUp.label}
             primaryResourceSummary={resolvedEmptyStateFollowUp.primaryResourceSummary}
+            workflowGovernanceHandoff={resolvedEmptyStateFollowUp.workflowGovernanceHandoff}
             actions={
               resolvedEmptyStateFollowUp.entryKey ? (
                 <WorkbenchEntryLink
@@ -390,6 +391,7 @@ export function WorkspaceStarterTemplateListPanel({
                       detail={recommendedNextStep.detail}
                       label={recommendedNextStep.label}
                       primaryResourceSummary={recommendedNextStep.primaryResourceSummary}
+                      workflowGovernanceHandoff={recommendedNextStep.workflowGovernanceHandoff}
                       actions={
                         recommendedNextStep.entryKey ? (
                           <span

@@ -41,13 +41,15 @@ import {
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 import { appendWorkflowLibraryViewState } from "@/lib/workflow-library-query";
 import {
-  formatWorkflowLegacyPublishAuthBacklogSummary,
   formatToolReferenceIssueSummary,
   formatCatalogGapSummary,
   formatCatalogGapToolSummary,
   getWorkflowLegacyPublishAuthStatusLabel
 } from "@/lib/workflow-definition-governance";
-import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
+import {
+  buildWorkflowGovernanceHandoff,
+  type WorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 
 export {
@@ -162,6 +164,7 @@ export type WorkspaceStarterGovernanceRecommendedNextStep = {
   label: string;
   detail: string;
   primaryResourceSummary?: string | null;
+  workflowGovernanceHandoff?: WorkflowGovernanceHandoff | null;
   focusTemplateId: string | null;
   focusLabel: string | null;
   entryKey?: WorkbenchEntryLinkKey;
@@ -191,6 +194,7 @@ export type WorkspaceStarterFollowUpSurface = {
   headline: string;
   detail: string;
   primaryResourceSummary?: string | null;
+  workflowGovernanceHandoff?: WorkflowGovernanceHandoff | null;
   focusTemplateId: string | null;
   focusLabel: string | null;
   entryKey?: WorkbenchEntryLinkKey;
@@ -852,6 +856,7 @@ export function buildWorkspaceStarterSourceGovernancePrimaryFollowUp({
       statusLabels: [presenter.actionStatusLabel ?? presenter.statusLabel],
       archived: primaryTemplate.archived
     }),
+    workflowGovernanceHandoff: recommendedNextStep?.workflowGovernanceHandoff ?? null,
     focusTemplateId: primaryTemplate.id,
     focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null,
     entryKey: recommendedNextStep?.entryKey,
@@ -923,15 +928,10 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
   const legacyAuthStatusLabel = sourceWorkflowSummary
     ? getWorkflowLegacyPublishAuthStatusLabel(sourceWorkflowSummary)
     : null;
-  const legacyAuthBacklogSummary = sourceWorkflowSummary
-    ? formatWorkflowLegacyPublishAuthBacklogSummary(sourceWorkflowSummary)
-    : null;
   const renderedToolSummary =
     formatCatalogGapToolSummary(normalizedMissingToolIds) ?? "unknown tool";
   const detail = sourceWorkflowId
-    ? legacyAuthBacklogSummary && legacyAuthStatusLabel
-      ? `当前 starter 仍有 catalog gap（${renderedToolSummary}）；来源 workflow 还保留 ${legacyAuthBacklogSummary} 的 ${legacyAuthStatusLabel}，先回源 workflow 统一收口 catalog gap / publish auth contract，再回来继续复用或创建。`
-      : `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先回源 workflow 补齐 binding，再回来继续复用或创建。`
+    ? `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先回源 workflow 补齐 binding，再回来继续复用或创建。`
     : `当前 starter 仍有 catalog gap（${renderedToolSummary}）；先同步 workspace plugin catalog，或切换到仍可用的 starter。`;
 
   const sourceWorkflowLink = sourceWorkflowId
@@ -981,6 +981,7 @@ export function buildWorkspaceStarterMissingToolGovernanceSurface({
       ],
       archived: template.archived
     }),
+    workflowGovernanceHandoff,
     focusTemplateId: null,
     focusLabel: null,
     entryKey: sourceWorkflowLink ? "workflowLibrary" : undefined,
@@ -1096,6 +1097,8 @@ export function buildWorkspaceStarterTemplateFollowUpSurface({
         statusLabels: [primaryStatusLabel],
         archived: template.archived
       }),
+    workflowGovernanceHandoff:
+      sourceGovernanceSurface.recommendedNextStep?.workflowGovernanceHandoff ?? null,
     focusTemplateId: template.id,
     focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null,
     entryKey: sourceGovernanceSurface.recommendedNextStep?.entryKey,
@@ -1318,6 +1321,7 @@ function buildWorkspaceStarterBulkResultMissingToolRecommendedNextStep(
     label: missingToolSurface.label,
     detail: missingToolSurface.detail,
     primaryResourceSummary: missingToolSurface.primaryResourceSummary,
+    workflowGovernanceHandoff: missingToolSurface.workflowGovernanceHandoff,
     focusTemplateId: item.template_id,
     focusLabel: focusTemplateName ? `优先聚焦 starter：${focusTemplateName}` : null,
     entryKey: missingToolSurface.entryKey,

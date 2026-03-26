@@ -104,6 +104,7 @@ export function WorkspaceStarterSourceDiffPanel({
               headline={emptyPanelFollowUp.headline}
               label={emptyPanelFollowUp.label}
               primaryResourceSummary={emptyPanelFollowUp.primaryResourceSummary}
+              workflowGovernanceHandoff={emptyPanelFollowUp.workflowGovernanceHandoff}
               actions={
                 emptyPanelFollowUp.entryKey ? (
                   <WorkbenchEntryLink

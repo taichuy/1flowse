@@ -550,13 +550,14 @@ describe("workspace starter source action decision", () => {
       ]
     });
 
-    expect(primaryFollowUp).toEqual({
+    expect(primaryFollowUp).toMatchObject({
       kind: "prioritized",
       label: "建议 refresh",
       headline: "Active starter A 当前是共享来源治理队列的首个待处理 starter。",
       detail:
         "后端 follow-up queue 已把 Active starter A 排在当前范围的首位，后面还有 1 个待处理 starter。 当前主要是来源快照漂移。 先看 source diff，再决定 refresh 还是 rebase。 当前 starter 与来源 workflow 版本不一致。",
       primaryResourceSummary: "Active starter A · 建议 refresh · source 0.2.0",
+      workflowGovernanceHandoff: null,
       focusTemplateId: "starter-active-a",
       focusLabel: "优先聚焦 starter：Active starter A"
     });
@@ -703,13 +704,14 @@ describe("workspace starter source action decision", () => {
       }
     });
 
-    expect(primaryFollowUp).toEqual({
+    expect(primaryFollowUp).toMatchObject({
       kind: "prioritized",
       label: "确认模板后带此 starter 回到创建页",
       headline: "Active starter B 当前是共享来源治理队列的首个待处理 starter。",
       detail:
         "后端 follow-up queue 已把 Active starter B 排在当前范围的首位。 来源 workflow 当前不可访问。 当前 starter 绑定的来源 workflow 已缺失。",
       primaryResourceSummary: "Active starter B · 来源缺失 · source Workflow B",
+      workflowGovernanceHandoff: null,
       focusTemplateId: "starter-active-b",
       focusLabel: "优先聚焦 starter：Active starter B",
       entryKey: "createWorkflow",
@@ -1274,10 +1276,19 @@ describe("workspace starter source action decision", () => {
       recommendedNextStep: {
         action: "review_result_receipt",
         label: "catalog gap",
-        detail:
-          "当前 starter 仍有 catalog gap（native.catalog-gap）；来源 workflow 还保留 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory 的 publish auth blocker，先回源 workflow 统一收口 catalog gap / publish auth contract，再回来继续复用或创建。",
+        detail: "当前 starter 仍有 catalog gap（native.catalog-gap）；先回源 workflow 补齐 binding，再回来继续复用或创建。",
         primaryResourceSummary:
           "Catalog gap starter · catalog gap · native.catalog-gap · publish auth blocker · source 0.4.0",
+        workflowGovernanceHandoff: expect.objectContaining({
+          workflowGovernanceHref: expect.stringContaining("definition_issue=legacy_publish_auth"),
+          legacyAuthHandoff: expect.objectContaining({
+            bindingChipLabel: "2 legacy bindings",
+            statusChipLabel: "publish auth blocker",
+            detail: expect.stringContaining(
+              "当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory。"
+            )
+          })
+        }),
         focusTemplateId: "starter-catalog-gap",
         focusLabel: "优先聚焦 starter：Catalog gap starter",
         entryKey: "workflowLibrary",

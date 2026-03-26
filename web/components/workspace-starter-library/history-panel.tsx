@@ -105,6 +105,7 @@ export function WorkspaceStarterHistoryPanel({
               headline={emptyPanelFollowUp.headline}
               label={emptyPanelFollowUp.label}
               primaryResourceSummary={emptyPanelFollowUp.primaryResourceSummary}
+              workflowGovernanceHandoff={emptyPanelFollowUp.workflowGovernanceHandoff}
               actions={
                 emptyPanelFollowUp.entryKey ? (
                   <WorkbenchEntryLink

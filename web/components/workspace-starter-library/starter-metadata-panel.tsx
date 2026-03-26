@@ -159,6 +159,7 @@ export function WorkspaceStarterMetadataPanel({
             headline={resolvedEmptyStateFollowUp.headline}
             label={resolvedEmptyStateFollowUp.label}
             primaryResourceSummary={resolvedEmptyStateFollowUp.primaryResourceSummary}
+            workflowGovernanceHandoff={resolvedEmptyStateFollowUp.workflowGovernanceHandoff}
             actions={
               resolvedEmptyStateFollowUp.entryKey ? (
                 <WorkbenchEntryLink
@@ -197,6 +198,7 @@ export function WorkspaceStarterMetadataPanel({
               label={resolvedMetadataFollowUpSurface.label}
               detail={resolvedMetadataFollowUpSurface.detail}
               primaryResourceSummary={resolvedMetadataFollowUpSurface.primaryResourceSummary}
+              workflowGovernanceHandoff={resolvedMetadataFollowUpSurface.workflowGovernanceHandoff}
               actions={
                 missingToolGovernanceSurface ? (
                   resolvedMetadataFollowUpSurface.entryKey ? (

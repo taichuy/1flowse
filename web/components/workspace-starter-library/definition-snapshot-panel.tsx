@@ -107,6 +107,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
             headline={resolvedEmptyStateFollowUp.headline}
             label={resolvedEmptyStateFollowUp.label}
             primaryResourceSummary={resolvedEmptyStateFollowUp.primaryResourceSummary}
+            workflowGovernanceHandoff={resolvedEmptyStateFollowUp.workflowGovernanceHandoff}
             actions={
               resolvedEmptyStateFollowUp.entryKey ? (
                 <WorkbenchEntryLink
@@ -213,6 +214,7 @@ export function WorkspaceStarterDefinitionSnapshotPanel({
                   detail={missingToolGovernanceSurface.detail}
                   label={missingToolGovernanceSurface.label}
                   primaryResourceSummary={missingToolGovernanceSurface.primaryResourceSummary}
+                  workflowGovernanceHandoff={missingToolGovernanceSurface.workflowGovernanceHandoff}
                   actions={
                     missingToolGovernanceSurface.entryKey ? (
                       <WorkbenchEntryLink
