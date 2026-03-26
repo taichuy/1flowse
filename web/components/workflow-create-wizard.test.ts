@@ -869,11 +869,12 @@ describe("WorkflowCreateWizard", () => {
       })
     );
 
-    expect(html).toContain("Source publish governance");
-    expect(html).toContain("Source Publish Workflow");
-    expect(html).toContain("Publish auth contract");
-    expect(html).toContain("打开源 workflow");
-    expect(html).toContain("只看 legacy auth cleanup workflows");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("2 legacy bindings");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain("Publish auth contract：supported api_key / internal；legacy token。");
+    expect(html).toContain("管理这个 workspace starter");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
     expect(html).toContain(
       '/workflows/wf-source?needs_follow_up=true&amp;q=publish&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth'
     );
@@ -994,9 +995,12 @@ describe("WorkflowCreateWizard", () => {
       })
     );
 
+    expect(html).toContain("Legacy publish auth handoff");
     expect(html).toContain("Offline Inventory Workflow");
+    expect(html).toContain("1 legacy bindings");
+    expect(html).toContain("legacy auth cleanup");
     expect(html).toContain("1 条 offline inventory");
-    expect(html).toContain("只看 legacy auth cleanup workflows");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
     expect(html).toContain(
       '/workflows/wf-offline?needs_follow_up=true&amp;q=inventory&amp;source_governance_kind=drifted&amp;starter=workspace-starter-offline&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth'
     );
@@ -1123,11 +1127,11 @@ describe("WorkflowCreateWizard", () => {
       })
     );
 
-    expect(html).toContain("Catalog gap");
+    expect(html).toContain("catalog gap");
     expect(html).toContain("当前 starter 仍有 catalog gap（native.missing）");
     expect(html).toContain("如果现在创建，API 会直接拒绝该草稿");
     expect(html).toContain(
-      "Primary governed starter: Missing Tool Starter · catalog gap · native.missing."
+      "Primary governed starter: Missing Tool Starter · catalog gap · native.missing · source Source Missing Tool Workflow."
     );
     expect(html).toContain("打开源 workflow");
     expect(html).toContain('/workflows/wf-missing-tool?');
