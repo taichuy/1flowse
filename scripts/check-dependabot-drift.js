@@ -995,6 +995,20 @@ function shouldAllowAlertApiFallback() {
   return process.env.CHECK_DEPENDABOT_DRIFT_ALERTS_OPTIONAL === '1';
 }
 
+function resolveRepositoryDefaultBranch(repositoryData, resolveGitRef = run) {
+  const graphQlDefaultBranch = repositoryData?.data?.repository?.defaultBranchRef?.name || null;
+  if (graphQlDefaultBranch) {
+    return graphQlDefaultBranch;
+  }
+
+  try {
+    const remoteHeadRef = resolveGitRef('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+    return remoteHeadRef.startsWith('origin/') ? remoteHeadRef.slice('origin/'.length) : remoteHeadRef;
+  } catch {
+    return null;
+  }
+}
+
 function parseArgs(argv) {
   const options = {
     reportOutputPath: null,
@@ -1396,7 +1410,9 @@ function writeDriftReport(reportOutputPath, params) {
     return;
   }
 
-  const reportPath = path.resolve(repoRoot, reportOutputPath);
+  const reportPath = path.isAbsolute(reportOutputPath)
+    ? reportOutputPath
+    : path.resolve(process.cwd(), reportOutputPath);
   const report = buildDriftReport(params);
   fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 }
@@ -1492,16 +1508,7 @@ function main() {
     manifestGraphCheckError = error.message;
   }
 
-  const defaultBranch =
-    repositoryData?.data?.repository?.defaultBranchRef?.name ||
-    (() => {
-      try {
-        const remoteHeadRef = run('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
-        return remoteHeadRef.startsWith('origin/') ? remoteHeadRef.slice('origin/'.length) : remoteHeadRef;
-      } catch {
-        return null;
-      }
-    })();
+  const defaultBranch = resolveRepositoryDefaultBranch(repositoryData);
   let repositorySecurityAndAnalysis = null;
 
   try {
@@ -1823,6 +1830,7 @@ module.exports = {
   parseDependencySubmissionReport,
   parsePythonDependencyName,
   resolveProcessExitCode,
+  resolveRepositoryDefaultBranch,
   resolveAlertEvaluationSource,
   resolveDependencySubmissionEvidenceWaitSeconds,
   buildDriftStepOutputs,

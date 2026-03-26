@@ -91,7 +91,8 @@ test('main degrades graph visibility rate limits into a report instead of crashi
   const binDir = path.join(repoRoot, 'bin');
   const gitPath = path.join(binDir, 'git');
   const ghPath = path.join(binDir, 'gh');
-  const reportPath = path.join(repoRoot, 'dependabot-drift.json');
+  const reportFileName = 'tmp-dependabot-drift-report.json';
+  const reportPath = path.join(repoRoot, reportFileName);
   const summaryPath = path.join(repoRoot, 'step-summary.md');
   const originalPath = process.env.PATH;
   const scriptPath = path.join(__dirname, 'check-dependabot-drift.js');
@@ -142,7 +143,7 @@ process.exit(1);
   fs.chmodSync(ghPath, 0o755);
 
   try {
-    execFileSync(process.execPath, [scriptPath, '--report-output', reportPath, '--allow-platform-state-exit-zero'], {
+    execFileSync(process.execPath, [scriptPath, '--report-output', reportFileName, '--allow-platform-state-exit-zero'], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -167,6 +168,7 @@ process.exit(1);
     assert.match(summary, /rerun_with_authenticated_github_api/);
     assert.match(summary, /run_dependency_graph_submission/);
   } finally {
+    fs.rmSync(reportPath, { force: true });
     process.env.PATH = originalPath;
   }
 });
@@ -176,10 +178,20 @@ test('main keeps dependency submission evidence in the step summary when graph v
   const binDir = path.join(repoRoot, 'bin');
   const gitPath = path.join(binDir, 'git');
   const ghPath = path.join(binDir, 'gh');
-  const reportPath = path.join(repoRoot, 'dependabot-drift.json');
+  const reportFileName = 'tmp-dependabot-drift-report.json';
+  const reportPath = path.join(repoRoot, reportFileName);
   const summaryPath = path.join(repoRoot, 'step-summary.md');
   const originalPath = process.env.PATH;
   const scriptPath = path.join(__dirname, 'check-dependabot-drift.js');
+  const trackedFilesOutput = JSON.stringify(
+    [
+      '.github/workflows/dependency-graph-submission.yml',
+      'api/pyproject.toml',
+      'api/uv.lock',
+      'web/package.json',
+      'web/pnpm-lock.yaml',
+    ].join('\n'),
+  );
 
   fs.mkdirSync(path.join(repoRoot, '.github', 'workflows'), { recursive: true });
   fs.writeFileSync(
@@ -193,13 +205,7 @@ test('main keeps dependency submission evidence in the step summary when graph v
     `#!/usr/bin/env node
 const args = process.argv.slice(2);
 if (args[0] === 'ls-files') {
-  process.stdout.write([
-    '.github/workflows/dependency-graph-submission.yml',
-    'api/pyproject.toml',
-    'api/uv.lock',
-    'web/package.json',
-    'web/pnpm-lock.yaml',
-  ].join('\n'));
+  process.stdout.write(${trackedFilesOutput});
   process.exit(0);
 }
 if (args[0] === 'config' && args[1] === '--get' && args[2] === 'remote.origin.url') {
@@ -296,7 +302,7 @@ process.exit(1);
   fs.chmodSync(ghPath, 0o755);
 
   try {
-    execFileSync(process.execPath, [scriptPath, '--report-output', 'dependabot-drift.json', '--allow-platform-state-exit-zero'], {
+    execFileSync(process.execPath, [scriptPath, '--report-output', reportFileName, '--allow-platform-state-exit-zero'], {
       cwd: repoRoot,
       env: {
         ...process.env,
@@ -318,6 +324,7 @@ process.exit(1);
     assert.match(summary, /submitted roots: `web`（snapshot: `snapshot-web`）/);
     assert.match(summary, /roots not yet visible: `api`/);
   } finally {
+    fs.rmSync(reportPath, { force: true });
     process.env.PATH = originalPath;
   }
 });

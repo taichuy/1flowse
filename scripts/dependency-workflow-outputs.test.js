@@ -49,3 +49,36 @@ test('GitHub Security Drift keeps issue sync running after drift failures', () =
   assert.match(workflowSource, /node scripts\/sync-github-security-drift-issue\.js\s+--report dependabot-drift\.json/);
   assert.match(workflowSource, /tracking_issue_url: \$\{\{ steps\.sync_issue\.outputs\.tracking_issue_url }}?/);
 });
+
+test('GitHub Security Drift only auto-relays rerun push submissions', () => {
+  const workflowSource = readWorkflow('.github/workflows/github-security-drift.yml');
+
+  assert.match(
+    workflowSource,
+    /if: \$\{\{ github\.event_name != 'workflow_run' \|\| \(github\.event\.workflow_run\.conclusion == 'success' && \(github\.event\.workflow_run\.event != 'push' \|\| github\.event\.workflow_run\.run_attempt > 1\)\) }}/,
+  );
+});
+
+test('GitHub Security Drift keeps workflow_run relays pinned to the upstream branch and sha', () => {
+  const workflowSource = readWorkflow('.github/workflows/github-security-drift.yml');
+
+  assert.match(workflowSource, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha }}/);
+  assert.match(
+    workflowSource,
+    /--current-ref-name "\$\{\{ github\.event\.workflow_run\.head_branch \|\| github\.ref_name }}"/,
+  );
+});
+
+test('GitHub Security Drift keeps workflow_run checkout and issue sync pinned to the submission branch facts', () => {
+  const workflowSource = readWorkflow('.github/workflows/github-security-drift.yml');
+
+  assert.match(
+    workflowSource,
+    /workflow_run:\s+workflows:\s+- Dependency Graph Submission\s+types:\s+- completed/s,
+  );
+  assert.match(workflowSource, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \|\| github\.sha }}/);
+  assert.match(
+    workflowSource,
+    /--current-ref-name "\$\{\{ github\.event\.workflow_run\.head_branch \|\| github\.ref_name }}"/,
+  );
+});
