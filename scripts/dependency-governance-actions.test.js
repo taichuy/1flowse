@@ -111,6 +111,8 @@ test('normalizeRepositorySecurityAndAnalysis preserves missing setting fields ex
       'secret_scanning_push_protection',
       'secret_scanning_validity_checks',
     ],
+    manualVerificationRequired: true,
+    manualVerificationReason: 'missing_dependency_graph_fields',
     raw: {
       dependabot_security_updates: { status: 'disabled' },
       secret_scanning: { status: 'disabled' },
@@ -132,6 +134,8 @@ test('buildRepositorySecurityAndAnalysisMarkdownLines explains missing dependenc
   assert.match(lines.join('\n'), /automatic dependency submission: `unknown`/);
   assert.match(lines.join('\n'), /fields absent from repo API payload: `dependency_graph`、`automatic_dependency_submission`/);
   assert.match(lines.join('\n'), /最终仍以 dependency submission blocker 与 manifest visibility 证据为准/);
+  assert.match(lines.join('\n'), /gh api -X PATCH repos\/\{owner\}\/\{repo\}/);
+  assert.match(lines.join('\n'), /仍需到 `Settings -> Security & analysis` 人工确认/);
 });
 
 test('buildDriftRecommendedActions prioritizes dependency graph blocker ahead of alerts token setup', () => {

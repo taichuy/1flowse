@@ -442,6 +442,8 @@ test('buildSubmissionReport keeps machine-readable root evidence stable', () => 
       'secret_scanning_push_protection',
       'secret_scanning_validity_checks',
     ],
+    manualVerificationRequired: true,
+    manualVerificationReason: 'missing_dependency_graph_fields',
     raw: {
       dependabot_security_updates: { status: 'disabled' },
       secret_scanning: { status: 'disabled' },
@@ -745,6 +747,8 @@ test('buildSubmissionStepOutputs expose stable blocker and follow-up fields', ()
       'secret_scanning_validity_checks',
     ]),
   );
+  assert.equal(outputs.repository_security_and_analysis_manual_verification_required, 'false');
+  assert.equal(outputs.repository_security_and_analysis_manual_verification_reason, '');
   assert.equal(outputs.repository_security_and_analysis_check_error, '');
   assert.equal(
     outputs.primary_recommended_action_href,

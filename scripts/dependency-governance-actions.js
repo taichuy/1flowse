@@ -10,6 +10,11 @@ const trackedSecurityAndAnalysisFields = [
   'secret_scanning_validity_checks',
 ];
 
+const manualVerificationMissingSecurityAndAnalysisFields = [
+  'dependency_graph',
+  'automatic_dependency_submission',
+];
+
 function normalizeRecommendedActions(actions) {
   return (Array.isArray(actions) ? actions : [])
     .map((action) => {
@@ -173,6 +178,12 @@ function normalizeRepositorySecurityAndAnalysis(securityAndAnalysis) {
   });
 
   const dedupedAvailableFields = [...new Set(availableFields)].sort();
+  const missingFields = trackedSecurityAndAnalysisFields.filter(
+    (field) => !dedupedAvailableFields.includes(field),
+  );
+  const manualVerificationRequired = manualVerificationMissingSecurityAndAnalysisFields.some((field) =>
+    missingFields.includes(field),
+  );
 
   return {
     checkedAt: typeof securityAndAnalysis.checkedAt === 'string' ? securityAndAnalysis.checkedAt : null,
@@ -185,9 +196,11 @@ function normalizeRepositorySecurityAndAnalysis(securityAndAnalysis) {
       rawInput?.dependabot_security_updates,
     ),
     availableFields: dedupedAvailableFields,
-    missingFields: trackedSecurityAndAnalysisFields.filter(
-      (field) => !dedupedAvailableFields.includes(field),
-    ),
+    missingFields,
+    manualVerificationRequired,
+    manualVerificationReason: manualVerificationRequired
+      ? 'missing_dependency_graph_fields'
+      : null,
     raw,
   };
 }
@@ -246,6 +259,12 @@ function buildRepositorySecurityAndAnalysisMarkdownLines(
       lines.push(
         '- repo API 缺失这些字段时，不应把缺失误判成“已开启”；最终仍以 dependency submission blocker 与 manifest visibility 证据为准。',
       );
+
+      if (normalized.manualVerificationRequired) {
+        lines.push(
+          '- 即使 `gh api -X PATCH repos/{owner}/{repo}` 返回成功响应，也不要把这一步当成完成信号；仍需到 `Settings -> Security & analysis` 人工确认，并用新的 submission artifact 复验 blocker 是否消失。',
+        );
+      }
     }
   }
 

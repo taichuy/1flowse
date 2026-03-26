@@ -1312,6 +1312,10 @@ function buildDriftStepOutputs(report) {
     repository_security_and_analysis_missing_fields_json: JSON.stringify(
       repositorySecurityAndAnalysis?.missingFields || [],
     ),
+    repository_security_and_analysis_manual_verification_required:
+      repositorySecurityAndAnalysis?.manualVerificationRequired ? 'true' : 'false',
+    repository_security_and_analysis_manual_verification_reason:
+      repositorySecurityAndAnalysis?.manualVerificationReason || '',
     repository_security_and_analysis_check_error:
       repositorySecurityAndAnalysis?.checkError || '',
     alerts_unavailable: report?.dependabotAlerts?.unavailable ? 'true' : 'false',
