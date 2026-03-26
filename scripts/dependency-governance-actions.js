@@ -350,11 +350,14 @@ function buildRepositorySecurityAndAnalysisMarkdownLines(
   }
 
   if (normalized.missingFields.length > 0) {
+    const missingFieldsInline = normalized.missingFields
+      .map((field) => `\`${field}\``)
+      .join('、');
+
     lines.push(
-      `- repo API 未返回字段：${normalized.missingFields
-        .map((field) => `\`${field}\``)
-        .join('、')}`,
+      `- repo API 未返回字段：${missingFieldsInline}`,
     );
+    lines.push(`- fields absent from repo API payload: ${missingFieldsInline}`);
 
     if (normalized.manualVerificationReason) {
       lines.push(`- manual verification reason：\`${normalized.manualVerificationReason}\``);
@@ -404,6 +407,11 @@ function buildRecommendedActionsMarkdownLines(
       lines.push(
         `  - 仅支持人工操作${
           action.manualOnlyReason ? `（\`${action.manualOnlyReason}\`）` : ''
+        }`,
+      );
+      lines.push(
+        `  - execution: manual-only step${
+          action.manualOnlyReason ? ` (${action.manualOnlyReason})` : ''
         }`,
       );
     }
