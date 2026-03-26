@@ -11,7 +11,6 @@ import {
 } from "@/lib/workflow-definition-governance";
 import {
   appendWorkflowLibraryViewState,
-  appendWorkflowLibraryViewStateForWorkflow,
   readWorkflowLibraryViewState,
   type WorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
@@ -94,27 +93,30 @@ export function buildWorkflowGovernanceHandoff({
         new URLSearchParams(resolvedWorkflowDetailHref.split("?")[1] ?? "")
       )
     : { definitionIssue: null };
-  const legacyAuthHandoff = resolvedWorkflowId
-    ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance ?? null, resolvedWorkflowId)
-    : null;
+  const workflowGovernanceViewState: WorkflowLibraryViewState = workflowLibraryViewState.definitionIssue
+    ? workflowLibraryViewState
+    : {
+        definitionIssue: hasWorkflowLegacyPublishAuthIssues(workflowLibraryWorkflow)
+          ? "legacy_publish_auth"
+          : hasWorkflowMissingToolIssues(workflowLibraryWorkflow)
+            ? "missing_tool"
+            : null
+      };
   const hasWorkflowGovernanceIssues =
-    hasWorkflowLegacyPublishAuthIssues(workflowLibraryWorkflow) ||
-    hasWorkflowMissingToolIssues(workflowLibraryWorkflow);
+    workflowGovernanceViewState.definitionIssue !== null;
   const workflowGovernanceHref = resolvedWorkflowDetailHref
     ? hasWorkflowGovernanceIssues
-      ? appendWorkflowLibraryViewStateForWorkflow(
+      ? appendWorkflowLibraryViewState(
           resolvedWorkflowDetailHref,
-          workflowLibraryWorkflow,
-          workflowLibraryViewState
+          workflowGovernanceViewState
         )
       : resolvedWorkflowDetailHref
     : null;
   const workflowCatalogGapHref =
     resolvedWorkflowDetailHref && workflowCatalogGapSummary
-      ? appendWorkflowLibraryViewState(
-          resolvedWorkflowDetailHref,
-          { definitionIssue: "missing_tool" }
-        )
+      ? appendWorkflowLibraryViewState(resolvedWorkflowDetailHref, {
+          definitionIssue: "missing_tool"
+        })
       : null;
 
   return {
@@ -123,6 +125,8 @@ export function buildWorkflowGovernanceHandoff({
     workflowCatalogGapHref,
     workflowCatalogGapSummary,
     workflowCatalogGapDetail: workflowCatalogGapSummary ? workflowCatalogGapDetail : null,
-    legacyAuthHandoff
+    legacyAuthHandoff: resolvedWorkflowId
+      ? buildLegacyPublishAuthWorkflowHandoff(legacyAuthGovernance ?? null, resolvedWorkflowId)
+      : null
   };
 }

@@ -24,7 +24,7 @@ describe("workflow-governance-handoff", () => {
     expect(handoff.legacyAuthHandoff?.detail).toContain("1 条 published blocker");
   });
 
-  it("prioritizes legacy-auth scope while keeping a separate catalog-gap link when both blockers coexist", () => {
+  it("prioritizes legacy publish auth scope while keeping a separate catalog-gap shortcut", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-mixed",
       workflowDetailHref: "/workflows/workflow-mixed?starter=starter-openclaw",
@@ -53,7 +53,7 @@ describe("workflow-governance-handoff", () => {
     expect(handoff.legacyAuthHandoff?.statusChipLabel).toBe("publish auth blocker");
   });
 
-  it("preserves an explicit catalog-gap scope when callers already pinned it", () => {
+  it("preserves an explicit workflow detail scope when callers already pinned it", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-mixed",
       workflowDetailHref:

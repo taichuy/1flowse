@@ -81,11 +81,7 @@ function readWorkflowItemLegacyAuthGovernanceCounts(
 type ResolvedLegacyAuthGovernanceCounts = NonNullable<
   ReturnType<typeof readLegacyAuthGovernanceCounts>
 > & {
-  sourceKind:
-    | "workflow_item"
-    | "legacy_auth_summary"
-    | "snapshot_workflow"
-    | "snapshot_summary";
+  isSnapshotSummaryFallback: boolean;
 };
 
 function resolveWorkflowLegacyAuthGovernanceCounts(
@@ -97,7 +93,7 @@ function resolveWorkflowLegacyAuthGovernanceCounts(
     return workflowItemCounts
       ? {
           ...workflowItemCounts,
-          sourceKind: "workflow_item"
+          isSnapshotSummaryFallback: false
         }
       : null;
   }
@@ -109,12 +105,12 @@ function resolveWorkflowLegacyAuthGovernanceCounts(
       : legacyAuthGovernance.workflows.length === 1
         ? legacyAuthGovernance.workflows[0] ?? null
         : null;
-    const resolvedCounts = readLegacyAuthGovernanceCounts(workflowSummary ?? legacyAuthGovernance);
 
+    const resolvedCounts = readLegacyAuthGovernanceCounts(workflowSummary ?? legacyAuthGovernance);
     return resolvedCounts
       ? {
           ...resolvedCounts,
-          sourceKind: workflowSummary ? "snapshot_workflow" : "snapshot_summary"
+          isSnapshotSummaryFallback: workflowSummary === null
         }
       : null;
   }
@@ -123,19 +119,24 @@ function resolveWorkflowLegacyAuthGovernanceCounts(
   return resolvedCounts
     ? {
         ...resolvedCounts,
-        sourceKind: "legacy_auth_summary"
+        isSnapshotSummaryFallback: false
       }
     : null;
 }
 
 function getLegacyAuthGovernanceBacklogCount(
-  legacyAuthGovernance: ResolvedLegacyAuthGovernanceCounts,
-  draftCleanupCount: number
+  legacyAuthGovernance: ResolvedLegacyAuthGovernanceCounts | null
 ): number {
-  const nonPublishedBacklogCount =
-    draftCleanupCount > 0 ? draftCleanupCount : legacyAuthGovernance.offlineInventoryCount;
+  if (!legacyAuthGovernance) {
+    return 0;
+  }
 
-  return nonPublishedBacklogCount + legacyAuthGovernance.publishedBlockerCount;
+  const summarizedBacklogCount =
+    legacyAuthGovernance.draftCandidateCount +
+    legacyAuthGovernance.publishedBlockerCount +
+    legacyAuthGovernance.offlineInventoryCount;
+
+  return summarizedBacklogCount > 0 ? summarizedBacklogCount : legacyAuthGovernance.bindingCount;
 }
 
 function resolveWorkflowLegacyPublishAuthBacklogCounts(
@@ -144,10 +145,11 @@ function resolveWorkflowLegacyPublishAuthBacklogCounts(
   const currentPublishDraftIssueCount = getWorkflowLegacyPublishAuthIssues(workflow).length;
   const legacyAuthGovernance = resolveWorkflowLegacyAuthGovernanceCounts(workflow);
 
-  if (!legacyAuthGovernance || legacyAuthGovernance.bindingCount <= 0) {
+  if (!legacyAuthGovernance || getLegacyAuthGovernanceBacklogCount(legacyAuthGovernance) <= 0) {
     return {
       backlogCount: currentPublishDraftIssueCount,
       followUpCount: currentPublishDraftIssueCount,
+      currentPublishDraftIssueCount,
       draftCleanupCount: currentPublishDraftIssueCount,
       publishedBlockerCount: 0,
       offlineInventoryCount: 0,
@@ -161,14 +163,13 @@ function resolveWorkflowLegacyPublishAuthBacklogCounts(
   );
   const publishedBlockerCount = legacyAuthGovernance.publishedBlockerCount;
   const offlineInventoryCount = legacyAuthGovernance.offlineInventoryCount;
-  const backlogCount = getLegacyAuthGovernanceBacklogCount(
-    legacyAuthGovernance,
-    draftCleanupCount
-  );
+  const backlogCount = draftCleanupCount + publishedBlockerCount + offlineInventoryCount;
+  const followUpCount = backlogCount;
 
   return {
     backlogCount,
-    followUpCount: backlogCount,
+    followUpCount,
+    currentPublishDraftIssueCount,
     draftCleanupCount,
     publishedBlockerCount,
     offlineInventoryCount,
@@ -228,6 +229,9 @@ export function formatWorkflowLegacyPublishAuthBacklogSummary(
 
   if (backlogCounts.hasPersistedLegacyBindings) {
     return [
+      backlogCounts.currentPublishDraftCount > 0
+        ? `${backlogCounts.currentPublishDraftCount} 个当前 publish draft`
+        : null,
       `${backlogCounts.draftCleanupCount} 条 draft cleanup`,
       `${backlogCounts.publishedBlockerCount} 条 published blocker`,
       `${backlogCounts.offlineInventoryCount} 条 offline inventory`
@@ -236,7 +240,7 @@ export function formatWorkflowLegacyPublishAuthBacklogSummary(
       .join("、");
   }
 
-  return `${backlogCounts.followUpCount} 个 publish draft`;
+  return `${backlogCounts.followUpCount} 个当前 publish draft`;
 }
 
 export function hasWorkflowLegacyPublishAuthIssues(
