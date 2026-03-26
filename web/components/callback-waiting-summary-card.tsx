@@ -329,6 +329,7 @@ export function CallbackWaitingSummaryCard({
           legacyAuthHandoff
         }
       : {};
+  const hasWorkflowGovernanceSummary = Object.keys(workflowGovernanceSummaryProps).length > 0;
   const preferredInlineAction =
     recommendedAction?.kind === "manual_resume"
       ? "resume"
@@ -393,7 +394,8 @@ export function CallbackWaitingSummaryCard({
     lifecycleSummary ||
     waitingReason ||
     combinedChips.length > 0 ||
-    hasTermination;
+    hasTermination ||
+    hasWorkflowGovernanceSummary;
 
   if (!hasContent) {
     return null;
