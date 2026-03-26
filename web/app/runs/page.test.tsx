@@ -239,7 +239,7 @@ describe("RunsPage", () => {
     expect(html).toContain("Catalog Gap Workflow");
     expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain(
-      "当前 workflow 仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
+      "当前 run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 run 事实。"
     );
     expect(html).toContain('/workflows/workflow-gap-1?definition_issue=missing_tool');
   });

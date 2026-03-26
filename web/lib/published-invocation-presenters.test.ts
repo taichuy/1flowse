@@ -905,7 +905,9 @@ describe("published invocation presenters", () => {
 
     expect(sample.workflow_id).toBe("workflow-1");
     expect(sample.workflow_catalog_gap_summary).toBe("catalog gap · native.catalog-gap");
-    expect(sample.workflow_catalog_gap_detail).toContain("catalog gap（native.catalog-gap）");
+    expect(sample.workflow_catalog_gap_detail).toBe(
+      "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 publish sampled snapshot。"
+    );
     expect(sample.workflow_governance_handoff).toMatchObject({
       workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
       workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth"
