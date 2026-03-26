@@ -156,11 +156,11 @@ describe("RunDiagnosticsLegacyAuthGovernanceCard", () => {
     expect(html).toContain("再补发支持鉴权的 replacement bindings");
     expect(html).toContain(surfaceCopy.workflowFollowUpTitle);
     expect(html).toContain("回到 workflow 编辑器");
-    expect(html).toContain('href="/workflows/workflow-1"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
     expect(html).toContain("当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory");
   });
 
-  it("keeps the workflow handoff inside missing-tool scope when the workflow still has a catalog gap", () => {
+  it("keeps the workflow handoff inside legacy-auth scope when the workflow still has a catalog gap", () => {
     const executionView = buildExecutionView();
     executionView.legacy_auth_governance = buildLegacyAuthGovernanceSnapshotFixture({
       workflow_count: 1,
@@ -185,7 +185,7 @@ describe("RunDiagnosticsLegacyAuthGovernanceCard", () => {
       })
     );
 
-    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
   });
 
   it("returns nothing when the run has no legacy auth governance snapshot", () => {

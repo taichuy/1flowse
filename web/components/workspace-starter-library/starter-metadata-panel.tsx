@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { WorkbenchEntryLink } from "@/components/workbench-entry-links";
 import { WorkspaceStarterFollowUpCard } from "@/components/workspace-starter-library/follow-up-card";
 import type { WorkflowDefinitionToolGovernance } from "@/lib/workflow-definition-tool-governance";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
   WORKFLOW_BUSINESS_TRACKS,
   type WorkflowBusinessTrack
@@ -18,6 +19,7 @@ import {
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 
 import {
   buildWorkspaceStarterEmptyStateFollowUp,
@@ -40,6 +42,7 @@ type WorkspaceStarterMetadataPanelProps = {
   messageTone: WorkspaceStarterMessageTone;
   createWorkflowHref: string | null;
   selectedTemplateToolGovernance?: WorkflowDefinitionToolGovernance | null;
+  sourceWorkflowSummariesById?: Record<string, WorkflowListItem> | null;
   emptyStateFollowUp?: WorkspaceStarterFollowUpSurface | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
   setFormState: Dispatch<SetStateAction<WorkspaceStarterFormState | null>>;
@@ -58,6 +61,7 @@ export function WorkspaceStarterMetadataPanel({
   messageTone,
   createWorkflowHref,
   selectedTemplateToolGovernance = null,
+  sourceWorkflowSummariesById = null,
   emptyStateFollowUp = null,
   workspaceStarterGovernanceQueryScope = null,
   setFormState,
@@ -105,19 +109,37 @@ export function WorkspaceStarterMetadataPanel({
           focusTemplateId: null,
           focusLabel: null
         });
-  const sourceWorkflowLink =
-    !missingToolGovernanceSurface && selectedTemplate?.created_from_workflow_id
-    ? workspaceStarterGovernanceQueryScope
-      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
-          workflowId: selectedTemplate.created_from_workflow_id,
-          viewState: workspaceStarterGovernanceQueryScope,
-          variant: "source"
-        })
-      : buildAuthorFacingWorkflowDetailLinkSurface({
-          workflowId: selectedTemplate.created_from_workflow_id,
-          variant: "source"
-        })
+  const sourceWorkflowId =
+    selectedTemplate?.source_governance?.source_workflow_id?.trim() ||
+    selectedTemplate?.created_from_workflow_id?.trim() ||
+    null;
+  const sourceWorkflowSummary = sourceWorkflowId
+    ? sourceWorkflowSummariesById?.[sourceWorkflowId] ?? null
     : null;
+  const sourceWorkflowLink =
+    !missingToolGovernanceSurface && sourceWorkflowId
+      ? (() => {
+          const workflowDetailLink = workspaceStarterGovernanceQueryScope
+            ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                workflowId: sourceWorkflowId,
+                viewState: workspaceStarterGovernanceQueryScope,
+                variant: "source"
+              })
+            : buildAuthorFacingWorkflowDetailLinkSurface({
+                workflowId: sourceWorkflowId,
+                variant: "source"
+              });
+
+          return {
+            ...workflowDetailLink,
+            href: sourceWorkflowSummary
+              ? appendWorkflowLibraryViewStateForWorkflow(workflowDetailLink.href, sourceWorkflowSummary, {
+                  definitionIssue: null
+                })
+              : workflowDetailLink.href
+          };
+        })()
+      : null;
 
   return (
     <article className="diagnostic-panel">

@@ -4,13 +4,15 @@ import Link from "next/link";
 import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
 import type { RunExecutionView } from "@/lib/get-run-views";
 import { buildLegacyPublishAuthGovernanceSurfaceCopy } from "@/lib/legacy-publish-auth-governance-presenters";
-import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
+import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
 export function RunDiagnosticsLegacyAuthGovernanceCard({
-  executionView
+  executionView,
+  workflowDetailHref = null
 }: {
   executionView: RunExecutionView;
+  workflowDetailHref?: string | null;
 }) {
   const snapshot = executionView.legacy_auth_governance ?? null;
   if (!snapshot || snapshot.binding_count <= 0) {
@@ -26,11 +28,17 @@ export function RunDiagnosticsLegacyAuthGovernanceCard({
     workflowId: executionView.workflow_id,
     variant: "editor"
   });
-  const workflowDetailHref = workflowSummary
-    ? appendWorkflowLibraryViewStateForWorkflow(workflowDetailLink.href, workflowSummary, {
-        definitionIssue: null
+  const baseWorkflowDetailHref = workflowDetailHref ?? workflowDetailLink.href;
+  const workflowGovernanceHandoff = workflowSummary
+    ? buildWorkflowGovernanceHandoff({
+        workflowId: executionView.workflow_id,
+        workflowDetailHref: baseWorkflowDetailHref,
+        toolGovernance: workflowSummary.tool_governance,
+        legacyAuthGovernance: snapshot
       })
-    : workflowDetailLink.href;
+    : null;
+  const resolvedWorkflowDetailHref =
+    workflowGovernanceHandoff?.workflowGovernanceHref ?? baseWorkflowDetailHref;
 
   return (
     <section>
@@ -87,7 +95,7 @@ export function RunDiagnosticsLegacyAuthGovernanceCard({
               : legacyAuthSurfaceCopy.workflowFollowUpFallback}
           </p>
         </div>
-        <Link className="activity-link" href={workflowDetailHref}>
+        <Link className="activity-link" href={resolvedWorkflowDetailHref}>
           {workflowDetailLink.label}
         </Link>
       </div>

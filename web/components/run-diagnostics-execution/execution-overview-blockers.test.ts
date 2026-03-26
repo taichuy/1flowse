@@ -19,6 +19,7 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
     focusSkillReferenceNodeName,
     nodeRunId,
     workflowCatalogGapSummary,
+    workflowCatalogGapHref,
     workflowGovernanceHref,
     legacyAuthHandoff
   }: {
@@ -37,6 +38,7 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
     focusSkillReferenceNodeName?: string | null;
     nodeRunId?: string | null;
     workflowCatalogGapSummary?: string | null;
+    workflowCatalogGapHref?: string | null;
     workflowGovernanceHref?: string | null;
     legacyAuthHandoff?: {
       bindingChipLabel?: string | null;
@@ -52,7 +54,7 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
         `trace node ${focusSkillTrace?.nodes?.[0]?.node_run_id ?? "n/a"} ` +
         `fallback refs ${(focusSkillReferenceCount ?? 0).toString()} ` +
         `fallback node ${focusSkillReferenceNodeName ?? "n/a"} ` +
-        `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
+        `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowCatalogGapHref ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
         `legacy auth ${legacyAuthHandoff?.bindingChipLabel ?? "none"}`
     )
 }));
@@ -93,10 +95,12 @@ vi.mock("@/components/operator-focus-evidence-card", () => ({
 vi.mock("@/components/workflow-governance-handoff-cards", () => ({
   WorkflowGovernanceHandoffCards: ({
     workflowCatalogGapSummary,
+    workflowCatalogGapHref,
     workflowGovernanceHref,
     legacyAuthHandoff
   }: {
     workflowCatalogGapSummary?: string | null;
+    workflowCatalogGapHref?: string | null;
     workflowGovernanceHref?: string | null;
     legacyAuthHandoff?: {
       bindingChipLabel?: string | null;
@@ -109,7 +113,7 @@ vi.mock("@/components/workflow-governance-handoff-cards", () => ({
     return createElement(
       "div",
       { "data-testid": "workflow-governance-handoff-cards" },
-      `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
+      `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowCatalogGapHref ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
         `legacy auth ${legacyAuthHandoff?.bindingChipLabel ?? "none"}`
     );
   }
@@ -517,6 +521,7 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
 
     expect(html).toContain("workflow catalog gap · native.catalog-gap");
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+    expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
     expect(html).toContain("legacy auth 1 legacy bindings");
   });
 
@@ -626,6 +631,7 @@ describe("RunDiagnosticsExecutionOverviewBlockers", () => {
     expect(html).toContain("workflow-governance-handoff-cards");
     expect(html).toContain("workflow catalog gap · native.catalog-gap");
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+    expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
     expect(html).toContain("legacy auth 1 legacy bindings");
     expect(html).toContain("operator-focus-evidence-card");
     expect(html).toContain("artifacts 1 artifact refs 1 tool calls 1");

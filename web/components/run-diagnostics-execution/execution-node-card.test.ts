@@ -22,6 +22,7 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
     focusSkillReferenceNodeId,
     focusSkillReferenceNodeName,
     workflowCatalogGapSummary,
+    workflowCatalogGapHref,
     workflowGovernanceHref,
     legacyAuthHandoff
   }: {
@@ -48,6 +49,7 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
     focusSkillReferenceNodeId?: string | null;
     focusSkillReferenceNodeName?: string | null;
     workflowCatalogGapSummary?: string | null;
+    workflowCatalogGapHref?: string | null;
     workflowGovernanceHref?: string | null;
     legacyAuthHandoff?: {
       bindingChipLabel?: string | null;
@@ -67,7 +69,7 @@ vi.mock("@/components/callback-waiting-summary-card", () => ({
         `skill loads ${(focusSkillReferenceLoads?.length ?? 0).toString()} ` +
         `skill refs ${(focusSkillReferenceCount ?? 0).toString()} ` +
         `skill node ${focusSkillReferenceNodeId ?? "n/a"} ${focusSkillReferenceNodeName ?? "n/a"} ` +
-        `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
+        `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowCatalogGapHref ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
         `legacy auth ${legacyAuthHandoff?.bindingChipLabel ?? "none"}`
     )
 }));
@@ -76,11 +78,13 @@ vi.mock("@/components/workflow-governance-handoff-cards", () => ({
   WorkflowGovernanceHandoffCards: ({
     workflowCatalogGapSummary,
     workflowCatalogGapDetail,
+    workflowCatalogGapHref,
     workflowGovernanceHref,
     legacyAuthHandoff
   }: {
     workflowCatalogGapSummary?: string | null;
     workflowCatalogGapDetail?: string | null;
+    workflowCatalogGapHref?: string | null;
     workflowGovernanceHref?: string | null;
     legacyAuthHandoff?: {
       bindingChipLabel?: string | null;
@@ -93,7 +97,7 @@ vi.mock("@/components/workflow-governance-handoff-cards", () => ({
     return createElement(
       "div",
       { "data-testid": "workflow-governance-handoff-cards" },
-      `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowCatalogGapDetail ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
+      `workflow ${workflowCatalogGapSummary ?? "none"} ${workflowCatalogGapDetail ?? "none"} ${workflowCatalogGapHref ?? "none"} ${workflowGovernanceHref ?? "none"} ` +
         `legacy auth ${legacyAuthHandoff?.bindingChipLabel ?? "none"}`
     );
   }

@@ -104,6 +104,98 @@ describe("WorkspaceStarterMetadataPanel", () => {
     expect(html).toContain(scopedSourceWorkflowHref);
   });
 
+  it("preserves source workflow legacy auth governance on the metadata source link", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceStarterMetadataPanel, {
+        selectedTemplate: {
+          id: "starter-legacy-auth",
+          workspace_id: "default",
+          name: "Legacy Auth Starter",
+          description: "Starter description",
+          business_track: "应用新建编排",
+          default_workflow_name: "Governed workflow",
+          workflow_focus: "Keep legacy auth governance visible.",
+          recommended_next_step: "Review the source workflow before creating.",
+          tags: ["workspace starter"],
+          definition: {
+            nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+            edges: [],
+            variables: [],
+            publish: []
+          },
+          created_from_workflow_id: " workflow alpha/beta ",
+          archived: false,
+          created_at: "2026-03-22T00:00:00.000Z",
+          updated_at: "2026-03-22T00:00:00.000Z",
+          source_governance: {
+            kind: "drifted",
+            status_label: "建议 refresh",
+            summary: "当前主要是来源快照漂移。",
+            source_workflow_id: " workflow alpha/beta ",
+            source_workflow_name: "Governed workflow",
+            template_version: "0.1.0",
+            source_version: "0.2.0",
+            action_decision: null,
+            outcome_explanation: null
+          }
+        },
+        formState: {
+          name: "Legacy Auth Starter",
+          description: "Starter description",
+          businessTrack: "应用新建编排",
+          defaultWorkflowName: "Governed workflow",
+          workflowFocus: "Keep legacy auth governance visible.",
+          recommendedNextStep: "Review the source workflow before creating.",
+          tagsText: "workspace starter"
+        },
+        selectedTrackPriority: "P0 应用新建编排",
+        hasPendingChanges: false,
+        isSaving: false,
+        isMutating: false,
+        message: null,
+        messageTone: "idle",
+        createWorkflowHref: "/workflows/new?needs_follow_up=true&starter=starter-legacy-auth",
+        sourceWorkflowSummariesById: {
+          "workflow alpha/beta": {
+            id: "workflow alpha/beta",
+            name: "Governed workflow",
+            status: "draft",
+            version: "0.2.0",
+            node_count: 1,
+            definition_issues: [],
+            tool_governance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            },
+            legacy_auth_governance: {
+              binding_count: 1,
+              draft_candidate_count: 0,
+              published_blocker_count: 0,
+              offline_inventory_count: 1
+            }
+          }
+        },
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " inventory ",
+          selectedTemplateId: "starter-legacy-auth"
+        },
+        setFormState: vi.fn(),
+        onSave: vi.fn(),
+        onTemplateMutation: vi.fn()
+      })
+    );
+
+    expect(html).toContain("打开源 workflow");
+    expect(html).toContain(
+      '/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=inventory&amp;source_governance_kind=drifted&amp;starter=starter-legacy-auth&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth'
+    );
+  });
+
   it("keeps the missing-source create-entry label aligned with the shared governance surface", () => {
     const html = renderToStaticMarkup(
       createElement(WorkspaceStarterMetadataPanel, {

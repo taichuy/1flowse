@@ -138,6 +138,7 @@ describe("RunDiagnosticsExecutionOverview", () => {
     expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain("execution overview 对应的 workflow 版本仍有 catalog gap");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
     expect(html).toContain("legacy binding");
     expect(html).toContain("legacy auth detail");
   });

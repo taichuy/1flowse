@@ -22,6 +22,7 @@ export function RunDiagnosticsExecutionOverview({
   executionView,
   callbackWaitingAutomation,
   sandboxReadiness = null,
+  workflowDetailHref = null,
   workflowId = null,
   toolGovernance = null,
   legacyAuthGovernance = null
@@ -29,6 +30,7 @@ export function RunDiagnosticsExecutionOverview({
   executionView: RunExecutionView | null;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowDetailHref?: string | null;
   workflowId?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
@@ -43,6 +45,7 @@ export function RunDiagnosticsExecutionOverview({
   const resolvedLegacyAuthGovernance = legacyAuthGovernance ?? executionView.legacy_auth_governance ?? null;
   const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: resolvedWorkflowId,
+    workflowDetailHref,
     toolGovernance: resolvedToolGovernance,
     legacyAuthGovernance: resolvedLegacyAuthGovernance,
     workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
@@ -135,19 +138,24 @@ export function RunDiagnosticsExecutionOverview({
         executionView={executionView}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
+        workflowDetailHref={workflowDetailHref}
       />
 
       {shouldRenderWorkflowGovernanceHandoff ? (
         <WorkflowGovernanceHandoffCards
           workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
           workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+          workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
           workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
           legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
           cardClassName="payload-card compact-card"
         />
       ) : null}
 
-      <RunDiagnosticsLegacyAuthGovernanceCard executionView={executionView} />
+      <RunDiagnosticsLegacyAuthGovernanceCard
+        executionView={executionView}
+        workflowDetailHref={workflowDetailHref}
+      />
 
       <MetricChipRow
         title="Ticket statuses"
@@ -228,6 +236,7 @@ export function RunDiagnosticsExecutionOverview({
         executionView={executionView}
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
+        workflowDetailHref={workflowDetailHref}
         workflowId={workflowId}
         toolGovernance={toolGovernance}
         legacyAuthGovernance={legacyAuthGovernance}

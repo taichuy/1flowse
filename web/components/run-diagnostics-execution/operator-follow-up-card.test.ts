@@ -543,6 +543,7 @@ describe("RunDiagnosticsOperatorFollowUpCard", () => {
       "当前 callback summary 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照 callback summary、execution focus 与 timeline。"
     );
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
     expect(html).toContain(
       'href="/sensitive-access?status=pending&amp;waiting_status=waiting&amp;run_id=run-123&amp;node_run_id=node-run-1&amp;access_request_id=access-request-1&amp;approval_ticket_id=approval-ticket-1"'
     );

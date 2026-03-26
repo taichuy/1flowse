@@ -85,6 +85,27 @@ export function WorkflowRunOverlayPanel({
   const tracePreview = trace?.events.slice(-6) ?? [];
   const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshotModel);
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const resolveRunDetailHref = React.useCallback(
+    (candidateRunId: string) =>
+      workspaceStarterGovernanceQueryScope
+        ? buildRunDetailHrefFromWorkspaceStarterViewState(
+            candidateRunId,
+            workspaceStarterGovernanceQueryScope
+          )
+        : null,
+    [workspaceStarterGovernanceQueryScope]
+  );
+  const baseWorkflowDetailHref = run
+    ? workspaceStarterGovernanceQueryScope
+      ? buildWorkflowEditorHrefFromWorkspaceStarterViewState(
+          run.workflow_id,
+          workspaceStarterGovernanceQueryScope
+        )
+      : buildAuthorFacingWorkflowDetailLinkSurface({
+          workflowId: run.workflow_id,
+          variant: "editor"
+        }).href
+    : null;
   const callbackSummaryWorkflowCatalogGapDetail = buildWorkflowCatalogGapDetail({
     toolGovernance: runSnapshot?.toolGovernance ?? run?.tool_governance ?? null,
     subjectLabel: "overlay callback summary",
@@ -93,6 +114,7 @@ export function WorkflowRunOverlayPanel({
   });
   const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: runSnapshot?.snapshot?.workflowId ?? run?.workflow_id ?? null,
+    workflowDetailHref: baseWorkflowDetailHref,
     toolGovernance: runSnapshot?.toolGovernance ?? run?.tool_governance ?? null,
     legacyAuthGovernance: runSnapshot?.legacyAuthGovernance ?? run?.legacy_auth_governance ?? null,
     workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
@@ -108,37 +130,18 @@ export function WorkflowRunOverlayPanel({
           callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary,
         workflowCatalogGapDetail:
           callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail,
+        workflowCatalogGapHref:
+          callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref,
         workflowGovernanceHref:
           callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref,
         legacyAuthHandoff: callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff
       }
     : undefined;
-  const resolveRunDetailHref = React.useCallback(
-    (candidateRunId: string) =>
-      workspaceStarterGovernanceQueryScope
-        ? buildRunDetailHrefFromWorkspaceStarterViewState(
-            candidateRunId,
-            workspaceStarterGovernanceQueryScope
-          )
-        : null,
-    [workspaceStarterGovernanceQueryScope]
-  );
   const runDrilldownLink = run
     ? buildAuthorFacingRunDetailLinkSurface({
         runId: run.id,
         runHref: resolveRunDetailHref(run.id)
       })
-    : null;
-  const baseWorkflowDetailHref = run
-    ? workspaceStarterGovernanceQueryScope
-      ? buildWorkflowEditorHrefFromWorkspaceStarterViewState(
-          run.workflow_id,
-          workspaceStarterGovernanceQueryScope
-        )
-      : buildAuthorFacingWorkflowDetailLinkSurface({
-          workflowId: run.workflow_id,
-          variant: "editor"
-        }).href
     : null;
   const workflowCatalogGapToolCopy = formatCatalogGapToolSummary(
     run?.tool_governance?.missing_tool_ids ?? []
@@ -223,6 +226,7 @@ export function WorkflowRunOverlayPanel({
               <WorkflowGovernanceHandoffCards
                 workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
                 workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+                workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
                 workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
                 legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
                 cardClassName="payload-card compact-card runtime-overlay-governance-card"

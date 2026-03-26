@@ -506,6 +506,8 @@ export function SensitiveAccessTimelineEntryList({
               callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary,
             workflowCatalogGapDetail:
               callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail,
+            workflowCatalogGapHref:
+              callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref,
             workflowGovernanceHref:
               callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref,
             legacyAuthHandoff: callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff
@@ -626,6 +628,9 @@ export function SensitiveAccessTimelineEntryList({
                   workflowCatalogGapDetail={
                     callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
                   }
+                  workflowCatalogGapHref={
+                    callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref
+                  }
                   workflowGovernanceHref={
                     callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
                   }
@@ -666,6 +671,9 @@ export function SensitiveAccessTimelineEntryList({
                   }
                   workflowCatalogGapDetail={
                     callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
+                  }
+                  workflowCatalogGapHref={
+                    callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref
                   }
                   workflowGovernanceHref={
                     callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref

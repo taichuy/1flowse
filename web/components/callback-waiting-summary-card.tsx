@@ -107,6 +107,7 @@ type CallbackWaitingSummaryCardProps = {
   suppressSensitiveAccessContextRows?: boolean;
   workflowCatalogGapSummary?: string | null;
   workflowCatalogGapDetail?: string | null;
+  workflowCatalogGapHref?: string | null;
   workflowGovernanceHref?: string | null;
   legacyAuthHandoff?: LegacyPublishAuthWorkflowHandoff | null;
   className?: string;
@@ -159,6 +160,7 @@ export function CallbackWaitingSummaryCard({
   suppressSensitiveAccessContextRows = false,
   workflowCatalogGapSummary = null,
   workflowCatalogGapDetail = null,
+  workflowCatalogGapHref = null,
   workflowGovernanceHref = null,
   legacyAuthHandoff = null,
   className = ""
@@ -471,6 +473,7 @@ export function CallbackWaitingSummaryCard({
       <WorkflowGovernanceHandoffCards
         workflowCatalogGapSummary={workflowCatalogGapSummary}
         workflowCatalogGapDetail={workflowCatalogGapDetail}
+        workflowCatalogGapHref={workflowCatalogGapHref}
         workflowGovernanceHref={workflowGovernanceHref}
         legacyAuthHandoff={legacyAuthHandoff}
       />

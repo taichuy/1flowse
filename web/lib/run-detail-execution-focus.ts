@@ -59,6 +59,7 @@ export type RunDetailExecutionFocusViewModel = {
   skillReferencePhaseCounts: Record<string, number>;
   skillReferenceSourceCounts: Record<string, number>;
   skillReferenceLoads: SkillReferenceLoadItem[];
+  workflowCatalogGapHref: string | null;
   workflowGovernanceHref: string | null;
   workflowCatalogGapSummary: string | null;
   workflowCatalogGapDetail: string | null;
@@ -266,6 +267,7 @@ export function buildRunDetailExecutionFocusViewModel(
     skillReferencePhaseCounts: run.execution_focus_skill_trace?.phase_counts ?? {},
     skillReferenceSourceCounts: run.execution_focus_skill_trace?.source_counts ?? {},
     skillReferenceLoads,
+    workflowCatalogGapHref: workflowGovernanceHandoff.workflowCatalogGapHref,
     workflowGovernanceHref: workflowGovernanceHandoff.workflowGovernanceHref,
     workflowCatalogGapSummary: workflowGovernanceHandoff.workflowCatalogGapSummary,
     workflowCatalogGapDetail: workflowGovernanceHandoff.workflowCatalogGapDetail,

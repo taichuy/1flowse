@@ -211,6 +211,7 @@ export function RunDetailExecutionFocusCard({
             waitingReason={focus.waitingReason}
             workflowCatalogGapSummary={focus.workflowCatalogGapSummary}
             workflowCatalogGapDetail={focus.workflowCatalogGapDetail}
+            workflowCatalogGapHref={focus.workflowCatalogGapHref}
             workflowGovernanceHref={focus.workflowGovernanceHref}
             legacyAuthHandoff={focus.legacyAuthHandoff}
           />
@@ -221,6 +222,7 @@ export function RunDetailExecutionFocusCard({
             <WorkflowGovernanceHandoffCards
               workflowCatalogGapSummary={focus.workflowCatalogGapSummary}
               workflowCatalogGapDetail={focus.workflowCatalogGapDetail}
+              workflowCatalogGapHref={focus.workflowCatalogGapHref}
               workflowGovernanceHref={focus.workflowGovernanceHref}
               legacyAuthHandoff={focus.legacyAuthHandoff}
             />

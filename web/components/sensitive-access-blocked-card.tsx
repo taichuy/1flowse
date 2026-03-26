@@ -194,6 +194,8 @@ export function SensitiveAccessBlockedCard({
       callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary,
     workflowCatalogGapDetail:
       callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail,
+    workflowCatalogGapHref:
+      callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref,
     workflowGovernanceHref:
       callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref,
     legacyAuthHandoff: callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff

@@ -97,23 +97,23 @@ export function buildWorkflowGovernanceHandoff({
     : null;
   const workflowGovernanceHref = resolvedWorkflowDetailHref
     ? workflowCatalogGapSummary || legacyAuthHandoff
-      ? workflowLibraryViewState.definitionIssue
-        ? appendWorkflowLibraryViewState(
-            resolvedWorkflowDetailHref,
-            workflowLibraryViewState
-          )
-        : appendWorkflowLibraryViewStateForWorkflow(
-            resolvedWorkflowDetailHref,
-            workflowLibraryWorkflow,
-            workflowLibraryViewState
-          )
+      ? appendWorkflowLibraryViewStateForWorkflow(
+          resolvedWorkflowDetailHref,
+          workflowLibraryWorkflow,
+          workflowLibraryViewState.definitionIssue === "legacy_publish_auth"
+            ? workflowLibraryViewState
+            : { definitionIssue: null }
+        )
       : resolvedWorkflowDetailHref
     : null;
   const workflowCatalogGapHref =
     resolvedWorkflowDetailHref && workflowCatalogGapSummary
-      ? appendWorkflowLibraryViewState(resolvedWorkflowDetailHref, {
-          definitionIssue: "missing_tool"
-        })
+      ? appendWorkflowLibraryViewState(
+          resolvedWorkflowDetailHref,
+          workflowLibraryViewState.definitionIssue === "legacy_publish_auth"
+            ? workflowLibraryViewState
+            : { definitionIssue: "missing_tool" }
+        )
       : null;
 
   return {

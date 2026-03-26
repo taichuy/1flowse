@@ -19,6 +19,7 @@ export type CallbackWaitingSummaryProps = {
   preferCanonicalRecommendedNextStep?: boolean;
   workflowCatalogGapSummary?: string | null;
   workflowCatalogGapDetail?: string | null;
+  workflowCatalogGapHref?: string | null;
   workflowGovernanceHref?: string | null;
   legacyAuthHandoff?: LegacyPublishAuthWorkflowHandoff | null;
 };

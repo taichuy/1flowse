@@ -8,7 +8,6 @@ import type {
 } from "@/lib/get-system-overview";
 import type { RunTraceQuery } from "@/lib/get-run-trace";
 import { formatCatalogGapToolSummary } from "@/lib/workflow-definition-governance";
-import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
 
 import { RunDetailExecutionFocusCard } from "@/components/run-detail-execution-focus-card";
@@ -44,19 +43,12 @@ export function RunDiagnosticsOverviewSections({
     : "当前这条 run 对应的 workflow 版本仍有 catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 run 的 execution focus、node timeline 与 trace。";
   const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: run.workflow_id,
+    workflowDetailHref,
     toolGovernance: run.tool_governance ?? null,
     legacyAuthGovernance: run.legacy_auth_governance ?? null,
     workflowCatalogGapDetail
   });
-  const workflowGovernanceHref = workflowDetailHref
-    ? run.tool_governance
-      ? appendWorkflowLibraryViewStateForWorkflow(
-          workflowDetailHref,
-          { tool_governance: run.tool_governance },
-          { definitionIssue: null }
-        )
-      : workflowDetailHref
-    : workflowGovernanceHandoff.workflowGovernanceHref;
+  const workflowGovernanceHref = workflowGovernanceHandoff.workflowGovernanceHref;
 
   return (
     <>
@@ -120,6 +112,7 @@ export function RunDiagnosticsOverviewSections({
           <WorkflowGovernanceHandoffCards
             workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
             workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+            workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
             workflowGovernanceHref={workflowGovernanceHref}
             legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
             cardClassName="payload-card"

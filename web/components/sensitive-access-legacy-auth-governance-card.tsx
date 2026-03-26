@@ -28,7 +28,11 @@ function renderWorkflowFollowUpCards(
     });
     const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
       workflowDetailLink.href,
-      workflow,
+      {
+        workflow_id: workflow.workflow_id,
+        tool_governance: workflow.tool_governance ?? null,
+        legacy_auth_governance: snapshot
+      },
       {
         definitionIssue: null
       }

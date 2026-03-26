@@ -109,6 +109,7 @@ export function ExecutionNodeCard({
   callbackWaitingAutomation,
   sandboxReadiness = null,
   skillTrace = null,
+  workflowDetailHref = null,
   workflowId = null,
   toolGovernance = null,
   legacyAuthGovernance = null
@@ -118,6 +119,7 @@ export function ExecutionNodeCard({
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
   skillTrace?: RunExecutionSkillTrace | null;
+  workflowDetailHref?: string | null;
   workflowId?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
@@ -167,6 +169,7 @@ export function ExecutionNodeCard({
   });
   const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId,
+    workflowDetailHref,
     toolGovernance,
     legacyAuthGovernance,
     workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
@@ -332,6 +335,9 @@ export function ExecutionNodeCard({
           workflowCatalogGapDetail={
             callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
           }
+          workflowCatalogGapHref={
+            callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref
+          }
           workflowGovernanceHref={
             callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
           }
@@ -341,6 +347,7 @@ export function ExecutionNodeCard({
         <WorkflowGovernanceHandoffCards
           workflowCatalogGapSummary={callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary}
           workflowCatalogGapDetail={callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail}
+          workflowCatalogGapHref={callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref}
           workflowGovernanceHref={callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref}
           legacyAuthHandoff={callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff}
         />

@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { WorkspaceStarterDefinitionSnapshotPanel } from "@/components/workspace-starter-library/definition-snapshot-panel";
 import { WorkspaceStarterHeroSection } from "@/components/workspace-starter-library/hero-section";
 import { WorkspaceStarterHistoryPanel } from "@/components/workspace-starter-library/history-panel";
@@ -14,18 +16,21 @@ import {
   type WorkspaceStarterLibraryViewState
 } from "@/components/workspace-starter-library/shared";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type { WorkflowListItem } from "@/lib/get-workflows";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import { pickWorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 type WorkspaceStarterLibraryProps = {
   initialTemplates: WorkspaceStarterTemplateItem[];
   initialViewState: WorkspaceStarterLibraryViewState;
+  initialWorkflows: WorkflowListItem[];
   tools: PluginToolRegistryItem[];
 };
 
 export function WorkspaceStarterLibrary({
   initialTemplates,
   initialViewState,
+  initialWorkflows,
   tools
 }: WorkspaceStarterLibraryProps) {
   const {
@@ -106,6 +111,10 @@ export function WorkspaceStarterLibrary({
     sourceGovernancePrimaryFollowUp,
     createWorkflowHref
   });
+  const sourceWorkflowSummariesById = useMemo<Record<string, WorkflowListItem>>(
+    () => Object.fromEntries(initialWorkflows.map((workflow) => [workflow.id, workflow] as const)),
+    [initialWorkflows]
+  );
 
   return (
     <main className="editor-shell">
@@ -158,6 +167,7 @@ export function WorkspaceStarterLibrary({
           <WorkspaceStarterMetadataPanel
             selectedTemplate={selectedTemplate}
             selectedTemplateToolGovernance={selectedTemplateToolGovernance}
+            sourceWorkflowSummariesById={sourceWorkflowSummariesById}
             formState={formState}
             selectedTrackPriority={selectedTrackMeta?.priority ?? null}
             hasPendingChanges={hasPendingChanges}

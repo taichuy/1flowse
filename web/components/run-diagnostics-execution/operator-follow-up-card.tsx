@@ -54,12 +54,14 @@ type RunDiagnosticsOperatorFollowUpCardProps = {
   executionView: RunExecutionView;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowDetailHref?: string | null;
 };
 
 export function RunDiagnosticsOperatorFollowUpCard({
   executionView,
   callbackWaitingAutomation,
-  sandboxReadiness = null
+  sandboxReadiness = null,
+  workflowDetailHref = null
 }: RunDiagnosticsOperatorFollowUpCardProps) {
   const snapshot = executionView.run_snapshot;
   const followUp = executionView.run_follow_up;
@@ -263,6 +265,7 @@ export function RunDiagnosticsOperatorFollowUpCard({
   });
   const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: sampledFollowUp?.snapshot?.workflowId ?? executionView.workflow_id,
+    workflowDetailHref,
     toolGovernance: sampledFollowUp?.toolGovernance ?? null,
     legacyAuthGovernance:
       sampledFollowUp?.legacyAuthGovernance ?? executionView.legacy_auth_governance ?? null,
@@ -341,6 +344,9 @@ export function RunDiagnosticsOperatorFollowUpCard({
           }
           workflowCatalogGapDetail={
             callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
+          }
+          workflowCatalogGapHref={
+            callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref
           }
           workflowGovernanceHref={
             callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref

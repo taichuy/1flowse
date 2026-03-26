@@ -81,6 +81,7 @@ function renderNodeFollowUp({
   runId,
   skillTrace,
   toolGovernance,
+  workflowDetailHref,
   workflowId
 }: {
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
@@ -90,6 +91,7 @@ function renderNodeFollowUp({
   runId: string;
   skillTrace: RunExecutionView["skill_trace"];
   toolGovernance?: WorkflowToolGovernanceSummary | null;
+  workflowDetailHref?: string | null;
   workflowId?: string | null;
 }) {
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
@@ -122,6 +124,7 @@ function renderNodeFollowUp({
   });
   const callbackSummaryWorkflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId,
+    workflowDetailHref,
     toolGovernance,
     legacyAuthGovernance,
     workflowCatalogGapDetail: callbackSummaryWorkflowCatalogGapDetail
@@ -159,6 +162,9 @@ function renderNodeFollowUp({
         workflowCatalogGapDetail={
           callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
         }
+        workflowCatalogGapHref={
+          callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref
+        }
         workflowGovernanceHref={
           callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
         }
@@ -174,6 +180,7 @@ function renderNodeFollowUp({
       <WorkflowGovernanceHandoffCards
         workflowCatalogGapSummary={callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary}
         workflowCatalogGapDetail={callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail}
+        workflowCatalogGapHref={callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapHref}
         workflowGovernanceHref={callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref}
         legacyAuthHandoff={callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff}
       />
@@ -199,6 +206,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
   executionView,
   callbackWaitingAutomation,
   sandboxReadiness = null,
+  workflowDetailHref = null,
   workflowId = null,
   toolGovernance = null,
   legacyAuthGovernance = null
@@ -206,6 +214,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
   executionView: RunExecutionView;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  workflowDetailHref?: string | null;
   workflowId?: string | null;
   toolGovernance?: WorkflowToolGovernanceSummary | null;
   legacyAuthGovernance?: WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null;
@@ -276,6 +285,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
               runId: executionView.run_id,
               skillTrace,
               toolGovernance,
+              workflowDetailHref,
               workflowId: workflowId ?? executionView.workflow_id
             })}
           </article>
@@ -337,6 +347,7 @@ export function RunDiagnosticsExecutionOverviewBlockers({
                 runId: executionView.run_id,
                 skillTrace,
                 toolGovernance,
+                workflowDetailHref,
                 workflowId: workflowId ?? executionView.workflow_id
               })}
             </article>
