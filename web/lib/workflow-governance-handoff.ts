@@ -17,6 +17,10 @@ import {
   readWorkflowLibraryViewState,
   type WorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  readWorkspaceStarterLibraryViewState
+} from "@/lib/workspace-starter-governance-query";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-types";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 
@@ -66,8 +70,14 @@ export function buildWorkflowGovernanceDetailHrefFromCurrentHref({
     const [, currentWorkflowId] = currentUrl.pathname.split("/").filter(Boolean);
 
     if (currentUrl.pathname.startsWith("/workflows/") && currentWorkflowId === resolvedWorkflowId) {
+      const workflowDetailHref = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+        workflowId: resolvedWorkflowId,
+        viewState: readWorkspaceStarterLibraryViewState(currentUrl.searchParams),
+        variant: "editor"
+      }).href;
+
       return appendWorkflowLibraryViewState(
-        fallbackHref,
+        workflowDetailHref,
         readWorkflowLibraryViewState(currentUrl.searchParams)
       );
     }

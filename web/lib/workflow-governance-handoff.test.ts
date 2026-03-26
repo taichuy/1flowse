@@ -20,6 +20,15 @@ describe("workflow-governance-handoff", () => {
     );
   });
 
+  it("falls back to the canonical workflow detail href outside the workflow page", () => {
+    expect(
+      buildWorkflowGovernanceDetailHrefFromCurrentHref({
+        workflowId: "workflow-same",
+        currentHref: "/sensitive-access?run_id=run-1&definition_issue=missing_tool"
+      })
+    ).toBe("/workflows/workflow-same");
+  });
+
   it("builds shared catalog-gap detail for recent-run style surfaces", () => {
     expect(
       buildWorkflowCatalogGapDetail({

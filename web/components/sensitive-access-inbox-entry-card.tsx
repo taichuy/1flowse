@@ -46,6 +46,7 @@ import {
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildSandboxReadinessNodeFromRunSnapshot } from "@/lib/sandbox-readiness-presenters";
 import { buildSensitiveAccessInboxEntryWorkflowGovernanceHandoff } from "@/lib/sensitive-access-inbox-workflow-governance";
+import { buildWorkflowGovernanceDetailHrefFromCurrentHref } from "@/lib/workflow-governance-handoff";
 import {
   buildSandboxReadinessFollowUpCandidate,
   shouldPreferSharedSandboxReadinessFollowUp
@@ -191,6 +192,11 @@ export function SensitiveAccessInboxEntryCard({
         entry,
         runSnapshot: entry.runSnapshot ?? null,
         canonicalRunId: executionContext?.runId ?? null,
+        resolveWorkflowDetailHref: (workflowId) =>
+          buildWorkflowGovernanceDetailHrefFromCurrentHref({
+            workflowId,
+            currentHref
+          }),
         subjectLabel: "sensitive access inbox entry",
         returnDetail:
           "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对当前审批票据、execution focus 与 inbox slice。"
