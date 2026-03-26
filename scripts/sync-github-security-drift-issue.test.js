@@ -6,6 +6,7 @@ const {
   buildIssueBody,
   hasExternalBlocker,
   parseArgs,
+  syncIssueFromReport,
 } = require('./sync-github-security-drift-issue');
 
 function createReport(overrides = {}) {
@@ -125,6 +126,7 @@ test('buildIssueBody renders blocker evidence and recommended actions', () => {
   assert.match(body, /打开仓库安全设置/);
   assert.match(body, /manual-only step \(github_settings_ui\)/);
   assert.match(body, /`api`、`services\/compat-dify`、`web`/);
+  assert.match(body, /fields absent from repo API payload: `automatic_dependency_submission`、`dependency_graph`/);
   assert.match(body, /manual verification reason: `missing_dependency_graph_fields`/);
   assert.match(body, /gh api -X PATCH repos\/\{owner\}\/\{repo\}/);
   assert.match(body, /Enabling the dependency graph/);
@@ -147,8 +149,104 @@ test('buildIssueBody treats missing dependency graph fields as manual verificati
   );
 
   assert.match(body, /fields absent from repo API payload: `dependency_graph`/);
+  assert.match(body, /manual verification reason: `missing_dependency_graph_fields`/);
   assert.match(body, /不应把缺失误判成“已开启”/);
   assert.match(body, /Settings -> Security & analysis/);
+});
+
+test('syncIssueFromReport creates tracking issue when blocker persists', async (t) => {
+  const calls = [];
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url, options });
+
+    if (calls.length === 1) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '[]',
+      };
+    }
+
+    return {
+      ok: true,
+      status: 201,
+      text: async () => JSON.stringify({ number: 42 }),
+    };
+  };
+
+  const result = await syncIssueFromReport(createReport(), { token: 'test-token' });
+
+  assert.equal(result.action, 'created');
+  assert.equal(result.issueNumber, 42);
+  assert.equal(result.shouldTrack, true);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].url, /\/repos\/taichuy\/7flows\/issues\?state=all/);
+  assert.equal(calls[0].options.method || 'GET', 'GET');
+  assert.match(calls[1].url, /\/repos\/taichuy\/7flows\/issues$/);
+  assert.equal(calls[1].options.method, 'POST');
+  const createPayload = JSON.parse(calls[1].options.body);
+  assert.equal(createPayload.title, 'GitHub Security Drift: external blocker');
+  assert.match(createPayload.body, /GitHub Security Drift 外部阻塞跟踪/);
+});
+
+test('syncIssueFromReport closes tracked issue after blocker resolves', async (t) => {
+  const calls = [];
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url, options });
+
+    if (calls.length === 1) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify([
+            {
+              number: 7,
+              state: 'open',
+              title: 'GitHub Security Drift: external blocker',
+              body: `${DEFAULT_ISSUE_MARKER}\nold body`,
+            },
+          ]),
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ number: 7 }),
+    };
+  };
+
+  const resolvedReport = createReport({
+    conclusion: {
+      kind: 'no_open_alerts',
+      summary: '当前没有 open alert。',
+    },
+    recommendedActions: [],
+  });
+
+  const result = await syncIssueFromReport(resolvedReport, { token: 'test-token' });
+
+  assert.equal(result.action, 'closed');
+  assert.equal(result.issueNumber, 7);
+  assert.equal(result.shouldTrack, false);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].url, /\/repos\/taichuy\/7flows\/issues\/7$/);
+  assert.equal(calls[1].options.method, 'PATCH');
+  const patchPayload = JSON.parse(calls[1].options.body);
+  assert.equal(patchPayload.state, 'closed');
+  assert.equal(patchPayload.state_reason, 'completed');
+  assert.match(patchPayload.body, /已由自动化关闭/);
 });
 
 test('buildIssueBody renders resolved snapshot when blocker is gone', () => {
