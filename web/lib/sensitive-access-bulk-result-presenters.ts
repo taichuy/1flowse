@@ -198,8 +198,8 @@ export function buildSensitiveAccessBulkWorkflowGovernanceSummary(
       ? sharedSampleLegacyAuth.card.workflowGovernanceHref ?? null
       : null;
   const workflowGovernanceHref =
+    sharedLegacyWorkflowHref ??
     sharedWorkflowGovernanceHref ??
-    (sharedLegacyAuthHandoff ? sharedLegacyWorkflowHref : null) ??
     null;
 
   const narrativeText = buildBulkWorkflowGovernanceNarrative({

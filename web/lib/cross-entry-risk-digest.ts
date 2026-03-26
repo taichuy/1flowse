@@ -85,6 +85,7 @@ type BuildCrossEntryRiskDigestInput = {
   sensitiveAccessSummary: SensitiveAccessInboxSummary;
   channels: NotificationChannelCapabilityItem[];
   sensitiveAccessEntries?: SensitiveAccessInboxEntry[];
+  resolveWorkflowDetailHref?: ((workflowId: string) => string | null) | null;
 };
 
 type CrossEntryRiskDigestFollowUpSurface = {
@@ -462,7 +463,8 @@ export function buildCrossEntryRiskDigest({
   recentEvents = [],
   sensitiveAccessSummary,
   channels,
-  sensitiveAccessEntries = []
+  sensitiveAccessEntries = [],
+  resolveWorkflowDetailHref = null
 }: BuildCrossEntryRiskDigestInput): CrossEntryRiskDigest {
   const blockedClasses = listSandboxBlockedClasses(sandboxReadiness);
   const availableClasses = listSandboxAvailableClasses(sandboxReadiness);
@@ -535,6 +537,7 @@ export function buildCrossEntryRiskDigest({
     ? buildSensitiveAccessInboxEntryWorkflowGovernanceHandoff({
         entry: primaryOperatorEntry,
         runSnapshot: primaryOperatorEntry.runSnapshot ?? null,
+        resolveWorkflowDetailHref,
         subjectLabel: "operator backlog",
         returnDetail:
           "先对齐当前审批、恢复与通知 backlog，再回到 workflow 编辑器补齐 binding / publish auth contract，避免同类请求继续落回同一条 backlog。"

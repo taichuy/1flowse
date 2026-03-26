@@ -31,6 +31,7 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationSkillTraceSurface,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff,
   resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
@@ -381,7 +382,10 @@ export function WorkflowPublishInvocationDetailPanel({
               {runFollowUpSamples.map((sample) => {
                 const samplePrimarySignal = sample.explanation?.primary_signal?.trim() || null;
                 const sampleFollowUp = sample.explanation?.follow_up?.trim() || null;
-                const sampleWorkflowGovernanceHandoff = sample.workflow_governance_handoff;
+                const sampleWorkflowGovernanceHandoff =
+                  buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(sample, {
+                    workflowDetailHref: sampleWorkflowDetailLink?.href ?? null
+                  });
                 const sampleFocusNodeEvidence = buildExecutionFocusExplainableNode(
                   sample.run_snapshot
                 );

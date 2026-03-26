@@ -697,7 +697,7 @@ describe("buildSensitiveAccessBulkWorkflowGovernanceSummary", () => {
       workflowCatalogGapDetail:
         "bulk 回执当前回读的 2 个 sampled run 都指向同一条 workflow catalog gap；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 bulk 回执与 callback 事实。",
       workflowCatalogGapHref: "/workflows/workflow-shared?definition_issue=missing_tool",
-      workflowGovernanceHref: "/workflows/workflow-shared?definition_issue=missing_tool"
+      workflowGovernanceHref: "/workflows/workflow-shared?definition_issue=legacy_publish_auth"
     });
     expect(summary?.legacyAuthHandoff).toMatchObject({
       bindingChipLabel: "1 legacy bindings",
