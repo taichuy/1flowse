@@ -31,7 +31,8 @@ import {
 } from "@/lib/workflow-definition-sandbox-governance";
 import {
   formatCatalogGapResourceSummary,
-  formatCatalogGapToolSummary
+  formatCatalogGapToolSummary,
+  getWorkflowLegacyPublishAuthBacklogCount
 } from "@/lib/workflow-definition-governance";
 import type {
   WorkflowLibrarySourceLane,
@@ -999,10 +1000,7 @@ function buildWorkflowCreateStarterLegacyAuthGovernanceSurface({
     (item) => item.workflow_id === sourceWorkflowId
   );
 
-  if (
-    workflow === undefined ||
-    (workflow.draft_candidate_count <= 0 && workflow.published_blocker_count <= 0)
-  ) {
+  if (workflow === undefined || getWorkflowLegacyPublishAuthBacklogCount(workflow) <= 0) {
     return null;
   }
 
@@ -1011,6 +1009,13 @@ function buildWorkflowCreateStarterLegacyAuthGovernanceSurface({
     viewState: workspaceStarterGovernanceScope,
     variant: "source"
   });
+  const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+    workflowDetailLink.href,
+    workflow,
+    {
+      definitionIssue: "legacy_publish_auth"
+    }
+  );
   const workflowLibraryHref = appendWorkflowLibraryViewState(
     buildWorkflowLibraryHrefFromWorkspaceStarterViewState(workspaceStarterGovernanceScope),
     {
@@ -1025,10 +1030,22 @@ function buildWorkflowCreateStarterLegacyAuthGovernanceSurface({
   const followUp = buildLegacyPublishAuthModeFollowUp(
     legacyAuthGovernanceSnapshot.auth_mode_contract
   );
-  const summary =
+  const backlogSummary = [
+    workflow.draft_candidate_count > 0
+      ? `${workflow.draft_candidate_count} 条 draft cleanup`
+      : null,
     workflow.published_blocker_count > 0
-      ? `${workflowName} 仍有 ${workflow.published_blocker_count} 条 live legacy binding，另外还有 ${workflow.draft_candidate_count} 条 draft cleanup 候选。${contractSummary}`
-      : `${workflowName} 仍有 ${workflow.draft_candidate_count} 条 draft legacy binding 可直接 cleanup。${contractSummary}`;
+      ? `${workflow.published_blocker_count} 条 published blocker`
+      : null,
+    workflow.offline_inventory_count > 0
+      ? `${workflow.offline_inventory_count} 条 offline inventory`
+      : null
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join("、");
+  const summary = backlogSummary
+    ? `${workflowName} 仍有 ${backlogSummary} 需要继续做 legacy auth cleanup。${contractSummary}`
+    : `${workflowName} 仍有 legacy auth cleanup 待处理。${contractSummary}`;
 
   return {
     workflowName,
@@ -1037,9 +1054,9 @@ function buildWorkflowCreateStarterLegacyAuthGovernanceSurface({
     offlineInventoryCount: workflow.offline_inventory_count,
     summary,
     followUp,
-    workflowDetailHref: workflowDetailLink.href,
+    workflowDetailHref,
     workflowDetailLabel: workflowDetailLink.label,
     workflowLibraryHref,
-    workflowLibraryLabel: "只看 legacy auth blocker workflows"
+    workflowLibraryLabel: "只看 legacy auth cleanup workflows"
   };
 }

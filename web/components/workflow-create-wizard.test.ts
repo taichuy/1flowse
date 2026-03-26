@@ -873,10 +873,133 @@ describe("WorkflowCreateWizard", () => {
     expect(html).toContain("Source Publish Workflow");
     expect(html).toContain("Publish auth contract");
     expect(html).toContain("打开源 workflow");
-    expect(html).toContain("只看 legacy auth blocker workflows");
-    expect(html).toContain('/workflows/wf-source?');
-    expect(html).toContain('definition_issue=legacy_publish_auth');
-    expect(html).toContain('starter=workspace-starter-1');
+    expect(html).toContain("只看 legacy auth cleanup workflows");
+    expect(html).toContain(
+      '/workflows/wf-source?needs_follow_up=true&amp;q=publish&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth'
+    );
+  });
+
+  it("keeps offline-inventory-only source workflow legacy auth handoff visible in the create flow", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCreateWizard, {
+        catalogToolCount: 0,
+        governanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " inventory ",
+          selectedTemplateId: "workspace-starter-offline"
+        },
+        legacyAuthGovernanceSnapshot: {
+          generated_at: "2026-03-18T10:00:00Z",
+          workflow_count: 1,
+          binding_count: 1,
+          summary: {
+            draft_candidate_count: 0,
+            published_blocker_count: 0,
+            offline_inventory_count: 1
+          },
+          checklist: [],
+          workflows: [
+            {
+              workflow_id: "wf-offline",
+              workflow_name: "Offline Inventory Workflow",
+              binding_count: 1,
+              draft_candidate_count: 0,
+              published_blocker_count: 0,
+              offline_inventory_count: 1,
+              tool_governance: {
+                referenced_tool_ids: [],
+                missing_tool_ids: [],
+                governed_tool_count: 0,
+                strong_isolation_tool_count: 0
+              }
+            }
+          ],
+          buckets: {
+            draft_candidates: [],
+            published_blockers: [],
+            offline_inventory: []
+          }
+        },
+        workflows: [],
+        starterSourceLanes: [],
+        nodeCatalog: [
+          {
+            type: "trigger",
+            label: "Trigger",
+            description: "Trigger node",
+            ecosystem: "native",
+            source: {
+              kind: "node",
+              scope: "builtin",
+              status: "available",
+              governance: "repo",
+              ecosystem: "native",
+              label: "Native node catalog",
+              shortLabel: "native nodes",
+              summary: "Native nodes"
+            },
+            capabilityGroup: "entry",
+            businessTrack: "应用新建编排",
+            tags: [],
+            supportStatus: "available",
+            supportSummary: "",
+            bindingRequired: false,
+            bindingSourceLanes: [],
+            palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
+            defaults: { name: "Trigger", config: {} }
+          }
+        ],
+        tools: [],
+        starters: [
+          {
+            id: "workspace-starter-offline",
+            origin: "workspace",
+            workspaceId: "default",
+            name: "Offline Inventory Starter",
+            description: "Starter with offline inventory follow-up.",
+            businessTrack: "应用新建编排",
+            defaultWorkflowName: "Offline Inventory Workflow",
+            workflowFocus: "Keep offline inventory visible before creating.",
+            recommendedNextStep: "Review the source workflow before creating the draft.",
+            tags: ["workspace starter"],
+            definition: {
+              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              edges: [],
+              variables: [],
+              publish: []
+            },
+            source: {
+              kind: "starter",
+              scope: "workspace",
+              status: "available",
+              governance: "workspace",
+              ecosystem: "native",
+              label: "Workspace starters",
+              shortLabel: "workspace ready",
+              summary: "Workspace starter library"
+            },
+            archived: false,
+            createdFromWorkflowId: "wf-offline",
+            sourceGovernance: {
+              kind: "drifted",
+              statusLabel: "建议 refresh",
+              summary: "当前主要是来源快照漂移。优先 refresh 同步最新 definition / version。",
+              sourceWorkflowId: "wf-offline",
+              sourceWorkflowName: "Offline Inventory Workflow"
+            }
+          }
+        ]
+      })
+    );
+
+    expect(html).toContain("Offline Inventory Workflow");
+    expect(html).toContain("1 条 offline inventory");
+    expect(html).toContain("只看 legacy auth cleanup workflows");
+    expect(html).toContain(
+      '/workflows/wf-offline?needs_follow_up=true&amp;q=inventory&amp;source_governance_kind=drifted&amp;starter=workspace-starter-offline&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=legacy_publish_auth'
+    );
   });
 
   it("blocks create when the selected starter still references missing catalog tools", () => {
