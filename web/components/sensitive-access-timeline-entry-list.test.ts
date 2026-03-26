@@ -272,7 +272,8 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(sensitiveAccessInlineActionProps).toHaveLength(1);
     expect(callbackSummaryProps[0]).toMatchObject({
       workflowCatalogGapSummary: "catalog gap · native.timeline-gap",
-      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      workflowCatalogGapHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker"
@@ -283,7 +284,8 @@ describe("SensitiveAccessTimelineEntryList", () => {
     );
     expect(inlineFeedbackProps[0]?.callbackWaitingSummaryProps).toMatchObject({
       workflowCatalogGapSummary: "catalog gap · native.timeline-gap",
-      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      workflowCatalogGapHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker"
@@ -291,7 +293,8 @@ describe("SensitiveAccessTimelineEntryList", () => {
     });
     expect(sensitiveAccessInlineActionProps[0]?.callbackWaitingSummaryProps).toMatchObject({
       workflowCatalogGapSummary: "catalog gap · native.timeline-gap",
-      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      workflowCatalogGapHref: "/workflows/workflow-timeline?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker"
@@ -673,7 +676,7 @@ describe("SensitiveAccessTimelineEntryList", () => {
     expect(workflowGovernanceCardProps).toHaveLength(1);
     expect(workflowGovernanceCardProps[0]).toMatchObject({
       workflowCatalogGapSummary: null,
-      workflowGovernanceHref: "/workflows/workflow-timeline",
+      workflowGovernanceHref: "/workflows/workflow-timeline?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker"

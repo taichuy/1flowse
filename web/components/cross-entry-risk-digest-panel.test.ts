@@ -84,6 +84,28 @@ function buildDigest(): CrossEntryRiskDigest {
 }
 
 describe("CrossEntryRiskDigestPanel", () => {
+  it("renders operator workflow governance handoff cards when digest exposes them", () => {
+    const digest = buildDigest();
+    digest.operatorWorkflowGovernanceHandoff = {
+      workflowId: "workflow-governed",
+      workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+      workflowCatalogGapDetail: "当前 operator backlog 对应的 workflow 仍有 catalog gap。",
+      workflowCatalogGapHref: "/workflows/workflow-governed?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-governed?definition_issue=legacy_publish_auth",
+      legacyAuthHandoff: null
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(CrossEntryRiskDigestPanel, {
+        digest,
+        intro: "cross-entry intro"
+      })
+    );
+
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain('href="/workflows/workflow-governed?definition_issue=missing_tool"');
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+  });
   it("projects canonical CTA links into the primary follow-up and each focus area", () => {
     const html = renderToStaticMarkup(
       createElement(CrossEntryRiskDigestPanel, {

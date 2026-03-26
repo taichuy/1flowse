@@ -199,7 +199,8 @@ describe("RunDetailExecutionFocusCard shared callback summary handoff", () => {
     expect(callbackSummaryProps).toHaveLength(1);
     expect(callbackSummaryProps[0]).toMatchObject({
       workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
-      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker"

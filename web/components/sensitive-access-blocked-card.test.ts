@@ -309,7 +309,8 @@ describe("SensitiveAccessBlockedCard", () => {
     expect(callbackWaitingSummaryProps).not.toBeNull();
     expect(callbackWaitingSummaryProps).toMatchObject({
       workflowCatalogGapSummary: "catalog gap · native.blocked-gap",
-      workflowGovernanceHref: "/workflows/workflow-blocked?definition_issue=missing_tool",
+      workflowCatalogGapHref: "/workflows/workflow-blocked?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-blocked?definition_issue=legacy_publish_auth",
       legacyAuthHandoff: {
         bindingChipLabel: "1 legacy bindings",
         statusChipLabel: "publish auth blocker"
