@@ -1,3 +1,5 @@
+import React from "react";
+
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
@@ -10,6 +12,11 @@ import { RunDiagnosticsOperatorFollowUpCard } from "@/components/run-diagnostics
 import { RunDiagnosticsExecutionOverviewBlockers } from "@/components/run-diagnostics-execution/execution-overview-blockers";
 import { RunDiagnosticsLegacyAuthGovernanceCard } from "@/components/run-diagnostics-execution/legacy-auth-governance-card";
 import { MetricChipRow, SummaryCard } from "@/components/run-diagnostics-execution/shared";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 
 export function RunDiagnosticsExecutionOverview({
   executionView,
@@ -31,6 +38,23 @@ export function RunDiagnosticsExecutionOverview({
   }
 
   const callbackWaiting = executionView.summary.callback_waiting;
+  const resolvedWorkflowId = workflowId ?? executionView.workflow_id;
+  const resolvedToolGovernance = toolGovernance;
+  const resolvedLegacyAuthGovernance = legacyAuthGovernance ?? executionView.legacy_auth_governance ?? null;
+  const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: resolvedWorkflowId,
+    toolGovernance: resolvedToolGovernance,
+    legacyAuthGovernance: resolvedLegacyAuthGovernance,
+    workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+      toolGovernance: resolvedToolGovernance,
+      subjectLabel: "execution overview",
+      returnDetail:
+        "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 execution dispatch、fallback 与 blocker 分布。"
+    })
+  });
+  const shouldRenderWorkflowGovernanceHandoff = Boolean(
+    workflowGovernanceHandoff.workflowCatalogGapSummary
+  );
 
   return (
     <>
@@ -112,6 +136,16 @@ export function RunDiagnosticsExecutionOverview({
         callbackWaitingAutomation={callbackWaitingAutomation}
         sandboxReadiness={sandboxReadiness}
       />
+
+      {shouldRenderWorkflowGovernanceHandoff ? (
+        <WorkflowGovernanceHandoffCards
+          workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+          workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+          workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
+          legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+          cardClassName="payload-card compact-card"
+        />
+      ) : null}
 
       <RunDiagnosticsLegacyAuthGovernanceCard executionView={executionView} />
 
