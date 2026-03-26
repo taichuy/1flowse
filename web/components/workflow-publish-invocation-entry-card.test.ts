@@ -1146,12 +1146,10 @@ describe("WorkflowPublishInvocationEntryCard", () => {
         callbackSummaryProps.some(
           (props) =>
             props.runId === "run-callback-1" &&
-            typeof props.workflowCatalogGapHref === "string" &&
-            props.workflowCatalogGapHref.includes("starter=starter-1") &&
-            props.workflowCatalogGapHref.includes("definition_issue=missing_tool") &&
-            typeof props.workflowGovernanceHref === "string" &&
-            props.workflowGovernanceHref.includes("starter=starter-1") &&
-            props.workflowGovernanceHref.includes("definition_issue=legacy_publish_auth")
+            props.workflowCatalogGapHref ===
+              "/workflows/workflow-1?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool" &&
+            props.workflowGovernanceHref ===
+              "/workflows/workflow-1?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=legacy_publish_auth"
         )
       ).toBe(true);
     } finally {
