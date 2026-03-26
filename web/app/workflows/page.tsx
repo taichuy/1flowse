@@ -44,6 +44,7 @@ import {
   formatCatalogGapResourceSummary,
   formatCatalogGapToolSummary,
   formatWorkflowLegacyPublishAuthBacklogSummary,
+  getWorkflowLegacyPublishAuthBlockerCount,
   hasWorkflowLegacyPublishAuthIssues
 } from "@/lib/workflow-definition-governance";
 import {
@@ -447,6 +448,63 @@ export default async function WorkflowsPage({
   );
 }
 
+function compareCountsDescending(left: number, right: number) {
+  return right - left;
+}
+
+function compareWorkflowNames(left: WorkflowListItem, right: WorkflowListItem) {
+  return left.name.localeCompare(right.name, "zh-Hans-CN");
+}
+
+function compareWorkflowLegacyAuthPriority(left: WorkflowListItem, right: WorkflowListItem) {
+  const leftGovernance = left.legacy_auth_governance;
+  const rightGovernance = right.legacy_auth_governance;
+  const leftDraftCleanupCount =
+    leftGovernance?.draft_candidate_count ?? getWorkflowLegacyPublishAuthBlockerCount(left);
+  const rightDraftCleanupCount =
+    rightGovernance?.draft_candidate_count ?? getWorkflowLegacyPublishAuthBlockerCount(right);
+
+  return (
+    compareCountsDescending(
+      leftGovernance?.published_blocker_count ?? 0,
+      rightGovernance?.published_blocker_count ?? 0
+    ) ||
+    compareCountsDescending(
+      leftGovernance?.offline_inventory_count ?? 0,
+      rightGovernance?.offline_inventory_count ?? 0
+    ) ||
+    compareCountsDescending(leftDraftCleanupCount, rightDraftCleanupCount) ||
+    compareCountsDescending(
+      getWorkflowLegacyPublishAuthBlockerCount(left),
+      getWorkflowLegacyPublishAuthBlockerCount(right)
+    ) ||
+    compareWorkflowNames(left, right)
+  );
+}
+
+function compareWorkflowMissingToolPriority(left: WorkflowListItem, right: WorkflowListItem) {
+  return (
+    compareCountsDescending(
+      left.tool_governance?.missing_tool_ids.length ?? 0,
+      right.tool_governance?.missing_tool_ids.length ?? 0
+    ) ||
+    compareCountsDescending(
+      left.tool_governance?.governed_tool_count ?? 0,
+      right.tool_governance?.governed_tool_count ?? 0
+    ) ||
+    compareWorkflowNames(left, right)
+  );
+}
+
+function compareWorkflowStrongIsolationPriority(left: WorkflowListItem, right: WorkflowListItem) {
+  return (
+    compareCountsDescending(
+      left.tool_governance?.strong_isolation_tool_count ?? 0,
+      right.tool_governance?.strong_isolation_tool_count ?? 0
+    ) || compareWorkflowNames(left, right)
+  );
+}
+
 function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
   const statusCounts: Record<string, number> = {};
   let totalNodeCount = 0;
@@ -472,6 +530,10 @@ function buildWorkflowLibrarySummary(workflows: WorkflowListItem[]) {
       workflowsWithStrongIsolation.push(workflow);
     }
   }
+
+  workflowsWithLegacyPublishAuth.sort(compareWorkflowLegacyAuthPriority);
+  workflowsWithMissingTools.sort(compareWorkflowMissingToolPriority);
+  workflowsWithStrongIsolation.sort(compareWorkflowStrongIsolationPriority);
 
   return {
     workflowCount: workflows.length,

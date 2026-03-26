@@ -76,4 +76,42 @@ describe("WorkflowChipLink", () => {
     expect(html).toContain("publish auth blocker");
     expect(html).toContain("catalog gap · native.catalog-gap");
   });
+
+  it("counts current publish draft issues together with persisted legacy bindings", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowChipLink, {
+        href: "/workflows/workflow-auth-mixed",
+        workflow: {
+          id: "workflow-auth-mixed",
+          name: "Mixed Auth Workflow",
+          status: "draft",
+          version: "0.6.0",
+          node_count: 2,
+          definition_issues: [
+            {
+              category: "publish_draft",
+              message: "Public Search 当前不能使用 authMode = token。",
+              path: "publish.0.authMode",
+              field: "authMode"
+            }
+          ],
+          legacy_auth_governance: {
+            binding_count: 2,
+            draft_candidate_count: 1,
+            published_blocker_count: 1,
+            offline_inventory_count: 0
+          },
+          tool_governance: {
+            referenced_tool_ids: [],
+            missing_tool_ids: [],
+            governed_tool_count: 1,
+            strong_isolation_tool_count: 0
+          }
+        }
+      })
+    );
+
+    expect(html).toContain("3 publish auth blockers");
+    expect(html).toContain("publish auth blocker");
+  });
 });

@@ -87,6 +87,31 @@ describe("workflow-definition-governance", () => {
     );
   });
 
+  it("combines current publish draft issues with persisted legacy auth backlog", () => {
+    const workflow = {
+      definition_issues: [
+        {
+          category: "publish_draft",
+          message: "Public Search 当前不能使用 authMode = token。",
+          path: "publish.0.authMode",
+          field: "authMode"
+        }
+      ],
+      legacy_auth_governance: {
+        binding_count: 2,
+        draft_candidate_count: 1,
+        published_blocker_count: 1,
+        offline_inventory_count: 0
+      }
+    };
+
+    expect(getWorkflowLegacyPublishAuthBlockerCount(workflow)).toBe(3);
+    expect(hasWorkflowLegacyPublishAuthIssues(workflow)).toBe(true);
+    expect(formatWorkflowLegacyPublishAuthBacklogSummary(workflow)).toBe(
+      "1 个当前 publish draft、1 条 draft cleanup、1 条 published blocker、0 条 offline inventory"
+    );
+  });
+
   it("normalizes workflow missing tool ids into a shared catalog-gap summary", () => {
     const workflow = {
       tool_governance: {

@@ -1,9 +1,11 @@
 import type { WorkflowDefinitionPreflightIssue, WorkflowListItem } from "@/lib/get-workflows";
 
-type WorkflowLegacyAuthGovernanceLike = Pick<
-  WorkflowListItem,
-  "definition_issues" | "legacy_auth_governance"
->;
+type WorkflowLegacyAuthGovernanceLike = {
+  definition_issues?: WorkflowDefinitionPreflightIssue[];
+  legacy_auth_governance?: {
+    binding_count: number;
+  } | null;
+};
 type WorkflowMissingToolGovernanceLike = {
   tool_governance?: WorkflowListItem["tool_governance"] | null;
 };

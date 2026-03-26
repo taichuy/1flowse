@@ -291,6 +291,51 @@ describe("WorkflowsPage", () => {
     expect(html).toContain('/workflows/workflow-legacy-auth');
   });
 
+  it("keeps current publish draft issues in the shared legacy publish auth handoff", async () => {
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
+    vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
+      buildSensitiveAccessInboxSnapshot()
+    );
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshot());
+    vi.mocked(getWorkflows).mockResolvedValue([
+      {
+        id: "workflow-mixed-auth",
+        name: "Mixed Auth workflow",
+        version: "1.2.0",
+        status: "draft",
+        node_count: 5,
+        definition_issues: [
+          {
+            category: "publish_draft",
+            message: "Public Search 当前不能使用 authMode = token。",
+            path: "publish.0.authMode",
+            field: "authMode"
+          }
+        ],
+        legacy_auth_governance: {
+          binding_count: 2,
+          draft_candidate_count: 1,
+          published_blocker_count: 1,
+          offline_inventory_count: 0
+        },
+        tool_governance: {
+          referenced_tool_ids: ["tool-1"],
+          missing_tool_ids: [],
+          governed_tool_count: 1,
+          strong_isolation_tool_count: 0
+        }
+      }
+    ]);
+
+    const html = renderToStaticMarkup(await WorkflowsPage());
+
+    expect(html).toContain("3 publish auth blockers");
+    expect(html).toContain(
+      "优先回到 Mixed Auth workflow 处理 1 个当前 publish draft、1 条 draft cleanup、1 条 published blocker、0 条 offline inventory：先把 workflow draft endpoint 切回 api_key/internal 并保存"
+    );
+    expect(html).toContain('/workflows/workflow-mixed-auth');
+  });
+
   it("prioritizes shared operator backlog follow-up before local workflow cleanup", async () => {
     vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverview());
     vi.mocked(getSensitiveAccessInboxSnapshot).mockResolvedValue(
