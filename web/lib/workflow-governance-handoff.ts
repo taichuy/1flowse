@@ -38,46 +38,6 @@ function normalizeText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
-export function buildWorkflowGovernanceDetailHrefFromCurrentHref({
-  workflowId,
-  currentHref
-}: {
-  workflowId?: string | null;
-  currentHref?: string | null;
-}) {
-  const resolvedWorkflowId = normalizeText(workflowId);
-
-  if (!resolvedWorkflowId) {
-    return null;
-  }
-
-  const fallbackHref = buildAuthorFacingWorkflowDetailLinkSurface({
-    workflowId: resolvedWorkflowId,
-    variant: "editor"
-  }).href;
-  const normalizedCurrentHref = normalizeText(currentHref);
-
-  if (!normalizedCurrentHref) {
-    return fallbackHref;
-  }
-
-  try {
-    const currentUrl = new URL(normalizedCurrentHref, "https://7flows.local");
-    const [, currentWorkflowId] = currentUrl.pathname.split("/").filter(Boolean);
-
-    if (currentUrl.pathname.startsWith("/workflows/") && currentWorkflowId === resolvedWorkflowId) {
-      return appendWorkflowLibraryViewState(
-        fallbackHref,
-        readWorkflowLibraryViewState(currentUrl.searchParams)
-      );
-    }
-  } catch {
-    return fallbackHref;
-  }
-
-  return fallbackHref;
-}
-
 function isLegacyAuthGovernanceSnapshot(
   legacyAuthGovernance: WorkflowLegacyAuthGovernanceHandoffInput | null | undefined
 ): legacyAuthGovernance is WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot {

@@ -135,7 +135,7 @@ describe("workflow-governance-handoff", () => {
     );
   });
 
-  it("upgrades an explicit missing-tool scope when legacy auth handoff also exists", () => {
+  it("upgrades an explicit missing-tool scope to legacy auth while preserving the catalog-gap shortcut", () => {
     const handoff = buildWorkflowGovernanceHandoff({
       workflowId: "workflow-mixed",
       workflowDetailHref:
@@ -155,7 +155,7 @@ describe("workflow-governance-handoff", () => {
     });
 
     expect(handoff.workflowGovernanceHref).toBe(
-      "/workflows/workflow-mixed?starter=starter-openclaw&definition_issue=missing_tool"
+      "/workflows/workflow-mixed?starter=starter-openclaw&definition_issue=legacy_publish_auth"
     );
     expect(handoff.workflowCatalogGapHref).toBe(
       "/workflows/workflow-mixed?starter=starter-openclaw&definition_issue=missing_tool"
