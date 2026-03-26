@@ -325,25 +325,15 @@ export function ExecutionNodeCard({
         scheduledResumeRequeuedAt={node.scheduled_resume_requeued_at}
         scheduledResumeRequeueSource={node.scheduled_resume_requeue_source}
         workflowCatalogGapSummary={
-          hasCallbackWaitingSummary
-            ? callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary
-            : null
+          callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapSummary
         }
         workflowCatalogGapDetail={
-          hasCallbackWaitingSummary
-            ? callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
-            : null
+          callbackSummaryWorkflowGovernanceHandoff.workflowCatalogGapDetail
         }
         workflowGovernanceHref={
-          hasCallbackWaitingSummary
-            ? callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
-            : null
+          callbackSummaryWorkflowGovernanceHandoff.workflowGovernanceHref
         }
-        legacyAuthHandoff={
-          hasCallbackWaitingSummary
-            ? callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff
-            : null
-        }
+        legacyAuthHandoff={callbackSummaryWorkflowGovernanceHandoff.legacyAuthHandoff}
       />
 
       <MetricChipRow

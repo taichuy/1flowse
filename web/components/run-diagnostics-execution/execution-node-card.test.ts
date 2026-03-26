@@ -466,6 +466,48 @@ describe("ExecutionNodeCard", () => {
     expect(html).toContain("legacy auth 1 legacy bindings");
   });
 
+  it("keeps workflow governance handoff on node fallback surfaces without callback summary facts", () => {
+    const html = renderToStaticMarkup(
+      createElement(ExecutionNodeCard, {
+        node: {
+          ...buildExecutionNode(),
+          callback_waiting_lifecycle: null,
+          callback_waiting_explanation: null,
+          waiting_reason: null,
+          scheduled_resume_delay_seconds: null,
+          scheduled_resume_reason: null,
+          scheduled_resume_source: null,
+          scheduled_waiting_status: null,
+          scheduled_resume_scheduled_at: null,
+          scheduled_resume_due_at: null,
+          scheduled_resume_requeued_at: null,
+          scheduled_resume_requeue_source: null
+        },
+        runId: "run-callback-1",
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        workflowId: "workflow-1",
+        toolGovernance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        legacyAuthGovernance: buildLegacyAuthGovernanceSinglePublishedBlockerSnapshotFixture({
+          binding: {
+            workflow_id: "workflow-1",
+            workflow_name: "Workflow 1"
+          }
+        })
+      })
+    );
+
+    expect(html).toContain("当前节点仍在等待 callback。");
+    expect(html).toContain("优先观察定时恢复是否已重新排队。");
+    expect(html).toContain("workflow catalog gap · native.catalog-gap");
+    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+    expect(html).toContain("legacy auth 1 legacy bindings");
+  });
+
   it("surfaces compact runner facts in the node header strip", () => {
     const html = renderToStaticMarkup(
       createElement(ExecutionNodeCard, {
