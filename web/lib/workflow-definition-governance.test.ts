@@ -51,7 +51,7 @@ describe("workflow-definition-governance", () => {
       "publish auth blocker"
     );
     expect(formatWorkflowLegacyPublishAuthBacklogSummary({ definition_issues: [issue] })).toBe(
-      "1 个 publish draft"
+      "1 个当前 publish draft"
     );
   });
 
@@ -113,16 +113,16 @@ describe("workflow-definition-governance", () => {
       })
     };
 
-    expect(getWorkflowLegacyPublishAuthBacklogCount(workflow)).toBe(2);
-    expect(getWorkflowLegacyPublishAuthFollowUpCount(workflow)).toBe(4);
+    expect(getWorkflowLegacyPublishAuthBacklogCount(workflow)).toBe(3);
+    expect(getWorkflowLegacyPublishAuthFollowUpCount(workflow)).toBe(3);
     expect(hasWorkflowLegacyPublishAuthIssues(workflow)).toBe(true);
     expect(getWorkflowLegacyPublishAuthStatusLabel(workflow)).toBe("publish auth blocker");
     expect(formatWorkflowLegacyPublishAuthBacklogSummary(workflow)).toBe(
-      "1 个当前 publish draft、1 条 draft cleanup、1 条 published blocker、1 条 offline inventory"
+      "1 条 draft cleanup、1 条 published blocker、1 条 offline inventory"
     );
   });
 
-  it("deduplicates current publish draft issues against persisted legacy auth backlog", () => {
+  it("deduplicates current publish draft issues against persisted legacy auth cleanup counts", () => {
     const workflow = {
       definition_issues: [
         {
@@ -173,12 +173,12 @@ describe("workflow-definition-governance", () => {
       }
     };
 
-    expect(getWorkflowLegacyPublishAuthBacklogCount(workflow)).toBe(2);
+    expect(getWorkflowLegacyPublishAuthBacklogCount(workflow)).toBe(3);
     expect(getWorkflowLegacyPublishAuthFollowUpCount(workflow)).toBe(3);
     expect(hasWorkflowLegacyPublishAuthIssues(workflow)).toBe(true);
     expect(getWorkflowLegacyPublishAuthStatusLabel(workflow)).toBe("publish auth blocker");
     expect(formatWorkflowLegacyPublishAuthBacklogSummary(workflow)).toBe(
-      "1 个当前 publish draft、2 条 draft cleanup、0 条 published blocker、1 条 offline inventory"
+      "2 条 draft cleanup、0 条 published blocker、1 条 offline inventory"
     );
   });
 
@@ -250,11 +250,11 @@ describe("workflow-definition-governance", () => {
     };
 
     expect(getWorkflowLegacyPublishAuthBacklogCount(workflow)).toBe(2);
-    expect(getWorkflowLegacyPublishAuthFollowUpCount(workflow)).toBe(3);
+    expect(getWorkflowLegacyPublishAuthFollowUpCount(workflow)).toBe(2);
     expect(hasWorkflowLegacyPublishAuthIssues(workflow)).toBe(true);
     expect(getWorkflowLegacyPublishAuthStatusLabel(workflow)).toBe("publish auth blocker");
     expect(formatWorkflowLegacyPublishAuthBacklogSummary(workflow)).toBe(
-      "1 个当前 publish draft、1 条 draft cleanup、1 条 published blocker、0 条 offline inventory"
+      "1 条 draft cleanup、1 条 published blocker、0 条 offline inventory"
     );
   });
 
