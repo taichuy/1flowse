@@ -30,7 +30,12 @@ import {
   buildAuthorFacingWorkflowDetailLinkSurface,
   buildWorkflowEditorStarterSaveSurfaceCopy
 } from "@/lib/workbench-entry-surfaces";
+import {
+  buildLegacyPublishAuthModeContractSummary,
+  buildLegacyPublishAuthModeFollowUp
+} from "@/lib/legacy-publish-auth-contract";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import { buildWorkflowCatalogGapDetail } from "@/lib/workflow-governance-handoff";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-blocker-notice";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
@@ -90,6 +95,47 @@ type WorkflowEditorSidebarProps = {
   onSelectRunId: (runId: string | null) => void;
   onRefreshRuns: () => void;
 };
+
+function buildValidationIssueGovernancePreview(item: WorkflowValidationNavigatorItem) {
+  const chips: string[] = [];
+  const details: string[] = [];
+  const catalogGapToolIds = Array.from(new Set(item.catalogGapToolIds ?? []));
+
+  if (catalogGapToolIds.length > 0) {
+    chips.push("catalog gap");
+    const catalogGapDetail = buildWorkflowCatalogGapDetail({
+      toolGovernance: {
+        referenced_tool_ids: catalogGapToolIds,
+        missing_tool_ids: catalogGapToolIds,
+        governed_tool_count: 0,
+        strong_isolation_tool_count: 0
+      },
+      subjectLabel: "这条校验项",
+      returnDetail:
+        "点击这条校验项后，编辑器会跳到对应字段，并继续沿同一份 workflow governance handoff 收口。"
+    });
+
+    if (catalogGapDetail) {
+      details.push(catalogGapDetail);
+    }
+  }
+
+  if (item.hasLegacyPublishAuthModeIssues) {
+    chips.push("publish auth blocker");
+    details.push(
+      `${buildLegacyPublishAuthModeContractSummary()} ${buildLegacyPublishAuthModeFollowUp()}`
+    );
+  }
+
+  if (chips.length === 0 && details.length === 0) {
+    return null;
+  }
+
+  return {
+    chips: Array.from(new Set(chips)),
+    details: Array.from(new Set(details))
+  };
+}
 
 export function WorkflowEditorSidebar({
   currentHref,
@@ -419,17 +465,39 @@ export function WorkflowEditorSidebar({
 
         {validationNavigatorItems.length > 0 ? (
           <div className="validation-issue-list">
-            {validationNavigatorItems.slice(0, 8).map((item) => (
-              <button
-                key={item.key}
-                className="validation-issue-button"
-                type="button"
-                onClick={() => onNavigateValidationIssue(item)}
-              >
-                <strong>{item.target.label}</strong>
-                <span>{item.message}</span>
-              </button>
-            ))}
+            {validationNavigatorItems.slice(0, 8).map((item) => {
+              const governancePreview = buildValidationIssueGovernancePreview(item);
+
+              return (
+                <button
+                  key={item.key}
+                  className="validation-issue-button"
+                  type="button"
+                  onClick={() => onNavigateValidationIssue(item)}
+                >
+                  <strong>{item.target.label}</strong>
+                  <span>{item.message}</span>
+                  {governancePreview ? (
+                    <div className="compact-stack">
+                      {governancePreview.chips.length > 0 ? (
+                        <div className="tool-badge-row">
+                          {governancePreview.chips.map((chip) => (
+                            <span className="event-chip" key={`${item.key}-${chip}`}>
+                              {chip}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {governancePreview.details.map((detail) => (
+                        <small className="section-copy" key={`${item.key}-${detail}`}>
+                          {detail}
+                        </small>
+                      ))}
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         ) : null}
       </article>

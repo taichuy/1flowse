@@ -416,6 +416,76 @@ describe("WorkflowEditorSidebar", () => {
     );
   });
 
+  it("adds shared governance previews to validation issue buttons", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [
+          {
+            key: "tool-reference",
+            category: "tool_reference",
+            message: "Tool 节点 Search 引用了当前目录中不存在的工具 native.catalog-gap。",
+            catalogGapToolIds: ["native.catalog-gap"],
+            target: {
+              scope: "node",
+              nodeId: "node-1",
+              section: "config",
+              fieldPath: "config.tool.toolId",
+              label: "Node · Search"
+            }
+          },
+          {
+            key: "publish-auth-mode",
+            category: "publish_draft",
+            message: "Public Search 当前不能使用 authMode = token。",
+            hasLegacyPublishAuthModeIssues: true,
+            target: {
+              scope: "publish",
+              endpointIndex: 0,
+              fieldPath: "authMode",
+              label: "Publish · Public Search"
+            }
+          }
+        ],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onWorkflowNameChange: () => undefined,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain("catalog gap");
+    expect(html).toContain("native.catalog-gap");
+    expect(html).toContain("workflow governance handoff 收口");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain("Publish auth contract：supported api_key / internal；legacy token。");
+    expect(html).toContain("先把 workflow draft endpoint 切回 api_key/internal 并保存");
+  });
+
   it("prioritizes missing-tool governance handoff after saving a starter from a governed workflow", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {
