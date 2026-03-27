@@ -286,11 +286,23 @@ describe("workflow publish activity panel helpers", () => {
   });
 
   it("projects selected invocation next-step surface from shared publish facts", () => {
+    const detail = buildSelectedInvocationDetail();
+    detail.run_follow_up!.sampled_runs[0] = {
+      ...detail.run_follow_up!.sampled_runs[0],
+      tool_governance: {
+        missing_tool_ids: ["native.catalog-gap"],
+        unresolved_node_count: 1,
+        missing_binding_count: 1,
+        affected_version_count: 1,
+        missing_toolkit_count: 1,
+        latest_version: "v3"
+      }
+    } as never;
     const detailSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
       selectedInvocationId: "invocation-1",
       selectedInvocationDetail: {
         kind: "ok",
-        data: buildSelectedInvocationDetail()
+        data: detail
       }
     });
 
@@ -301,6 +313,11 @@ describe("workflow publish activity panel helpers", () => {
       label: "approval blocker",
       hrefLabel: "open blocker inbox slice",
       detail: "优先处理 blocker inbox，再观察 waiting 节点是否恢复。"
+    });
+    expect(detailSurface.nextStepSurface?.workflowGovernanceHandoff).toMatchObject({
+      workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
+      workflowCatalogGapDetail:
+        "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 publish sampled snapshot。"
     });
   });
 

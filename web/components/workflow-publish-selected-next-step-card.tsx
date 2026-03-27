@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { PublishedInvocationSelectedNextStepSurface } from "@/lib/published-invocation-presenters";
 
 type WorkflowPublishSelectedNextStepCardProps = {
@@ -30,6 +31,16 @@ export function WorkflowPublishSelectedNextStepCard({
         <p className="binding-meta">
           {`Primary governed resource: ${surface.primaryResourceSummary}.`}
         </p>
+      ) : null}
+      {surface.workflowGovernanceHandoff ? (
+        <WorkflowGovernanceHandoffCards
+          workflowCatalogGapSummary={surface.workflowGovernanceHandoff.workflowCatalogGapSummary}
+          workflowCatalogGapDetail={surface.workflowGovernanceHandoff.workflowCatalogGapDetail}
+          workflowCatalogGapHref={surface.workflowGovernanceHandoff.workflowCatalogGapHref}
+          workflowGovernanceHref={surface.workflowGovernanceHandoff.workflowGovernanceHref}
+          legacyAuthHandoff={surface.workflowGovernanceHandoff.legacyAuthHandoff}
+          cardClassName="payload-card compact-card"
+        />
       ) : null}
       {surface.href && surface.hrefLabel ? (
         <div className="tool-badge-row">

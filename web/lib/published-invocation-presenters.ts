@@ -573,6 +573,7 @@ export type PublishedInvocationSelectedNextStepSurface = {
   href: string | null;
   hrefLabel: string | null;
   primaryResourceSummary?: string | null;
+  workflowGovernanceHandoff?: WorkflowGovernanceHandoff | null;
 };
 
 type PublishedInvocationFailureReasonItem = {
@@ -1780,11 +1781,13 @@ export function buildPublishedInvocationSelectedNextStepSurface({
   invocationId,
   nextStep,
   title,
+  workflowGovernanceHandoff = null,
   surfaceCopy = buildPublishedInvocationActivityDetailsSurfaceCopy()
 }: {
   invocationId: string;
   nextStep: PublishedInvocationRecommendedNextStep;
   title?: string;
+  workflowGovernanceHandoff?: WorkflowGovernanceHandoff | null;
   surfaceCopy?: PublishedInvocationActivityDetailsSurfaceCopy;
 }): PublishedInvocationSelectedNextStepSurface {
   return {
@@ -1794,6 +1797,10 @@ export function buildPublishedInvocationSelectedNextStepSurface({
     detail: nextStep.detail,
     href: nextStep.href,
     hrefLabel: nextStep.href_label,
+    ...(workflowGovernanceHandoff?.workflowCatalogGapSummary ||
+    workflowGovernanceHandoff?.legacyAuthHandoff
+      ? { workflowGovernanceHandoff }
+      : {}),
     ...(nextStep.primaryResourceSummary
       ? { primaryResourceSummary: nextStep.primaryResourceSummary }
       : {})

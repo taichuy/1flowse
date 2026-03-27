@@ -26,6 +26,7 @@ import {
   buildPublishedInvocationEntrySurfaceCopy,
   buildPublishedInvocationInboxHref,
   buildPublishedInvocationRecommendedNextStep,
+  buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff,
   resolvePublishedInvocationRecommendedNextStepInboxHrefs,
   buildPublishedInvocationRunFollowUpSampleApprovalInboxHref,
   buildPublishedInvocationRunFollowUpSampleInboxHref,
@@ -223,6 +224,19 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
     const runId = detail.run?.id ?? detail.invocation.run_id ?? null;
     const recommendedNextStepSample =
       samples.find((sample) => sample.run_id === runId) ?? samples[0] ?? null;
+    const recommendedNextStepWorkflowGovernanceHandoff =
+      recommendedNextStepSample?.workflow_governance_handoff ??
+      (detail.legacy_auth_governance
+        ? buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(
+            {
+              workflow_id: detail.invocation.workflow_id,
+              tool_governance: null,
+              legacy_auth_governance: detail.legacy_auth_governance,
+              workflow_catalog_gap_detail: null,
+            },
+            {}
+          )
+        : null);
     const approvalInboxHref = buildPublishedInvocationInboxHref({
       invocation: detail.invocation,
       callbackTickets: detail.callback_tickets,
@@ -283,6 +297,7 @@ export function resolveWorkflowPublishSelectedInvocationDetailSurface({
         ? buildPublishedInvocationSelectedNextStepSurface({
             invocationId: selectedInvocationId,
             nextStep,
+            workflowGovernanceHandoff: recommendedNextStepWorkflowGovernanceHandoff,
             surfaceCopy: detailsSurfaceCopy
           })
         : null
