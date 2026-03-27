@@ -305,6 +305,94 @@ describe("WorkflowPublishBindingCard", () => {
     expect(html).toContain("#workflow-editor-publish-endpoint-endpoint-1");
   });
 
+  it("shares workflow governance handoff on binding blockers", () => {
+    const workflow = buildWorkflow();
+    workflow.tool_governance = {
+      referenced_tool_ids: ["native.catalog-gap"],
+      missing_tool_ids: ["native.catalog-gap"],
+      governed_tool_count: 1,
+      strong_isolation_tool_count: 0
+    };
+    workflow.legacy_auth_governance = {
+      binding_count: 1,
+      draft_candidate_count: 1,
+      published_blocker_count: 1,
+      offline_inventory_count: 0
+    };
+
+    const binding = buildBinding();
+    binding.auth_mode = "token";
+    binding.issues = [buildLegacyPublishUnsupportedAuthIssueFixture()];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishBindingCard, {
+        workflow,
+        tools: [],
+        binding,
+        cacheInventory: null as never,
+        apiKeys: [],
+        invocationAudit: null,
+        selectedInvocationId: null,
+        selectedInvocationDetail: null as never,
+        rateLimitWindowAudit: null,
+        activeInvocationFilter: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Workflow handoff");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("当前 publish binding 对应的 workflow 版本仍有 catalog gap");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
+  });
+
+  it("keeps workspace starter governance scope on shared blocker handoff links", () => {
+    const workflow = buildWorkflow();
+    workflow.tool_governance = {
+      referenced_tool_ids: ["native.catalog-gap"],
+      missing_tool_ids: ["native.catalog-gap"],
+      governed_tool_count: 1,
+      strong_isolation_tool_count: 0
+    };
+
+    const binding = buildBinding();
+    binding.auth_mode = "token";
+    binding.issues = [buildLegacyPublishUnsupportedAuthIssueFixture()];
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishBindingCard, {
+        workflow,
+        tools: [],
+        binding,
+        cacheInventory: null as never,
+        apiKeys: [],
+        invocationAudit: null,
+        selectedInvocationId: null,
+        selectedInvocationDetail: null as never,
+        rateLimitWindowAudit: null,
+        activeInvocationFilter: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "all",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: "catalog",
+          selectedTemplateId: "starter-1"
+        }
+      })
+    );
+
+    expect(html).toContain("source_governance_kind=drifted");
+    expect(html).toContain("needs_follow_up=true");
+    expect(html).toContain("q=catalog");
+    expect(html).toContain("starter=starter-1");
+  });
+
   it("uses shared blocked surface copy for cache inventory", () => {
     const binding = buildBinding();
     binding.cache_inventory = {

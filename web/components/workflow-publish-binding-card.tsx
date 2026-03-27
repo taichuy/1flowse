@@ -4,6 +4,7 @@ import Link from "next/link";
 import { updatePublishedEndpointLifecycle } from "@/app/actions/publish";
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { SensitiveAccessBlockedCard } from "@/components/sensitive-access-blocked-card";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import { WorkflowPublishActivityPanel } from "@/components/workflow-publish-activity-panel";
 import { WorkflowPublishApiKeyManager } from "@/components/workflow-publish-api-key-manager";
 import { WorkflowPublishLifecycleForm } from "@/components/workflow-publish-lifecycle-form";
@@ -22,11 +23,18 @@ import type {
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import type { WorkflowDetail } from "@/lib/get-workflows";
-import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 import { buildWorkflowPublishBindingCardSurface } from "@/lib/workflow-publish-binding-presenters";
 import { buildPublishedCacheInventorySurfaceCopy } from "@/lib/published-invocation-presenters";
 import { formatTimestamp } from "@/lib/runtime-presenters";
 import { buildSensitiveAccessBlockedSurfaceCopy } from "@/lib/sensitive-access-presenters";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 
 type WorkflowPublishBindingCardProps = {
   workflow: WorkflowDetail;
@@ -65,6 +73,28 @@ export function WorkflowPublishBindingCard({
     currentWorkflowVersion: workflow.version,
     currentDraftPublishEndpoints: workflow.definition.publish ?? []
   });
+  const workflowDetailHref = workspaceStarterGovernanceQueryScope
+    ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+        workflowId: workflow.id,
+        viewState: workspaceStarterGovernanceQueryScope,
+        variant: "editor"
+      }).href
+    : null;
+  const issueWorkflowGovernanceHandoff = bindingSurface.issueSurface
+    ? buildWorkflowGovernanceHandoff({
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        workflowDetailHref,
+        toolGovernance: workflow.tool_governance,
+        legacyAuthGovernance: workflow.legacy_auth_governance ?? null,
+        workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+          toolGovernance: workflow.tool_governance,
+          subjectLabel: "publish binding",
+          returnDetail:
+            "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理当前 binding lifecycle blocker 与 publish activity。"
+        })
+      })
+    : null;
   const cacheSummary = binding.cache_inventory;
   const activity = binding.activity;
   const resolvedCacheInventory = cacheInventory?.kind === "ok" ? cacheInventory.data : null;
@@ -119,6 +149,31 @@ export function WorkflowPublishBindingCard({
             <Link className="inline-link" href={bindingSurface.issueSurface.followUpHref}>
               {bindingSurface.issueSurface.followUpLabel}
             </Link>
+          ) : null}
+
+          {issueWorkflowGovernanceHandoff?.workflowCatalogGapSummary ||
+          issueWorkflowGovernanceHandoff?.legacyAuthHandoff ? (
+            <div className="publish-key-list">
+              <div>
+                <p className="entry-card-title">Workflow handoff</p>
+                <p className="section-copy entry-copy">
+                  当前 publish binding blocker 也直接复用 shared workflow governance handoff，
+                  避免作者在 draft endpoint blocker、catalog gap 与 legacy publish auth contract
+                  之间来回跳页拼接治理事实。
+                </p>
+              </div>
+
+              <WorkflowGovernanceHandoffCards
+                workflowCatalogGapSummary={
+                  issueWorkflowGovernanceHandoff.workflowCatalogGapSummary
+                }
+                workflowCatalogGapDetail={issueWorkflowGovernanceHandoff.workflowCatalogGapDetail}
+                workflowCatalogGapHref={issueWorkflowGovernanceHandoff.workflowCatalogGapHref}
+                workflowGovernanceHref={issueWorkflowGovernanceHandoff.workflowGovernanceHref}
+                legacyAuthHandoff={issueWorkflowGovernanceHandoff.legacyAuthHandoff}
+                cardClassName="payload-card compact-card"
+              />
+            </div>
           ) : null}
         </div>
       ) : null}
