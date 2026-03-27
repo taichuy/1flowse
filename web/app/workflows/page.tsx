@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Layout, Button, Typography, Space, Row, Col, Divider } from "antd";
+import { PlusOutlined, AppstoreAddOutlined } from "@ant-design/icons";
 
 import { CrossEntryRiskDigestPanel } from "@/components/cross-entry-risk-digest-panel";
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
@@ -63,6 +65,9 @@ import {
   pickWorkspaceStarterGovernanceQueryScope,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
+
+const { Title, Text } = Typography;
+const { Content } = Layout;
 
 export const metadata: Metadata = {
   title: "Workflows | 7Flows Studio"
@@ -202,261 +207,85 @@ export default async function WorkflowsPage({
   );
 
   return (
-    <main className="page-shell workspace-page">
-      <section className="hero-card">
+    <Content style={{ padding: '24px 48px', maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <p className="eyebrow">Workflow library</p>
-          <h1>作者、operator 与运行入口统一收口</h1>
-          <p className="hero-copy">{surfaceCopy.heroDescription}</p>
+          <Title level={2} style={{ margin: 0 }}>应用工作台</Title>
+          <Text type="secondary">{surfaceCopy.editorListDescription}</Text>
         </div>
-        <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
-      </section>
+        <Space>
+          <Link href={buildWorkflowCreateHrefFromWorkspaceStarterViewState(workspaceStarterViewState)}>
+            <Button type="primary" icon={<PlusOutlined />} size="large">
+              创建空白应用
+            </Button>
+          </Link>
+          <Link href={buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(workspaceStarterViewState)}>
+            <Button icon={<AppstoreAddOutlined />} size="large">
+              从模板创建
+            </Button>
+          </Link>
+        </Space>
+      </div>
 
-      <section className="diagnostics-layout">
-        <CrossEntryRiskDigestPanel
-          currentHref={workflowLibraryHref}
-          digest={crossEntryRiskDigest}
-          eyebrow="Workflow overview"
-          intro="作者进入 workflow library 后先看到跨入口 blocker：当前强隔离是否可用、callback waiting 是否仍需 operator 跟进，以及 inbox backlog 是否会继续拖住发布与调试。"
-        />
-      </section>
+      <CrossEntryRiskDigestPanel
+        currentHref={workflowLibraryHref}
+        digest={crossEntryRiskDigest}
+        eyebrow="Workflow overview"
+        intro="作者进入 workflow library 后先看到跨入口 blocker：当前强隔离是否可用、callback waiting 是否仍需 operator 跟进，以及 inbox backlog 是否会继续拖住发布与调试。"
+      />
 
-      <section className="diagnostics-layout">
-        <article className="diagnostic-panel panel-span">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Editor entry</p>
-              <h2>可编辑 workflow 列表</h2>
-            </div>
-            <p className="section-copy">{surfaceCopy.editorListDescription}</p>
-          </div>
+      <Divider />
 
-          <div className="summary-strip">
-            <article className="summary-card">
-              <span>Workflows</span>
-              <strong>{summary.workflowCount}</strong>
-            </article>
-            <article className="summary-card">
-              <span>Total nodes</span>
-              <strong>{summary.totalNodeCount}</strong>
-            </article>
-            <article className="summary-card">
-              <span>Statuses</span>
-              <strong>{formatCountMap(summary.statusCounts)}</strong>
-            </article>
-          </div>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+        <Link href={clearWorkflowLibraryFilterHref}>
+          <Button type={(!isLegacyPublishAuthFilterActive && !isMissingToolFilterActive) ? 'primary' : 'default'} shape="round">
+            全部应用 ({summary.workflowCount})
+          </Button>
+        </Link>
+        <Link href={legacyPublishAuthFilterHref}>
+          <Button type={isLegacyPublishAuthFilterActive ? 'primary' : 'default'} shape="round">
+            Legacy auth ({summary.workflowLegacyPublishAuthCount})
+          </Button>
+        </Link>
+        <Link href={missingToolFilterHref}>
+          <Button type={isMissingToolFilterActive ? 'primary' : 'default'} shape="round">
+            Catalog gap ({summary.workflowMissingToolCount})
+          </Button>
+        </Link>
+      </div>
 
-          <div className="summary-strip">
-            <Link
-              className={`event-chip inbox-filter-link${
-                !isLegacyPublishAuthFilterActive && !isMissingToolFilterActive ? " active" : ""
-              }`}
-              href={clearWorkflowLibraryFilterHref}
-            >
-              全部 workflow
-            </Link>
-            <Link
-              className={`event-chip inbox-filter-link${
-                isLegacyPublishAuthFilterActive ? " active" : ""
-              }`}
-              href={legacyPublishAuthFilterHref}
-            >
-              Legacy auth cleanup
-            </Link>
-            <Link
-              className={`event-chip inbox-filter-link${
-                isMissingToolFilterActive ? " active" : ""
-              }`}
-              href={missingToolFilterHref}
-            >
-              Catalog gap
-            </Link>
-          </div>
+      {workflows.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '64px 0', background: 'white', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{surfaceCopy.emptyState}</Text>
+          <Link href={buildWorkflowCreateHrefFromWorkspaceStarterViewState(workspaceStarterViewState)}>
+            <Button type="primary" icon={<PlusOutlined />}>创建应用</Button>
+          </Link>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+          {workflows.map((workflow) => {
+            const workflowDetailLink = buildFilteredWorkflowDetailLink({
+              workflowId: workflow.id,
+              viewState: workspaceStarterViewState,
+              workflowLibraryViewState
+            });
+            const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
+              workflowDetailLink.href,
+              workflow,
+              workflowLibraryViewState
+            );
 
-          {isLegacyPublishAuthFilterActive ? (
-            <p className="section-copy">
-              当前列表只显示存在 legacy auth cleanup 的 workflow，共 {workflows.length} / {summary.workflowCount} 个 workflow；逐个回 editor 保存后，再回 publish 面板补发新版 binding。
-            </p>
-          ) : isMissingToolFilterActive ? (
-            <p className="section-copy">
-              当前列表只显示存在 catalog gap 的 workflow，共 {workflows.length} / {summary.workflowCount} 个
-              workflow；优先回 editor 补齐缺失 binding，再继续排查其余治理信号。
-            </p>
-          ) : null}
-
-          {workflows.length === 0 ? (
-            <div className="empty-state-block">
-              {emptyStateFilterFollowUp ? (
-                <WorkspaceStarterFollowUpCard
-                  detail={emptyStateFilterFollowUp.detail}
-                  headline={emptyStateFilterFollowUp.headline}
-                  label={emptyStateFilterFollowUp.label}
-                  actions={
-                    <Link className="inline-link" href={emptyStateFilterFollowUp.href}>
-                      {emptyStateFilterFollowUp.hrefLabel}
-                    </Link>
-                  }
-                />
-              ) : (
-                <>
-                  <p className="empty-state">{surfaceCopy.emptyState}</p>
-                  {emptyStateStarterFollowUp ? (
-                    <WorkspaceStarterFollowUpCard
-                      detail={emptyStateStarterFollowUp.detail}
-                      headline={emptyStateStarterFollowUp.headline}
-                      label={emptyStateStarterFollowUp.label}
-                      primaryResourceSummary={emptyStateStarterFollowUp.primaryResourceSummary}
-                      actions={
-                        emptyStateStarterFollowUp.entryKey ? (
-                          <WorkbenchEntryLink
-                            className="inline-link"
-                            currentHref={workflowLibraryHref}
-                            linkKey={emptyStateStarterFollowUp.entryKey}
-                            override={emptyStateStarterFollowUp.entryOverride}
-                          />
-                        ) : null
-                      }
-                    />
-                  ) : recommendedNextStep ? (
-                    <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
-                  ) : (
-                    <WorkbenchEntryLink className="inline-link" linkKey="createWorkflow">
-                      进入新建向导
-                    </WorkbenchEntryLink>
-                  )}
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="workflow-chip-row">
-              {workflows.map((workflow) => {
-                const workflowDetailLink = buildFilteredWorkflowDetailLink({
-                  workflowId: workflow.id,
-                  viewState: workspaceStarterViewState,
-                  workflowLibraryViewState
-                });
-                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
-                  workflowDetailLink.href,
-                  workflow,
-                  workflowLibraryViewState
-                );
-
-                return (
-                  <WorkflowChipLink
-                    key={`workflow-library-${workflow.id}`}
-                    workflow={workflow}
-                    href={workflowDetailHref}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </article>
-
-        <article className="diagnostic-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Governance</p>
-              <h2>治理与隔离信号</h2>
-            </div>
-            <p className="section-copy">{surfaceCopy.governanceDescription}</p>
-          </div>
-
-          <div className="summary-strip">
-            <article className="summary-card">
-              <span>Governed tools</span>
-              <strong>{summary.governedToolCount}</strong>
-            </article>
-            <article className="summary-card">
-              <span>Publish auth workflows</span>
-              <strong>{summary.workflowLegacyPublishAuthCount}</strong>
-            </article>
-            <article className="summary-card">
-              <span>Strong isolation</span>
-              <strong>{summary.strongIsolationToolCount}</strong>
-            </article>
-            <article className="summary-card">
-              <span>Missing tool workflows</span>
-              <strong>{summary.workflowMissingToolCount}</strong>
-            </article>
-          </div>
-
-          <WorkflowLibraryLegacyAuthGovernanceCard
-            snapshot={legacyAuthGovernanceSnapshot}
-            workflowDetailHrefsById={legacyAuthWorkflowDetailHrefsById}
-            workflowLibraryFilterHref={legacyPublishAuthFilterHref}
-          />
-
-          <WorkflowLibraryMissingToolGovernanceCard
-            workflows={summary.workflowsWithMissingTools}
-            workflowDetailHrefsById={missingToolWorkflowDetailHrefsById}
-            workflowLibraryFilterHref={missingToolFilterHref}
-          />
-
-          <div className="event-type-strip">
-            {summary.workflowsWithLegacyPublishAuth.length === 0 ? (
-              <p className="empty-state compact">
-                当前 workflow 列表里没有 legacy auth cleanup。
-              </p>
-            ) : (
-              summary.workflowsWithLegacyPublishAuth.map((workflow) => (
-                <WorkflowGovernanceQuickFilterLink
-                  key={`${workflow.id}-publish-auth`}
-                  href={buildFilteredWorkflowDetailLink({
-                    workflowId: workflow.id,
-                    viewState: workspaceStarterViewState,
-                    workflowLibraryViewState: {
-                      definitionIssue: "legacy_publish_auth"
-                    }
-                  }).href}
-                  primaryIssue="legacy_publish_auth"
-                  workflow={workflow}
-                />
-              ))
-            )}
-          </div>
-
-          <div className="event-type-strip">
-            {summary.workflowsWithMissingTools.length === 0 ? (
-              <p className="empty-state compact">当前 workflow 列表里没有存在 catalog gap 的条目。</p>
-            ) : (
-              summary.workflowsWithMissingTools.map((workflow) => (
-                <WorkflowGovernanceQuickFilterLink
-                  key={`${workflow.id}-missing-tool`}
-                  href={buildFilteredWorkflowDetailLink({
-                    workflowId: workflow.id,
-                    viewState: workspaceStarterViewState,
-                    workflowLibraryViewState: {
-                      definitionIssue: "missing_tool"
-                    }
-                  }).href}
-                  primaryIssue="missing_tool"
-                  workflow={workflow}
-                />
-              ))
-            )}
-          </div>
-
-          <SandboxReadinessOverviewCard
-            currentHref={workflowLibraryHref}
-            intro="workflow library 直接暴露当前 live sandbox readiness，让作者在进入具体 editor 之前就能知道 blocked / degraded / offline backend 是否会继续影响强隔离节点。"
-            hideRecommendedNextStep
-            readiness={systemOverview.sandbox_readiness}
-            title="Live sandbox readiness"
-          />
-
-          {recommendedNextStep ? (
-            <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
-          ) : null}
-
-          <div className="entry-card">
-            <p className="entry-card-title">{surfaceCopy.nextStepTitle}</p>
-            <p className="section-copy entry-copy">{surfaceCopy.nextStepDescription}</p>
-            <WorkbenchEntryLinks {...surfaceCopy.nextStepLinks} />
-          </div>
-        </article>
-      </section>
-    </main>
+            return (
+              <WorkflowChipLink
+                key={`workflow-library-${workflow.id}`}
+                workflow={workflow}
+                href={workflowDetailHref}
+              />
+            );
+          })}
+        </div>
+      )}
+    </Content>
   );
 }
 

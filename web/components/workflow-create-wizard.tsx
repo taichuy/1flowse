@@ -73,6 +73,11 @@ type WorkflowCreateWizardProps = {
   tools: PluginToolRegistryItem[];
 };
 
+import { Input, Button, Spin, Layout, Typography, Card, Space, Tag, Modal, Row, Col } from "antd";
+import { PlusOutlined, RocketOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+
+const { Title, Text } = Typography;
+
 export function WorkflowCreateWizard({
   catalogToolCount,
   governanceQueryScope,
@@ -385,345 +390,111 @@ export function WorkflowCreateWizard({
   }
 
   return (
-    <main className="editor-shell">
-      <section className="hero creation-hero">
-        <div className="hero-copy">
-          <p className="eyebrow">Workflow Creation</p>
-          <h1>按业务主线挑 starter，再把草稿送进画布</h1>
-          <p className="hero-text">
-            这一页继续沿着当前优先级推进，不再只展示一排静态 starter 卡片，而是把
-            “应用新建编排 / 节点能力 / 插件兼容 / API 调用开放” 收成一组可筛选的主业务入口。
-            这样 starter 不只是创建页素材，而是后续模板治理和节点入口分层的稳定落点。
-          </p>
-          <div className="pill-row">
-            <span className="pill">{starterTracks.length} business tracks</span>
-            <span className="pill">{starterTemplates.length} starter templates</span>
-            <span className="pill">{catalogToolCount} catalog tools</span>
-            <span className="pill">{workflows.length} existing workflows</span>
-          </div>
-          <div className="hero-actions">
-            <WorkbenchEntryLinks {...surfaceCopy.heroLinks} />
-            {recentWorkflowLink ? (
-              <Link className="inline-link secondary" href={recentWorkflowLink.href}>
-                {recentWorkflowLink.label}
-              </Link>
-            ) : null}
-          </div>
+    <div style={{ minHeight: '100vh', background: '#F3F4F6', display: 'flex', flexDirection: 'column' }}>
+      {/* Top Navigation Bar mimicking Dify modal header */}
+      <div style={{ height: 56, background: '#ffffff', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', padding: '0 24px' }}>
+        <Link href={buildWorkflowLibraryHrefFromWorkspaceStarterViewState(workspaceStarterGovernanceScope)}>
+          <Button type="text" icon={<ArrowLeftOutlined />} style={{ color: '#374151', display: 'flex', alignItems: 'center', padding: '4px 8px' }}>
+            返回工作台
+          </Button>
+        </Link>
+        <div style={{ marginLeft: 16, fontSize: 16, fontWeight: 600, color: '#111827' }}>
+          创建应用
         </div>
+      </div>
 
-        <div className="hero-panel">
-          <div className="panel-label">Starter focus</div>
-          <div className="panel-value">{activeTrackMeta.priority}</div>
-          <p className="panel-text">
-            当前主线：<strong>{activeTrackMeta.id}</strong>
-          </p>
-          <p className="panel-text">
-            选中的 starter：<strong>{selectedStarter.name}</strong>
-          </p>
-          <p className="panel-text">
-            当前焦点：<strong>{selectedStarter.workflowFocus}</strong>
-          </p>
-          <dl className="signal-list">
-            <div>
-              <dt>Visible starters</dt>
-              <dd>{visibleStarters.length}</dd>
+      <div style={{ flex: 1, padding: '32px 24px', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 1100, display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+          
+          {/* Left Column: Template Selection */}
+          <div style={{ flex: '1 1 60%', background: '#ffffff', borderRadius: 12, border: '1px solid #E5E7EB', padding: 24, boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+            <div style={{ marginBottom: 24 }}>
+              <Title level={4} style={{ margin: 0, color: '#111827' }}>选择应用模板</Title>
+              <Text type="secondary">先按主业务线选入口，再用最小骨架进入编排。</Text>
             </div>
-            <div>
-              <dt>Catalog tools</dt>
-              <dd>{catalogToolCount}</dd>
-            </div>
-            <div>
-              <dt>Drafts</dt>
-              <dd>{workflows.length}</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section className="creation-layout">
-        <article className="diagnostic-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Templates</p>
-              <h2>Starter library</h2>
-            </div>
-            <p className="section-copy">
-              先按主业务线选入口，再用最小骨架进入编排。后续 workspace 级模板治理，也继续沿着
-              这套 starter library 演进。
-            </p>
-            {hasScopedWorkspaceStarterFilters ? (
-              <p className="binding-meta">
-                {surfaceCopy.scopedGovernanceDescription}
-                {" "}
-                <WorkbenchEntryLink
-                  className="inline-link secondary"
-                  linkKey="workspaceStarterLibrary"
-                  override={{ href: starterGovernanceHref }}
-                >
-                  {surfaceCopy.scopedGovernanceBackLinkLabel}
-                </WorkbenchEntryLink>
-                。
-              </p>
-            ) : null}
+            <WorkflowStarterBrowser
+              activeTrack={activeTrack}
+              selectedStarterId={selectedStarter.id}
+              starters={visibleStarters}
+              tracks={starterTracks}
+              sourceLanes={starterSourceLanes}
+              onSelectTrack={handleTrackSelect}
+              onSelectStarter={applyStarterSelection}
+            />
           </div>
 
-          <WorkflowStarterBrowser
-            activeTrack={activeTrack}
-            selectedStarterId={selectedStarter.id}
-            starters={visibleStarters}
-            tracks={starterTracks}
-            sourceLanes={starterSourceLanes}
-            onSelectTrack={handleTrackSelect}
-            onSelectStarter={applyStarterSelection}
-          />
-        </article>
-
-        <article className="diagnostic-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Create</p>
-              <h2>Draft setup</h2>
-            </div>
-          </div>
-
-          <div className="binding-form">
-            <label className="binding-field">
-              <span className="binding-label">Workflow name</span>
-              <input
-                className="trace-text-input"
-                value={workflowName}
-                onChange={(event) => setWorkflowName(event.target.value)}
-                placeholder={selectedStarter.defaultWorkflowName}
-              />
-            </label>
-
-            <div className="starter-summary-card">
-              <div className="starter-card-header">
-                <p className="entry-card-title">{selectedStarter.name}</p>
-                <span className="health-pill">{selectedStarter.priority}</span>
-              </div>
-              <p className="section-copy starter-summary-copy">
-                {selectedStarter.description}
-              </p>
-              <div className="summary-strip compact-strip">
-                <div className="summary-card">
-                  <span>Track</span>
-                  <strong>{selectedStarter.businessTrack}</strong>
-                </div>
-                <div className="summary-card">
-                  <span>Source</span>
-                  <strong>{selectedStarter.source.shortLabel}</strong>
-                </div>
-                <div className="summary-card">
-                  <span>Nodes</span>
-                  <strong>{selectedStarter.nodeCount}</strong>
-                </div>
-                <div className="summary-card">
-                  <span>Governed tools</span>
-                  <strong>{selectedStarter.governedToolCount}</strong>
-                </div>
-                <div className="summary-card">
-                  <span>Strong isolation</span>
-                  <strong>{selectedStarter.strongIsolationToolCount}</strong>
-                </div>
-              </div>
-              <p className="starter-focus-copy">{selectedStarter.trackSummary}</p>
-              <p className="starter-focus-copy">{selectedStarter.source.summary}</p>
-              {selectedStarterNextStepSurface ? (
-                <WorkspaceStarterFollowUpCard
-                  title={surfaceCopy.recommendedNextStepTitle}
-                  label={selectedStarterNextStepSurface.label}
-                  detail={selectedStarterNextStepSurface.detail}
-                  primaryResourceSummary={selectedStarterNextStepSurface.primaryResourceSummary}
-                  workflowGovernanceHandoff={selectedStarterNextStepSurface.workflowGovernanceHandoff}
-                  actions={
-                    selectedStarterNextStepSurface.href && selectedStarterNextStepSurface.hrefLabel ? (
-                      <WorkbenchEntryLink
-                        className="inline-link secondary"
-                        linkKey="workspaceStarterLibrary"
-                        override={{ href: selectedStarterNextStepSurface.href }}
-                      >
-                        {selectedStarterNextStepSurface.hrefLabel}
-                      </WorkbenchEntryLink>
-                    ) : null
-                  }
+          {/* Right Column: Draft Setup */}
+          <div style={{ flex: '0 0 380px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #E5E7EB', padding: 24, boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+              <Title level={4} style={{ margin: '0 0 24px', color: '#111827' }}>配置草稿</Title>
+              
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>应用名称</div>
+                <Input
+                  size="large"
+                  value={workflowName}
+                  onChange={(event) => setWorkflowName(event.target.value)}
+                  placeholder={selectedStarter.defaultWorkflowName}
                 />
-              ) : null}
-              {shouldRenderSelectedStarterSourceGovernance && selectedStarterSourcePresenter ? (
-                <div className="binding-form">
-                  <p className="binding-label">Source governance</p>
-                  <p className="binding-meta">{surfaceCopy.sourceGovernanceDescription}</p>
-                  <div className="summary-strip compact-strip">
-                    <div className="summary-card">
-                      <span>Status</span>
-                      <strong>{selectedStarterSourcePresenter.statusLabel}</strong>
-                    </div>
-                    <div className="summary-card">
-                      <span>Template</span>
-                      <strong>{selectedStarterSourceGovernance?.templateVersion ?? "未记录"}</strong>
-                    </div>
-                    <div className="summary-card">
-                      <span>Source</span>
-                      <strong>{selectedStarterSourcePresenter.sourceVersion ?? "不可用"}</strong>
-                    </div>
-                  </div>
-                  <p className="section-copy starter-summary-copy">
-                    {selectedStarterSourcePresenter.summary}
-                  </p>
-                  {selectedStarterSourceChips.length > 0 ? (
-                    <div className="starter-tag-row">
-                      {selectedStarterSourceChips.map((chip) => (
-                        <span className="event-chip" key={`${selectedStarter.id}-${chip}`}>
-                          {chip}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {selectedStarter.referencedTools.length > 0 ? (
-                <div className="binding-form">
-                  <p className="binding-label">Tool governance in this starter</p>
-                  <p className="binding-meta">
-                    创建前先确认 starter 已引用的工具是否默认需要 `sandbox / microvm`，避免后面进入画布后才发现治理约束。
-                  </p>
-                  {selectedStarter.referencedTools.slice(0, 2).map((tool) => (
-                    <ToolGovernanceSummary
-                      key={`starter-tool-${tool.id}`}
-                      tool={tool}
-                      title={tool.name || tool.id}
-                      subtitle={`${tool.ecosystem} · starter referenced tool`}
-                    />
-                  ))}
-                  {selectedStarter.referencedTools.length > 2 ? (
-                    <p className="binding-meta">
-                      还有 {selectedStarter.referencedTools.length - 2} 个引用工具会在进入编辑器后继续沿同一治理规则展示。
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              {selectedStarter.sandboxGovernance.sandboxNodeCount > 0 ? (
-                <div className="binding-form">
-                  <p className="binding-label">Sandbox dependency in this starter</p>
-                  <p className="binding-meta">
-                    创建前先确认 `sandbox_code` 节点已经记录的 execution、dependencyMode 和
-                    backendExtensions 与当前 sandbox readiness 一致，避免进入画布后才发现依赖约束漂移。
-                  </p>
-                  <div className="summary-strip compact-strip">
-                    <div className="summary-card">
-                      <span>Sandbox nodes</span>
-                      <strong>{selectedStarter.sandboxGovernance.sandboxNodeCount}</strong>
-                    </div>
-                    <div className="summary-card">
-                      <span>Execution</span>
-                      <strong>
-                        {selectedStarter.sandboxGovernance.executionClasses.join(" / ") || "-"}
-                      </strong>
-                    </div>
-                    <div className="summary-card">
-                      <span>Dependency mode</span>
-                      <strong>
-                        {selectedStarter.sandboxGovernance.dependencyModes.join(" / ") || "未声明"}
-                      </strong>
-                    </div>
-                    <div className="summary-card">
-                      <span>Extensions</span>
-                      <strong>{selectedStarter.sandboxGovernance.backendExtensionNodeCount}</strong>
-                    </div>
-                  </div>
-                  <div className="starter-tag-row">
-                    {selectedStarterSandboxBadges.map((badge) => (
-                      <span className="event-chip" key={`${selectedStarter.id}-${badge}`}>
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="binding-meta">
-                    {selectedStarterSandboxDependencySummary ??
-                      "当前 starter 已含 sandbox_code 节点，但还没有显式 dependencyMode；进入画布后优先补齐依赖策略与 runtime policy。"}
-                  </p>
-                </div>
-              ) : null}
-              <div className="starter-tag-row">
-                {selectedStarter.nodeLabels.map((nodeLabel) => (
-                  <span className="event-chip" key={`summary-${nodeLabel}`}>
-                    {nodeLabel}
-                  </span>
-                ))}
-                {selectedStarter.tags.map((tag) => (
-                  <span className="event-chip" key={tag}>
-                    {tag}
-                  </span>
-                ))}
               </div>
-            </div>
 
-            <div className="binding-actions">
-              <button
-                className="sync-button"
-                type="button"
+              <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 16, border: '1px solid #E5E7EB', marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, color: '#111827' }}>{selectedStarter.name}</div>
+                  <Tag color="blue" style={{ margin: 0 }}>{selectedStarter.priority}</Tag>
+                </div>
+                <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>
+                  {selectedStarter.description}
+                </div>
+                
+                <Row gutter={[8, 8]} style={{ fontSize: 12 }}>
+                  <Col span={12}>
+                    <div style={{ color: '#9CA3AF' }}>Track</div>
+                    <div style={{ fontWeight: 500, color: '#374151' }}>{selectedStarter.businessTrack}</div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ color: '#9CA3AF' }}>Source</div>
+                    <div style={{ fontWeight: 500, color: '#374151' }}>{selectedStarter.source.shortLabel}</div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ color: '#9CA3AF' }}>Nodes</div>
+                    <div style={{ fontWeight: 500, color: '#374151' }}>{selectedStarter.nodeCount}</div>
+                  </Col>
+                  <Col span={12}>
+                    <div style={{ color: '#9CA3AF' }}>Governed tools</div>
+                    <div style={{ fontWeight: 500, color: '#374151' }}>{selectedStarter.governedToolCount}</div>
+                  </Col>
+                </Row>
+              </div>
+
+              <Button 
+                type="primary" 
+                size="large" 
+                block 
                 onClick={handleCreateWorkflow}
-                disabled={isCreating || selectedStarterMissingToolGovernanceSurface !== null}
+                loading={isCreating}
+                style={{ height: 44, borderRadius: 8, background: '#1C64F2' }}
               >
-                {isCreating
-                  ? "创建中..."
-                  : selectedStarterMissingToolGovernanceSurface
-                    ? "先补 tool binding"
-                    : "创建并进入画布"}
-              </button>
+                创建并进入编排
+              </Button>
+              
+              {message && (
+                <div style={{ 
+                  marginTop: 16, 
+                  padding: 12, 
+                  borderRadius: 8, 
+                  background: messageTone === 'error' ? '#FEF2F2' : '#F0FDF4',
+                  color: messageTone === 'error' ? '#DC2626' : '#16A34A',
+                  fontSize: 13
+                }}>
+                  {message}
+                </div>
+              )}
             </div>
-
-            <p className={`sync-message ${messageTone}`}>
-              {message ??
-                (selectedStarterMissingToolBlockingSurface?.blockedMessage ??
-                  "创建后会直接进入 workflow 编辑器，继续补节点、连线、运行态调试和后续发布链路。")}
-            </p>
           </div>
-        </article>
-
-        <article className="diagnostic-panel panel-span">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Existing drafts</p>
-              <h2>Continue an existing workflow</h2>
-            </div>
-            <p className="section-copy">
-              已有草稿会继续保留版本链路。需要接着修改时，也可以直接回到现有 workflow。
-            </p>
-          </div>
-
-          {workflows.length === 0 ? (
-            <p className="empty-state">
-              当前还没有历史 workflow。创建第一个 starter 后，就可以从这里继续返回编辑。
-            </p>
-          ) : (
-            <div className="workflow-chip-row">
-              {workflows.map((workflow) => {
-                const workflowDetailLink = buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
-                  workflowId: workflow.id,
-                  viewState: workspaceStarterGovernanceScope
-                });
-                const workflowDetailHref = appendWorkflowLibraryViewStateForWorkflow(
-                  workflowDetailLink.href,
-                  workflow,
-                  {
-                    definitionIssue: null
-                  }
-                );
-
-                return (
-                  <WorkflowChipLink
-                    key={workflow.id}
-                    workflow={workflow}
-                    href={workflowDetailHref}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </article>
-      </section>
-    </main>
+        </div>
+      </div>
+    </div>
   );
 }
 

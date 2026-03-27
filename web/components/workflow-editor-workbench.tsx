@@ -233,6 +233,8 @@ export function WorkflowEditorWorkbench({
         <WorkflowEditorHero
           currentHref={currentEditorHref}
           workflowId={workflow.id}
+          workflowName={graph.workflowName}
+          onWorkflowNameChange={graph.setWorkflowName}
           workflowVersion={graph.workflowVersion}
           nodesCount={graph.nodes.length}
           edgesCount={graph.edges.length}
@@ -302,7 +304,6 @@ export function WorkflowEditorWorkbench({
             hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
             isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
             isRefreshingRuns={runOverlay.isRefreshingRuns}
-            onWorkflowNameChange={graph.setWorkflowName}
             onAddNode={graph.handleAddNode}
             onNavigateValidationIssue={persistence.handleNavigateValidationIssue}
             onSelectRunId={runOverlay.setSelectedRunId}

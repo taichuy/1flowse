@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
+import { AntdRegistry } from '@ant-design/nextjs-registry';
 import "@xyflow/react/dist/style.css";
 import "./globals.css";
+import { AppLayout } from "@/components/app-layout";
 
 export const metadata: Metadata = {
   title: "7Flows Studio",
@@ -15,7 +17,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <AntdRegistry>
+          <AppLayout>{children}</AppLayout>
+        </AntdRegistry>
+      </body>
     </html>
   );
 }

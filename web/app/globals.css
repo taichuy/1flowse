@@ -1,16 +1,5 @@
 :root {
   color-scheme: light;
-  --bg: #f4efe7;
-  --panel: rgba(255, 252, 246, 0.74);
-  --panel-strong: #fff8ef;
-  --ink: #1c1915;
-  --muted: #6a6256;
-  --line: rgba(28, 25, 21, 0.1);
-  --accent: #d0632d;
-  --accent-soft: #f1d4b5;
-  --ok: #216e4a;
-  --down: #a13a32;
-  --shadow: 0 24px 80px rgba(77, 54, 32, 0.14);
 }
 
 * {
@@ -21,43 +10,30 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(208, 99, 45, 0.22), transparent 28%),
-    radial-gradient(circle at right, rgba(53, 128, 105, 0.14), transparent 26%),
-    linear-gradient(180deg, #f7f1e8 0%, var(--bg) 100%);
-  color: var(--ink);
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background-color: #f3f4f6; /* Tailwind gray-100 */
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 28px 28px;
-  opacity: 0.35;
-}
-
+/* Base styles for legacy custom components that haven't been refactored yet */
 .shell {
   position: relative;
   z-index: 1;
   width: min(1180px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 56px 0 72px;
+  padding: 32px 0 72px;
 }
 
-.hero,
-.roadmap,
-.status-card,
-.diagnostic-panel {
-  backdrop-filter: blur(18px);
-  background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: var(--shadow);
+/* Legacy styles for panels */
+.diagnostic-panel, .hero-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  padding: 24px;
+  margin-bottom: 24px;
 }
+
+/* Let's clear out most of the legacy complex backgrounds */
 
 .hero {
   display: grid;
@@ -1070,20 +1046,24 @@ a {
 .editor-shell {
   position: relative;
   z-index: 1;
-  width: min(100% - 24px, 1480px);
-  margin: 0 auto;
-  padding: 28px 0 48px;
+  width: 100%;
+  height: calc(100vh - 65px);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .creation-hero {
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+  margin: 24px;
 }
 
 .creation-layout {
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-  margin-top: 18px;
+  margin: 0 24px 24px;
 }
 
 .governance-layout {
@@ -1100,44 +1080,57 @@ a {
 }
 
 .editor-hero {
+  display: none; /* Hide legacy hero in Dify-style layout, we will use top bar or something else, wait maybe just keep it but compact */
   grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  margin: 12px 24px 0;
 }
 
 .editor-workspace {
   display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(320px, 380px);
-  margin-top: 18px;
-  align-items: start;
+  gap: 0;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+  background: white;
 }
 
 .editor-sidebar,
 .editor-inspector {
-  display: grid;
-  gap: 18px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+  overflow-y: auto;
+}
+
+.editor-inspector {
+  border-right: none;
+  border-left: 1px solid #e5e7eb;
 }
 
 .editor-panel {
-  padding: 20px;
+  padding: 16px;
 }
 
 .editor-canvas-panel {
   min-width: 0;
+  position: relative;
+  background: #f3f4f6;
 }
 
 .editor-canvas-card {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  min-height: 820px;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background:
-    radial-gradient(circle at top, rgba(208, 99, 45, 0.12), transparent 36%),
-    linear-gradient(180deg, rgba(255, 252, 246, 0.92), rgba(244, 239, 231, 0.94));
-  box-shadow: var(--shadow);
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .editor-canvas {
-  min-height: 820px;
+  height: 100%;
 }
 
 .editor-canvas .react-flow__attribution {

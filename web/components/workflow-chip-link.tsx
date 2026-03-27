@@ -1,4 +1,11 @@
 import Link from "next/link";
+import { Card, Typography, Tag, Space } from "antd";
+import { 
+  AppstoreOutlined, 
+  WarningOutlined, 
+  NodeIndexOutlined,
+  ToolOutlined 
+} from "@ant-design/icons";
 
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import { getWorkflowLegacyPublishAuthBacklogCount } from "@/lib/workflow-definition-governance";
@@ -7,6 +14,8 @@ import {
   buildWorkflowGovernanceHandoff
 } from "@/lib/workflow-governance-handoff";
 import { isCurrentWorkbenchHref } from "@/lib/workbench-entry-links";
+
+const { Text, Title } = Typography;
 
 type WorkflowChipLinkProps = {
   workflow: WorkflowListItem;
@@ -24,6 +33,7 @@ export function WorkflowChipLink({
   const governedToolCount = workflow.tool_governance?.governed_tool_count ?? 0;
   const strongIsolationToolCount = workflow.tool_governance?.strong_isolation_tool_count ?? 0;
   const legacyPublishAuthBacklogCount = getWorkflowLegacyPublishAuthBacklogCount(workflow);
+  
   const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
     workflowId: workflow.id,
     workflowName: workflow.name,
@@ -37,59 +47,84 @@ export function WorkflowChipLink({
         "打开当前 workflow 即可继续补齐 binding / LLM Agent tool policy，并沿同一份治理 handoff 收口。"
     })
   });
+  
   const missingToolSummary = workflowGovernanceHandoff.workflowCatalogGapSummary;
   const hasMissingToolIssues = Boolean(missingToolSummary);
   const legacyAuthHandoff = workflowGovernanceHandoff.legacyAuthHandoff;
-  const followUpDetails = [
-    workflowGovernanceHandoff.workflowCatalogGapDetail,
-    legacyAuthHandoff?.detail ?? null
-  ].filter((detail): detail is string => Boolean(detail));
-  const className = `workflow-chip ${selected ? "selected" : ""}`.trim();
+  
   const isCurrentPage = isCurrentWorkbenchHref(href, currentHref);
+
+  const cardStyle = {
+    height: '160px',
+    cursor: 'pointer',
+    borderColor: isCurrentPage ? '#1C64F2' : (selected ? '#1C64F2' : '#e5e7eb'),
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderRadius: '12px',
+    background: '#ffffff',
+    transition: 'all 0.2s',
+    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    position: 'relative' as const,
+    overflow: 'hidden'
+  };
+
   const content = (
-    <>
-      <strong className="workflow-chip-title">{workflow.name}</strong>
-      <small>
-        {workflow.version} · {workflow.status}
-      </small>
-      <small>
-        {workflow.node_count} nodes · {governedToolCount} governed tools · {strongIsolationToolCount} strong isolation
-      </small>
-      {legacyPublishAuthBacklogCount > 0 ? (
-        <small>
-          {legacyPublishAuthBacklogCount} legacy auth cleanup item
-          {legacyPublishAuthBacklogCount === 1 ? "" : "s"}
-        </small>
-      ) : null}
-      {missingToolSummary ? <small>{missingToolSummary}</small> : null}
-      {strongIsolationToolCount > 0 || hasMissingToolIssues || legacyPublishAuthBacklogCount > 0 ? (
-        <div className="workflow-chip-flags">
-          {legacyAuthHandoff?.bindingChipLabel ? (
-            <span className="event-chip">{legacyAuthHandoff.bindingChipLabel}</span>
-          ) : null}
-          {legacyAuthHandoff?.statusChipLabel ? (
-            <span className="event-chip">{legacyAuthHandoff.statusChipLabel}</span>
-          ) : null}
-          {strongIsolationToolCount > 0 ? <span className="event-chip">strong isolation</span> : null}
-          {hasMissingToolIssues ? <span className="event-chip">catalog gap</span> : null}
+    <div style={cardStyle} className="group hover:shadow-lg">
+      <div style={{ display: 'flex', height: '66px', alignItems: 'center', padding: '14px 14px 12px', gap: '12px' }}>
+        <div style={{ 
+          width: 40, height: 40, borderRadius: 8, background: '#EFF4FF', 
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#1C64F2', fontSize: 20, flexShrink: 0
+        }}>
+          <AppstoreOutlined />
         </div>
-      ) : null}
-      {followUpDetails.length > 0 ? (
-        <div className="workflow-chip-follow-up">
-          {followUpDetails.map((detail) => (
-            <small key={detail}>{detail}</small>
-          ))}
+        <div style={{ flex: 1, minWidth: 0, padding: '1px 0' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '20px' }}>
+            {workflow.name}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#6B7280', lineHeight: '18px', fontWeight: 500 }}>
+            <span>v{workflow.version}</span>
+            <span>·</span>
+            <span>{workflow.status}</span>
+          </div>
         </div>
-      ) : null}
-    </>
+      </div>
+
+      <div style={{ padding: '0 14px', height: '45px', fontSize: 12, color: '#6B7280', lineHeight: '1.5' }}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <NodeIndexOutlined /> {workflow.node_count} nodes
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <ToolOutlined /> {governedToolCount} tools
+          </span>
+        </div>
+      </div>
+
+      <div style={{ 
+        position: 'absolute', bottom: 4, left: 0, right: 0, 
+        height: '42px', display: 'flex', alignItems: 'center', 
+        padding: '4px 6px 6px 14px', gap: '4px' 
+      }}>
+        {strongIsolationToolCount > 0 && (
+          <Tag bordered={false} color="purple" style={{ margin: 0 }}>strong iso</Tag>
+        )}
+        {hasMissingToolIssues && (
+          <Tag bordered={false} icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>catalog gap</Tag>
+        )}
+        {legacyPublishAuthBacklogCount > 0 && (
+          <Tag bordered={false} color="warning" style={{ margin: 0 }}>{legacyPublishAuthBacklogCount} auth</Tag>
+        )}
+      </div>
+    </div>
   );
 
   return isCurrentPage ? (
-    <span aria-current="page" className={className}>
-      {content}
-    </span>
+    <div aria-current="page" style={{ height: '100%' }}>{content}</div>
   ) : (
-    <Link className={className} href={href}>
+    <Link href={href} style={{ textDecoration: 'none', height: '100%', display: 'block' }}>
       {content}
     </Link>
   );
