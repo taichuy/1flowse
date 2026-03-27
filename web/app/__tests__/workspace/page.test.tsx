@@ -248,8 +248,11 @@ describe("WorkspacePage", () => {
 
     expect(html).toContain("7Flows Workspace 应用工作台");
     expect(html).toContain("Workspace / Apps");
+    expect(html).toContain("ChatFlow");
+    expect(html).toContain("Agent");
+    expect(html).toContain("Tool Agent");
     expect(html).toContain("全部类型");
-    expect(html).toContain("搜索应用、业务轨道或治理焦点");
+    expect(html).toContain("搜索应用、Agent、工具链或治理焦点");
     expect(html).toContain("新建空白 ChatFlow");
     expect(html).toContain("从应用模板创建");
     expect(html).toContain("继续进入 xyflow");
@@ -351,5 +354,95 @@ describe("WorkspacePage", () => {
     expect(html).toContain("ChatFlow Alpha");
     expect(html).not.toContain("Plugin Bridge");
     expect(html).toContain('href="/workspace?filter=draft&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"');
+  });
+
+  it("filters workspace apps by application mode before rendering cards", async () => {
+    vi.mocked(getServerWorkspaceContext).mockResolvedValue(buildWorkspaceContext());
+    vi.mocked(getWorkflows).mockResolvedValue([
+      {
+        id: "workflow-chatflow",
+        name: "ChatFlow Alpha",
+        version: "0.1.0",
+        status: "draft",
+        node_count: 3,
+        tool_governance: {
+          referenced_tool_ids: [],
+          missing_tool_ids: [],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        definition_issues: []
+      },
+      {
+        id: "workflow-agent",
+        name: "Agent Ops",
+        version: "0.2.0",
+        status: "draft",
+        node_count: 4,
+        tool_governance: {
+          referenced_tool_ids: [],
+          missing_tool_ids: [],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        definition_issues: []
+      }
+    ]);
+    vi.mocked(getWorkflowDetail)
+      .mockResolvedValueOnce(
+        buildWorkflowDetailFixture({
+          id: "workflow-chatflow",
+          name: "ChatFlow Alpha",
+          definition: {
+            nodes: [
+              {
+                id: "trigger",
+                type: "trigger",
+                name: "Trigger"
+              },
+              {
+                id: "output",
+                type: "output",
+                name: "Output"
+              }
+            ],
+            edges: [],
+            publish: []
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        buildWorkflowDetailFixture({
+          id: "workflow-agent",
+          name: "Agent Ops",
+          definition: {
+            nodes: [
+              {
+                id: "agent",
+                type: "llm_agent",
+                name: "Agent"
+              }
+            ],
+            edges: [],
+            publish: []
+          }
+        })
+      );
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshotFixture());
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverviewFixture());
+
+    const html = renderToStaticMarkup(
+      await WorkspacePage({
+        searchParams: Promise.resolve({
+          mode: "agent"
+        })
+      })
+    );
+
+    expect(html).toContain("Agent 1 个");
+    expect(html).toContain("Agent Ops");
+    expect(html).not.toContain("ChatFlow Alpha");
+    expect(html).toContain('href="/workspace?mode=agent"');
+    expect(html).toContain("新建 Agent 草稿");
   });
 });
