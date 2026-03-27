@@ -990,6 +990,34 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html.match(/open blocker inbox slice/g)?.length ?? 0).toBeGreaterThan(1);
   });
 
+  it("keeps shared workflow governance handoff in the matching API key usage card", () => {
+    const detail = buildSelectedInvocationDetailWithWorkflowGovernance();
+    detail.invocation.api_key_id = "key-1";
+    detail.invocation.reason_code = "api_key_invalid";
+    detail.invocation.error_message = "Caller API key is invalid.";
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit: buildInvocationAuditWithApiKeyUsage(),
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: detail
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: null
+      })
+    );
+
+    expect(html).toContain("Primary Key");
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
+  });
+
   it("uses shared activity insights copy for publish summary labels", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishActivityInsights, {
@@ -1671,6 +1699,34 @@ describe("WorkflowPublishActivityInsights", () => {
     expect(html).toContain("approval blocker");
     expect(html).toContain("优先处理 blocker inbox，再观察 waiting 节点是否恢复。");
     expect(html).not.toContain("当前 live sandbox readiness 仍在报警。");
+  });
+
+  it("keeps shared workflow governance handoff in the matching failure reason card", () => {
+    const invocationAudit = {
+      ...buildInvocationAudit(),
+      items: [{ id: "invocation-1" } as never]
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishActivityDetails, {
+        tools: [],
+        invocationAudit,
+        selectedInvocationId: "invocation-1",
+        selectedInvocationDetail: {
+          kind: "ok",
+          data: buildSelectedInvocationDetailWithWorkflowGovernance()
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        buildInvocationDetailHref: () => "#",
+        clearInvocationDetailHref: "/workflows/workflow-1?publish_invocation=invocation-1"
+      })
+    );
+
+    expect(html).toContain("sandbox backend offline during invocation");
+    expect(html).toContain("approval blocker");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
   });
 
   it("uses shared API key status fallback copy inside activity details", () => {
