@@ -32,6 +32,7 @@ import {
   buildWorkflowValidationRemediation,
   pickWorkflowValidationRemediationItem
 } from "@/lib/workflow-validation-remediation";
+import { buildWorkflowPersistBlockedFeedbackMessage } from "./workflow-editor-persistence-feedback";
 
 import {
   summarizePreflightIssues,
@@ -88,9 +89,12 @@ export function useWorkflowEditorPersistence({
 }: UseWorkflowEditorPersistenceOptions) {
   const [isSaving, startSavingTransition] = useTransition();
   const [isSavingStarter, startSaveStarterTransition] = useTransition();
-  const blockedFeedbackMessage = persistBlockerSummary
-    ? `${persistBlockerSummary} 已定位到首个阻断点。`
-    : persistBlockedMessage;
+  const blockedFeedbackMessage = buildWorkflowPersistBlockedFeedbackMessage({
+    persistBlockerSummary,
+    persistBlockedMessage,
+    validationNavigatorItems,
+    sandboxReadiness
+  });
 
   const applyValidationFocus = (item?: WorkflowValidationNavigatorItem | null) => {
     if (!item) {
