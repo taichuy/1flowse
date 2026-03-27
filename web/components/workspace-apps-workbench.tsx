@@ -148,12 +148,12 @@ function WorkspaceCreateBoardCard({
 
       <div className="workspace-create-board-actions">
         {quickCreateEntries.map((entry) => (
-          <Link className="workspace-create-link workspace-create-link-inline" href={entry.href} key={entry.title}>
-            <div className="workspace-create-link-copy">
+          <Link className="workspace-create-board-entry" href={entry.href} key={entry.title}>
+            <strong className="workspace-create-board-entry-badge">{entry.badge}</strong>
+            <div className="workspace-create-link-copy workspace-create-board-entry-copy">
               <span>{entry.title}</span>
               <small>{entry.detail}</small>
             </div>
-            <strong className="workspace-create-link-badge">{entry.badge}</strong>
           </Link>
         ))}
       </div>
@@ -167,14 +167,16 @@ function WorkspaceCreateBoardCard({
         {visibleStarterHighlights.length > 0 ? (
           <div className="workspace-create-board-starters">
             <p className="workspace-app-card-caption">Starter 模板精选</p>
-            {visibleStarterHighlights.map((starter) => (
-              <Link className="workspace-create-board-starter" href={starter.href} key={starter.id}>
-                <strong>{starter.name}</strong>
-                <span>
-                  {starter.priority} · {starter.modeShortLabel}
-                </span>
-              </Link>
-            ))}
+            <div className="workspace-create-board-pill-list">
+              {visibleStarterHighlights.map((starter) => (
+                <Link className="workspace-create-board-starter" href={starter.href} key={starter.id}>
+                  <strong>{starter.name}</strong>
+                  <span>
+                    {starter.priority} · {starter.modeShortLabel}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
@@ -249,20 +251,26 @@ function WorkspaceAppTile({
         ) : null}
       </div>
 
-      <div className="workspace-app-next-step-panel">
+      <div className="workspace-app-command-copy">
+        <span className="workspace-app-card-caption">Current focus</span>
+        <p className="workspace-app-focus">{card.track.focus}</p>
+      </div>
+
+      <div className="workspace-app-next-step-inline">
         <span className="workspace-app-card-caption">Recommended next step</span>
         <p className="workspace-app-next-step">推荐下一步：{card.recommendedNextStep}</p>
-        <p className="workspace-app-meta workspace-app-meta-detail">{card.track.summary}</p>
+      </div>
+
+      <div className="workspace-app-footnote-row" aria-label={`${card.name} workspace hints`}>
+        <span className="workspace-app-footnote">{card.track.summary}</span>
+        <span className="workspace-app-footnote">
+          {card.status === "published"
+            ? "继续维护已发布版本，必要时从 runs 回看线上调用。"
+            : "草稿仍回到 xyflow 继续编排，不在 workspace 壳层分叉执行语义。"}
+        </span>
       </div>
 
       <div className="workspace-app-footer workspace-app-footer-inline">
-        <div>
-          <p className="workspace-app-meta">
-            {card.status === "published"
-              ? "继续维护已发布版本，必要时从 runs 回看线上调用。"
-              : "草稿仍回到 xyflow 继续编排，不在 workspace 壳层分叉执行语义。"}
-          </p>
-        </div>
         <div className="workspace-action-row workspace-app-card-actions">
           <Link className="workspace-primary-button compact" href={card.href}>
             继续进入 xyflow
@@ -297,8 +305,8 @@ export function WorkspaceAppsWorkbench({
   return (
     <main className="workspace-main workspace-home-main workspace-home-main-flat">
       <section className="workspace-panel workspace-dashboard-panel">
-        <div className="workspace-dashboard-header">
-          <div>
+        <div className="workspace-dashboard-header workspace-dashboard-header-desk">
+          <div className="workspace-dashboard-intro">
             <p className="workspace-eyebrow">Workspace / Apps</p>
             <div className="workspace-dashboard-title-row">
               <h1>{workspaceName} 应用工作台</h1>
@@ -311,47 +319,36 @@ export function WorkspaceAppsWorkbench({
             </p>
           </div>
 
-          <div className="workspace-action-row workspace-dashboard-actions">
-            <Link className="workspace-primary-button compact" href="/workflows/new">
-              + 新建应用
-            </Link>
-            <Link className="workspace-ghost-button compact" href="/workspace-starters">
-              查看 Starter
-            </Link>
+          <div className="workspace-dashboard-side">
+            <div className="workspace-action-row workspace-dashboard-actions">
+              <Link className="workspace-primary-button compact" href="/workflows/new">
+                + 新建应用
+              </Link>
+              <Link className="workspace-ghost-button compact" href="/workspace-starters">
+                查看 Starter
+              </Link>
+            </div>
+
+            <WorkspaceSummaryBar workspaceSignals={workspaceSignals} />
           </div>
         </div>
 
-        <WorkspaceSummaryBar workspaceSignals={workspaceSignals} />
-
         <div className="workspace-dashboard-toolbar">
-          <div className="workspace-mode-tabs" aria-label="App modes">
-            {modeTabs.map((modeTab) => (
-              <Link
-                className={`workspace-mode-tab ${modeTab.active ? "active" : ""}`}
-                href={modeTab.href}
-                key={modeTab.key}
-              >
-                <span>{modeTab.label}</span>
-                <strong>{modeTab.count}</strong>
-              </Link>
-            ))}
-          </div>
-
-          <div className="workspace-dashboard-toolbar-row">
-            <div className="workspace-filter-row">
-              <span className="workspace-toolbar-meta">应用筛选</span>
-              {statusFilters.map((statusFilter) => (
+          <div className="workspace-dashboard-toolbar-row workspace-dashboard-toolbar-row-primary">
+            <div className="workspace-mode-tabs" aria-label="App modes">
+              {modeTabs.map((modeTab) => (
                 <Link
-                  className={`workspace-filter-chip ${statusFilter.active ? "active" : ""}`}
-                  href={statusFilter.href}
-                  key={statusFilter.key}
+                  className={`workspace-mode-tab ${modeTab.active ? "active" : ""}`}
+                  href={modeTab.href}
+                  key={modeTab.key}
                 >
-                  {statusFilter.label}
+                  <span>{modeTab.label}</span>
+                  <strong>{modeTab.count}</strong>
                 </Link>
               ))}
             </div>
 
-            <form action="/workspace" className="workspace-search-form">
+            <form action="/workspace" className="workspace-search-form workspace-search-form-desk">
               {searchState.filter ? <input name="filter" type="hidden" value={searchState.filter} /> : null}
               {searchState.mode ? <input name="mode" type="hidden" value={searchState.mode} /> : null}
               {searchState.track ? <input name="track" type="hidden" value={searchState.track} /> : null}
@@ -373,18 +370,33 @@ export function WorkspaceAppsWorkbench({
             </form>
           </div>
 
-          <div className="workspace-filter-row workspace-track-filter-row workspace-track-filter-row-compact" aria-label="Business tracks">
-            <span className="workspace-toolbar-meta">业务轨道</span>
-            {trackTabs.map((trackTab) => (
-              <Link
-                className={`workspace-filter-chip workspace-track-filter-chip ${trackTab.active ? "active" : ""}`}
-                href={trackTab.href}
-                key={trackTab.key}
-              >
-                <span>{trackTab.label}</span>
-                <strong>{trackTab.count}</strong>
-              </Link>
-            ))}
+          <div className="workspace-dashboard-toolbar-row workspace-dashboard-toolbar-row-secondary">
+            <div className="workspace-filter-row">
+              <span className="workspace-toolbar-meta">应用筛选</span>
+              {statusFilters.map((statusFilter) => (
+                <Link
+                  className={`workspace-filter-chip ${statusFilter.active ? "active" : ""}`}
+                  href={statusFilter.href}
+                  key={statusFilter.key}
+                >
+                  {statusFilter.label}
+                </Link>
+              ))}
+            </div>
+
+            <div className="workspace-filter-row workspace-track-filter-row workspace-track-filter-row-compact" aria-label="Business tracks">
+              <span className="workspace-toolbar-meta">业务轨道</span>
+              {trackTabs.map((trackTab) => (
+                <Link
+                  className={`workspace-filter-chip workspace-track-filter-chip ${trackTab.active ? "active" : ""}`}
+                  href={trackTab.href}
+                  key={trackTab.key}
+                >
+                  <span>{trackTab.label}</span>
+                  <strong>{trackTab.count}</strong>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </section>
