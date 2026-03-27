@@ -1,12 +1,11 @@
 import Link from "next/link";
 
 import type { WorkflowListItem } from "@/lib/get-workflows";
+import { getWorkflowLegacyPublishAuthBacklogCount } from "@/lib/workflow-definition-governance";
 import {
-  getWorkflowLegacyPublishAuthBacklogCount,
-  getWorkflowLegacyPublishAuthStatusLabel,
-  formatWorkflowMissingToolSummary,
-  hasWorkflowMissingToolIssues
-} from "@/lib/workflow-definition-governance";
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 
 type WorkflowChipLinkProps = {
   workflow: WorkflowListItem;
@@ -19,12 +18,29 @@ export function WorkflowChipLink({
   href,
   selected = false
 }: WorkflowChipLinkProps) {
-  const missingToolSummary = formatWorkflowMissingToolSummary(workflow);
-  const hasMissingToolIssues = hasWorkflowMissingToolIssues(workflow);
   const governedToolCount = workflow.tool_governance?.governed_tool_count ?? 0;
   const strongIsolationToolCount = workflow.tool_governance?.strong_isolation_tool_count ?? 0;
   const legacyPublishAuthBacklogCount = getWorkflowLegacyPublishAuthBacklogCount(workflow);
-  const legacyPublishAuthStatusLabel = getWorkflowLegacyPublishAuthStatusLabel(workflow);
+  const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    workflowDetailHref: href,
+    toolGovernance: workflow.tool_governance ?? null,
+    legacyAuthGovernance: workflow.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+      toolGovernance: workflow.tool_governance ?? null,
+      subjectLabel: "workflow",
+      returnDetail:
+        "打开当前 workflow 即可继续补齐 binding / LLM Agent tool policy，并沿同一份治理 handoff 收口。"
+    })
+  });
+  const missingToolSummary = workflowGovernanceHandoff.workflowCatalogGapSummary;
+  const hasMissingToolIssues = Boolean(missingToolSummary);
+  const legacyAuthHandoff = workflowGovernanceHandoff.legacyAuthHandoff;
+  const followUpDetails = [
+    workflowGovernanceHandoff.workflowCatalogGapDetail,
+    legacyAuthHandoff?.detail ?? null
+  ].filter((detail): detail is string => Boolean(detail));
 
   return (
     <Link className={`workflow-chip ${selected ? "selected" : ""}`} href={href}>
@@ -44,11 +60,21 @@ export function WorkflowChipLink({
       {missingToolSummary ? <small>{missingToolSummary}</small> : null}
       {strongIsolationToolCount > 0 || hasMissingToolIssues || legacyPublishAuthBacklogCount > 0 ? (
         <div className="workflow-chip-flags">
-          {legacyPublishAuthStatusLabel ? (
-            <span className="event-chip">{legacyPublishAuthStatusLabel}</span>
+          {legacyAuthHandoff?.bindingChipLabel ? (
+            <span className="event-chip">{legacyAuthHandoff.bindingChipLabel}</span>
+          ) : null}
+          {legacyAuthHandoff?.statusChipLabel ? (
+            <span className="event-chip">{legacyAuthHandoff.statusChipLabel}</span>
           ) : null}
           {strongIsolationToolCount > 0 ? <span className="event-chip">strong isolation</span> : null}
           {hasMissingToolIssues ? <span className="event-chip">catalog gap</span> : null}
+        </div>
+      ) : null}
+      {followUpDetails.length > 0 ? (
+        <div className="workflow-chip-follow-up">
+          {followUpDetails.map((detail) => (
+            <small key={detail}>{detail}</small>
+          ))}
         </div>
       ) : null}
     </Link>

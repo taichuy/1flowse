@@ -613,6 +613,12 @@ a {
   color: var(--muted);
 }
 
+.workflow-chip-follow-up {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+}
+
 .binding-workbench {
   margin-top: 22px;
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.4fr);
