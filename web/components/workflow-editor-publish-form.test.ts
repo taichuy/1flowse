@@ -228,7 +228,7 @@ describe("WorkflowEditorPublishForm", () => {
     expect(html).not.toContain("<li>Public Search 当前不能使用 authMode = token。</li>");
   });
 
-  it("keeps non-auth publish issues in the aggregate list while lifting legacy auth into remediation", () => {
+  it("keeps remaining publish issues in the aggregate list while lifting the primary remediation", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorPublishForm, {
         workflowVersion: "1.0.0",
@@ -241,15 +241,26 @@ describe("WorkflowEditorPublishForm", () => {
             authMode: "token",
             workflowVersion: "draft-version",
             streaming: true,
-            inputSchema: {}
+            inputSchema: {},
+            cache: {
+              enabled: true,
+              ttl: 60,
+              maxEntries: 128,
+              varyBy: ["input.locale", "input.locale"]
+            }
           }
         ],
         onChange: () => undefined
       })
     );
 
+    expect(html).toContain("Publish · Public Search · Workflow version");
+    expect(html).toContain("如果这个 endpoint 要跟随本次保存生成的新版本");
     expect(html).toContain("当前 publish draft 里还有这些字段级问题：");
-    expect(html).toContain("Public Search 的 workflowVersion 必须使用 major.minor.patch 语义版本格式。");
+    expect(html).toContain("Public Search 的 cache.varyBy 不能包含重复字段。");
+    expect(html).not.toContain(
+      "<li>Public Search 的 workflowVersion 必须使用 major.minor.patch 语义版本格式。</li>"
+    );
     expect(html).not.toContain("<li>Public Search 当前不能使用 authMode = token。</li>");
     expect(html).toContain("Publish · Public Search · Auth mode");
   });

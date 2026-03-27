@@ -40,6 +40,26 @@ describe("WorkflowEditorVariableForm", () => {
     expect(html).toContain("validation-focus-ring");
   });
 
+  it("promotes aggregate variable validation into shared remediation", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorVariableForm, {
+        variables: [
+          {
+            name: "",
+            type: "string",
+            description: "Current locale"
+          }
+        ],
+        onChange: () => undefined
+      })
+    );
+
+    expect(html).toContain("Variable · variable_1 · Variable name");
+    expect(html).toContain("Variable 1 的变量名不能为空。");
+    expect(html).toContain("把变量名改成当前 workflow 内唯一、稳定的标识");
+    expect(html).not.toContain("当前 workflow variables 里还有这些字段级问题：");
+  });
+
   it("shows the shared save gate summary for variable blockers", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorVariableForm, {

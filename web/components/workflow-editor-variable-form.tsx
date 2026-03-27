@@ -3,7 +3,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
-import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import {
+  buildWorkflowValidationNavigatorItems,
+  type WorkflowValidationNavigatorItem
+} from "@/lib/workflow-validation-navigation";
+import { pickWorkflowValidationRemediationItem } from "@/lib/workflow-validation-remediation";
 import { buildWorkflowVariableValidationIssues } from "@/lib/workflow-variable-validation";
 import type { WorkflowPersistBlocker } from "@/components/workflow-editor-workbench/persist-blockers";
 import { summarizeWorkflowPersistBlockers } from "@/components/workflow-editor-workbench/persist-blockers";
@@ -53,6 +57,21 @@ export function WorkflowEditorVariableForm({
   const validationIssues = useMemo(
     () => buildWorkflowVariableValidationIssues({ variables }),
     [variables]
+  );
+  const validationNavigatorItems = useMemo(
+    () => buildWorkflowValidationNavigatorItems({ variables }, validationIssues),
+    [validationIssues, variables]
+  );
+  const validationRemediationItem = useMemo(
+    () => pickWorkflowValidationRemediationItem(validationNavigatorItems),
+    [validationNavigatorItems]
+  );
+  const remainingValidationIssues = useMemo(
+    () =>
+      validationIssues.filter(
+        (issue) => !matchesVariableValidationIssue(issue, validationRemediationItem)
+      ),
+    [validationIssues, validationRemediationItem]
   );
   const variablePersistBlockers = useMemo(
     () => persistBlockers.filter((blocker) => blocker.id === "variables"),
@@ -235,11 +254,18 @@ export function WorkflowEditorVariableForm({
         </button>
       </div>
 
-      {validationIssues.length > 0 ? (
+      {validationRemediationItem ? (
+        <WorkflowValidationRemediationCard
+          currentHref={currentHref}
+          item={validationRemediationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
+      {remainingValidationIssues.length > 0 ? (
         <div className="sync-message error">
           <p>当前 workflow variables 里还有这些字段级问题：</p>
           <ul className="roadmap-list compact-list">
-            {validationIssues.map((issue) => (
+            {remainingValidationIssues.map((issue) => (
               <li key={`${issue.path ?? issue.message}`}>{issue.message}</li>
             ))}
           </ul>
@@ -462,6 +488,22 @@ function normalizeValidationFieldKey(fieldPath: string | null | undefined) {
   }
 
   return fieldPath;
+}
+
+function matchesVariableValidationIssue(
+  issue: ReturnType<typeof buildWorkflowVariableValidationIssues>[number],
+  item: WorkflowValidationNavigatorItem | null
+) {
+  if (!item || item.target.scope !== "variables" || issue.category !== item.category) {
+    return false;
+  }
+
+  const fieldPath = item.target.fieldPath?.trim();
+  if (fieldPath) {
+    return issue.path === `variables.${item.target.variableIndex}.${fieldPath}`;
+  }
+
+  return issue.message === item.message;
 }
 
 function createUniqueVariableName(existingNames: string[]) {

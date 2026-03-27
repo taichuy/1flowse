@@ -13,6 +13,7 @@ import {
   type WorkflowValidationNavigatorItem
 } from "@/lib/workflow-validation-navigation";
 import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
+import { pickWorkflowValidationRemediationItem } from "@/lib/workflow-validation-remediation";
 import type { WorkflowPersistBlocker } from "@/components/workflow-editor-workbench/persist-blockers";
 import { summarizeWorkflowPersistBlockers } from "@/components/workflow-editor-workbench/persist-blockers";
 import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-blocker-notice";
@@ -93,6 +94,21 @@ export function WorkflowEditorPublishForm({
   const genericValidationIssues = useMemo(
     () => validationIssues.filter((issue) => !publishLegacyAuthValidationIssues.includes(issue)),
     [publishLegacyAuthValidationIssues, validationIssues]
+  );
+  const genericValidationNavigatorItems = useMemo(
+    () => buildWorkflowValidationNavigatorItems({ publish: normalizedEndpoints }, genericValidationIssues),
+    [genericValidationIssues, normalizedEndpoints]
+  );
+  const genericValidationRemediationItem = useMemo(
+    () => pickWorkflowValidationRemediationItem(genericValidationNavigatorItems),
+    [genericValidationNavigatorItems]
+  );
+  const remainingGenericValidationIssues = useMemo(
+    () =>
+      genericValidationIssues.filter(
+        (issue) => !matchesPublishValidationIssue(issue, genericValidationRemediationItem)
+      ),
+    [genericValidationIssues, genericValidationRemediationItem]
   );
   const validationIssuesByEndpoint = useMemo(
     () => groupValidationIssuesByEndpoint(validationIssues),
@@ -266,11 +282,18 @@ export function WorkflowEditorPublishForm({
 
       {genericValidationIssues.length > 0 || publishLegacyAuthValidationItem ? (
         <>
-          {genericValidationIssues.length > 0 ? (
+          {genericValidationRemediationItem ? (
+            <WorkflowValidationRemediationCard
+              currentHref={currentHref}
+              item={genericValidationRemediationItem}
+              sandboxReadiness={sandboxReadiness}
+            />
+          ) : null}
+          {remainingGenericValidationIssues.length > 0 ? (
             <div className="sync-message error">
               <p>当前 publish draft 里还有这些字段级问题：</p>
               <ul className="roadmap-list compact-list">
-                {genericValidationIssues.map((issue) => (
+                {remainingGenericValidationIssues.map((issue) => (
                   <li key={issue.key}>{issue.message}</li>
                 ))}
               </ul>
@@ -340,4 +363,20 @@ function groupValidationIssuesByEndpoint(
     issuesByEndpoint.set(issue.endpointKey, nextIssues);
   }
   return issuesByEndpoint;
+}
+
+function matchesPublishValidationIssue(
+  issue: WorkflowEditorPublishValidationIssue,
+  item: WorkflowValidationNavigatorItem | null
+) {
+  if (!item || item.target.scope !== "publish" || issue.category !== item.category) {
+    return false;
+  }
+
+  const fieldPath = item.target.fieldPath?.trim();
+  if (fieldPath) {
+    return issue.path === `publish.${item.target.endpointIndex}.${fieldPath}`;
+  }
+
+  return issue.message === item.message;
 }
