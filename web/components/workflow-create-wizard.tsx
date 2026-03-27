@@ -46,6 +46,7 @@ import {
   WorkflowDefinitionValidationError
 } from "@/lib/get-workflows";
 import {
+  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
   buildWorkflowLibraryHrefFromWorkspaceStarterViewState,
@@ -174,6 +175,9 @@ export function WorkflowCreateWizard({
       selectedStarter,
       sourceGovernanceKind
     ]
+  );
+  const currentWorkflowCreateHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState(
+    workspaceStarterGovernanceScope
   );
   const starterGovernanceHref = buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
     workspaceStarterGovernanceScope
@@ -352,7 +356,10 @@ export function WorkflowCreateWizard({
               {surfaceCopy.emptyStateDescription}
             </p>
             <div className="hero-actions">
-              <WorkbenchEntryLinks {...surfaceCopy.emptyStateLinks} />
+              <WorkbenchEntryLinks
+                {...surfaceCopy.emptyStateLinks}
+                currentHref={currentWorkflowCreateHref}
+              />
             </div>
           </div>
 

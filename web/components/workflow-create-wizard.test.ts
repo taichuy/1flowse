@@ -666,6 +666,30 @@ describe("WorkflowCreateWizard", () => {
     expect(html.split(scopedWorkflowHref).length - 1).toBeGreaterThanOrEqual(2);
   });
 
+  it("marks the empty-state create entry as current when already on the base create page", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCreateWizard, {
+        catalogToolCount: 0,
+        governanceQueryScope: {
+          activeTrack: "all",
+          sourceGovernanceKind: "all",
+          needsFollowUp: false,
+          searchQuery: "",
+          selectedTemplateId: null
+        },
+        workflows: [],
+        starterSourceLanes: [],
+        nodeCatalog: [],
+        tools: [],
+        starters: []
+      })
+    );
+
+    expect(html).toContain("清除筛选并查看全部 starter");
+    expect(html).toContain('aria-current="page"');
+    expect(html).not.toContain('href="/workflows/new"');
+  });
+
   it("keeps the original governance scope when the incoming track is all", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowCreateWizard, {
