@@ -1,8 +1,13 @@
 import Link from "next/link";
 
 import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import { WorkflowLibraryLegacyAuthGovernanceExportActions } from "@/components/workflow-library-legacy-auth-governance-export-actions";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/get-workflow-publish";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import { shouldRenderWorkflowLibraryLegacyAuthGovernance } from "@/lib/workflow-library-legacy-auth-governance";
 
 type WorkflowLibraryLegacyAuthGovernanceCardProps = {
@@ -77,28 +82,52 @@ export function WorkflowLibraryLegacyAuthGovernanceCard({
         <div>
           <p className="entry-card-title">Workflow handoff</p>
           <p className="section-copy entry-copy">
-            下面保留每个 workflow 的 backlog 计数，进入 detail 后可继续沿同一条 publish auth 治理链路收口历史 binding。
+            每个条目继续复用 shared workflow governance handoff，让 publish auth contract 与同一 workflow 的 catalog gap follow-up 在同一页直接收口。
           </p>
         </div>
 
         {snapshot.workflows.map((workflow) => {
           const workflowHref = workflowDetailHrefsById[workflow.workflow_id] ?? null;
+          const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+            workflowId: workflow.workflow_id,
+            workflowName: workflow.workflow_name,
+            workflowDetailHref: workflowHref,
+            toolGovernance: workflow.tool_governance,
+            legacyAuthGovernance: snapshot,
+            workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+              toolGovernance: workflow.tool_governance,
+              subjectLabel: "workflow",
+              returnDetail:
+                "先回 workflow 编辑器补齐 binding / LLM Agent tool policy，再继续对齐 publish auth contract，避免同一 workflow 的治理事实被拆到两张卡里。"
+            })
+          });
 
           return (
-            <article className="payload-card compact-card" key={workflow.workflow_id}>
-              <div className="payload-card-header">
-                <span className="status-meta">{workflow.binding_count} legacy bindings</span>
-                {workflowHref ? (
-                  <Link className="event-chip inbox-filter-link" href={workflowHref}>
-                    打开 workflow detail
-                  </Link>
-                ) : null}
-              </div>
-              <p className="binding-meta">{workflow.workflow_name}</p>
-              <p className="section-copy entry-copy">
-                draft cleanup {workflow.draft_candidate_count} 条，published blocker {workflow.published_blocker_count} 条，offline inventory {workflow.offline_inventory_count} 条。
-              </p>
-            </article>
+            <div key={workflow.workflow_id}>
+              <article className="payload-card compact-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">{workflow.binding_count} legacy bindings</span>
+                  {workflowHref ? (
+                    <Link className="event-chip inbox-filter-link" href={workflowHref}>
+                      打开 workflow detail
+                    </Link>
+                  ) : null}
+                </div>
+                <p className="binding-meta">{workflow.workflow_name}</p>
+                <p className="section-copy entry-copy">
+                  draft cleanup {workflow.draft_candidate_count} 条，published blocker {workflow.published_blocker_count} 条，offline inventory {workflow.offline_inventory_count} 条。
+                </p>
+              </article>
+
+              <WorkflowGovernanceHandoffCards
+                workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+                workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+                workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
+                workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
+                legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+                cardClassName="payload-card compact-card"
+              />
+            </div>
           );
         })}
       </div>
