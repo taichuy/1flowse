@@ -83,6 +83,17 @@ export function WorkflowEditorPublishForm({
       }),
     [availableWorkflowVersions, normalizedEndpoints]
   );
+  const publishLegacyAuthValidationIssues = useMemo(
+    () =>
+      validationIssues.filter(
+        (issue) => issue.category === "publish_draft" && issue.field === "authMode"
+      ),
+    [validationIssues]
+  );
+  const genericValidationIssues = useMemo(
+    () => validationIssues.filter((issue) => !publishLegacyAuthValidationIssues.includes(issue)),
+    [publishLegacyAuthValidationIssues, validationIssues]
+  );
   const validationIssuesByEndpoint = useMemo(
     () => groupValidationIssuesByEndpoint(validationIssues),
     [validationIssues]
@@ -91,8 +102,7 @@ export function WorkflowEditorPublishForm({
     () =>
       buildWorkflowValidationNavigatorItems(
         { publish: normalizedEndpoints },
-        validationIssues
-          .filter((issue) => issue.category === "publish_draft" && issue.field === "authMode")
+        publishLegacyAuthValidationIssues
           .map((issue) => ({
             category: issue.category,
             message: issue.message,
@@ -101,7 +111,7 @@ export function WorkflowEditorPublishForm({
             hasLegacyPublishAuthModeIssues: true
           }))
       )[0] ?? null,
-    [normalizedEndpoints, validationIssues]
+    [normalizedEndpoints, publishLegacyAuthValidationIssues]
   );
   const publishPersistBlockers = useMemo(
     () => persistBlockers.filter((blocker) => blocker.id === "publish_draft"),
@@ -254,16 +264,18 @@ export function WorkflowEditorPublishForm({
         </button>
       </div>
 
-      {validationIssues.length > 0 ? (
+      {genericValidationIssues.length > 0 || publishLegacyAuthValidationItem ? (
         <>
-          <div className="sync-message error">
-            <p>当前 publish draft 里还有这些字段级问题：</p>
-            <ul className="roadmap-list compact-list">
-              {validationIssues.map((issue) => (
-                <li key={issue.key}>{issue.message}</li>
-              ))}
-            </ul>
-          </div>
+          {genericValidationIssues.length > 0 ? (
+            <div className="sync-message error">
+              <p>当前 publish draft 里还有这些字段级问题：</p>
+              <ul className="roadmap-list compact-list">
+                {genericValidationIssues.map((issue) => (
+                  <li key={issue.key}>{issue.message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {publishLegacyAuthValidationItem ? (
             <WorkflowValidationRemediationCard
               currentHref={currentHref}
