@@ -3,12 +3,17 @@ import Link from "next/link";
 
 import { SandboxReadinessOverviewCard } from "@/components/sandbox-readiness-overview-card";
 import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import { WorkflowPublishBindingCard } from "@/components/workflow-publish-binding-card";
 import { WorkflowPublishLegacyAuthCleanupCard } from "@/components/workflow-publish-legacy-auth-cleanup-card";
 import {
   buildWorkflowPublishLegacyAuthCleanupSurface,
   buildWorkflowPublishLegacyAuthExportHint,
 } from "@/lib/workflow-publish-legacy-auth-cleanup";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import {
   buildWorkflowPublishPrimaryFollowUpToneSurface,
   buildWorkflowPublishPrimaryFollowUpSurface,
@@ -92,6 +97,19 @@ export function WorkflowPublishPanel({
     bindings,
     primaryFollowUp
   });
+  const workflowGovernanceHandoff = buildWorkflowGovernanceHandoff({
+    workflowId: workflow.id,
+    workflowName: workflow.name,
+    workflowDetailHref,
+    toolGovernance: workflow.tool_governance,
+    legacyAuthGovernance: workflow.legacy_auth_governance ?? null,
+    workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+      toolGovernance: workflow.tool_governance,
+      subjectLabel: "publish summary",
+      returnDetail:
+        "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理 publish lifecycle、binding activity 与 invocation 诊断。"
+    })
+  });
 
   return (
     <section className="shell workflow-management-shell">
@@ -136,6 +154,15 @@ export function WorkflowPublishPanel({
           <p className="binding-meta">{primaryFollowUp.headline}</p>
           <p className="section-copy entry-copy">{primaryFollowUp.detail}</p>
         </article>
+
+        <WorkflowGovernanceHandoffCards
+          workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+          workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+          workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
+          workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
+          legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+          cardClassName="payload-card compact-card"
+        />
 
         <SandboxReadinessOverviewCard
           readiness={sandboxReadiness}

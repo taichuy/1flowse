@@ -507,4 +507,56 @@ describe("WorkflowPublishPanel", () => {
       "binding:binding-1:导出的 published invocation JSON / JSONL 也会附带当前 workflow 的 legacy publish auth handoff：draft 0 / published 1 / offline 0。"
     );
   });
+
+  it("keeps shared workflow governance handoff visible at publish summary level", () => {
+    const workflow = buildWorkflow();
+    workflow.tool_governance = {
+      referenced_tool_ids: ["tool-search"],
+      missing_tool_ids: ["native.catalog-gap"],
+      governed_tool_count: 1,
+      strong_isolation_tool_count: 0
+    };
+    workflow.legacy_auth_governance = {
+      binding_count: 1,
+      draft_candidate_count: 0,
+      published_blocker_count: 1,
+      offline_inventory_count: 0
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishPanel, {
+        workflow,
+        tools: [],
+        bindings: [buildBinding()],
+        cacheInventories: {},
+        apiKeysByBinding: {},
+        invocationAuditsByBinding: {},
+        invocationDetailsByBinding: {},
+        selectedInvocationId: null,
+        rateLimitWindowAuditsByBinding: {},
+        activeInvocationFilter: {
+          bindingId: null,
+          status: null,
+          requestSource: null,
+          requestSurface: null,
+          cacheStatus: null,
+          runStatus: null,
+          apiKeyId: null,
+          reasonCode: null,
+          timeWindow: "all"
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Current publish bindings do not show a shared operator backlog.");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("当前 publish summary 对应的 workflow 版本仍有 catalog gap");
+    expect(html).toContain(
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续处理 publish lifecycle、binding activity 与 invocation 诊断。"
+    );
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
+  });
 });
