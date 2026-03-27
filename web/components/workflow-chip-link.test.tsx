@@ -156,4 +156,33 @@ describe("WorkflowChipLink", () => {
       "当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory。"
     );
   });
+
+  it("renders aria-current instead of a self link when the chip already targets the current page", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowChipLink, {
+        href: "/workflows/workflow-summary?starter=starter-openclaw&definition_issue=missing_tool",
+        currentHref:
+          "/workflows/workflow-summary?definition_issue=missing_tool&starter=starter-openclaw",
+        workflow: {
+          id: "workflow-summary",
+          name: "Summary workflow",
+          status: "draft",
+          version: "0.7.0",
+          node_count: 2,
+          definition_issues: [],
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 1,
+            strong_isolation_tool_count: 0
+          }
+        },
+        selected: true
+      })
+    );
+
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('class="workflow-chip selected"');
+    expect(html).not.toContain('<a href="/workflows/workflow-summary?starter=starter-openclaw&amp;definition_issue=missing_tool"');
+  });
 });

@@ -233,6 +233,72 @@ describe("WorkflowEditorSidebar", () => {
     );
   });
 
+  it("marks the current workflow chip as current when the scoped editor href already matches", () => {
+    const currentHref =
+      "/workflows/workflow-1?needs_follow_up=true&q=drift&source_governance_kind=drifted&starter=workspace-starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool";
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        currentHref,
+        workflowId: "workflow-1",
+        workflowName: "Governed workflow",
+        workflows: [
+          {
+            id: "workflow-1",
+            name: "Governed workflow",
+            status: "draft",
+            version: "0.1.0",
+            node_count: 1,
+            tool_governance: {
+              referenced_tool_ids: ["native.catalog-gap"],
+              missing_tool_ids: ["native.catalog-gap"],
+              governed_tool_count: 0,
+              strong_isolation_tool_count: 0
+            }
+          }
+        ],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        workspaceStarterGovernanceQueryScope: {
+          activeTrack: "应用新建编排",
+          sourceGovernanceKind: "drifted",
+          needsFollowUp: true,
+          searchQuery: " drift ",
+          selectedTemplateId: "workspace-starter-1"
+        },
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onWorkflowNameChange: () => undefined,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain('aria-current="page"');
+    expect(html).not.toContain(
+      'href="/workflows/workflow-1?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=missing_tool"'
+    );
+  });
+
   it("shows execution preflight readiness before save when strong isolation is blocked", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {

@@ -6,17 +6,20 @@ import {
   buildWorkflowCatalogGapDetail,
   buildWorkflowGovernanceHandoff
 } from "@/lib/workflow-governance-handoff";
+import { isCurrentWorkbenchHref } from "@/lib/workbench-entry-links";
 
 type WorkflowChipLinkProps = {
   workflow: WorkflowListItem;
   href: string;
   selected?: boolean;
+  currentHref?: string | null;
 };
 
 export function WorkflowChipLink({
   workflow,
   href,
-  selected = false
+  selected = false,
+  currentHref = null
 }: WorkflowChipLinkProps) {
   const governedToolCount = workflow.tool_governance?.governed_tool_count ?? 0;
   const strongIsolationToolCount = workflow.tool_governance?.strong_isolation_tool_count ?? 0;
@@ -41,9 +44,10 @@ export function WorkflowChipLink({
     workflowGovernanceHandoff.workflowCatalogGapDetail,
     legacyAuthHandoff?.detail ?? null
   ].filter((detail): detail is string => Boolean(detail));
-
-  return (
-    <Link className={`workflow-chip ${selected ? "selected" : ""}`} href={href}>
+  const className = `workflow-chip ${selected ? "selected" : ""}`.trim();
+  const isCurrentPage = isCurrentWorkbenchHref(href, currentHref);
+  const content = (
+    <>
       <strong className="workflow-chip-title">{workflow.name}</strong>
       <small>
         {workflow.version} · {workflow.status}
@@ -77,6 +81,16 @@ export function WorkflowChipLink({
           ))}
         </div>
       ) : null}
+    </>
+  );
+
+  return isCurrentPage ? (
+    <span aria-current="page" className={className}>
+      {content}
+    </span>
+  ) : (
+    <Link className={className} href={href}>
+      {content}
     </Link>
   );
 }

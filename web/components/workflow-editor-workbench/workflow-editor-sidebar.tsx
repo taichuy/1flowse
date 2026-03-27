@@ -302,6 +302,7 @@ export function WorkflowEditorSidebar({
                 key={item.id}
                 workflow={item}
                 href={workflowDetailHref}
+                currentHref={currentHref}
                 selected={item.id === workflowId}
               />
             );
