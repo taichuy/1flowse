@@ -22,11 +22,6 @@ vi.mock("@/components/tool-governance-summary", () => ({
   ToolGovernanceSummary: () => createElement("div", { "data-component": "tool-governance-summary" })
 }));
 
-vi.mock("@/components/workflow-chip-link", () => ({
-  WorkflowChipLink: ({ href }: { href?: string }) =>
-    createElement("a", { href: href ?? "#", "data-component": "workflow-chip-link" })
-}));
-
 vi.mock("@/components/workflow-tool-binding-form", () => ({
   WorkflowToolBindingForm: ({ currentToolId }: { currentToolId?: string }) =>
     createElement("div", { "data-component": "workflow-tool-binding-form", "data-tool-id": currentToolId ?? "" })
@@ -157,5 +152,16 @@ describe("WorkflowToolBindingPanel", () => {
     expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
     expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
+  });
+
+  it("marks the selected home workflow chip as current instead of self-linking", () => {
+    const workflow = buildWorkflowDetail();
+    const html = renderToStaticMarkup(
+      <WorkflowToolBindingPanel workflows={[workflow]} selectedWorkflow={workflow} tools={[]} />
+    );
+
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('class="workflow-chip selected"');
+    expect(html).not.toContain('<a class="workflow-chip selected" href="/?workflow=workflow-1#workflow-binding"');
   });
 });

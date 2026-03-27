@@ -37,6 +37,9 @@ export function WorkflowToolBindingPanel({
   selectedWorkflow,
   tools
 }: WorkflowToolBindingPanelProps) {
+  const currentWorkflowHref = selectedWorkflow
+    ? buildWorkflowToolBindingHref(selectedWorkflow.id)
+    : null;
   const toolNodes = getToolNodeBindings(selectedWorkflow, tools);
   const workflowMissingToolIds = selectedWorkflow
     ? getWorkflowMissingToolIds(selectedWorkflow)
@@ -104,13 +107,15 @@ export function WorkflowToolBindingPanel({
           <div className="workflow-chip-row">
             {workflows.map((workflow) => {
               const selected = workflow.id === selectedWorkflow?.id;
+              const workflowHref = buildWorkflowToolBindingHref(workflow.id);
 
               return (
                 <WorkflowChipLink
                   key={workflow.id}
                   workflow={workflow}
-                  href={`/?workflow=${encodeURIComponent(workflow.id)}#workflow-binding`}
+                  href={workflowHref}
                   selected={selected}
+                  currentHref={currentWorkflowHref}
                 />
               );
             })}
@@ -287,6 +292,10 @@ function buildWorkflowBindingCatalogGapFollowUpDetail({
 
 function buildBindingCatalogGapMessage(toolId: string) {
   return `当前 binding 仍有 catalog gap（${toolId}）。请先同步目录，或改绑到仍可用的工具定义。`;
+}
+
+function buildWorkflowToolBindingHref(workflowId: string) {
+  return `/?workflow=${encodeURIComponent(workflowId)}#workflow-binding`;
 }
 
 function getToolNodeBindings(
