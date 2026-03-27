@@ -134,7 +134,7 @@ describe("RunDiagnosticsExecutionOverview", () => {
       })
     );
 
-    expect(html).toContain("Workflow governance");
+    expect(html).toContain("Legacy publish auth handoff");
     expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain("execution overview 对应的 workflow 版本仍有 catalog gap");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
@@ -166,7 +166,7 @@ describe("RunDiagnosticsExecutionOverview", () => {
     );
   });
 
-  it("keeps legacy auth detail as the only governance card when there is no catalog gap", () => {
+  it("keeps shared workflow governance handoff visible when only legacy auth remains", () => {
     const html = renderToStaticMarkup(
       createElement(RunDiagnosticsExecutionOverview, {
         executionView: buildExecutionView(),
@@ -180,7 +180,11 @@ describe("RunDiagnosticsExecutionOverview", () => {
       })
     );
 
-    expect(html).not.toContain("Workflow governance");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).not.toContain("catalog gap ·");
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
+    expect(html).toContain("legacy binding");
+    expect(html).toContain("publish auth blocker");
     expect(html).toContain("legacy auth detail");
   });
 });

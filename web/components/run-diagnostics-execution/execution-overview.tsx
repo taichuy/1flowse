@@ -56,7 +56,8 @@ export function RunDiagnosticsExecutionOverview({
     })
   });
   const shouldRenderWorkflowGovernanceHandoff = Boolean(
-    workflowGovernanceHandoff.workflowCatalogGapSummary
+    workflowGovernanceHandoff.workflowCatalogGapSummary ||
+      workflowGovernanceHandoff.legacyAuthHandoff
   );
 
   return (
