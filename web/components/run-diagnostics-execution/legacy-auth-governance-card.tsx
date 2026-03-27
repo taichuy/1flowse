@@ -2,10 +2,17 @@ import React from "react";
 import Link from "next/link";
 
 import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { RunExecutionView } from "@/lib/get-run-views";
 import { buildLegacyPublishAuthGovernanceSurfaceCopy } from "@/lib/legacy-publish-auth-governance-presenters";
-import { buildWorkflowGovernanceHandoff } from "@/lib/workflow-governance-handoff";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
+
+const RUN_DIAGNOSTICS_WORKFLOW_GOVERNANCE_RETURN_DETAIL =
+  "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 legacy auth checklist、execution diagnostics 与 trace。";
 
 export function RunDiagnosticsLegacyAuthGovernanceCard({
   executionView,
@@ -32,9 +39,15 @@ export function RunDiagnosticsLegacyAuthGovernanceCard({
   const workflowGovernanceHandoff = workflowSummary
     ? buildWorkflowGovernanceHandoff({
         workflowId: executionView.workflow_id,
+        workflowName: workflowSummary.workflow_name,
         workflowDetailHref: baseWorkflowDetailHref,
         toolGovernance: workflowSummary.tool_governance,
-        legacyAuthGovernance: snapshot
+        legacyAuthGovernance: snapshot,
+        workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+          toolGovernance: workflowSummary.tool_governance,
+          subjectLabel: workflowSummary.workflow_name,
+          returnDetail: RUN_DIAGNOSTICS_WORKFLOW_GOVERNANCE_RETURN_DETAIL
+        })
       })
     : null;
   const resolvedWorkflowDetailHref =
@@ -85,6 +98,15 @@ export function RunDiagnosticsLegacyAuthGovernanceCard({
           ))}
         </div>
       ) : null}
+
+      <WorkflowGovernanceHandoffCards
+        workflowCatalogGapSummary={workflowGovernanceHandoff?.workflowCatalogGapSummary}
+        workflowCatalogGapDetail={workflowGovernanceHandoff?.workflowCatalogGapDetail}
+        workflowCatalogGapHref={workflowGovernanceHandoff?.workflowCatalogGapHref}
+        workflowGovernanceHref={workflowGovernanceHandoff?.workflowGovernanceHref}
+        legacyAuthHandoff={workflowGovernanceHandoff?.legacyAuthHandoff}
+        cardClassName="payload-card compact-card"
+      />
 
       <div className="binding-actions">
         <div>

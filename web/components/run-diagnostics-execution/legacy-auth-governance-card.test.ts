@@ -154,6 +154,8 @@ describe("RunDiagnosticsLegacyAuthGovernanceCard", () => {
     expect(html).toContain("Published blockers");
     expect(html).toContain("先批量下线 draft legacy bindings");
     expect(html).toContain("再补发支持鉴权的 replacement bindings");
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
     expect(html).toContain(surfaceCopy.workflowFollowUpTitle);
     expect(html).toContain("回到 workflow 编辑器");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
@@ -185,6 +187,14 @@ describe("RunDiagnosticsLegacyAuthGovernanceCard", () => {
       })
     );
 
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain(
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续对照当前 legacy auth checklist、execution diagnostics 与 trace。"
+    );
+    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
     expect(html).toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
   });
 
