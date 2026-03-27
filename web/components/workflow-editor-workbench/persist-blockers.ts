@@ -27,6 +27,7 @@ export type WorkflowPersistBlocker = {
   label: string;
   detail: string;
   nextStep: string;
+  catalogGapToolIds?: string[];
 };
 
 type BuildWorkflowPersistBlockersOptions = {
@@ -137,6 +138,7 @@ export function buildWorkflowPersistBlockers({
           ? `当前 workflow definition 仍有 ${catalogGapSummary}：${toolReferenceValidationSummary}`
           : `当前 workflow definition 还有 tool catalog 引用待修正问题：${toolReferenceValidationSummary}`
       ),
+      catalogGapToolIds: missingToolIds,
       nextStep: missingToolSummary
         ? `请先补齐 catalog gap（${missingToolSummary}）里的 tool binding / LLM Agent tool policy 后再保存。`
         : "请先修正 tool binding / LLM Agent tool policy 后再保存。"

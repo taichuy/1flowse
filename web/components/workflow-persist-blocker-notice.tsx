@@ -1,7 +1,12 @@
 import React from "react";
 
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff
+} from "@/lib/workflow-governance-handoff";
 import type { WorkflowPersistBlocker } from "@/components/workflow-editor-workbench/persist-blockers";
 import { buildWorkflowPersistBlockerRecommendedNextStep } from "@/components/workflow-editor-workbench/persist-blockers";
 
@@ -14,6 +19,40 @@ type WorkflowPersistBlockerNoticeProps = {
   hideRecommendedNextStep?: boolean;
   limit?: number;
 };
+
+function buildPersistBlockerWorkflowGovernanceHandoff(
+  blockers: WorkflowPersistBlocker[],
+  currentHref?: string | null
+) {
+  const catalogGapToolIds = Array.from(
+    new Set(
+      blockers.flatMap((blocker) =>
+        blocker.id === "tool_reference" ? blocker.catalogGapToolIds ?? [] : []
+      )
+    )
+  );
+
+  if (catalogGapToolIds.length === 0) {
+    return null;
+  }
+
+  const toolGovernance = {
+    referenced_tool_ids: catalogGapToolIds,
+    missing_tool_ids: catalogGapToolIds,
+    governed_tool_count: 0,
+    strong_isolation_tool_count: 0
+  };
+
+  return buildWorkflowGovernanceHandoff({
+    workflowDetailHref: currentHref ?? null,
+    toolGovernance,
+    workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+      toolGovernance,
+      subjectLabel: "这次保存入口",
+      returnDetail: "先回到当前 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续保存。"
+    })
+  });
+}
 
 export function WorkflowPersistBlockerNotice({
   title,
@@ -33,6 +72,10 @@ export function WorkflowPersistBlockerNotice({
     sandboxReadiness,
     currentHref
   );
+  const workflowGovernanceHandoff = buildPersistBlockerWorkflowGovernanceHandoff(
+    blockers,
+    currentHref
+  );
 
   return (
     <div className="sync-message error">
@@ -41,6 +84,15 @@ export function WorkflowPersistBlockerNotice({
       {hideRecommendedNextStep ? null : (
         <OperatorRecommendedNextStepCard recommendedNextStep={recommendedNextStep} />
       )}
+      <WorkflowGovernanceHandoffCards
+        workflowCatalogGapSummary={workflowGovernanceHandoff?.workflowCatalogGapSummary}
+        workflowCatalogGapDetail={workflowGovernanceHandoff?.workflowCatalogGapDetail}
+        workflowCatalogGapHref={workflowGovernanceHandoff?.workflowCatalogGapHref}
+        workflowGovernanceHref={workflowGovernanceHandoff?.workflowGovernanceHref}
+        legacyAuthHandoff={workflowGovernanceHandoff?.legacyAuthHandoff}
+        cardClassName="entry-card compact-card"
+        currentHref={currentHref}
+      />
       <ul className="event-list compact-list">
         {blockers.slice(0, limit).map((blocker) => (
           <li key={blocker.id}>
