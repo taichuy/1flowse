@@ -3,6 +3,7 @@
 import React from "react";
 
 import { OperatorRecommendedNextStepCard } from "@/components/operator-recommended-next-step-card";
+import { WorkflowPersistBlockerNotice } from "@/components/workflow-persist-blocker-notice";
 import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import { buildWorkflowEditorHeroSurfaceCopy } from "@/lib/workbench-entry-surfaces";
@@ -10,6 +11,7 @@ import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog
 import type { WorkflowPersistBlocker } from "./persist-blockers";
 
 type WorkflowEditorHeroProps = {
+  currentHref?: string | null;
   workflowId: string;
   workflowVersion: string;
   nodesCount: number;
@@ -43,6 +45,7 @@ type WorkflowEditorHeroProps = {
 };
 
 export function WorkflowEditorHero({
+  currentHref = null,
   workflowId,
   workflowVersion,
   nodesCount,
@@ -158,13 +161,14 @@ export function WorkflowEditorHero({
             <p className="panel-text">
               当前保存策略：<strong>{persistBlockerSummary}</strong>
             </p>
-            <div className="starter-tag-row">
-              {persistBlockers.map((blocker) => (
-                <span className="event-chip" key={blocker.id}>
-                  {blocker.label}
-                </span>
-              ))}
-            </div>
+            <WorkflowPersistBlockerNotice
+              title="Hero save gate"
+              summary={persistBlockerSummary}
+              blockers={persistBlockers}
+              currentHref={currentHref}
+              hideRecommendedNextStep
+              limit={3}
+            />
           </>
         ) : null}
         <p className="panel-text">

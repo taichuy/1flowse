@@ -231,6 +231,7 @@ export function WorkflowEditorWorkbench({
     <ReactFlowProvider>
       <main className="editor-shell">
         <WorkflowEditorHero
+          currentHref={currentEditorHref}
           workflowId={workflow.id}
           workflowVersion={graph.workflowVersion}
           nodesCount={graph.nodes.length}

@@ -36,6 +36,7 @@ describe("WorkflowEditorHero", () => {
         nodeExecutionValidationIssuesCount: 0,
         toolExecutionValidationIssuesCount: 2,
         publishDraftValidationIssuesCount: 1,
+        currentHref: "/workflows/workflow-1?pane=editor",
         persistBlockedMessage: "blocked",
         persistBlockerSummary:
           "当前保存会被 2 类问题阻断：Execution capability / Publish draft。",
@@ -72,6 +73,77 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain("Publish draft");
     expect(html).toContain("Recommended next step");
     expect(html).toContain("Open workflow library");
+    expect(html).toContain("Hero save gate");
+    expect(html).toContain("execution detail execution next step");
+    expect(html).toContain("publish detail publish next step");
+  });
+
+  it("reuses structured workflow governance handoffs in the hero save gate", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorHero, {
+        workflowId: "workflow-1",
+        workflowVersion: "1.0.0",
+        nodesCount: 4,
+        edgesCount: 3,
+        toolsCount: 2,
+        availableRunsCount: 1,
+        isDirty: true,
+        selectedNodeLabel: null,
+        selectedEdgeId: null,
+        workflowsCount: 1,
+        selectedRunAttached: false,
+        plannedNodeLabels: [],
+        unsupportedNodes: [],
+        contractValidationIssuesCount: 0,
+        toolReferenceValidationIssuesCount: 1,
+        nodeExecutionValidationIssuesCount: 0,
+        toolExecutionValidationIssuesCount: 0,
+        publishDraftValidationIssuesCount: 1,
+        currentHref: "/workflows/workflow-1?pane=publish",
+        persistBlockedMessage: "blocked",
+        persistBlockerSummary: "当前保存会被 2 类问题阻断：Catalog gap / Publish draft。",
+        persistBlockers: [
+          {
+            id: "tool_reference",
+            label: "Catalog gap",
+            detail: "当前 workflow definition 仍有 catalog gap · native.catalog-gap。",
+            nextStep:
+              "请先补齐 catalog gap（native.catalog-gap）里的 tool binding / LLM Agent tool policy 后再保存。",
+            catalogGapToolIds: ["native.catalog-gap"]
+          },
+          {
+            id: "publish_draft",
+            label: "Publish draft",
+            detail:
+              "当前 workflow definition 还有 publish draft 待修正问题：Public Search 当前不能使用 authMode = token。",
+            nextStep:
+              "先把 workflow draft endpoint 切回 api_key/internal 并保存，再补发 replacement binding，最后清理 draft/offline legacy backlog。",
+            hasLegacyPublishAuthModeIssues: true,
+            hasGenericPublishDraftIssues: false
+          }
+        ],
+        persistBlockerRecommendedNextStep: {
+          label: "workflow governance",
+          detail: "先回到当前 workflow 处理 catalog gap 与 publish auth contract。",
+          href: "/workflows/workflow-1?definition_issue=missing_tool",
+          href_label: "Open workflow editor"
+        },
+        isSaving: false,
+        isSavingStarter: false,
+        onSave: () => undefined,
+        onSaveAsWorkspaceStarter: () => undefined
+      })
+    );
+
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain("回到 workflow 编辑器处理 catalog gap");
+    expect(html).toContain("Save-gate publish auth contract");
+    expect(html).toContain("legacy token");
+    expect(html).toContain("supported api_key / internal");
+    expect(html).toContain('href="/workflows/workflow-1?pane=publish&amp;definition_issue=missing_tool"');
+    expect(html).toContain("Recommended next step");
+    expect(html).toContain("Open workflow editor");
+    expect(html.match(/Recommended next step/g)).toHaveLength(1);
   });
 
   it("labels tool reference blockers as catalog gap issues in hero pills", () => {
@@ -95,6 +167,7 @@ describe("WorkflowEditorHero", () => {
         nodeExecutionValidationIssuesCount: 0,
         toolExecutionValidationIssuesCount: 0,
         publishDraftValidationIssuesCount: 0,
+        currentHref: "/workflows/workflow-1",
         persistBlockedMessage: null,
         persistBlockerSummary: null,
         persistBlockers: [],
@@ -139,6 +212,7 @@ describe("WorkflowEditorHero", () => {
         nodeExecutionValidationIssuesCount: 0,
         toolExecutionValidationIssuesCount: 0,
         publishDraftValidationIssuesCount: 0,
+        currentHref: "/workflows/workflow-1",
         persistBlockedMessage: null,
         persistBlockerSummary: null,
         persistBlockers: [],
