@@ -10,6 +10,7 @@ import {
 import { LegacyPublishAuthContractCard } from "@/components/legacy-publish-auth-contract-card";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
 import {
+  buildWorkflowPublishLegacyAuthCleanupGovernanceHandoff,
   buildWorkflowPublishLegacyAuthCleanupExportActionSurface,
   buildWorkflowPublishLegacyAuthCleanupExportErrorMessage,
   buildWorkflowPublishLegacyAuthCleanupExportFilename,
@@ -20,11 +21,13 @@ import {
   type WorkflowPublishLegacyAuthCleanupExportFormat,
   type WorkflowPublishLegacyAuthCleanupWorkflowLike,
 } from "@/lib/workflow-publish-legacy-auth-cleanup";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
 
 type WorkflowPublishLegacyAuthCleanupCardProps = {
   workflowId: string;
   workflowName?: string;
   workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
+  workflowDetailHref?: string | null;
   bindings: WorkflowPublishedEndpointItem[];
   action?: (
     state: CleanupLegacyPublishedEndpointBindingsState,
@@ -54,6 +57,7 @@ export function WorkflowPublishLegacyAuthCleanupCard({
   workflowId,
   workflowName = workflowId,
   workflow = null,
+  workflowDetailHref = null,
   bindings,
   action = cleanupLegacyPublishedEndpointBindings,
 }: WorkflowPublishLegacyAuthCleanupCardProps) {
@@ -64,9 +68,21 @@ export function WorkflowPublishLegacyAuthCleanupCard({
         workflowId,
         workflowName,
         workflow,
+        workflowDetailHref,
         bindings,
       }),
-    [bindings, workflow, workflowId, workflowName]
+    [bindings, workflow, workflowDetailHref, workflowId, workflowName]
+  );
+  const workflowGovernanceHandoff = useMemo(
+    () =>
+      buildWorkflowPublishLegacyAuthCleanupGovernanceHandoff({
+        workflowId,
+        workflowName,
+        workflow,
+        workflowDetailHref,
+        bindings,
+      }),
+    [bindings, workflow, workflowDetailHref, workflowId, workflowName]
   );
   const initialState: CleanupLegacyPublishedEndpointBindingsState = {
     status: "idle",
@@ -207,10 +223,39 @@ export function WorkflowPublishLegacyAuthCleanupCard({
         </div>
       ) : null}
 
+      {workflowGovernanceHandoff.workflowCatalogGapSummary ||
+      workflowGovernanceHandoff.legacyAuthHandoff ? (
+        <div className="publish-key-list">
+          <div>
+            <p className="entry-card-title">Workflow handoff</p>
+            <p className="section-copy entry-copy">
+              当前 publish panel 也直接复用 shared workflow governance handoff，让
+              legacy publish auth cleanup、governance export 与同一 workflow 的
+              catalog gap follow-up 在同一块治理事实里收口。
+            </p>
+          </div>
+
+          <WorkflowGovernanceHandoffCards
+            workflowCatalogGapSummary={workflowGovernanceHandoff.workflowCatalogGapSummary}
+            workflowCatalogGapDetail={workflowGovernanceHandoff.workflowCatalogGapDetail}
+            workflowCatalogGapHref={workflowGovernanceHandoff.workflowCatalogGapHref}
+            workflowGovernanceHref={workflowGovernanceHandoff.workflowGovernanceHref}
+            legacyAuthHandoff={workflowGovernanceHandoff.legacyAuthHandoff}
+            cardClassName="payload-card compact-card"
+          />
+        </div>
+      ) : null}
+
       <div className="binding-actions">
         <div>
           <p className="entry-card-title">{surface.exportTitle}</p>
           <p className="section-copy entry-copy">{surface.exportDescription}</p>
+          {exportPayload.workflow_governance_handoff ? (
+            <p className="binding-meta">
+              导出的治理清单会继续保留当前 workflow 的 shared governance handoff，离开
+              publish panel 后仍能直接衔接 catalog gap / publish auth contract。
+            </p>
+          ) : null}
         </div>
 
         {EXPORT_FORMATS.map((format) => {

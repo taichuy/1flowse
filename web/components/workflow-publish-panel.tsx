@@ -30,7 +30,10 @@ import type {
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import type { WorkflowPublishInvocationActiveFilter } from "@/lib/workflow-publish-governance";
 import type { WorkflowDetail } from "@/lib/get-workflows";
-import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
+import {
+  buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
+  type WorkspaceStarterGovernanceQueryScope,
+} from "@/lib/workspace-starter-governance-query";
 
 type WorkflowPublishPanelProps = {
   workflow: WorkflowDetail;
@@ -78,6 +81,13 @@ export function WorkflowPublishPanel({
   );
   const legacyAuthCleanupSurface = buildWorkflowPublishLegacyAuthCleanupSurface(bindings);
   const legacyAuthExportHint = buildWorkflowPublishLegacyAuthExportHint(legacyAuthCleanupSurface);
+  const workflowDetailHref = workspaceStarterGovernanceQueryScope
+    ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+        workflowId: workflow.id,
+        viewState: workspaceStarterGovernanceQueryScope,
+        variant: "editor",
+      }).href
+    : null;
   const summaryCards = buildWorkflowPublishSummaryCardSurfaces({
     bindings,
     primaryFollowUp
@@ -138,6 +148,7 @@ export function WorkflowPublishPanel({
             workflowId={workflow.id}
             workflowName={workflow.name}
             workflow={workflow}
+            workflowDetailHref={workflowDetailHref}
             bindings={bindings}
           />
         ) : null}

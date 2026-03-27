@@ -94,6 +94,13 @@ describe("workflow publish legacy auth cleanup helpers", () => {
           governed_tool_count: 0,
           strong_isolation_tool_count: 0,
         },
+        legacy_auth_governance: {
+          binding_count: 3,
+          draft_candidate_count: 1,
+          published_blocker_count: 1,
+          offline_inventory_count: 1,
+        },
+        definition_issues: [],
       },
       bindings: [
         buildBinding({ id: "binding-draft", lifecycle_status: "draft", workflow_version: "1.2.0" }),
@@ -110,25 +117,37 @@ describe("workflow publish legacy auth cleanup helpers", () => {
       published_blocker_count: 1,
       offline_inventory_count: 1,
     });
+    expect(payload.workflow_governance_handoff).toMatchObject({
+      workflow_governance_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
+      workflow_catalog_gap_href: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflow_catalog_gap_summary: "catalog gap · native.catalog-gap",
+      legacy_auth_handoff: {
+        binding_chip_label: "3 legacy bindings",
+        status_chip_label: "publish auth blocker",
+      },
+    });
+    expect(payload.workflow_governance_handoff?.workflow_catalog_gap_detail).toContain(
+      "继续对照当前 legacy publish auth cleanup、governance export 与 publish activity export。"
+    );
     expect(payload.checklist.map((item) => item.key)).toEqual([
       "draft_cleanup",
       "published_follow_up",
       "offline_inventory",
     ]);
     expect(payload.buckets.draft_candidates[0]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflow_detail_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: "missing_tool",
+      definition_issue: "legacy_publish_auth",
     });
     expect(payload.buckets.published_blockers[0]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflow_detail_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: "missing_tool",
+      definition_issue: "legacy_publish_auth",
     });
     expect(payload.buckets.offline_inventory[0]?.workflow_follow_up).toEqual({
-      workflow_detail_href: "/workflows/workflow-1?definition_issue=missing_tool",
+      workflow_detail_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
       workflow_detail_label: "回到 workflow 编辑器",
-      definition_issue: "missing_tool",
+      definition_issue: "legacy_publish_auth",
     });
 
     const jsonl = serializeWorkflowPublishLegacyAuthCleanupExportJsonl({
@@ -147,15 +166,20 @@ describe("workflow publish legacy auth cleanup helpers", () => {
         workflow_id: "workflow-1",
         workflow_name: "Demo workflow",
       },
+      workflow_governance_handoff: {
+        workflow_governance_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
+        workflow_catalog_gap_href: "/workflows/workflow-1?definition_issue=missing_tool",
+        workflow_catalog_gap_summary: "catalog gap · native.catalog-gap",
+      },
     });
     expect(lines[1]).toMatchObject({
       record_type: "legacy_publish_auth_binding",
       bucket: "draft_candidates",
       bindingId: "binding-draft",
       workflow_follow_up: {
-        workflow_detail_href: "/workflows/workflow-1?definition_issue=missing_tool",
+        workflow_detail_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
         workflow_detail_label: "回到 workflow 编辑器",
-        definition_issue: "missing_tool",
+        definition_issue: "legacy_publish_auth",
       },
     });
     expect(lines[3]).toMatchObject({
@@ -163,10 +187,48 @@ describe("workflow publish legacy auth cleanup helpers", () => {
       bucket: "offline_inventory",
       bindingId: "binding-offline",
       workflow_follow_up: {
-        workflow_detail_href: "/workflows/workflow-1?definition_issue=missing_tool",
+        workflow_detail_href: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
         workflow_detail_label: "回到 workflow 编辑器",
-        definition_issue: "missing_tool",
+        definition_issue: "legacy_publish_auth",
       },
+    });
+  });
+
+  it("keeps scoped workflow follow-up links inside the export handoff", () => {
+    const payload = buildWorkflowPublishLegacyAuthCleanupExportPayload({
+      workflowId: "workflow-1",
+      workflowName: "Demo workflow",
+      workflowDetailHref: "/workflows/workflow-1?needs_follow_up=true&starter=starter-1",
+      workflow: {
+        definition_issues: [],
+        tool_governance: {
+          referenced_tool_ids: ["native.catalog-gap"],
+          missing_tool_ids: ["native.catalog-gap"],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0,
+        },
+        legacy_auth_governance: {
+          binding_count: 1,
+          draft_candidate_count: 0,
+          published_blocker_count: 1,
+          offline_inventory_count: 0,
+        },
+      },
+      bindings: [buildBinding({ id: "binding-live", lifecycle_status: "published" })],
+      exportedAt: "2026-03-24T08:30:00Z",
+    });
+
+    expect(payload.workflow_governance_handoff).toMatchObject({
+      workflow_governance_href:
+        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&definition_issue=legacy_publish_auth",
+      workflow_catalog_gap_href:
+        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&definition_issue=missing_tool",
+    });
+    expect(payload.buckets.published_blockers[0]?.workflow_follow_up).toEqual({
+      workflow_detail_href:
+        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&definition_issue=legacy_publish_auth",
+      workflow_detail_label: "回到 workflow 编辑器",
+      definition_issue: "legacy_publish_auth",
     });
   });
 

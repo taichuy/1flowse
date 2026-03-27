@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowPublishLegacyAuthCleanupCard } from "@/components/workflow-publish-legacy-auth-cleanup-card";
 import type { CleanupLegacyPublishedEndpointBindingsState } from "@/app/actions/publish";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
+import type { WorkflowPublishLegacyAuthCleanupWorkflowLike } from "@/lib/workflow-publish-legacy-auth-cleanup";
 import { buildLegacyPublishUnsupportedAuthIssueFixture } from "@/lib/workflow-publish-legacy-auth-test-fixtures";
 
 type MockActionState = Record<string, unknown>;
@@ -59,6 +60,27 @@ function buildBinding(
   };
 }
 
+function buildWorkflow(
+  overrides: Partial<WorkflowPublishLegacyAuthCleanupWorkflowLike> = {}
+): WorkflowPublishLegacyAuthCleanupWorkflowLike {
+  return {
+    definition_issues: [],
+    tool_governance: {
+      referenced_tool_ids: [],
+      missing_tool_ids: [],
+      governed_tool_count: 0,
+      strong_isolation_tool_count: 0,
+    },
+    legacy_auth_governance: {
+      binding_count: 3,
+      draft_candidate_count: 1,
+      published_blocker_count: 1,
+      offline_inventory_count: 1,
+    },
+    ...overrides,
+  };
+}
+
 describe("WorkflowPublishLegacyAuthCleanupCard", () => {
   beforeEach(() => {
     actionStateQueue = [];
@@ -69,6 +91,15 @@ describe("WorkflowPublishLegacyAuthCleanupCard", () => {
       createElement(WorkflowPublishLegacyAuthCleanupCard, {
         workflowId: "workflow-1",
         workflowName: "Demo workflow",
+        workflowDetailHref: "/workflows/workflow-1?needs_follow_up=true&starter=starter-1",
+        workflow: buildWorkflow({
+          tool_governance: {
+            referenced_tool_ids: ["native.catalog-gap"],
+            missing_tool_ids: ["native.catalog-gap"],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0,
+          },
+        }),
         bindings: [
           buildBinding({ id: "binding-draft", workflow_version: "1.2.0", lifecycle_status: "draft" }),
           buildBinding({ id: "binding-live", workflow_version: "1.1.0", lifecycle_status: "published" }),
@@ -90,6 +121,21 @@ describe("WorkflowPublishLegacyAuthCleanupCard", () => {
     expect(html).toContain("导出 JSON 清单");
     expect(html).toContain("导出 JSONL 清单");
     expect(html).toContain("批量下线 legacy draft bindings");
+    expect(html).toContain("Workflow handoff");
+    expect(html).toContain("Workflow governance");
+    expect(html).toContain("catalog gap · native.catalog-gap");
+    expect(html).toContain(
+      "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再继续对照当前 legacy publish auth cleanup、governance export 与 publish activity export。"
+    );
+    expect(html).toContain("Legacy publish auth handoff");
+    expect(html).toContain("publish auth blocker");
+    expect(html).toContain(
+      'href="/workflows/workflow-1?needs_follow_up=true&amp;starter=starter-1&amp;definition_issue=missing_tool"'
+    );
+    expect(html).toContain(
+      'href="/workflows/workflow-1?needs_follow_up=true&amp;starter=starter-1&amp;definition_issue=legacy_publish_auth"'
+    );
+    expect(html).toContain("导出的治理清单会继续保留当前 workflow 的 shared governance handoff");
   });
 
   it("keeps feedback visible after a successful bulk cleanup submission", () => {

@@ -3,12 +3,17 @@ import type {
   WorkflowPublishedEndpointItem,
   WorkflowPublishedEndpointLegacyAuthCleanupResult
 } from "@/lib/get-workflow-publish";
-import type { WorkflowDetail } from "@/lib/get-workflows";
+import type { WorkflowDetail, WorkflowLegacyAuthGovernanceSummary } from "@/lib/get-workflows";
 import {
   buildLegacyPublishAuthModeContractSummary,
   buildLegacyPublishAuthModeFollowUp,
   resolveLegacyPublishAuthModeContract
 } from "@/lib/legacy-publish-auth-contract";
+import {
+  buildWorkflowCatalogGapDetail,
+  buildWorkflowGovernanceHandoff,
+  type WorkflowGovernanceHandoff,
+} from "@/lib/workflow-governance-handoff";
 import {
   appendWorkflowLibraryViewStateForWorkflow,
   resolveWorkflowLibraryViewStateForWorkflow,
@@ -61,6 +66,7 @@ export type WorkflowPublishLegacyAuthCleanupExportPayload = {
     published_blocker_count: number;
     offline_inventory_count: number;
   };
+  workflow_governance_handoff: WorkflowPublishLegacyAuthCleanupExportWorkflowGovernanceHandoff | null;
   checklist: WorkflowPublishLegacyAuthCleanupChecklistItem[];
   buckets: {
     draft_candidates: WorkflowPublishLegacyAuthCleanupBindingItem[];
@@ -73,6 +79,18 @@ export type WorkflowPublishLegacyAuthCleanupWorkflowLike = Pick<
   WorkflowDetail,
   "definition_issues" | "tool_governance" | "legacy_auth_governance"
 >;
+
+export type WorkflowPublishLegacyAuthCleanupExportWorkflowGovernanceHandoff = {
+  workflow_governance_href: string | null;
+  workflow_catalog_gap_href: string | null;
+  workflow_catalog_gap_summary: string | null;
+  workflow_catalog_gap_detail: string | null;
+  legacy_auth_handoff: {
+    binding_chip_label: string;
+    status_chip_label: string;
+    detail: string;
+  } | null;
+};
 
 export type WorkflowPublishLegacyAuthCleanupSurface = {
   shouldRender: boolean;
@@ -96,7 +114,8 @@ export type WorkflowPublishLegacyAuthCleanupSurface = {
 };
 
 function buildWorkflowPublishLegacyAuthCleanupDefaultWorkflowFollowUp(
-  workflowId: string
+  workflowId: string,
+  workflowDetailHref?: string | null
 ): WorkflowPublishLegacyAuthCleanupWorkflowFollowUp {
   const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
     workflowId,
@@ -104,7 +123,7 @@ function buildWorkflowPublishLegacyAuthCleanupDefaultWorkflowFollowUp(
   });
 
   return {
-    workflow_detail_href: workflowDetailLink.href,
+    workflow_detail_href: workflowDetailHref ?? workflowDetailLink.href,
     workflow_detail_label: workflowDetailLink.label,
     definition_issue: null,
   };
@@ -113,25 +132,31 @@ function buildWorkflowPublishLegacyAuthCleanupDefaultWorkflowFollowUp(
 function buildWorkflowPublishLegacyAuthCleanupWorkflowFollowUp({
   workflowId,
   workflow,
+  workflowDetailHref = null,
 }: {
   workflowId: string;
   workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
+  workflowDetailHref?: string | null;
 }): WorkflowPublishLegacyAuthCleanupWorkflowFollowUp {
   if (!workflow) {
-    return buildWorkflowPublishLegacyAuthCleanupDefaultWorkflowFollowUp(workflowId);
+    return buildWorkflowPublishLegacyAuthCleanupDefaultWorkflowFollowUp(
+      workflowId,
+      workflowDetailHref
+    );
   }
 
   const workflowDetailLink = buildAuthorFacingWorkflowDetailLinkSurface({
     workflowId,
     variant: "editor",
   });
+  const resolvedWorkflowDetailHref = workflowDetailHref ?? workflowDetailLink.href;
   const viewState = resolveWorkflowLibraryViewStateForWorkflow(workflow, {
     definitionIssue: null,
   });
 
   return {
     workflow_detail_href: appendWorkflowLibraryViewStateForWorkflow(
-      workflowDetailLink.href,
+      resolvedWorkflowDetailHref,
       workflow,
       { definitionIssue: null }
     ),
@@ -270,6 +295,51 @@ function formatBindingLabelPreview(bindings: WorkflowPublishLegacyAuthCleanupBin
   return `${labels.join("、")} 等 ${bindings.length} 条 binding`;
 }
 
+function buildWorkflowPublishLegacyAuthCleanupLegacyAuthSummary(
+  surface: Pick<
+    WorkflowPublishLegacyAuthCleanupSurface,
+    "candidateBindings" | "publishedBindings" | "offlineBindings"
+  >
+): WorkflowLegacyAuthGovernanceSummary | null {
+  const bindingCount =
+    surface.candidateBindings.length +
+    surface.publishedBindings.length +
+    surface.offlineBindings.length;
+
+  if (bindingCount <= 0) {
+    return null;
+  }
+
+  return {
+    binding_count: bindingCount,
+    draft_candidate_count: surface.candidateBindings.length,
+    published_blocker_count: surface.publishedBindings.length,
+    offline_inventory_count: surface.offlineBindings.length,
+  };
+}
+
+function serializeWorkflowPublishLegacyAuthCleanupGovernanceHandoff(
+  handoff: WorkflowGovernanceHandoff
+): WorkflowPublishLegacyAuthCleanupExportWorkflowGovernanceHandoff | null {
+  if (!handoff.workflowCatalogGapSummary && !handoff.legacyAuthHandoff) {
+    return null;
+  }
+
+  return {
+    workflow_governance_href: handoff.workflowGovernanceHref,
+    workflow_catalog_gap_href: handoff.workflowCatalogGapHref,
+    workflow_catalog_gap_summary: handoff.workflowCatalogGapSummary,
+    workflow_catalog_gap_detail: handoff.workflowCatalogGapDetail,
+    legacy_auth_handoff: handoff.legacyAuthHandoff
+      ? {
+          binding_chip_label: handoff.legacyAuthHandoff.bindingChipLabel,
+          status_chip_label: handoff.legacyAuthHandoff.statusChipLabel,
+          detail: handoff.legacyAuthHandoff.detail,
+        }
+      : null,
+  };
+}
+
 function buildChecklistItems(
   candidateBindings: WorkflowPublishLegacyAuthCleanupBindingItem[],
   publishedBindings: WorkflowPublishLegacyAuthCleanupBindingItem[],
@@ -397,6 +467,39 @@ export function buildWorkflowPublishLegacyAuthCleanupSurface(
   };
 }
 
+export function buildWorkflowPublishLegacyAuthCleanupGovernanceHandoff({
+  workflowId,
+  workflowName,
+  workflow = null,
+  workflowDetailHref = null,
+  bindings,
+}: {
+  workflowId: string;
+  workflowName: string;
+  workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
+  workflowDetailHref?: string | null;
+  bindings: WorkflowPublishedEndpointItem[];
+}) {
+  const surface = buildWorkflowPublishLegacyAuthCleanupSurface(bindings);
+  const legacyAuthGovernance =
+    workflow?.legacy_auth_governance ??
+    buildWorkflowPublishLegacyAuthCleanupLegacyAuthSummary(surface);
+
+  return buildWorkflowGovernanceHandoff({
+    workflowId,
+    workflowName,
+    workflowDetailHref,
+    toolGovernance: workflow?.tool_governance ?? null,
+    legacyAuthGovernance,
+    workflowCatalogGapDetail: buildWorkflowCatalogGapDetail({
+      toolGovernance: workflow?.tool_governance ?? null,
+      subjectLabel: "publish panel",
+      returnDetail:
+        "先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再继续对照当前 legacy publish auth cleanup、governance export 与 publish activity export。",
+    }),
+  });
+}
+
 export function buildWorkflowPublishLegacyAuthCleanupExportFilename(
   workflowName: string,
   format: WorkflowPublishLegacyAuthCleanupExportFormat
@@ -409,18 +512,28 @@ export function buildWorkflowPublishLegacyAuthCleanupExportPayload({
   workflowName,
   workflow = null,
   bindings,
+  workflowDetailHref = null,
   exportedAt = new Date().toISOString(),
 }: {
   workflowId: string;
   workflowName: string;
   workflow?: WorkflowPublishLegacyAuthCleanupWorkflowLike | null;
   bindings: WorkflowPublishedEndpointItem[];
+  workflowDetailHref?: string | null;
   exportedAt?: string;
 }): WorkflowPublishLegacyAuthCleanupExportPayload {
   const surface = buildWorkflowPublishLegacyAuthCleanupSurface(bindings);
   const workflowFollowUp = buildWorkflowPublishLegacyAuthCleanupWorkflowFollowUp({
     workflowId,
     workflow,
+    workflowDetailHref,
+  });
+  const workflowGovernanceHandoff = buildWorkflowPublishLegacyAuthCleanupGovernanceHandoff({
+    workflowId,
+    workflowName,
+    workflow,
+    workflowDetailHref,
+    bindings,
   });
 
   return {
@@ -439,6 +552,9 @@ export function buildWorkflowPublishLegacyAuthCleanupExportPayload({
       published_blocker_count: surface.publishedBindings.length,
       offline_inventory_count: surface.offlineBindings.length,
     },
+    workflow_governance_handoff: serializeWorkflowPublishLegacyAuthCleanupGovernanceHandoff(
+      workflowGovernanceHandoff
+    ),
     checklist: surface.checklistItems,
     buckets: {
       draft_candidates: applyWorkflowFollowUpToBindings(
@@ -483,6 +599,7 @@ export function serializeWorkflowPublishLegacyAuthCleanupExportJsonl(
         auth_mode_contract: payload.auth_mode_contract,
         workflow: payload.workflow,
         summary: payload.summary,
+        workflow_governance_handoff: payload.workflow_governance_handoff,
         checklist: payload.checklist,
       },
       null,
