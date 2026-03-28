@@ -35,7 +35,7 @@
 5. [docs/technical-design-supplement.md](/E:/code/taichuCode/7flows/docs/technical-design-supplement.md)
 6. [docs/dev/team-conventions.md](/E:/code/taichuCode/7flows/docs/dev/team-conventions.md)
 7. [.agents/skills/README.md](/E:/code/taichuCode/7flows/.agents/skills/README.md)
-8. 需要时再读 `docs/.private/` 下当前开发者自己的本地连续性文档
+8. 需要时再读 `docs/.private/AGENTS.md` 与它指向的当前开发者本地连续性文档
 
 ## 本地开发
 

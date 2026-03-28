@@ -8,13 +8,15 @@
 
 - 共享规则写在根 `AGENTS.md`、目录级 `AGENTS.md`、本文与 `docs/adr/`。
 - 专项工作流写在 `.agents/skills/`，并通过 `.agents/skills/README.md` 维护索引与使用案例。
-- 当前开发者自己的稳定偏好、目标账本、下一步规划和按日期留痕写在 `docs/.private/`，不得作为共享事实来源。
+- 当前开发者自己的稳定偏好、目标账本、下一步规划和按日期留痕写在 `docs/.private/`，如存在 `docs/.private/AGENTS.md` 则由它充当本地私有入口；这些内容不得作为共享事实来源。
 - 共享仓库不写个人启动提示词、机器路径、临时讨论稿或按日期开发流水。
+- 共享文档只保留指向 `.private` 的最小链路说明，不展开个人 prompt、任务卡结构或本地多 Agent 接力细节。
 - `docs/.private/` 初始化为当前开发者自己的本地 git 仓库作为时序记忆，但不配置共享远端，也不改变它的私有属性，每次开发结束应该自动作为开发日志提交到本地git，但是不纳入共享仓库。
 
 ## AI 协作主循环
 
 - 开始任务时，先读根 `AGENTS.md`、命中目录的 `AGENTS.md`、相关共享文档与命中的技能。
+- 如果存在 `docs/.private/AGENTS.md`，先按它给出的本地入口继续读取 `user-preferences.md`、`runtime-foundation.md`、`history/` 与本地多 Agent 交接文件。
 - 如果存在 `docs/.private/runtime-foundation.md`，先比较“当前用户输入目标”与“本地目标账本”是否一致。
 - 如果是同一目标下的继续推进，不更新目标记录。
 - 如果目标明显偏移，先询问用户是更新主目标还是新增附加目标，再改本地记录。

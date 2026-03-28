@@ -28,6 +28,7 @@
    - `README.md`
 4. 命中的 `.agents/skills/*/SKILL.md`
 5. 当前开发者自己的本地连续性文档
+   - `docs/.private/AGENTS.md`
    - `docs/.private/user-preferences.md`
    - `docs/.private/runtime-foundation.md`
    - `docs/.private/history/`
@@ -35,7 +36,7 @@
 补充约定：
 
 - `docs/.taichuy/` 只用于本地讨论草稿，默认不是事实入口，只有用户明确要求时再读。
-- `docs/.private/` 只反映当前本地开发者自己的连续性记忆，不是共享事实来源。
+- `docs/.private/` 只反映当前本地开发者自己的连续性记忆，不是共享事实来源；如存在 `docs/.private/AGENTS.md`，先把它视为本地私有入口，再按它的指引继续下钻。
 - 如果设计文档与当前实现冲突，优先以代码、`docs/dev/team-conventions.md` 和有效 ADR 反映的当前共享事实为准，然后决定修实现还是补文档。
 
 ## 3. 规则应该写在哪
@@ -45,7 +46,7 @@
 - 团队级共享协作约定：`docs/dev/team-conventions.md`
 - 长期保留“背景 / 决策 / 后果”的事项：`docs/adr/`
 - 可复用的专项流程与检查清单：`.agents/skills/`
-- 当前开发者自己的稳定偏好、目标、时序记忆：`docs/.private/`
+- 当前开发者自己的稳定偏好、目标、时序记忆与本地多 Agent 协作入口：`docs/.private/`
 
 不要把个人偏好、启动提示词、机器路径和一次性口头要求写回共享仓库；共享文档优先做链式指引，不重复搬运整段规则。
 
@@ -101,12 +102,14 @@
 
 ## 7. AI 协作默认工作方式
 
+- 如果 `docs/.private/AGENTS.md` 存在，先按它的本地入口说明读取 `user-preferences.md`、`runtime-foundation.md`、`history/` 和本地多 Agent 交接文件。
 - 如果 `docs/.private/runtime-foundation.md` 存在，先比较“当前用户输入目标”与“本地记录目标”是否一致。
 - 如果只是同一目标下的继续推进，不更新目标记录，直接执行。
 - 如果目标明显漂移，先和用户确认是“更新主目标”还是“新增附加目标”，再改本地目标记录。
 - 当方向仍有多种可行方案时，先基于代码现实列出候选方案、好处、代价和推荐方案，再进入实现。
 - 任务规划不要切得过细；优先先打通一个模块或链路闭环，再根据测试与回归结果修复剩余问题。
 - 共享文档优先提供短链入口、明确边界和索引，不堆重复说明。
+- 本地多 Agent 交接、角色提示词、任务卡和评测记录默认放在 `docs/.private/`，不要把这些细节重新抬成共享规则。
 - `docs/.private/runtime-foundation.md` 与下一步规划中的时间统一使用 `YYYY-MM-DD HH:mm`。
 - `docs/.private/` 可以初始化为当前开发者本地 git 仓库作为时序记忆，但不得配置共享远程，也不得把其中内容重新抬成共享事实。
 
