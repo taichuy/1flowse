@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
@@ -39,7 +39,8 @@ import {
 } from "@/components/workflow-editor-workbench/persist-blockers";
 import {
   applyRunOverlayToNodes,
-  WORKFLOW_EDITOR_NODE_TYPES
+  WorkflowCanvasNode,
+  type WorkflowCanvasQuickAddOption
 } from "@/components/workflow-editor-workbench/workflow-canvas-node";
 import { useWorkflowEditorGraph } from "@/components/workflow-editor-workbench/use-workflow-editor-graph";
 import { useWorkflowEditorPersistence } from "@/components/workflow-editor-workbench/use-workflow-editor-persistence";
@@ -86,6 +87,8 @@ export function WorkflowEditorWorkbench({
   hasScopedWorkspaceStarterFilters = false,
   workspaceStarterGovernanceQueryScope = null
 }: WorkflowEditorWorkbenchProps) {
+  const sidebarPreferenceStorageKey = "sevenflows.editor.sidebarCollapsed";
+  const inspectorPreferenceStorageKey = "sevenflows.editor.inspectorCollapsed";
   const editorNodeLibrary = getPaletteNodeCatalog(nodeCatalog);
   const plannedNodeLibrary = getPlannedNodeCatalog(nodeCatalog);
   const [message, setMessage] = useState<string | null>(null);
@@ -103,6 +106,38 @@ export function WorkflowEditorWorkbench({
     useState<string>(persistedDefinitionSignature);
   const [validationFocusItem, setValidationFocusItem] =
     useState<WorkflowValidationNavigatorItem | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
+  const [hasLoadedPanelPreferences, setHasLoadedPanelPreferences] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const nextSidebarCollapsed = window.localStorage.getItem(sidebarPreferenceStorageKey) === "true";
+    const nextInspectorCollapsed =
+      window.localStorage.getItem(inspectorPreferenceStorageKey) === "true";
+
+    setIsSidebarCollapsed(nextSidebarCollapsed);
+    setIsInspectorCollapsed(nextInspectorCollapsed);
+    setHasLoadedPanelPreferences(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedPanelPreferences || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(sidebarPreferenceStorageKey, String(isSidebarCollapsed));
+    window.localStorage.setItem(inspectorPreferenceStorageKey, String(isInspectorCollapsed));
+  }, [
+    hasLoadedPanelPreferences,
+    inspectorPreferenceStorageKey,
+    isInspectorCollapsed,
+    isSidebarCollapsed,
+    sidebarPreferenceStorageKey
+  ]);
 
   const graph = useWorkflowEditorGraph({
     workflow,
@@ -224,8 +259,46 @@ export function WorkflowEditorWorkbench({
     runOverlay.selectedRunDetail,
     runOverlay.selectedRunTrace
   );
+  const canvasQuickAddOptions = useMemo<WorkflowCanvasQuickAddOption[]>(
+    () =>
+      editorNodeLibrary
+        .filter((item) => item.type !== "trigger")
+        .map((item) => ({
+          type: item.type,
+          label: item.label,
+          description: item.description,
+          capabilityGroup: item.capabilityGroup
+        })),
+    [editorNodeLibrary]
+  );
+  const handleCanvasQuickAdd = graph.handleAddNode;
+  const handleCanvasDeleteNode = graph.handleDeleteNode;
+  const handleCanvasOpenConfig = graph.focusNode;
+  const canvasNodeTypes = useMemo(
+    () => ({
+      workflowNode: (props: ComponentProps<typeof WorkflowCanvasNode>) => (
+        <WorkflowCanvasNode
+          {...props}
+          quickAddOptions={canvasQuickAddOptions}
+          onDeleteNode={(nodeId) => handleCanvasDeleteNode(nodeId)}
+          onOpenConfig={(nodeId) => handleCanvasOpenConfig(nodeId)}
+          onQuickAdd={(sourceNodeId, type) =>
+            handleCanvasQuickAdd(type, { sourceNodeId })
+          }
+        />
+      )
+    }),
+    [canvasQuickAddOptions, handleCanvasDeleteNode, handleCanvasOpenConfig, handleCanvasQuickAdd]
+  );
   const selectedNode = displayedNodes.find((node) => node.id === graph.selectedNodeId) ?? null;
   const selectedEdge = graph.edges.find((edge) => edge.id === graph.selectedEdgeId) ?? null;
+  const editorWorkspaceClassName = [
+    "editor-workspace",
+    isSidebarCollapsed ? "sidebar-collapsed" : null,
+    isInspectorCollapsed ? "inspector-collapsed" : null
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <ReactFlowProvider>
@@ -262,131 +335,139 @@ export function WorkflowEditorWorkbench({
           createWorkflowHref={createWorkflowHref}
           workspaceStarterLibraryHref={workspaceStarterLibraryHref}
           hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
+          isSidebarCollapsed={isSidebarCollapsed}
+          isInspectorCollapsed={isInspectorCollapsed}
+          onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
+          onToggleInspector={() => setIsInspectorCollapsed((current) => !current)}
           onSave={persistence.handleSave}
           onSaveAsWorkspaceStarter={persistence.handleSaveAsWorkspaceStarter}
         />
 
-        <section className="editor-workspace">
-          <WorkflowEditorSidebar
-            currentHref={currentEditorHref}
-            workflowId={workflow.id}
-            workflowName={graph.workflowName}
-            workflows={workflows}
-            nodeSourceLanes={nodeSourceLanes}
-            toolSourceLanes={toolSourceLanes}
-            editorNodeLibrary={editorNodeLibrary}
-            plannedNodeLibrary={plannedNodeLibrary}
-            unsupportedNodes={validation.unsupportedNodes}
-            message={message}
-            messageTone={messageTone}
-            messageKind={messageKind}
-            savedWorkspaceStarter={savedWorkspaceStarter}
-            persistBlockerSummary={persistBlockerSummary}
-            persistBlockers={validation.persistBlockers}
-            persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
-            executionPreflightMessage={executionPreflightMessage}
-            toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
-            focusedValidationItem={validationFocusItem}
-            preflightValidationItem={preflightValidationItem}
-            validationNavigatorItems={validation.validationNavigatorItems}
-            runs={runOverlay.availableRuns}
-            selectedRunId={runOverlay.selectedRunId}
-            run={runOverlay.selectedRunDetail}
-            runSnapshot={runOverlay.selectedRunSnapshot}
-            trace={runOverlay.selectedRunTrace}
-            traceError={runOverlay.runOverlayError}
-            selectedNodeId={graph.selectedNodeId}
-            callbackWaitingAutomation={callbackWaitingAutomation}
-            sandboxReadiness={sandboxReadiness}
-            workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
-            createWorkflowHref={createWorkflowHref}
-            workspaceStarterLibraryHref={workspaceStarterLibraryHref}
-            hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
-            isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
-            isRefreshingRuns={runOverlay.isRefreshingRuns}
-            onAddNode={graph.handleAddNode}
-            onNavigateValidationIssue={persistence.handleNavigateValidationIssue}
-            onSelectRunId={runOverlay.setSelectedRunId}
-            onRefreshRuns={runOverlay.refreshRecentRuns}
-          />
+        <section className={editorWorkspaceClassName}>
+          {isSidebarCollapsed ? null : (
+            <WorkflowEditorSidebar
+              currentHref={currentEditorHref}
+              workflowId={workflow.id}
+              workflowName={graph.workflowName}
+              workflows={workflows}
+              nodeSourceLanes={nodeSourceLanes}
+              toolSourceLanes={toolSourceLanes}
+              editorNodeLibrary={editorNodeLibrary}
+              plannedNodeLibrary={plannedNodeLibrary}
+              unsupportedNodes={validation.unsupportedNodes}
+              message={message}
+              messageTone={messageTone}
+              messageKind={messageKind}
+              savedWorkspaceStarter={savedWorkspaceStarter}
+              persistBlockerSummary={persistBlockerSummary}
+              persistBlockers={validation.persistBlockers}
+              persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
+              executionPreflightMessage={executionPreflightMessage}
+              toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
+              focusedValidationItem={validationFocusItem}
+              preflightValidationItem={preflightValidationItem}
+              validationNavigatorItems={validation.validationNavigatorItems}
+              runs={runOverlay.availableRuns}
+              selectedRunId={runOverlay.selectedRunId}
+              run={runOverlay.selectedRunDetail}
+              runSnapshot={runOverlay.selectedRunSnapshot}
+              trace={runOverlay.selectedRunTrace}
+              traceError={runOverlay.runOverlayError}
+              selectedNodeId={graph.selectedNodeId}
+              callbackWaitingAutomation={callbackWaitingAutomation}
+              sandboxReadiness={sandboxReadiness}
+              workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
+              createWorkflowHref={createWorkflowHref}
+              workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+              hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
+              isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
+              isRefreshingRuns={runOverlay.isRefreshingRuns}
+              onAddNode={graph.handleAddNode}
+              onNavigateValidationIssue={persistence.handleNavigateValidationIssue}
+              onSelectRunId={runOverlay.setSelectedRunId}
+              onRefreshRuns={runOverlay.refreshRecentRuns}
+            />
+          )}
 
           <WorkflowEditorCanvas
             nodes={displayedNodes}
             edges={graph.edges}
-            nodeTypes={WORKFLOW_EDITOR_NODE_TYPES}
+            nodeTypes={canvasNodeTypes}
             onNodesChange={graph.onNodesChange}
             onEdgesChange={graph.onEdgesChange}
             onConnect={graph.onConnect}
             onSelectionChange={graph.handleSelectionChange}
           />
 
-          <aside className="editor-inspector">
-            <WorkflowEditorInspector
-              currentHref={currentEditorHref}
-              selectedNode={selectedNode}
-              selectedEdge={selectedEdge}
-              nodes={graph.nodes}
-              edges={graph.edges}
-              tools={tools}
-              adapters={adapters}
-              nodeConfigText={graph.nodeConfigText}
-              onNodeConfigTextChange={graph.setNodeConfigText}
-              onApplyNodeConfigJson={graph.applyNodeConfigJson}
-              onNodeNameChange={graph.handleNodeNameChange}
-              onNodeConfigChange={graph.handleSelectedNodeConfigChange}
-              onNodeInputSchemaChange={graph.updateNodeInputSchema}
-              onNodeOutputSchemaChange={graph.updateNodeOutputSchema}
-              onNodeRuntimePolicyUpdate={graph.updateNodeRuntimePolicy}
-              onNodeRuntimePolicyChange={graph.handleNodeRuntimePolicyChange}
-              workflowVersion={graph.workflowVersion}
-              availableWorkflowVersions={validation.availableWorkflowVersions}
-              workflowVariables={graph.workflowVariables}
-              workflowPublish={graph.workflowPublish}
-              onWorkflowVariablesChange={graph.updateWorkflowVariables}
-              onWorkflowPublishChange={graph.updateWorkflowPublish}
-              onDeleteSelectedNode={graph.handleDeleteSelectedNode}
-              onUpdateSelectedEdge={graph.updateSelectedEdge}
-              onDeleteSelectedEdge={graph.handleDeleteSelectedEdge}
-              highlightedNodeSection={
-                validationFocusItem?.target.scope === "node" &&
-                validationFocusItem.target.nodeId === graph.selectedNodeId
-                  ? validationFocusItem.target.section
-                  : null
-              }
-              highlightedNodeFieldPath={
-                validationFocusItem?.target.scope === "node" &&
-                validationFocusItem.target.nodeId === graph.selectedNodeId
-                  ? validationFocusItem.target.fieldPath ?? null
-                  : null
-              }
-              highlightedPublishEndpointIndex={
-                validationFocusItem?.target.scope === "publish"
-                  ? validationFocusItem.target.endpointIndex
-                  : null
-              }
-              highlightedPublishEndpointFieldPath={
-                validationFocusItem?.target.scope === "publish"
-                  ? validationFocusItem.target.fieldPath ?? null
-                  : null
-              }
-              highlightedVariableIndex={
-                validationFocusItem?.target.scope === "variables"
-                  ? validationFocusItem.target.variableIndex
-                  : null
-              }
-              highlightedVariableFieldPath={
-                validationFocusItem?.target.scope === "variables"
-                  ? validationFocusItem.target.fieldPath ?? null
-                  : null
-              }
-              focusedValidationItem={validationFocusItem}
-              persistBlockedMessage={validation.persistBlockedMessage || null}
-              persistBlockerSummary={persistBlockerSummary}
-              persistBlockers={validation.persistBlockers}
-              persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
-              sandboxReadiness={sandboxReadiness}
-            />
-          </aside>
+          {isInspectorCollapsed ? null : (
+            <aside className="editor-inspector">
+              <WorkflowEditorInspector
+                currentHref={currentEditorHref}
+                selectedNode={selectedNode}
+                selectedEdge={selectedEdge}
+                nodes={graph.nodes}
+                edges={graph.edges}
+                tools={tools}
+                adapters={adapters}
+                nodeConfigText={graph.nodeConfigText}
+                onNodeConfigTextChange={graph.setNodeConfigText}
+                onApplyNodeConfigJson={graph.applyNodeConfigJson}
+                onNodeNameChange={graph.handleNodeNameChange}
+                onNodeConfigChange={graph.handleSelectedNodeConfigChange}
+                onNodeInputSchemaChange={graph.updateNodeInputSchema}
+                onNodeOutputSchemaChange={graph.updateNodeOutputSchema}
+                onNodeRuntimePolicyUpdate={graph.updateNodeRuntimePolicy}
+                onNodeRuntimePolicyChange={graph.handleNodeRuntimePolicyChange}
+                workflowVersion={graph.workflowVersion}
+                availableWorkflowVersions={validation.availableWorkflowVersions}
+                workflowVariables={graph.workflowVariables}
+                workflowPublish={graph.workflowPublish}
+                onWorkflowVariablesChange={graph.updateWorkflowVariables}
+                onWorkflowPublishChange={graph.updateWorkflowPublish}
+                onDeleteSelectedNode={graph.handleDeleteSelectedNode}
+                onUpdateSelectedEdge={graph.updateSelectedEdge}
+                onDeleteSelectedEdge={graph.handleDeleteSelectedEdge}
+                highlightedNodeSection={
+                  validationFocusItem?.target.scope === "node" &&
+                  validationFocusItem.target.nodeId === graph.selectedNodeId
+                    ? validationFocusItem.target.section
+                    : null
+                }
+                highlightedNodeFieldPath={
+                  validationFocusItem?.target.scope === "node" &&
+                  validationFocusItem.target.nodeId === graph.selectedNodeId
+                    ? validationFocusItem.target.fieldPath ?? null
+                    : null
+                }
+                highlightedPublishEndpointIndex={
+                  validationFocusItem?.target.scope === "publish"
+                    ? validationFocusItem.target.endpointIndex
+                    : null
+                }
+                highlightedPublishEndpointFieldPath={
+                  validationFocusItem?.target.scope === "publish"
+                    ? validationFocusItem.target.fieldPath ?? null
+                    : null
+                }
+                highlightedVariableIndex={
+                  validationFocusItem?.target.scope === "variables"
+                    ? validationFocusItem.target.variableIndex
+                    : null
+                }
+                highlightedVariableFieldPath={
+                  validationFocusItem?.target.scope === "variables"
+                    ? validationFocusItem.target.fieldPath ?? null
+                    : null
+                }
+                focusedValidationItem={validationFocusItem}
+                persistBlockedMessage={validation.persistBlockedMessage || null}
+                persistBlockerSummary={persistBlockerSummary}
+                persistBlockers={validation.persistBlockers}
+                persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
+                sandboxReadiness={sandboxReadiness}
+              />
+            </aside>
+          )}
         </section>
       </main>
     </ReactFlowProvider>

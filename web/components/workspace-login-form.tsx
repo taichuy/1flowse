@@ -91,7 +91,7 @@ export function WorkspaceLoginForm() {
         {isSubmitting ? "登录中..." : "登录并进入工作台"}
       </button>
       <p className="workspace-muted login-helper-copy">
-        登录后先进入应用工作台；新建应用会直接衔接到 7Flows 的 xyflow 编辑器。
+        登录后先进入应用工作台；管理员可继续添加成员，新建应用会直接衔接到 xyflow 编辑器。
       </p>
       {message ? (
         <p className={`workspace-inline-message ${messageTone === "error" ? "error" : "idle"}`}>

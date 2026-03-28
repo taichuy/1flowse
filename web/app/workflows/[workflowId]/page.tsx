@@ -128,20 +128,6 @@ export default async function WorkflowEditorPage({
   } = await getWorkflowPublishGovernanceSnapshot(workflow.id, publishedEndpoints, {
     activeInvocationFilter: publishActivityFilters.governanceFetchFilter
   });
-  const nodeCount = Array.isArray(workflow.definition?.nodes)
-    ? workflow.definition.nodes.length
-    : 0;
-  const edgeCount = Array.isArray(workflow.definition?.edges)
-    ? workflow.definition.edges.length
-    : 0;
-  const workflowSignals = [
-    { label: "节点", value: String(nodeCount) },
-    { label: "连线", value: String(edgeCount) },
-    { label: "最近运行", value: String(recentRuns.length) },
-    { label: "发布端点", value: String(publishedEndpoints.length) }
-  ];
-  const activeStudioSurfaceLabel =
-    activeStudioSurface === "publish" ? "发布治理" : "画布编排";
   const workflowStageLabel =
     publishedEndpoints.length > 0 ? "publish ready" : "draft only";
 
@@ -155,49 +141,17 @@ export default async function WorkflowEditorPage({
     >
       <div className="workspace-main workflow-studio-main">
         <section className="workflow-studio-shell-bar">
-          <div className="workflow-studio-shell-copy">
-            <div className="workflow-studio-breadcrumb-row">
-              <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
-                编排中心
-              </Link>
-              <span aria-hidden="true" className="workflow-studio-breadcrumb-separator">
-                /
-              </span>
-              <span className="workflow-studio-breadcrumb-current">{workflow.name}</span>
-              <span className="workflow-studio-shell-mode">xyflow studio</span>
-            </div>
-            <div className="workflow-studio-shell-heading">
-              <div className="workflow-studio-shell-title-row">
-                <h1>{workflow.name}</h1>
-                <span className="workflow-studio-inline-tag">v{workflow.version}</span>
-                <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
-              </div>
-
-              <div className="workflow-studio-shell-actions">
-                <Link className="workflow-studio-secondary-link" href="/workspace">
-                  返回工作台
-                </Link>
-                <Link className="workflow-studio-secondary-link" href={createWorkflowHref}>
-                  新建应用
-                </Link>
-                <Link className="workflow-studio-secondary-link" href="/runs">
-                  运行诊断
-                </Link>
-              </div>
-            </div>
-            <p className="workflow-studio-shell-summary">
-              像 Dify Studio 一样把当前界面压成“画布 / 发布 / 运行”三块主动作；首屏只保留继续编排所需的关键信号，
-              避免从新建应用进入 Studio 后再看到第二层说明页。
-            </p>
-            <div className="workflow-studio-inline-metrics" aria-label="Workflow studio summary">
-              <span className="workflow-studio-inline-tag">当前视图：{activeStudioSurfaceLabel}</span>
-              {workflowSignals.map((signal) => (
-                <span className="workflow-studio-inline-signal" key={signal.label}>
-                  <strong>{signal.value}</strong>
-                  <span>{signal.label}</span>
-                </span>
-              ))}
-            </div>
+          <div className="workflow-studio-breadcrumb-row">
+            <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
+              编排中心
+            </Link>
+            <span aria-hidden="true" className="workflow-studio-breadcrumb-separator">
+              /
+            </span>
+            <span className="workflow-studio-breadcrumb-current">{workflow.name}</span>
+            <span className="workflow-studio-inline-tag">v{workflow.version}</span>
+            <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
+            <span className="workflow-studio-shell-mode">xyflow studio</span>
           </div>
 
           <nav className="workflow-studio-surface-nav" aria-label="Workflow studio surfaces">
@@ -218,8 +172,8 @@ export default async function WorkflowEditorPage({
               发布治理
             </Link>
             <span className="workflow-studio-surface-nav-spacer" aria-hidden="true" />
-            <Link className="workflow-studio-secondary-link" href={workflowLibraryHref}>
-              编排中心
+            <Link className="workflow-studio-secondary-link" href="/runs">
+              运行诊断
             </Link>
             <Link className="workflow-studio-secondary-link" href={workspaceStarterLibraryHref}>
               Starter 模板

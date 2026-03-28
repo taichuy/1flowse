@@ -44,8 +44,11 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain("Demo Workflow");
     expect(html).toContain("未保存修改");
     expect(html).toContain("3 个问题");
-    expect(html).toContain("xyflow 画布 4 个节点、3 条连线、2 个工具目录入口、1 条最近运行。");
-    expect(html).toContain("当前聚焦节点：LLM Agent");
+    expect(html).toContain("4 节点");
+    expect(html).toContain("3 连线");
+    expect(html).toContain("2 工具");
+    expect(html).toContain("1 运行");
+    expect(html).toContain("已选中：LLM Agent");
     expect(html).toContain("当前保存仍被 Publish draft 阻断。");
     expect(html).toContain("保存为模板");
     expect(html).toContain("保存");
@@ -88,8 +91,54 @@ describe("WorkflowEditorHero", () => {
 
     expect(html).toContain("Replay Workflow");
     expect(html).toContain("可继续编排");
-    expect(html).toContain("当前已挂载运行回放，可直接对照画布与运行事实。");
+    expect(html).toContain("挂载运行回放");
     expect(html).not.toContain("个问题");
     expect(html).not.toContain("workflow-editor-warning-inline");
+  });
+
+  it("switches to canvas-focused compact mode when both side rails are collapsed", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorHero, {
+        workflowId: "workflow-3",
+        workflowName: "Canvas Focus Workflow",
+        onWorkflowNameChange: () => undefined,
+        workflowVersion: "0.3.0",
+        nodesCount: 3,
+        edgesCount: 2,
+        toolsCount: 1,
+        availableRunsCount: 4,
+        isDirty: false,
+        selectedNodeLabel: null,
+        selectedEdgeId: null,
+        workflowsCount: 5,
+        selectedRunAttached: false,
+        plannedNodeLabels: [],
+        unsupportedNodes: [],
+        contractValidationIssuesCount: 0,
+        toolReferenceValidationIssuesCount: 0,
+        nodeExecutionValidationIssuesCount: 0,
+        toolExecutionValidationIssuesCount: 0,
+        publishDraftValidationIssuesCount: 0,
+        persistBlockedMessage: null,
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        isSaving: false,
+        isSavingStarter: false,
+        isSidebarCollapsed: true,
+        isInspectorCollapsed: true,
+        onToggleSidebar: () => undefined,
+        onToggleInspector: () => undefined,
+        onSave: () => undefined,
+        onSaveAsWorkspaceStarter: () => undefined
+      })
+    );
+
+    expect(html).toContain("workflow-editor-topbar canvas-focused");
+    expect(html).toContain("展开节点栏");
+    expect(html).toContain("展开属性栏");
+    expect(html).toContain("3 节点");
+    expect(html).toContain("2 连线");
+    expect(html).not.toContain("1 工具");
+    expect(html).not.toContain("4 运行");
   });
 });

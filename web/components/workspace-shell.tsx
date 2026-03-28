@@ -46,6 +46,17 @@ export function WorkspaceShell({
   const workspaceBadgeLabel = getWorkspaceBadgeLabel(workspaceName);
   const userBadgeLabel = getWorkspaceBadgeLabel(userName, "A");
   const canManageMembers = canManageWorkspaceMembers(userRole);
+  const visibleNavigationItems = navigationItems.filter((item) => {
+    if (item.key === "team" && !canManageMembers) {
+      return false;
+    }
+
+    if (!isEditorLayout) {
+      return true;
+    }
+
+    return item.key === "workspace" || item.key === "workflows" || item.key === "runs" || item.key === "team";
+  });
 
   const handleLogout = async () => {
     await fetch("/api/session/logout", {
@@ -83,9 +94,7 @@ export function WorkspaceShell({
             className={`workspace-nav ${isEditorLayout ? "workspace-nav-editor" : ""}`.trim()}
             aria-label="Workspace"
           >
-            {navigationItems
-              .filter((item) => (item.key === "team" ? canManageMembers : true))
-              .map((item) => (
+            {visibleNavigationItems.map((item) => (
               <Link
                 className={`workspace-nav-link ${item.key === activeNav ? "active" : ""}`}
                 href={item.href}

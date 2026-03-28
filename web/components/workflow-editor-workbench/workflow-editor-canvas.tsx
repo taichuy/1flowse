@@ -4,6 +4,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   type Edge,
   type Node,
@@ -44,6 +45,7 @@ export function WorkflowEditorCanvas({
       <div className="editor-canvas-card">
         <ReactFlow
           fitView
+          fitViewOptions={{ padding: 0.16, duration: 240 }}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -52,8 +54,15 @@ export function WorkflowEditorCanvas({
           onConnect={onConnect}
           onSelectionChange={onSelectionChange}
           deleteKeyCode={["Delete", "Backspace"]}
+          onlyRenderVisibleElements
+          minZoom={0.4}
+          maxZoom={1.5}
           className="editor-canvas"
         >
+          <Panel className="workflow-canvas-helper-panel" position="top-left">
+            <strong>xyflow Studio</strong>
+            <span>选中节点后可 + 插入下一节点，或用 ··· 打开配置。</span>
+          </Panel>
           <Background gap={24} size={1} />
           <MiniMap
             pannable

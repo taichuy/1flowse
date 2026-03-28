@@ -38,7 +38,7 @@ describe("LoginPage", () => {
 
     const html = renderToStaticMarkup(await LoginPage());
 
-    expect(html).toContain("先进入 7Flows Workspace，再回到 xyflow 继续编排");
+    expect(html).toContain("登录后直接进入 7Flows Workspace");
     expect(html).toContain("登录 7Flows Workspace");
     expect(html).toContain('data-component="workspace-login-form"');
   });

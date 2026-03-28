@@ -245,15 +245,17 @@ describe("WorkspacePage", () => {
     expect(html).toContain("Tool Agent");
     expect(html).toContain("全部 2");
     expect(html).toContain("搜索应用、Agent、工具链或治理焦点");
+    expect(html).toContain("应用目录");
     expect(html).toContain("创建空白应用");
     expect(html).toContain("从 Starter 模板创建");
     expect(html).toContain("推荐起点");
     expect(html).toContain("Starter ChatFlow");
-    expect(html).toContain("参考 Dify 的工作台：先筛选应用，再进入 Studio。");
+    expect(html).toContain("像 Dify 一样先浏览目录，再创建或继续进入 Studio。");
     expect(html).toContain("管理成员与权限");
-    expect(html).toContain("应用目录 · 全部 2 个应用");
-    expect(html).toContain("继续进入 xyflow");
-    expect(html).toContain("优先处理 1 个治理待办。");
+    expect(html).toContain("全部 2 个应用");
+    expect(html).toContain("治理 / 下一步");
+    expect(html).toContain("进入 Studio");
+    expect(html).toContain("治理优先");
     expect(html).toContain('href="/workflows/new"');
     expect(html).toContain('href="/workspace-starters"');
     expect(html).toContain('href="/admin/members"');
@@ -389,6 +391,56 @@ describe("WorkspacePage", () => {
     expect(html).not.toContain("ChatFlow Alpha");
     expect(html).toContain('href="/workspace?mode=agent"');
     expect(html).toContain("创建 Agent 应用");
+  });
+
+  it("orders workspace apps by latest update before rendering the directory rows", async () => {
+    vi.mocked(getServerWorkspaceContext).mockResolvedValue(buildWorkspaceContext());
+    vi.mocked(getWorkflows).mockResolvedValue([
+      {
+        id: "workflow-older",
+        name: "Older Flow",
+        version: "0.1.0",
+        status: "draft",
+        updated_at: "2026-03-28T09:30:00Z",
+        node_count: 3,
+        node_types: ["trigger", "output"],
+        publish_count: 0,
+        tool_governance: {
+          referenced_tool_ids: [],
+          missing_tool_ids: [],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        definition_issues: []
+      },
+      {
+        id: "workflow-newer",
+        name: "Newer Flow",
+        version: "0.2.0",
+        status: "draft",
+        updated_at: "2026-03-28T10:30:00Z",
+        node_count: 3,
+        node_types: ["trigger", "output"],
+        publish_count: 0,
+        tool_governance: {
+          referenced_tool_ids: [],
+          missing_tool_ids: [],
+          governed_tool_count: 0,
+          strong_isolation_tool_count: 0
+        },
+        definition_issues: []
+      }
+    ]);
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshotFixture());
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverviewFixture());
+
+    const html = renderToStaticMarkup(
+      await WorkspacePage({
+        searchParams: Promise.resolve({})
+      })
+    );
+
+    expect(html.indexOf("Newer Flow")).toBeLessThan(html.indexOf("Older Flow"));
   });
 
   it("shows starter showcase cards when the workspace has no apps yet", async () => {

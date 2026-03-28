@@ -182,8 +182,8 @@ describe("WorkflowEditorPage", () => {
     expect(html).toContain('data-component="workflow-publish-panel"');
     expect(html).toContain('data-workflow-id="workflow-1"');
     expect(html).toContain("workflow-studio-shell-bar");
-    expect(html).toContain("像 Dify Studio 一样把当前界面压成“画布 / 发布 / 运行”三块主动作");
-    expect(html).toContain("返回工作台");
+    expect(html).toContain("运行诊断");
+    expect(html).toContain("Starter 模板");
     expect(html).toContain("编排中心");
   });
 

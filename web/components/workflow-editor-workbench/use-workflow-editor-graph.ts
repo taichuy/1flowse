@@ -53,6 +53,7 @@ export function useWorkflowEditorGraph({
   const nodeActions = useWorkflowEditorNodeActions({
     nodeCatalog,
     nodes,
+    edges,
     selectedNodeId,
     setNodes,
     setEdges,
@@ -181,6 +182,7 @@ export function useWorkflowEditorGraph({
     updateNodeOutputSchema: nodeActions.updateNodeOutputSchema,
     updateNodeRuntimePolicy: nodeActions.updateNodeRuntimePolicy,
     handleNodeRuntimePolicyChange: nodeActions.handleNodeRuntimePolicyChange,
+    handleDeleteNode: nodeActions.handleDeleteNode,
     handleDeleteSelectedNode: nodeActions.handleDeleteSelectedNode,
     handleDeleteSelectedEdge,
     updateSelectedEdge,

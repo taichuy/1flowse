@@ -1,6 +1,9 @@
 "use client";
 
-import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
+import {
+  getWorkflowBusinessTrackCreateSurface,
+  type WorkflowBusinessTrack
+} from "@/lib/workflow-business-tracks";
 import type {
   WorkflowStarterTemplateId,
   WorkflowStarterTemplate,
@@ -25,6 +28,7 @@ export function WorkflowStarterBrowser({
   onSelectStarter
 }: WorkflowStarterBrowserProps) {
   const activeTrackMeta = tracks.find((track) => track.id === activeTrack) ?? tracks[0];
+  const activeTrackPresentation = getWorkflowBusinessTrackCreateSurface(activeTrackMeta.id);
 
   return (
     <div className="starter-browser-list-shell">
@@ -36,8 +40,8 @@ export function WorkflowStarterBrowser({
             type="button"
             onClick={() => onSelectTrack(track.id)}
           >
-            <span>{track.priority}</span>
-            <strong>{track.id}</strong>
+            <span>应用类型</span>
+            <strong>{getWorkflowBusinessTrackCreateSurface(track.id).label}</strong>
             <small>{track.starterCount} 个模板</small>
           </button>
         ))}
@@ -45,85 +49,85 @@ export function WorkflowStarterBrowser({
 
       <div className="starter-browser-toolbar starter-browser-toolbar-dify">
         <div className="starter-browser-toolbar-copy">
-          <p className="eyebrow">Step 1</p>
-          <h3>选择模板</h3>
+          <p className="eyebrow">应用类型</p>
+          <h3>选择一个起点</h3>
           <p className="section-copy starter-track-copy">
-            先按业务线筛选 starter，再在右侧完成命名与创建；主区只保留模板选择，不再堆来源说明。
+            {activeTrackPresentation.summary}
           </p>
         </div>
         <div className="starter-browser-toolbar-pills">
-          <span className="starter-browser-toolbar-pill">{activeTrackMeta.priority}</span>
-          <span className="starter-browser-toolbar-pill">{activeTrackMeta.id}</span>
+          <span className="starter-browser-toolbar-pill">{activeTrackPresentation.label}</span>
           <span className="starter-browser-toolbar-pill">{starters.length} 个模板</span>
-          <span className="starter-browser-toolbar-pill starter-browser-toolbar-pill-focus">
-            {activeTrackMeta.focus}
-          </span>
+          <span className="starter-browser-toolbar-pill starter-browser-toolbar-pill-focus">创建后直接进入画布</span>
         </div>
       </div>
 
       <div className="starter-list" role="list" aria-label="Workflow starter templates">
-        {starters.map((starter) => (
-          <button
-            key={starter.id}
-            className={`starter-list-row ${starter.id === selectedStarterId ? "selected" : ""}`}
-            type="button"
-            onClick={() => onSelectStarter(starter.id)}
-          >
-            <div className="starter-list-row-main">
-              <div className="starter-card-header starter-card-header-dify starter-list-row-header">
-                <div className="starter-card-identity">
-                  <span aria-hidden="true" className="starter-card-icon">
-                    {starter.name.slice(0, 1).toUpperCase()}
-                  </span>
-                  <div>
-                    <span className="starter-track">{starter.businessTrack}</span>
-                    <strong>{starter.name}</strong>
+        {starters.map((starter) => {
+          const starterTrackPresentation = getWorkflowBusinessTrackCreateSurface(starter.businessTrack);
+
+          return (
+            <button
+              key={starter.id}
+              className={`starter-list-row ${starter.id === selectedStarterId ? "selected" : ""}`}
+              type="button"
+              onClick={() => onSelectStarter(starter.id)}
+            >
+              <div className="starter-list-row-main">
+                <div className="starter-card-header starter-card-header-dify starter-list-row-header">
+                  <div className="starter-card-identity">
+                    <span aria-hidden="true" className="starter-card-icon">
+                      {starter.name.slice(0, 1).toUpperCase()}
+                    </span>
+                    <div>
+                      <span className="starter-track">{starterTrackPresentation.label}</span>
+                      <strong>{starter.name}</strong>
+                    </div>
+                  </div>
+
+                  <div className="starter-card-header-actions starter-list-row-badges">
+                    <span className="health-pill">{starter.source.shortLabel}</span>
+                    {starter.id === selectedStarterId ? (
+                      <span className="starter-selected-pill">当前模板</span>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="starter-card-header-actions starter-list-row-badges">
-                  <span className="health-pill">{starter.priority}</span>
-                  {starter.id === selectedStarterId ? (
-                    <span className="starter-selected-pill">当前模板</span>
-                  ) : null}
+                <p className="starter-card-description starter-list-row-description">{starter.description}</p>
+
+                <div className="starter-node-row starter-node-row-dify starter-list-row-labels">
+                  {starter.nodeLabels.slice(0, 4).map((nodeLabel) => (
+                    <span className="event-chip" key={`${starter.id}-${nodeLabel}`}>
+                      {nodeLabel}
+                    </span>
+                  ))}
                 </div>
               </div>
 
-              <p className="starter-card-description starter-list-row-description">{starter.description}</p>
-
-              <div className="starter-node-row starter-node-row-dify starter-list-row-labels">
-                {starter.nodeLabels.slice(0, 4).map((nodeLabel) => (
-                  <span className="event-chip" key={`${starter.id}-${nodeLabel}`}>
-                    {nodeLabel}
+              <div className="starter-list-row-side">
+                <div className="starter-meta-row starter-meta-row-dify starter-list-row-meta">
+                  <span>{starter.nodeCount} 个节点</span>
+                  <span>{starter.governedToolCount > 0 ? `${starter.governedToolCount} 个工具` : "无工具依赖"}</span>
+                  {starter.sourceGovernance ? <span>{starter.sourceGovernance.statusLabel}</span> : null}
+                  <span>
+                    {starter.sandboxGovernance.dependencyModes[0]
+                      ? `隔离 ${starter.sandboxGovernance.dependencyModes[0]}`
+                      : starter.sandboxGovernance.sandboxNodeCount > 0
+                        ? `${starter.sandboxGovernance.sandboxNodeCount} 个隔离节点`
+                        : "开箱即用"}
                   </span>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            <div className="starter-list-row-side">
-              <div className="starter-meta-row starter-meta-row-dify starter-list-row-meta">
-                <span>{starter.nodeCount} nodes</span>
-                <span>{starter.governedToolCount} governed tools</span>
-                <span>{starter.source.shortLabel}</span>
-                {starter.sourceGovernance ? <span>{starter.sourceGovernance.statusLabel}</span> : null}
-                <span>
-                  {starter.sandboxGovernance.dependencyModes[0]
-                    ? `deps ${starter.sandboxGovernance.dependencyModes[0]}`
-                    : starter.sandboxGovernance.sandboxNodeCount > 0
-                      ? `${starter.sandboxGovernance.sandboxNodeCount} sandbox`
-                      : starter.tags[0] ?? "starter"}
-                </span>
+                <div className="starter-card-footer starter-list-row-footer">
+                  <span>{starterTrackPresentation.summary}</span>
+                  <span className="starter-card-footer-action">
+                    {starter.id === selectedStarterId ? "已选中，可直接创建" : "选中后在右侧命名"}
+                  </span>
+                </div>
               </div>
-
-              <div className="starter-card-footer starter-list-row-footer">
-                <span>{starter.trackSummary}</span>
-                <span className="starter-card-footer-action">
-                  {starter.id === selectedStarterId ? "已同步到右侧配置" : "选中后在右侧创建"}
-                </span>
-              </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

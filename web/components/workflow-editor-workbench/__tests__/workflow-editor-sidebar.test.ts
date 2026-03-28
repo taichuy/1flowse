@@ -152,7 +152,6 @@ describe("WorkflowEditorSidebar", () => {
         },
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -163,6 +162,8 @@ describe("WorkflowEditorSidebar", () => {
     expect(html).toContain(
       'href="/workflows/workflow%20alpha%2Fbeta?needs_follow_up=true&amp;q=drift&amp;source_governance_kind=drifted&amp;starter=workspace-starter-1&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&amp;definition_issue=missing_tool"'
     );
+    expect(html).toContain("同域草稿 1");
+    expect(html).toContain("查看同域草稿");
   });
 
   it("prioritizes legacy publish auth scope on workflow chips when publish auth backlog still exists", () => {
@@ -220,7 +221,6 @@ describe("WorkflowEditorSidebar", () => {
         },
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -285,7 +285,6 @@ describe("WorkflowEditorSidebar", () => {
         },
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -342,7 +341,6 @@ describe("WorkflowEditorSidebar", () => {
         sandboxReadiness: buildSandboxReadiness(),
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -412,7 +410,6 @@ describe("WorkflowEditorSidebar", () => {
         sandboxReadiness: buildSandboxReadiness(),
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -461,7 +458,6 @@ describe("WorkflowEditorSidebar", () => {
         hasScopedWorkspaceStarterFilters: true,
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -536,7 +532,6 @@ describe("WorkflowEditorSidebar", () => {
         sandboxReadiness: buildSandboxReadiness(),
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,
@@ -614,7 +609,6 @@ describe("WorkflowEditorSidebar", () => {
         },
         isLoadingRunOverlay: false,
         isRefreshingRuns: false,
-        onWorkflowNameChange: () => undefined,
         onAddNode: () => undefined,
         onNavigateValidationIssue: () => undefined,
         onSelectRunId: () => undefined,

@@ -117,7 +117,8 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     getWorkflowLibrarySnapshot(),
     getSystemOverview()
   ]);
-  const appCards: WorkspaceAppCard[] = workflowSummaries.map((workflow) => {
+  const appCards: WorkspaceAppCard[] = workflowSummaries
+    .map((workflow) => {
     const mode = getWorkspaceAppModeMeta(
       inferWorkspaceAppMode({
         nodeTypes: workflow.node_types ?? []
@@ -138,27 +139,28 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
           ? "可调用"
           : "草稿可继续编排";
 
-    return {
-      id: workflow.id,
-      name: workflow.name,
-      href: `/workflows/${encodeURIComponent(workflow.id)}`,
-      status: workflow.status,
-      healthLabel,
-      mode,
-      recommendedNextStep:
-        missingToolCount > 0
-          ? `先补齐 ${missingToolCount} 个工具缺口，再进入 xyflow 继续编排。`
-          : workflow.status === "published"
-            ? "继续在 xyflow 维护版本，必要时从运行诊断核对线上调用。"
-            : "继续在 xyflow 完成节点配置、上下文授权和发布准备。",
-      track,
-      nodeCount: workflow.node_count,
-      publishCount: workflow.publish_count ?? 0,
-      updatedAt: workflow.updated_at ?? new Date(0).toISOString(),
-      missingToolCount,
-      followUpCount
-    };
-  });
+      return {
+        id: workflow.id,
+        name: workflow.name,
+        href: `/workflows/${encodeURIComponent(workflow.id)}`,
+        status: workflow.status,
+        healthLabel,
+        mode,
+        recommendedNextStep:
+          missingToolCount > 0
+            ? `先补齐 ${missingToolCount} 个工具缺口，再进入 xyflow 继续编排。`
+            : workflow.status === "published"
+              ? "继续在 xyflow 维护版本，必要时从运行诊断核对线上调用。"
+              : "继续在 xyflow 完成节点配置、上下文授权和发布准备。",
+        track,
+        nodeCount: workflow.node_count,
+        publishCount: workflow.publish_count ?? 0,
+        updatedAt: workflow.updated_at ?? new Date(0).toISOString(),
+        missingToolCount,
+        followUpCount
+      };
+    })
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
 
   const filteredApps = appCards.filter((card) => {
     const matchesMode = activeMode === "all" || card.mode.id === activeMode;

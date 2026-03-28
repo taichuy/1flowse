@@ -14,6 +14,9 @@ export type WorkflowDefinition = WorkflowDetail["definition"];
 export type WorkflowCanvasNodeData = {
   label: string;
   nodeType: string;
+  typeLabel?: string;
+  typeDescription?: string;
+  capabilityGroup?: WorkflowNodeCatalogItem["capabilityGroup"];
   config: Record<string, unknown>;
   runtimePolicy?: WorkflowNodeRuntimePolicy;
   inputSchema?: Record<string, unknown> | null;
@@ -60,10 +63,13 @@ export function createStarterWorkflowDefinition(
 export function createWorkflowNodeDraft(
   nodeCatalog: WorkflowNodeCatalogItem[],
   type: string,
-  existingNodesCount: number
+  existingNodesCount: number,
+  options?: { anchorPosition?: { x: number; y: number } }
 ) {
   const fallbackPosition = getWorkflowNodeDefaultPosition(nodeCatalog, type);
   const catalogItem = getWorkflowNodeCatalogItem(nodeCatalog, type);
+  const anchorPosition = options?.anchorPosition;
+  const basePosition = anchorPosition ?? fallbackPosition;
 
   return {
     id: createEntityId(type),
@@ -72,8 +78,8 @@ export function createWorkflowNodeDraft(
     config: withCanvasPosition(
       structuredClone(catalogItem?.defaults.config ?? {}),
       {
-        x: fallbackPosition.x + Math.max(0, existingNodesCount - 1) * 36,
-        y: fallbackPosition.y + (existingNodesCount % 3) * 44
+        x: basePosition.x + (anchorPosition ? 0 : Math.max(0, existingNodesCount - 1) * 36),
+        y: basePosition.y + (anchorPosition ? 0 : (existingNodesCount % 3) * 44)
       }
     )
   };
@@ -97,14 +103,14 @@ export function workflowDefinitionToReactFlow(
       id: node.id,
       type: "workflowNode",
       position,
-      data: {
+      data: buildWorkflowCanvasNodeData(nodeCatalog, {
         label: node.name,
         nodeType: node.type,
         config: stripCanvasMetadata(config),
         runtimePolicy: toOptionalRecord(node.runtimePolicy),
         inputSchema: toOptionalRecord(node.inputSchema),
         outputSchema: toOptionalRecord(node.outputSchema)
-      }
+      })
     } satisfies Node<WorkflowCanvasNodeData>;
   });
 
@@ -275,5 +281,275 @@ export function buildEditorEdge(
     type: "smoothstep",
     animated: false,
     data: { ...DEFAULT_EDGE_OPTIONS }
+  };
+}
+
+export function buildWorkflowCanvasNodeData(
+  nodeCatalog: WorkflowNodeCatalogItem[],
+  input: Omit<WorkflowCanvasNodeData, "typeLabel" | "typeDescription" | "capabilityGroup">
+): WorkflowCanvasNodeData {
+  const catalogItem = getWorkflowNodeCatalogItem(nodeCatalog, input.nodeType);
+
+  return {
+    ...input,
+    typeLabel: catalogItem?.label ?? input.nodeType,
+    typeDescription: catalogItem?.description ?? catalogItem?.supportSummary,
+    capabilityGroup: catalogItem?.capabilityGroup
+  };
+}
+
+export function buildWorkflowInsertedNodePosition(
+  sourcePosition: { x: number; y: number },
+  branchIndex: number
+) {
+  if (branchIndex <= 0) {
+    return {
+      x: Math.round(sourcePosition.x + 280),
+      y: Math.round(sourcePosition.y)
+    };
+  }
+
+  const verticalLane = Math.ceil(branchIndex / 2) * 156;
+  const direction = branchIndex % 2 === 1 ? 1 : -1;
+
+  return {
+    x: Math.round(sourcePosition.x + 280),
+    y: Math.round(sourcePosition.y + verticalLane * direction)
+  };
+}
+
+export function insertNodeIntoCanvasGraph({
+  nodeCatalog,
+  nodes,
+  edges,
+  type,
+  sourceNodeId
+}: {
+  nodeCatalog: WorkflowNodeCatalogItem[];
+  nodes: Array<Node<WorkflowCanvasNodeData>>;
+  edges: Array<Edge<WorkflowCanvasEdgeData>>;
+  type: string;
+  sourceNodeId?: string | null;
+}) {
+  const sourceNode = sourceNodeId
+    ? nodes.find((item) => item.id === sourceNodeId) ?? null
+    : null;
+  const outgoingEdges = sourceNode
+    ? edges.filter((edge) => edge.source === sourceNode.id)
+    : [];
+  const inlineEdge =
+    sourceNode && outgoingEdges.length === 1 && isWorkflowControlEdge(outgoingEdges[0])
+      ? outgoingEdges[0]
+      : null;
+  const inlineTargetNode = inlineEdge
+    ? nodes.find((item) => item.id === inlineEdge.target) ?? null
+    : null;
+  const shouldInsertInline = Boolean(sourceNode && inlineEdge && inlineTargetNode);
+  const outgoingEdgeCount = shouldInsertInline ? 0 : outgoingEdges.length;
+  const draft = createWorkflowNodeDraft(nodeCatalog, type, nodes.length + 1, {
+    anchorPosition: sourceNode
+      ? buildWorkflowInsertedNodePosition(sourceNode.position, outgoingEdgeCount)
+      : undefined
+  });
+  const nextNode: Node<WorkflowCanvasNodeData> = {
+    id: draft.id,
+    type: "workflowNode",
+    position: readCanvasPosition(
+      nodeCatalog,
+      toRecord(draft.config),
+      draft.type,
+      nodes.length
+    ),
+    data: buildWorkflowCanvasNodeData(nodeCatalog, {
+      label: draft.name,
+      nodeType: draft.type,
+      config: stripCanvasMetadata(draft.config)
+    }),
+    selected: true
+  };
+
+  if (shouldInsertInline && sourceNode && inlineEdge && inlineTargetNode) {
+    const downstreamNodeIds = collectWorkflowDownstreamNodeIds(inlineTargetNode.id, edges);
+    const shiftedNodes = nodes.map((node) =>
+      downstreamNodeIds.has(node.id)
+        ? {
+            ...node,
+            position: {
+              x: Math.round(node.position.x + 280),
+              y: node.position.y
+            }
+          }
+        : node
+    );
+
+    return {
+      nextNode,
+      sourceNode,
+      displacedTargetNode: inlineTargetNode,
+      insertionMode: "inline" as const,
+      nodes: [...shiftedNodes, nextNode],
+      edges: [
+        ...edges.map((edge) =>
+          edge.id === inlineEdge.id
+            ? {
+                ...edge,
+                target: nextNode.id,
+                data: cloneWorkflowCanvasEdgeData(edge.data),
+                label: edge.label
+              }
+            : edge
+        ),
+        buildEditorEdge(nextNode.id, inlineTargetNode.id)
+      ]
+    };
+  }
+
+  return {
+    nextNode,
+    sourceNode,
+    displacedTargetNode: null,
+    insertionMode: sourceNode ? ("branch" as const) : ("append" as const),
+    nodes: [...nodes, nextNode],
+    edges: sourceNode ? [...edges, buildEditorEdge(sourceNode.id, nextNode.id)] : edges
+  };
+}
+
+export function removeNodeFromCanvasGraph({
+  nodeId,
+  nodes,
+  edges
+}: {
+  nodeId: string;
+  nodes: Array<Node<WorkflowCanvasNodeData>>;
+  edges: Array<Edge<WorkflowCanvasEdgeData>>;
+}) {
+  const deletedNode = nodes.find((node) => node.id === nodeId) ?? null;
+  if (!deletedNode) {
+    return {
+      deletedNode: null,
+      upstreamNode: null,
+      downstreamNode: null,
+      deletionMode: "detached" as const,
+      nodes,
+      edges
+    };
+  }
+
+  const incomingEdges = edges.filter((edge) => edge.target === nodeId);
+  const outgoingEdges = edges.filter((edge) => edge.source === nodeId);
+  const reconnectIncomingEdge =
+    incomingEdges.length === 1 && isWorkflowReconnectableControlEdge(incomingEdges[0])
+      ? incomingEdges[0]
+      : null;
+  const reconnectOutgoingEdge =
+    outgoingEdges.length === 1 && isWorkflowReconnectableControlEdge(outgoingEdges[0])
+      ? outgoingEdges[0]
+      : null;
+  const upstreamNode = reconnectIncomingEdge
+    ? nodes.find((node) => node.id === reconnectIncomingEdge.source) ?? null
+    : null;
+  const downstreamNode = reconnectOutgoingEdge
+    ? nodes.find((node) => node.id === reconnectOutgoingEdge.target) ?? null
+    : null;
+  const canReconnectInline = Boolean(
+    reconnectIncomingEdge &&
+      reconnectOutgoingEdge &&
+      upstreamNode &&
+      downstreamNode &&
+      upstreamNode.id !== downstreamNode.id
+  );
+
+  let nextNodes = nodes.filter((node) => node.id !== nodeId);
+  let nextEdges = edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
+
+  if (canReconnectInline && upstreamNode && downstreamNode) {
+    const downstreamNodeIds = collectWorkflowDownstreamNodeIds(downstreamNode.id, nextEdges);
+    nextNodes = nextNodes.map((node) =>
+      downstreamNodeIds.has(node.id)
+        ? {
+            ...node,
+            position: {
+              x: Math.round(node.position.x - 280),
+              y: node.position.y
+            }
+          }
+        : node
+    );
+
+    if (
+      !nextEdges.some(
+        (edge) =>
+          edge.source === upstreamNode.id &&
+          edge.target === downstreamNode.id &&
+          isWorkflowControlEdge(edge)
+      )
+    ) {
+      nextEdges = [...nextEdges, buildEditorEdge(upstreamNode.id, downstreamNode.id)];
+    }
+  }
+
+  return {
+    deletedNode,
+    upstreamNode,
+    downstreamNode,
+    deletionMode: canReconnectInline ? ("inline" as const) : ("detached" as const),
+    nodes: nextNodes,
+    edges: nextEdges
+  };
+}
+
+function isWorkflowControlEdge(edge: Edge<WorkflowCanvasEdgeData>) {
+  return edge.data?.channel !== "data";
+}
+
+function isWorkflowReconnectableControlEdge(edge: Edge<WorkflowCanvasEdgeData>) {
+  if (!isWorkflowControlEdge(edge)) {
+    return false;
+  }
+
+  return !normalizeOptionalString(edge.data?.condition) &&
+    !normalizeOptionalString(edge.data?.conditionExpression)
+    ? !Array.isArray(edge.data?.mapping) || edge.data.mapping.length === 0
+    : false;
+}
+
+function collectWorkflowDownstreamNodeIds(
+  startNodeId: string,
+  edges: Array<Edge<WorkflowCanvasEdgeData>>
+) {
+  const visited = new Set<string>();
+  const queue = [startNodeId];
+
+  while (queue.length > 0) {
+    const nodeId = queue.shift();
+    if (!nodeId || visited.has(nodeId)) {
+      continue;
+    }
+
+    visited.add(nodeId);
+    edges.forEach((edge) => {
+      if (edge.source === nodeId && !visited.has(edge.target)) {
+        queue.push(edge.target);
+      }
+    });
+  }
+
+  return visited;
+}
+
+function cloneWorkflowCanvasEdgeData(
+  data?: WorkflowCanvasEdgeData
+): WorkflowCanvasEdgeData {
+  return {
+    channel: data?.channel === "data" ? "data" : "control",
+    ...(normalizeOptionalString(data?.condition)
+      ? { condition: normalizeOptionalString(data?.condition) }
+      : {}),
+    ...(normalizeOptionalString(data?.conditionExpression)
+      ? { conditionExpression: normalizeOptionalString(data?.conditionExpression) }
+      : {}),
+    ...(Array.isArray(data?.mapping)
+      ? { mapping: data.mapping.map((item) => ({ ...item })) }
+      : {})
   };
 }

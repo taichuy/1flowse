@@ -41,6 +41,10 @@ type WorkflowEditorHeroProps = {
   createWorkflowHref?: string;
   workspaceStarterLibraryHref?: string;
   hasScopedWorkspaceStarterFilters?: boolean;
+  isSidebarCollapsed?: boolean;
+  isInspectorCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+  onToggleInspector?: () => void;
   onSave: () => void;
   onSaveAsWorkspaceStarter: () => void;
 };
@@ -56,7 +60,6 @@ export function WorkflowEditorHero({
   isDirty,
   selectedNodeLabel,
   selectedEdgeId,
-  workflowsCount,
   selectedRunAttached,
   plannedNodeLabels,
   unsupportedNodes,
@@ -68,10 +71,15 @@ export function WorkflowEditorHero({
   persistBlockerSummary,
   isSaving,
   isSavingStarter,
+  isSidebarCollapsed = false,
+  isInspectorCollapsed = false,
+  onToggleSidebar,
+  onToggleInspector,
   onSave,
   onSaveAsWorkspaceStarter
 }: WorkflowEditorHeroProps) {
   const [isEditingName, setIsEditingName] = useState(false);
+  const isCanvasFocused = isSidebarCollapsed && isInspectorCollapsed;
 
   const totalIssues =
     contractValidationIssuesCount +
@@ -80,16 +88,28 @@ export function WorkflowEditorHero({
     toolExecutionValidationIssuesCount +
     publishDraftValidationIssuesCount;
   const focusSummary = selectedNodeLabel
-    ? `当前聚焦节点：${selectedNodeLabel}`
+    ? `已选中：${selectedNodeLabel}`
     : selectedEdgeId
-      ? `当前聚焦连线：${selectedEdgeId}`
+      ? `已选中连线：${selectedEdgeId}`
       : selectedRunAttached
-        ? "当前已挂载运行回放，可直接对照画布与运行事实。"
-        : `当前应用库共 ${workflowsCount} 个应用；先完成保存，再继续运行或切去发布治理。`;
-  const workflowSummary = `xyflow 画布 ${nodesCount} 个节点、${edgesCount} 条连线、${toolsCount} 个工具目录入口、${availableRunsCount} 条最近运行。`;
+        ? "挂载运行回放"
+        : "画布已就绪，可继续编排";
+  const workflowSignals = [
+    `${nodesCount} 节点`,
+    `${edgesCount} 连线`,
+    `${toolsCount} 工具`,
+    `${availableRunsCount} 运行`
+  ];
+  const visibleWorkflowSignals = isCanvasFocused ? workflowSignals.slice(0, 2) : workflowSignals;
+  const topbarClassName = [
+    "workflow-editor-topbar",
+    isCanvasFocused ? "canvas-focused" : null
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className="workflow-editor-topbar">
+    <div className={topbarClassName}>
       <div className="workflow-editor-topbar-copy">
         <div className="workflow-editor-title-row">
           {isEditingName ? (
@@ -128,7 +148,11 @@ export function WorkflowEditorHero({
         </div>
 
         <div className="workflow-editor-meta-row" aria-label="Workflow editor summary">
-          <span className="workflow-editor-meta-pill">{workflowSummary}</span>
+          {visibleWorkflowSignals.map((signal) => (
+            <span className="workflow-editor-meta-pill" key={signal}>
+              {signal}
+            </span>
+          ))}
           <span className="workflow-editor-meta-pill focus">{focusSummary}</span>
         </div>
 
@@ -141,6 +165,12 @@ export function WorkflowEditorHero({
       </div>
 
       <Space size="middle" wrap className="workflow-editor-action-row">
+        <Button type={isSidebarCollapsed ? "default" : "text"} onClick={onToggleSidebar}>
+          {isSidebarCollapsed ? "展开节点栏" : "收起节点栏"}
+        </Button>
+        <Button type={isInspectorCollapsed ? "default" : "text"} onClick={onToggleInspector}>
+          {isInspectorCollapsed ? "展开属性栏" : "收起属性栏"}
+        </Button>
         <Button icon={<SaveOutlined />} onClick={onSaveAsWorkspaceStarter} loading={isSavingStarter}>
           保存为模板
         </Button>

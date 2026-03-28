@@ -101,10 +101,11 @@ describe("WorkflowCreateWizard", () => {
       'href="/workspace?keyword=drift&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"'
     );
     expect(html).toContain("返回工作台");
-    expect(html).toContain("先选 Starter，再进入 xyflow");
-    expect(html).toContain("命名并创建");
-    expect(html).toContain("创建并进入 xyflow");
-    expect(html).toContain("选模板 → 命名 → xyflow");
+    expect(html).toContain("创建一个应用");
+    expect(html).toContain("命名后进入画布");
+    expect(html).toContain("创建并进入画布");
+    expect(html).toContain("直接打开画布继续编排");
+    expect(html).not.toContain("当前业务线");
   });
 
   it("adds missing-tool scope to existing workflow chips when the draft already has a catalog gap", () => {

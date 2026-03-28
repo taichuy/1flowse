@@ -96,31 +96,6 @@ type WorkspaceAppsWorkbenchProps = {
   };
 };
 
-function WorkspaceSummaryBar({
-  workspaceSignals,
-  compact = false
-}: {
-  workspaceSignals: WorkspaceSignal[];
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={`workspace-summary-bar workspace-summary-bar-studio${compact ? " workspace-summary-bar-inline" : ""}`}
-      aria-label="Workspace overview"
-    >
-      {workspaceSignals.map((signal) => (
-        <article
-          className={`workspace-summary-stat workspace-summary-stat-studio${compact ? " workspace-summary-stat-inline" : ""}`}
-          key={signal.label}
-        >
-          <span>{signal.label}</span>
-          <strong>{signal.value}</strong>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 function getWorkspaceScopeSummary({
   activeModeDescription,
   activeModeLabel,
@@ -154,24 +129,119 @@ function WorkspaceScopePills({ scopePills }: { scopePills: WorkspaceScopePill[] 
   );
 }
 
+function WorkspaceBrowseRail({
+  currentScopeSummary,
+  modeTabs,
+  statusFilters,
+  workspaceSignals,
+  scopePills,
+  variant = "rail"
+}: {
+  currentScopeSummary: string;
+  modeTabs: WorkspaceModeTab[];
+  statusFilters: WorkspaceStatusFilter[];
+  workspaceSignals: WorkspaceSignal[];
+  scopePills: WorkspaceScopePill[];
+  variant?: "rail" | "inline";
+}) {
+  const isInline = variant === "inline";
+
+  return (
+    <section
+      className={`workspace-filter-rail workspace-catalog-card ${isInline ? "workspace-filter-rail-inline" : ""}`.trim()}
+      aria-label="Workspace filters"
+    >
+      <div
+        className={`workspace-filter-rail-header ${isInline ? "workspace-filter-rail-header-inline" : ""}`.trim()}
+      >
+        <div className="workspace-filter-rail-copy">
+          <p className="workspace-app-card-caption">Directory</p>
+          <h2>{isInline ? "应用目录" : "筛选应用"}</h2>
+          <p className="workspace-muted workspace-card-copy">{currentScopeSummary}</p>
+        </div>
+
+        {isInline ? (
+          <div className="workspace-filter-rail-signal-grid workspace-filter-rail-signal-grid-inline">
+            {workspaceSignals.map((signal) => (
+              <article className="workspace-filter-rail-signal" key={signal.label}>
+                <span>{signal.label}</span>
+                <strong>{signal.value}</strong>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className={`workspace-filter-rail-body ${isInline ? "workspace-filter-rail-body-inline" : ""}`.trim()}>
+        <div className="workspace-filter-rail-group">
+          <span className="workspace-filter-rail-label">应用类型</span>
+          <div className="workspace-filter-rail-tab-list" aria-label="App modes">
+            {modeTabs.map((modeTab) => (
+              <Link
+                className={`workspace-filter-rail-tab ${modeTab.active ? "active" : ""}`.trim()}
+                href={modeTab.href}
+                key={modeTab.key}
+              >
+                <span>{modeTab.label}</span>
+                <strong>{modeTab.count}</strong>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="workspace-filter-rail-group">
+          <span className="workspace-filter-rail-label">状态</span>
+          <div className="workspace-filter-row workspace-filter-row-board workspace-filter-rail-chip-list">
+            {statusFilters.map((statusFilter) => (
+              <Link
+                className={`workspace-filter-chip ${statusFilter.active ? "active" : ""}`}
+                href={statusFilter.href}
+                key={statusFilter.key}
+              >
+                {statusFilter.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {!isInline ? (
+        <div className="workspace-filter-rail-group">
+          <span className="workspace-filter-rail-label">工作台信号</span>
+          <div className="workspace-filter-rail-signal-grid">
+            {workspaceSignals.map((signal) => (
+              <article className="workspace-filter-rail-signal" key={signal.label}>
+                <span>{signal.label}</span>
+                <strong>{signal.value}</strong>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {scopePills.length > 0 ? <WorkspaceScopePills scopePills={scopePills} /> : null}
+    </section>
+  );
+}
+
 function WorkspaceCreateRail({
   activeModeDescription,
   activeModeLabel,
-  compact = false,
   quickCreateEntries,
   starterHighlights,
   requestedKeyword,
   starterCount,
-  workspaceUtilityEntry
+  workspaceUtilityEntry,
+  variant = "rail"
 }: {
   activeModeDescription: string;
   activeModeLabel: string | null;
-  compact?: boolean;
   quickCreateEntries: WorkspaceQuickCreateEntry[];
   starterHighlights: WorkspaceStarterHighlight[];
   requestedKeyword: string;
   starterCount: number;
   workspaceUtilityEntry: WorkspaceQuickCreateEntry | null;
+  variant?: "rail" | "stage";
 }) {
   const primaryStarter = starterHighlights[0] ?? null;
   const [primaryEntry, ...secondaryEntries] = quickCreateEntries;
@@ -180,34 +250,45 @@ function WorkspaceCreateRail({
     activeModeLabel,
     requestedKeyword
   });
+  const isStageVariant = variant === "stage";
+  const summaryCopy = requestedKeyword
+    ? `${currentScopeSummary}，命中后直接继续进入 xyflow。`
+    : isStageVariant
+      ? "把空白应用、Starter 模板和团队协作入口压成一条创建带，创建后直接进入 xyflow。"
+      : activeModeDescription;
 
   return (
     <div
-      className={`workspace-create-rail workspace-catalog-card${compact ? " workspace-create-rail-compact" : ""}`}
+      className={`workspace-create-rail workspace-catalog-card workspace-create-rail-${variant}`}
       aria-label="Workspace create actions"
     >
-      <div className="workspace-create-rail-copy">
-        <p className="workspace-app-card-caption">Create</p>
-        <h3>{activeModeLabel ? `${activeModeLabel} 创建入口` : compact ? "新建应用" : "像 Dify 一样从应用入口开始"}</h3>
-        <p className="workspace-muted workspace-card-copy workspace-create-rail-summary">
-          {requestedKeyword ? `${currentScopeSummary}，命中后直接继续进入 xyflow。` : activeModeDescription}
-        </p>
+      <div className="workspace-create-rail-header">
+        <div className="workspace-create-rail-copy">
+          <p className="workspace-app-card-caption">Create</p>
+          <h3>{activeModeLabel ? `${activeModeLabel} 创建入口` : "创建应用"}</h3>
+          <p className="workspace-muted workspace-card-copy workspace-create-rail-summary">{summaryCopy}</p>
+        </div>
+
+        <div className="workspace-create-rail-header-side">
+          <span className="workspace-app-footnote">Starter 模板：{starterCount} 个</span>
+          <span className="workspace-app-footnote">{requestedKeyword ? `当前搜索：${requestedKeyword}` : "创建后直达 xyflow"}</span>
+        </div>
       </div>
 
-      <div className="workspace-create-rail-actions">
+      <div className={`workspace-create-action-cluster workspace-create-action-cluster-${variant}`}>
         {primaryEntry ? (
-          <Link className="workspace-create-rail-primary" href={primaryEntry.href}>
+          <Link className="workspace-create-primary-row" href={primaryEntry.href}>
             <div>
               <strong>{primaryEntry.title}</strong>
               <p>{primaryEntry.detail}</p>
             </div>
-            <span>{primaryEntry.badge}</span>
+            <span className="workspace-create-row-arrow">{primaryEntry.badge}</span>
           </Link>
         ) : null}
 
-        <div className="workspace-create-rail-secondary-list">
+        <div className="workspace-create-secondary-list">
           {secondaryEntries.map((entry) => (
-            <Link className="workspace-create-rail-secondary" href={entry.href} key={entry.title}>
+            <Link className="workspace-create-secondary-row" href={entry.href} key={entry.title}>
               <div>
                 <strong>{entry.title}</strong>
                 <p>{entry.detail}</p>
@@ -217,31 +298,44 @@ function WorkspaceCreateRail({
           ))}
 
           {workspaceUtilityEntry ? (
-            <Link className="workspace-create-rail-utility" href={workspaceUtilityEntry.href}>
-              <strong>{workspaceUtilityEntry.title}</strong>
-              <p>{workspaceUtilityEntry.detail}</p>
+            <Link className="workspace-create-secondary-row" href={workspaceUtilityEntry.href}>
+              <div>
+                <strong>{workspaceUtilityEntry.title}</strong>
+                <p>{workspaceUtilityEntry.detail}</p>
+              </div>
               <span>{workspaceUtilityEntry.badge}</span>
             </Link>
           ) : null}
         </div>
       </div>
 
-      <div className="workspace-create-rail-side">
+      <div className="workspace-create-rail-footer">
         <div className="workspace-create-rail-footnotes">
-          <span className="workspace-app-footnote">筛选后创建，创建后直达 xyflow</span>
-          <span className="workspace-app-footnote">Starter 模板：{starterCount} 个</span>
+          <span className="workspace-app-footnote">主区只保留目录行与进入 Studio 的下一步</span>
         </div>
 
         {primaryStarter ? (
-          <Link className="workspace-create-rail-starter" href={primaryStarter.href}>
-            <span>{compact ? "推荐起点" : "推荐 Starter"}</span>
+          <Link className="workspace-create-recommend-row" href={primaryStarter.href}>
+            <span className="workspace-create-recommend-label">推荐起点</span>
             <strong>{primaryStarter.name}</strong>
-            <small>
+            <span>
               {primaryStarter.priority} · {primaryStarter.modeShortLabel} · {primaryStarter.description}
-            </small>
+            </span>
           </Link>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function WorkspaceAppListColumns() {
+  return (
+    <div className="workspace-app-list-columns" aria-hidden="true">
+      <span>应用</span>
+      <span>模式</span>
+      <span>状态</span>
+      <span>治理 / 下一步</span>
+      <span>操作</span>
     </div>
   );
 }
@@ -279,68 +373,70 @@ function WorkspaceAppTile({
       : card.missingToolCount > 0
         ? `${card.missingToolCount} 个工具缺口`
         : card.healthLabel;
+  const showSignalLabel = card.followUpCount > 0 || card.status === "published";
   const appDigest =
     card.status === "published"
-      ? "已发布，可继续核对版本、运行与调用状态。"
+      ? "已发布，可继续从 Studio 维护版本并回到运行入口核对状态。"
       : card.followUpCount > 0
-        ? `优先处理 ${card.followUpCount} 个治理待办。`
-        : "草稿已就绪，可继续进入画布。";
+        ? `治理优先：${card.recommendedNextStep}`
+        : "草稿已就绪，继续进入 xyflow 补首个业务节点与应用配置。";
+  const publishLabel = card.publishCount > 0 ? `${card.publishCount} 个发布端点` : "未发布";
+  const governanceLabel =
+    card.followUpCount > 0
+      ? `${card.followUpCount} 项待治理`
+      : card.missingToolCount > 0
+        ? `${card.missingToolCount} 个工具缺口`
+        : signalLabel;
 
   return (
     <article className="workspace-app-row workspace-catalog-card" key={card.id}>
-      <div className="workspace-app-row-main">
-        <div className="workspace-app-row-header">
-          <div className="workspace-app-card-identity workspace-app-row-identity">
-            <div className="workspace-app-icon" aria-hidden="true">
-              {getWorkspaceBadgeLabel(card.name, "A")}
-            </div>
-            <div>
-              <div className="workspace-app-card-title-row workspace-app-row-title-row">
-                <h3>{card.name}</h3>
-                <span className="workspace-mode-pill">{card.mode.shortLabel}</span>
-              </div>
-              <p className="workspace-app-subtitle workspace-app-subtitle-dify workspace-app-subtitle-compact">
-                {card.track.priority} · {currentUserDisplayName} · 最近更新 {formatTimestamp(card.updatedAt)}
-              </p>
-            </div>
+      <div className="workspace-app-row-cell workspace-app-row-cell-primary">
+        <div className="workspace-app-card-identity workspace-app-row-identity">
+          <div className="workspace-app-icon" aria-hidden="true">
+            {getWorkspaceBadgeLabel(card.name, "A")}
           </div>
-
-          <span className={`workspace-status-pill ${card.status === "published" ? "healthy" : "draft"}`}>
-            {card.status === "published" ? "已发布" : "草稿"}
-          </span>
-        </div>
-
-        <p className="workspace-app-description workspace-app-row-description">{appDigest}</p>
-
-        <div className="workspace-app-guidance" aria-label={`${card.name} next step`}>
-          <span>{card.followUpCount > 0 ? "治理优先" : "下一步"}</span>
-          <p>{card.recommendedNextStep}</p>
-        </div>
-
-        <div className="workspace-app-meta-row workspace-app-row-meta" aria-label={`${card.name} workspace hints`}>
-          <span className="workspace-app-meta-pill">{card.mode.label}</span>
-          <span className="workspace-app-meta-pill">{card.track.focus}</span>
-          {card.missingToolCount > 0 ? <span className="workspace-app-meta-pill warning">工具缺口：{card.missingToolCount}</span> : null}
+          <div>
+            <div className="workspace-app-card-title-row workspace-app-row-title-row">
+              <h3>{card.name}</h3>
+            </div>
+            <p className="workspace-app-subtitle workspace-app-subtitle-dify workspace-app-subtitle-compact">
+              {card.nodeCount} 个节点 · {currentUserDisplayName}
+            </p>
+            <p className="workspace-muted workspace-app-row-updated">最近更新 {formatTimestamp(card.updatedAt)}</p>
+          </div>
         </div>
       </div>
 
-      <div className="workspace-app-row-side">
-        <div className="workspace-app-row-metrics" aria-label={`${card.name} metrics`}>
-          <span className="workspace-app-inline-metric">{card.nodeCount} 个节点</span>
-          <span className="workspace-app-inline-metric">{card.publishCount} 个发布端点</span>
-          <span className={`workspace-app-inline-metric ${card.followUpCount > 0 ? "warning" : ""}`}>
-            {signalLabel}
-          </span>
-        </div>
+      <div className="workspace-app-row-cell workspace-app-row-cell-mode">
+        <span className="workspace-mode-pill">{card.mode.shortLabel}</span>
+        <span className="workspace-app-row-track">{card.track.focus}</span>
+        <span className="workspace-app-footnote">{publishLabel}</span>
+      </div>
 
-        <div className="workspace-app-row-actions">
-          <Link className="workspace-primary-button compact" href={card.href}>
-            继续进入 xyflow
-          </Link>
-          <Link className="workspace-ghost-button compact" href="/runs">
-            查看运行
-          </Link>
+      <div className="workspace-app-row-cell workspace-app-row-cell-status">
+        <span className={`workspace-status-pill ${card.status === "published" ? "healthy" : "draft"}`}>
+          {card.status === "published" ? "已发布" : "草稿"}
+        </span>
+        <span className={`workspace-app-inline-metric workspace-app-row-signal ${card.followUpCount > 0 ? "warning" : ""}`}>
+          {showSignalLabel ? signalLabel : governanceLabel}
+        </span>
+      </div>
+
+      <div className="workspace-app-row-cell workspace-app-row-cell-summary">
+        <div className="workspace-app-meta-row workspace-app-row-meta" aria-label={`${card.name} workspace hints`}>
+          <span className="workspace-app-meta-pill">{card.track.focus}</span>
+          {card.missingToolCount > 0 ? <span className="workspace-app-meta-pill warning">工具缺口：{card.missingToolCount}</span> : null}
         </div>
+        <p className="workspace-muted workspace-app-row-helper">{appDigest}</p>
+      </div>
+
+      <div className="workspace-app-row-cell workspace-app-row-cell-actions">
+        <Link className="workspace-primary-button compact" href={card.href}>
+          进入 Studio
+        </Link>
+        <Link className="workspace-ghost-button compact" href="/runs">
+          查看运行
+        </Link>
       </div>
     </article>
   );
@@ -373,55 +469,24 @@ export function WorkspaceAppsWorkbench({
   const catalogDescription = requestedKeyword
     ? `当前按“${requestedKeyword}”筛选应用；命中后直接进入 xyflow 继续编排。`
     : activeModeLabel
-      ? `当前聚焦 ${activeModeLabel}：${activeModeDescription}`
-      : "参考 Dify 的工作台：先筛选应用，再进入 Studio。";
+      ? `当前聚焦 ${activeModeLabel}，继续创建或进入 Studio。`
+      : "像 Dify 一样先浏览目录，再创建或继续进入 Studio。";
 
   return (
     <main className="workspace-main workspace-home-main workspace-home-main-flat workspace-board-page">
-      <section className="workspace-studio-shell">
-        <section className="workspace-workbench-shell-card">
-          <div className="workspace-workbench-hero">
-            <div className="workspace-board-hero-copy workspace-studio-header-copy workspace-workbench-copy">
+      <section className="workspace-apps-dify-shell">
+        <section className="workspace-apps-dify-stage">
+          <section className="workspace-apps-stage-header workspace-catalog-card">
+            <div className="workspace-apps-stage-copy">
               <p className="workspace-eyebrow">Workspace / Apps</p>
-              <div className="workspace-board-title-row">
+              <div className="workspace-apps-stage-title-row">
                 <h1>{workspaceName} 应用工作台</h1>
                 <span className="workspace-tag accent">当前身份：{currentRoleLabel}</span>
               </div>
-              <p className="workspace-muted workspace-copy-wide workspace-board-hero-copy-text">{catalogDescription}</p>
+              <p className="workspace-muted workspace-apps-stage-copy-text">{catalogDescription}</p>
             </div>
 
-            <div className="workspace-workbench-meta-row">
-              <WorkspaceSummaryBar compact workspaceSignals={workspaceSignals} />
-              <WorkspaceScopePills scopePills={scopePills} />
-              <p className="workspace-workbench-scope-summary">{currentScopeSummary}</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="workspace-board-toolbar-shell workspace-board-toolbar-shell-studio">
-          <div className="workspace-mode-tabs workspace-mode-tabs-board" aria-label="App modes">
-            {modeTabs.map((modeTab) => (
-              <Link className={`workspace-mode-tab ${modeTab.active ? "active" : ""}`} href={modeTab.href} key={modeTab.key}>
-                <span>{modeTab.label}</span>
-                <strong>{modeTab.count}</strong>
-              </Link>
-            ))}
-          </div>
-
-          <div className="workspace-board-toolbar-row workspace-board-toolbar-row-studio">
-            <div className="workspace-filter-row workspace-filter-row-board">
-              {statusFilters.map((statusFilter) => (
-                <Link
-                  className={`workspace-filter-chip ${statusFilter.active ? "active" : ""}`}
-                  href={statusFilter.href}
-                  key={statusFilter.key}
-                >
-                  {statusFilter.label}
-                </Link>
-              ))}
-            </div>
-
-            <form action="/workspace" className="workspace-search-form workspace-search-form-board workspace-search-form-studio">
+            <form action="/workspace" className="workspace-search-form workspace-search-form-board workspace-search-form-studio workspace-apps-stage-search">
               {searchState.filter ? <input name="filter" type="hidden" value={searchState.filter} /> : null}
               {searchState.mode ? <input name="mode" type="hidden" value={searchState.mode} /> : null}
               {searchState.track ? <input name="track" type="hidden" value={searchState.track} /> : null}
@@ -441,51 +506,48 @@ export function WorkspaceAppsWorkbench({
                 </Link>
               ) : null}
             </form>
-          </div>
-        </section>
+          </section>
 
-        <section className="workspace-app-section workspace-app-section-dify workspace-catalog-section workspace-catalog-section-studio">
-          <div className="workspace-app-section-header workspace-app-section-header-dify workspace-app-section-header-board workspace-app-section-header-board-compact">
-            <div className="workspace-app-section-heading">
-              <p className="workspace-eyebrow">Applications</p>
-              <h2>应用目录 · {visibleAppSummary}</h2>
-              <p className="workspace-muted workspace-copy-wide">
-                保留创建、筛选和进入 Studio 三条主链，不在列表里堆编辑器说明。
-              </p>
-            </div>
-          </div>
+          <WorkspaceBrowseRail
+            currentScopeSummary={currentScopeSummary}
+            modeTabs={modeTabs}
+            scopePills={scopePills}
+            statusFilters={statusFilters}
+            variant="inline"
+            workspaceSignals={workspaceSignals}
+          />
 
-          <div className="workspace-catalog-layout">
-            <aside className="workspace-catalog-rail">
-              <WorkspaceCreateRail
-                activeModeDescription={activeModeDescription}
-                activeModeLabel={activeModeLabel}
-                compact
-                quickCreateEntries={quickCreateEntries}
-                requestedKeyword={requestedKeyword}
-                starterCount={starterCount}
-                starterHighlights={starterHighlights}
-                workspaceUtilityEntry={workspaceUtilityEntry}
-              />
-            </aside>
+          <WorkspaceCreateRail
+            activeModeDescription={activeModeDescription}
+            activeModeLabel={activeModeLabel}
+            quickCreateEntries={quickCreateEntries}
+            requestedKeyword={requestedKeyword}
+            starterCount={starterCount}
+            starterHighlights={starterHighlights}
+            variant="stage"
+            workspaceUtilityEntry={workspaceUtilityEntry}
+          />
 
-            <div className="workspace-app-list-stage">
-              <div className="workspace-app-list-stage-header">
+          <section className="workspace-app-section workspace-app-section-dify workspace-catalog-section workspace-catalog-section-studio">
+            <div className="workspace-app-list-stage-header">
+              <div>
                 <p className="workspace-app-list-stage-summary">{visibleAppSummary}</p>
                 <p className="workspace-muted workspace-app-list-stage-copy">
-                  选中应用后直接回到 xyflow；列表只保留状态、治理与下一步。
+                  目录行只保留状态、治理信号和进入 Studio 的下一步。
                 </p>
               </div>
-
-              <div className="workspace-app-list-shell">
-                {filteredApps.length === 0 ? <WorkspaceEmptyTile activeModeLabel={activeModeLabel} /> : null}
-
-                {filteredApps.map((card) => (
-                  <WorkspaceAppTile card={card} currentUserDisplayName={currentUserDisplayName} key={card.id} />
-                ))}
-              </div>
             </div>
-          </div>
+
+            {filteredApps.length > 0 ? <WorkspaceAppListColumns /> : null}
+
+            <div className="workspace-app-list-shell">
+              {filteredApps.length === 0 ? <WorkspaceEmptyTile activeModeLabel={activeModeLabel} /> : null}
+
+              {filteredApps.map((card) => (
+                <WorkspaceAppTile card={card} currentUserDisplayName={currentUserDisplayName} key={card.id} />
+              ))}
+            </div>
+          </section>
         </section>
       </section>
     </main>

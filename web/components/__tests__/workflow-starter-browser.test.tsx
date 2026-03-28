@@ -62,9 +62,11 @@ describe("WorkflowStarterBrowser", () => {
     );
 
     expect(html).toContain("starter-browser-list-shell");
-    expect(html).toContain("选择模板");
+    expect(html).toContain("选择一个起点");
+    expect(html).toContain("ChatFlow 基础");
     expect(html).toContain("starter-list-row selected");
     expect(html).toContain("当前模板");
-    expect(html).toContain("选中后在右侧创建");
+    expect(html).toContain("选中后在右侧命名");
+    expect(html).not.toContain("P0");
   });
 });

@@ -5,22 +5,22 @@ import type { Edge, Node } from "@xyflow/react";
 
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import {
-  createWorkflowNodeDraft,
+  insertNodeIntoCanvasGraph,
+  removeNodeFromCanvasGraph,
   type WorkflowCanvasEdgeData,
   type WorkflowCanvasNodeData
 } from "@/lib/workflow-editor";
 
 import {
   isRecord,
-  readNodePosition,
   stringifyJson,
-  stripUiPosition,
   type WorkflowEditorMessageTone
 } from "./shared";
 
 type UseWorkflowEditorNodeActionsOptions = {
   nodeCatalog: WorkflowNodeCatalogItem[];
   nodes: Array<Node<WorkflowCanvasNodeData>>;
+  edges: Array<Edge<WorkflowCanvasEdgeData>>;
   selectedNodeId: string | null;
   setNodes: Dispatch<SetStateAction<Array<Node<WorkflowCanvasNodeData>>>>;
   setEdges: Dispatch<SetStateAction<Array<Edge<WorkflowCanvasEdgeData>>>>;
@@ -33,6 +33,7 @@ type UseWorkflowEditorNodeActionsOptions = {
 export function useWorkflowEditorNodeActions({
   nodeCatalog,
   nodes,
+  edges,
   selectedNodeId,
   setNodes,
   setEdges,
@@ -59,24 +60,28 @@ export function useWorkflowEditorNodeActions({
     setSelectedEdgeId(null);
   };
 
-  const handleAddNode = (type: string) => {
-    const draft = createWorkflowNodeDraft(nodeCatalog, type, nodes.length + 1);
-    const nextNode: Node<WorkflowCanvasNodeData> = {
-      id: draft.id,
-      type: "workflowNode",
-      position: readNodePosition(draft.config),
-      data: {
-        label: draft.name,
-        nodeType: draft.type,
-        config: stripUiPosition(draft.config)
-      },
-      selected: true
-    };
+  const handleAddNode = (
+    type: string,
+    options?: { sourceNodeId?: string | null }
+  ) => {
+    const insertion = insertNodeIntoCanvasGraph({
+      nodeCatalog,
+      nodes,
+      edges,
+      type,
+      sourceNodeId: options?.sourceNodeId ?? null
+    });
 
-    setNodes((currentNodes) => [...currentNodes, nextNode]);
-    setSelectedNodeId(nextNode.id);
+    setNodes(insertion.nodes);
+    setEdges(insertion.edges);
+    setSelectedNodeId(insertion.nextNode.id);
     setSelectedEdgeId(null);
-    setMessage(`${draft.name} 已加入画布，记得保存 workflow。`);
+    const insertionMessage = !insertion.sourceNode
+      ? `${insertion.nextNode.data.label} 已加入画布，记得保存 workflow。`
+      : insertion.insertionMode === "inline" && insertion.displacedTargetNode
+        ? `${insertion.nextNode.data.label} 已插入到 ${insertion.sourceNode.data.label} 与 ${insertion.displacedTargetNode.data.label} 之间，记得保存 workflow。`
+        : `${insertion.nextNode.data.label} 已接到 ${insertion.sourceNode.data.label} 后方，记得保存 workflow。`;
+    setMessage(insertionMessage);
     setMessageTone("success");
   };
 
@@ -187,19 +192,24 @@ export function useWorkflowEditorNodeActions({
     });
   };
 
-  const handleDeleteSelectedNode = () => {
-    if (!selectedNode) {
+  const handleDeleteNode = (nodeId?: string | null) => {
+    const targetNodeId = nodeId ?? selectedNodeId;
+    const targetNode = targetNodeId
+      ? nodes.find((node) => node.id === targetNodeId) ?? null
+      : null;
+
+    if (!targetNode) {
       return;
     }
 
-    if (selectedNode.data.nodeType === "trigger") {
+    if (targetNode.data.nodeType === "trigger") {
       setMessage("最小编辑器暂不允许删除唯一 trigger 节点。");
       setMessageTone("error");
       return;
     }
 
     if (
-      selectedNode.data.nodeType === "output" &&
+      targetNode.data.nodeType === "output" &&
       nodes.filter((node) => node.data.nodeType === "output").length <= 1
     ) {
       setMessage("至少保留一个 output 节点，避免保存后被后端校验拒绝。");
@@ -207,14 +217,21 @@ export function useWorkflowEditorNodeActions({
       return;
     }
 
-    setNodes((currentNodes) => currentNodes.filter((node) => node.id !== selectedNode.id));
-    setEdges((currentEdges) =>
-      currentEdges.filter(
-        (edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id
-      )
+    const removal = removeNodeFromCanvasGraph({
+      nodeId: targetNode.id,
+      nodes,
+      edges
+    });
+
+    setNodes(removal.nodes);
+    setEdges(removal.edges);
+    setSelectedNodeId(removal.upstreamNode?.id ?? removal.downstreamNode?.id ?? null);
+    setSelectedEdgeId(null);
+    setMessage(
+      removal.deletionMode === "inline" && removal.upstreamNode && removal.downstreamNode
+        ? `节点 ${targetNode.data.label} 已移除，并已将 ${removal.upstreamNode.data.label} 重新连到 ${removal.downstreamNode.data.label}。`
+        : `节点 ${targetNode.data.label} 已从画布移除。`
     );
-    setSelectedNodeId(null);
-    setMessage(`节点 ${selectedNode.data.label} 已从画布移除。`);
     setMessageTone("success");
   };
 
@@ -231,6 +248,7 @@ export function useWorkflowEditorNodeActions({
     updateNodeOutputSchema,
     updateNodeRuntimePolicy,
     handleNodeRuntimePolicyChange,
-    handleDeleteSelectedNode
+    handleDeleteNode,
+    handleDeleteSelectedNode: () => handleDeleteNode(selectedNodeId)
   };
 }

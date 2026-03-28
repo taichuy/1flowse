@@ -132,18 +132,17 @@ export function WorkspaceMemberAdminPanel({
         <p className="workspace-eyebrow">设置</p>
         <h1>团队设置</h1>
         <p className="workspace-muted workspace-copy-wide">
-          参考 Dify 的 settings / members 入口，把成员、角色和工作空间边界收口在一处；这里只管协作与权限，不复制应用运行事实。
+          这一页只做成员、角色与本地账号开通，不把其它设置能力硬堆进来。
         </p>
         <nav className="settings-nav" aria-label="Settings">
           <span className="settings-nav-group">工作空间</span>
-          <span className="settings-nav-item">工作空间</span>
-          <span className="settings-nav-item">模型供应商</span>
           <span className="settings-nav-item active">成员</span>
-          <span className="settings-nav-item">数据来源</span>
-          <span className="settings-nav-item">API 扩展</span>
-          <span className="settings-nav-group">通用</span>
-          <span className="settings-nav-item">语言</span>
         </nav>
+        <div className="settings-sidebar-focus-list" aria-label="成员管理重点">
+          <span className="settings-sidebar-focus-item">本地账号开通</span>
+          <span className="settings-sidebar-focus-item">角色调整</span>
+          <span className="settings-sidebar-focus-item">权限回写</span>
+        </div>
       </aside>
 
       <div className="settings-main-panel settings-main-panel-dify">
@@ -157,7 +156,7 @@ export function WorkspaceMemberAdminPanel({
                 <p className="workspace-eyebrow">成员</p>
                 <h2>{workspaceName}</h2>
                 <p className="workspace-muted workspace-copy-wide">
-                  管成员、配角色、开账号都在这里完成；真正的编排和运行事实仍然回到 xyflow / runs 主链。
+                  管成员、配角色、开账号都在这里完成；真正的编排与运行事实继续回到 xyflow / runs 主链。
                 </p>
               </div>
             </div>
@@ -190,7 +189,7 @@ export function WorkspaceMemberAdminPanel({
               <div>
                 <strong>成员列表</strong>
                 <p className="workspace-muted member-section-copy">
-                  owner / admin 可维护角色；editor / viewer 默认只读查看工作空间入口与运行信息。
+                  先看成员与当前角色，再决定是否调整权限。
                 </p>
               </div>
               <div className="member-role-badges">
@@ -269,7 +268,7 @@ export function WorkspaceMemberAdminPanel({
               <div>
                 <strong>新增成员</strong>
                 <p className="workspace-muted member-section-copy">
-                  默认通过邮箱 + 初始密码完成本地开通，后续再继续扩展邀请与更细粒度权限配置。
+                  通过邮箱、初始密码和角色即可完成本地开通。
                 </p>
               </div>
             </div>
