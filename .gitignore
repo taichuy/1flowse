@@ -149,6 +149,8 @@ dependabot-drift.txt
 dependency-submission.json
 dependency-submission.txt
 tmp-dependabot-drift-report.json
+test-results/
+tmp/
 
 # Python intermediate artifacts
 __pycache__/

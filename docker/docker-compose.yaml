@@ -196,4 +196,4 @@ services:
       api:
         condition: service_started
     ports:
-      - "${SEVENFLOWS_WEB_PORT:-3000}:3000"
+      - "${SEVENFLOWS_WEB_PORT:-3010}:3010"

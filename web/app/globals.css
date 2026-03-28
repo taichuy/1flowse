@@ -5910,6 +5910,10 @@ a {
   align-content: flex-start;
 }
 
+.workspace-create-strip-actions > * {
+  flex: 1 1 220px;
+}
+
 .workspace-create-strip-primary,
 .workspace-create-strip-action,
 .workspace-create-strip-starter {
@@ -6722,6 +6726,49 @@ a {
   line-height: 1.5;
 }
 
+.workspace-app-row-details {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-app-row-details summary {
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+  color: #315cec;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.workspace-app-row-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-app-row-details summary::after {
+  content: "▾";
+  margin-left: 6px;
+  font-size: 0.72rem;
+}
+
+.workspace-app-row-details[open] summary::after {
+  content: "▴";
+}
+
+.workspace-app-row-details-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #e7ecf4;
+  background: #f8fafc;
+}
+
+.workspace-app-row-details-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
 .workspace-app-row-updated,
 .workspace-app-row-track {
   margin: 0;
@@ -6969,6 +7016,10 @@ a {
   .workspace-app-row-header,
   .workspace-apps-stage-header {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-create-strip-actions > * {
+    flex-basis: 100%;
   }
 
   .workspace-create-rail-header-side {

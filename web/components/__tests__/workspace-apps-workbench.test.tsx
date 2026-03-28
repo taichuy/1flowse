@@ -98,7 +98,7 @@ describe("WorkspaceAppsWorkbench", () => {
 
     expect(html).toContain("workspace-apps-dify-shell");
     expect(html).toContain("workspace-filter-rail-inline");
-    expect(html).toContain("workspace-create-rail-stage");
+    expect(html).toContain("workspace-create-strip");
     expect(html).toContain("创建空白应用");
     expect(html).toContain("workspace-app-row");
     expect(html).toContain("workspace-app-list-columns");
@@ -106,5 +106,6 @@ describe("WorkspaceAppsWorkbench", () => {
     expect(html).toContain("应用目录");
     expect(html).toContain("治理 / 下一步");
     expect(html).toContain("进入 Studio");
+    expect(html).toContain("查看下一步");
   });
 });
