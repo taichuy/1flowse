@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Tabs } from "antd";
+import React, { useEffect, useMemo, useState } from "react";
+import { Input, Tabs } from "antd";
 import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import { WorkspaceStarterFollowUpCard } from "@/components/workspace-starter-library/follow-up-card";
@@ -95,6 +95,8 @@ type WorkflowEditorSidebarProps = {
   onSelectRunId: (runId: string | null) => void;
   onRefreshRuns: () => void;
 };
+
+type WorkflowEditorNodeRailView = "catalog" | "drafts";
 
 function buildValidationIssueGovernancePreview(item: WorkflowValidationNavigatorItem) {
   const chips: string[] = [];
@@ -195,7 +197,7 @@ export function WorkflowEditorSidebar({
     message ??
     (persistBlockers.length > 0
       ? "选择一个待修正项或点击保存，编辑器会跳到首个阻断点。"
-      : "选择节点或连线后，这里会显示编辑器反馈。");
+      : "选中节点后即可编辑配置，或在画布里点 + 插入下一节点。");
   const savedWorkspaceStarterLibraryHref = savedWorkspaceStarter
     ? workspaceStarterGovernanceQueryScope
       ? buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState({
@@ -257,10 +259,75 @@ export function WorkflowEditorSidebar({
               : null
         })
       : null;
+  const workflowChipLinks = workflows.slice(0, 6).map((workflow) => {
+    const baseHref = workspaceStarterGovernanceQueryScope
+      ? buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+          workflowId: workflow.id,
+          viewState: workspaceStarterGovernanceQueryScope,
+          variant: "chip"
+        }).href
+      : buildAuthorFacingWorkflowDetailLinkSurface({
+          workflowId: workflow.id,
+          variant: "chip"
+        }).href;
+
+    return {
+      workflow,
+      href: appendWorkflowLibraryViewStateForWorkflow(baseHref, workflow, {
+        definitionIssue: null
+      })
+    };
+  });
+  const preferredTabKey = useMemo(() => {
+    const shouldFocusDiagnostics =
+      persistBlockers.length > 0 ||
+      Boolean(starterSaveSurfaceCopy) ||
+      Boolean(remediationItem) ||
+      validationNavigatorItems.length > 0 ||
+      Boolean(traceError) ||
+      messageTone === "error";
+
+    return shouldFocusDiagnostics ? "2" : "1";
+  }, [
+    messageTone,
+    persistBlockers.length,
+    remediationItem,
+    starterSaveSurfaceCopy,
+    traceError,
+    validationNavigatorItems.length
+  ]);
+  const [activeTabKey, setActiveTabKey] = useState(preferredTabKey);
+  const [nodeSearch, setNodeSearch] = useState("");
+  const [nodeRailView, setNodeRailView] = useState<WorkflowEditorNodeRailView>("catalog");
+  const filteredEditorNodeLibrary = useMemo(() => {
+    const keyword = nodeSearch.trim().toLowerCase();
+    if (!keyword) {
+      return editorNodeLibrary;
+    }
+
+    return editorNodeLibrary.filter((item) => {
+      const haystack = [item.label, item.type, item.description, item.supportSummary]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(keyword);
+    });
+  }, [editorNodeLibrary, nodeSearch]);
+
+  useEffect(() => {
+    setActiveTabKey(preferredTabKey);
+  }, [preferredTabKey, workflowId]);
+
+  useEffect(() => {
+    setNodeRailView("catalog");
+  }, [workflowId]);
+
+  const hasScopedWorkflowLinks = workflowChipLinks.length > 0;
 
   return (
     <aside className="editor-sidebar" style={{ background: '#fff' }}>
-      <Tabs defaultActiveKey="1" centered style={{ height: '100%' }} items={[
+      <Tabs activeKey={activeTabKey} onChange={setActiveTabKey} centered style={{ height: '100%' }} items={[
         {
           key: '1',
           label: '节点',
@@ -268,21 +335,31 @@ export function WorkflowEditorSidebar({
             <article className="diagnostic-panel editor-panel">
               <div style={{ marginBottom: 16 }}>
                 <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: '#111827' }}>节点目录</h2>
-                <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0 0' }}>点击添加节点到画布</p>
+                <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0 0' }}>
+                  默认先插入节点；同域草稿切换降到次级 rail，减少对当前画布的干扰。
+                </p>
               </div>
 
-              {unsupportedNodes.length > 0 ? (
-                <div className="sync-message error">
-                  <p>当前 workflow 已包含未进入执行主链的节点类型，编辑器会保留它们，但不能假装已可运行：</p>
-                  <ul className="roadmap-list compact-list">
-                    {unsupportedNodes.map((item) => (
-                      <li key={`unsupported-${item.type}`}>
-                        {item.label} x{item.count}：{item.supportSummary}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+              <div className="workflow-editor-rail-switch" role="tablist" aria-label="Editor node rail view">
+                <button
+                  className={`workflow-editor-rail-switch-button${nodeRailView === "catalog" ? " active" : ""}`}
+                  type="button"
+                  aria-pressed={nodeRailView === "catalog"}
+                  onClick={() => setNodeRailView("catalog")}
+                >
+                  节点目录
+                </button>
+                {hasScopedWorkflowLinks ? (
+                  <button
+                    className={`workflow-editor-rail-switch-button${nodeRailView === "drafts" ? " active" : ""}`}
+                    type="button"
+                    aria-pressed={nodeRailView === "drafts"}
+                    onClick={() => setNodeRailView("drafts")}
+                  >
+                    同域草稿 {workflowChipLinks.length}
+                  </button>
+                ) : null}
+              </div>
 
               <div className="summary-strip compact-strip">
                 {primaryNodeLane ? (
@@ -293,7 +370,7 @@ export function WorkflowEditorSidebar({
                 ) : null}
                 <div className="summary-card">
                   <span>Palette nodes</span>
-                  <strong>{primaryNodeLane?.count ?? editorNodeLibrary.length}</strong>
+                  <strong>{filteredEditorNodeLibrary.length}</strong>
                 </div>
                 <div className="summary-card">
                   <span>Plugin-backed</span>
@@ -321,73 +398,107 @@ export function WorkflowEditorSidebar({
                 ))}
               </div>
 
-              {plannedNodeLibrary.length > 0 ? (
-                <div className="binding-field compact-stack">
-                  <span className="binding-label">Planned node types</span>
-                  <div className="tool-badge-row">
-                    {plannedNodeLibrary.map((item) => (
-                      <span className="event-chip" key={`planned-${item.type}`}>
-                        {item.label}
-                      </span>
-                    ))}
+              <section hidden={nodeRailView !== "catalog"} aria-hidden={nodeRailView !== "catalog"}>
+                <div className="workflow-editor-catalog-search-block">
+                  <Input
+                    allowClear
+                    className="workflow-editor-catalog-search"
+                    placeholder="搜索节点，例如 agent / loop / tool"
+                    value={nodeSearch}
+                    onChange={(event) => setNodeSearch(event.target.value)}
+                  />
+                  <div className="workflow-editor-catalog-search-meta">
+                    <span>{filteredEditorNodeLibrary.length} / {editorNodeLibrary.length} 个节点</span>
+                    {nodeSearch.trim() ? <span>当前筛选：{nodeSearch.trim()}</span> : <span>支持按名称、类型搜索</span>}
                   </div>
-                  <small className="section-copy">
-                    这些类型已经进入统一节点目录，但当前仍保持 planned，不进入 palette 按钮或 runtime 主链。
-                  </small>
                 </div>
-              ) : null}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-                {editorNodeLibrary.map((item) => (
-                  <button
-                    key={item.type}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '8px 12px',
-                      background: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      width: '100%',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#1C64F2';
-                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(28,100,242,0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e5e7eb';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    type="button"
-                    onClick={() => onAddNode(item.type)}
-                  >
-                    <div style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 6,
-                      background: '#EFF4FF',
-                      color: '#1C64F2',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 12,
-                      flexShrink: 0,
-                      fontSize: 14
-                    }}>
-                      +
+                {hasScopedWorkflowLinks ? (
+                  <div className="workflow-editor-rail-handoff">
+                    <span>还有 {workflowChipLinks.length} 个同域草稿，需要时再切换。</span>
+                    <button
+                      className="workflow-editor-inline-link"
+                      type="button"
+                      onClick={() => setNodeRailView("drafts")}
+                    >
+                      查看同域草稿
+                    </button>
+                  </div>
+                ) : null}
+
+                {plannedNodeLibrary.length > 0 ? (
+                  <div className="binding-field compact-stack">
+                    <span className="binding-label">Planned node types</span>
+                    <div className="tool-badge-row">
+                      {plannedNodeLibrary.map((item) => (
+                        <span className="event-chip" key={`planned-${item.type}`}>
+                          {item.label}
+                        </span>
+                      ))}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13, color: '#111827' }}>{item.label}</div>
-                      <div style={{ fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.description}
+                    <small className="section-copy">
+                      这些类型已进入统一目录，但当前仍保持 planned，不进入 palette 或 runtime 主链。
+                    </small>
+                  </div>
+                ) : null}
+
+                <div className="workflow-editor-catalog-list">
+                  {filteredEditorNodeLibrary.map((item) => (
+                    <button
+                      key={item.type}
+                      className="workflow-editor-catalog-button"
+                      type="button"
+                      onClick={() => onAddNode(item.type)}
+                    >
+                      <div className="workflow-editor-catalog-button-mark">
+                        +
                       </div>
+                      <div className="workflow-editor-catalog-button-copy">
+                        <div className="workflow-editor-catalog-button-label">{item.label}</div>
+                        <div className="workflow-editor-catalog-button-description">
+                          {item.description}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {filteredEditorNodeLibrary.length === 0 ? (
+                    <div className="workflow-editor-catalog-empty">
+                      没找到匹配节点。换个关键词，或从右侧配置继续编辑当前节点。
                     </div>
-                  </button>
-                ))}
-              </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section hidden={nodeRailView !== "drafts"} aria-hidden={nodeRailView !== "drafts"}>
+                {hasScopedWorkflowLinks ? (
+                  <div className="binding-field compact-stack workflow-editor-scoped-workflows">
+                    <span className="binding-label">Scoped workflows</span>
+                    <small className="section-copy">
+                      把“切换草稿 / 查看治理”收成次级 rail，默认不打断节点插入。
+                    </small>
+                    <div className="workflow-editor-catalog-search-meta">
+                      <span>当前编辑：{workflowName}</span>
+                      <span>可切换 {workflowChipLinks.length} 个相关应用</span>
+                    </div>
+                    <div className="workflow-editor-scoped-workflow-grid">
+                      {workflowChipLinks.map(({ workflow, href }) => (
+                        <WorkflowChipLink
+                          key={`workflow-chip-${workflow.id}`}
+                          workflow={workflow}
+                          href={href}
+                          selected={workflow.id === workflowId}
+                          currentHref={currentHref}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="workflow-editor-catalog-empty">
+                    当前还没有可切换的同域草稿，先从节点目录继续补当前工作流。
+                  </div>
+                )}
+              </section>
+
             </article>
           )
         },
@@ -402,6 +513,19 @@ export function WorkflowEditorSidebar({
                   <h2>Editor feedback</h2>
                 </div>
               </div>
+
+              {unsupportedNodes.length > 0 ? (
+                <div className="sync-message error">
+                  <p>当前 workflow 已包含未进入执行主链的节点类型，编辑器会保留它们，但不能假装已可运行：</p>
+                  <ul className="roadmap-list compact-list">
+                    {unsupportedNodes.map((item) => (
+                      <li key={`unsupported-${item.type}`}>
+                        {item.label} x{item.count}：{item.supportSummary}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {persistBlockers.length > 0 ? (
                 <WorkflowPersistBlockerNotice

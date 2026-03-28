@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import { Typography, Tabs, Input, Button, Space, Tag, Empty } from "antd";
 
@@ -25,6 +25,16 @@ import { WorkflowEditorVariableForm } from "@/components/workflow-editor-variabl
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+type WorkflowEditorInspectorTabKey =
+  | "node-config"
+  | "node-schema"
+  | "node-runtime"
+  | "node-json"
+  | "edge-config"
+  | "workflow-overview"
+  | "workflow-variables"
+  | "workflow-publish";
 
 type WorkflowEditorInspectorProps = {
   currentHref?: string | null;
@@ -113,174 +123,313 @@ export function WorkflowEditorInspector({
   persistBlockerRecommendedNextStep = null,
   sandboxReadiness
 }: WorkflowEditorInspectorProps) {
-  return (
-    <div style={{ background: '#fff', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
-        <Title level={5} style={{ margin: 0 }}>属性与配置</Title>
-      </div>
+  const preferredTabKey = useMemo<WorkflowEditorInspectorTabKey>(() => {
+    if (selectedNode) {
+      if (highlightedNodeSection === "contract") {
+        return "node-schema";
+      }
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        <Tabs defaultActiveKey="1" items={[
-          {
-            key: '1',
-            label: '节点/连线',
-            children: selectedNode ? (
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                <Space>
-                  <Tag color="blue">{selectedNode.data.nodeType}</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{selectedNode.id}</Text>
-                </Space>
-    
-                <div>
-                  <div style={{ marginBottom: 8, fontWeight: 500 }}>节点名称</div>
-                  <Input
-                    value={selectedNode.data.label}
-                    onChange={(event) => onNodeNameChange(event.target.value)}
-                  />
-                </div>
-    
-                <WorkflowNodeConfigForm
-                  node={selectedNode}
-                  nodes={nodes}
-                  tools={tools}
-                  adapters={adapters}
-                  currentHref={currentHref}
-                  sandboxReadiness={sandboxReadiness}
-                  highlightedFieldPath={highlightedNodeSection === "config" ? highlightedNodeFieldPath : null}
-                  focusedValidationItem={
-                    highlightedNodeSection === "config" ? focusedValidationItem : null
-                  }
-                  onChange={onNodeConfigChange}
+      if (highlightedNodeSection === "runtime") {
+        return "node-runtime";
+      }
+
+      return "node-config";
+    }
+
+    if (selectedEdge) {
+      return "edge-config";
+    }
+
+    if (focusedValidationItem?.target.scope === "variables") {
+      return "workflow-variables";
+    }
+
+    if (focusedValidationItem?.target.scope === "publish") {
+      return "workflow-publish";
+    }
+
+    return "workflow-overview";
+  }, [focusedValidationItem, highlightedNodeSection, selectedEdge, selectedNode]);
+  const [activeTabKey, setActiveTabKey] = useState<WorkflowEditorInspectorTabKey>(preferredTabKey);
+
+  useEffect(() => {
+    setActiveTabKey(preferredTabKey);
+  }, [preferredTabKey]);
+
+  const inspectorHeader = useMemo(() => {
+    if (selectedNode) {
+      return {
+        eyebrow: "NODE CONFIG",
+        title: selectedNode.data.label,
+        description: "当前右侧只聚焦已选节点，避免把应用级设置和节点配置堆在同一层。",
+        chips: [selectedNode.data.nodeType, selectedNode.id]
+      };
+    }
+
+    if (selectedEdge) {
+      return {
+        eyebrow: "EDGE CONFIG",
+        title: "连线规则",
+        description: "当前聚焦连线条件；应用变量与发布配置仍保留在相邻标签里。",
+        chips: ["Condition", selectedEdge.id]
+      };
+    }
+
+    return {
+      eyebrow: "WORKFLOW CONFIG",
+      title: "应用配置",
+      description: "未选中节点时，右侧回到应用级配置：先看当前焦点，再补变量与发布。",
+      chips: [
+        `v${workflowVersion}`,
+        `${workflowVariables.length} 个变量`,
+        `${workflowPublish.length} 个发布端点`
+      ]
+    };
+  }, [selectedEdge, selectedNode, workflowPublish.length, workflowVariables.length, workflowVersion]);
+  const inspectorHeaderModeKey = selectedNode
+    ? `node:${selectedNode.id}`
+    : selectedEdge
+      ? `edge:${selectedEdge.id}`
+      : "workflow";
+
+  const workflowPublishPanel = (
+    <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+      {persistBlockedMessage ? (
+        <WorkflowPersistBlockerNotice
+          title="Publish gate"
+          summary={persistBlockerSummary ?? persistBlockedMessage}
+          blockers={persistBlockers}
+          sandboxReadiness={sandboxReadiness}
+          currentHref={currentHref}
+          hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
+        />
+      ) : null}
+
+      <WorkflowEditorPublishForm
+        currentHref={currentHref}
+        workflowVersion={workflowVersion}
+        availableWorkflowVersions={availableWorkflowVersions}
+        publishEndpoints={workflowPublish}
+        sandboxReadiness={sandboxReadiness}
+        onChange={onWorkflowPublishChange}
+        focusedValidationItem={
+          focusedValidationItem?.target.scope === "publish" ? focusedValidationItem : null
+        }
+        persistBlockers={persistBlockers}
+        highlightedEndpointIndex={highlightedPublishEndpointIndex}
+        highlightedEndpointFieldPath={highlightedPublishEndpointFieldPath}
+      />
+    </Space>
+  );
+
+  const workflowVariablesPanel = (
+    <WorkflowEditorVariableForm
+      currentHref={currentHref}
+      variables={workflowVariables}
+      onChange={onWorkflowVariablesChange}
+      highlightedVariableIndex={highlightedVariableIndex}
+      highlightedVariableFieldPath={highlightedVariableFieldPath}
+      focusedValidationItem={focusedValidationItem}
+      sandboxReadiness={sandboxReadiness}
+    />
+  );
+
+  const tabItems = selectedNode
+    ? [
+        {
+          key: "node-config",
+          label: "配置",
+          children: (
+            <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+              <div className="workflow-editor-inspector-section">
+                <div className="workflow-editor-inspector-section-title">节点名称</div>
+                <Input
+                  value={selectedNode.data.label}
+                  onChange={(event) => onNodeNameChange(event.target.value)}
                 />
-    
-                <WorkflowNodeIoSchemaForm
-                  node={selectedNode}
-                  currentHref={currentHref}
-                  onInputSchemaChange={onNodeInputSchemaChange}
-                  onOutputSchemaChange={onNodeOutputSchemaChange}
-                  highlighted={highlightedNodeSection === "contract"}
-                  highlightedFieldPath={
-                    highlightedNodeSection === "contract" ? highlightedNodeFieldPath : null
-                  }
-                  focusedValidationItem={
-                    highlightedNodeSection === "contract" ? focusedValidationItem : null
-                  }
-                  sandboxReadiness={sandboxReadiness}
-                />
-    
-                <div>
-                  <div style={{ marginBottom: 8, fontWeight: 500 }}>高级 config JSON</div>
-                  <TextArea
-                    rows={4}
-                    value={nodeConfigText}
-                    onChange={(event) => onNodeConfigTextChange(event.target.value)}
-                  />
-                  <Button type="default" style={{ marginTop: 8 }} onClick={onApplyNodeConfigJson}>
-                    应用配置
-                  </Button>
-                </div>
-    
-                <WorkflowNodeRuntimePolicyForm
-                  node={selectedNode}
-                  nodes={nodes}
-                  edges={edges}
-                  currentHref={currentHref}
-                  onChange={onNodeRuntimePolicyUpdate}
-                  highlighted={highlightedNodeSection === "runtime"}
-                  highlightedFieldPath={
-                    highlightedNodeSection === "runtime" ? highlightedNodeFieldPath : null
-                  }
-                  focusedValidationItem={
-                    highlightedNodeSection === "runtime" ? focusedValidationItem : null
-                  }
-                  sandboxReadiness={sandboxReadiness}
-                />
-    
-                <Button danger onClick={onDeleteSelectedNode} style={{ width: '100%' }}>
+              </div>
+
+              <WorkflowNodeConfigForm
+                node={selectedNode}
+                nodes={nodes}
+                tools={tools}
+                adapters={adapters}
+                currentHref={currentHref}
+                sandboxReadiness={sandboxReadiness}
+                highlightedFieldPath={highlightedNodeSection === "config" ? highlightedNodeFieldPath : null}
+                focusedValidationItem={
+                  highlightedNodeSection === "config" ? focusedValidationItem : null
+                }
+                onChange={onNodeConfigChange}
+              />
+            </Space>
+          )
+        },
+        {
+          key: "node-schema",
+          label: "I/O",
+          children: (
+            <WorkflowNodeIoSchemaForm
+              node={selectedNode}
+              currentHref={currentHref}
+              onInputSchemaChange={onNodeInputSchemaChange}
+              onOutputSchemaChange={onNodeOutputSchemaChange}
+              highlighted={highlightedNodeSection === "contract"}
+              highlightedFieldPath={
+                highlightedNodeSection === "contract" ? highlightedNodeFieldPath : null
+              }
+              focusedValidationItem={
+                highlightedNodeSection === "contract" ? focusedValidationItem : null
+              }
+              sandboxReadiness={sandboxReadiness}
+            />
+          )
+        },
+        {
+          key: "node-runtime",
+          label: "运行",
+          children: (
+            <WorkflowNodeRuntimePolicyForm
+              node={selectedNode}
+              nodes={nodes}
+              edges={edges}
+              currentHref={currentHref}
+              onChange={onNodeRuntimePolicyUpdate}
+              highlighted={highlightedNodeSection === "runtime"}
+              highlightedFieldPath={
+                highlightedNodeSection === "runtime" ? highlightedNodeFieldPath : null
+              }
+              focusedValidationItem={
+                highlightedNodeSection === "runtime" ? focusedValidationItem : null
+              }
+              sandboxReadiness={sandboxReadiness}
+            />
+          )
+        },
+        {
+          key: "node-json",
+          label: "JSON",
+          children: (
+            <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+              <div className="workflow-editor-inspector-section">
+                <div className="workflow-editor-inspector-section-title">高级 config JSON</div>
+                <Text type="secondary">
+                  仅在需要精准调整字段时使用，默认仍优先走上面的结构化表单。
+                </Text>
+              </div>
+              <TextArea
+                rows={8}
+                value={nodeConfigText}
+                onChange={(event) => onNodeConfigTextChange(event.target.value)}
+              />
+              <div className="workflow-editor-inspector-json-actions">
+                <Button type="default" onClick={onApplyNodeConfigJson}>
+                  应用配置
+                </Button>
+                <Button danger onClick={onDeleteSelectedNode}>
                   删除节点
                 </Button>
-              </Space>
-            ) : selectedEdge ? (
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                <Space>
-                  <Tag color="purple">edge</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>{selectedEdge.id}</Text>
-                </Space>
-                
-                <div>
-                  <div style={{ marginBottom: 8, fontWeight: 500 }}>分支标签 (Condition)</div>
+              </div>
+            </Space>
+          )
+        }
+      ]
+    : selectedEdge
+      ? [
+          {
+            key: "edge-config",
+            label: "连线",
+            children: (
+              <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+                <div className="workflow-editor-inspector-section">
+                  <div className="workflow-editor-inspector-section-title">分支标签 (Condition)</div>
                   <Input
                     value={selectedEdge.data?.condition ?? ""}
-                    onChange={(event) => onUpdateSelectedEdge({ 
-                      condition: event.target.value,
-                      label: event.target.value.trim() || undefined
-                    })}
+                    onChange={(event) =>
+                      onUpdateSelectedEdge({
+                        condition: event.target.value,
+                        label: event.target.value.trim() || undefined
+                      })
+                    }
                     placeholder="可选的分支说明"
                   />
                 </div>
-    
-                <Button danger onClick={onDeleteSelectedEdge} style={{ width: '100%' }}>
+
+                <Button danger onClick={onDeleteSelectedEdge}>
                   删除连线
                 </Button>
               </Space>
-            ) : (
-              <Empty description="在画布中选择节点或连线以查看属性" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )
           },
           {
-            key: '2',
-            label: '全局变量',
-            children: (
-              <WorkflowEditorVariableForm
-                currentHref={currentHref}
-                variables={workflowVariables}
-                onChange={onWorkflowVariablesChange}
-                highlightedVariableIndex={highlightedVariableIndex}
-                highlightedVariableFieldPath={highlightedVariableFieldPath}
-                focusedValidationItem={focusedValidationItem}
-                sandboxReadiness={sandboxReadiness}
-              />
-            )
+            key: "workflow-variables",
+            label: "变量",
+            children: workflowVariablesPanel
           },
           {
-            key: '3',
-            label: '发布配置',
-            children: (
-              <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                {persistBlockedMessage ? (
-                  <WorkflowPersistBlockerNotice
-                    title="Publish gate"
-                    summary={persistBlockerSummary ?? persistBlockedMessage}
-                    blockers={persistBlockers}
-                    sandboxReadiness={sandboxReadiness}
-                    currentHref={currentHref}
-                    hideRecommendedNextStep={Boolean(persistBlockerRecommendedNextStep)}
-                  />
-                ) : null}
-        
-                <WorkflowEditorPublishForm
-                  currentHref={currentHref}
-                  workflowVersion={workflowVersion}
-                  availableWorkflowVersions={availableWorkflowVersions}
-                  publishEndpoints={workflowPublish}
-                  sandboxReadiness={sandboxReadiness}
-                  onChange={onWorkflowPublishChange}
-                  focusedValidationItem={
-                    focusedValidationItem?.target.scope === "publish" ? focusedValidationItem : null
-                  }
-                  persistBlockers={persistBlockers}
-                  highlightedEndpointIndex={highlightedPublishEndpointIndex}
-                  highlightedEndpointFieldPath={highlightedPublishEndpointFieldPath}
-                />
-              </Space>
-            )
+            key: "workflow-publish",
+            label: "发布",
+            children: workflowPublishPanel
           }
-        ]} />
+        ]
+      : [
+          {
+            key: "workflow-overview",
+            label: "当前焦点",
+            children: (
+              <div className="workflow-editor-inspector-empty-state">
+                <Empty
+                  description="选中节点后再编辑节点配置；未选中时，右侧回到应用级设置。"
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+                <div className="workflow-editor-inspector-empty-hints">
+                  <span className="workflow-editor-inspector-empty-pill">节点：配置 / I/O / 运行</span>
+                  <span className="workflow-editor-inspector-empty-pill">应用：变量 / 发布</span>
+                  <span className="workflow-editor-inspector-empty-pill">目标：不新增第四栏</span>
+                </div>
+              </div>
+            )
+          },
+          {
+            key: "workflow-variables",
+            label: "变量",
+            children: workflowVariablesPanel
+          },
+          {
+            key: "workflow-publish",
+            label: "发布",
+            children: workflowPublishPanel
+          }
+        ];
+
+  return (
+    <div className="workflow-editor-inspector-shell">
+      <div className="workflow-editor-inspector-header">
+        <div className="workflow-editor-inspector-heading">
+          <span className="workflow-editor-inspector-eyebrow">{inspectorHeader.eyebrow}</span>
+          <Title level={5} style={{ margin: 0 }}>
+            {inspectorHeader.title}
+          </Title>
+          <Text type="secondary">{inspectorHeader.description}</Text>
+        </div>
+
+        <div className="workflow-editor-inspector-chip-row" key={inspectorHeaderModeKey}>
+          {inspectorHeader.chips.map((chip) => (
+            <Tag key={chip} className="workflow-editor-inspector-chip">
+              {chip}
+            </Tag>
+          ))}
+        </div>
+      </div>
+
+      <div className="workflow-editor-inspector-body">
+        <Tabs
+          activeKey={activeTabKey}
+          onChange={(key) => setActiveTabKey(key as WorkflowEditorInspectorTabKey)}
+          className="workflow-editor-inspector-tabs"
+          items={tabItems}
+        />
       </div>
     </div>
   );
-}
-
-function stringifyJson(value: unknown) {
-  return JSON.stringify(value ?? {}, null, 2);
 }
