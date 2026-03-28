@@ -12,7 +12,11 @@ import {
   type WorkspaceAppModeId
 } from "@/lib/workspace-app-modes";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
-import { getWorkflowBusinessTrack, WORKFLOW_BUSINESS_TRACKS } from "@/lib/workflow-business-tracks";
+import {
+  getWorkflowBusinessTrack,
+  WORKFLOW_BUSINESS_TRACKS,
+  type WorkflowBusinessTrack
+} from "@/lib/workflow-business-tracks";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
 import { formatWorkspaceRole } from "@/lib/workspace-access";
@@ -102,9 +106,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
   const activeMode: WorkspaceAppModeId = isWorkspaceAppModeId(requestedMode)
     ? requestedMode
     : "all";
-  const activeTrack =
+  const activeTrack: WorkflowBusinessTrack | "all" =
     requestedTrack && WORKFLOW_BUSINESS_TRACKS.some((track) => track.id === requestedTrack)
-      ? requestedTrack
+      ? (requestedTrack as WorkflowBusinessTrack)
       : "all";
   const normalizedKeyword = requestedKeyword.toLowerCase();
 
@@ -189,14 +193,6 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
       key: "follow_up",
       label: `待治理 ${appCards.filter((card) => card.followUpCount > 0).length}`
     }
-  ];
-  const trackItems = [
-    { key: "all", label: "全部类型", count: appCards.length },
-    ...WORKFLOW_BUSINESS_TRACKS.map((track) => ({
-      key: track.id,
-      label: `${track.priority} ${track.id}`,
-      count: appCards.filter((card) => card.track.id === track.id).length
-    }))
   ];
   const modeItems = [
     {
@@ -311,16 +307,6 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
       keyword: requestedKeyword
     })
   }));
-  const trackTabs = trackItems.map((trackItem) => ({
-    ...trackItem,
-    active: trackItem.key === activeTrack,
-    href: buildWorkspaceHref({
-      filter: activeFilter,
-      mode: activeMode,
-      track: trackItem.key,
-      keyword: requestedKeyword
-    })
-  }));
   const statusFilters = filterItems.map((filterItem) => ({
     ...filterItem,
     active: filterItem.key === activeFilter,
@@ -339,6 +325,37 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
       ? buildWorkspaceHref({ filter: activeFilter, mode: activeMode, track: activeTrack })
       : null
   };
+  const activeTrackMeta = activeTrack === "all" ? null : getWorkflowBusinessTrack(activeTrack);
+  const scopePills = [
+    ...(activeTrackMeta
+      ? [
+          {
+            key: "track",
+            label: "业务焦点",
+            value: `${activeTrackMeta.priority} ${activeTrack}`,
+            href: buildWorkspaceHref({
+              filter: activeFilter,
+              mode: activeMode,
+              keyword: requestedKeyword
+            })
+          }
+        ]
+      : []),
+    ...(requestedKeyword
+      ? [
+          {
+            key: "keyword",
+            label: "关键词",
+            value: requestedKeyword,
+            href: buildWorkspaceHref({
+              filter: activeFilter,
+              mode: activeMode,
+              track: activeTrack
+            })
+          }
+        ]
+      : [])
+  ];
   const starterWorkBenchHighlights = starterHighlights.map((starter) => ({
     ...starter,
     modeShortLabel: starter.mode.shortLabel
@@ -359,6 +376,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
       <WorkspaceAppsWorkbench
         activeModeDescription={activeModeDescription}
         activeModeLabel={activeModeMeta?.label ?? null}
+        canManageMembers={workspaceContext.can_manage_members}
         currentRoleLabel={currentRoleLabel}
         currentUserDisplayName={workspaceContext.current_user.display_name}
         filteredApps={filteredApps}
@@ -366,10 +384,10 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
         quickCreateEntries={quickCreateEntries}
         requestedKeyword={requestedKeyword}
         searchState={searchState}
+        scopePills={scopePills}
         starterCount={workflowLibrary.starters.length}
         starterHighlights={starterWorkBenchHighlights}
         statusFilters={statusFilters}
-        trackTabs={trackTabs}
         visibleAppSummary={visibleAppSummary}
         workspaceName={workspaceContext.workspace.name}
         workspaceSignals={workspaceSignals}

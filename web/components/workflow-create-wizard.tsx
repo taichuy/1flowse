@@ -10,10 +10,9 @@ import {
   buildWorkspaceStarterSourceGovernanceSurface,
   type WorkspaceStarterFollowUpSurface
 } from "@/components/workspace-starter-library/shared";
-import { WorkbenchEntryLink, WorkbenchEntryLinks } from "@/components/workbench-entry-links";
+import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
-import { ToolGovernanceSummary } from "@/components/tool-governance-summary";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/get-workflow-publish";
 import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
@@ -77,8 +76,8 @@ type WorkflowCreateWizardProps = {
   tools: PluginToolRegistryItem[];
 };
 
-import { Input, Button, Spin, Layout, Typography, Card, Space, Tag, Modal, Row, Col } from "antd";
-import { PlusOutlined, RocketOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+import { Input, Button, Typography, Tag, Row, Col } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
 
@@ -318,14 +317,14 @@ export function WorkflowCreateWizard({
         return;
       }
 
-    if (selectedStarterMissingToolBlockingSurface) {
-      setMessage(selectedStarterMissingToolBlockingSurface.blockedMessage);
-      setMessageTone("error");
-      return;
-    }
+      if (selectedStarterMissingToolBlockingSurface) {
+        setMessage(selectedStarterMissingToolBlockingSurface.blockedMessage);
+        setMessageTone("error");
+        return;
+      }
 
       const normalizedName = workflowName.trim() || selectedStarter.defaultWorkflowName;
-      setMessage("正在创建 workflow 草稿...");
+      setMessage("正在创建应用草稿...");
       setMessageTone("idle");
 
       try {
@@ -334,7 +333,7 @@ export function WorkflowCreateWizard({
           definition: structuredClone(selectedStarter.definition)
         });
 
-        setMessage(`已创建 ${normalizedName}，正在进入编辑器...`);
+        setMessage(`已创建 ${normalizedName}，正在进入 xyflow Studio...`);
         setMessageTone("success");
         router.push(
           buildWorkflowEditorHrefFromWorkspaceStarterViewState(
@@ -433,12 +432,12 @@ export function WorkflowCreateWizard({
               <Title level={3} style={{ margin: 0, color: '#111827' }}>
                 选择应用模板
               </Title>
-              <Text type="secondary">先按主业务线选入口，再用最小骨架进入编排。</Text>
+              <Text type="secondary">像 Dify 一样先选入口，再把最小草稿直接送进 xyflow Studio。</Text>
 
               {recentWorkflowLink ? (
                 <div className="workflow-create-inline-actions">
                   <Link href={recentWorkflowLink.href} className="workflow-create-inline-link">
-                    {recentWorkflowLink.label}
+                    继续最近草稿
                   </Link>
                 </div>
               ) : null}
@@ -466,73 +465,80 @@ export function WorkflowCreateWizard({
                 <p>{catalogToolCount} 个工具能力已入目录</p>
               </article>
               <article className="workflow-create-hero-stat wide">
-                <span>创建目标</span>
+                <span>Studio handoff</span>
                 <strong>{selectedStarter.defaultWorkflowName}</strong>
-                <p>{selectedStarter.recommendedNextStep}</p>
+                <p>创建后直接进入 xyflow，优先补命名、首个业务节点和基础输出。</p>
               </article>
             </div>
           </div>
 
-          <WorkflowStarterBrowser
-            activeTrack={activeTrack}
-            selectedStarterId={selectedStarter.id}
-            starters={visibleStarters}
-            tracks={starterTracks}
-            sourceLanes={starterSourceLanes}
-            onSelectTrack={handleTrackSelect}
-            onSelectStarter={applyStarterSelection}
-          />
+          <div className="workflow-create-browser-card">
+            <WorkflowStarterBrowser
+              activeTrack={activeTrack}
+              selectedStarterId={selectedStarter.id}
+              starters={visibleStarters}
+              tracks={starterTracks}
+              sourceLanes={starterSourceLanes}
+              onSelectTrack={handleTrackSelect}
+              onSelectStarter={applyStarterSelection}
+            />
+          </div>
 
-          {workflows.length > 0 ? (
-            <div className="workflow-create-recent-section">
-              <div className="workflow-create-recent-header">
-                <div>
-                  <p className="workspace-eyebrow">Recent drafts</p>
-                  <h3>最近工作流</h3>
+          {workflows.length > 0 || selectedStarterNextStepSurface ? (
+            <div className="workflow-create-support-grid">
+              {workflows.length > 0 ? (
+                <div className="workflow-create-recent-section workflow-create-support-card">
+                  <div className="workflow-create-recent-header">
+                    <div>
+                      <p className="workspace-eyebrow">Recent drafts</p>
+                      <h3>继续最近草稿</h3>
+                      <p>如果已经有接近的应用草稿，先继续而不是重复创建。</p>
+                    </div>
+                  </div>
+                  <div className="workflow-create-recent-grid">
+                    {workflows.slice(0, 3).map((workflow) => {
+                      const workflowHref = appendWorkflowLibraryViewState(
+                        buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
+                          workflowId: workflow.id,
+                          viewState: workspaceStarterGovernanceScope,
+                          variant: 'recent'
+                        }).href,
+                        workflow.tool_governance?.missing_tool_ids?.length
+                          ? { definitionIssue: 'missing_tool' }
+                          : {}
+                      );
+
+                      return (
+                        <WorkflowChipLink
+                          currentHref={currentWorkflowCreateHref}
+                          href={workflowHref}
+                          key={workflow.id}
+                          workflow={workflow}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div className="workflow-create-recent-grid">
-                {workflows.slice(0, 3).map((workflow) => {
-                  const workflowHref = appendWorkflowLibraryViewState(
-                    buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState({
-                      workflowId: workflow.id,
-                      viewState: workspaceStarterGovernanceScope,
-                      variant: 'recent'
-                    }).href,
-                    workflow.tool_governance?.missing_tool_ids?.length
-                      ? { definitionIssue: 'missing_tool' }
-                      : {}
-                  );
+              ) : null}
 
-                  return (
-                    <WorkflowChipLink
-                      currentHref={currentWorkflowCreateHref}
-                      href={workflowHref}
-                      key={workflow.id}
-                      workflow={workflow}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {selectedStarterNextStepSurface ? (
-            <div className="workflow-create-followup-card">
-              <WorkspaceStarterFollowUpCard
-                title={surfaceCopy.recommendedNextStepTitle}
-                label={selectedStarterNextStepSurface.label}
-                detail={selectedStarterNextStepSurface.detail}
-                primaryResourceSummary={selectedStarterNextStepSurface.primaryResourceSummary}
-                workflowGovernanceHandoff={selectedStarterNextStepSurface.workflowGovernanceHandoff}
-                actions={
-                  selectedStarterNextStepSurface.href && selectedStarterNextStepSurface.hrefLabel ? (
-                    <Link href={selectedStarterNextStepSurface.href} className="workflow-create-inline-link">
-                      {selectedStarterNextStepSurface.hrefLabel}
-                    </Link>
-                  ) : null
-                }
-              />
+              {selectedStarterNextStepSurface ? (
+                <div className="workflow-create-followup-card workflow-create-support-card">
+                  <WorkspaceStarterFollowUpCard
+                    title={surfaceCopy.recommendedNextStepTitle}
+                    label={selectedStarterNextStepSurface.label}
+                    detail={selectedStarterNextStepSurface.detail}
+                    primaryResourceSummary={selectedStarterNextStepSurface.primaryResourceSummary}
+                    workflowGovernanceHandoff={selectedStarterNextStepSurface.workflowGovernanceHandoff}
+                    actions={
+                      selectedStarterNextStepSurface.href && selectedStarterNextStepSurface.hrefLabel ? (
+                        <Link href={selectedStarterNextStepSurface.href} className="workflow-create-inline-link">
+                          {selectedStarterNextStepSurface.hrefLabel}
+                        </Link>
+                      ) : null
+                    }
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -542,6 +548,17 @@ export function WorkflowCreateWizard({
             <Title level={4} style={{ margin: '0 0 20px', color: '#111827' }}>
               配置草稿
             </Title>
+
+            <div className="workflow-create-side-summary">
+              <div>
+                <span>当前模板</span>
+                <strong>{selectedStarter.name}</strong>
+              </div>
+              <div>
+                <span>进入方式</span>
+                <strong>创建后直达 xyflow</strong>
+              </div>
+            </div>
 
             <div className="workflow-create-form-field">
               <div className="workflow-create-form-label">应用名称</div>
@@ -611,7 +628,7 @@ export function WorkflowCreateWizard({
               loading={isCreating}
               className="workflow-create-primary-button"
             >
-              创建并进入编排
+              创建并进入 xyflow
             </Button>
 
             {message ? (
