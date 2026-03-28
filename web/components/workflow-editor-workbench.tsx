@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
@@ -292,6 +292,12 @@ export function WorkflowEditorWorkbench({
   );
   const selectedNode = displayedNodes.find((node) => node.id === graph.selectedNodeId) ?? null;
   const selectedEdge = graph.edges.find((edge) => edge.id === graph.selectedEdgeId) ?? null;
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed((current) => !current);
+  }, []);
+  const handleToggleInspector = useCallback(() => {
+    setIsInspectorCollapsed((current) => !current);
+  }, []);
   const editorWorkspaceClassName = [
     "editor-workspace",
     isSidebarCollapsed ? "sidebar-collapsed" : null,
@@ -337,8 +343,8 @@ export function WorkflowEditorWorkbench({
           hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
           isSidebarCollapsed={isSidebarCollapsed}
           isInspectorCollapsed={isInspectorCollapsed}
-          onToggleSidebar={() => setIsSidebarCollapsed((current) => !current)}
-          onToggleInspector={() => setIsInspectorCollapsed((current) => !current)}
+          onToggleSidebar={handleToggleSidebar}
+          onToggleInspector={handleToggleInspector}
           onSave={persistence.handleSave}
           onSaveAsWorkspaceStarter={persistence.handleSaveAsWorkspaceStarter}
         />

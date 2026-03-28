@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { Input, Tabs } from "antd";
 import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
@@ -139,7 +139,7 @@ function buildValidationIssueGovernancePreview(item: WorkflowValidationNavigator
   };
 }
 
-export function WorkflowEditorSidebar({
+function WorkflowEditorSidebarComponent({
   currentHref,
   workflowId,
   workflowName,
@@ -314,6 +314,58 @@ export function WorkflowEditorSidebar({
       return haystack.includes(keyword);
     });
   }, [editorNodeLibrary, nodeSearch]);
+  const hasScopedWorkflowLinks = workflowChipLinks.length > 0;
+  const railSummaryPills = useMemo(
+    () =>
+      [
+        primaryNodeLane
+          ? {
+              key: "primary-lane",
+              label: `节点域 · ${primaryNodeLane.shortLabel}`,
+              tone: "accent" as const
+            }
+          : null,
+        {
+          key: "catalog-count",
+          label: `${filteredEditorNodeLibrary.length}/${editorNodeLibrary.length} 个节点`
+        },
+        pluginBackedNodeCount > 0
+          ? {
+              key: "plugin-backed",
+              label: `插件节点 ${pluginBackedNodeCount}`
+            }
+          : null,
+        toolSourceLanes.length > 0
+          ? {
+              key: "tool-lanes",
+              label: `工具域 ${toolSourceLanes.length}`
+            }
+          : null,
+        hasScopedWorkflowLinks
+          ? {
+              key: "draft-count",
+              label: `相关草稿 ${workflowChipLinks.length}`
+            }
+          : null
+      ].filter((item): item is { key: string; label: string; tone?: "accent" } => Boolean(item)),
+    [
+      editorNodeLibrary.length,
+      filteredEditorNodeLibrary.length,
+      hasScopedWorkflowLinks,
+      pluginBackedNodeCount,
+      primaryNodeLane,
+      toolSourceLanes.length,
+      workflowChipLinks.length
+    ]
+  );
+  const laneBadges = useMemo(
+    () =>
+      [...nodeSourceLanes, ...toolSourceLanes].map((lane) => ({
+        key: `${lane.kind}-${lane.label}`,
+        label: `${lane.shortLabel} · ${lane.count}`
+      })),
+    [nodeSourceLanes, toolSourceLanes]
+  );
 
   useEffect(() => {
     setActiveTabKey(preferredTabKey);
@@ -323,21 +375,34 @@ export function WorkflowEditorSidebar({
     setNodeRailView("catalog");
   }, [workflowId]);
 
-  const hasScopedWorkflowLinks = workflowChipLinks.length > 0;
-
   return (
-    <aside className="editor-sidebar" style={{ background: '#fff' }}>
-      <Tabs activeKey={activeTabKey} onChange={setActiveTabKey} centered style={{ height: '100%' }} items={[
+    <aside className="editor-sidebar">
+      <Tabs
+        activeKey={activeTabKey}
+        className="workflow-editor-sidebar-tabs"
+        onChange={setActiveTabKey}
+        centered
+        items={[
         {
           key: '1',
           label: '节点',
           children: (
             <article className="diagnostic-panel editor-panel">
-              <div style={{ marginBottom: 16 }}>
-                <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: '#111827' }}>节点目录</h2>
-                <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0 0' }}>
-                  默认先插入节点；同域草稿切换降到次级 rail，减少对当前画布的干扰。
-                </p>
+              <div className="workflow-editor-rail-header">
+                <div className="workflow-editor-rail-header-copy">
+                  <h2>节点目录</h2>
+                  <p>先插入节点；相关草稿切到次级 rail，不打断当前画布。</p>
+                </div>
+                <div className="workflow-editor-rail-summary" aria-label="节点栏摘要">
+                  {railSummaryPills.map((pill) => (
+                    <span
+                      className={`workflow-editor-rail-summary-pill${pill.tone === "accent" ? " accent" : ""}`}
+                      key={pill.key}
+                    >
+                      {pill.label}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               <div className="workflow-editor-rail-switch" role="tablist" aria-label="Editor node rail view">
@@ -361,42 +426,15 @@ export function WorkflowEditorSidebar({
                 ) : null}
               </div>
 
-              <div className="summary-strip compact-strip">
-                {primaryNodeLane ? (
-                  <div className="summary-card">
-                    <span>Node lane</span>
-                    <strong>{primaryNodeLane.shortLabel}</strong>
-                  </div>
-                ) : null}
-                <div className="summary-card">
-                  <span>Palette nodes</span>
-                  <strong>{filteredEditorNodeLibrary.length}</strong>
+              {laneBadges.length > 0 ? (
+                <div className="workflow-editor-rail-badge-row">
+                  {laneBadges.map((badge) => (
+                    <span className="event-chip" key={badge.key}>
+                      {badge.label}
+                    </span>
+                  ))}
                 </div>
-                <div className="summary-card">
-                  <span>Plugin-backed</span>
-                  <strong>{pluginBackedNodeCount}</strong>
-                </div>
-                <div className="summary-card">
-                  <span>Tool lanes</span>
-                  <strong>{toolSourceLanes.length}</strong>
-                </div>
-              </div>
-
-              <div className="starter-tag-row">
-                {nodeSourceLanes.map((lane) => (
-                  <span className="event-chip" key={`${lane.kind}-${lane.label}`}>
-                    {lane.shortLabel} · {lane.count}
-                  </span>
-                ))}
-              </div>
-
-              <div className="starter-tag-row">
-                {toolSourceLanes.map((lane) => (
-                  <span className="event-chip" key={`${lane.kind}-${lane.label}`}>
-                    {lane.shortLabel} · {lane.count}
-                  </span>
-                ))}
-              </div>
+              ) : null}
 
               <section hidden={nodeRailView !== "catalog"} aria-hidden={nodeRailView !== "catalog"}>
                 <div className="workflow-editor-catalog-search-block">
@@ -428,7 +466,7 @@ export function WorkflowEditorSidebar({
 
                 {plannedNodeLibrary.length > 0 ? (
                   <div className="binding-field compact-stack">
-                    <span className="binding-label">Planned node types</span>
+                    <span className="binding-label">规划中的节点</span>
                     <div className="tool-badge-row">
                       {plannedNodeLibrary.map((item) => (
                         <span className="event-chip" key={`planned-${item.type}`}>
@@ -437,7 +475,7 @@ export function WorkflowEditorSidebar({
                       ))}
                     </div>
                     <small className="section-copy">
-                      这些类型已进入统一目录，但当前仍保持 planned，不进入 palette 或 runtime 主链。
+                      这些类型仅作规划占位，当前不进入节点目录或 runtime 主链。
                     </small>
                   </div>
                 ) : null}
@@ -472,9 +510,9 @@ export function WorkflowEditorSidebar({
               <section hidden={nodeRailView !== "drafts"} aria-hidden={nodeRailView !== "drafts"}>
                 {hasScopedWorkflowLinks ? (
                   <div className="binding-field compact-stack workflow-editor-scoped-workflows">
-                    <span className="binding-label">Scoped workflows</span>
+                    <span className="binding-label">相关草稿</span>
                     <small className="section-copy">
-                      把“切换草稿 / 查看治理”收成次级 rail，默认不打断节点插入。
+                      当前只在这里切换相关草稿，避免和节点插入混在一起。
                     </small>
                     <div className="workflow-editor-catalog-search-meta">
                       <span>当前编辑：{workflowName}</span>
@@ -509,8 +547,8 @@ export function WorkflowEditorSidebar({
             <article className="diagnostic-panel editor-panel">
               <div className="section-heading">
                 <div>
-                  <p className="eyebrow">Status</p>
-                  <h2>Editor feedback</h2>
+                  <p className="eyebrow">编辑器反馈</p>
+                  <h2>当前阻断与下一步</h2>
                 </div>
               </div>
 
@@ -529,7 +567,7 @@ export function WorkflowEditorSidebar({
 
               {persistBlockers.length > 0 ? (
                 <WorkflowPersistBlockerNotice
-                  title="Save gate"
+                  title="保存阻断"
                   summary={persistBlockerSummary}
                   blockers={persistBlockers}
                   sandboxReadiness={sandboxReadiness}
@@ -554,7 +592,7 @@ export function WorkflowEditorSidebar({
               <SandboxReadinessOverviewCard
                 currentHref={currentHref}
                 readiness={sandboxReadiness}
-                title="Execution preflight"
+                title="执行前检查"
                 intro={executionPreflightMessage}
                 hideWhenHealthy={toolExecutionValidationIssueCount === 0}
                 hideRecommendedNextStep={Boolean(resolvedPersistBlockerRecommendedNextStep)}
@@ -631,10 +669,13 @@ export function WorkflowEditorSidebar({
             />
           )
         }
-      ]} />
+      ]}
+      />
     </aside>
   );
 }
+
+export const WorkflowEditorSidebar = memo(WorkflowEditorSidebarComponent);
 
 function mergeWorkspaceStarterSelectionIntoHref(href: string, starterId: string) {
   const [pathWithQuery, hash = ""] = href.split("#");

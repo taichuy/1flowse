@@ -348,8 +348,8 @@ describe("WorkflowEditorSidebar", () => {
       })
     );
 
-    expect(html).toContain("Execution preflight");
-    expect(html).toContain("Save gate");
+    expect(html).toContain("执行前检查");
+    expect(html).toContain("保存阻断");
     expect(html).toContain("当前保存会被 2 类问题阻断");
     expect(html).toContain("保存前还有 2 个 execution capability 问题");
     expect(html).toContain("sandbox backend");
@@ -417,7 +417,7 @@ describe("WorkflowEditorSidebar", () => {
       })
     );
 
-    expect(html).toContain("Save gate");
+    expect(html).toContain("保存阻断");
     expect(html).toContain("当前保存会被 2 类问题阻断");
     expect(html).not.toContain("Recommended next step");
     expect(html).not.toContain("Open workflow library");

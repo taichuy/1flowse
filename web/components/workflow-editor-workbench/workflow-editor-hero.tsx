@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { memo, useState } from "react";
 import { Button, Space, Typography, Tag, Tooltip, Input } from "antd";
 import { SaveOutlined, PlayCircleOutlined, WarningOutlined, EditOutlined } from "@ant-design/icons";
 import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
@@ -49,7 +49,7 @@ type WorkflowEditorHeroProps = {
   onSaveAsWorkspaceStarter: () => void;
 };
 
-export function WorkflowEditorHero({
+function WorkflowEditorHeroComponent({
   workflowName,
   onWorkflowNameChange,
   workflowVersion,
@@ -164,15 +164,27 @@ export function WorkflowEditorHero({
         ) : null}
       </div>
 
-      <Space size="middle" wrap className="workflow-editor-action-row">
-        <Button type={isSidebarCollapsed ? "default" : "text"} onClick={onToggleSidebar}>
-          {isSidebarCollapsed ? "展开节点栏" : "收起节点栏"}
+      <Space size="small" wrap className="workflow-editor-action-row">
+        <Button
+          className="workflow-editor-toggle-button"
+          type={isSidebarCollapsed ? "default" : "text"}
+          onClick={onToggleSidebar}
+        >
+          节点栏
         </Button>
-        <Button type={isInspectorCollapsed ? "default" : "text"} onClick={onToggleInspector}>
-          {isInspectorCollapsed ? "展开属性栏" : "收起属性栏"}
+        <Button
+          className="workflow-editor-toggle-button"
+          type={isInspectorCollapsed ? "default" : "text"}
+          onClick={onToggleInspector}
+        >
+          属性栏
         </Button>
-        <Button icon={<SaveOutlined />} onClick={onSaveAsWorkspaceStarter} loading={isSavingStarter}>
-          保存为模板
+        <Button
+          icon={<SaveOutlined />}
+          onClick={onSaveAsWorkspaceStarter}
+          loading={isSavingStarter}
+        >
+          存为模板
         </Button>
         <Button
           type="primary"
@@ -194,3 +206,5 @@ export function WorkflowEditorHero({
     </div>
   );
 }
+
+export const WorkflowEditorHero = memo(WorkflowEditorHeroComponent);

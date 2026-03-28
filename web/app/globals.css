@@ -3190,11 +3190,21 @@ a {
 }
 
 .workflow-editor-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-end;
 }
 
 .workflow-editor-action-row .ant-btn {
   border-radius: 999px;
+  min-width: 0;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.workflow-editor-toggle-button.ant-btn {
+  padding-inline: 10px;
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-action-row {
@@ -3387,11 +3397,74 @@ a {
   padding: 16px;
 }
 
+.workflow-editor-sidebar-tabs {
+  height: 100%;
+}
+
+.workflow-editor-sidebar-tabs .ant-tabs-content-holder,
+.workflow-editor-sidebar-tabs .ant-tabs-tabpane {
+  height: 100%;
+}
+
+.workflow-editor-rail-header {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.workflow-editor-rail-header-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-editor-rail-header-copy h2,
+.workflow-editor-rail-header-copy p {
+  margin: 0;
+}
+
+.workflow-editor-rail-header-copy h2 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.workflow-editor-rail-header-copy p {
+  color: #667085;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.workflow-editor-rail-summary,
+.workflow-editor-rail-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-editor-rail-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid #dbe5f1;
+  background: #f8faff;
+  color: #526079;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.workflow-editor-rail-summary-pill.accent {
+  border-color: #cfe0ff;
+  background: #edf4ff;
+  color: #1f5ed5;
+}
+
 .workflow-editor-rail-switch {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .workflow-editor-rail-switch-button {
@@ -3454,7 +3527,7 @@ a {
 .workflow-editor-catalog-search-block {
   display: grid;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .workflow-editor-catalog-search-meta {
@@ -3468,17 +3541,17 @@ a {
 .workflow-editor-catalog-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 6px;
+  margin-top: 14px;
 }
 
 .workflow-editor-catalog-button {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #ffffff;
   text-align: left;
   cursor: pointer;

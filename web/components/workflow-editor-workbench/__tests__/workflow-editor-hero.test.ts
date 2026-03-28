@@ -50,7 +50,7 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain("1 运行");
     expect(html).toContain("已选中：LLM Agent");
     expect(html).toContain("当前保存仍被 Publish draft 阻断。");
-    expect(html).toContain("保存为模板");
+    expect(html).toContain("存为模板");
     expect(html).toContain("保存");
     expect(html).toContain("运行");
     expect(html).toContain("workflow-editor-topbar");
@@ -134,8 +134,8 @@ describe("WorkflowEditorHero", () => {
     );
 
     expect(html).toContain("workflow-editor-topbar canvas-focused");
-    expect(html).toContain("展开节点栏");
-    expect(html).toContain("展开属性栏");
+    expect(html).toContain("节点栏");
+    expect(html).toContain("属性栏");
     expect(html).toContain("3 节点");
     expect(html).toContain("2 连线");
     expect(html).not.toContain("1 工具");
