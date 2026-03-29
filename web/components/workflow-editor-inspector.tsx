@@ -553,8 +553,8 @@ export function WorkflowEditorInspector({
                   </div>
                 ) : null}
                 <div className="workflow-editor-inspector-empty-state" style={{ padding: "40px 16px", textAlign: "center", color: "var(--ant-color-text-description)" }}>
-                  <p style={{ marginBottom: 8 }}>选中节点后，右侧面板将自动跟随显示节点配置。</p>
-                  <p style={{ fontSize: "12px", opacity: 0.8 }}>未选中节点时，可在此进行应用级的“变量”和“发布”设置；选中节点后可从顶栏直接打开 AI 辅助。</p>
+                  <p style={{ marginBottom: 8 }}>选中节点后，右侧面板只跟随当前节点。</p>
+                  <p style={{ fontSize: "12px", opacity: 0.8 }}>未选中时只保留变量与发布；从顶栏打开 AI 辅助后，仍在这里展开。</p>
                 </div>
               </Space>
             )

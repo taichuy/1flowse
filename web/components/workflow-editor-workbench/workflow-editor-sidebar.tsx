@@ -349,7 +349,7 @@ function WorkflowEditorSidebarComponent({
         hasScopedWorkflowLinks
           ? {
               key: "draft-count",
-              label: `相关草稿 ${workflowChipLinks.length}`
+              label: `同域草稿 ${workflowChipLinks.length}`
             }
           : null
       ].filter((item): item is { key: string; label: string; tone?: "accent" } => Boolean(item)),
@@ -396,7 +396,7 @@ function WorkflowEditorSidebarComponent({
               <div className="workflow-editor-rail-header">
                 <div className="workflow-editor-rail-header-copy">
                   <h2>节点目录</h2>
-                  <p>先插节点，相关草稿按需再看。</p>
+                  <p>先插节点，再切草稿。</p>
                 </div>
                 <div className="workflow-editor-rail-summary" aria-label="节点栏摘要">
                   {railSummaryPills.map((pill) => (
@@ -452,7 +452,7 @@ function WorkflowEditorSidebarComponent({
                   />
                   <div className="workflow-editor-catalog-search-meta">
                     <span>{filteredEditorNodeLibrary.length} / {editorNodeLibrary.length} 个节点</span>
-                    {nodeSearch.trim() ? <span>当前筛选：{nodeSearch.trim()}</span> : <span>支持按名称、类型搜索</span>}
+                    {nodeSearch.trim() ? <span>当前筛选：{nodeSearch.trim()}</span> : <span>名称 / 类型搜索</span>}
                   </div>
                 </div>
 
@@ -469,7 +469,7 @@ function WorkflowEditorSidebarComponent({
                       ))}
                     </div>
                     <small className="section-copy">
-                      这些类型仅作规划占位，暂不进入当前画布主链。
+                      规划占位，暂不进入当前画布。
                     </small>
                   </details>
                 ) : null}
@@ -495,7 +495,7 @@ function WorkflowEditorSidebarComponent({
                   ))}
                   {filteredEditorNodeLibrary.length === 0 ? (
                     <div className="workflow-editor-catalog-empty">
-                      没找到匹配节点。换个关键词，或从右侧配置继续编辑当前节点。
+                      没找到匹配节点。换个关键词，或继续配置当前节点。
                     </div>
                   ) : null}
                 </div>
@@ -504,9 +504,9 @@ function WorkflowEditorSidebarComponent({
               <section hidden={nodeRailView !== "drafts"} aria-hidden={nodeRailView !== "drafts"}>
                 {hasScopedWorkflowLinks ? (
                   <div className="binding-field compact-stack workflow-editor-scoped-workflows">
-                    <span className="binding-label">相关草稿</span>
+                    <span className="binding-label">同域草稿</span>
                     <small className="section-copy">
-                      当前只在这里切换相关草稿，避免和节点插入混在一起。
+                      切草稿只放这里，不和节点插入混在一起。
                     </small>
                     <div className="workflow-editor-catalog-search-meta">
                       <span>当前编辑：{workflowName}</span>
@@ -526,7 +526,7 @@ function WorkflowEditorSidebarComponent({
                   </div>
                 ) : (
                   <div className="workflow-editor-catalog-empty">
-                    当前还没有可切换的同域草稿，先从节点目录继续补当前工作流。
+                    暂无同域草稿，继续从节点目录补当前 workflow。
                   </div>
                 )}
               </section>
