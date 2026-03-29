@@ -2,7 +2,13 @@
 
 import React, { memo, useState } from "react";
 import { Button, Space, Typography, Tag, Tooltip, Input } from "antd";
-import { SaveOutlined, PlayCircleOutlined, WarningOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  SaveOutlined,
+  PlayCircleOutlined,
+  WarningOutlined,
+  EditOutlined,
+  RobotOutlined
+} from "@ant-design/icons";
 import type { OperatorRecommendedNextStep } from "@/lib/operator-follow-up-presenters";
 import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { WorkflowPersistBlocker } from "./persist-blockers";
@@ -43,8 +49,10 @@ type WorkflowEditorHeroProps = {
   hasScopedWorkspaceStarterFilters?: boolean;
   isSidebarCollapsed?: boolean;
   isInspectorCollapsed?: boolean;
+  hasNodeAssistant?: boolean;
   onToggleSidebar?: () => void;
   onToggleInspector?: () => void;
+  onOpenAssistant?: () => void;
   onSave: () => void;
   onSaveAsWorkspaceStarter: () => void;
   onOpenRunLauncher?: () => void;
@@ -74,8 +82,10 @@ function WorkflowEditorHeroComponent({
   isSavingStarter,
   isSidebarCollapsed = false,
   isInspectorCollapsed = false,
+  hasNodeAssistant = false,
   onToggleSidebar,
   onToggleInspector,
+  onOpenAssistant,
   onSave,
   onSaveAsWorkspaceStarter,
   onOpenRunLauncher
@@ -181,6 +191,16 @@ function WorkflowEditorHeroComponent({
         >
           属性栏
         </Button>
+        {hasNodeAssistant ? (
+          <Button
+            className="workflow-editor-toggle-button"
+            type="default"
+            icon={<RobotOutlined />}
+            onClick={onOpenAssistant}
+          >
+            AI 辅助
+          </Button>
+        ) : null}
         <Button
           icon={<SaveOutlined />}
           onClick={onSaveAsWorkspaceStarter}

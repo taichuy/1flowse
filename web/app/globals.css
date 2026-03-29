@@ -703,6 +703,11 @@ a {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
 }
 
+.workflow-studio-shell-bar-compact {
+  padding: 10px 14px;
+  gap: 8px;
+}
+
 .workflow-studio-breadcrumb-row,
 .workflow-studio-inline-metrics {
   display: flex;

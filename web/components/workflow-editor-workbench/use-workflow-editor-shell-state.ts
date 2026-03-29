@@ -88,6 +88,7 @@ export function useWorkflowEditorShellState({
     useState<WorkflowValidationNavigatorItem | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
+  const [assistantRequestSerial, setAssistantRequestSerial] = useState(0);
   const [hasLoadedPanelPreferences, setHasLoadedPanelPreferences] = useState(false);
 
   useEffect(() => {
@@ -146,6 +147,12 @@ export function useWorkflowEditorShellState({
     setIsInspectorCollapsed((current) => !current);
   }, []);
 
+  const openNodeAssistant = useCallback(() => {
+    setIsSidebarCollapsed(true);
+    setIsInspectorCollapsed(false);
+    setAssistantRequestSerial((current) => current + 1);
+  }, []);
+
   const getInspectorFocusState = useCallback(
     (selectedNodeId: string | null) =>
       resolveWorkflowEditorInspectorFocusState(validationFocusItem, selectedNodeId),
@@ -170,8 +177,10 @@ export function useWorkflowEditorShellState({
     setIsSidebarCollapsed,
     isInspectorCollapsed,
     setIsInspectorCollapsed,
+    assistantRequestSerial,
     toggleSidebar,
     toggleInspector,
+    openNodeAssistant,
     getInspectorFocusState
   };
 }

@@ -130,6 +130,7 @@ export default async function WorkflowEditorPage({
   });
   const workflowStageLabel =
     publishedEndpoints.length > 0 ? "publish ready" : "draft only";
+  const isEditorSurface = activeStudioSurface === "editor";
 
   return (
     <WorkspaceShell
@@ -140,18 +141,29 @@ export default async function WorkflowEditorPage({
       workspaceName={workspaceContext.workspace.name}
     >
       <div className="workspace-main workflow-studio-main">
-        <section className="workflow-studio-shell-bar">
+        <section
+          className={[
+            "workflow-studio-shell-bar",
+            isEditorSurface ? "workflow-studio-shell-bar-compact" : null
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <div className="workflow-studio-breadcrumb-row">
             <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
               编排中心
             </Link>
-            <span aria-hidden="true" className="workflow-studio-breadcrumb-separator">
-              /
-            </span>
-            <span className="workflow-studio-breadcrumb-current">{workflow.name}</span>
-            <span className="workflow-studio-inline-tag">v{workflow.version}</span>
-            <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
-            <span className="workflow-studio-shell-mode">xyflow studio</span>
+            {isEditorSurface ? null : (
+              <>
+                <span aria-hidden="true" className="workflow-studio-breadcrumb-separator">
+                  /
+                </span>
+                <span className="workflow-studio-breadcrumb-current">{workflow.name}</span>
+                <span className="workflow-studio-inline-tag">v{workflow.version}</span>
+                <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
+                <span className="workflow-studio-shell-mode">xyflow studio</span>
+              </>
+            )}
           </div>
 
           <nav className="workflow-studio-surface-nav" aria-label="Workflow studio surfaces">

@@ -114,8 +114,10 @@ export function useWorkflowEditorPanels({
     hasScopedWorkspaceStarterFilters,
     isSidebarCollapsed: shell.isSidebarCollapsed,
     isInspectorCollapsed: shell.isInspectorCollapsed,
+    hasNodeAssistant: Boolean(graph.selectedNodeId),
     onToggleSidebar: shell.toggleSidebar,
     onToggleInspector: shell.toggleInspector,
+    onOpenAssistant: shell.openNodeAssistant,
     onSave: persistence.handleSave,
     onSaveAsWorkspaceStarter: persistence.handleSaveAsWorkspaceStarter,
     onOpenRunLauncher: () => setIsRunLauncherOpen(true)
@@ -201,6 +203,7 @@ export function useWorkflowEditorPanels({
     persistBlockerSummary,
     persistBlockers: validation.persistBlockers,
     persistBlockerRecommendedNextStep,
+    assistantRequestSerial: shell.assistantRequestSerial,
     sandboxReadiness
   };
 

@@ -36,8 +36,10 @@ describe("WorkflowEditorHero", () => {
         persistBlockers: [],
         isSaving: false,
         isSavingStarter: false,
+        hasNodeAssistant: true,
         onSave: () => undefined,
-        onSaveAsWorkspaceStarter: () => undefined
+        onSaveAsWorkspaceStarter: () => undefined,
+        onOpenAssistant: () => undefined
       })
     );
 
@@ -50,6 +52,7 @@ describe("WorkflowEditorHero", () => {
     expect(html).toContain("1 运行");
     expect(html).toContain("已选中：LLM Agent");
     expect(html).toContain("当前保存仍被 Publish draft 阻断。");
+    expect(html).toContain("AI 辅助");
     expect(html).toContain("存为模板");
     expect(html).toContain("保存");
     expect(html).toContain("运行");

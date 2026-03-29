@@ -119,5 +119,6 @@ describe("WorkflowEditorInspector", () => {
     expect(html).toContain("变量");
     expect(html).toContain("发布");
     expect(html).toContain("选中节点后，右侧面板将自动跟随显示节点配置。");
+    expect(html).toContain("选中节点后可从顶栏直接打开 AI 辅助。");
   });
 });

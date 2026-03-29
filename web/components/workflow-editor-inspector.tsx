@@ -93,6 +93,7 @@ type WorkflowEditorInspectorProps = {
   persistBlockerSummary?: string | null;
   persistBlockers: WorkflowPersistBlocker[];
   persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
+  assistantRequestSerial?: number;
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
@@ -133,6 +134,7 @@ export function WorkflowEditorInspector({
   persistBlockerSummary = null,
   persistBlockers,
   persistBlockerRecommendedNextStep = null,
+  assistantRequestSerial = 0,
   sandboxReadiness
 }: WorkflowEditorInspectorProps) {
   const preferredTabKey = useMemo<WorkflowEditorInspectorTabKey>(() => {
@@ -182,6 +184,14 @@ export function WorkflowEditorInspector({
   useEffect(() => {
     setActiveTabKey(preferredTabKey);
   }, [preferredTabKey]);
+
+  useEffect(() => {
+    if (!assistantContext || assistantRequestSerial === 0) {
+      return;
+    }
+
+    setActiveTabKey("node-assistant");
+  }, [assistantContext, assistantRequestSerial]);
 
   useEffect(() => {
     if (!assistantContext) {
@@ -544,7 +554,7 @@ export function WorkflowEditorInspector({
                 ) : null}
                 <div className="workflow-editor-inspector-empty-state" style={{ padding: "40px 16px", textAlign: "center", color: "var(--ant-color-text-description)" }}>
                   <p style={{ marginBottom: 8 }}>选中节点后，右侧面板将自动跟随显示节点配置。</p>
-                  <p style={{ fontSize: "12px", opacity: 0.8 }}>未选中节点时，可在此进行应用级的“变量”和“发布”设置。</p>
+                  <p style={{ fontSize: "12px", opacity: 0.8 }}>未选中节点时，可在此进行应用级的“变量”和“发布”设置；选中节点后可从顶栏直接打开 AI 辅助。</p>
                 </div>
               </Space>
             )
