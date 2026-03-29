@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -14,11 +14,6 @@ import { WorkbenchEntryLinks } from "@/components/workbench-entry-links";
 import { WorkflowStarterBrowser } from "@/components/workflow-starter-browser";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/get-workflow-publish";
-import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
-import {
-  getWorkflowBusinessTrackCreateSurface,
-  WORKFLOW_BUSINESS_TRACKS
-} from "@/lib/workflow-business-tracks";
 import {
   appendWorkflowLibraryViewState,
 } from "@/lib/workflow-library-query";
@@ -49,18 +44,15 @@ import {
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
-  buildWorkflowLibraryHrefFromWorkspaceStarterViewState,
   buildWorkspaceHrefFromWorkspaceStarterViewState,
   buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState,
   hasScopedWorkspaceStarterGovernanceFilters,
-  pickWorkspaceStarterGovernanceQueryScope,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
 import {
   buildWorkflowStarterTemplates,
   buildWorkflowStarterTracks,
-  type WorkflowStarterTemplate,
-  type WorkflowStarterTemplateId
+  type WorkflowStarterTemplate
 } from "@/lib/workflow-starters";
 
 type WorkflowCreateWizardProps = {
@@ -76,6 +68,7 @@ type WorkflowCreateWizardProps = {
 
 import { Input, Button, Typography, Tag } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
+import { useWorkflowCreateShellState } from "@/components/workflow-create-wizard/use-workflow-create-shell-state";
 
 const { Title, Text } = Typography;
 
@@ -88,7 +81,6 @@ export function WorkflowCreateWizard({
   tools
 }: WorkflowCreateWizardProps) {
   const router = useRouter();
-  const preferredStarterId = governanceQueryScope.selectedTemplateId ?? undefined;
   const searchQuery = governanceQueryScope.searchQuery;
   const sourceGovernanceKind =
     governanceQueryScope.sourceGovernanceKind === "all"
@@ -103,36 +95,29 @@ export function WorkflowCreateWizard({
     () => buildWorkflowStarterTracks(starterTemplates),
     [starterTemplates]
   );
-  const defaultStarter =
-    starterTemplates.find((starter) => starter.id === preferredStarterId) ??
-    starterTemplates[0] ??
-    null;
-  const [activeTrack, setActiveTrack] = useState(
-    governanceQueryScope.activeTrack === "all"
-      ? (defaultStarter?.businessTrack ?? WORKFLOW_BUSINESS_TRACKS[0].id)
-      : governanceQueryScope.activeTrack
-  );
-  const [governanceActiveTrack, setGovernanceActiveTrack] = useState(
-    governanceQueryScope.activeTrack
-  );
-  const [selectedStarterId, setSelectedStarterId] =
-    useState<WorkflowStarterTemplateId | null>(defaultStarter?.id ?? null);
-  const [workflowName, setWorkflowName] = useState(defaultStarter?.defaultWorkflowName ?? "");
-  const [message, setMessage] = useState<string | null>(null);
-  const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
-  const [isCreating, startCreateTransition] = useTransition();
-
-  const selectedStarter = useMemo(
-    () =>
-      (selectedStarterId
-        ? starterTemplates.find((starter) => starter.id === selectedStarterId)
-        : null) ?? defaultStarter,
-    [defaultStarter, selectedStarterId, starterTemplates]
-  );
-  const activeTrackPresentation = useMemo(
-    () => getWorkflowBusinessTrackCreateSurface(activeTrack),
-    [activeTrack]
-  );
+  const {
+    activeTrack,
+    activeTrackPresentation,
+    applyStarterSelection,
+    clearFeedback,
+    createSignalItems,
+    handleTrackSelect,
+    isCreating,
+    message,
+    messageTone,
+    runCreateTransition,
+    selectedStarter,
+    selectedStarterTrackPresentation,
+    setFeedback,
+    setWorkflowName,
+    visibleStarters,
+    workflowName,
+    workspaceStarterGovernanceScope
+  } = useWorkflowCreateShellState({
+    governanceQueryScope,
+    starterTemplates,
+    workflowsCount: workflows.length
+  });
   const selectedStarterSandboxBadges = useMemo(
     () =>
       selectedStarter
@@ -161,27 +146,6 @@ export function WorkflowCreateWizard({
       (selectedStarter.origin === "workspace" ||
         selectedStarter.createdFromWorkflowId ||
         selectedStarterSourceGovernance)
-  );
-  const workspaceStarterGovernanceScope = useMemo<WorkspaceStarterGovernanceQueryScope>(
-    () =>
-      pickWorkspaceStarterGovernanceQueryScope({
-        activeTrack: governanceActiveTrack,
-        sourceGovernanceKind: sourceGovernanceKind ?? "all",
-        needsFollowUp,
-        searchQuery,
-        selectedTemplateId:
-          selectedStarter?.origin === "workspace"
-            ? selectedStarter.id
-            : governanceQueryScope.selectedTemplateId
-      }),
-    [
-      governanceActiveTrack,
-      governanceQueryScope.selectedTemplateId,
-      needsFollowUp,
-      searchQuery,
-      selectedStarter,
-      sourceGovernanceKind
-    ]
   );
   const currentWorkflowCreateHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState(
     workspaceStarterGovernanceScope
@@ -257,10 +221,6 @@ export function WorkflowCreateWizard({
         : null,
     [selectedStarter]
   );
-  const selectedStarterTrackPresentation = useMemo(
-    () => getWorkflowBusinessTrackCreateSurface(selectedStarter?.businessTrack ?? activeTrack),
-    [activeTrack, selectedStarter?.businessTrack]
-  );
   const selectedStarterPreviewNodes = useMemo(
     () =>
       (selectedStarter?.definition.nodes ?? []).slice(0, 4).map((node) => {
@@ -273,80 +233,19 @@ export function WorkflowCreateWizard({
     0,
     (selectedStarter?.definition.nodes?.length ?? 0) - selectedStarterPreviewNodes.length
   );
-  const visibleStarters = useMemo(
-    () =>
-      starterTemplates.filter((starter) =>
-        activeTrack ? starter.businessTrack === activeTrack : true
-      ),
-    [activeTrack, starterTemplates]
-  );
-  const createSignalItems = [
-    { label: "模式", value: activeTrackPresentation.label },
-    { label: "模板", value: `${visibleStarters.length} 个` },
-    { label: "草稿", value: `${workflows.length} 个` }
-  ];
-
-  const applyStarterSelection = (
-    nextStarterId: WorkflowStarterTemplateId,
-    currentStarterId: WorkflowStarterTemplateId | null = selectedStarterId
-  ) => {
-    const currentStarter =
-      (currentStarterId
-        ? starterTemplates.find((starter) => starter.id === currentStarterId)
-        : null) ?? defaultStarter;
-    const nextStarter =
-      starterTemplates.find((starter) => starter.id === nextStarterId) ?? defaultStarter;
-
-    if (!nextStarter) {
-      return;
-    }
-
-    if (
-      !workflowName.trim() ||
-      (currentStarter
-        ? workflowName.trim() === currentStarter.defaultWorkflowName
-        : false)
-    ) {
-      setWorkflowName(nextStarter.defaultWorkflowName);
-    }
-
-    setSelectedStarterId(nextStarterId);
-    setActiveTrack(nextStarter.businessTrack);
-    setMessage(null);
-    setMessageTone("idle");
-  };
-
-  const handleTrackSelect = (trackId: (typeof starterTracks)[number]["id"]) => {
-    setActiveTrack(trackId);
-    setGovernanceActiveTrack(trackId);
-
-    const nextVisibleStarters = starterTemplates.filter(
-      (starter) => starter.businessTrack === trackId
-    );
-    if (nextVisibleStarters.some((starter) => starter.id === selectedStarterId)) {
-      return;
-    }
-
-    if (nextVisibleStarters[0]) {
-      applyStarterSelection(nextVisibleStarters[0].id);
-    }
-  };
-
   const handleCreateWorkflow = () => {
-    startCreateTransition(async () => {
+    runCreateTransition(async () => {
       if (!selectedStarter) {
         return;
       }
 
       if (selectedStarterMissingToolBlockingSurface) {
-        setMessage(selectedStarterMissingToolBlockingSurface.blockedMessage);
-        setMessageTone("error");
+        setFeedback(selectedStarterMissingToolBlockingSurface.blockedMessage, "error");
         return;
       }
 
       const normalizedName = workflowName.trim() || selectedStarter.defaultWorkflowName;
-      setMessage("正在创建应用草稿...");
-      setMessageTone("idle");
+      setFeedback("正在创建应用草稿...", "idle");
 
       try {
         const body = await createWorkflow({
@@ -354,8 +253,7 @@ export function WorkflowCreateWizard({
           definition: structuredClone(selectedStarter.definition)
         });
 
-        setMessage(`已创建 ${normalizedName}，正在进入 xyflow Studio...`);
-        setMessageTone("success");
+        setFeedback(`已创建 ${normalizedName}，正在进入 xyflow Studio...`, "success");
         router.push(
           buildWorkflowEditorHrefFromWorkspaceStarterViewState(
             body.id,
@@ -364,12 +262,12 @@ export function WorkflowCreateWizard({
         );
         router.refresh();
       } catch (error) {
-        setMessage(
+        setFeedback(
           error instanceof WorkflowDefinitionValidationError
             ? error.message
-            : "无法连接后端创建 workflow，请确认 API 已启动。"
+            : "无法连接后端创建 workflow，请确认 API 已启动。",
+          "error"
         );
-        setMessageTone("error");
       }
     });
   };
@@ -554,7 +452,10 @@ export function WorkflowCreateWizard({
               <Input
                 size="large"
                 value={workflowName}
-                onChange={(event) => setWorkflowName(event.target.value)}
+                onChange={(event) => {
+                  clearFeedback();
+                  setWorkflowName(event.target.value);
+                }}
                 placeholder={selectedStarter.defaultWorkflowName}
               />
             </div>

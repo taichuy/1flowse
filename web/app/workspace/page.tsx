@@ -7,25 +7,27 @@ import { getWorkflows } from "@/lib/get-workflows";
 import {
   getWorkspaceAppModeMeta,
   inferWorkspaceAppMode,
-  isWorkspaceAppModeId,
   listWorkspaceAppModes,
   type WorkspaceAppModeId
 } from "@/lib/workspace-app-modes";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import {
   getWorkflowBusinessTrack,
-  WORKFLOW_BUSINESS_TRACKS,
   type WorkflowBusinessTrack
 } from "@/lib/workflow-business-tracks";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
 import { formatWorkspaceRole } from "@/lib/workspace-access";
+import {
+  buildWorkspaceAppHref,
+  buildWorkspaceAppSearchFormState,
+  readWorkspaceAppViewState,
+  type WorkspaceFilterKey
+} from "@/lib/workspace-app-query-state";
 
 type WorkspacePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
-
-type WorkspaceFilterKey = "all" | "draft" | "published" | "follow_up";
 
 type WorkspaceAppCard = {
   id: string;
@@ -43,45 +45,6 @@ type WorkspaceAppCard = {
   followUpCount: number;
 };
 
-function readSearchParam(
-  searchParams: Record<string, string | string[] | undefined>,
-  key: string
-) {
-  const value = searchParams[key];
-  if (typeof value === "string") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value[0] ?? "";
-  }
-  return "";
-}
-
-function buildWorkspaceHref(options: {
-  filter?: WorkspaceFilterKey;
-  mode?: WorkspaceAppModeId;
-  track?: string;
-  keyword?: string;
-}) {
-  const searchParams = new URLSearchParams();
-
-  if (options.filter && options.filter !== "all") {
-    searchParams.set("filter", options.filter);
-  }
-  if (options.mode && options.mode !== "all") {
-    searchParams.set("mode", options.mode);
-  }
-  if (options.track && options.track !== "all") {
-    searchParams.set("track", options.track);
-  }
-  if (options.keyword && options.keyword.trim()) {
-    searchParams.set("keyword", options.keyword.trim());
-  }
-
-  const query = searchParams.toString();
-  return query ? `/workspace?${query}` : "/workspace";
-}
-
 function buildWorkflowStarterCreateHref(starterId: string) {
   return `/workflows/new?starter=${encodeURIComponent(starterId)}`;
 }
@@ -93,23 +56,8 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
   }
 
   const resolvedSearchParams = (await searchParams) ?? {};
-  const requestedFilter = readSearchParam(resolvedSearchParams, "filter");
-  const requestedMode = readSearchParam(resolvedSearchParams, "mode");
-  const requestedTrack = readSearchParam(resolvedSearchParams, "track");
-  const requestedKeyword = readSearchParam(resolvedSearchParams, "keyword").trim();
-  const activeFilter: WorkspaceFilterKey =
-    requestedFilter === "draft" ||
-    requestedFilter === "published" ||
-    requestedFilter === "follow_up"
-      ? requestedFilter
-      : "all";
-  const activeMode: WorkspaceAppModeId = isWorkspaceAppModeId(requestedMode)
-    ? requestedMode
-    : "all";
-  const activeTrack: WorkflowBusinessTrack | "all" =
-    requestedTrack && WORKFLOW_BUSINESS_TRACKS.some((track) => track.id === requestedTrack)
-      ? (requestedTrack as WorkflowBusinessTrack)
-      : "all";
+  const { activeFilter, activeMode, activeTrack, keyword: requestedKeyword } =
+    readWorkspaceAppViewState(resolvedSearchParams);
   const normalizedKeyword = requestedKeyword.toLowerCase();
 
   const [workflowSummaries, workflowLibrary, systemOverview] = await Promise.all([
@@ -304,31 +252,29 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
   const modeTabs = modeItems.map((modeItem) => ({
     ...modeItem,
     active: modeItem.key === activeMode,
-    href: buildWorkspaceHref({
-      filter: activeFilter,
-      mode: modeItem.key,
-      track: activeTrack,
+    href: buildWorkspaceAppHref({
+      activeFilter,
+      activeMode: modeItem.key,
+      activeTrack,
       keyword: requestedKeyword
     })
   }));
   const statusFilters = filterItems.map((filterItem) => ({
     ...filterItem,
     active: filterItem.key === activeFilter,
-    href: buildWorkspaceHref({
-      filter: filterItem.key as WorkspaceFilterKey,
-      mode: activeMode,
-      track: activeTrack,
+    href: buildWorkspaceAppHref({
+      activeFilter: filterItem.key as WorkspaceFilterKey,
+      activeMode,
+      activeTrack,
       keyword: requestedKeyword
     })
   }));
-  const searchState = {
-    filter: activeFilter === "all" ? null : activeFilter,
-    mode: activeMode === "all" ? null : activeMode,
-    track: activeTrack === "all" ? null : activeTrack,
-    clearHref: requestedKeyword
-      ? buildWorkspaceHref({ filter: activeFilter, mode: activeMode, track: activeTrack })
-      : null
-  };
+  const searchState = buildWorkspaceAppSearchFormState({
+    activeFilter,
+    activeMode,
+    activeTrack,
+    keyword: requestedKeyword
+  });
   const activeTrackMeta = activeTrack === "all" ? null : getWorkflowBusinessTrack(activeTrack);
   const scopePills = [
     ...(activeTrackMeta
@@ -337,9 +283,9 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             key: "track",
             label: "业务焦点",
             value: `${activeTrackMeta.priority} ${activeTrack}`,
-            href: buildWorkspaceHref({
-              filter: activeFilter,
-              mode: activeMode,
+            href: buildWorkspaceAppHref({
+              activeFilter,
+              activeMode,
               keyword: requestedKeyword
             })
           }
@@ -351,10 +297,10 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
             key: "keyword",
             label: "关键词",
             value: requestedKeyword,
-            href: buildWorkspaceHref({
-              filter: activeFilter,
-              mode: activeMode,
-              track: activeTrack
+            href: buildWorkspaceAppHref({
+              activeFilter,
+              activeMode,
+              activeTrack
             })
           }
         ]
