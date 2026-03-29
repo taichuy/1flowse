@@ -1,6 +1,7 @@
 import React from "react";
 
 import { formatDuration, formatTimestamp } from "@/lib/runtime-presenters";
+import { cleanNodePayload } from "@/lib/runtime-presenters";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type {
   CallbackWaitingAutomationCheck,
@@ -210,10 +211,10 @@ export function RunDiagnosticsOverviewSections({
                     <p className="run-error-message">{nodeRun.error_message}</p>
                   ) : null}
                   <div className="detail-grid">
-                    <PayloadCard title="Input" payload={nodeRun.input_payload} />
+                    <PayloadCard title="Input" payload={cleanNodePayload(nodeRun.input_payload)} />
                     <PayloadCard
                       title="Output"
-                      payload={nodeRun.output_payload}
+                      payload={cleanNodePayload(nodeRun.output_payload)}
                       emptyCopy="当前没有节点输出。"
                     />
                   </div>

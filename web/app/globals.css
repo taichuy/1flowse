@@ -4172,6 +4172,75 @@ a {
   flex: 1 1 220px;
 }
 
+.runtime-overlay-run-rail,
+.runtime-overlay-drawer-grid,
+.runtime-overlay-node-preview-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.runtime-overlay-run-rail {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 14px;
+}
+
+.runtime-overlay-run-pill {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #e3e8f3;
+  border-radius: 18px;
+  background: #fbfcff;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.runtime-overlay-run-pill strong,
+.runtime-overlay-mini-card p {
+  font-size: 0.92rem;
+}
+
+.runtime-overlay-run-pill span:last-child,
+.runtime-overlay-mini-card .binding-meta,
+.runtime-overlay-timeline-preview,
+.runtime-overlay-headline {
+  color: var(--muted);
+}
+
+.runtime-overlay-run-pill.selected {
+  border-color: rgba(37, 99, 235, 0.24);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.runtime-overlay-live-drawer {
+  margin-top: 18px;
+}
+
+.runtime-overlay-drawer-grid,
+.runtime-overlay-node-preview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-top: 14px;
+}
+
+.runtime-overlay-mini-card {
+  margin-top: 0;
+  background: #fcfdff;
+}
+
+.runtime-overlay-mini-card p,
+.runtime-overlay-timeline-preview {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
 .runtime-overlay-focus-card,
 .runtime-overlay-trace-card {
   margin-top: 18px;

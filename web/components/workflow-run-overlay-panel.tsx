@@ -8,7 +8,7 @@ import { InlineOperatorActionFeedback } from "@/components/inline-operator-actio
 import { RunTraceExportActions } from "@/components/run-trace-export-actions";
 import { SandboxExecutionReadinessCard } from "@/components/sandbox-execution-readiness-card";
 import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
-import type { RunDetail } from "@/lib/get-run-detail";
+import type { NodeRunItem, RunDetail } from "@/lib/get-run-detail";
 import type {
   CallbackWaitingAutomationCheck,
   SandboxReadinessCheck
@@ -39,7 +39,8 @@ import {
 import {
   formatDuration,
   formatDurationMs,
-  formatTimestamp
+  formatTimestamp,
+  cleanNodePayload
 } from "@/lib/runtime-presenters";
 
 type WorkflowRunOverlayPanelProps = {
@@ -78,13 +79,47 @@ export function WorkflowRunOverlayPanel({
   onRefreshRuns
 }: WorkflowRunOverlayPanelProps) {
   const runSnapshotModel = runSnapshot?.snapshot ?? null;
+  const liveCurrentNodeId = runSnapshotModel?.currentNodeId ?? run?.current_node_id ?? null;
+  const currentNodeRun =
+    liveCurrentNodeId != null && run
+      ? run.node_runs.find((nodeRun) => nodeRun.node_id === liveCurrentNodeId) ?? null
+      : null;
   const selectedNodeRun =
     selectedNodeId && run
       ? run.node_runs.find((nodeRun) => nodeRun.node_id === selectedNodeId) ?? null
       : null;
+  const focusedNodeRun = selectedNodeRun ?? currentNodeRun ?? run?.node_runs.at(-1) ?? null;
+  const focusedNodeRunLabel = selectedNodeRun
+    ? "Selected node run"
+    : currentNodeRun
+      ? "Current node run"
+      : "Latest node run";
   const tracePreview = trace?.events.slice(-6) ?? [];
   const sandboxReadinessNode = buildSandboxReadinessNodeFromRunSnapshot(runSnapshotModel);
   const operatorSurfaceCopy = buildOperatorFollowUpSurfaceCopy();
+  const runOutputPreview = summarizePayloadPreview(
+    cleanNodePayload(run?.output_payload) ?? null,
+    run?.status === "failed" ? "当前 run 以失败结束，暂未产生可复用 output。" : "当前 run 还没有 output。"
+  );
+  const focusedNodeInputPreview = summarizePayloadPreview(
+    cleanNodePayload(focusedNodeRun?.input_payload) ?? null,
+    "当前节点没有输入 payload。"
+  );
+  const focusedNodeOutputPreview = summarizePayloadPreview(
+    cleanNodePayload(focusedNodeRun?.output_payload) ?? null,
+    focusedNodeRun?.error_message
+      ? "当前节点以错误结束，暂未产生可复用 output。"
+      : "当前节点还没有 output。"
+  );
+  const runtimeHeadline =
+    runSnapshotModel?.callbackWaitingExplanation?.primary_signal ??
+    runSnapshotModel?.executionFocusExplanation?.primary_signal ??
+    run?.error_message ??
+    (runSnapshotModel?.waitingReason
+      ? `当前 waiting reason：${runSnapshotModel.waitingReason}`
+      : focusedNodeRun?.waiting_reason
+        ? `当前节点等待原因：${focusedNodeRun.waiting_reason}`
+        : "运行反馈会沿着 node runs、focus snapshot 和 trace preview 自动汇总到这里。");
   const resolveRunDetailHref = React.useCallback(
     (candidateRunId: string) =>
       workspaceStarterGovernanceQueryScope
@@ -207,8 +242,60 @@ export function WorkflowRunOverlayPanel({
             </button>
           </div>
 
+          <div className="runtime-overlay-run-rail" aria-label="Recent run rail">
+            {runs.map((item) => {
+              const isActive = item.id === selectedRunId;
+
+              return (
+                <button
+                  key={item.id}
+                  className={`runtime-overlay-run-pill ${isActive ? "selected" : ""}`}
+                  type="button"
+                  onClick={() => onSelectRunId(item.id)}
+                >
+                  <span className={`health-pill ${item.status}`}>{item.status}</span>
+                  <strong>{formatTimestamp(item.created_at)}</strong>
+                  <span>
+                    {item.node_run_count} nodes · {item.event_count} events
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {run ? (
             <>
+              <div className="payload-card compact-card runtime-overlay-live-drawer">
+                <div className="payload-card-header">
+                  <span className="status-meta">Live drawer</span>
+                  <span className={`health-pill ${run.status}`}>{run.status}</span>
+                </div>
+                <p className="activity-copy">
+                  {focusedNodeRun
+                    ? `${focusedNodeRunLabel} · ${focusedNodeRun.node_name} · ${focusedNodeRun.node_type}`
+                    : "当前 run 还没有可聚焦的 node run。"}
+                </p>
+                <p className="section-copy runtime-overlay-headline">{runtimeHeadline}</p>
+                <div className="runtime-overlay-drawer-grid">
+                  <article className="payload-card compact-card runtime-overlay-mini-card">
+                    <span className="binding-meta">Workflow output</span>
+                    <p>{runOutputPreview}</p>
+                  </article>
+                  <article className="payload-card compact-card runtime-overlay-mini-card">
+                    <span className="binding-meta">Current step</span>
+                    <p>
+                      {focusedNodeRun
+                        ? `${focusedNodeRun.node_name} · ${focusedNodeRun.status}`
+                        : "等待 node run 进入 runtime 视图。"}
+                    </p>
+                  </article>
+                  <article className="payload-card compact-card runtime-overlay-mini-card">
+                    <span className="binding-meta">Last activity</span>
+                    <p>{formatTimestamp(run.last_event_at ?? run.finished_at ?? run.created_at)}</p>
+                  </article>
+                </div>
+              </div>
+
               <div className="summary-strip compact-strip">
                 <article className="summary-card">
                   <span>Status</span>
@@ -259,25 +346,35 @@ export function WorkflowRunOverlayPanel({
                 />
               </div>
 
-              {selectedNodeRun ? (
+              {focusedNodeRun ? (
                 <div className="payload-card compact-card runtime-overlay-focus-card">
                   <div className="payload-card-header">
-                    <span className="status-meta">Selected node run</span>
-                    <span className={`health-pill ${selectedNodeRun.status}`}>
-                      {selectedNodeRun.status}
+                    <span className="status-meta">{focusedNodeRunLabel}</span>
+                    <span className={`health-pill ${focusedNodeRun.status}`}>
+                      {focusedNodeRun.status}
                     </span>
                   </div>
                   <p className="activity-copy">
-                    {selectedNodeRun.node_name} · {selectedNodeRun.node_type} · node run{" "}
-                    {selectedNodeRun.id}
+                    {focusedNodeRun.node_name} · {focusedNodeRun.node_type} · node run{" "}
+                    {focusedNodeRun.id}
                   </p>
                   <p className="event-run">
-                    Started {formatTimestamp(selectedNodeRun.started_at)} · Duration{" "}
-                    {formatDuration(selectedNodeRun.started_at, selectedNodeRun.finished_at)}
+                    Started {formatTimestamp(focusedNodeRun.started_at)} · Duration{" "}
+                    {formatDuration(focusedNodeRun.started_at, focusedNodeRun.finished_at)}
                   </p>
-                  {selectedNodeRun.error_message ? (
-                    <p className="run-error-message">{selectedNodeRun.error_message}</p>
+                  {focusedNodeRun.error_message ? (
+                    <p className="run-error-message">{focusedNodeRun.error_message}</p>
                   ) : null}
+                  <div className="runtime-overlay-node-preview-grid">
+                    <article className="payload-card compact-card runtime-overlay-mini-card">
+                      <span className="binding-meta">Input preview</span>
+                      <p>{focusedNodeInputPreview}</p>
+                    </article>
+                    <article className="payload-card compact-card runtime-overlay-mini-card">
+                      <span className="binding-meta">Output preview</span>
+                      <p>{focusedNodeOutputPreview}</p>
+                    </article>
+                  </div>
                 </div>
               ) : null}
 
@@ -317,7 +414,7 @@ export function WorkflowRunOverlayPanel({
                   run.node_runs.map((nodeRun) => (
                     <article
                       className={`timeline-row compact-card ${
-                        selectedNodeId === nodeRun.node_id ? "selected" : ""
+                        focusedNodeRun?.node_id === nodeRun.node_id ? "selected" : ""
                       }`}
                       key={nodeRun.id}
                     >
@@ -335,6 +432,9 @@ export function WorkflowRunOverlayPanel({
                       <p className="event-run">
                         {formatDuration(nodeRun.started_at, nodeRun.finished_at)} · node run{" "}
                         {nodeRun.id}
+                      </p>
+                      <p className="section-copy runtime-overlay-timeline-preview">
+                        {buildNodeRunProgressPreview(nodeRun)}
                       </p>
                     </article>
                   ))
@@ -398,4 +498,77 @@ function findNodeRunName(run: RunDetail | null, nodeRunId: string) {
 
   const nodeRun = run.node_runs.find((item) => item.id === nodeRunId);
   return nodeRun?.node_name ?? "unknown node";
+}
+
+function buildNodeRunProgressPreview(nodeRun: NodeRunItem): string {
+  if (nodeRun.output_payload && Object.keys(nodeRun.output_payload).length > 0) {
+    return `Output · ${summarizePayloadPreview(cleanNodePayload(nodeRun.output_payload), "当前节点还没有 output。")}`;
+  }
+
+  if (nodeRun.waiting_reason) {
+    return `Waiting · ${nodeRun.waiting_reason}`;
+  }
+
+  if (nodeRun.error_message) {
+    return `Error · ${nodeRun.error_message}`;
+  }
+
+  if (nodeRun.input_payload && Object.keys(nodeRun.input_payload).length > 0) {
+    return `Input · ${summarizePayloadPreview(cleanNodePayload(nodeRun.input_payload), "当前节点没有输入 payload。")}`;
+  }
+
+  return nodeRun.finished_at
+    ? "节点已完成，等待进入更细的 run diagnostics 视图。"
+    : "节点仍在推进，等待新的 trace 事件。";
+}
+
+function summarizePayloadPreview(
+  payload: Record<string, unknown> | null | undefined,
+  emptyFallback: string
+): string {
+  if (!payload || Object.keys(payload).length === 0) {
+    return emptyFallback;
+  }
+
+  const preview = Object.entries(payload)
+    .filter(([, value]) => value !== undefined)
+    .slice(0, 3)
+    .map(([key, value]) => `${key}: ${summarizePayloadValue(value)}`)
+    .join(" · ");
+
+  return preview || emptyFallback;
+}
+
+function summarizePayloadValue(value: unknown): string {
+  if (typeof value === "string") {
+    const normalized = value.trim().replace(/\s+/g, " ");
+    return normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "[]";
+    }
+
+    const head: string = value
+      .slice(0, 2)
+      .map((item) => summarizePayloadValue(item))
+      .join(", ");
+    return value.length > 2 ? `[${head}, +${value.length - 2}]` : `[${head}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>);
+    return keys.length === 0 ? "{}" : `{${keys.slice(0, 3).join(", ")}}`;
+  }
+
+  if (value == null) {
+    return "null";
+  }
+
+  return "unknown";
 }

@@ -290,6 +290,134 @@ describe("WorkflowRunOverlayPanel", () => {
     expect(props).not.toHaveProperty("blockedSummary");
   });
 
+  it("renders compact live drawer previews for workflow and focused node payloads", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowRunOverlayPanel, {
+        runs: [
+          {
+            id: "run-2",
+            workflow_id: "workflow-1",
+            workflow_version: "v2",
+            status: "running",
+            started_at: "2026-03-20T10:02:00Z",
+            finished_at: null,
+            created_at: "2026-03-20T10:02:00Z",
+            node_run_count: 2,
+            event_count: 4,
+            last_event_at: "2026-03-20T10:03:00Z"
+          },
+          {
+            id: "run-1",
+            workflow_id: "workflow-1",
+            workflow_version: "v1",
+            status: "failed",
+            started_at: "2026-03-20T10:00:00Z",
+            finished_at: null,
+            created_at: "2026-03-20T10:00:00Z",
+            node_run_count: 1,
+            event_count: 0,
+            last_event_at: null
+          }
+        ],
+        selectedRunId: "run-2",
+        run: buildRunDetail({
+          id: "run-2",
+          status: "running",
+          workflow_version: "v2",
+          output_payload: {
+            final_answer: "Need manual approval before publish",
+            steps_completed: 2
+          },
+          last_event_at: "2026-03-20T10:03:00Z",
+          node_runs: [
+            {
+              id: "node-run-1",
+              node_id: "trigger",
+              node_name: "Trigger",
+              node_type: "trigger",
+              status: "succeeded",
+              phase: "execute",
+              retry_count: 0,
+              input_payload: {
+                message: "start"
+              },
+              checkpoint_payload: {},
+              working_context: {},
+              evidence_context: null,
+              artifact_refs: [],
+              output_payload: {
+                message: "started"
+              },
+              error_message: null,
+              waiting_reason: null,
+              started_at: "2026-03-20T10:02:00Z",
+              phase_started_at: "2026-03-20T10:02:00Z",
+              finished_at: "2026-03-20T10:02:10Z"
+            },
+            {
+              id: "node-run-2",
+              node_id: "planner",
+              node_name: "Planner",
+              node_type: "llm_agent",
+              status: "running",
+              phase: "execute",
+              retry_count: 0,
+              input_payload: {
+                prompt: "Summarize the issue",
+                retry: false
+              },
+              checkpoint_payload: {},
+              working_context: {},
+              evidence_context: null,
+              artifact_refs: [],
+              output_payload: {
+                summary: "Waiting for operator confirmation",
+                confidence: "high"
+              },
+              error_message: null,
+              waiting_reason: null,
+              started_at: "2026-03-20T10:02:11Z",
+              phase_started_at: "2026-03-20T10:02:11Z",
+              finished_at: null
+            }
+          ]
+        }),
+        runSnapshot: buildRunSnapshotModel({
+          ...buildRunSnapshot().snapshot!,
+          status: "running",
+          currentNodeId: "planner",
+          executionFocusNodeId: "planner",
+          executionFocusNodeRunId: "node-run-2",
+          executionFocusNodeName: "Planner",
+          executionFocusNodeType: "llm_agent",
+          executionFocusExplanation: {
+            primary_signal: "当前节点仍在生成最新回答。",
+            follow_up: "继续观察输出摘要是否已经稳定。"
+          }
+        }),
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoading: false,
+        isRefreshingRuns: false,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain("Live drawer");
+    expect(html).toContain("Recent run rail");
+    expect(html).toContain("Workflow output");
+    expect(html).toContain("Current node run");
+    expect(html).toContain("final_answer: Need manual approval before publish");
+    expect(html).toContain("Input preview");
+    expect(html).toContain("Output preview");
+    expect(html).toContain("summary: Waiting for operator confirmation");
+    expect(html).toContain("Output · summary: Waiting for operator confirmation");
+  });
+
   it("surfaces workflow legacy-auth handoff inside the runtime overlay", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowRunOverlayPanel, {
