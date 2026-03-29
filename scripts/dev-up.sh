@@ -20,7 +20,7 @@ COMPOSE_CMD=()
 
 usage() {
   cat <<'USAGE'
-用法：bash scripts/dev-up.sh [选项] [start|stop|status]
+用法：bash scripts/dev-up.sh [选项] [start|stop|pause|status]
 
 默认动作：start
 
@@ -35,6 +35,7 @@ usage() {
   bash scripts/dev-up.sh --skip-install
   bash scripts/dev-up.sh start --skip-install
   bash scripts/dev-up.sh status
+  bash scripts/dev-up.sh pause
   bash scripts/dev-up.sh stop
 USAGE
 }
@@ -271,11 +272,12 @@ start_all() {
 
 启动完成：
 - API:  http://localhost:8000
-- Web:  http://localhost:3010
+- Web:  http://localhost:3100
 - 日志: tmp/logs/
 
 常用命令：
 - 查看状态：bash scripts/dev-up.sh status
+- 暂停全部：bash scripts/dev-up.sh pause
 - 停止全部：bash scripts/dev-up.sh stop
 SUMMARY
 }
@@ -307,7 +309,7 @@ status_all() {
 
 while (( $# > 0 )); do
   case "$1" in
-    start|stop|status)
+    start|stop|pause|status)
       if [[ "${ACTION}" != "start" ]]; then
         echo "动作只能指定一次：已收到 ${ACTION}，又收到 $1" >&2
         usage >&2
@@ -341,7 +343,7 @@ case "${ACTION}" in
   start)
     start_all
     ;;
-  stop)
+  stop|pause)
     stop_all
     ;;
   status)

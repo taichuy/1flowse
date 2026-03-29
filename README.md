@@ -39,19 +39,27 @@
 
 ## 本地开发
 
-### 0. 一键启动（Linux / macOS / Git Bash）
+### 0. 一键启动（Node）
 
 ```shell
-bash scripts/dev-up.sh
+node scripts/dev-up.js
 ```
 
-默认会复制缺失的本地环境文件、启动 `docker-compose.middleware.yaml`、执行 API migration，并在后台拉起 API / Worker / Scheduler / Web；日志写入 `tmp/logs/`。
+默认会复制缺失的本地环境文件、启动 `docker-compose.middleware.yaml`、执行 API migration，并在后台拉起 API / Worker / Scheduler / Web；日志写入 `tmp/logs/`，Web 默认地址为 `http://localhost:3100`。
 
 常用命令：
 
 ```shell
-bash scripts/dev-up.sh status
-bash scripts/dev-up.sh stop
+node scripts/dev-up.js status
+node scripts/dev-pause.js
+node scripts/dev-up.js stop
+```
+
+如需继续使用 Shell 入口，也可以执行：
+
+```shell
+bash scripts/dev-up.sh
+bash scripts/dev-up.sh pause
 ```
 
 ### 1. 启动中间件
@@ -102,6 +110,8 @@ copy .env.example .env.local
 pnpm install
 pnpm dev
 ```
+
+默认端口：`3100`
 
 ### 本地 workspace 默认管理员
 

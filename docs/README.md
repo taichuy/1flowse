@@ -28,4 +28,5 @@
 ## 使用提醒
 
 - 共享文档优先链式说明，避免跨文件重复搬运同一规则。
+- 本地开发一键启停入口以根目录 `README.md` 为准；当前 Node 入口是 `scripts/dev-up.js` / `scripts/dev-pause.js`，Web 默认端口为 `3100`。
 - 如果任务涉及 AI 协作流程、技能治理或高风险改动，再继续阅读 `.agents/`、`docs/dev/team-conventions.md` 与相关 ADR。
