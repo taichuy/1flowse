@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { formatSandboxReadinessPreflightHint } from "@/lib/sandbox-readiness-presenters";
@@ -64,6 +64,18 @@ type UseWorkflowEditorPersistenceOptions = {
   setValidationFocusItem: Dispatch<SetStateAction<WorkflowValidationNavigatorItem | null>>;
 };
 
+export async function runWorkflowEditorPendingMutation(
+  setPending: Dispatch<SetStateAction<boolean>>,
+  action: () => Promise<void>
+) {
+  setPending(true);
+  try {
+    await action();
+  } finally {
+    setPending(false);
+  }
+}
+
 export function useWorkflowEditorPersistence({
   workflowId,
   fallbackWorkflowName,
@@ -87,8 +99,8 @@ export function useWorkflowEditorPersistence({
   focusNode,
   setValidationFocusItem
 }: UseWorkflowEditorPersistenceOptions) {
-  const [isSaving, startSavingTransition] = useTransition();
-  const [isSavingStarter, startSaveStarterTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingStarter, setIsSavingStarter] = useState(false);
   const blockedFeedbackMessage = buildWorkflowPersistBlockedFeedbackMessage({
     persistBlockerSummary,
     persistBlockedMessage,
@@ -117,7 +129,7 @@ export function useWorkflowEditorPersistence({
       return;
     }
 
-    startSavingTransition(async () => {
+    void runWorkflowEditorPendingMutation(setIsSaving, async () => {
       setMessageKind("default");
       setSavedWorkspaceStarter(null);
       setMessage("正在保存 workflow definition...");
@@ -208,7 +220,7 @@ export function useWorkflowEditorPersistence({
       definition: currentDefinition
     });
 
-    startSaveStarterTransition(async () => {
+    void runWorkflowEditorPendingMutation(setIsSavingStarter, async () => {
       setMessageKind("default");
       setSavedWorkspaceStarter(null);
       setMessage(buildWorkspaceStarterMutationPendingMessage("create"));
