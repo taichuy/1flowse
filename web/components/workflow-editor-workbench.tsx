@@ -26,6 +26,7 @@ import { getPaletteNodeCatalog, getPlannedNodeCatalog } from "@/lib/workflow-nod
 import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/workflow-editor-canvas";
 import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
 import { useWorkflowEditorShellState } from "@/components/workflow-editor-workbench/use-workflow-editor-shell-state";
+import { useWorkflowEditorPanels } from "@/components/workflow-editor-workbench/use-workflow-editor-panels";
 import { WorkflowEditorSidebar } from "@/components/workflow-editor-workbench/workflow-editor-sidebar";
 import {
   buildWorkflowPersistBlockerRecommendedNextStep,
@@ -117,47 +118,13 @@ export function WorkflowEditorWorkbench({
     sandboxBackends,
     serverValidationIssues: shell.serverValidationIssues
   });
-  const sandboxReadinessPreflightHint = useMemo(
-    () => formatSandboxReadinessPreflightHint(sandboxReadiness),
-    [sandboxReadiness]
-  );
-  const executionPreflightMessage = useMemo(() => {
-    if (validation.toolExecutionValidationIssues.length > 0) {
-      return [
-        `保存前还有 ${validation.toolExecutionValidationIssues.length} 个 execution capability 问题。`,
-        sandboxReadinessPreflightHint,
-        "先对齐 tool binding、tool 节点 runtimePolicy / LLM Agent tool policy，以及 live sandbox readiness，再继续保存。"
-      ]
-        .filter(Boolean)
-        .join(" ");
-    }
-
-    return sandboxReadinessPreflightHint;
-  }, [sandboxReadinessPreflightHint, validation.toolExecutionValidationIssues.length]);
-  const preflightValidationItem = useMemo(
-    () => pickWorkflowValidationRemediationItem(validation.validationNavigatorItems),
-    [validation.validationNavigatorItems]
-  );
-  const persistBlockerSummary = useMemo(
-    () => summarizeWorkflowPersistBlockers(validation.persistBlockers),
-    [validation.persistBlockers]
-  );
-  const persistBlockerRecommendedNextStep = useMemo(
-    () =>
-      buildWorkflowPersistBlockerRecommendedNextStep(
-        validation.persistBlockers,
-        sandboxReadiness,
-        currentEditorHref
-      ),
-    [currentEditorHref, sandboxReadiness, validation.persistBlockers]
-  );
   const persistence = useWorkflowEditorPersistence({
     workflowId: workflow.id,
     fallbackWorkflowName: workflow.name,
     workflowName: graph.workflowName,
     workflowVersion: graph.workflowVersion,
     currentDefinition: graph.currentDefinition,
-    persistBlockerSummary,
+    persistBlockerSummary: summarizeWorkflowPersistBlockers(validation.persistBlockers),
     persistBlockedMessage: validation.persistBlockedMessage,
     validationNavigatorItems: validation.validationNavigatorItems,
     sandboxReadiness,
@@ -174,8 +141,36 @@ export function WorkflowEditorWorkbench({
     focusNode: graph.focusNode,
     setValidationFocusItem: shell.setValidationFocusItem
   });
+
   const serverValidationIssueCount = shell.serverValidationIssues.length;
   const clearServerValidationIssues = shell.setServerValidationIssues;
+
+  const panels = useWorkflowEditorPanels({
+    workflow,
+    workflows,
+    nodeCatalog,
+    nodeSourceLanes,
+    toolSourceLanes,
+    tools,
+    adapters,
+    callbackWaitingAutomation,
+    sandboxReadiness,
+    sandboxBackends,
+    recentRuns,
+    currentEditorHref,
+    workflowLibraryHref,
+    createWorkflowHref,
+    workspaceStarterLibraryHref,
+    hasScopedWorkspaceStarterFilters,
+    workspaceStarterGovernanceQueryScope,
+    editorNodeLibrary,
+    plannedNodeLibrary,
+    shell,
+    graph,
+    validation,
+    runOverlay,
+    persistence
+  });
 
   useEffect(() => {
     if (serverValidationIssueCount === 0) {
@@ -242,90 +237,11 @@ export function WorkflowEditorWorkbench({
   return (
     <ReactFlowProvider>
       <main className="editor-shell">
-        <WorkflowEditorHero
-          currentHref={currentEditorHref}
-          workflowId={workflow.id}
-          workflowName={graph.workflowName}
-          onWorkflowNameChange={graph.setWorkflowName}
-          workflowVersion={graph.workflowVersion}
-          nodesCount={graph.nodes.length}
-          edgesCount={graph.edges.length}
-          toolsCount={tools.length}
-          availableRunsCount={runOverlay.availableRuns.length}
-          isDirty={graph.isDirty}
-          selectedNodeLabel={graph.selectedNode?.data.label ?? null}
-          selectedEdgeId={graph.selectedEdge?.id ?? null}
-          workflowsCount={workflows.length}
-          selectedRunAttached={Boolean(runOverlay.selectedRunId)}
-          plannedNodeLabels={plannedNodeLibrary.map((item) => item.label)}
-          unsupportedNodes={validation.unsupportedNodes}
-          contractValidationIssuesCount={validation.contractValidationIssues.length}
-          toolReferenceValidationIssuesCount={validation.toolReferenceValidationIssues.length}
-          nodeExecutionValidationIssuesCount={validation.nodeExecutionValidationIssues.length}
-          toolExecutionValidationIssuesCount={validation.toolExecutionValidationIssues.length}
-          publishDraftValidationIssuesCount={validation.publishDraftValidationIssues.length}
-          persistBlockedMessage={validation.persistBlockedMessage || null}
-          persistBlockerSummary={persistBlockerSummary}
-          persistBlockers={validation.persistBlockers}
-          persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
-          isSaving={persistence.isSaving}
-          isSavingStarter={persistence.isSavingStarter}
-          workflowLibraryHref={workflowLibraryHref}
-          createWorkflowHref={createWorkflowHref}
-          workspaceStarterLibraryHref={workspaceStarterLibraryHref}
-          hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
-          isSidebarCollapsed={shell.isSidebarCollapsed}
-          isInspectorCollapsed={shell.isInspectorCollapsed}
-          onToggleSidebar={shell.toggleSidebar}
-          onToggleInspector={shell.toggleInspector}
-          onSave={persistence.handleSave}
-          onSaveAsWorkspaceStarter={persistence.handleSaveAsWorkspaceStarter}
-        />
+        <WorkflowEditorHero {...panels.heroProps} />
 
         <section className={editorWorkspaceClassName}>
           {shell.isSidebarCollapsed ? null : (
-            <WorkflowEditorSidebar
-              currentHref={currentEditorHref}
-              workflowId={workflow.id}
-              workflowName={graph.workflowName}
-              workflows={workflows}
-              nodeSourceLanes={nodeSourceLanes}
-              toolSourceLanes={toolSourceLanes}
-              editorNodeLibrary={editorNodeLibrary}
-              plannedNodeLibrary={plannedNodeLibrary}
-              unsupportedNodes={validation.unsupportedNodes}
-              message={shell.message}
-              messageTone={shell.messageTone}
-              messageKind={shell.messageKind}
-              savedWorkspaceStarter={shell.savedWorkspaceStarter}
-              persistBlockerSummary={persistBlockerSummary}
-              persistBlockers={validation.persistBlockers}
-              persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
-              executionPreflightMessage={executionPreflightMessage}
-              toolExecutionValidationIssueCount={validation.toolExecutionValidationIssues.length}
-              focusedValidationItem={shell.validationFocusItem}
-              preflightValidationItem={preflightValidationItem}
-              validationNavigatorItems={validation.validationNavigatorItems}
-              runs={runOverlay.availableRuns}
-              selectedRunId={runOverlay.selectedRunId}
-              run={runOverlay.selectedRunDetail}
-              runSnapshot={runOverlay.selectedRunSnapshot}
-              trace={runOverlay.selectedRunTrace}
-              traceError={runOverlay.runOverlayError}
-              selectedNodeId={graph.selectedNodeId}
-              callbackWaitingAutomation={callbackWaitingAutomation}
-              sandboxReadiness={sandboxReadiness}
-              workspaceStarterGovernanceQueryScope={workspaceStarterGovernanceQueryScope}
-              createWorkflowHref={createWorkflowHref}
-              workspaceStarterLibraryHref={workspaceStarterLibraryHref}
-              hasScopedWorkspaceStarterFilters={hasScopedWorkspaceStarterFilters}
-              isLoadingRunOverlay={runOverlay.isLoadingRunOverlay}
-              isRefreshingRuns={runOverlay.isRefreshingRuns}
-              onAddNode={graph.handleAddNode}
-              onNavigateValidationIssue={persistence.handleNavigateValidationIssue}
-              onSelectRunId={runOverlay.setSelectedRunId}
-              onRefreshRuns={runOverlay.refreshRecentRuns}
-            />
+            <WorkflowEditorSidebar {...panels.sidebarProps} />
           )}
 
           <WorkflowEditorCanvas
@@ -340,49 +256,7 @@ export function WorkflowEditorWorkbench({
 
           {shell.isInspectorCollapsed ? null : (
             <aside className="editor-inspector">
-              <WorkflowEditorInspector
-                currentHref={currentEditorHref}
-                selectedNode={graph.selectedNode}
-                selectedEdge={graph.selectedEdge}
-                nodes={graph.nodes}
-                edges={graph.edges}
-                tools={tools}
-                adapters={adapters}
-                nodeConfigText={graph.nodeConfigText}
-                onNodeConfigTextChange={graph.setNodeConfigText}
-                onApplyNodeConfigJson={graph.applyNodeConfigJson}
-                onNodeNameChange={graph.handleNodeNameChange}
-                onNodeConfigChange={graph.handleSelectedNodeConfigChange}
-                onNodeInputSchemaChange={graph.updateNodeInputSchema}
-                onNodeOutputSchemaChange={graph.updateNodeOutputSchema}
-                onNodeRuntimePolicyUpdate={graph.updateNodeRuntimePolicy}
-                onNodeRuntimePolicyChange={graph.handleNodeRuntimePolicyChange}
-                workflowVersion={graph.workflowVersion}
-                availableWorkflowVersions={validation.availableWorkflowVersions}
-                workflowVariables={graph.workflowVariables}
-                workflowPublish={graph.workflowPublish}
-                onWorkflowVariablesChange={graph.updateWorkflowVariables}
-                onWorkflowPublishChange={graph.updateWorkflowPublish}
-                onDeleteSelectedNode={graph.handleDeleteSelectedNode}
-                onUpdateSelectedEdge={graph.updateSelectedEdge}
-                onDeleteSelectedEdge={graph.handleDeleteSelectedEdge}
-                highlightedNodeSection={inspectorFocusState.highlightedNodeSection}
-                highlightedNodeFieldPath={inspectorFocusState.highlightedNodeFieldPath}
-                highlightedPublishEndpointIndex={
-                  inspectorFocusState.highlightedPublishEndpointIndex
-                }
-                highlightedPublishEndpointFieldPath={
-                  inspectorFocusState.highlightedPublishEndpointFieldPath
-                }
-                highlightedVariableIndex={inspectorFocusState.highlightedVariableIndex}
-                highlightedVariableFieldPath={inspectorFocusState.highlightedVariableFieldPath}
-                focusedValidationItem={shell.validationFocusItem}
-                persistBlockedMessage={validation.persistBlockedMessage || null}
-                persistBlockerSummary={persistBlockerSummary}
-                persistBlockers={validation.persistBlockers}
-                persistBlockerRecommendedNextStep={persistBlockerRecommendedNextStep}
-                sandboxReadiness={sandboxReadiness}
-              />
+              <WorkflowEditorInspector {...panels.inspectorProps} />
             </aside>
           )}
         </section>

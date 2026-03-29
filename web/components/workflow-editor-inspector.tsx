@@ -542,16 +542,9 @@ export function WorkflowEditorInspector({
                     />
                   </div>
                 ) : null}
-                <div className="workflow-editor-inspector-empty-state">
-                  <Empty
-                    description="选中节点后再编辑节点配置；未选中时，右侧回到应用级设置。"
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  />
-                  <div className="workflow-editor-inspector-empty-hints">
-                    <span className="workflow-editor-inspector-empty-pill">节点：配置 / I/O / 运行 / AI</span>
-                    <span className="workflow-editor-inspector-empty-pill">应用：变量 / 发布</span>
-                    <span className="workflow-editor-inspector-empty-pill">右侧只保留一个焦点面板</span>
-                  </div>
+                <div className="workflow-editor-inspector-empty-state" style={{ padding: "40px 16px", textAlign: "center", color: "var(--ant-color-text-description)" }}>
+                  <p style={{ marginBottom: 8 }}>选中节点后，右侧面板将自动跟随显示节点配置。</p>
+                  <p style={{ fontSize: "12px", opacity: 0.8 }}>未选中节点时，可在此进行应用级的“变量”和“发布”设置。</p>
                 </div>
               </Space>
             )

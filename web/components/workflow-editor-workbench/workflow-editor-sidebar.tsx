@@ -451,23 +451,12 @@ function WorkflowEditorSidebarComponent({
                   </div>
                 </div>
 
-                {hasScopedWorkflowLinks ? (
-                  <div className="workflow-editor-rail-handoff">
-                    <span>还有 {workflowChipLinks.length} 个同域草稿，需要时再切换。</span>
-                    <button
-                      className="workflow-editor-inline-link"
-                      type="button"
-                      onClick={() => setNodeRailView("drafts")}
-                    >
-                      查看同域草稿
-                    </button>
-                  </div>
-                ) : null}
+
 
                 {plannedNodeLibrary.length > 0 ? (
-                  <div className="binding-field compact-stack">
-                    <span className="binding-label">规划中的节点</span>
-                    <div className="tool-badge-row">
+                  <details className="binding-field compact-stack">
+                    <summary className="binding-label" style={{ cursor: "pointer", userSelect: "none" }}>规划中的节点 ({plannedNodeLibrary.length})</summary>
+                    <div className="tool-badge-row" style={{ marginTop: "8px" }}>
                       {plannedNodeLibrary.map((item) => (
                         <span className="event-chip" key={`planned-${item.type}`}>
                           {item.label}
@@ -477,7 +466,7 @@ function WorkflowEditorSidebarComponent({
                     <small className="section-copy">
                       这些类型仅作规划占位，暂不进入当前画布主链。
                     </small>
-                  </div>
+                  </details>
                 ) : null}
 
                 <div className="workflow-editor-catalog-list">

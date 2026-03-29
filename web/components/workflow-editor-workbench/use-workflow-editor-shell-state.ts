@@ -95,12 +95,13 @@ export function useWorkflowEditorShellState({
       return;
     }
 
-    setIsSidebarCollapsed(
-      window.localStorage.getItem(SIDEBAR_PREFERENCE_STORAGE_KEY) === "true"
-    );
-    setIsInspectorCollapsed(
-      window.localStorage.getItem(INSPECTOR_PREFERENCE_STORAGE_KEY) === "true"
-    );
+    const sidebarPreference = window.localStorage.getItem(SIDEBAR_PREFERENCE_STORAGE_KEY);
+    const inspectorPreference = window.localStorage.getItem(INSPECTOR_PREFERENCE_STORAGE_KEY);
+
+    // Default to collapsed if no preference is set, to reduce default noise
+    setIsSidebarCollapsed(sidebarPreference !== "false");
+    setIsInspectorCollapsed(inspectorPreference !== "false");
+    
     setHasLoadedPanelPreferences(true);
   }, []);
 
@@ -166,7 +167,9 @@ export function useWorkflowEditorShellState({
     validationFocusItem,
     setValidationFocusItem,
     isSidebarCollapsed,
+    setIsSidebarCollapsed,
     isInspectorCollapsed,
+    setIsInspectorCollapsed,
     toggleSidebar,
     toggleInspector,
     getInspectorFocusState

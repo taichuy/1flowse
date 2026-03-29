@@ -118,6 +118,6 @@ describe("WorkflowEditorInspector", () => {
     expect(html).toContain("当前焦点");
     expect(html).toContain("变量");
     expect(html).toContain("发布");
-    expect(html).toContain("右侧只保留一个焦点面板");
+    expect(html).toContain("选中节点后，右侧面板将自动跟随显示节点配置。");
   });
 });
