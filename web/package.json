@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3100",
+    "dev": "next dev --turbo -p 3100",
     "build": "next build",
     "start": "next start -p 3100",
     "lint": "next lint",
@@ -15,9 +15,6 @@
     "@xyflow/react": "^12.10.1",
     "antd": "^6.3.4",
     "antd-style": "^4.1.0",
-    "clsx": "^2.1.1",
-    "dayjs": "^1.11.20",
-    "lucide-react": "^1.7.0",
     "next": "^15.5.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
