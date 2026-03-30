@@ -116,6 +116,12 @@ export type WorkflowCreateWizardSurfaceCopy = {
   sourceGovernanceFollowUpLinkLabel: string;
 };
 
+export type AuthoringBootstrapLoadingSurfaceCopy = {
+  title: string;
+  summary: string;
+  detail: string;
+};
+
 export type WorkspaceStarterGovernanceHeroSurfaceCopy = {
   heroDescription: string;
   heroLinks: WorkbenchEntryLinksConfig;
@@ -149,6 +155,24 @@ export function buildWorkspaceStarterGovernanceHeroSurfaceCopy({
       primaryKey: "createWorkflow",
       variant: "inline"
     }
+  };
+}
+
+export function buildWorkflowCreateBootstrapLoadingSurfaceCopy(): AuthoringBootstrapLoadingSurfaceCopy {
+  return {
+    title: "正在准备创建工作台",
+    summary: "创建向导会在最小作者壳层之后按需加载。",
+    detail:
+      "首屏先保留空白创建和 starter 入口所需的数据边界，复杂预览与后续面板稍后补齐。"
+  };
+}
+
+export function buildWorkflowEditorBootstrapLoadingSurfaceCopy(): AuthoringBootstrapLoadingSurfaceCopy {
+  return {
+    title: "正在准备 xyflow Studio",
+    summary: "编辑器岛会在基础 workflow 壳层渲染后按需挂载。",
+    detail:
+      "workflow inventory、catalog、plugin registry 与 system overview 会在最小 workflow 壳层之后按需补齐。"
   };
 }
 

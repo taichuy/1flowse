@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildWorkflowCreateBootstrapLoadingSurfaceCopy,
   buildAuthorFacingFollowUpSurfaceCopy,
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface,
+  buildWorkflowEditorBootstrapLoadingSurfaceCopy,
   buildRunDetailExecutionFocusSurfaceCopy,
   buildRunDiagnosticsOperatorFollowUpSurfaceCopy,
   buildRunLibrarySurfaceCopy,
@@ -19,6 +21,24 @@ import {
 } from "@/lib/workbench-entry-surfaces";
 
 describe("workbench entry surface copy", () => {
+  it("centralizes create bootstrap loading copy", () => {
+    expect(buildWorkflowCreateBootstrapLoadingSurfaceCopy()).toEqual({
+      title: "正在准备创建工作台",
+      summary: "创建向导会在最小作者壳层之后按需加载。",
+      detail:
+        "首屏先保留空白创建和 starter 入口所需的数据边界，复杂预览与后续面板稍后补齐。"
+    });
+  });
+
+  it("centralizes editor bootstrap loading copy", () => {
+    expect(buildWorkflowEditorBootstrapLoadingSurfaceCopy()).toEqual({
+      title: "正在准备 xyflow Studio",
+      summary: "编辑器岛会在基础 workflow 壳层渲染后按需挂载。",
+      detail:
+        "workflow inventory、catalog、plugin registry 与 system overview 会在最小 workflow 壳层之后按需补齐。"
+    });
+  });
+
   it("centralizes author-facing follow-up card titles", () => {
     expect(buildAuthorFacingFollowUpSurfaceCopy()).toEqual({
       primaryFollowUpTitle: "Primary follow-up",
@@ -72,7 +92,7 @@ describe("workbench entry surface copy", () => {
         variant: "editor"
       })
     ).toEqual({
-      href: "/workflows/workflow-1",
+      href: "/workflows/workflow-1/editor",
       label: "回到 workflow 编辑器"
     });
     expect(

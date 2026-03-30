@@ -1,4 +1,4 @@
-type AuthoringSurfaceLoadingStateProps = {
+export type AuthoringSurfaceLoadingStateProps = {
   title: string;
   summary: string;
   detail: string;
