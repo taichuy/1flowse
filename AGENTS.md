@@ -96,6 +96,7 @@
 - 后端：`backend-code-review`、`backend-testing`
 - 前端：`frontend-code-review`、`frontend-testing`、`component-refactoring`
 - 插件 / 兼容服务：`plugin-service-development`
+- 工具：`browser-automation`
 - 特例：`orpc-contract-first`、`pua`
 
 技能目录的索引、分类和案例说明统一放在 `.agents/skills/README.md`；不要把完整技能正文复制进根文档。

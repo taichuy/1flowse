@@ -49,6 +49,15 @@
 
 - 调整 `services/compat-dify` 的翻译 contract、invoke 流程、catalog 结构或未来新增 compat service 时，优先使用。
 
+## 工具技能
+
+- `browser-automation`
+  - 面向浏览器自动化、页面真实行为复核、截图 / PDF 留证和最小 smoke。
+
+使用案例：
+
+- 需要打开本地作者页面、点击或填写表单、核对 DOM 文本、生成截图证据，或用 Playwright CLI 最小复现前端问题时，优先使用。
+
 ## 特例技能
 
 - `orpc-contract-first`
@@ -59,5 +68,5 @@
 ## 选择顺序
 
 1. 先判断是否命中元流程技能。
-2. 再按目录落到后端 / 前端 / 插件服务技能。
+2. 再按目录落到后端 / 前端 / 插件服务 / 工具技能。
 3. 任务结束前默认回到 `development-closure`；如果触及 `P0` 高风险面，再补 `safe-change-review`。
