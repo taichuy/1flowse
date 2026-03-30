@@ -11,6 +11,19 @@ const PID_DIR = path.join(TMP_DIR, 'pids');
 const MIDDLEWARE_DIR = path.join(REPO_ROOT, 'docker');
 const API_DIR = path.join(REPO_ROOT, 'api');
 const WEB_DIR = path.join(REPO_ROOT, 'web');
+const WEB_PORT = 3100;
+const WEB_DIST_DIR = path.join(WEB_DIR, '.next');
+const WEB_APP_PATHS_MANIFEST = path.join(WEB_DIST_DIR, 'server', 'app-paths-manifest.json');
+const WEB_NEXT_CLI = path.join(WEB_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1'];
+const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '127.0.0.0/8', '::1'];
+const AUTHOR_ROUTE_PROBES = [
+  { path: '/login', expectedStatuses: [200] },
+  { path: '/workspace', expectedStatuses: [200, 307, 308] },
+  { path: '/workflows', expectedStatuses: [200, 307, 308] },
+  { path: '/workflows/new', expectedStatuses: [200, 307, 308] },
+];
+const AUTHOR_MANIFEST_ROUTES = ['/login/page'];
 
 fs.mkdirSync(LOG_DIR, { recursive: true });
 fs.mkdirSync(PID_DIR, { recursive: true });
@@ -80,10 +93,49 @@ function displayPath(targetPath) {
   return targetPath;
 }
 
+function parseNoProxyEntries(envValue) {
+  return String(envValue || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function buildLocalLoopbackEnv(sourceEnv) {
+  const noProxyEntries = new Set([
+    ...parseNoProxyEntries(sourceEnv.NO_PROXY),
+    ...parseNoProxyEntries(sourceEnv.no_proxy),
+    ...LOOPBACK_NO_PROXY_ENTRIES,
+  ]);
+  const noProxyValue = [...noProxyEntries].join(',');
+
+  return {
+    ...sourceEnv,
+    NO_PROXY: noProxyValue,
+    no_proxy: noProxyValue,
+  };
+}
+
+function shellProxyMayInterceptLoopback() {
+  const hasProxy = ['HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy'].some(
+    (key) => Boolean(process.env[key])
+  );
+
+  if (!hasProxy) {
+    return false;
+  }
+
+  const noProxyEntries = new Set([
+    ...parseNoProxyEntries(process.env.NO_PROXY),
+    ...parseNoProxyEntries(process.env.no_proxy),
+  ]);
+
+  return !noProxyEntries.has('127.0.0.1');
+}
+
 function runCommand(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd || REPO_ROOT,
-    env: { ...process.env, ...(options.env || {}) },
+    env: { ...buildLocalLoopbackEnv(process.env), ...(options.env || {}) },
     encoding: 'utf8',
     stdio: options.captureOutput ? ['ignore', 'pipe', 'pipe'] : 'inherit',
   });
@@ -219,7 +271,216 @@ function readTail(filePath, maxLines = 40) {
   return lines.slice(-maxLines).join('\n');
 }
 
-function startBackgroundProcess(serviceName, workdir, command, args) {
+function getWebDevCommand() {
+  if (!fs.existsSync(WEB_NEXT_CLI)) {
+    throw new Error(`缺少 ${displayPath(WEB_NEXT_CLI)}，请先同步 Web 依赖`);
+  }
+
+  return {
+    command: process.execPath,
+    args: [WEB_NEXT_CLI, 'dev', '-p', String(WEB_PORT)],
+    env: {
+      WATCHPACK_POLLING: 'true',
+    },
+  };
+}
+
+function cleanupWebBuildArtifacts() {
+  if (!fs.existsSync(WEB_DIST_DIR)) {
+    return;
+  }
+
+  fs.rmSync(WEB_DIST_DIR, { recursive: true, force: true });
+  log(`已清理 ${displayPath(WEB_DIST_DIR)}，避免旧 route manifest 残留`);
+}
+
+function findListeningPidsByPort(port) {
+  const processIds = new Set();
+
+  if (process.platform !== 'win32' && commandExists('ss')) {
+    const ssResult = runCommand('ss', ['-ltnp', `sport = :${port}`], { captureOutput: true });
+    if (!ssResult.error && ssResult.status === 0 && ssResult.stdout) {
+      for (const match of ssResult.stdout.matchAll(/pid=(\d+)/g)) {
+        processIds.add(Number.parseInt(match[1], 10));
+      }
+    }
+  }
+
+  if (processIds.size === 0 && commandExists('lsof')) {
+    const lsofResult = runCommand('lsof', ['-iTCP:' + String(port), '-sTCP:LISTEN', '-n', '-P'], {
+      captureOutput: true,
+    });
+    if (!lsofResult.error && lsofResult.status === 0 && lsofResult.stdout) {
+      for (const line of lsofResult.stdout.split(/\r?\n/).slice(1)) {
+        const columns = line.trim().split(/\s+/);
+        const pid = Number.parseInt(columns[1] || '', 10);
+        if (Number.isInteger(pid) && pid > 0) {
+          processIds.add(pid);
+        }
+      }
+    }
+  }
+
+  return [...processIds];
+}
+
+function cleanupOrphanedWebListeners() {
+  const trackedPid = readPid(pidFileFor('web'));
+  const occupiedPids = findListeningPidsByPort(WEB_PORT).filter((pid) => pid !== trackedPid);
+
+  if (occupiedPids.length === 0) {
+    return;
+  }
+
+  log(`发现占用 ${WEB_PORT} 端口的孤儿 Web 进程：${occupiedPids.join(', ')}`);
+  for (const pid of occupiedPids) {
+    killProcessGroup(pid, 'SIGTERM');
+  }
+
+  sleepSync(1000);
+
+  for (const pid of occupiedPids) {
+    try {
+      process.kill(pid, 0);
+      killProcessGroup(pid, 'SIGKILL');
+    } catch (error) {
+      if (!error || error.code !== 'ESRCH') {
+        throw error;
+      }
+    }
+  }
+}
+
+function readWebAppPathsManifest() {
+  if (!fs.existsSync(WEB_APP_PATHS_MANIFEST)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(WEB_APP_PATHS_MANIFEST, 'utf8'));
+  } catch (error) {
+    return null;
+  }
+}
+
+function getMissingAuthorManifestRoutes(manifest) {
+  const manifestRoutes = new Set(Object.keys(manifest || {}));
+  return AUTHOR_MANIFEST_ROUTES.filter((route) => !manifestRoutes.has(route));
+}
+
+async function sleep(milliseconds) {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function probeAuthorRouteStatus(routePath, host = 'localhost') {
+  try {
+    const response = await fetch(`http://${host}:${WEB_PORT}${routePath}`, {
+      redirect: 'manual',
+      headers: {
+        accept: 'text/html',
+      },
+    });
+
+    return response.status;
+  } catch (error) {
+    return null;
+  }
+}
+
+function formatAuthorRouteStatuses(routeStatuses) {
+  return routeStatuses
+    .map(({ path: routePath, status, expectedStatuses }) => {
+      const actualStatus = status === null ? 'unreachable' : String(status);
+      return `${routePath}=${actualStatus} (expect ${expectedStatuses.join('/')})`;
+    })
+    .join(', ');
+}
+
+async function collectWebAuthorRouteHealth() {
+  const routeStatuses = [];
+
+  for (const probe of AUTHOR_ROUTE_PROBES) {
+    const status = await probeAuthorRouteStatus(probe.path);
+    routeStatuses.push({
+      ...probe,
+      status,
+      ok: typeof status === 'number' && probe.expectedStatuses.includes(status),
+    });
+  }
+
+  const manifest = readWebAppPathsManifest();
+  const missingManifestRoutes = getMissingAuthorManifestRoutes(manifest);
+
+  return {
+    manifest,
+    missingManifestRoutes,
+    routeStatuses,
+    ok: routeStatuses.every((probe) => probe.ok) && missingManifestRoutes.length === 0,
+  };
+}
+
+async function collectLoopbackHostParity() {
+  const loopbackPaths = ['/login', '/workflows/new'];
+  const results = [];
+
+  for (const host of LOOPBACK_HOSTS) {
+    for (const routePath of loopbackPaths) {
+      results.push({
+        host,
+        path: routePath,
+        status: await probeAuthorRouteStatus(routePath, host),
+      });
+    }
+  }
+
+  return results;
+}
+
+function formatLoopbackHostParity(results) {
+  return results
+    .map(({ host, path: routePath, status }) => `${host}${routePath}=${status === null ? 'unreachable' : status}`)
+    .join(', ');
+}
+
+function printLoopbackProxyNotice() {
+  if (!shellProxyMayInterceptLoopback()) {
+    return;
+  }
+
+  process.stdout.write(
+    'web proxy note: 检测到 shell 代理且 NO_PROXY 未显式包含 127.0.0.1；CLI 直连 127.0.0.1 可能被代理劫持。可临时执行 `export NO_PROXY=localhost,127.0.0.1,127.0.0.0/8,::1` 后再用 curl 复验。\n'
+  );
+}
+
+async function ensureWebAuthorRoutesHealthy() {
+  const maxAttempts = 20;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const health = await collectWebAuthorRouteHealth();
+    if (health.ok) {
+      log(`Web 作者路由已恢复：${formatAuthorRouteStatuses(health.routeStatuses)}`);
+      return health;
+    }
+
+    await sleep(1000);
+  }
+
+  const health = await collectWebAuthorRouteHealth();
+  const tailOutput = readTail(logFileFor('web'), 80);
+  const manifestSummary = health.manifest
+    ? Object.keys(health.manifest).join(', ')
+    : 'manifest missing';
+
+  throw new Error(
+    `Web 作者路由未恢复\n` +
+      `- route status: ${formatAuthorRouteStatuses(health.routeStatuses)}\n` +
+      `- missing manifest routes: ${health.missingManifestRoutes.join(', ') || 'none'}\n` +
+      `- manifest keys: ${manifestSummary}\n` +
+      (tailOutput ? `- web log tail:\n${tailOutput}` : '')
+  );
+}
+
+function startBackgroundProcess(serviceName, workdir, command, args, extraEnv = {}) {
   const pidFile = pidFileFor(serviceName);
   const logFile = logFileFor(serviceName);
 
@@ -235,7 +496,7 @@ function startBackgroundProcess(serviceName, workdir, command, args) {
   const child = spawn(command, args, {
     cwd: workdir,
     detached: true,
-    env: process.env,
+    env: { ...buildLocalLoopbackEnv(process.env), ...extraEnv },
     stdio: ['ignore', outputHandle, outputHandle],
   });
 
@@ -299,6 +560,11 @@ function stopBackgroundProcess(serviceName) {
   log(`${serviceName} 已停止`);
 }
 
+function stopWebProcess() {
+  stopBackgroundProcess('web');
+  cleanupOrphanedWebListeners();
+}
+
 function printProcessStatus(serviceName) {
   const pidFile = pidFileFor(serviceName);
   cleanupStalePid(pidFile);
@@ -333,6 +599,15 @@ function prepareEnvFiles() {
   copyIfMissing(path.join(WEB_DIR, '.env.example'), path.join(WEB_DIR, '.env.local'));
 }
 
+async function startWebProcess() {
+  cleanupOrphanedWebListeners();
+  cleanupWebBuildArtifacts();
+
+  const webCommand = getWebDevCommand();
+  startBackgroundProcess('web', WEB_DIR, webCommand.command, webCommand.args, webCommand.env);
+  await ensureWebAuthorRoutesHealthy();
+}
+
 function ensureDependencies() {
   if (skipInstall) {
     log('按参数跳过依赖同步');
@@ -364,7 +639,7 @@ function runMigrations() {
   });
 }
 
-function startAll() {
+async function startAll() {
   requireCommand('docker');
   requireCommand('uv');
   requireCommand('corepack');
@@ -409,7 +684,7 @@ function startAll() {
       'INFO',
     ]);
   }
-  startBackgroundProcess('web', WEB_DIR, 'corepack', ['pnpm', 'dev']);
+  await startWebProcess();
 
   process.stdout.write(`
 启动完成：
@@ -428,7 +703,7 @@ function stopAll() {
   requireCommand('docker');
   resolveComposeCommand();
 
-  stopBackgroundProcess('web');
+  stopWebProcess();
   stopBackgroundProcess('beat');
   stopBackgroundProcess('worker');
   stopBackgroundProcess('api');
@@ -437,14 +712,33 @@ function stopAll() {
   runMiddlewareCompose(['down']);
 }
 
-function statusAll() {
+async function statusAll() {
   requireCommand('docker');
   resolveComposeCommand();
+  const trackedWebPidFile = pidFileFor('web');
+  const trackedWebPid = readPid(trackedWebPidFile);
+  const orphanedWebPids = findListeningPidsByPort(WEB_PORT).filter((pid) => pid !== trackedWebPid);
 
   printProcessStatus('api');
   printProcessStatus('worker');
   printProcessStatus('beat');
   printProcessStatus('web');
+  if (isPidRunning(trackedWebPidFile)) {
+    const health = await collectWebAuthorRouteHealth();
+    process.stdout.write(
+      `web routes   ${health.ok ? 'healthy' : 'degraded'} (${formatAuthorRouteStatuses(health.routeStatuses)})\n`
+    );
+    const loopbackParity = await collectLoopbackHostParity();
+    process.stdout.write(`web hosts    ${formatLoopbackHostParity(loopbackParity)}\n`);
+    printLoopbackProxyNotice();
+    if (health.missingManifestRoutes.length > 0) {
+      process.stdout.write(
+        `web manifest missing: ${health.missingManifestRoutes.join(', ')}\n`
+      );
+    }
+  } else if (orphanedWebPids.length > 0) {
+    process.stdout.write(`web orphan   port ${WEB_PORT} occupied by PID=${orphanedWebPids.join(',')}\n`);
+  }
   process.stdout.write('\nDocker middleware:\n');
 
   const result = runMiddlewareCompose(['ps'], { allowFailure: true });
@@ -488,20 +782,20 @@ function parseArgs(args) {
   }
 }
 
-function main() {
+async function main() {
   try {
     parseArgs(process.argv.slice(2));
 
     switch (action) {
       case 'start':
-        startAll();
+        await startAll();
         break;
       case 'stop':
       case 'pause':
         stopAll();
         break;
       case 'status':
-        statusAll();
+        await statusAll();
         break;
       default:
         usage();
