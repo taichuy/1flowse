@@ -10,6 +10,31 @@ import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 
 Object.assign(globalThis, { React });
 
+vi.mock("next/dynamic", async () => {
+  const diagnosticsModule = await vi.importActual<
+    typeof import("@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-diagnostics-panel")
+  >("@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-diagnostics-panel");
+  const runPanelModule = await vi.importActual<
+    typeof import("@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-run-panel")
+  >("@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-run-panel");
+
+  return {
+    default: (loader: { toString: () => string }) => {
+      const source = loader.toString();
+
+      if (source.includes("sidebar-panels/workflow-editor-diagnostics-panel")) {
+        return diagnosticsModule.WorkflowEditorDiagnosticsPanel;
+      }
+
+      if (source.includes("sidebar-panels/workflow-editor-run-panel")) {
+        return runPanelModule.WorkflowEditorRunPanel;
+      }
+
+      return () => null;
+    }
+  };
+});
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
@@ -157,6 +182,89 @@ function buildNodeCatalogItem(
 }
 
 describe("WorkflowEditorSidebar", () => {
+  it("does not mount diagnostics content before the diagnostics tab is opened", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).not.toContain('data-component="workflow-editor-diagnostics-panel"');
+  });
+
+  it("mounts diagnostics content when the diagnostics tab becomes the active entry", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: "还有阻断",
+        persistBlockers: [
+          {
+            id: "contract_schema",
+            label: "Contract schema",
+            detail: "当前 workflow 缺少触发器。",
+            nextStep: "请先补触发器。"
+          }
+        ],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-editor-diagnostics-panel"');
+  });
+
   it("does not mount run overlay content before the run tab is opened", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {

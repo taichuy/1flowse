@@ -9,6 +9,59 @@ import type { Edge, Node } from "@xyflow/react";
 
 Object.assign(globalThis, { React });
 
+vi.mock("next/dynamic", async () => {
+  const nodeConfigModule = await vi.importMock<
+    typeof import("@/components/workflow-node-config-form")
+  >("@/components/workflow-node-config-form");
+  const nodeSchemaModule = await vi.importMock<
+    typeof import("@/components/workflow-node-config-form/node-io-schema-form")
+  >("@/components/workflow-node-config-form/node-io-schema-form");
+  const nodeRuntimeModule = await vi.importMock<
+    typeof import("@/components/workflow-node-config-form/runtime-policy-form")
+  >("@/components/workflow-node-config-form/runtime-policy-form");
+  const assistantPanelModule = await vi.importActual<
+    typeof import("@/components/workflow-editor-inspector-panels/workflow-editor-assistant-panel")
+  >("@/components/workflow-editor-inspector-panels/workflow-editor-assistant-panel");
+  const jsonPanelModule = await vi.importActual<
+    typeof import("@/components/workflow-editor-inspector-panels/workflow-editor-json-panel")
+  >("@/components/workflow-editor-inspector-panels/workflow-editor-json-panel");
+  const publishPanelModule = await vi.importActual<
+    typeof import("@/components/workflow-editor-inspector-panels/workflow-editor-publish-panel")
+  >("@/components/workflow-editor-inspector-panels/workflow-editor-publish-panel");
+
+  return {
+    default: (loader: { toString: () => string }) => {
+      const source = loader.toString();
+
+      if (source.includes("workflow-node-config-form/runtime-policy-form")) {
+        return nodeRuntimeModule.WorkflowNodeRuntimePolicyForm;
+      }
+
+      if (source.includes("workflow-node-config-form/node-io-schema-form")) {
+        return nodeSchemaModule.WorkflowNodeIoSchemaForm;
+      }
+
+      if (source.includes("workflow-node-config-form")) {
+        return nodeConfigModule.WorkflowNodeConfigForm;
+      }
+
+      if (source.includes("workflow-editor-inspector-panels/workflow-editor-assistant-panel")) {
+        return assistantPanelModule.WorkflowEditorAssistantPanel;
+      }
+
+      if (source.includes("workflow-editor-inspector-panels/workflow-editor-json-panel")) {
+        return jsonPanelModule.WorkflowEditorJsonPanel;
+      }
+
+      if (source.includes("workflow-editor-inspector-panels/workflow-editor-publish-panel")) {
+        return publishPanelModule.WorkflowEditorPublishPanel;
+      }
+
+      return () => null;
+    }
+  };
+});
+
 vi.mock("@/components/workflow-node-config-form", () => ({
   WorkflowNodeConfigForm: () => createElement("div", { "data-component": "node-config-form" }, "node-config-form")
 }));
@@ -147,5 +200,29 @@ describe("WorkflowEditorInspector", () => {
 
     expect(html).toContain('data-component="workflow-editor-publish-panel"');
     expect(html).toContain('data-component="workflow-editor-publish-form"');
+  });
+
+  it("mounts schema and runtime panels when validation focus switches the preferred tab", () => {
+    const schemaHtml = renderToStaticMarkup(
+      createElement(WorkflowEditorInspector, {
+        ...buildProps(),
+        selectedNode: buildSelectedNode(),
+        highlightedNodeSection: "contract",
+        highlightedNodeFieldPath: "inputSchema"
+      })
+    );
+    const runtimeHtml = renderToStaticMarkup(
+      createElement(WorkflowEditorInspector, {
+        ...buildProps(),
+        selectedNode: buildSelectedNode(),
+        highlightedNodeSection: "runtime",
+        highlightedNodeFieldPath: "retry.maxAttempts"
+      })
+    );
+
+    expect(schemaHtml).toContain('data-component="node-io-schema-form"');
+    expect(schemaHtml).not.toContain('data-component="node-runtime-policy-form"');
+    expect(runtimeHtml).toContain('data-component="node-runtime-policy-form"');
+    expect(runtimeHtml).not.toContain('data-component="node-io-schema-form"');
   });
 });
