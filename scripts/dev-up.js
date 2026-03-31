@@ -15,6 +15,7 @@ const WEB_PORT = 3100;
 const WEB_DIST_DIR = path.join(WEB_DIR, '.next');
 const WEB_APP_PATHS_MANIFEST = path.join(WEB_DIST_DIR, 'server', 'app-paths-manifest.json');
 const WEB_NEXT_CLI = path.join(WEB_DIR, 'node_modules', 'next', 'dist', 'bin', 'next');
+const WEB_MODES = new Set(['dev', 'build']);
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1'];
 const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '127.0.0.0/8', '::1'];
 const AUTHOR_ROUTE_PROBES = [
@@ -34,6 +35,7 @@ let startBeat = true;
 let skipInstall = false;
 let manageDockerMiddleware = true;
 let composeCommand = null;
+let webMode = 'dev';
 
 function usage() {
   process.stdout.write(`用法：node scripts/dev-up.js [选项] [start|stop|pause|status]
@@ -44,14 +46,17 @@ function usage() {
   --skip-install  跳过 \`uv sync\` 与 \`pnpm install\`
   --no-worker     不启动 Celery worker
   --no-beat       不启动 Celery beat
+  --web-mode      Web 启动模式：\`dev\`（默认）或 \`build\`
   --local-only    仅管理本地 API / Worker / Scheduler / Web，不启动或关闭 Docker
   -h, --help      查看帮助
 
 示例：
   node scripts/dev-up.js
   node scripts/dev-up.js --skip-install
+  node scripts/dev-up.js --web-mode build
   node scripts/dev-up.js --local-only
   node scripts/dev-up.js start --skip-install
+  node scripts/dev-up.js start --web-mode=build --skip-install
   node scripts/dev-up.js start --local-only --skip-install
   node scripts/dev-up.js status --local-only
   node scripts/dev-up.js status
@@ -276,9 +281,25 @@ function readTail(filePath, maxLines = 40) {
   return lines.slice(-maxLines).join('\n');
 }
 
-function getWebDevCommand() {
+function setWebMode(nextWebMode) {
+  if (!WEB_MODES.has(nextWebMode)) {
+    throw new Error(`不支持的 Web 启动模式：${nextWebMode}`);
+  }
+
+  webMode = nextWebMode;
+}
+
+function getWebCommand() {
   if (!fs.existsSync(WEB_NEXT_CLI)) {
     throw new Error(`缺少 ${displayPath(WEB_NEXT_CLI)}，请先同步 Web 依赖`);
+  }
+
+  if (webMode === 'build') {
+    return {
+      command: process.execPath,
+      args: [WEB_NEXT_CLI, 'start', '-p', String(WEB_PORT)],
+      env: {},
+    };
   }
 
   return {
@@ -604,11 +625,22 @@ function prepareEnvFiles() {
   copyIfMissing(path.join(WEB_DIR, '.env.example'), path.join(WEB_DIR, '.env.local'));
 }
 
+function buildWebArtifacts() {
+  if (webMode !== 'build') {
+    return;
+  }
+
+  log('构建 Web 产物');
+  ensureCommandSuccess('构建 Web 产物', runCommand('corepack', ['pnpm', 'build'], { cwd: WEB_DIR }));
+}
+
 async function startWebProcess() {
   cleanupOrphanedWebListeners();
   cleanupWebBuildArtifacts();
 
-  const webCommand = getWebDevCommand();
+  buildWebArtifacts();
+
+  const webCommand = getWebCommand();
   startBackgroundProcess('web', WEB_DIR, webCommand.command, webCommand.args, webCommand.env);
   await ensureWebAuthorRoutesHealthy();
 }
@@ -697,20 +729,17 @@ async function startAll() {
   }
   await startWebProcess();
 
-  const statusCommand = manageDockerMiddleware
-    ? 'node scripts/dev-up.js status'
-    : 'node scripts/dev-up.js status --local-only';
-  const pauseCommand = manageDockerMiddleware
-    ? 'node scripts/dev-pause.js'
-    : 'node scripts/dev-pause.js --local-only';
-  const stopCommand = manageDockerMiddleware
-    ? 'node scripts/dev-up.js stop'
-    : 'node scripts/dev-up.js stop --local-only';
+  const sharedArgs = [manageDockerMiddleware ? null : '--local-only', webMode === 'build' ? '--web-mode=build' : null]
+    .filter(Boolean)
+    .join(' ');
+  const statusCommand = `node scripts/dev-up.js status${sharedArgs ? ` ${sharedArgs}` : ''}`;
+  const pauseCommand = `node scripts/dev-pause.js${sharedArgs ? ` ${sharedArgs}` : ''}`;
+  const stopCommand = `node scripts/dev-up.js stop${sharedArgs ? ` ${sharedArgs}` : ''}`;
 
   process.stdout.write(`
 启动完成：
 - API:  http://localhost:8000
-- Web:  http://localhost:3100
+- Web:  http://localhost:3100 (${webMode})
 - 日志: tmp/logs/
 
 常用命令：
@@ -785,7 +814,9 @@ async function statusAll() {
 }
 
 function parseArgs(args) {
-  for (const currentArg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const currentArg = args[index];
+
     switch (currentArg) {
       case 'start':
       case 'stop':
@@ -808,12 +839,27 @@ function parseArgs(args) {
       case '--local-only':
         manageDockerMiddleware = false;
         break;
+      case '--web-mode': {
+        const nextWebMode = args[index + 1];
+        if (!nextWebMode) {
+          throw new Error('`--web-mode` 需要一个参数：dev 或 build');
+        }
+
+        setWebMode(nextWebMode);
+        index += 1;
+        break;
+      }
       case '-h':
       case '--help':
         usage();
         process.exit(0);
         break;
       default:
+        if (currentArg.startsWith('--web-mode=')) {
+          setWebMode(currentArg.slice('--web-mode='.length));
+          break;
+        }
+
         throw new Error(`未知参数：${currentArg}`);
     }
   }

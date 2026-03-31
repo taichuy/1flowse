@@ -48,6 +48,14 @@ node scripts/dev-up.js
 
 默认会复制缺失的本地环境文件、启动 `docker-compose.middleware.yaml`、执行 API migration，并在后台拉起 API / Worker / Scheduler / Web；日志写入 `tmp/logs/`，Web 默认地址为 `http://localhost:3100`。
 
+如果你想验证本地编译后的 Web 包，而不是 `next dev`，可以显式切到 build 模式：
+
+```shell
+node scripts/dev-up.js --web-mode build
+```
+
+这个模式会先清理 `web/.next`、执行 `pnpm build`，再用 `next start -p 3100` 拉起编译后的包；其余 API / Worker / Scheduler / Docker 中间件行为保持不变。
+
 如果本机已经有数据库 / Redis 等依赖，或只想重启本地服务而不碰 Docker，可以改用：
 
 ```shell
@@ -58,7 +66,7 @@ node scripts/dev-up.js stop --local-only
 
 这个模式会继续同步依赖、执行 migration、拉起 API / Worker / Scheduler / Web，但不会启动 Docker，也不会在 `stop` / `pause` 时关闭现有 Docker 中间件；查看状态时可用 `node scripts/dev-up.js status --local-only`。
 
-`node scripts/dev-up.js` 现在会在启动 Web 前清理 `web/.next`，并以 watchpack 轮询模式拉起 `next dev`，对 `/login`、`/workspace`、`/workflows`、`/workflows/new` 做一次本地作者路由 smoke；`node scripts/dev-up.js status` 也会额外打印这条作者主链的路由健康度、`localhost/127.0.0.1` 的 loopback 结果，并在 shell 代理可能劫持 `127.0.0.1` 时给出显式提示，避免把代理 `502` 误判成前端路由故障。
+`node scripts/dev-up.js` 默认会在启动 Web 前清理 `web/.next`，并以 watchpack 轮询模式拉起 `next dev`；如果传入 `--web-mode build`，则会先执行 `pnpm build`，再用 `next start` 拉起本地编译产物。两种模式都会对 `/login`、`/workspace`、`/workflows`、`/workflows/new` 做一次本地作者路由 smoke；`node scripts/dev-up.js status` 也会额外打印这条作者主链的路由健康度、`localhost/127.0.0.1` 的 loopback 结果，并在 shell 代理可能劫持 `127.0.0.1` 时给出显式提示，避免把代理 `502` 误判成前端路由故障。
 
 常用命令：
 
