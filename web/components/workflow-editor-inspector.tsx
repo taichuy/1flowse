@@ -151,6 +151,7 @@ export function WorkflowEditorInspector({
   tools,
   adapters,
   credentials,
+  modelProviderCatalog = [],
   modelProviderConfigs = [],
   modelProviderRegistryStatus = "idle",
   nodeConfigText,
@@ -386,6 +387,7 @@ export function WorkflowEditorInspector({
                 tools={tools}
                 adapters={adapters}
                 credentials={credentials}
+                modelProviderCatalog={modelProviderCatalog}
                 modelProviderConfigs={modelProviderConfigs}
                 modelProviderRegistryStatus={modelProviderRegistryStatus}
                 currentHref={currentHref}

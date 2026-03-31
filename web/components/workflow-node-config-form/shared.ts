@@ -9,6 +9,7 @@ import type {
 import type { CredentialItem } from "@/lib/get-credentials";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type {
+  NativeModelProviderCatalogItem,
   WorkspaceModelProviderConfigItem,
   WorkspaceModelProviderRegistryStatus
 } from "@/lib/model-provider-registry";
@@ -21,6 +22,7 @@ export type WorkflowNodeConfigFormProps = {
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
   credentials: CredentialItem[];
+  modelProviderCatalog?: NativeModelProviderCatalogItem[];
   modelProviderConfigs?: WorkspaceModelProviderConfigItem[];
   modelProviderRegistryStatus?: WorkspaceModelProviderRegistryStatus;
   currentHref?: string | null;

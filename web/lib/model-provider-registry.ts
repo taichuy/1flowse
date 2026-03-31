@@ -59,7 +59,53 @@ export type WorkspaceModelProviderRegistryResponse = {
   items: WorkspaceModelProviderConfigItem[];
 };
 
+export type WorkspaceModelProviderSettingsResponse = {
+  registry: WorkspaceModelProviderRegistryResponse;
+  credentials: CredentialItem[];
+};
+
 export type WorkspaceModelProviderRegistryStatus = "idle" | "loading" | "ready" | "error";
+
+export const FALLBACK_NATIVE_MODEL_PROVIDER_CATALOG: NativeModelProviderCatalogItem[] = [
+  {
+    id: "openai",
+    label: "OpenAI",
+    description: "参考 Dify provider manifest 的原生 OpenAI 厂商定义，团队先配置 endpoint / credential，再由节点引用。",
+    help_url: "https://platform.openai.com/account/api-keys",
+    supported_model_types: ["llm"],
+    configuration_methods: ["predefined-model", "customizable-model"],
+    credential_type: "openai_api_key",
+    compatible_credential_types: ["openai_api_key", "api_key"],
+    default_base_url: "https://api.openai.com/v1",
+    default_protocol: "chat_completions",
+    default_models: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
+    credential_fields: []
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    description: "参考 Dify provider manifest 的原生 Anthropic / Claude 厂商定义，默认走 Messages API。",
+    help_url: "https://console.anthropic.com/account/keys",
+    supported_model_types: ["llm"],
+    configuration_methods: ["predefined-model", "customizable-model"],
+    credential_type: "anthropic_api_key",
+    compatible_credential_types: ["anthropic_api_key", "api_key"],
+    default_base_url: "https://api.anthropic.com",
+    default_protocol: "messages",
+    default_models: ["claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest"],
+    credential_fields: []
+  }
+];
+
+export function resolveNativeModelProviderCatalog(
+  catalog: NativeModelProviderCatalogItem[] | null | undefined
+) {
+  if (catalog && catalog.length > 0) {
+    return catalog;
+  }
+
+  return FALLBACK_NATIVE_MODEL_PROVIDER_CATALOG;
+}
 
 export async function getWorkspaceModelProviderRegistry(): Promise<WorkspaceModelProviderRegistryResponse | null> {
   try {
@@ -108,12 +154,13 @@ export function getModelProviderCatalogItem(
   catalog: NativeModelProviderCatalogItem[],
   providerId: string | null | undefined
 ) {
+  const resolvedCatalog = resolveNativeModelProviderCatalog(catalog);
   const normalizedProviderId = providerId?.trim().toLowerCase();
   if (!normalizedProviderId) {
-    return catalog[0] ?? null;
+    return resolvedCatalog[0] ?? null;
   }
 
-  return catalog.find((item) => item.id === normalizedProviderId) ?? null;
+  return resolvedCatalog.find((item) => item.id === normalizedProviderId) ?? null;
 }
 
 export function getCompatibleCredentials(
@@ -133,7 +180,7 @@ export function createDefaultModelProviderDraft(
   catalog: NativeModelProviderCatalogItem[],
   credentials: CredentialItem[]
 ): WorkspaceModelProviderConfigDraft {
-  const provider = catalog[0] ?? null;
+  const provider = resolveNativeModelProviderCatalog(catalog)[0] ?? null;
   const compatibleCredential = getCompatibleCredentials(provider, credentials)[0] ?? null;
 
   return {

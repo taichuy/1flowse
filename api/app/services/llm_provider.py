@@ -3,35 +3,79 @@
 Unified abstraction for calling LLM APIs (OpenAI-compatible and Anthropic).
 Supports both synchronous and streaming modes.
 
-Provider routing:
-- "openai" / "deepseek" / any OpenAI-compatible → POST {baseUrl}/chat/completions
-- "anthropic" → POST {baseUrl}/messages
-- Unknown providers default to OpenAI-compatible protocol
+Provider routing now resolves through the native model provider catalog so the
+runtime no longer keeps a separate copy of provider defaults.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
 from app.core.config import get_settings
+from app.services.model_provider_registry import (
+    ModelProviderRegistryError,
+    ModelProviderRegistryService,
+    NativeModelProviderDefinition,
+)
 
 LLMClientFactory = Callable[[], httpx.Client]
 
 _log = logging.getLogger(__name__)
 
-_OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
-_ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"
 _ANTHROPIC_VERSION = "2023-06-01"
 _DEFAULT_MAX_TOKENS = 4096
 _DEFAULT_TIMEOUT_SECONDS = 120
+_DEFAULT_NATIVE_PROVIDER_ID = "openai"
+_PROVIDER_REGISTRY = ModelProviderRegistryService()
 
-_ANTHROPIC_PROVIDERS = frozenset({"anthropic"})
+
+@dataclass(frozen=True)
+class NativeLlmRuntimeAdapter:
+    key: str
+    request_path: str
+    default_protocol: str
+    default_max_tokens: int | None = None
+
+
+@dataclass(frozen=True)
+class NativeLlmProviderContract:
+    definition: NativeModelProviderDefinition
+    runtime_adapter: NativeLlmRuntimeAdapter
+
+
+_NATIVE_RUNTIME_ADAPTERS = {
+    "chat_completions": NativeLlmRuntimeAdapter(
+        key="openai_chat_completions",
+        request_path="/chat/completions",
+        default_protocol="chat_completions",
+    ),
+    "messages": NativeLlmRuntimeAdapter(
+        key="anthropic_messages",
+        request_path="/v1/messages",
+        default_protocol="messages",
+        default_max_tokens=_DEFAULT_MAX_TOKENS,
+    ),
+}
+
+
+def resolve_native_llm_provider_contract(provider: str) -> NativeLlmProviderContract:
+    normalized_provider = provider.strip().lower()
+    try:
+        definition = _PROVIDER_REGISTRY.get_catalog_item(normalized_provider)
+    except ModelProviderRegistryError:
+        definition = _PROVIDER_REGISTRY.get_catalog_item(_DEFAULT_NATIVE_PROVIDER_ID)
+
+    runtime_adapter = _NATIVE_RUNTIME_ADAPTERS.get(
+        definition.default_protocol,
+        _NATIVE_RUNTIME_ADAPTERS["chat_completions"],
+    )
+    return NativeLlmProviderContract(definition=definition, runtime_adapter=runtime_adapter)
 
 
 @dataclass(frozen=True)
@@ -97,21 +141,27 @@ class LLMProviderService:
 
     def chat(self, config: LLMCallConfig) -> LLMResponse:
         """Synchronous LLM call. Returns complete response."""
-        if self._is_anthropic(config.provider):
-            return self._anthropic_chat(config)
-        return self._openai_chat(config)
+        contract = resolve_native_llm_provider_contract(config.provider)
+        if contract.runtime_adapter.key == "anthropic_messages":
+            return self._anthropic_chat(config, contract)
+        return self._openai_chat(config, contract)
 
     def chat_stream(self, config: LLMCallConfig) -> Generator[LLMStreamChunk, None, None]:
         """Streaming LLM call. Yields chunks as they arrive."""
-        if self._is_anthropic(config.provider):
-            yield from self._anthropic_chat_stream(config)
-        else:
-            yield from self._openai_chat_stream(config)
+        contract = resolve_native_llm_provider_contract(config.provider)
+        if contract.runtime_adapter.key == "anthropic_messages":
+            yield from self._anthropic_chat_stream(config, contract)
+            return
+        yield from self._openai_chat_stream(config, contract)
 
     # --- OpenAI-compatible ---
 
-    def _openai_chat(self, config: LLMCallConfig) -> LLMResponse:
-        url = self._openai_url(config)
+    def _openai_chat(
+        self,
+        config: LLMCallConfig,
+        contract: NativeLlmProviderContract,
+    ) -> LLMResponse:
+        url = self._openai_url(config, contract)
         headers = self._openai_headers(config)
         body = self._openai_body(config, stream=False)
 
@@ -131,9 +181,11 @@ class LLMProviderService:
         )
 
     def _openai_chat_stream(
-        self, config: LLMCallConfig
+        self,
+        config: LLMCallConfig,
+        contract: NativeLlmProviderContract,
     ) -> Generator[LLMStreamChunk, None, None]:
-        url = self._openai_url(config)
+        url = self._openai_url(config, contract)
         headers = self._openai_headers(config)
         body = self._openai_body(config, stream=True)
 
@@ -145,9 +197,9 @@ class LLMProviderService:
                     if chunk is not None:
                         yield chunk
 
-    def _openai_url(self, config: LLMCallConfig) -> str:
-        base = (config.base_url or _OPENAI_DEFAULT_BASE_URL).rstrip("/")
-        return f"{base}/chat/completions"
+    def _openai_url(self, config: LLMCallConfig, contract: NativeLlmProviderContract) -> str:
+        base = (config.base_url or contract.definition.default_base_url).rstrip("/")
+        return f"{base}{contract.runtime_adapter.request_path}"
 
     def _openai_headers(self, config: LLMCallConfig) -> dict[str, str]:
         return {
@@ -205,10 +257,14 @@ class LLMProviderService:
 
     # --- Anthropic ---
 
-    def _anthropic_chat(self, config: LLMCallConfig) -> LLMResponse:
-        url = self._anthropic_url(config)
+    def _anthropic_chat(
+        self,
+        config: LLMCallConfig,
+        contract: NativeLlmProviderContract,
+    ) -> LLMResponse:
+        url = self._anthropic_url(config, contract)
         headers = self._anthropic_headers(config)
-        body = self._anthropic_body(config, stream=False)
+        body = self._anthropic_body(config, contract, stream=False)
 
         with self._make_client() as client:
             resp = client.post(url, headers=headers, json=body)
@@ -229,11 +285,13 @@ class LLMProviderService:
         )
 
     def _anthropic_chat_stream(
-        self, config: LLMCallConfig
+        self,
+        config: LLMCallConfig,
+        contract: NativeLlmProviderContract,
     ) -> Generator[LLMStreamChunk, None, None]:
-        url = self._anthropic_url(config)
+        url = self._anthropic_url(config, contract)
         headers = self._anthropic_headers(config)
-        body = self._anthropic_body(config, stream=True)
+        body = self._anthropic_body(config, contract, stream=True)
 
         with self._make_client() as client:
             with client.stream("POST", url, headers=headers, json=body) as resp:
@@ -243,9 +301,9 @@ class LLMProviderService:
                     if chunk is not None:
                         yield chunk
 
-    def _anthropic_url(self, config: LLMCallConfig) -> str:
-        base = (config.base_url or _ANTHROPIC_DEFAULT_BASE_URL).rstrip("/")
-        return f"{base}/v1/messages"
+    def _anthropic_url(self, config: LLMCallConfig, contract: NativeLlmProviderContract) -> str:
+        base = (config.base_url or contract.definition.default_base_url).rstrip("/")
+        return f"{base}{contract.runtime_adapter.request_path}"
 
     def _anthropic_headers(self, config: LLMCallConfig) -> dict[str, str]:
         return {
@@ -254,11 +312,19 @@ class LLMProviderService:
             "Content-Type": "application/json",
         }
 
-    def _anthropic_body(self, config: LLMCallConfig, *, stream: bool) -> dict[str, Any]:
+    def _anthropic_body(
+        self,
+        config: LLMCallConfig,
+        contract: NativeLlmProviderContract,
+        *,
+        stream: bool,
+    ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": config.model_id,
             "messages": list(config.messages),
-            "max_tokens": config.max_tokens or _DEFAULT_MAX_TOKENS,
+            "max_tokens": config.max_tokens
+            or contract.runtime_adapter.default_max_tokens
+            or _DEFAULT_MAX_TOKENS,
             "stream": stream,
         }
         if config.system_prompt:
@@ -295,9 +361,6 @@ class LLMProviderService:
         return None
 
     # --- Shared helpers ---
-
-    def _is_anthropic(self, provider: str) -> bool:
-        return provider.lower() in _ANTHROPIC_PROVIDERS
 
     def _make_client(self) -> httpx.Client:
         if self._client_factory is not None:

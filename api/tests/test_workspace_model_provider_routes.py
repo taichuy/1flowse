@@ -188,7 +188,7 @@ def test_workspace_model_provider_registry_write_requires_manager_and_csrf(
         },
     )
     assert viewer_forbidden_response.status_code == 403
-    assert viewer_forbidden_response.json()["detail"] == "当前账号没有成员管理权限。"
+    assert viewer_forbidden_response.json()["detail"] == "当前账号没有团队模型供应商管理权限。"
 
     viewer_list_response = client.get(
         "/api/workspace/model-providers",
@@ -196,3 +196,62 @@ def test_workspace_model_provider_registry_write_requires_manager_and_csrf(
     )
     assert viewer_list_response.status_code == 200
     assert len(viewer_list_response.json()["catalog"]) == 2
+
+
+def test_workspace_model_provider_settings_requires_manager_before_loading_credentials(
+    client: TestClient,
+    sqlite_session: Session,
+) -> None:
+    credential_store = CredentialStore()
+    openai_credential = credential_store.create(
+        sqlite_session,
+        name="OpenAI Team Key",
+        credential_type="openai_api_key",
+        data={"api_key": "openai-secret"},
+    )
+    sqlite_session.commit()
+
+    owner_login = _login(client, email="admin@taichuy.com", password="admin123")
+    create_member_response = client.post(
+        "/api/workspace/members",
+        headers=_csrf_headers(owner_login),
+        json={
+            "email": "viewer@taichuy.com",
+            "display_name": "Viewer User",
+            "password": "viewer123",
+            "role": "viewer",
+        },
+    )
+    assert create_member_response.status_code == 201
+
+    client.post(
+        "/api/workspace/model-providers",
+        headers=_csrf_headers(owner_login),
+        json={
+            "provider_id": "openai",
+            "label": "OpenAI Production",
+            "description": "主团队 OpenAI 供应商",
+            "credential_ref": f"credential://{openai_credential.id}",
+            "base_url": "https://api.openai.com/v1",
+            "default_model": "gpt-4.1",
+            "protocol": "responses",
+            "status": "active",
+        },
+    )
+
+    owner_settings_response = client.get(
+        "/api/workspace/model-providers/settings",
+        headers=_auth_headers(owner_login["access_token"]),
+    )
+    assert owner_settings_response.status_code == 200
+    owner_settings_body = owner_settings_response.json()
+    assert owner_settings_body["registry"]["items"][0]["label"] == "OpenAI Production"
+    assert owner_settings_body["credentials"][0]["id"] == openai_credential.id
+
+    viewer_login = _login(client, email="viewer@taichuy.com", password="viewer123")
+    viewer_settings_response = client.get(
+        "/api/workspace/model-providers/settings",
+        headers=_auth_headers(viewer_login["access_token"]),
+    )
+    assert viewer_settings_response.status_code == 403
+    assert viewer_settings_response.json()["detail"] == "当前账号没有团队模型供应商管理权限。"

@@ -1,5 +1,6 @@
 import {
   canManageWorkspaceMembers,
+  type ConsoleRoutePermissionItem,
   type ConsoleAccessLevel,
   type WorkspaceContextResponse,
   type WorkspaceMemberRole
@@ -10,8 +11,13 @@ export const WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF = "/workspace/settings/provi
 export const LEGACY_WORKSPACE_TEAM_SETTINGS_HREF = "/admin/members";
 
 export type WorkspaceConsoleNavKey = "workspace" | "workflows" | "runs" | "starters" | "team";
-export type WorkspaceConsolePageKey = "login" | WorkspaceConsoleNavKey;
+export type WorkspaceConsolePageKey = "login" | WorkspaceConsoleNavKey | "providers";
 export type WorkspaceShellNavigationMode = "all" | "core" | "studio";
+
+type WorkspaceConsoleRouteContract = {
+  route: string;
+  methods: string[];
+};
 
 export type WorkspaceConsolePagePermission = {
   key: WorkspaceConsolePageKey;
@@ -19,6 +25,7 @@ export type WorkspaceConsolePagePermission = {
   label: string;
   accessLevel: ConsoleAccessLevel;
   description: string;
+  routeContracts?: WorkspaceConsoleRouteContract[];
 };
 
 const workspaceConsolePagePermissions: WorkspaceConsolePagePermission[] = [
@@ -62,7 +69,26 @@ const workspaceConsolePagePermissions: WorkspaceConsolePagePermission[] = [
     href: WORKSPACE_TEAM_SETTINGS_HREF,
     label: "团队",
     accessLevel: "manager",
-    description: "workspace settings 下的成员与权限入口；后续 provider settings 继续在此扩展。"
+    description: "workspace settings 下的成员与权限入口；后续 provider settings 继续在此扩展。",
+    routeContracts: [
+      {
+        route: "/api/workspace/members",
+        methods: ["GET"]
+      }
+    ]
+  },
+  {
+    key: "providers",
+    href: WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF,
+    label: "模型供应商设置",
+    accessLevel: "manager",
+    description: "团队级原生模型供应商与 credential 绑定入口。",
+    routeContracts: [
+      {
+        route: "/api/workspace/model-providers/settings",
+        methods: ["GET"]
+      }
+    ]
   }
 ];
 
@@ -95,6 +121,28 @@ function hasRequiredAccessLevel(
   return rankByLevel[currentLevel] >= rankByLevel[requiredLevel];
 }
 
+function canSatisfyRouteContract(
+  routePermissions: ConsoleRoutePermissionItem[] | undefined,
+  currentLevel: ConsoleAccessLevel,
+  routeContract: WorkspaceConsoleRouteContract
+) {
+  if (!routePermissions || routePermissions.length === 0) {
+    return true;
+  }
+
+  return routeContract.methods.every((method) => {
+    const matchingPermission = routePermissions.find(
+      (item) => item.route === routeContract.route && item.methods.includes(method)
+    );
+
+    if (!matchingPermission) {
+      return false;
+    }
+
+    return hasRequiredAccessLevel(currentLevel, matchingPermission.access_level);
+  });
+}
+
 export function getWorkspaceConsolePagePermission(page: WorkspaceConsolePageKey) {
   return workspaceConsolePagePermissions.find((item) => item.key === page) ?? null;
 }
@@ -105,23 +153,36 @@ export function getWorkspaceConsolePageHref(page: WorkspaceConsolePageKey) {
 
 export function getWorkspaceConsoleNavigationItems() {
   return workspaceConsolePagePermissions.filter(
-    (item) => item.key !== "login"
+    (item) => item.key !== "login" && item.key !== "providers"
   ) as Array<WorkspaceConsolePagePermission & { key: WorkspaceConsoleNavKey }>;
 }
 
 export function canAccessConsolePage(
   page: WorkspaceConsolePageKey,
   workspaceContext:
-    | { current_member: Pick<WorkspaceContextResponse["current_member"], "role"> }
+    | {
+        current_member: Pick<WorkspaceContextResponse["current_member"], "role">;
+        route_permissions?: WorkspaceContextResponse["route_permissions"];
+      }
     | null
 ) {
-  const requiredAccessLevel =
-    getWorkspaceConsolePagePermission(page)?.accessLevel ?? "authenticated";
+  const pagePermission = getWorkspaceConsolePagePermission(page);
+  const requiredAccessLevel = pagePermission?.accessLevel ?? "authenticated";
   const currentAccessLevel = getConsoleAccessLevelForRole(
     workspaceContext?.current_member.role
   );
 
-  return hasRequiredAccessLevel(currentAccessLevel, requiredAccessLevel);
+  if (!hasRequiredAccessLevel(currentAccessLevel, requiredAccessLevel)) {
+    return false;
+  }
+
+  return (pagePermission?.routeContracts ?? []).every((routeContract) =>
+    canSatisfyRouteContract(
+      workspaceContext?.route_permissions,
+      currentAccessLevel,
+      routeContract
+    )
+  );
 }
 
 export function canViewConsoleNavItem(item: WorkspaceConsoleNavKey, userRole: WorkspaceMemberRole) {

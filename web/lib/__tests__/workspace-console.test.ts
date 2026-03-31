@@ -20,6 +20,7 @@ describe("workspace-console route matrix", () => {
 
   it("keeps team settings on a canonical workspace route", () => {
     expect(getWorkspaceConsolePageHref("team")).toBe(WORKSPACE_TEAM_SETTINGS_HREF);
+    expect(getWorkspaceConsolePageHref("providers")).toBe(WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF);
     expect(WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF).toBe("/workspace/settings/providers");
     expect(
       getWorkspaceConsoleNavigationItems().find((item) => item.key === "team")?.href
@@ -31,7 +32,32 @@ describe("workspace-console route matrix", () => {
       canAccessConsolePage("team", {
         current_member: {
           role: "owner"
-        }
+        },
+        route_permissions: [
+          {
+            route: "/api/workspace/members",
+            access_level: "authenticated",
+            methods: ["GET"],
+            csrf_protected_methods: [],
+            description: "members"
+          }
+        ]
+      })
+    ).toBe(true);
+    expect(
+      canAccessConsolePage("providers", {
+        current_member: {
+          role: "owner"
+        },
+        route_permissions: [
+          {
+            route: "/api/workspace/model-providers/settings",
+            access_level: "manager",
+            methods: ["GET"],
+            csrf_protected_methods: [],
+            description: "provider settings"
+          }
+        ]
       })
     ).toBe(true);
     expect(
@@ -41,6 +67,14 @@ describe("workspace-console route matrix", () => {
         }
       })
     ).toBe(false);
+    expect(
+      canAccessConsolePage("providers", {
+        current_member: {
+          role: "owner"
+        },
+        route_permissions: []
+      })
+    ).toBe(true);
     expect(canAccessConsolePage("team", null)).toBe(false);
     expect(canViewConsoleNavItem("team", "admin")).toBe(true);
     expect(canViewConsoleNavItem("team", "editor")).toBe(false);

@@ -3,7 +3,10 @@ import { cookies } from "next/headers";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { CredentialItem } from "@/lib/get-credentials";
-import type { WorkspaceModelProviderRegistryResponse } from "@/lib/model-provider-registry";
+import type {
+  WorkspaceModelProviderRegistryResponse,
+  WorkspaceModelProviderSettingsResponse
+} from "@/lib/model-provider-registry";
 import {
   ACCESS_TOKEN_COOKIE_NAME,
   buildCookieHeader,
@@ -240,6 +243,33 @@ export async function getServerWorkspaceCredentials(): Promise<CredentialItem[]>
 export async function getServerWorkspaceModelProviderRegistry(): Promise<WorkspaceModelProviderRegistryResponse | null> {
   const state = await getServerWorkspaceModelProviderRegistryState();
   return state.registry;
+}
+
+export async function getServerWorkspaceModelProviderSettingsState(): Promise<{
+  settings: WorkspaceModelProviderSettingsResponse | null;
+  errorMessage: string | null;
+  status: number | null;
+}> {
+  const cookieStore = await cookies();
+  const session = buildServerSessionCookies(cookieStore);
+  if (!session.accessToken && !session.refreshToken) {
+    return {
+      settings: null,
+      errorMessage: null,
+      status: null
+    };
+  }
+
+  const result = await fetchWorkspaceAccessResult<WorkspaceModelProviderSettingsResponse>(
+    "/api/workspace/model-providers/settings",
+    session
+  );
+
+  return {
+    settings: result.data,
+    errorMessage: result.errorMessage,
+    status: result.status
+  };
 }
 
 export async function getServerWorkspaceModelProviderRegistryState(): Promise<{

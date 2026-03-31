@@ -45,6 +45,7 @@ export function WorkflowNodeConfigForm({
   tools,
   adapters,
   credentials,
+  modelProviderCatalog,
   modelProviderConfigs,
   currentHref,
   sandboxReadiness,
@@ -60,6 +61,7 @@ export function WorkflowNodeConfigForm({
           nodes={nodes}
           tools={tools}
           credentials={credentials}
+          modelProviderCatalog={modelProviderCatalog}
           modelProviderConfigs={modelProviderConfigs}
           currentHref={currentHref}
           sandboxReadiness={sandboxReadiness}

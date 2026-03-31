@@ -50,6 +50,12 @@ def test_default_admin_login_and_session_contract(client: TestClient) -> None:
         and item["methods"] == ["POST"]
         for item in login_body["route_permissions"]
     )
+    assert any(
+        item["route"] == "/api/workspace/model-providers/settings"
+        and item["access_level"] == "manager"
+        and item["methods"] == ["GET"]
+        for item in login_body["route_permissions"]
+    )
 
     access_cookie_name = login_body["cookie_contract"]["access_token_cookie_name"]
     refresh_cookie_name = login_body["cookie_contract"]["refresh_token_cookie_name"]

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getCredentials, type CredentialItem } from "@/lib/get-credentials";
 import {
   getWorkspaceModelProviderRegistry,
+  type NativeModelProviderCatalogItem,
   type WorkspaceModelProviderConfigItem,
   type WorkspaceModelProviderRegistryStatus
 } from "@/lib/model-provider-registry";
@@ -20,6 +21,7 @@ type UseWorkflowEditorRuntimeDataOptions = {
 
 type RuntimeDataState = {
   credentials: CredentialItem[];
+  modelProviderCatalog: NativeModelProviderCatalogItem[];
   modelProviderConfigs: WorkspaceModelProviderConfigItem[];
   modelProviderRegistryStatus: WorkspaceModelProviderRegistryStatus;
   recentRuns: WorkflowRunListItem[];
@@ -60,6 +62,9 @@ export function useWorkflowEditorRuntimeData({
   loadRecentRuns = true
 }: UseWorkflowEditorRuntimeDataOptions): RuntimeDataState {
   const [credentials, setCredentials] = useState(initialCredentials);
+  const [modelProviderCatalog, setModelProviderCatalog] = useState<NativeModelProviderCatalogItem[]>(
+    []
+  );
   const [modelProviderConfigs, setModelProviderConfigs] = useState<
     WorkspaceModelProviderConfigItem[]
   >([]);
@@ -91,11 +96,13 @@ export function useWorkflowEditorRuntimeData({
         }
 
         if (!registry) {
+          setModelProviderCatalog([]);
           setModelProviderConfigs([]);
           setModelProviderRegistryStatus("error");
           return;
         }
 
+        setModelProviderCatalog(registry.catalog ?? []);
         setModelProviderConfigs(registry.items ?? []);
         setModelProviderRegistryStatus("ready");
       });
@@ -131,6 +138,7 @@ export function useWorkflowEditorRuntimeData({
 
   return {
     credentials,
+    modelProviderCatalog,
     modelProviderConfigs,
     modelProviderRegistryStatus,
     recentRuns

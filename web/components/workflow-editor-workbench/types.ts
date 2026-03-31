@@ -4,6 +4,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type { PluginAdapterRegistryItem, PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type { CredentialItem } from "@/lib/get-credentials";
 import type {
+  NativeModelProviderCatalogItem,
   WorkspaceModelProviderConfigItem,
   WorkspaceModelProviderRegistryStatus
 } from "@/lib/model-provider-registry";
@@ -119,6 +120,7 @@ export type WorkflowEditorInspectorProps = {
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
   credentials: CredentialItem[];
+  modelProviderCatalog?: NativeModelProviderCatalogItem[];
   modelProviderConfigs?: WorkspaceModelProviderConfigItem[];
   modelProviderRegistryStatus?: WorkspaceModelProviderRegistryStatus;
   nodeConfigText: string;
@@ -217,6 +219,7 @@ export type UseWorkflowEditorPanelsArgs = {
   tools: PluginToolRegistryItem[];
   adapters: PluginAdapterRegistryItem[];
   credentials: CredentialItem[];
+  modelProviderCatalog: NativeModelProviderCatalogItem[];
   modelProviderConfigs: WorkspaceModelProviderConfigItem[];
   modelProviderRegistryStatus: WorkspaceModelProviderRegistryStatus;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;

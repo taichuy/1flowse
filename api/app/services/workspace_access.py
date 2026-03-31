@@ -241,21 +241,40 @@ def build_console_route_permission_matrix() -> list[ConsoleRoutePermissionItem]:
             access_level="authenticated",
             methods=["GET"],
             csrf_protected_methods=[],
-            description="workspace 原生模型供应商 registry 快照，对已登录成员开放只读，供 team settings 与后续节点表单消费。",
+            description=(
+                "workspace 原生模型供应商 registry 快照，对已登录成员开放只读，"
+                "供 team settings 与后续节点表单消费。"
+            ),
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/model-providers/settings",
+            access_level="manager",
+            methods=["GET"],
+            csrf_protected_methods=[],
+            description=(
+                "团队模型供应商 settings 聚合读取面，仅 owner/admin 可见，"
+                "供 provider settings SSR 在权限成立后再读取敏感 credential 列表。"
+            ),
         ),
         ConsoleRoutePermissionItem(
             route="/api/workspace/model-providers",
             access_level="manager",
             methods=["POST"],
             csrf_protected_methods=["POST"],
-            description="新增 workspace 模型供应商配置仅 owner/admin 可调用，并要求 CSRF double-submit。",
+            description=(
+                "新增 workspace 模型供应商配置仅 owner/admin 可调用，"
+                "并要求 CSRF double-submit。"
+            ),
         ),
         ConsoleRoutePermissionItem(
             route="/api/workspace/model-providers/{provider_config_id}",
             access_level="manager",
             methods=["PUT", "DELETE"],
             csrf_protected_methods=["PUT", "DELETE"],
-            description="更新或停用 workspace 模型供应商配置仅 owner/admin 可调用，并要求 CSRF double-submit。",
+            description=(
+                "更新或停用 workspace 模型供应商配置仅 owner/admin 可调用，"
+                "并要求 CSRF double-submit。"
+            ),
         ),
     ]
 
@@ -469,7 +488,9 @@ def authenticate_workspace_user(
     )
 
 
-def issue_workspace_auth_tokens(access_context: WorkspaceAccessContext) -> WorkspaceIssuedAuthTokens:
+def issue_workspace_auth_tokens(
+    access_context: WorkspaceAccessContext,
+) -> WorkspaceIssuedAuthTokens:
     session_expires_at = _normalize_datetime(access_context.session.expires_at)
     if session_expires_at is None:
         raise AuthenticationError("登录会话已失效，请重新登录。")
@@ -506,7 +527,10 @@ def get_workspace_access_context(db: Session, *, token: str | None) -> Workspace
         raise AuthenticationError("登录会话无效，请重新登录。")
 
     session_record = _get_active_session_record(db, session_id=claims.session_id)
-    if session_record.user_id != claims.user_id or session_record.workspace_id != claims.workspace_id:
+    if (
+        session_record.user_id != claims.user_id
+        or session_record.workspace_id != claims.workspace_id
+    ):
         raise AuthenticationError("登录会话对应的工作空间上下文已失效。")
 
     return _build_workspace_access_context(
@@ -527,7 +551,10 @@ def refresh_workspace_session(
         raise AuthenticationError("refresh token 无效，请重新登录。")
 
     session_record = _get_active_session_record(db, session_id=claims.session_id)
-    if session_record.user_id != claims.user_id or session_record.workspace_id != claims.workspace_id:
+    if (
+        session_record.user_id != claims.user_id
+        or session_record.workspace_id != claims.workspace_id
+    ):
         raise AuthenticationError("登录会话对应的工作空间上下文已失效。")
 
     access_context = _build_workspace_access_context(db, session_record=session_record)
@@ -564,7 +591,11 @@ def validate_workspace_csrf_token(
 ) -> None:
     header_token = (csrf_header_token or "").strip()
     cookie_token = (csrf_cookie_token or "").strip()
-    if not header_token or not cookie_token or not hmac.compare_digest(header_token, cookie_token):
+    if (
+        not header_token
+        or not cookie_token
+        or not hmac.compare_digest(header_token, cookie_token)
+    ):
         raise CsrfValidationError("CSRF token 缺失或不匹配。")
 
     claims = _decode_workspace_token(
@@ -573,13 +604,21 @@ def validate_workspace_csrf_token(
     )
     if claims.purpose != TOKEN_PURPOSE_CSRF:
         raise CsrfValidationError("CSRF token 无效，请刷新页面后重试。")
-    if claims.session_id != access_context.session.token or claims.user_id != access_context.user.id:
+    if (
+        claims.session_id != access_context.session.token
+        or claims.user_id != access_context.user.id
+    ):
         raise CsrfValidationError("CSRF token 无效，请刷新页面后重试。")
 
 
 def ensure_can_manage_members(access_context: WorkspaceAccessContext) -> None:
     if access_context.member.role not in MANAGE_MEMBER_ROLES:
         raise AuthorizationError("当前账号没有成员管理权限。")
+
+
+def ensure_can_manage_model_providers(access_context: WorkspaceAccessContext) -> None:
+    if access_context.member.role not in MANAGE_MEMBER_ROLES:
+        raise AuthorizationError("当前账号没有团队模型供应商管理权限。")
 
 
 def list_workspace_members(db: Session, *, workspace_id: str) -> list[WorkspaceMemberRecord]:

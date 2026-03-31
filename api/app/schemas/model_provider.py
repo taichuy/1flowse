@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.credential import CredentialItem
+
 
 ProviderConfigStatus = Literal["active", "inactive"]
 ProviderConfigMethod = Literal["predefined-model", "customizable-model"]
@@ -88,3 +90,8 @@ class WorkspaceModelProviderConfigItem(BaseModel):
 class WorkspaceModelProviderRegistryResponse(BaseModel):
     catalog: list[NativeModelProviderCatalogItem] = Field(default_factory=list)
     items: list[WorkspaceModelProviderConfigItem] = Field(default_factory=list)
+
+
+class WorkspaceModelProviderSettingsResponse(BaseModel):
+    registry: WorkspaceModelProviderRegistryResponse
+    credentials: list[CredentialItem] = Field(default_factory=list)

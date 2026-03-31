@@ -7,8 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import WorkspaceProviderSettingsPage from "@/app/workspace/settings/providers/page";
 import {
   getServerWorkspaceContext,
-  getServerWorkspaceCredentials,
-  getServerWorkspaceModelProviderRegistryState
+  getServerWorkspaceModelProviderSettingsState
 } from "@/lib/server-workspace-access";
 
 Object.assign(globalThis, { React });
@@ -59,8 +58,7 @@ vi.mock("@/components/workspace-model-provider-settings", () => ({
 
 vi.mock("@/lib/server-workspace-access", () => ({
   getServerWorkspaceContext: vi.fn(),
-  getServerWorkspaceCredentials: vi.fn(),
-  getServerWorkspaceModelProviderRegistryState: vi.fn()
+  getServerWorkspaceModelProviderSettingsState: vi.fn()
 }));
 
 beforeEach(() => {
@@ -96,13 +94,24 @@ describe("WorkspaceProviderSettingsPage", () => {
         updated_at: "2026-03-31T12:00:00Z"
       },
       available_roles: ["owner", "admin", "editor", "viewer"],
-      can_manage_members: true
+      can_manage_members: true,
+      route_permissions: [
+        {
+          route: "/api/workspace/model-providers/settings",
+          access_level: "manager",
+          methods: ["GET"],
+          csrf_protected_methods: [],
+          description: "provider settings"
+        }
+      ]
     });
-    vi.mocked(getServerWorkspaceCredentials).mockResolvedValue([{ id: "cred-openai-1" } as never]);
-    vi.mocked(getServerWorkspaceModelProviderRegistryState).mockResolvedValue({
-      registry: {
-        catalog: [{ id: "openai" } as never],
-        items: [{ id: "provider-openai-1" } as never]
+    vi.mocked(getServerWorkspaceModelProviderSettingsState).mockResolvedValue({
+      settings: {
+        registry: {
+          catalog: [{ id: "openai" } as never],
+          items: [{ id: "provider-openai-1" } as never]
+        },
+        credentials: [{ id: "cred-openai-1" } as never]
       },
       errorMessage: null,
       status: 200
@@ -125,8 +134,7 @@ describe("WorkspaceProviderSettingsPage", () => {
       "redirect:/login?next=%2Fworkspace%2Fsettings%2Fproviders"
     );
 
-    expect(getServerWorkspaceCredentials).not.toHaveBeenCalled();
-    expect(getServerWorkspaceModelProviderRegistryState).not.toHaveBeenCalled();
+    expect(getServerWorkspaceModelProviderSettingsState).not.toHaveBeenCalled();
   });
 
   it("redirects non-manager members before reading provider registry or credentials", async () => {
@@ -157,13 +165,21 @@ describe("WorkspaceProviderSettingsPage", () => {
         updated_at: "2026-03-31T12:00:00Z"
       },
       available_roles: ["owner", "admin", "editor", "viewer"],
-      can_manage_members: false
+      can_manage_members: false,
+      route_permissions: [
+        {
+          route: "/api/workspace/model-providers/settings",
+          access_level: "manager",
+          methods: ["GET"],
+          csrf_protected_methods: [],
+          description: "provider settings"
+        }
+      ]
     });
 
     await expect(WorkspaceProviderSettingsPage()).rejects.toThrowError("redirect:/workspace");
 
-    expect(getServerWorkspaceCredentials).not.toHaveBeenCalled();
-    expect(getServerWorkspaceModelProviderRegistryState).not.toHaveBeenCalled();
+    expect(getServerWorkspaceModelProviderSettingsState).not.toHaveBeenCalled();
   });
 
   it("renders an explicit provider registry error when backend fetch fails", async () => {
@@ -194,11 +210,19 @@ describe("WorkspaceProviderSettingsPage", () => {
         updated_at: "2026-03-31T12:00:00Z"
       },
       available_roles: ["owner", "admin", "editor", "viewer"],
-      can_manage_members: true
+      can_manage_members: true,
+      route_permissions: [
+        {
+          route: "/api/workspace/model-providers/settings",
+          access_level: "manager",
+          methods: ["GET"],
+          csrf_protected_methods: [],
+          description: "provider settings"
+        }
+      ]
     });
-    vi.mocked(getServerWorkspaceCredentials).mockResolvedValue([{ id: "cred-openai-1" } as never]);
-    vi.mocked(getServerWorkspaceModelProviderRegistryState).mockResolvedValue({
-      registry: null,
+    vi.mocked(getServerWorkspaceModelProviderSettingsState).mockResolvedValue({
+      settings: null,
       errorMessage: "工作台请求失败（500）。",
       status: 500
     });

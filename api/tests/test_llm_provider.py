@@ -11,10 +11,9 @@ from app.services.llm_provider import (
     LLMCallConfig,
     LLMProviderError,
     LLMProviderService,
-    LLMStreamChunk,
     build_llm_call_config,
+    resolve_native_llm_provider_contract,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -69,6 +68,27 @@ def _config(
         messages=[{"role": "user", "content": "Hi"}],
         **kwargs,
     )
+
+
+# ---------------------------------------------------------------------------
+# Native provider contract
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_native_provider_contract_uses_registry_defaults():
+    contract = resolve_native_llm_provider_contract("anthropic")
+
+    assert contract.definition.id == "anthropic"
+    assert contract.definition.default_base_url == "https://api.anthropic.com"
+    assert contract.runtime_adapter.key == "anthropic_messages"
+    assert contract.runtime_adapter.request_path == "/v1/messages"
+
+
+def test_unknown_provider_falls_back_to_openai_contract():
+    contract = resolve_native_llm_provider_contract("deepseek")
+
+    assert contract.definition.id == "openai"
+    assert contract.runtime_adapter.key == "openai_chat_completions"
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +236,8 @@ def test_openai_chat_stream_requests_usage_and_parses_usage_chunk():
     captured = {}
     sse_lines = (
         'data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":null}],"model":"gpt-4o"}\n'
-        'data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":4,"total_tokens":16},"model":"gpt-4o"}\n'
+        "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,"
+        '\"completion_tokens\":4,\"total_tokens\":16},\"model\":\"gpt-4o\"}\n'
         'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"model":"gpt-4o"}\n'
         "data: [DONE]\n"
     )

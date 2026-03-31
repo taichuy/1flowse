@@ -8,6 +8,7 @@ import type { Node } from "@xyflow/react";
 import type { CredentialItem } from "@/lib/get-credentials";
 import {
   getNativeLlmProviderPreset,
+  listNativeLlmProviderPresets,
   NATIVE_LLM_PROVIDER_PRESETS
 } from "@/lib/llm-provider-presets";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
@@ -18,6 +19,7 @@ import { LlmAgentSkillSection } from "@/components/workflow-node-config-form/llm
 import { LlmAgentToolPolicyForm } from "@/components/workflow-node-config-form/llm-agent-tool-policy-form";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
 import type {
+  NativeModelProviderCatalogItem,
   WorkspaceModelProviderConfigItem,
   WorkspaceModelProviderRegistryStatus
 } from "@/lib/model-provider-registry";
@@ -39,6 +41,7 @@ type LlmAgentNodeConfigFormProps = {
   nodes: Array<Node<WorkflowCanvasNodeData>>;
   tools: PluginToolRegistryItem[];
   credentials: CredentialItem[];
+  modelProviderCatalog?: NativeModelProviderCatalogItem[];
   modelProviderConfigs?: WorkspaceModelProviderConfigItem[];
   modelProviderRegistryStatus?: WorkspaceModelProviderRegistryStatus;
   currentHref?: string | null;
@@ -81,6 +84,7 @@ export function LlmAgentNodeConfigForm({
   nodes,
   tools,
   credentials,
+  modelProviderCatalog = [],
   modelProviderConfigs = [],
   modelProviderRegistryStatus = "idle",
   currentHref = null,
@@ -144,7 +148,14 @@ export function LlmAgentNodeConfigForm({
     activeProviderConfigs.find((providerConfig) => providerConfig.id === effectiveProviderConfigRef) ??
     null;
   const effectiveProviderValue = selectedProviderConfig?.provider_id ?? currentProviderValue;
-  const providerPreset = getNativeLlmProviderPreset(effectiveProviderValue);
+  const providerPresets = useMemo(
+    () =>
+      modelProviderCatalog.length > 0
+        ? listNativeLlmProviderPresets(modelProviderCatalog)
+        : NATIVE_LLM_PROVIDER_PRESETS,
+    [modelProviderCatalog]
+  );
+  const providerPreset = getNativeLlmProviderPreset(effectiveProviderValue, modelProviderCatalog);
   const selectedCredential =
     typeof model.apiKey === "string"
       ? credentials.find((credential) => `credential://${credential.id}` === model.apiKey) ?? null
@@ -480,7 +491,7 @@ export function LlmAgentNodeConfigForm({
             {providerPreset === null && currentProviderValue ? (
               <option value={currentProviderValue}>{`保留现有 provider：${currentProviderValue}`}</option>
             ) : null}
-            {NATIVE_LLM_PROVIDER_PRESETS.map((preset) => (
+            {providerPresets.map((preset) => (
               <option key={preset.id} value={preset.providerValue}>
                 {preset.label}
               </option>

@@ -3,31 +3,26 @@ import { redirect } from "next/navigation";
 import { WorkspaceModelProviderSettings } from "@/components/workspace-model-provider-settings";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import {
-  WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF,
   canAccessConsolePage,
   getWorkspaceConsolePageHref
 } from "@/lib/workspace-console";
 import {
   getServerWorkspaceContext,
-  getServerWorkspaceCredentials,
-  getServerWorkspaceModelProviderRegistryState
+  getServerWorkspaceModelProviderSettingsState
 } from "@/lib/server-workspace-access";
 
 export default async function WorkspaceProviderSettingsPage() {
   const workspaceContext = await getServerWorkspaceContext();
 
   if (!workspaceContext) {
-    redirect(`/login?next=${encodeURIComponent(WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF)}`);
+    redirect(`/login?next=${encodeURIComponent(getWorkspaceConsolePageHref("providers"))}`);
   }
 
-  if (!canAccessConsolePage("team", workspaceContext)) {
+  if (!canAccessConsolePage("providers", workspaceContext)) {
     redirect(getWorkspaceConsolePageHref("workspace"));
   }
 
-  const [registryState, credentials] = await Promise.all([
-    getServerWorkspaceModelProviderRegistryState(),
-    getServerWorkspaceCredentials()
-  ]);
+  const providerSettingsState = await getServerWorkspaceModelProviderSettingsState();
 
   return (
     <WorkspaceShell
@@ -39,20 +34,20 @@ export default async function WorkspaceProviderSettingsPage() {
       workspaceName={workspaceContext.workspace.name}
     >
       <main className="workspace-main">
-        {registryState.errorMessage ? (
+        {providerSettingsState.errorMessage ? (
           <section
             className="workspace-panel workspace-settings-header-card"
             data-component="workspace-model-provider-error"
           >
             <span className="workspace-panel-eyebrow">Registry Status</span>
             <h2>团队模型供应商暂不可用</h2>
-            <p className="workspace-empty-notice">{registryState.errorMessage}</p>
+            <p className="workspace-empty-notice">{providerSettingsState.errorMessage}</p>
           </section>
         ) : null}
         <WorkspaceModelProviderSettings
-          initialCatalog={registryState.registry?.catalog ?? []}
-          initialCredentials={credentials}
-          initialProviderConfigs={registryState.registry?.items ?? []}
+          initialCatalog={providerSettingsState.settings?.registry.catalog ?? []}
+          initialCredentials={providerSettingsState.settings?.credentials ?? []}
+          initialProviderConfigs={providerSettingsState.settings?.registry.items ?? []}
           workspaceName={workspaceContext.workspace.name}
         />
       </main>
