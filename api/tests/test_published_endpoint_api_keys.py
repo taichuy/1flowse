@@ -1,4 +1,7 @@
+import pytest
 from fastapi.testclient import TestClient
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def _publishable_definition(

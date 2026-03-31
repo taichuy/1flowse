@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +14,8 @@ from app.models.sensitive_access import (
 )
 from app.models.workflow import Workflow
 from app.services.run_resume_scheduler import RunResumeScheduler
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def _seed_run_sensitive_access(

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.routes.auth import require_console_route_access
 from app.core.database import get_db
 from app.schemas.run_views import RunEvidenceView, RunExecutionView
 from app.services.run_views import RunViewService
@@ -10,7 +11,11 @@ run_view_service = RunViewService()
 
 
 @router.get("/runs/{run_id}/execution-view", response_model=RunExecutionView)
-def get_run_execution_view(run_id: str, db: Session = Depends(get_db)) -> RunExecutionView:
+def get_run_execution_view(
+    run_id: str,
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}/execution-view")),
+    db: Session = Depends(get_db),
+) -> RunExecutionView:
     view = run_view_service.get_execution_view(db, run_id)
     if view is None:
         raise HTTPException(
@@ -21,7 +26,11 @@ def get_run_execution_view(run_id: str, db: Session = Depends(get_db)) -> RunExe
 
 
 @router.get("/runs/{run_id}/evidence-view", response_model=RunEvidenceView)
-def get_run_evidence_view(run_id: str, db: Session = Depends(get_db)) -> RunEvidenceView:
+def get_run_evidence_view(
+    run_id: str,
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}/evidence-view")),
+    db: Session = Depends(get_db),
+) -> RunEvidenceView:
     view = run_view_service.get_evidence_view(db, run_id)
     if view is None:
         raise HTTPException(

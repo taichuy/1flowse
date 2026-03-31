@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,6 +24,8 @@ from tests.workflow_publish_helpers import (
     legacy_auth_governance_snapshot_for_single_draft_candidate,
     publishable_definition,
 )
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def _seed_run_sensitive_access(
@@ -1047,3 +1050,28 @@ def test_list_published_cache_inventory_allows_moderate_sensitive_runs_without_t
     assert access_request_record.run_id is None
     assert access_request_record.decision == "allow"
     assert access_request_record.reason_code == "allow_human_moderate_runtime_use"
+
+
+def test_published_invocation_detail_requires_workspace_console_access(
+    client: TestClient,
+    sqlite_session: Session,
+    workspace_console_auth: dict[str, object],
+) -> None:
+    workflow_id, binding, _run, _node_run, invocation = _create_published_invocation_fixture(
+        client,
+        sqlite_session,
+    )
+
+    client.cookies.clear()
+
+    detail_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}"
+    )
+    assert detail_response.status_code == 401
+
+    auth_headers = {"Authorization": f"Bearer {workspace_console_auth['access_token']}"}
+    authorized_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations/{invocation.id}",
+        headers=auth_headers,
+    )
+    assert authorized_response.status_code == 200

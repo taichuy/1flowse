@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.routes.auth import require_console_route_access
 from app.core.database import get_db
 from app.models.workflow import Workflow, WorkflowPublishedEndpoint
 from app.schemas.workflow_publish import (
@@ -138,6 +139,9 @@ def list_workflow_published_endpoints(
     workflow_version: str | None = Query(default=None, min_length=1, max_length=32),
     include_all_versions: bool = Query(default=False),
     lifecycle_status: PublishedEndpointLifecycleStatus | None = Query(default=None),
+    _access_context=Depends(
+        require_console_route_access("/api/workflows/{workflow_id}/published-endpoints")
+    ),
     db: Session = Depends(get_db),
 ) -> list[WorkflowPublishedEndpointItem]:
     workflow = db.get(Workflow, workflow_id)

@@ -15,11 +15,13 @@ from app.schemas.workspace_access import (
 )
 from app.services.workspace_access import (
     AuthenticationError,
+    AuthorizationError,
     CsrfValidationError,
     WorkspaceAccessContext,
     WorkspaceIssuedAuthTokens,
     authenticate_workspace_user,
     build_console_route_permission_matrix,
+    ensure_console_route_access,
     get_workspace_access_context,
     get_workspace_access_cookie_name,
     get_workspace_auth_cookie_contract,
@@ -46,7 +48,9 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
 
 
 def _extract_access_token(request: Request, authorization: str | None) -> str | None:
-    return request.cookies.get(get_workspace_access_cookie_name()) or _extract_bearer_token(authorization)
+    return request.cookies.get(get_workspace_access_cookie_name()) or _extract_bearer_token(
+        authorization
+    )
 
 
 def _extract_refresh_token(
@@ -189,6 +193,26 @@ def get_authenticated_access_context(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
         ) from exc
+
+
+def require_console_route_access(route: str, *, method: str = "GET"):
+    def dependency(
+        access_context: WorkspaceAccessContext = Depends(get_authenticated_access_context),
+    ) -> WorkspaceAccessContext:
+        try:
+            ensure_console_route_access(
+                access_context,
+                route=route,
+                method=method,
+            )
+        except AuthorizationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(exc),
+            ) from exc
+        return access_context
+
+    return dependency
 
 
 def get_authenticated_write_access_context(

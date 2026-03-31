@@ -44,6 +44,16 @@ def client(sqlite_session: Session) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture
+def workspace_console_auth(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "admin@taichuy.com", "password": "admin123"},
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+@pytest.fixture
 def sample_workflow(sqlite_session: Session) -> Workflow:
     blueprint_service = CompiledBlueprintService()
     workflow = Workflow(

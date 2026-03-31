@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -19,6 +20,8 @@ from tests.workflow_publish_helpers import (
     legacy_auth_mode_contract,
     publishable_definition,
 )
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def test_protocol_streaming_rejections_are_recorded_in_publish_audit(

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.routes.auth import require_console_route_access
 from app.api.routes.published_endpoint_invocation_support import (
     build_waiting_lifecycle_lookup,
     serialize_cache_inventory_item,
@@ -129,6 +130,11 @@ def get_published_endpoint_invocation_detail(
     invocation_id: str,
     requester_id: str = Query(default="publish-activity-detail", min_length=1, max_length=128),
     purpose_text: str | None = Query(default=None, min_length=1, max_length=512),
+    _access_context=Depends(
+        require_console_route_access(
+            "/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations/{invocation_id}"
+        )
+    ),
     db: Session = Depends(get_db),
 ) -> PublishedEndpointInvocationDetailResponse:
     workflow = db.get(Workflow, workflow_id)

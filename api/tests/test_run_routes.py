@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,6 +30,8 @@ from app.services.sandbox_backends import (
     SandboxBackendRegistry,
 )
 from tests.workflow_publish_helpers import legacy_auth_mode_contract
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 class _StaticSandboxHealthChecker:
@@ -2614,3 +2617,34 @@ def test_receive_run_callback_route_clears_stale_scheduled_resume_after_run_left
     assert late_event is not None
     assert late_event.payload["reason"] == "callback_received_after_run_left_waiting"
     assert late_event.payload["source"] == "route_test"
+
+
+def test_run_utility_routes_require_workspace_console_access(
+    client: TestClient,
+    sample_workflow: Workflow,
+    workspace_console_auth: dict[str, object],
+) -> None:
+    run_response = client.post(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        json={"input_payload": {"message": "auth regression"}},
+    )
+    assert run_response.status_code == 201
+    run_id = run_response.json()["id"]
+
+    client.cookies.clear()
+
+    protected_paths = [
+        f"/api/runs/{run_id}",
+        f"/api/runs/{run_id}/detail",
+        f"/api/runs/{run_id}/events",
+        f"/api/runs/{run_id}/trace",
+        f"/api/runs/{run_id}/trace/export",
+    ]
+    for path in protected_paths:
+        response = client.get(path)
+        assert response.status_code == 401, path
+
+    auth_headers = {"Authorization": f"Bearer {workspace_console_auth['access_token']}"}
+    for path in protected_paths:
+        response = client.get(path, headers=auth_headers)
+        assert response.status_code == 200, path

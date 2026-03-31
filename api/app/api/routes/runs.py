@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
+from app.api.routes.auth import require_console_route_access
 from app.api.routes.sensitive_access_http import (
     build_sensitive_access_blocking_response,
 )
@@ -106,6 +107,7 @@ def execute_workflow(
 @router.get("/runs/{run_id}", response_model=RunOverview)
 def get_run(
     run_id: str,
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}")),
     db: Session = Depends(get_db),
 ) -> RunOverview:
     run = db.get(Run, run_id)
@@ -135,6 +137,7 @@ def get_run(
 def get_run_detail(
     run_id: str,
     include_events: bool = Query(default=True),
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}/detail")),
     db: Session = Depends(get_db),
 ) -> RunDetail:
     artifacts = runtime_service.load_run(db, run_id)
@@ -228,7 +231,11 @@ def receive_run_callback(
 
 
 @router.get("/runs/{run_id}/events", response_model=list[RunEventItem])
-def get_run_events(run_id: str, db: Session = Depends(get_db)) -> list[RunEventItem]:
+def get_run_events(
+    run_id: str,
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}/events")),
+    db: Session = Depends(get_db),
+) -> list[RunEventItem]:
     artifacts = runtime_service.load_run(db, run_id)
     if artifacts is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
@@ -248,6 +255,7 @@ def get_run_trace(
     after_event_id: int | None = None,
     limit: int = Query(default=200, ge=1, le=1000),
     order: Literal["asc", "desc"] = "asc",
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}/trace")),
     db: Session = Depends(get_db),
 ) -> RunTrace:
     return load_run_trace(
@@ -282,6 +290,7 @@ def export_run_trace(
     format: Literal["json", "jsonl"] = "json",
     requester_id: str = Query(default="run-diagnostics-export", min_length=1, max_length=128),
     purpose_text: str | None = Query(default=None, max_length=512),
+    _access_context=Depends(require_console_route_access("/api/runs/{run_id}/trace/export")),
     db: Session = Depends(get_db),
 ):
     sensitive_access_response = _enforce_trace_export_sensitive_access(

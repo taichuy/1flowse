@@ -1,9 +1,12 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.models.run import NodeRun, Run
 from app.services.plugin_runtime import PluginToolDefinition, reset_plugin_registry
 from tests.workflow_publish_helpers import waiting_agent_publishable_definition
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def test_published_native_async_route_accepts_waiting_run(client: TestClient) -> None:

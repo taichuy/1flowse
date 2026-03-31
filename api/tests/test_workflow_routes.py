@@ -1,5 +1,6 @@
 ﻿from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.models.credential import Credential
@@ -18,6 +19,8 @@ from app.services.sandbox_backends import (
     SandboxBackendRegistration,
     SandboxBackendRegistry,
 )
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def _sandbox_backend_client(
@@ -3344,3 +3347,27 @@ def test_workflow_routes_expose_tool_governance_summary(
     assert detail_body["publish_count"] == list_body[0]["publish_count"]
     assert detail_body["tool_governance"] == list_body[0]["tool_governance"]
     assert len(detail_body["versions"]) == 1
+
+
+def test_workflow_utility_routes_require_workspace_console_access(
+    client: TestClient,
+    sample_workflow: Workflow,
+    workspace_console_auth: dict[str, object],
+) -> None:
+    client.cookies.clear()
+
+    detail_response = client.get(f"/api/workflows/{sample_workflow.id}/detail")
+    runs_response = client.get(f"/api/workflows/{sample_workflow.id}/runs")
+
+    assert detail_response.status_code == 401
+    assert runs_response.status_code == 401
+
+    auth_headers = {"Authorization": f"Bearer {workspace_console_auth['access_token']}"}
+    assert client.get(
+        f"/api/workflows/{sample_workflow.id}/detail",
+        headers=auth_headers,
+    ).status_code == 200
+    assert client.get(
+        f"/api/workflows/{sample_workflow.id}/runs",
+        headers=auth_headers,
+    ).status_code == 200

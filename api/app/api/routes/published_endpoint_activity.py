@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.routes.auth import require_console_route_access
 from app.api.routes.published_endpoint_invocation_support import (
     build_waiting_lifecycle_lookup,
     serialize_published_invocation_item,
@@ -311,6 +312,11 @@ def list_published_endpoint_invocations(
     reason_code: PublishedEndpointInvocationReasonCode | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
+    _access_context=Depends(
+        require_console_route_access(
+            "/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations"
+        )
+    ),
     db: Session = Depends(get_db),
 ) -> PublishedEndpointInvocationListResponse:
     workflow = db.get(Workflow, workflow_id)
@@ -366,6 +372,11 @@ def export_published_endpoint_invocations(
     format: Literal["json", "jsonl"] = "json",
     requester_id: str = Query(default="publish-activity-export", min_length=1, max_length=128),
     purpose_text: str | None = Query(default=None, min_length=1, max_length=512),
+    _access_context=Depends(
+        require_console_route_access(
+            "/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations/export"
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     workflow = db.get(Workflow, workflow_id)

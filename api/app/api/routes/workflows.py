@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.routes.auth import require_console_route_access
 from app.core.database import get_db
 from app.models.workflow import Workflow
 from app.schemas.run import WorkflowRunListItem
@@ -211,6 +212,9 @@ def get_workflow(workflow_id: str, db: Session = Depends(get_db)) -> WorkflowOve
 @router.get("/{workflow_id}/detail", response_model=WorkflowDetail)
 def get_workflow_detail(
     workflow_id: str,
+    _access_context=Depends(
+        require_console_route_access("/api/workflows/{workflow_id}/detail")
+    ),
     db: Session = Depends(get_db),
 ) -> WorkflowDetail:
     workflow = db.get(Workflow, workflow_id)
@@ -303,6 +307,9 @@ def list_workflow_versions(
 def list_workflow_runs(
     workflow_id: str,
     limit: int = Query(default=8, ge=1, le=20),
+    _access_context=Depends(
+        require_console_route_access("/api/workflows/{workflow_id}/runs")
+    ),
     db: Session = Depends(get_db),
 ) -> list[WorkflowRunListItem]:
     workflow = db.get(Workflow, workflow_id)

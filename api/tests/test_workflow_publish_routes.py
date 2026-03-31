@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,6 +29,8 @@ from tests.workflow_publish_helpers import (
 from tests.workflow_publish_helpers import (
     waiting_agent_publishable_definition as _waiting_agent_publishable_definition,
 )
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def test_create_workflow_persists_publish_bindings(client: TestClient) -> None:
@@ -2533,3 +2536,41 @@ def test_rejected_published_invocation_does_not_consume_rate_limit_quota(
     assert reason_filtered["summary"]["rejected_count"] == 1
     assert reason_filtered["summary"]["last_reason_code"] == "api_key_invalid"
     assert [item["reason_code"] for item in reason_filtered["items"]] == ["api_key_invalid"]
+
+
+def test_publish_utility_routes_require_workspace_console_access(
+    client: TestClient,
+    workspace_console_auth: dict[str, object],
+) -> None:
+    create_response = client.post(
+        "/api/workflows",
+        json={
+            "name": "Publish Auth Guard Workflow",
+            "definition": _publishable_definition(auth_mode="internal"),
+        },
+    )
+    assert create_response.status_code == 201
+    workflow_id = create_response.json()["id"]
+
+    auth_headers = {"Authorization": f"Bearer {workspace_console_auth['access_token']}"}
+    bindings_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        headers=auth_headers,
+    )
+    assert bindings_response.status_code == 200
+    binding_id = bindings_response.json()[0]["id"]
+
+    client.cookies.clear()
+
+    protected_paths = [
+        f"/api/workflows/{workflow_id}/published-endpoints",
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations",
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding_id}/invocations/export",
+    ]
+    for path in protected_paths:
+        response = client.get(path)
+        assert response.status_code == 401, path
+
+    for path in protected_paths:
+        response = client.get(path, headers=auth_headers)
+        assert response.status_code == 200, path

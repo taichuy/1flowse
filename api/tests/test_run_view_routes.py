@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,8 @@ from app.models.sensitive_access import (
     SensitiveResourceRecord,
 )
 from app.models.workflow import Workflow
+
+pytestmark = pytest.mark.usefixtures("workspace_console_auth")
 
 
 def test_get_run_execution_view_returns_grouped_runtime_facts(
@@ -1520,3 +1523,13 @@ def test_get_run_execution_view_fail_closes_stale_blocked_tool_execution_facts(
     assert tool_call["execution_sandbox_backend_id"] == "sandbox-stale"
     assert tool_call["execution_trace"]["effective_execution_class"] is None
     assert tool_call["execution_trace"]["executor_ref"] is None
+
+
+def test_run_view_routes_require_workspace_console_access(client: TestClient) -> None:
+    client.cookies.clear()
+
+    execution_response = client.get("/api/runs/missing-run/execution-view")
+    evidence_response = client.get("/api/runs/missing-run/evidence-view")
+
+    assert execution_response.status_code == 401
+    assert evidence_response.status_code == 401
