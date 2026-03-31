@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
@@ -14,6 +15,7 @@ type WorkflowApiSurfaceProps = {
 export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurfaceProps) {
   const publishedBindings = selectPublishedWorkflowBindings(bindings);
   const nonPublishedCount = Math.max(bindings.length - publishedBindings.length, 0);
+  const docs = publishedBindings.map((binding) => buildWorkflowApiBindingDoc(binding));
 
   if (publishedBindings.length === 0) {
     const hasDraftBindings = bindings.some((binding) => binding.lifecycle_status === "draft");
@@ -50,8 +52,8 @@ export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurface
             <p className="workflow-studio-placeholder-eyebrow">Published contract</p>
             <h2>访问 API</h2>
             <p>
-              当前页面直接消费 workflow 已发布 binding 的真实 contract：展示 base URL、auth
-              mode、协议入口与最小请求示例，避免再从 publish 表单或外部记忆倒推调用方式。
+              当前页面直接消费 workflow 已发布 binding 的真实 contract：围绕 base URL、鉴权、
+              endpoint 入口、最小请求示例与协议差异组织成文档页，避免再从 publish 表单或外部记忆倒推调用方式。
             </p>
           </div>
           <div className="workspace-surface-actions workflow-api-surface-actions">
@@ -80,16 +82,15 @@ export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurface
         </div>
       </section>
 
-      <div className="workflow-api-doc-list">
-        {publishedBindings.map((binding) => {
-          const doc = buildWorkflowApiBindingDoc(binding);
-
-          return (
+      <div className="workflow-api-layout">
+        <div className="workflow-api-doc-list">
+          {docs.map((doc) => (
             <article
               className="workspace-panel workflow-api-doc-card"
-              data-binding-id={binding.id}
+              data-binding-id={doc.bindingId}
               data-component="workflow-api-binding-doc"
-              key={binding.id}
+              id={doc.anchorId}
+              key={doc.bindingId}
             >
               <div className="workflow-api-doc-header">
                 <div>
@@ -99,7 +100,7 @@ export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurface
                 </div>
                 <div className="workflow-api-chip-row">
                   {doc.protocolChips.map((chip) => (
-                    <span className="event-chip" key={`${binding.id}-${chip}`}>
+                    <span className="event-chip" key={`${doc.bindingId}-${chip}`}>
                       {chip}
                     </span>
                   ))}
@@ -123,39 +124,85 @@ export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurface
               </div>
 
               <div className="workflow-api-doc-grid">
-                <section className="workflow-api-section-card">
-                  <h4>鉴权与接入说明</h4>
-                  <p>{doc.authDescription}</p>
-                  <dl className="workflow-api-meta-list">
-                    <div>
-                      <dt>Request URL</dt>
-                      <dd>{doc.requestUrl}</dd>
+                {doc.sections.map((section) => (
+                  <section
+                    className="workflow-api-section-card"
+                    data-component="workflow-api-doc-section"
+                    data-section-id={section.id}
+                    id={section.id}
+                    key={section.id}
+                  >
+                    <div className="workflow-api-section-heading">
+                      <p className="workflow-studio-placeholder-eyebrow">{section.eyebrow}</p>
+                      <h4>{section.title}</h4>
                     </div>
-                    <div>
-                      <dt>Published alias</dt>
-                      <dd>{binding.endpoint_alias}</dd>
-                    </div>
-                    <div>
-                      <dt>Route path</dt>
-                      <dd>{binding.route_path}</dd>
-                    </div>
-                    {doc.requestHeaders.length > 0 ? (
-                      <div>
-                        <dt>Required headers</dt>
-                        <dd>{doc.requestHeaders.join(" · ")}</dd>
+
+                    <p className="section-copy">{section.description}</p>
+
+                    {section.metaRows?.length ? (
+                      <dl className="workflow-api-meta-list">
+                        {section.metaRows.map((row) => (
+                          <div key={`${section.id}-${row.label}`}>
+                            <dt>{row.label}</dt>
+                            <dd>{row.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+
+                    {section.bulletItems?.length ? (
+                      <ul className="workflow-api-bullet-list">
+                        {section.bulletItems.map((item) => (
+                          <li key={`${section.id}-${item}`}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {section.codeBlock ? (
+                      <div className="workflow-api-code-card">
+                        <div className="workflow-api-code-header">{section.codeLabel ?? "Code"}</div>
+                        <pre className="workflow-api-code-block">{section.codeBlock}</pre>
                       </div>
                     ) : null}
-                  </dl>
-                </section>
-
-                <section className="workflow-api-section-card">
-                  <h4>最小请求示例</h4>
-                  <pre className="workflow-api-code-block">{doc.snippet}</pre>
-                </section>
+                  </section>
+                ))}
               </div>
             </article>
-          );
-        })}
+          ))}
+        </div>
+
+        <aside className="workspace-panel workflow-api-directory" data-component="workflow-api-directory">
+          <div className="workflow-api-directory-header">
+            <p className="workflow-studio-placeholder-eyebrow">目录</p>
+            <h3>Published API docs</h3>
+            <p>
+              先按 binding 锁定协议，再跳到基础 URL、鉴权、endpoint、请求示例和协议差异章节。
+            </p>
+          </div>
+
+          <nav aria-label="Workflow API 目录" className="workflow-api-directory-nav">
+            {docs.map((doc) => (
+              <div
+                className="workflow-api-directory-group"
+                data-component="workflow-api-directory-group"
+                key={doc.bindingId}
+              >
+                <a className="workflow-api-directory-binding" href={`#${doc.anchorId}`}>
+                  <span>{doc.title}</span>
+                  <small>{doc.directorySummary}</small>
+                </a>
+
+                <div className="workflow-api-directory-links">
+                  {doc.sections.map((section) => (
+                    <a className="workflow-api-directory-link" href={`#${section.id}`} key={section.id}>
+                      {section.navLabel}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </aside>
       </div>
     </div>
   );
