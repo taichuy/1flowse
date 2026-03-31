@@ -9,13 +9,17 @@ import httpx
 from cryptography.fernet import Fernet
 from sqlalchemy.orm import Session
 
+from app.models.model_provider import WorkspaceModelProviderConfigRecord
 from app.models.skill import SkillRecord, SkillReferenceRecord
 from app.models.workflow import Workflow
 from app.services.credential_store import CredentialStore
 from app.services.llm_provider import LLMProviderService
-from app.services.plugin_runtime import PluginCallProxy, PluginRegistry, PluginToolDefinition
+from app.services.plugin_runtime import (
+    PluginCallProxy,
+    PluginRegistry,
+    PluginToolDefinition,
+)
 from app.services.runtime import RuntimeService
-
 
 _TEST_CREDENTIAL_KEY = Fernet.generate_key().decode("utf-8")
 
@@ -100,6 +104,7 @@ def _make_llm_provider(responses: list[dict]) -> LLMProviderService:
         body = json.loads(request.content)
         captured_requests.append({
             "url": str(request.url),
+            "headers": dict(request.headers),
             "body": body,
         })
         resp_json = responses[idx] if idx < len(responses) else _openai_response("fallback")
@@ -382,6 +387,128 @@ def test_llm_agent_injects_bound_skill_docs_into_llm_context(
         "/api/skills/skill-research-brief/references/ref-handoff?workspace_id=default"
         in combined_content
     )
+
+
+def test_llm_agent_resolves_workspace_provider_config_ref(sqlite_session: Session) -> None:
+    runtime = _create_runtime_with_llm(
+        [
+            _openai_response("Plan with provider config."),
+            _openai_response("Final answer with provider config."),
+        ]
+    )
+
+    with _patch_credential_settings():
+        credential = CredentialStore().create(
+            sqlite_session,
+            name="OpenAI Team Credential",
+            credential_type="openai_api_key",
+            data={"apiKey": "sk-provider-config-key"},
+        )
+        sqlite_session.add(
+            WorkspaceModelProviderConfigRecord(
+                id="provider-openai-team",
+                workspace_id="default",
+                provider_id="openai",
+                label="OpenAI Team",
+                description="",
+                credential_id=credential.id,
+                base_url="https://proxy.openai.local/v1",
+                default_model="gpt-4.1",
+                protocol="chat_completions",
+                status="active",
+                supported_model_types=["llm"],
+            )
+        )
+        workflow = Workflow(
+            id="wf-agent-provider-config-ref",
+            name="Agent Provider Config Ref",
+            version="0.1.0",
+            status="draft",
+            definition={
+                "nodes": [
+                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {
+                        "id": "agent",
+                        "type": "llm_agent",
+                        "name": "Agent",
+                        "config": {
+                            "prompt": "Say hello.",
+                            "model": {
+                                "providerConfigRef": "provider-openai-team",
+                                "modelId": "gpt-4.1-mini",
+                            },
+                        },
+                    },
+                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                ],
+                "edges": [
+                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                ],
+            },
+        )
+        sqlite_session.add(workflow)
+        sqlite_session.commit()
+
+        artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "provider ref"})
+
+    assert artifacts.run.status == "succeeded"
+    captured_requests = runtime._llm_provider._captured_requests  # type: ignore[attr-defined]
+    assert captured_requests
+    assert captured_requests[0]["url"] == "https://proxy.openai.local/v1/chat/completions"
+    assert captured_requests[0]["headers"]["authorization"] == "Bearer sk-provider-config-key"
+    assert captured_requests[0]["body"]["model"] == "gpt-4.1-mini"
+
+
+def test_reference_node_reads_authorized_upstream_json(sqlite_session: Session) -> None:
+    runtime = RuntimeService(plugin_call_proxy=PluginCallProxy(PluginRegistry()))
+    workflow = Workflow(
+        id="wf-reference-node-json",
+        name="Reference Node Json",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {
+                    "id": "source",
+                    "type": "tool",
+                    "name": "Source",
+                    "config": {"mock_output": {"answer": "from-source"}},
+                },
+                {
+                    "id": "reference",
+                    "type": "reference",
+                    "name": "Reference",
+                    "config": {
+                        "contextAccess": {"readableNodeIds": ["source"]},
+                        "reference": {"sourceNodeId": "source", "artifactType": "json"},
+                    },
+                },
+                {"id": "output", "type": "output", "name": "Output", "config": {}},
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "source"},
+                {"id": "e2", "sourceNodeId": "source", "targetNodeId": "reference"},
+                {"id": "e3", "sourceNodeId": "reference", "targetNodeId": "output"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = runtime.execute_workflow(sqlite_session, workflow, {"topic": "reference"})
+
+    assert artifacts.run.status == "succeeded"
+    assert artifacts.run.output_payload == {
+        "reference": {
+            "reference": {
+                "sourceNodeId": "source",
+                "artifactType": "json",
+                "content": {"answer": "from-source"},
+            }
+        }
+    }
 
 
 def test_llm_agent_skill_binding_limits_injection_to_selected_phase(

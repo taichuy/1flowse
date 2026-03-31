@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { BranchNodeConfigForm } from "@/components/workflow-node-config-form/branch-node-config-form";
 import { McpQueryNodeConfigForm } from "@/components/workflow-node-config-form/mcp-query-node-config-form";
 import { OutputNodeConfigForm } from "@/components/workflow-node-config-form/output-node-config-form";
+import { ReferenceNodeConfigForm } from "@/components/workflow-node-config-form/reference-node-config-form";
 import { SandboxCodeNodeConfigForm } from "@/components/workflow-node-config-form/sandbox-code-node-config-form";
 import type { WorkflowNodeConfigFormProps } from "@/components/workflow-node-config-form/shared";
 import { ToolNodeConfigForm } from "@/components/workflow-node-config-form/tool-node-config-form";
@@ -44,6 +45,7 @@ export function WorkflowNodeConfigForm({
   tools,
   adapters,
   credentials,
+  modelProviderConfigs,
   currentHref,
   sandboxReadiness,
   highlightedFieldPath,
@@ -58,6 +60,7 @@ export function WorkflowNodeConfigForm({
           nodes={nodes}
           tools={tools}
           credentials={credentials}
+          modelProviderConfigs={modelProviderConfigs}
           currentHref={currentHref}
           sandboxReadiness={sandboxReadiness}
           highlightedFieldPath={highlightedFieldPath}
@@ -80,6 +83,8 @@ export function WorkflowNodeConfigForm({
       );
     case "mcp_query":
       return <McpQueryNodeConfigForm node={node} nodes={nodes} onChange={onChange} />;
+    case "reference":
+      return <ReferenceNodeConfigForm node={node} nodes={nodes} onChange={onChange} />;
     case "sandbox_code":
       return (
         <SandboxCodeNodeConfigForm

@@ -23,6 +23,7 @@ from app.schemas.workflow_runtime_policy import WorkflowNodeRuntimePolicy
 NodeType = Literal[
     "trigger",
     "llm_agent",
+    "reference",
     "tool",
     "sandbox_code",
     "mcp_query",

@@ -17,6 +17,11 @@ from app.services.artifact_store import RuntimeArtifactStore
 from app.services.context_service import ContextService
 from app.services.credential_store import CredentialStore
 from app.services.llm_provider import LLMProviderService, LLMResponse
+from app.services.model_provider_registry import (
+    ModelProviderRegistryError,
+    ModelProviderRegistryService,
+    resolve_provider_config_id,
+)
 from app.services.runtime_execution_policy import resolve_tool_execution_policy
 from app.services.runtime_types import (
     PHASE_STATUS_MAP,
@@ -31,6 +36,7 @@ from app.services.tool_execution_events import build_tool_execution_events
 from app.services.tool_gateway import ToolGateway
 
 _log = logging.getLogger(__name__)
+_model_provider_registry = ModelProviderRegistryService()
 
 
 def _utcnow() -> datetime:
@@ -71,7 +77,10 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
     ) -> AgentExecutionResult:
         events: list[RuntimeEvent] = []
         config = dict(node.get("config") or {})
-        model_config = self._to_dict(config.get("model"))
+        model_config = self._resolve_model_config_reference(
+            db,
+            model_config=self._to_dict(config.get("model")),
+        )
         creds = self._credential_store.resolve_masked_runtime_credentials(
             db,
             credentials=resolved_credentials or {},
@@ -1346,6 +1355,42 @@ class AgentRuntime(AgentRuntimeLLMSupportMixin):
             return WorkflowNodeSkillBindingPolicy.model_validate(raw_skill_binding)
         except Exception as exc:
             raise WorkflowExecutionError(f"Invalid config.skillBinding: {exc}") from exc
+
+    def _resolve_model_config_reference(
+        self,
+        db: Session,
+        *,
+        model_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        provider_config_ref = model_config.get("providerConfigRef") or model_config.get(
+            "provider_config_ref"
+        )
+        if not isinstance(provider_config_ref, str) or not provider_config_ref.strip():
+            return model_config
+
+        try:
+            provider_config = _model_provider_registry.get_provider_config(
+                db,
+                workspace_id="default",
+                provider_config_id=resolve_provider_config_id(provider_config_ref),
+            )
+        except ModelProviderRegistryError as exc:
+            raise WorkflowExecutionError(str(exc)) from exc
+
+        if provider_config.status != "active":
+            raise WorkflowExecutionError(
+                f"Model provider config '{provider_config.label}' is inactive."
+            )
+
+        next_model_config = dict(model_config)
+        next_model_config["providerConfigRef"] = provider_config_ref.strip()
+        next_model_config["provider"] = provider_config.provider_id
+        next_model_config["baseUrl"] = provider_config.base_url
+        next_model_config["modelId"] = (
+            str(model_config.get("modelId") or model_config.get("model_id") or "").strip()
+            or provider_config.default_model
+        )
+        return next_model_config
 
     # ------------------------------------------------------------------
     # General helpers

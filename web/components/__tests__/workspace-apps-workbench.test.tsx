@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceAppsWorkbench } from "@/components/workspace-apps-workbench";
+import { WORKSPACE_TEAM_SETTINGS_HREF } from "@/lib/workspace-console";
 
 Object.assign(globalThis, { React });
 
@@ -50,7 +51,7 @@ describe("WorkspaceAppsWorkbench", () => {
         workspaceUtilityEntry: {
           title: "管理成员与权限",
           detail: "管理员可直接开通成员账号，并在工作空间里完成角色配置。",
-          href: "/admin/members",
+          href: WORKSPACE_TEAM_SETTINGS_HREF,
           badge: "4 种角色"
         },
         starterHighlights: [

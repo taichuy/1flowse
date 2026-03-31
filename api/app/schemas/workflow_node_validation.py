@@ -58,6 +58,37 @@ class WorkflowNodeMcpQuery(BaseModel):
     artifactTypes: list[ArtifactType] | None = None
 
 
+class WorkflowNodeReferenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sourceNodeId: str = Field(min_length=1, max_length=64)
+    artifactType: Literal["json"] = "json"
+
+
+class WorkflowNodeModelConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    providerConfigRef: str | None = Field(default=None, min_length=1, max_length=128)
+    provider: str | None = Field(default=None, min_length=1, max_length=64)
+    modelId: str | None = Field(default=None, min_length=1, max_length=256)
+    apiKey: str | None = Field(default=None, min_length=1, max_length=256)
+    baseUrl: str | None = Field(default=None, min_length=1, max_length=512)
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    maxTokens: int | None = Field(default=None, ge=1, le=128_000)
+
+    @model_validator(mode="after")
+    def validate_reference_or_legacy_fields(self) -> WorkflowNodeModelConfig:
+        if self.providerConfigRef is None:
+            return self
+        if self.provider is not None and not self.provider.strip():
+            raise ValueError("config.model.provider must be non-empty when provided.")
+        if self.apiKey is not None and not self.apiKey.strip():
+            raise ValueError("config.model.apiKey must be non-empty when provided.")
+        if self.baseUrl is not None and not self.baseUrl.strip():
+            raise ValueError("config.model.baseUrl must be non-empty when provided.")
+        return self
+
+
 class WorkflowNodeToolBinding(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -277,6 +308,14 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
             raise ValueError("MCP query nodes must define config.query.")
         WorkflowNodeMcpQuery.model_validate(query)
 
+    reference = config.get("reference")
+    if node_type == "reference":
+        if reference is None:
+            raise ValueError("Reference nodes must define config.reference.")
+        WorkflowNodeReferenceConfig.model_validate(reference)
+    elif reference is not None:
+        raise ValueError("Only reference nodes may define config.reference.")
+
     selector = config.get("selector")
     if selector is not None:
         if node_type not in {"condition", "router"}:
@@ -298,6 +337,12 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
         if node_type != "llm_agent":
             raise ValueError("Only llm_agent nodes may define config.assistant.")
         WorkflowNodeAssistantConfig.model_validate(assistant)
+
+    model = config.get("model")
+    if model is not None:
+        if node_type != "llm_agent":
+            raise ValueError("Only llm_agent nodes may define config.model.")
+        WorkflowNodeModelConfig.model_validate(model)
 
     skill_ids = config.get("skillIds")
     if skill_ids is not None:

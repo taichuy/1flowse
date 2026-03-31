@@ -7,6 +7,7 @@ import {
   type WorkspaceMemberItem,
   type WorkspaceMemberRole
 } from "@/lib/workspace-access";
+import { fetchConsoleApi } from "@/lib/console-session-client";
 import { submitWorkspaceMemberCreate } from "@/lib/workspace-member-admin";
 import { getWorkspaceBadgeLabel } from "@/lib/workspace-ui";
 
@@ -95,7 +96,7 @@ export function WorkspaceMemberAdminPanel({
     setMessageTone("idle");
 
     try {
-      const response = await fetch(`/api/workspace/members/${encodeURIComponent(memberId)}`, {
+      const response = await fetchConsoleApi(`/api/workspace/members/${encodeURIComponent(memberId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json"

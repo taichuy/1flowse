@@ -112,6 +112,33 @@ def build_node_catalog_items(
             ),
         ),
         WorkflowNodeCatalogItem(
+            type="reference",
+            label="Reference",
+            description=(
+                "显式引用已授权的上游 JSON 输出，"
+                "把引用边界收成独立节点而不是隐式共享上下文。"
+            ),
+            ecosystem="native",
+            source=NATIVE_NODE_SOURCE,
+            capability_group="integration",
+            business_track="编排节点能力",
+            tags=["reference", "authorized-context", "native"],
+            palette=_build_palette(enabled=True, order=15, x=340, y=200),
+            defaults=_build_defaults(
+                name="Reference",
+                config={
+                    "reference": {
+                        "artifactType": "json",
+                    },
+                },
+            ),
+            support_status="available",
+            support_summary=(
+                "当前先把显式上游 JSON 引用接入 editor / validation / runtime 主链，"
+                "继续坚持节点间上下文默认不可见，必须显式授权。"
+            ),
+        ),
+        WorkflowNodeCatalogItem(
             type="tool",
             label="Tool",
             description="绑定 native 或 compat tool catalog 的工具能力入口。",
@@ -128,7 +155,10 @@ def build_node_catalog_items(
         WorkflowNodeCatalogItem(
             type="sandbox_code",
             label="Sandbox Code",
-            description="高风险代码执行节点，当前已接入 runtime / persistence 主链，并沿 execution readiness 诚实校验。",
+            description=(
+                "高风险代码执行节点，当前已接入 runtime / persistence 主链，"
+                "并沿 execution readiness 诚实校验。"
+            ),
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
             capability_group="integration",
@@ -144,8 +174,9 @@ def build_node_catalog_items(
             ),
             support_status="available",
             support_summary=(
-                "当前已进入 editor / persistence / runtime 主链，并会在保存时按 sandbox readiness fail-closed；"
-                "默认仍走强隔离 execution class，若当前只想走 host-controlled MVP 路径，请在 runtime policy 中显式改成 subprocess。"
+                "当前已进入 editor / persistence / runtime 主链，并会在保存时按 "
+                "sandbox readiness fail-closed；默认仍走强隔离 execution class，"
+                "若当前只想走 host-controlled MVP 路径，请在 runtime policy 中显式改成 subprocess。"
             ),
         ),
         WorkflowNodeCatalogItem(
@@ -321,11 +352,20 @@ def build_builtin_starters(
             catalog_by_type,
             id="sandbox-code",
             name="Sandbox Code Draft",
-            description="预留一个 Sandbox Code 节点，方便把高风险代码执行链路直接从创建入口接回 editor / runtime 主线。",
+            description=(
+                "预留一个 Sandbox Code 节点，"
+                "方便把高风险代码执行链路直接从创建入口接回 editor / runtime 主线。"
+            ),
             business_track="编排节点能力",
             default_workflow_name="Sandbox Code Workflow",
-            workflow_focus="先把受控代码执行节点放进真实 workflow，再继续补代码、依赖策略与输出结构。",
-            recommended_next_step="优先补全 code、dependencyMode 和 runtimePolicy，确认当前 sandbox readiness 后再继续扩展上下游节点。",
+            workflow_focus=(
+                "先把受控代码执行节点放进真实 workflow，"
+                "再继续补代码、依赖策略与输出结构。"
+            ),
+            recommended_next_step=(
+                "优先补全 code、dependencyMode 和 runtimePolicy，"
+                "确认当前 sandbox readiness 后再继续扩展上下游节点。"
+            ),
             tags=["sandbox_code", "代码执行", "runtime-ready"],
             nodes=[
                 {"id": "trigger", "type": "trigger", "position": {"x": 80, "y": 220}},

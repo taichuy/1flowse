@@ -93,6 +93,21 @@ def _validate_node_context_access_and_queries(
                     f"'{readable_node_id}'."
                 )
 
+        if node.type == "reference":
+            reference = node.config.get("reference") or {}
+            source_node_id = str(reference.get("sourceNodeId") or "").strip()
+            if source_node_id and source_node_id not in node_id_set:
+                raise ValueError(
+                    f"Node '{node.id}' reference references missing source node "
+                    f"'{source_node_id}'."
+                )
+            if source_node_id and source_node_id not in authorized_node_ids:
+                raise ValueError(
+                    f"Node '{node.id}' reference references unauthorized source node: "
+                    f"{source_node_id}."
+                )
+            continue
+
         if node.type != "mcp_query":
             continue
 

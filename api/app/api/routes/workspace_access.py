@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.routes.auth import get_authenticated_access_context
+from app.api.routes.auth import (
+    get_authenticated_access_context,
+    get_authenticated_write_access_context,
+)
 from app.core.database import get_db
 from app.schemas.workspace_access import (
     UserAccountItem,
@@ -15,7 +18,9 @@ from app.services.workspace_access import (
     AuthorizationError,
     ConflictError,
     WorkspaceAccessContext,
+    build_console_route_permission_matrix,
     create_workspace_member,
+    get_workspace_auth_cookie_contract,
     get_workspace_user_index,
     list_workspace_members,
     update_workspace_member_role,
@@ -58,6 +63,8 @@ def _serialize_workspace_context(
         current_member=_serialize_member(access_context.member, user=access_context.user),
         available_roles=["owner", "admin", "editor", "viewer"],
         can_manage_members=access_context.member.role in {"owner", "admin"},
+        cookie_contract=get_workspace_auth_cookie_contract(),
+        route_permissions=build_console_route_permission_matrix(),
     )
 
 
@@ -85,7 +92,7 @@ def get_workspace_members(
 @router.post("/members", response_model=WorkspaceMemberItem, status_code=status.HTTP_201_CREATED)
 def create_member(
     payload: WorkspaceMemberCreateRequest,
-    access_context: WorkspaceAccessContext = Depends(get_authenticated_access_context),
+    access_context: WorkspaceAccessContext = Depends(get_authenticated_write_access_context),
     db: Session = Depends(get_db),
 ) -> WorkspaceMemberItem:
     try:
@@ -112,7 +119,7 @@ def create_member(
 def update_member_role(
     member_id: str,
     payload: WorkspaceMemberRoleUpdateRequest,
-    access_context: WorkspaceAccessContext = Depends(get_authenticated_access_context),
+    access_context: WorkspaceAccessContext = Depends(get_authenticated_write_access_context),
     db: Session = Depends(get_db),
 ) -> WorkspaceMemberItem:
     try:

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.api.routes.credentials import router as credential_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
+from app.api.routes.model_providers import router as model_provider_router
 from app.api.routes.plugins import router as plugin_router
 from app.api.routes.published_endpoint_activity import router as published_endpoint_activity_router
 from app.api.routes.published_endpoint_cache import router as published_endpoint_cache_router
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     application.include_router(workflow_router, prefix="/api")
     application.include_router(workflow_publish_router, prefix="/api")
     application.include_router(workspace_access_router, prefix="/api")
+    application.include_router(model_provider_router, prefix="/api")
     application.include_router(published_endpoint_activity_router, prefix="/api")
     application.include_router(published_endpoint_invocation_detail_router, prefix="/api")
     application.include_router(published_endpoint_cache_router, prefix="/api")

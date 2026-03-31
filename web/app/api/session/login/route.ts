@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
-import { SESSION_COOKIE_NAME, type AuthSessionResponse } from "@/lib/workspace-access";
+import { type AuthSessionResponse } from "@/lib/workspace-access";
+
+import { applyAuthCookies } from "../shared";
 
 export async function POST(request: NextRequest) {
   const payload = await request.json().catch(() => null);
@@ -21,14 +23,8 @@ export async function POST(request: NextRequest) {
     status: response.status
   });
 
-  if (response.ok && body && "token" in body && typeof body.token === "string") {
-    nextResponse.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: body.token,
-      path: "/",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7
-    });
+  if (response.ok && body && "access_token" in body && typeof body.access_token === "string") {
+    applyAuthCookies(nextResponse, body as AuthSessionResponse);
   }
 
   return nextResponse;

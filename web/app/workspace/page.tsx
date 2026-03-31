@@ -4,6 +4,7 @@ import { WorkspaceAppsWorkbench } from "@/components/workspace-apps-workbench";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflows } from "@/lib/get-workflows";
+import { WORKSPACE_TEAM_SETTINGS_HREF } from "@/lib/workspace-console";
 import {
   getWorkspaceAppModeMeta,
   inferWorkspaceAppMode,
@@ -299,7 +300,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     ? {
         title: "管理成员与权限",
         detail: "管理员可直接开通成员账号并调整角色。",
-        href: "/admin/members",
+        href: WORKSPACE_TEAM_SETTINGS_HREF,
         badge: `${workspaceContext.available_roles.length} 种角色`
       }
     : {

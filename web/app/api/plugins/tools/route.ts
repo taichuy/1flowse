@@ -1,19 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-import { getApiBaseUrl } from "@/lib/api-base-url";
-import { SESSION_COOKIE_NAME } from "@/lib/workspace-access";
+import { proxyConsoleApiRequest } from "@/app/api/_shared/console-api-proxy";
 
-export async function GET(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
-  const headers = new Headers();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}/api/plugins/tools${request.nextUrl.search}`, {
-    cache: "no-store",
-    headers
+export function GET(request: NextRequest) {
+  return proxyConsoleApiRequest(request, {
+    allowGuest: true,
+    backendPath: `/api/plugins/tools${request.nextUrl.search}`,
+    cache: "no-store"
   });
-  const body = await response.json().catch(() => null);
-  return NextResponse.json(body, { status: response.status });
 }

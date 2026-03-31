@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import {
+  LEGACY_WORKSPACE_TEAM_SETTINGS_HREF,
+  WORKSPACE_TEAM_SETTINGS_HREF
+} from "@/lib/workspace-console";
+
 const DEFAULT_ADMIN_EMAIL = "admin@taichuy.com";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 
@@ -30,6 +35,7 @@ export function WorkspaceLoginForm() {
     try {
       const response = await fetch("/api/session/login", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json"
         },
@@ -110,7 +116,10 @@ export function WorkspaceLoginForm() {
 }
 
 function getLoginNextLabel(nextHref: string) {
-  if (nextHref === "/admin/members") {
+  if (
+    nextHref === WORKSPACE_TEAM_SETTINGS_HREF ||
+    nextHref === LEGACY_WORKSPACE_TEAM_SETTINGS_HREF
+  ) {
     return "成员管理";
   }
 

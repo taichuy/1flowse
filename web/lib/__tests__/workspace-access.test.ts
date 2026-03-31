@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { canManageWorkspaceMembers, formatWorkspaceRole } from "@/lib/workspace-access";
+import {
+  buildConsoleCsrfHeaders,
+  canManageWorkspaceMembers,
+  CSRF_TOKEN_HEADER_NAME,
+  CSRF_TOKEN_COOKIE_NAME,
+  readSessionCookieFromDocument,
+  formatWorkspaceRole
+} from "@/lib/workspace-access";
 
 describe("workspace-access helpers", () => {
   it("maps member roles to localized labels", () => {
@@ -15,5 +22,29 @@ describe("workspace-access helpers", () => {
     expect(canManageWorkspaceMembers("admin")).toBe(true);
     expect(canManageWorkspaceMembers("editor")).toBe(false);
     expect(canManageWorkspaceMembers("viewer")).toBe(false);
+  });
+
+  it("builds csrf headers from the readable csrf cookie", () => {
+    Object.defineProperty(globalThis, "document", {
+      value: {
+        cookie: `${CSRF_TOKEN_COOKIE_NAME}=csrf-demo-token`
+      },
+      configurable: true
+    });
+
+    expect(buildConsoleCsrfHeaders()).toEqual({
+      [CSRF_TOKEN_HEADER_NAME]: "csrf-demo-token"
+    });
+  });
+
+  it("does not expose the httpOnly session cookie to browser helpers", () => {
+    Object.defineProperty(globalThis, "document", {
+      value: {
+        cookie: "sevenflows_access_token=should-not-be-read"
+      },
+      configurable: true
+    });
+
+    expect(readSessionCookieFromDocument()).toBeNull();
   });
 });

@@ -11,7 +11,12 @@ import {
   appendWorkflowLibraryViewState,
   readWorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
-import { buildWorkflowStudioSurfaceHref, type WorkflowStudioSurface } from "@/lib/workbench-links";
+import {
+  buildWorkflowStudioSurfaceHref,
+  getWorkflowStudioSurfaceDefinition,
+  getWorkflowStudioSurfaceDefinitions,
+  type WorkflowStudioSurface
+} from "@/lib/workbench-links";
 import {
   buildWorkflowCreateHrefFromWorkspaceStarterViewState,
   buildWorkflowEditorHrefFromWorkspaceStarterViewState,
@@ -39,8 +44,7 @@ type WorkflowStudioSharedContext = {
   resolvedSearchParams: Record<string, string | string[] | undefined>;
   workflowLibraryHref: string;
   createWorkflowHref: string;
-  editorSurfaceHref: string;
-  publishSurfaceHref: string;
+  surfaceHrefs: Record<WorkflowStudioSurface, string>;
   currentEditorHref: string;
   currentPublishHref: string;
   workspaceStarterLibraryHref: string;
@@ -59,8 +63,7 @@ type WorkflowStudioShellProps = {
   workflowStageLabel: string;
   workflowLibraryHref: string;
   activeStudioSurface: WorkflowStudioSurface;
-  editorSurfaceHref: string;
-  publishSurfaceHref: string;
+  surfaceHrefs: Record<WorkflowStudioSurface, string>;
   workspaceStarterLibraryHref: string;
   children: ReactNode;
 };
@@ -106,14 +109,20 @@ export async function renderWorkflowStudioPage({
     return renderWorkflowEditorSurface(sharedContext);
   }
 
-  return renderWorkflowPublishSurface(sharedContext);
+  if (surface === "publish") {
+    return renderWorkflowPublishSurface(sharedContext);
+  }
+
+  return renderWorkflowUtilitySurface(sharedContext, surface);
 }
 
 export function readWorkflowStudioSurface(
   value: string | string[] | undefined
 ): WorkflowStudioSurface {
   const resolvedValue = Array.isArray(value) ? value[0] : value;
-  return resolvedValue === "publish" ? "publish" : "editor";
+  return getWorkflowStudioSurfaceDefinitions().some((item) => item.key === resolvedValue)
+    ? (resolvedValue as WorkflowStudioSurface)
+    : "editor";
 }
 
 async function resolveWorkflowStudioSharedContext({
@@ -167,13 +176,25 @@ async function resolveWorkflowStudioSharedContext({
     ),
     workflowLibraryViewState
   );
+  const surfaceSearchParams = buildWorkflowStudioSearchParams(resolvedSearchParams, {
+    omitKeys: ["surface"]
+  });
+  const surfaceHrefs = Object.fromEntries(
+    getWorkflowStudioSurfaceDefinitions().map((item) => [
+      item.key,
+      appendSearchParamsToHref(
+        buildWorkflowStudioSurfaceHref(workflow.id, item.key),
+        surfaceSearchParams
+      )
+    ])
+  ) as Record<WorkflowStudioSurface, string>;
   const currentEditorHref = appendSearchParamsToHref(
     buildWorkflowStudioSurfaceHref(workflow.id, "editor"),
-    buildWorkflowStudioSearchParams(resolvedSearchParams, { omitKeys: ["surface"] })
+    surfaceSearchParams
   );
   const currentPublishHref = appendSearchParamsToHref(
     buildWorkflowStudioSurfaceHref(workflow.id, "publish"),
-    buildWorkflowStudioSearchParams(resolvedSearchParams, { omitKeys: ["surface"] })
+    surfaceSearchParams
   );
   const workspaceStarterLibraryHref =
     buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState(
@@ -198,8 +219,11 @@ async function resolveWorkflowStudioSharedContext({
     resolvedSearchParams,
     workflowLibraryHref,
     createWorkflowHref,
-    editorSurfaceHref,
-    publishSurfaceHref,
+    surfaceHrefs: {
+      ...surfaceHrefs,
+      editor: editorSurfaceHref,
+      publish: publishSurfaceHref
+    },
     currentEditorHref,
     currentPublishHref,
     workspaceStarterLibraryHref,
@@ -219,8 +243,7 @@ async function renderWorkflowEditorSurface(sharedContext: WorkflowStudioSharedCo
       workflowStageLabel={sharedContext.workflowStageLabel}
       workflowLibraryHref={sharedContext.workflowLibraryHref}
       activeStudioSurface="editor"
-      editorSurfaceHref={sharedContext.editorSurfaceHref}
-      publishSurfaceHref={sharedContext.publishSurfaceHref}
+      surfaceHrefs={sharedContext.surfaceHrefs}
       workspaceStarterLibraryHref={sharedContext.workspaceStarterLibraryHref}
     >
       <section className="workflow-studio-surface" data-surface="editor">
@@ -332,8 +355,7 @@ async function renderWorkflowPublishSurface(sharedContext: WorkflowStudioSharedC
       workflowStageLabel={workflowStageLabel}
       workflowLibraryHref={sharedContext.workflowLibraryHref}
       activeStudioSurface="publish"
-      editorSurfaceHref={sharedContext.editorSurfaceHref}
-      publishSurfaceHref={sharedContext.publishSurfaceHref}
+      surfaceHrefs={sharedContext.surfaceHrefs}
       workspaceStarterLibraryHref={sharedContext.workspaceStarterLibraryHref}
     >
       <section
@@ -365,6 +387,48 @@ async function renderWorkflowPublishSurface(sharedContext: WorkflowStudioSharedC
   );
 }
 
+function renderWorkflowUtilitySurface(
+  sharedContext: WorkflowStudioSharedContext,
+  surface: Exclude<WorkflowStudioSurface, "editor" | "publish">
+) {
+  const surfaceDefinition = getWorkflowStudioSurfaceDefinition(surface);
+
+  return (
+    <WorkflowStudioShell
+      workspaceName={sharedContext.workspaceName}
+      userName={sharedContext.userName}
+      userRole={sharedContext.userRole}
+      workflowName={sharedContext.workflow.name}
+      workflowVersion={sharedContext.workflow.version}
+      workflowStageLabel={sharedContext.workflowStageLabel}
+      workflowLibraryHref={sharedContext.workflowLibraryHref}
+      activeStudioSurface={surface}
+      surfaceHrefs={sharedContext.surfaceHrefs}
+      workspaceStarterLibraryHref={sharedContext.workspaceStarterLibraryHref}
+    >
+      <section className="workflow-studio-surface workflow-studio-surface-utility" data-surface={surface}>
+        <div
+          className="workflow-studio-placeholder-card"
+          data-component="workflow-studio-placeholder"
+          data-placeholder-surface={surface}
+        >
+          <p className="workflow-studio-placeholder-eyebrow">Workflow surface</p>
+          <h2>{surfaceDefinition.label}</h2>
+          <p>{surfaceDefinition.description}</p>
+          <div className="workflow-studio-placeholder-actions">
+            <Link className="workflow-studio-secondary-link" href={sharedContext.surfaceHrefs.publish}>
+              查看发布治理
+            </Link>
+            <Link className="workflow-studio-secondary-link" href="/runs">
+              查看运行诊断
+            </Link>
+          </div>
+        </div>
+      </section>
+    </WorkflowStudioShell>
+  );
+}
+
 function WorkflowStudioShell({
   workspaceName,
   userName,
@@ -374,13 +438,13 @@ function WorkflowStudioShell({
   workflowStageLabel,
   workflowLibraryHref,
   activeStudioSurface,
-  editorSurfaceHref,
-  publishSurfaceHref,
+  surfaceHrefs,
   workspaceStarterLibraryHref,
   children
 }: WorkflowStudioShellProps) {
   const isEditorSurface = activeStudioSurface === "editor";
-  const studioModeLabel = isEditorSurface ? "xyflow studio" : "publish governance";
+  const studioModeLabel = getWorkflowStudioSurfaceDefinition(activeStudioSurface).modeLabel;
+  const surfaceItems = getWorkflowStudioSurfaceDefinitions();
 
   return (
     <WorkspaceShell
@@ -411,22 +475,17 @@ function WorkflowStudioShell({
             </div>
 
             <nav className="workflow-studio-surface-nav" aria-label="Workflow studio surfaces">
-              <Link
-                className={`workflow-studio-surface-link ${
-                  activeStudioSurface === "editor" ? "active" : ""
-                }`.trim()}
-                href={editorSurfaceHref}
-              >
-                画布编排
-              </Link>
-              <Link
-                className={`workflow-studio-surface-link ${
-                  activeStudioSurface === "publish" ? "active" : ""
-                }`.trim()}
-                href={publishSurfaceHref}
-              >
-                发布治理
-              </Link>
+              {surfaceItems.map((item) => (
+                <Link
+                  className={`workflow-studio-surface-link ${
+                    activeStudioSurface === item.key ? "active" : ""
+                  }`.trim()}
+                  href={surfaceHrefs[item.key]}
+                  key={item.key}
+                >
+                  {item.label}
+                </Link>
+              ))}
               <span className="workflow-studio-surface-nav-spacer" aria-hidden="true" />
               <div className="workflow-studio-utility-links">
                 <Link className="workflow-studio-secondary-link" href="/runs">

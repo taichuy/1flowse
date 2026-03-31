@@ -16,6 +16,7 @@ import { LlmAgentSkillBindingSection } from "@/components/workflow-node-config-f
 import { LlmAgentSkillSection } from "@/components/workflow-node-config-form/llm-agent-skill-section";
 import { LlmAgentToolPolicyForm } from "@/components/workflow-node-config-form/llm-agent-tool-policy-form";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import type { WorkspaceModelProviderConfigItem } from "@/lib/model-provider-registry";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
@@ -34,6 +35,7 @@ type LlmAgentNodeConfigFormProps = {
   nodes: Array<Node<WorkflowCanvasNodeData>>;
   tools: PluginToolRegistryItem[];
   credentials: CredentialItem[];
+  modelProviderConfigs?: WorkspaceModelProviderConfigItem[];
   currentHref?: string | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   highlightedFieldPath?: string | null;
@@ -74,6 +76,7 @@ export function LlmAgentNodeConfigForm({
   nodes,
   tools,
   credentials,
+  modelProviderConfigs = [],
   currentHref = null,
   sandboxReadiness,
   highlightedFieldPath,
@@ -106,25 +109,27 @@ export function LlmAgentNodeConfigForm({
       ...readableArtifacts.map((artifact) => artifact.nodeId)
     ])
   );
+  const currentProviderConfigRef =
+    typeof model.providerConfigRef === "string"
+      ? model.providerConfigRef
+      : typeof model.provider_config_ref === "string"
+        ? model.provider_config_ref
+        : "";
   const currentProviderValue = typeof model.provider === "string" ? model.provider : "";
   const providerPreset = getNativeLlmProviderPreset(currentProviderValue);
+  const activeProviderConfigs = modelProviderConfigs.filter(
+    (providerConfig) => providerConfig.status === "active"
+  );
+  const selectedProviderConfig =
+    activeProviderConfigs.find((providerConfig) => providerConfig.id === currentProviderConfigRef) ??
+    null;
   const selectedCredential =
     typeof model.apiKey === "string"
       ? credentials.find((credential) => `credential://${credential.id}` === model.apiKey) ?? null
       : null;
 
-  const updateModel = (
-    field: "provider" | "modelId" | "temperature" | "baseUrl",
-    value: unknown
-  ) => {
+  const commitModel = (nextModel: Record<string, unknown>) => {
     const nextConfig = cloneRecord(config);
-    const nextModel = cloneRecord(model);
-
-    if (value === undefined || value === "") {
-      delete nextModel[field];
-    } else {
-      nextModel[field] = value;
-    }
 
     if (Object.keys(nextModel).length === 0) {
       delete nextConfig.model;
@@ -135,8 +140,22 @@ export function LlmAgentNodeConfigForm({
     onChange(nextConfig);
   };
 
+  const updateModel = (
+    field: "provider" | "modelId" | "temperature" | "baseUrl",
+    value: unknown
+  ) => {
+    const nextModel = cloneRecord(model);
+
+    if (value === undefined || value === "") {
+      delete nextModel[field];
+    } else {
+      nextModel[field] = value;
+    }
+
+    commitModel(nextModel);
+  };
+
   const updateModelApiKey = (value: string | undefined) => {
-    const nextConfig = cloneRecord(config);
     const nextModel = cloneRecord(model);
 
     if (value === undefined || value === "") {
@@ -145,13 +164,29 @@ export function LlmAgentNodeConfigForm({
       nextModel.apiKey = value;
     }
 
-    if (Object.keys(nextModel).length === 0) {
-      delete nextConfig.model;
-    } else {
-      nextConfig.model = nextModel;
+    commitModel(nextModel);
+  };
+
+  const updateModelProviderConfigRef = (providerConfigRef: string | undefined) => {
+    const nextModel = cloneRecord(model);
+
+    if (!providerConfigRef) {
+      delete nextModel.providerConfigRef;
+      commitModel(nextModel);
+      return;
     }
 
-    onChange(nextConfig);
+    const nextProviderConfig =
+      activeProviderConfigs.find((providerConfig) => providerConfig.id === providerConfigRef) ?? null;
+    nextModel.providerConfigRef = providerConfigRef;
+    delete nextModel.provider;
+    delete nextModel.baseUrl;
+    delete nextModel.apiKey;
+    if (typeof nextModel.modelId !== "string" || !nextModel.modelId.trim()) {
+      nextModel.modelId = nextProviderConfig?.default_model ?? "";
+    }
+
+    commitModel(nextModel);
   };
 
   const updateField = (field: string, value: unknown) => {
@@ -305,11 +340,46 @@ export function LlmAgentNodeConfigForm({
       </div>
 
       <label className="binding-field">
+        <span className="binding-label">Provider config ref</span>
+        <select
+          className="binding-select"
+          value={currentProviderConfigRef}
+          onChange={(event) =>
+            updateModelProviderConfigRef(event.target.value.trim() || undefined)
+          }
+        >
+          <option value="">暂不使用团队 provider registry（保留 legacy inline config）</option>
+          {activeProviderConfigs.map((providerConfig) => (
+            <option key={providerConfig.id} value={providerConfig.id}>
+              {providerConfig.label} · {providerConfig.provider_label}
+            </option>
+          ))}
+        </select>
+        <small className="section-copy">
+          优先通过团队设置里的 provider registry 把 definition 收口到 <code>providerConfigRef + modelId</code>；如当前 workflow
+          仍在兼容旧节点，可临时保留 legacy inline config。
+        </small>
+      </label>
+
+      {selectedProviderConfig ? (
+        <div className="binding-help">
+          <strong>当前引用的团队供应商</strong>
+          <span>
+            {selectedProviderConfig.label} · {selectedProviderConfig.provider_label} · <code>{selectedProviderConfig.credential_ref}</code>
+          </span>
+          <span>
+            runtime 会优先从该 provider config 解析 provider/baseUrl/credential，并以 <code>{selectedProviderConfig.default_model}</code> 作为默认模型。
+          </span>
+        </div>
+      ) : null}
+
+      <label className="binding-field">
         <span className="binding-label">Provider</span>
         <select
           className="binding-select"
           value={providerPreset?.providerValue ?? (currentProviderValue || "openai")}
           onChange={(event) => updateModel("provider", event.target.value.trim() || undefined)}
+          disabled={Boolean(currentProviderConfigRef)}
         >
           {providerPreset === null && currentProviderValue ? (
             <option value={currentProviderValue}>{`保留现有 provider：${currentProviderValue}`}</option>
@@ -321,7 +391,9 @@ export function LlmAgentNodeConfigForm({
           ))}
         </select>
         <small className="section-copy">
-          {providerPreset
+          {currentProviderConfigRef
+            ? "当前节点已经绑定团队 provider config；如需回退 legacy inline provider，请先清空上面的 providerConfigRef。"
+            : providerPreset
             ? `${providerPreset.description} 当前协议面：${providerPreset.protocolLabel}。`
             : "当前 provider 不是内置厂商预设；保留原值，避免覆盖已有 runtime 契约。"}
         </small>
@@ -344,9 +416,16 @@ export function LlmAgentNodeConfigForm({
           value={typeof model.baseUrl === "string" ? model.baseUrl : ""}
           onChange={(event) => updateModel("baseUrl", event.target.value.trim() || undefined)}
           placeholder={providerPreset?.baseUrlPlaceholder ?? "例如 https://proxy.example/v1"}
+          disabled={Boolean(currentProviderConfigRef)}
         />
         <small className="section-copy">
-          留空时沿用 {providerPreset?.label ?? "provider"} 默认 endpoint；填写后会继续落到 runtime 的 <code>model.baseUrl</code>。
+          {currentProviderConfigRef
+            ? "已绑定 provider registry 时，endpoint 由团队 provider config 提供。"
+            : (
+                <>
+                  留空时沿用 {providerPreset?.label ?? "provider"} 默认 endpoint；填写后会继续落到 runtime 的 <code>model.baseUrl</code>。
+                </>
+              )}
         </small>
       </label>
 
@@ -363,41 +442,45 @@ export function LlmAgentNodeConfigForm({
         />
       </label>
 
-      <CredentialPicker
-        label="API Key credential"
-        value={typeof model.apiKey === "string" ? model.apiKey : ""}
-        onChange={updateModelApiKey}
-        credentials={credentials}
-        credentialTypes={providerPreset?.compatibleCredentialTypes}
-        hint="选择后会自动写入 credential://{id}，运行时自动解密注入。"
-        placeholder="选择模型 API Key 凭证"
-        emptyStateCopy={
-          providerPreset
-            ? `当前还没有可用于 ${providerPreset.label} 的凭证，可直接在下方新建。`
-            : "当前 provider 没有命中内置厂商预设，请先选择 OpenAI / Anthropic / OpenAI-compatible。"
-        }
-      />
+      {currentProviderConfigRef ? null : (
+        <>
+          <CredentialPicker
+            label="API Key credential"
+            value={typeof model.apiKey === "string" ? model.apiKey : ""}
+            onChange={updateModelApiKey}
+            credentials={credentials}
+            credentialTypes={providerPreset?.compatibleCredentialTypes}
+            hint="选择后会自动写入 credential://{id}，运行时自动解密注入。"
+            placeholder="选择模型 API Key 凭证"
+            emptyStateCopy={
+              providerPreset
+                ? `当前还没有可用于 ${providerPreset.label} 的凭证，可直接在下方新建。`
+                : "当前 provider 没有命中内置厂商预设，请先选择 OpenAI / Anthropic / OpenAI-compatible。"
+            }
+          />
 
-      {selectedCredential ? (
-        <div className="binding-help">
-          <strong>当前节点正在使用</strong>
-          <span>
-            {selectedCredential.name} · <code>{selectedCredential.credential_type}</code>
-          </span>
-          <span>
-            workflow definition 会继续保存为 <code>{typeof model.apiKey === "string" ? model.apiKey : ""}</code>，运行时再统一解密。
-          </span>
-        </div>
-      ) : null}
+          {selectedCredential ? (
+            <div className="binding-help">
+              <strong>当前节点正在使用</strong>
+              <span>
+                {selectedCredential.name} · <code>{selectedCredential.credential_type}</code>
+              </span>
+              <span>
+                workflow definition 会继续保存为 <code>{typeof model.apiKey === "string" ? model.apiKey : ""}</code>，运行时再统一解密。
+              </span>
+            </div>
+          ) : null}
 
-      {providerPreset ? (
-        <LazyLlmProviderCredentialManager
-          providerPreset={providerPreset}
-          credentials={credentials}
-          selectedCredentialValue={typeof model.apiKey === "string" ? model.apiKey : ""}
-          onSelectCredential={updateModelApiKey}
-        />
-      ) : null}
+          {providerPreset ? (
+            <LazyLlmProviderCredentialManager
+              providerPreset={providerPreset}
+              credentials={credentials}
+              selectedCredentialValue={typeof model.apiKey === "string" ? model.apiKey : ""}
+              onSelectCredential={updateModelApiKey}
+            />
+          ) : null}
+        </>
+      )}
 
       <label className="binding-field">
         <span className="binding-label">System prompt</span>

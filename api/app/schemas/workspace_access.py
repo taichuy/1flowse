@@ -1,8 +1,31 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 WorkspaceMemberRole = str
+ConsoleAccessLevel = Literal["guest", "authenticated", "manager"]
+
+
+class ConsoleAuthCookieContract(BaseModel):
+    access_token_cookie_name: str
+    refresh_token_cookie_name: str
+    csrf_token_cookie_name: str
+    csrf_header_name: str
+    same_site: Literal["lax", "strict", "none"]
+    secure: bool
+    use_host_prefix: bool
+    access_token_http_only: bool = True
+    refresh_token_http_only: bool = True
+    csrf_token_http_only: bool = False
+
+
+class ConsoleRoutePermissionItem(BaseModel):
+    route: str
+    access_level: ConsoleAccessLevel
+    methods: list[str]
+    csrf_protected_methods: list[str] = Field(default_factory=list)
+    description: str
 
 
 class WorkspaceItem(BaseModel):
@@ -34,12 +57,19 @@ class AuthLoginRequest(BaseModel):
 
 
 class AuthSessionResponse(BaseModel):
-    token: str
+    token_type: str = "bearer"
+    token: str | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    csrf_token: str | None = None
     workspace: WorkspaceItem
     current_user: UserAccountItem
     current_member: WorkspaceMemberItem
     available_roles: list[WorkspaceMemberRole]
     expires_at: datetime
+    access_expires_at: datetime | None = None
+    cookie_contract: ConsoleAuthCookieContract
+    route_permissions: list[ConsoleRoutePermissionItem]
 
 
 class WorkspaceContextResponse(BaseModel):
@@ -48,6 +78,12 @@ class WorkspaceContextResponse(BaseModel):
     current_member: WorkspaceMemberItem
     available_roles: list[WorkspaceMemberRole]
     can_manage_members: bool
+    cookie_contract: ConsoleAuthCookieContract
+    route_permissions: list[ConsoleRoutePermissionItem]
+
+
+class AuthRefreshRequest(BaseModel):
+    refresh_token: str | None = None
 
 
 class WorkspaceMemberCreateRequest(BaseModel):

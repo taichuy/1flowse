@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { StudioShell } from "@/components/studio-shell";
 import { WorkspaceShell } from "@/components/workspace-shell";
+import { WORKSPACE_TEAM_SETTINGS_HREF } from "@/lib/workspace-console";
 
 Object.assign(globalThis, { React });
 
@@ -36,15 +37,17 @@ describe("WorkspaceShell", () => {
 
     expect(html).toContain('data-component="workspace-shell"');
     expect(html).toContain('data-layout="default"');
+    expect(html).toContain('data-navigation-mode="all"');
     expect(html).toContain("作者工作台");
     expect(html).toContain("新建应用");
     expect(html).toContain("团队");
+    expect(html).toContain(`href="${WORKSPACE_TEAM_SETTINGS_HREF}"`);
     expect(html).toContain("7Flows Admin");
     expect(html).toContain("所有者");
     expect(html).toContain('aria-current="page"');
   });
 
-  it("uses focused layout to slim navigation on create and settings surfaces", () => {
+  it("uses focused layout to slim navigation on create surfaces by default", () => {
     const html = renderToStaticMarkup(
       <WorkspaceShell
         activeNav="workflows"
@@ -58,6 +61,7 @@ describe("WorkspaceShell", () => {
     );
 
     expect(html).toContain('data-layout="focused"');
+    expect(html).toContain('data-navigation-mode="core"');
     expect(html).toContain("创建应用");
     expect(html).toContain("工作台");
     expect(html).toContain("编排");
@@ -65,6 +69,27 @@ describe("WorkspaceShell", () => {
     expect(html).not.toContain(">模板<");
     expect(html).not.toContain(">运行<");
     expect(html).not.toContain("新建应用");
+  });
+
+  it("allows focused settings surfaces to keep full navigation when explicitly requested", () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceShell
+        activeNav="team"
+        layout="focused"
+        navigationMode="all"
+        userName="7Flows Admin"
+        userRole="owner"
+        workspaceName="7Flows Workspace"
+      >
+        <div>team body</div>
+      </WorkspaceShell>
+    );
+
+    expect(html).toContain('data-navigation-mode="all"');
+    expect(html).toContain("工作台设置");
+    expect(html).toContain(">模板<");
+    expect(html).toContain(">运行<");
+    expect(html).toContain(">团队<");
   });
 
   it("keeps editor shell compact and hides manager-only navigation for editors", () => {
@@ -81,6 +106,7 @@ describe("WorkspaceShell", () => {
     );
 
     expect(html).toContain('data-layout="editor"');
+    expect(html).toContain('data-navigation-mode="studio"');
     expect(html).toContain("xyflow Studio");
     expect(html).toContain("工作台");
     expect(html).toContain("编排");
@@ -88,6 +114,24 @@ describe("WorkspaceShell", () => {
     expect(html).not.toContain(">模板<");
     expect(html).not.toContain(">团队<");
     expect(html).not.toContain("新建应用");
+  });
+
+  it("escapes workspace and user labels instead of rendering raw html", () => {
+    const html = renderToStaticMarkup(
+      <WorkspaceShell
+        activeNav="workspace"
+        userName={'<script>alert("user")</script>'}
+        userRole="owner"
+        workspaceName={'<img src=x onerror=alert(1) />'}
+      >
+        <div>safe body</div>
+      </WorkspaceShell>
+    );
+
+    expect(html).toContain('&lt;script&gt;alert(&quot;user&quot;)&lt;/script&gt;');
+    expect(html).toContain('&lt;img src=x onerror=alert(1) /&gt;');
+    expect(html).not.toContain('<script>alert');
+    expect(html).not.toContain('<img src=x onerror');
   });
 
   it("keeps the studio wrapper server-driven once active nav is passed by the route tree", () => {

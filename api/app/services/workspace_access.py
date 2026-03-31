@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
 import hmac
+import json
 import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +21,7 @@ from app.models.workspace_access import (
     WorkspaceMemberRecord,
     WorkspaceRecord,
 )
+from app.schemas.workspace_access import ConsoleAuthCookieContract, ConsoleRoutePermissionItem
 
 DEFAULT_WORKSPACE_ID = "default"
 DEFAULT_WORKSPACE_NAME = "7Flows Workspace"
@@ -28,6 +32,16 @@ DEFAULT_ADMIN_PASSWORD = "admin123"
 WORKSPACE_MEMBER_ROLES = ["owner", "admin", "editor", "viewer"]
 MANAGE_MEMBER_ROLES = {"owner", "admin"}
 SESSION_TTL = timedelta(days=7)
+ACCESS_TOKEN_TTL = timedelta(minutes=30)
+CSRF_TOKEN_TTL = SESSION_TTL
+TOKEN_PURPOSE_ACCESS = "access"
+TOKEN_PURPOSE_REFRESH = "refresh"
+TOKEN_PURPOSE_CSRF = "csrf"
+ACCESS_TOKEN_COOKIE_BASE_NAME = "sevenflows_access_token"
+REFRESH_TOKEN_COOKIE_BASE_NAME = "sevenflows_refresh_token"
+CSRF_TOKEN_COOKIE_BASE_NAME = "sevenflows_csrf_token"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+COOKIE_SAME_SITE = "lax"
 
 
 class WorkspaceAccessError(Exception):
@@ -46,12 +60,35 @@ class ConflictError(WorkspaceAccessError):
     pass
 
 
+class CsrfValidationError(WorkspaceAccessError):
+    pass
+
+
 @dataclass(slots=True)
 class WorkspaceAccessContext:
     session: AuthSessionRecord
     workspace: WorkspaceRecord
     user: UserAccountRecord
     member: WorkspaceMemberRecord
+    access_expires_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class SignedTokenClaims:
+    purpose: str
+    session_id: str
+    user_id: str
+    workspace_id: str
+    expires_at: datetime
+
+
+@dataclass(slots=True)
+class WorkspaceIssuedAuthTokens:
+    access_token: str
+    refresh_token: str
+    csrf_token: str
+    access_expires_at: datetime
+    expires_at: datetime
 
 
 def _utc_now() -> datetime:
@@ -94,6 +131,264 @@ def _verify_password(password: str, password_hash: str) -> bool:
 def _build_display_name_from_email(email: str) -> str:
     local_part = email.split("@", 1)[0].strip()
     return local_part or email
+
+
+def _auth_cookie_secure() -> bool:
+    return get_settings().env.strip().lower() not in {"local", "test", "development"}
+
+
+def _use_host_cookie_prefix() -> bool:
+    return _auth_cookie_secure()
+
+
+def _real_cookie_name(base_name: str) -> str:
+    if _use_host_cookie_prefix():
+        return f"__Host-{base_name}"
+    return base_name
+
+
+def get_workspace_access_cookie_name() -> str:
+    return _real_cookie_name(ACCESS_TOKEN_COOKIE_BASE_NAME)
+
+
+def get_workspace_refresh_cookie_name() -> str:
+    return _real_cookie_name(REFRESH_TOKEN_COOKIE_BASE_NAME)
+
+
+def get_workspace_csrf_cookie_name() -> str:
+    return _real_cookie_name(CSRF_TOKEN_COOKIE_BASE_NAME)
+
+
+def get_workspace_csrf_header_name() -> str:
+    return CSRF_HEADER_NAME
+
+
+def get_workspace_auth_cookie_contract() -> ConsoleAuthCookieContract:
+    return ConsoleAuthCookieContract(
+        access_token_cookie_name=get_workspace_access_cookie_name(),
+        refresh_token_cookie_name=get_workspace_refresh_cookie_name(),
+        csrf_token_cookie_name=get_workspace_csrf_cookie_name(),
+        csrf_header_name=get_workspace_csrf_header_name(),
+        same_site=COOKIE_SAME_SITE,
+        secure=_auth_cookie_secure(),
+        use_host_prefix=_use_host_cookie_prefix(),
+        access_token_http_only=True,
+        refresh_token_http_only=True,
+        csrf_token_http_only=False,
+    )
+
+
+def build_console_route_permission_matrix() -> list[ConsoleRoutePermissionItem]:
+    return [
+        ConsoleRoutePermissionItem(
+            route="/api/auth/login",
+            access_level="guest",
+            methods=["POST"],
+            csrf_protected_methods=[],
+            description="访客登录入口，签发 access/refresh/csrf 三类令牌。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/auth/session",
+            access_level="authenticated",
+            methods=["GET"],
+            csrf_protected_methods=[],
+            description="已登录会话快照，用于服务端路由守卫与当前用户恢复。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/auth/refresh",
+            access_level="authenticated",
+            methods=["POST"],
+            csrf_protected_methods=["POST"],
+            description="已登录会话刷新入口，要求 refresh token 与 CSRF double-submit 同时成立。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/auth/logout",
+            access_level="authenticated",
+            methods=["POST"],
+            csrf_protected_methods=[],
+            description="已登录会话撤销入口，允许使用 access 或 refresh token 主动失效当前会话。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/context",
+            access_level="authenticated",
+            methods=["GET"],
+            csrf_protected_methods=[],
+            description="console 主链工作空间上下文，供页面与服务端守卫复用。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/members",
+            access_level="authenticated",
+            methods=["GET"],
+            csrf_protected_methods=[],
+            description="成员列表对所有已登录成员可见，供团队页与路由守卫恢复 workspace roster。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/members",
+            access_level="manager",
+            methods=["POST"],
+            csrf_protected_methods=["POST"],
+            description="新增成员仅 owner/admin 可调用，并要求 CSRF double-submit。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/members/{member_id}",
+            access_level="manager",
+            methods=["PATCH"],
+            csrf_protected_methods=["PATCH"],
+            description="成员角色更新仅 owner/admin 可调用，并要求 CSRF double-submit。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/model-providers",
+            access_level="authenticated",
+            methods=["GET"],
+            csrf_protected_methods=[],
+            description="workspace 原生模型供应商 registry 快照，对已登录成员开放只读，供 team settings 与后续节点表单消费。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/model-providers",
+            access_level="manager",
+            methods=["POST"],
+            csrf_protected_methods=["POST"],
+            description="新增 workspace 模型供应商配置仅 owner/admin 可调用，并要求 CSRF double-submit。",
+        ),
+        ConsoleRoutePermissionItem(
+            route="/api/workspace/model-providers/{provider_config_id}",
+            access_level="manager",
+            methods=["PUT", "DELETE"],
+            csrf_protected_methods=["PUT", "DELETE"],
+            description="更新或停用 workspace 模型供应商配置仅 owner/admin 可调用，并要求 CSRF double-submit。",
+        ),
+    ]
+
+
+def _encode_segment(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _decode_segment(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(f"{value}{padding}")
+
+
+def _sign_payload_bytes(payload_bytes: bytes) -> bytes:
+    settings = get_settings()
+    return hmac.new(settings.secret_key.encode(), payload_bytes, sha256).digest()
+
+
+def _encode_signed_payload(payload: dict[str, Any]) -> str:
+    payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    signature = _sign_payload_bytes(payload_bytes)
+    return f"{_encode_segment(payload_bytes)}.{_encode_segment(signature)}"
+
+
+def _decode_signed_payload(token: str, *, error_message: str) -> dict[str, Any]:
+    token_value = (token or "").strip()
+    if not token_value:
+        raise AuthenticationError(error_message)
+
+    payload_segment, separator, signature_segment = token_value.partition(".")
+    if not separator:
+        raise AuthenticationError(error_message)
+
+    try:
+        payload_bytes = _decode_segment(payload_segment)
+        signature = _decode_segment(signature_segment)
+        expected_signature = _sign_payload_bytes(payload_bytes)
+        if not hmac.compare_digest(signature, expected_signature):
+            raise AuthenticationError(error_message)
+        payload = json.loads(payload_bytes)
+    except (AuthenticationError, ValueError, json.JSONDecodeError):
+        raise AuthenticationError(error_message) from None
+
+    if not isinstance(payload, dict):
+        raise AuthenticationError(error_message)
+    return payload
+
+
+def _decode_workspace_token(
+    token: str | None,
+    *,
+    error_message: str,
+    ignore_expiration: bool = False,
+) -> SignedTokenClaims:
+    payload = _decode_signed_payload(token or "", error_message=error_message)
+    purpose = payload.get("purpose")
+    session_id = payload.get("session_id")
+    user_id = payload.get("user_id")
+    workspace_id = payload.get("workspace_id")
+    exp = payload.get("exp")
+    if not all(
+        isinstance(item, str) and item
+        for item in (purpose, session_id, user_id, workspace_id)
+    ) or not isinstance(exp, int):
+        raise AuthenticationError(error_message)
+
+    expires_at = datetime.fromtimestamp(exp, UTC)
+    if not ignore_expiration and expires_at <= _utc_now():
+        raise AuthenticationError(error_message)
+
+    return SignedTokenClaims(
+        purpose=purpose,
+        session_id=session_id,
+        user_id=user_id,
+        workspace_id=workspace_id,
+        expires_at=expires_at,
+    )
+
+
+def _issue_workspace_token(
+    *,
+    purpose: str,
+    access_context: WorkspaceAccessContext,
+    expires_at: datetime,
+) -> str:
+    return _encode_signed_payload(
+        {
+            "purpose": purpose,
+            "session_id": access_context.session.token,
+            "user_id": access_context.user.id,
+            "workspace_id": access_context.workspace.id,
+            "exp": int(expires_at.timestamp()),
+            "nonce": secrets.token_urlsafe(8),
+        }
+    )
+
+
+def _build_workspace_access_context(
+    db: Session,
+    *,
+    session_record: AuthSessionRecord,
+    access_expires_at: datetime | None = None,
+) -> WorkspaceAccessContext:
+    workspace = db.get(WorkspaceRecord, session_record.workspace_id)
+    user = db.get(UserAccountRecord, session_record.user_id)
+    member = db.scalar(
+        select(WorkspaceMemberRecord).where(
+            WorkspaceMemberRecord.workspace_id == session_record.workspace_id,
+            WorkspaceMemberRecord.user_id == session_record.user_id,
+        )
+    )
+    if workspace is None or user is None or member is None:
+        raise AuthenticationError("登录会话对应的工作空间上下文已失效。")
+
+    return WorkspaceAccessContext(
+        session=session_record,
+        workspace=workspace,
+        user=user,
+        member=member,
+        access_expires_at=access_expires_at,
+    )
+
+
+def _get_active_session_record(db: Session, *, session_id: str) -> AuthSessionRecord:
+    session_record = db.get(AuthSessionRecord, session_id)
+    if session_record is None or session_record.revoked_at is not None:
+        raise AuthenticationError("登录会话无效，请重新登录。")
+
+    expires_at = _normalize_datetime(session_record.expires_at)
+    if expires_at is None or expires_at <= _utc_now():
+        raise AuthenticationError("登录会话已过期，请重新登录。")
+
+    return session_record
 
 
 def ensure_default_workspace_access_seed(db: Session) -> None:
@@ -174,35 +469,69 @@ def authenticate_workspace_user(
     )
 
 
-def get_workspace_access_context(db: Session, *, token: str | None) -> WorkspaceAccessContext:
-    normalized_token = (token or "").strip()
-    if not normalized_token:
-        raise AuthenticationError("缺少登录会话。")
+def issue_workspace_auth_tokens(access_context: WorkspaceAccessContext) -> WorkspaceIssuedAuthTokens:
+    session_expires_at = _normalize_datetime(access_context.session.expires_at)
+    if session_expires_at is None:
+        raise AuthenticationError("登录会话已失效，请重新登录。")
 
-    session_record = db.get(AuthSessionRecord, normalized_token)
-    if session_record is None or session_record.revoked_at is not None:
-        raise AuthenticationError("登录会话无效，请重新登录。")
-    expires_at = _normalize_datetime(session_record.expires_at)
-    if expires_at is None or expires_at <= _utc_now():
-        raise AuthenticationError("登录会话已过期，请重新登录。")
-
-    workspace = db.get(WorkspaceRecord, session_record.workspace_id)
-    user = db.get(UserAccountRecord, session_record.user_id)
-    member = db.scalar(
-        select(WorkspaceMemberRecord).where(
-            WorkspaceMemberRecord.workspace_id == session_record.workspace_id,
-            WorkspaceMemberRecord.user_id == session_record.user_id,
-        )
+    access_expires_at = _utc_now() + ACCESS_TOKEN_TTL
+    refresh_expires_at = session_expires_at
+    return WorkspaceIssuedAuthTokens(
+        access_token=_issue_workspace_token(
+            purpose=TOKEN_PURPOSE_ACCESS,
+            access_context=access_context,
+            expires_at=access_expires_at,
+        ),
+        refresh_token=_issue_workspace_token(
+            purpose=TOKEN_PURPOSE_REFRESH,
+            access_context=access_context,
+            expires_at=refresh_expires_at,
+        ),
+        csrf_token=_issue_workspace_token(
+            purpose=TOKEN_PURPOSE_CSRF,
+            access_context=access_context,
+            expires_at=min(_utc_now() + CSRF_TOKEN_TTL, refresh_expires_at),
+        ),
+        access_expires_at=access_expires_at,
+        expires_at=refresh_expires_at,
     )
-    if workspace is None or user is None or member is None:
+
+
+def get_workspace_access_context(db: Session, *, token: str | None) -> WorkspaceAccessContext:
+    claims = _decode_workspace_token(
+        token,
+        error_message="登录会话无效，请重新登录。",
+    )
+    if claims.purpose != TOKEN_PURPOSE_ACCESS:
+        raise AuthenticationError("登录会话无效，请重新登录。")
+
+    session_record = _get_active_session_record(db, session_id=claims.session_id)
+    if session_record.user_id != claims.user_id or session_record.workspace_id != claims.workspace_id:
         raise AuthenticationError("登录会话对应的工作空间上下文已失效。")
 
-    return WorkspaceAccessContext(
-        session=session_record,
-        workspace=workspace,
-        user=user,
-        member=member,
+    return _build_workspace_access_context(
+        db,
+        session_record=session_record,
+        access_expires_at=claims.expires_at,
     )
+
+
+def refresh_workspace_session(
+    db: Session, *, refresh_token: str | None
+) -> tuple[WorkspaceAccessContext, WorkspaceIssuedAuthTokens]:
+    claims = _decode_workspace_token(
+        refresh_token,
+        error_message="refresh token 无效，请重新登录。",
+    )
+    if claims.purpose != TOKEN_PURPOSE_REFRESH:
+        raise AuthenticationError("refresh token 无效，请重新登录。")
+
+    session_record = _get_active_session_record(db, session_id=claims.session_id)
+    if session_record.user_id != claims.user_id or session_record.workspace_id != claims.workspace_id:
+        raise AuthenticationError("登录会话对应的工作空间上下文已失效。")
+
+    access_context = _build_workspace_access_context(db, session_record=session_record)
+    return access_context, issue_workspace_auth_tokens(access_context)
 
 
 def revoke_workspace_session(db: Session, *, token: str | None) -> None:
@@ -210,12 +539,42 @@ def revoke_workspace_session(db: Session, *, token: str | None) -> None:
     if not normalized_token:
         return
 
-    session_record = db.get(AuthSessionRecord, normalized_token)
+    try:
+        claims = _decode_workspace_token(
+            normalized_token,
+            error_message="登录会话无效，请重新登录。",
+            ignore_expiration=True,
+        )
+    except AuthenticationError:
+        return
+
+    session_record = db.get(AuthSessionRecord, claims.session_id)
     if session_record is None or session_record.revoked_at is not None:
         return
 
     session_record.revoked_at = _utc_now()
     db.flush()
+
+
+def validate_workspace_csrf_token(
+    access_context: WorkspaceAccessContext,
+    *,
+    csrf_header_token: str | None,
+    csrf_cookie_token: str | None,
+) -> None:
+    header_token = (csrf_header_token or "").strip()
+    cookie_token = (csrf_cookie_token or "").strip()
+    if not header_token or not cookie_token or not hmac.compare_digest(header_token, cookie_token):
+        raise CsrfValidationError("CSRF token 缺失或不匹配。")
+
+    claims = _decode_workspace_token(
+        header_token,
+        error_message="CSRF token 无效，请刷新页面后重试。",
+    )
+    if claims.purpose != TOKEN_PURPOSE_CSRF:
+        raise CsrfValidationError("CSRF token 无效，请刷新页面后重试。")
+    if claims.session_id != access_context.session.token or claims.user_id != access_context.user.id:
+        raise CsrfValidationError("CSRF token 无效，请刷新页面后重试。")
 
 
 def ensure_can_manage_members(access_context: WorkspaceAccessContext) -> None:

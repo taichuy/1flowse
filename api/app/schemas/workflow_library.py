@@ -20,6 +20,7 @@ WorkflowNodeSupportStatus = Literal["available", "planned"]
 WorkflowNodeType = Literal[
     "trigger",
     "llm_agent",
+    "reference",
     "tool",
     "sandbox_code",
     "mcp_query",

@@ -13,7 +13,7 @@ export default async function SensitiveAccessLayout({ children }: { children: Re
 
   return (
     <StudioShell
-      activeNav="ops"
+      activeNav="runs"
       userName={workspaceContext.current_user.display_name}
       userRole={workspaceContext.current_member.role}
       workspaceName={workspaceContext.workspace.name}

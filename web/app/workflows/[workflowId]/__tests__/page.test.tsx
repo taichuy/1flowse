@@ -4,8 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import WorkflowApiPage from "@/app/workflows/[workflowId]/api/page";
 import WorkflowDetailCompatPage from "@/app/workflows/[workflowId]/page";
 import WorkflowEditorPage from "@/app/workflows/[workflowId]/editor/page";
+import WorkflowLogsPage from "@/app/workflows/[workflowId]/logs/page";
+import WorkflowMonitorPage from "@/app/workflows/[workflowId]/monitor/page";
 import WorkflowPublishPage from "@/app/workflows/[workflowId]/publish/page";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
 import { getWorkflowPublishedEndpoints } from "@/lib/get-workflow-publish";
@@ -204,6 +207,18 @@ describe("Workflow studio routes", () => {
     );
   });
 
+  it("redirects legacy monitor surface requests to the canonical monitor route", async () => {
+    await expect(
+      WorkflowDetailCompatPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({
+          surface: "monitor",
+          run: "run-1"
+        })
+      })
+    ).rejects.toThrowError("redirect:/workflows/workflow-1/monitor?run=run-1");
+  });
+
   it("renders only the editor surface on the canonical editor route", async () => {
     const html = renderToStaticMarkup(
       await WorkflowEditorPage({
@@ -295,6 +310,44 @@ describe("Workflow studio routes", () => {
         }
       }
     );
+  });
+
+  it("renders the api surface as a lightweight placeholder route", async () => {
+    const html = renderToStaticMarkup(
+      await WorkflowApiPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({})
+      })
+    );
+
+    expect(html).toContain('data-component="workspace-shell"');
+    expect(html).toContain('data-component="workflow-studio-placeholder"');
+    expect(html).toContain('data-placeholder-surface="api"');
+    expect(html).toContain("访问 API");
+    expect(html).toContain("/workflows/workflow-1/api");
+    expect(html).toContain("/workflows/workflow-1/logs");
+    expect(html).toContain("/workflows/workflow-1/monitor");
+    expect(vi.mocked(getWorkflowPublishedEndpoints)).not.toHaveBeenCalled();
+  });
+
+  it("renders logs and monitor as canonical utility surfaces", async () => {
+    const logsHtml = renderToStaticMarkup(
+      await WorkflowLogsPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({})
+      })
+    );
+    const monitorHtml = renderToStaticMarkup(
+      await WorkflowMonitorPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({})
+      })
+    );
+
+    expect(logsHtml).toContain('data-placeholder-surface="logs"');
+    expect(logsHtml).toContain("日志与标注");
+    expect(monitorHtml).toContain('data-placeholder-surface="monitor"');
+    expect(monitorHtml).toContain("监测报表");
   });
 
   it("redirects unauthenticated editor access back to login with the canonical route", async () => {

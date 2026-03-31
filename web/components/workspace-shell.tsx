@@ -1,26 +1,25 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+import { formatWorkspaceRole, type WorkspaceMemberRole } from "@/lib/workspace-access";
 import {
-  canManageWorkspaceMembers,
-  formatWorkspaceRole,
-  type WorkspaceMemberRole
-} from "@/lib/workspace-access";
+  canViewConsoleNavItem,
+  getDefaultWorkspaceNavigationMode,
+  getWorkspaceConsoleNavigationItems,
+  getWorkspaceShellNavigationKeys,
+  type WorkspaceConsoleNavKey,
+  type WorkspaceShellNavigationMode
+} from "@/lib/workspace-console";
 import { getWorkspaceBadgeLabel } from "@/lib/workspace-ui";
 import { WorkspaceLogoutButton } from "@/components/workspace-logout-button";
 
-export type WorkspaceShellActiveNav =
-  | "workspace"
-  | "workflows"
-  | "runs"
-  | "starters"
-  | "ops"
-  | "team";
+export type WorkspaceShellActiveNav = WorkspaceConsoleNavKey;
 
 type WorkspaceShellProps = {
   activeNav: WorkspaceShellActiveNav;
   children: ReactNode;
   layout?: "default" | "focused" | "editor";
+  navigationMode?: WorkspaceShellNavigationMode;
   userName: string;
   userRole: WorkspaceMemberRole;
   workspaceName: string;
@@ -28,46 +27,28 @@ type WorkspaceShellProps = {
 
 type WorkspaceShellLayout = NonNullable<WorkspaceShellProps["layout"]>;
 
-const navigationItems: Array<{
-  key: WorkspaceShellProps["activeNav"];
-  href: string;
-  label: string;
-}> = [
-  { key: "workspace", href: "/workspace", label: "工作台" },
-  { key: "workflows", href: "/workflows", label: "编排" },
-  { key: "starters", href: "/workspace-starters", label: "模板" },
-  { key: "runs", href: "/runs", label: "运行" },
-  { key: "team", href: "/admin/members", label: "团队" }
-];
-
 export function WorkspaceShell({
   activeNav,
   children,
   layout = "default",
+  navigationMode,
   userName,
   userRole,
   workspaceName
 }: WorkspaceShellProps) {
   const isEditorLayout = layout === "editor";
-  const isFocusedLayout = layout === "focused";
+  const resolvedNavigationMode = navigationMode ?? getDefaultWorkspaceNavigationMode(layout);
+  const allowedNavigationKeys = new Set(getWorkspaceShellNavigationKeys(resolvedNavigationMode));
+  const navigationItems = getWorkspaceConsoleNavigationItems();
   const workspaceBadgeLabel = getWorkspaceBadgeLabel(workspaceName);
   const userBadgeLabel = getWorkspaceBadgeLabel(userName, "A");
-  const canManageMembers = canManageWorkspaceMembers(userRole);
   const shellSurfaceLabel = getWorkspaceShellSurfaceLabel(activeNav, layout);
   const visibleNavigationItems = navigationItems.filter((item) => {
-    if (item.key === "team" && !canManageMembers) {
+    if (!allowedNavigationKeys.has(item.key)) {
       return false;
     }
 
-    if (isEditorLayout) {
-      return item.key === "workspace" || item.key === "workflows" || item.key === "runs" || item.key === "team";
-    }
-
-    if (isFocusedLayout) {
-      return item.key === "workspace" || item.key === "workflows" || item.key === "team";
-    }
-
-    return true;
+    return canViewConsoleNavItem(item.key, userRole);
   });
   const primaryAction =
     layout === "default"
@@ -78,7 +59,12 @@ export function WorkspaceShell({
       : null;
 
   return (
-    <div className={`workspace-shell workspace-shell-${layout}`.trim()} data-component="workspace-shell" data-layout={layout}>
+    <div
+      className={`workspace-shell workspace-shell-${layout}`.trim()}
+      data-component="workspace-shell"
+      data-layout={layout}
+      data-navigation-mode={resolvedNavigationMode}
+    >
       <header className="workspace-topbar">
         <div className={`workspace-topbar-inner ${isEditorLayout ? "workspace-topbar-inner-editor" : ""}`.trim()}>
           <div className="workspace-brand-row">

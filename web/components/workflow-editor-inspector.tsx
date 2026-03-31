@@ -151,6 +151,7 @@ export function WorkflowEditorInspector({
   tools,
   adapters,
   credentials,
+  modelProviderConfigs = [],
   nodeConfigText,
   onNodeConfigTextChange,
   onApplyNodeConfigJson,
@@ -384,6 +385,7 @@ export function WorkflowEditorInspector({
                 tools={tools}
                 adapters={adapters}
                 credentials={credentials}
+                modelProviderConfigs={modelProviderConfigs}
                 currentHref={currentHref}
                 sandboxReadiness={sandboxReadiness}
                 highlightedFieldPath={highlightedNodeSection === "config" ? highlightedNodeFieldPath : null}

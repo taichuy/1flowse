@@ -67,7 +67,7 @@ export function WorkflowEditorWorkbench({
   const [hasRequestedRunOverlay, setHasRequestedRunOverlay] = useState(
     initialRecentRuns.length > 0
   );
-  const { credentials, recentRuns } = useWorkflowEditorRuntimeData({
+  const { credentials, modelProviderConfigs, recentRuns } = useWorkflowEditorRuntimeData({
     workflowId: workflow.id,
     initialCredentials,
     initialRecentRuns,
@@ -130,6 +130,7 @@ export function WorkflowEditorWorkbench({
     tools,
     adapters,
     credentials,
+    modelProviderConfigs,
     callbackWaitingAutomation,
     sandboxReadiness,
     sandboxBackends,

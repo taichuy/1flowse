@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/lib/workspace-access";
+import { REFRESH_TOKEN_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/workspace-access";
 
 export function middleware(request: NextRequest) {
   const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
-  if (sessionToken) {
+  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value ?? "";
+
+  if (sessionToken || refreshToken) {
     return NextResponse.next();
   }
 

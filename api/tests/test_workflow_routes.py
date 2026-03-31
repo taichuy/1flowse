@@ -2390,6 +2390,55 @@ def test_validate_workflow_definition_preflight_accepts_condition_subprocess_exe
     )
 
 
+def test_validate_workflow_definition_preflight_accepts_reference_node_with_explicit_context(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/workflows",
+        json={"name": "Reference Preflight Workflow", "definition": _valid_definition()},
+    )
+    assert created.status_code == 201
+    workflow_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/workflows/{workflow_id}/validate-definition",
+        json={
+            "definition": {
+                "nodes": [
+                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {
+                        "id": "agent",
+                        "type": "tool",
+                        "name": "Agent",
+                        "config": {"mock_output": {"answer": "ok"}},
+                    },
+                    {
+                        "id": "reference",
+                        "type": "reference",
+                        "name": "Reference",
+                        "config": {
+                            "contextAccess": {"readableNodeIds": ["agent"]},
+                            "reference": {"sourceNodeId": "agent", "artifactType": "json"},
+                        },
+                    },
+                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                ],
+                "edges": [
+                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "reference"},
+                    {"id": "e3", "sourceNodeId": "reference", "targetNodeId": "output"},
+                ],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["issues"] == []
+    assert body["definition"]["nodes"][2]["type"] == "reference"
+    assert body["definition"]["nodes"][2]["config"]["reference"]["sourceNodeId"] == "agent"
+
+
 def test_get_workflow_detail_surfaces_definition_issues_for_persisted_tool_runner_gap(
     client: TestClient,
     sqlite_session,

@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { getCredentials, type CredentialItem } from "@/lib/get-credentials";
+import {
+  getWorkspaceModelProviderRegistry,
+  type WorkspaceModelProviderConfigItem
+} from "@/lib/model-provider-registry";
 import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 
 type UseWorkflowEditorRuntimeDataOptions = {
@@ -15,6 +19,7 @@ type UseWorkflowEditorRuntimeDataOptions = {
 
 type RuntimeDataState = {
   credentials: CredentialItem[];
+  modelProviderConfigs: WorkspaceModelProviderConfigItem[];
   recentRuns: WorkflowRunListItem[];
 };
 
@@ -53,6 +58,9 @@ export function useWorkflowEditorRuntimeData({
   loadRecentRuns = true
 }: UseWorkflowEditorRuntimeDataOptions): RuntimeDataState {
   const [credentials, setCredentials] = useState(initialCredentials);
+  const [modelProviderConfigs, setModelProviderConfigs] = useState<
+    WorkspaceModelProviderConfigItem[]
+  >([]);
   const [recentRuns, setRecentRuns] = useState(initialRecentRuns);
 
   useEffect(() => {
@@ -68,6 +76,14 @@ export function useWorkflowEditorRuntimeData({
         }
 
         setCredentials(nextCredentials);
+      });
+
+      void getWorkspaceModelProviderRegistry().then((registry) => {
+        if (!active) {
+          return;
+        }
+
+        setModelProviderConfigs(registry?.items ?? []);
       });
     });
 
@@ -101,6 +117,7 @@ export function useWorkflowEditorRuntimeData({
 
   return {
     credentials,
+    modelProviderConfigs,
     recentRuns
   };
 }

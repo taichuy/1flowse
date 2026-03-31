@@ -1,4 +1,5 @@
-import type { WorkspaceMemberItem } from "@/lib/workspace-access";
+import { fetchConsoleApi } from "@/lib/console-session-client";
+import { type WorkspaceMemberItem } from "@/lib/workspace-access";
 
 export type WorkspaceMemberCreatePayload = {
   email: string;
@@ -6,6 +7,8 @@ export type WorkspaceMemberCreatePayload = {
   password: string;
   role: string;
 };
+
+type WorkspaceMemberFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type WorkspaceMemberCreateResult =
   | {
@@ -27,7 +30,7 @@ function isWorkspaceMemberItem(value: unknown): value is WorkspaceMemberItem {
 
 export async function submitWorkspaceMemberCreate(
   payload: WorkspaceMemberCreatePayload,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: WorkspaceMemberFetch = fetchConsoleApi
 ): Promise<WorkspaceMemberCreateResult> {
   try {
     const response = await fetchImpl("/api/workspace/members", {

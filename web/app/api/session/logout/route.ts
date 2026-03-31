@@ -1,27 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
-import { SESSION_COOKIE_NAME } from "@/lib/workspace-access";
+import {
+  ACCESS_TOKEN_COOKIE_NAME,
+  REFRESH_TOKEN_COOKIE_NAME
+} from "@/lib/workspace-access";
+
+import { clearAuthCookies } from "../shared";
 
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
+  const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value ?? "";
+  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value ?? "";
 
-  if (token) {
+  if (accessToken || refreshToken) {
     await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(refreshToken ? { "X-Refresh-Token": refreshToken } : {})
       }
     }).catch(() => null);
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: "",
-    path: "/",
-    maxAge: 0,
-    sameSite: "lax"
-  });
+  clearAuthCookies(response);
   return response;
 }

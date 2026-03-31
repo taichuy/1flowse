@@ -1,41 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-import { getApiBaseUrl } from "@/lib/api-base-url";
-import { SESSION_COOKIE_NAME } from "@/lib/workspace-access";
+import { proxyConsoleApiRequest } from "@/app/api/_shared/console-api-proxy";
 
-function buildAuthHeaders(token: string) {
-  const headers = new Headers({
-    "Content-Type": "application/json"
+export function GET(request: NextRequest) {
+  return proxyConsoleApiRequest(request, {
+    backendPath: `/api/workflows${request.nextUrl.search}`,
+    cache: "no-store"
   });
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  return headers;
-}
-
-export async function GET(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
-  const headers = new Headers();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}/api/workflows${request.nextUrl.search}`, {
-    cache: "no-store",
-    headers
-  });
-  const body = await response.json().catch(() => null);
-  return NextResponse.json(body, { status: response.status });
 }
 
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? "";
-  const payload = await request.json().catch(() => null);
-  const response = await fetch(`${getApiBaseUrl()}/api/workflows`, {
+  return proxyConsoleApiRequest(request, {
+    backendPath: "/api/workflows",
     method: "POST",
-    headers: buildAuthHeaders(token),
-    body: JSON.stringify(payload ?? {})
+    includeJsonContentType: true,
+    body: (await request.text()) || "{}"
   });
-  const body = await response.json().catch(() => null);
-  return NextResponse.json(body, { status: response.status });
 }

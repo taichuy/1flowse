@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.run import NodeRun
 from app.services.credential_store import CredentialAccessPendingError
+from app.services.model_provider_registry import (
+    ModelProviderRegistryService,
+    build_credential_ref,
+    resolve_provider_config_id,
+)
 from app.services.runtime_branch_execution import execute_branch_node
 from app.services.runtime_execution_adapters import NodeExecutionRequest
 from app.services.runtime_execution_policy import execution_policy_from_node_run_input
@@ -20,6 +25,7 @@ from app.services.runtime_types import (
 from app.services.tool_execution_events import build_tool_execution_events
 
 _log = logging.getLogger(__name__)
+_model_provider_registry = ModelProviderRegistryService()
 
 
 class RuntimeNodeDispatchSupportMixin:
@@ -145,6 +151,10 @@ class RuntimeNodeDispatchSupportMixin:
                 run_id=run_id,
                 authorized_context=authorized_context,
                 outputs=outputs,
+            )
+        if node_type == "reference":
+            return NodeExecutionResult(
+                output=self._execute_reference_node(node, authorized_context, outputs)
             )
         if node_type in {"condition", "router"}:
             return NodeExecutionResult(output=self._execute_branch_node(node, node_input))
@@ -309,6 +319,16 @@ class RuntimeNodeDispatchSupportMixin:
             raw_creds.update({str(key): str(value) for key, value in config_creds.items()})
         model_config = config.get("model")
         if isinstance(model_config, dict):
+            provider_config_ref = model_config.get("providerConfigRef") or model_config.get(
+                "provider_config_ref"
+            )
+            if isinstance(provider_config_ref, str) and provider_config_ref.strip():
+                provider_config = _model_provider_registry.get_provider_config(
+                    db,
+                    workspace_id="default",
+                    provider_config_id=resolve_provider_config_id(provider_config_ref),
+                )
+                raw_creds.setdefault("apiKey", build_credential_ref(provider_config.credential_id))
             api_key = model_config.get("apiKey")
             if isinstance(api_key, str) and api_key.startswith("credential://"):
                 raw_creds["apiKey"] = api_key
@@ -475,6 +495,51 @@ class RuntimeNodeDispatchSupportMixin:
         guarded_output = deepcopy(node_output)
         guarded_output["results"] = guarded_results
         return guarded_output
+
+    def _execute_reference_node(
+        self,
+        node: dict,
+        authorized_context: AuthorizedContextRefs,
+        outputs: dict[str, dict],
+    ) -> dict[str, object]:
+        config = node.get("config") or {}
+        reference = config.get("reference") or {}
+        source_node_id = str(reference.get("sourceNodeId") or "").strip()
+        artifact_type = str(reference.get("artifactType") or "json").strip() or "json"
+
+        if not source_node_id:
+            raise WorkflowExecutionError(
+                f"Reference node '{node.get('id')}' requires config.reference.sourceNodeId."
+            )
+        if artifact_type != "json":
+            raise WorkflowExecutionError(
+                f"Reference node '{node.get('id')}' currently only supports json artifacts."
+            )
+
+        allowed_artifacts = self._authorized_artifact_lookup(authorized_context)
+        if source_node_id not in allowed_artifacts:
+            raise WorkflowExecutionError(
+                f"Node '{node.get('id')}' requested unauthorized reference source "
+                f"'{source_node_id}'."
+            )
+        if "json" not in allowed_artifacts.get(source_node_id, set()):
+            raise WorkflowExecutionError(
+                f"Node '{node.get('id')}' requested unauthorized json artifact from "
+                f"'{source_node_id}'."
+            )
+        if source_node_id not in outputs:
+            raise WorkflowExecutionError(
+                f"Reference node '{node.get('id')}' could not find source output from "
+                f"'{source_node_id}'."
+            )
+
+        return {
+            "reference": {
+                "sourceNodeId": source_node_id,
+                "artifactType": "json",
+                "content": deepcopy(outputs[source_node_id]),
+            }
+        }
 
     def _masked_context_content(self, content):
         if isinstance(content, dict):

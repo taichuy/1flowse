@@ -266,7 +266,7 @@ describe("WorkspacePage", () => {
     expect(html.indexOf("快速新建")).toBeLessThan(html.indexOf("ChatFlow Alpha"));
     expect(html).toContain('href="/workflows/new"');
     expect(html).toContain('href="/workspace-starters"');
-    expect(html).toContain('href="/admin/members"');
+    expect(html).toContain('href="/workspace/settings/team"');
     expect(html).toContain('href="/workflows/workflow-chatflow"');
   });
 
@@ -533,7 +533,7 @@ describe("WorkspacePage", () => {
       })
     );
 
-    expect(html).not.toContain('href="/admin/members"');
+    expect(html).not.toContain('href="/workspace/settings/team"');
     expect(html).toContain("查看运行诊断");
     expect(html).toContain('href="/runs"');
   });
