@@ -10,15 +10,11 @@ import {
 import {
   getServerWorkspaceContext,
   getServerWorkspaceCredentials,
-  getServerWorkspaceModelProviderRegistry
+  getServerWorkspaceModelProviderRegistryState
 } from "@/lib/server-workspace-access";
 
 export default async function WorkspaceProviderSettingsPage() {
-  const [workspaceContext, registry, credentials] = await Promise.all([
-    getServerWorkspaceContext(),
-    getServerWorkspaceModelProviderRegistry(),
-    getServerWorkspaceCredentials()
-  ]);
+  const workspaceContext = await getServerWorkspaceContext();
 
   if (!workspaceContext) {
     redirect(`/login?next=${encodeURIComponent(WORKSPACE_MODEL_PROVIDER_SETTINGS_HREF)}`);
@@ -27,6 +23,11 @@ export default async function WorkspaceProviderSettingsPage() {
   if (!canAccessConsolePage("team", workspaceContext)) {
     redirect(getWorkspaceConsolePageHref("workspace"));
   }
+
+  const [registryState, credentials] = await Promise.all([
+    getServerWorkspaceModelProviderRegistryState(),
+    getServerWorkspaceCredentials()
+  ]);
 
   return (
     <WorkspaceShell
@@ -38,10 +39,20 @@ export default async function WorkspaceProviderSettingsPage() {
       workspaceName={workspaceContext.workspace.name}
     >
       <main className="workspace-main">
+        {registryState.errorMessage ? (
+          <section
+            className="workspace-panel workspace-settings-header-card"
+            data-component="workspace-model-provider-error"
+          >
+            <span className="workspace-panel-eyebrow">Registry Status</span>
+            <h2>团队模型供应商暂不可用</h2>
+            <p className="workspace-empty-notice">{registryState.errorMessage}</p>
+          </section>
+        ) : null}
         <WorkspaceModelProviderSettings
-          initialCatalog={registry?.catalog ?? []}
+          initialCatalog={registryState.registry?.catalog ?? []}
           initialCredentials={credentials}
-          initialProviderConfigs={registry?.items ?? []}
+          initialProviderConfigs={registryState.registry?.items ?? []}
           workspaceName={workspaceContext.workspace.name}
         />
       </main>

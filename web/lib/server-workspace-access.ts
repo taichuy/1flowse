@@ -28,6 +28,12 @@ type ServerSessionCookies = {
   refreshToken: string;
 };
 
+type ServerWorkspaceAccessResult<T> = {
+  data: T | null;
+  errorMessage: string | null;
+  status: number | null;
+};
+
 function buildCookieEntries(
   entries: CookieEntry[],
   overrides: Record<string, string | null> = {}
@@ -80,7 +86,26 @@ function buildServerRequestHeaders({
   return headers;
 }
 
-async function fetchWorkspaceAccessJson<T>(path: string, session: ServerSessionCookies): Promise<T | null> {
+async function readWorkspaceAccessError(response: Response, fallbackMessage: string) {
+  const body = (await response.json().catch(() => null)) as
+    | { detail?: string; message?: string }
+    | null;
+
+  if (body?.detail?.trim()) {
+    return body.detail;
+  }
+
+  if (body?.message?.trim()) {
+    return body.message;
+  }
+
+  return fallbackMessage;
+}
+
+async function fetchWorkspaceAccessResult<T>(
+  path: string,
+  session: ServerSessionCookies
+): Promise<ServerWorkspaceAccessResult<T>> {
   const execute = async ({
     accessToken,
     cookieEntries,
@@ -142,13 +167,33 @@ async function fetchWorkspaceAccessJson<T>(path: string, session: ServerSessionC
     }
 
     if (!response.ok) {
-      return null;
+      return {
+        data: null,
+        errorMessage: await readWorkspaceAccessError(
+          response,
+          `工作台请求失败（${response.status}）。`
+        ),
+        status: response.status
+      };
     }
 
-    return (await response.json()) as T;
+    return {
+      data: (await response.json()) as T,
+      errorMessage: null,
+      status: response.status
+    };
   } catch {
-    return null;
+    return {
+      data: null,
+      errorMessage: "工作台请求失败，请确认 API 服务可用。",
+      status: null
+    };
   }
+}
+
+async function fetchWorkspaceAccessJson<T>(path: string, session: ServerSessionCookies): Promise<T | null> {
+  const result = await fetchWorkspaceAccessResult<T>(path, session);
+  return result.data;
 }
 
 export const getServerSessionToken = cache(async () => {
@@ -193,13 +238,32 @@ export async function getServerWorkspaceCredentials(): Promise<CredentialItem[]>
 }
 
 export async function getServerWorkspaceModelProviderRegistry(): Promise<WorkspaceModelProviderRegistryResponse | null> {
+  const state = await getServerWorkspaceModelProviderRegistryState();
+  return state.registry;
+}
+
+export async function getServerWorkspaceModelProviderRegistryState(): Promise<{
+  registry: WorkspaceModelProviderRegistryResponse | null;
+  errorMessage: string | null;
+  status: number | null;
+}> {
   const cookieStore = await cookies();
   const session = buildServerSessionCookies(cookieStore);
   if (!session.accessToken && !session.refreshToken) {
-    return null;
+    return {
+      registry: null,
+      errorMessage: null,
+      status: null
+    };
   }
-  return fetchWorkspaceAccessJson<WorkspaceModelProviderRegistryResponse>(
+  const result = await fetchWorkspaceAccessResult<WorkspaceModelProviderRegistryResponse>(
     "/api/workspace/model-providers",
     session
   );
+
+  return {
+    registry: result.data,
+    errorMessage: result.errorMessage,
+    status: result.status
+  };
 }

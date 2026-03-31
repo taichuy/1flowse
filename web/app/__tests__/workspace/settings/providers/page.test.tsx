@@ -8,7 +8,7 @@ import WorkspaceProviderSettingsPage from "@/app/workspace/settings/providers/pa
 import {
   getServerWorkspaceContext,
   getServerWorkspaceCredentials,
-  getServerWorkspaceModelProviderRegistry
+  getServerWorkspaceModelProviderRegistryState
 } from "@/lib/server-workspace-access";
 
 Object.assign(globalThis, { React });
@@ -60,7 +60,7 @@ vi.mock("@/components/workspace-model-provider-settings", () => ({
 vi.mock("@/lib/server-workspace-access", () => ({
   getServerWorkspaceContext: vi.fn(),
   getServerWorkspaceCredentials: vi.fn(),
-  getServerWorkspaceModelProviderRegistry: vi.fn()
+  getServerWorkspaceModelProviderRegistryState: vi.fn()
 }));
 
 beforeEach(() => {
@@ -99,9 +99,13 @@ describe("WorkspaceProviderSettingsPage", () => {
       can_manage_members: true
     });
     vi.mocked(getServerWorkspaceCredentials).mockResolvedValue([{ id: "cred-openai-1" } as never]);
-    vi.mocked(getServerWorkspaceModelProviderRegistry).mockResolvedValue({
-      catalog: [{ id: "openai" } as never],
-      items: [{ id: "provider-openai-1" } as never]
+    vi.mocked(getServerWorkspaceModelProviderRegistryState).mockResolvedValue({
+      registry: {
+        catalog: [{ id: "openai" } as never],
+        items: [{ id: "provider-openai-1" } as never]
+      },
+      errorMessage: null,
+      status: 200
     });
 
     const html = renderToStaticMarkup(await WorkspaceProviderSettingsPage());
@@ -116,11 +120,94 @@ describe("WorkspaceProviderSettingsPage", () => {
 
   it("redirects unauthenticated visitors back to login with canonical provider path", async () => {
     vi.mocked(getServerWorkspaceContext).mockResolvedValue(null);
-    vi.mocked(getServerWorkspaceCredentials).mockResolvedValue([]);
-    vi.mocked(getServerWorkspaceModelProviderRegistry).mockResolvedValue(null);
 
     await expect(WorkspaceProviderSettingsPage()).rejects.toThrowError(
       "redirect:/login?next=%2Fworkspace%2Fsettings%2Fproviders"
     );
+
+    expect(getServerWorkspaceCredentials).not.toHaveBeenCalled();
+    expect(getServerWorkspaceModelProviderRegistryState).not.toHaveBeenCalled();
+  });
+
+  it("redirects non-manager members before reading provider registry or credentials", async () => {
+    vi.mocked(getServerWorkspaceContext).mockResolvedValue({
+      workspace: {
+        id: "default",
+        name: "7Flows Workspace",
+        slug: "sevenflows"
+      },
+      current_user: {
+        id: "user-viewer",
+        email: "viewer@taichuy.com",
+        display_name: "Viewer User",
+        status: "active",
+        last_login_at: "2026-03-31T12:00:00Z"
+      },
+      current_member: {
+        id: "member-viewer",
+        role: "viewer",
+        user: {
+          id: "user-viewer",
+          email: "viewer@taichuy.com",
+          display_name: "Viewer User",
+          status: "active",
+          last_login_at: "2026-03-31T12:00:00Z"
+        },
+        created_at: "2026-03-31T12:00:00Z",
+        updated_at: "2026-03-31T12:00:00Z"
+      },
+      available_roles: ["owner", "admin", "editor", "viewer"],
+      can_manage_members: false
+    });
+
+    await expect(WorkspaceProviderSettingsPage()).rejects.toThrowError("redirect:/workspace");
+
+    expect(getServerWorkspaceCredentials).not.toHaveBeenCalled();
+    expect(getServerWorkspaceModelProviderRegistryState).not.toHaveBeenCalled();
+  });
+
+  it("renders an explicit provider registry error when backend fetch fails", async () => {
+    vi.mocked(getServerWorkspaceContext).mockResolvedValue({
+      workspace: {
+        id: "default",
+        name: "7Flows Workspace",
+        slug: "sevenflows"
+      },
+      current_user: {
+        id: "user-admin",
+        email: "admin@taichuy.com",
+        display_name: "7Flows Admin",
+        status: "active",
+        last_login_at: "2026-03-31T12:00:00Z"
+      },
+      current_member: {
+        id: "member-owner",
+        role: "owner",
+        user: {
+          id: "user-admin",
+          email: "admin@taichuy.com",
+          display_name: "7Flows Admin",
+          status: "active",
+          last_login_at: "2026-03-31T12:00:00Z"
+        },
+        created_at: "2026-03-31T12:00:00Z",
+        updated_at: "2026-03-31T12:00:00Z"
+      },
+      available_roles: ["owner", "admin", "editor", "viewer"],
+      can_manage_members: true
+    });
+    vi.mocked(getServerWorkspaceCredentials).mockResolvedValue([{ id: "cred-openai-1" } as never]);
+    vi.mocked(getServerWorkspaceModelProviderRegistryState).mockResolvedValue({
+      registry: null,
+      errorMessage: "工作台请求失败（500）。",
+      status: 500
+    });
+
+    const html = renderToStaticMarkup(await WorkspaceProviderSettingsPage());
+
+    expect(html).toContain('data-component="workspace-model-provider-error"');
+    expect(html).toContain("团队模型供应商暂不可用");
+    expect(html).toContain("工作台请求失败（500）。");
+    expect(html).toContain('data-provider-count="0"');
   });
 });
