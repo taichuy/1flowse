@@ -3,15 +3,29 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { WorkflowApiSurface } from "@/components/workflow-api-surface";
+import { WorkflowLogsSurface } from "@/components/workflow-logs-surface";
+import { WorkflowMonitorSurface } from "@/components/workflow-monitor-surface";
 import { WorkflowEditorWorkbenchEntry } from "@/components/workflow-editor-workbench-entry";
 import { WorkspaceShell } from "@/components/workspace-shell";
+import { getRunDetail } from "@/lib/get-run-detail";
+import { getSystemOverview } from "@/lib/get-system-overview";
+import { getRunEvidenceView, getRunExecutionView } from "@/lib/get-run-views";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import { getWorkflowPublishedEndpoints } from "@/lib/get-workflow-publish";
+import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
+import { getWorkflowRuns } from "@/lib/get-workflow-runs";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
+import {
+  readWorkflowLogsRequestedRunId,
+  selectWorkflowLogsRun
+} from "@/lib/workflow-logs-surface";
 import {
   appendWorkflowLibraryViewState,
   readWorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
 import {
+  buildRunDetailHref,
   buildWorkflowStudioSurfaceHref,
   getWorkflowStudioSurfaceDefinition,
   getWorkflowStudioSurfaceDefinitions,
@@ -387,10 +401,179 @@ async function renderWorkflowPublishSurface(sharedContext: WorkflowStudioSharedC
   );
 }
 
-function renderWorkflowUtilitySurface(
+async function renderWorkflowUtilitySurface(
   sharedContext: WorkflowStudioSharedContext,
   surface: Exclude<WorkflowStudioSurface, "editor" | "publish">
 ) {
+  if (surface === "api") {
+    const bindings = await getWorkflowPublishedEndpoints(sharedContext.workflow.id, {
+      includeAllVersions: true
+    });
+
+    return (
+      <WorkflowStudioShell
+        workspaceName={sharedContext.workspaceName}
+        userName={sharedContext.userName}
+        userRole={sharedContext.userRole}
+        workflowName={sharedContext.workflow.name}
+        workflowVersion={sharedContext.workflow.version}
+        workflowStageLabel={sharedContext.workflowStageLabel}
+        workflowLibraryHref={sharedContext.workflowLibraryHref}
+        activeStudioSurface={surface}
+        surfaceHrefs={sharedContext.surfaceHrefs}
+        workspaceStarterLibraryHref={sharedContext.workspaceStarterLibraryHref}
+      >
+        <section
+          className="workflow-studio-surface workflow-studio-surface-utility"
+          data-surface={surface}
+        >
+          <WorkflowApiSurface
+            bindings={bindings}
+            publishHref={sharedContext.surfaceHrefs.publish}
+          />
+        </section>
+      </WorkflowStudioShell>
+    );
+  }
+
+  if (surface === "logs") {
+    const recentRuns = await getWorkflowRuns(sharedContext.workflow.id);
+    const requestedRunId = readWorkflowLogsRequestedRunId(sharedContext.resolvedSearchParams.run);
+    const selection = selectWorkflowLogsRun(recentRuns, requestedRunId);
+    const activeRunSummary = selection.activeRun;
+    const logsSearchParams = buildWorkflowStudioSearchParams(sharedContext.resolvedSearchParams, {
+      omitKeys: ["surface", "run"]
+    });
+    const runs = recentRuns.map((run) => {
+      const runLogsParams = new URLSearchParams(logsSearchParams.toString());
+      runLogsParams.set("run", run.id);
+
+      return {
+        id: run.id,
+        workflowVersion: run.workflow_version,
+        status: run.status,
+        createdAt: run.created_at,
+        startedAt: run.started_at,
+        finishedAt: run.finished_at,
+        lastEventAt: run.last_event_at,
+        nodeRunCount: run.node_run_count,
+        eventCount: run.event_count,
+        errorMessage: run.error_message,
+        logsHref: appendSearchParamsToHref(sharedContext.surfaceHrefs.logs, runLogsParams),
+        detailHref: buildRunDetailHref(run.id)
+      };
+    });
+
+    let activeRunDetail = null;
+    let executionView = null;
+    let evidenceView = null;
+    let systemOverview = null;
+
+    if (activeRunSummary) {
+      [activeRunDetail, executionView, evidenceView, systemOverview] = await Promise.all([
+        getRunDetail(activeRunSummary.id),
+        getRunExecutionView(activeRunSummary.id),
+        getRunEvidenceView(activeRunSummary.id),
+        getSystemOverview()
+      ]);
+    }
+
+    return (
+      <WorkflowStudioShell
+        workspaceName={sharedContext.workspaceName}
+        userName={sharedContext.userName}
+        userRole={sharedContext.userRole}
+        workflowName={sharedContext.workflow.name}
+        workflowVersion={sharedContext.workflow.version}
+        workflowStageLabel={sharedContext.workflowStageLabel}
+        workflowLibraryHref={sharedContext.workflowLibraryHref}
+        activeStudioSurface={surface}
+        surfaceHrefs={sharedContext.surfaceHrefs}
+        workspaceStarterLibraryHref={sharedContext.workspaceStarterLibraryHref}
+      >
+        <section
+          className="workflow-studio-surface workflow-studio-surface-utility"
+          data-surface={surface}
+        >
+          <WorkflowLogsSurface
+            workflowId={sharedContext.workflow.id}
+            recentRuns={runs}
+            selectionSource={selection.selectionSource}
+            selectionNotice={selection.selectionNotice}
+            activeRunSummary={runs.find((run) => run.id === activeRunSummary?.id) ?? null}
+            activeRunDetail={activeRunDetail}
+            executionView={executionView}
+            evidenceView={evidenceView}
+            publishHref={sharedContext.surfaceHrefs.publish}
+            runLibraryHref="/runs"
+            workflowEditorHref={sharedContext.surfaceHrefs.editor}
+            callbackWaitingAutomation={
+              systemOverview?.callback_waiting_automation ?? {
+                status: "disabled",
+                scheduler_required: true,
+                detail: "当前还没有 callback automation facts。",
+                scheduler_health_status: "unknown",
+                scheduler_health_detail: "当前 logs surface 没有拿到 scheduler 概览。",
+                steps: [],
+                affected_run_count: 0,
+                affected_workflow_count: 0,
+                primary_blocker_kind: null,
+                recommended_action: null
+              }
+            }
+            sandboxReadiness={systemOverview?.sandbox_readiness ?? null}
+          />
+        </section>
+      </WorkflowStudioShell>
+    );
+  }
+
+  if (surface === "monitor") {
+    const bindings = await getWorkflowPublishedEndpoints(sharedContext.workflow.id, {
+      includeAllVersions: true
+    });
+    const publishedBindings = bindings.filter((binding) => binding.lifecycle_status === "published");
+    const governanceSnapshot = publishedBindings.length
+      ? await getWorkflowPublishGovernanceSnapshot(sharedContext.workflow.id, publishedBindings)
+      : {
+          cacheInventories: {},
+          apiKeysByBinding: {},
+          invocationAuditsByBinding: {},
+          invocationDetailsByBinding: {},
+          rateLimitWindowAuditsByBinding: {}
+        };
+
+    return (
+      <WorkflowStudioShell
+        workspaceName={sharedContext.workspaceName}
+        userName={sharedContext.userName}
+        userRole={sharedContext.userRole}
+        workflowName={sharedContext.workflow.name}
+        workflowVersion={sharedContext.workflow.version}
+        workflowStageLabel={sharedContext.workflowStageLabel}
+        workflowLibraryHref={sharedContext.workflowLibraryHref}
+        activeStudioSurface={surface}
+        surfaceHrefs={sharedContext.surfaceHrefs}
+        workspaceStarterLibraryHref={sharedContext.workspaceStarterLibraryHref}
+      >
+        <section
+          className="workflow-studio-surface workflow-studio-surface-utility"
+          data-surface={surface}
+        >
+          <WorkflowMonitorSurface
+            workflowId={sharedContext.workflow.id}
+            bindings={bindings}
+            invocationAuditsByBinding={governanceSnapshot.invocationAuditsByBinding}
+            publishHref={sharedContext.surfaceHrefs.publish}
+            logsHref={sharedContext.surfaceHrefs.logs}
+            workflowEditorHref={sharedContext.surfaceHrefs.editor}
+            currentHref={sharedContext.surfaceHrefs.monitor}
+          />
+        </section>
+      </WorkflowStudioShell>
+    );
+  }
+
   const surfaceDefinition = getWorkflowStudioSurfaceDefinition(surface);
 
   return (
