@@ -367,19 +367,20 @@ export function insertNodeIntoCanvasGraph({
       ? buildWorkflowInsertedNodePosition(sourceNode.position, outgoingEdgeCount)
       : undefined
   });
+  const hydratedDraftConfig = applyInsertedNodeConfigDefaults(draft.type, draft.config, sourceNode);
   const nextNode: Node<WorkflowCanvasNodeData> = {
     id: draft.id,
     type: "workflowNode",
     position: readCanvasPosition(
       nodeCatalog,
-      toRecord(draft.config),
+      toRecord(hydratedDraftConfig),
       draft.type,
       nodes.length
     ),
     data: buildWorkflowCanvasNodeData(nodeCatalog, {
       label: draft.name,
       nodeType: draft.type,
-      config: stripCanvasMetadata(draft.config)
+      config: stripCanvasMetadata(hydratedDraftConfig)
     }),
     selected: true
   };
@@ -430,6 +431,33 @@ export function insertNodeIntoCanvasGraph({
       ? [...clearedEdges, buildEditorEdge(sourceNode.id, nextNode.id)]
       : clearedEdges
   };
+}
+
+function applyInsertedNodeConfigDefaults(
+  type: string,
+  config: Record<string, unknown>,
+  sourceNode: Node<WorkflowCanvasNodeData> | null
+) {
+  if (type !== "reference" || !sourceNode) {
+    return config;
+  }
+
+  const nextConfig = structuredClone(config);
+  const nextContextAccess = toRecord(nextConfig.contextAccess);
+  const readableNodeIds = Array.isArray(nextContextAccess.readableNodeIds)
+    ? nextContextAccess.readableNodeIds.filter(
+        (value): value is string => typeof value === "string" && Boolean(value.trim())
+      )
+    : [];
+  nextContextAccess.readableNodeIds = Array.from(new Set([...readableNodeIds, sourceNode.id]));
+  nextConfig.contextAccess = nextContextAccess;
+
+  const nextReference = toRecord(nextConfig.reference);
+  nextReference.sourceNodeId = sourceNode.id;
+  nextReference.artifactType = normalizeOptionalString(nextReference.artifactType) ?? "json";
+  nextConfig.reference = nextReference;
+
+  return nextConfig;
 }
 
 export function removeNodeFromCanvasGraph({

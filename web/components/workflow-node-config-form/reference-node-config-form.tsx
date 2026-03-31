@@ -38,6 +38,16 @@ export function ReferenceNodeConfigForm({
   );
   const selectedSourceNodeId =
     typeof reference.sourceNodeId === "string" ? reference.sourceNodeId : "";
+  const selectedSourceNode =
+    availableNodes.find((candidate) => candidate.id === selectedSourceNodeId) ?? null;
+  const readableNodeSummary = readableNodeIds.map((readableNodeId) => {
+    const relatedNode = availableNodes.find((candidate) => candidate.id === readableNodeId) ?? null;
+    return {
+      id: readableNodeId,
+      label: relatedNode?.data.label ?? readableNodeId,
+      typeLabel: relatedNode?.data.typeLabel ?? relatedNode?.data.nodeType ?? "upstream"
+    };
+  });
 
   const updateConfig = (
     nextReadableNodeIds: string[],
@@ -122,6 +132,28 @@ export function ReferenceNodeConfigForm({
         </div>
       </div>
 
+      <div className="binding-help">
+        <strong>{selectedSourceNode ? "当前引用焦点" : "先选一个上游作为引用源"}</strong>
+        <span>
+          {selectedSourceNode
+            ? `${selectedSourceNode.data.label ?? selectedSourceNode.id} 已写入 reference.sourceNodeId；如需更多上下文，可继续在下方追加额外可读节点。`
+            : "在 Source node 里选择节点时，表单会自动把它加入显式授权；Reference 仍不会偷渡全部上游上下文。"}
+        </span>
+      </div>
+
+      {readableNodeSummary.length > 0 ? (
+        <div className="binding-field">
+          <span className="binding-label">Authorized upstreams</span>
+          <div className="tool-badge-row">
+            {readableNodeSummary.map((item) => (
+              <span className="event-chip" key={`reference-readable-${item.id}`}>
+                {item.label} · {item.typeLabel}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <AuthorizedContextFields
         nodeId={node.id}
         availableNodes={availableNodes}
@@ -129,8 +161,8 @@ export function ReferenceNodeConfigForm({
         readableArtifacts={readableArtifacts}
         onToggleReadableNode={toggleReadableNode}
         onToggleReadableArtifact={toggleReadableArtifact}
-        readableNodesLabel="Readable nodes"
-        readableNodesHint="Reference 节点只允许显式引用已授权的上游节点输出，不会偷渡全局上下文。"
+        readableNodesLabel="Additional readable upstreams"
+        readableNodesHint="选 Source node 会自动补齐当前主引用的显式授权；这里继续追加其它可读上游，不会偷渡全局上下文。"
       />
 
       <label className="binding-field">
@@ -139,19 +171,23 @@ export function ReferenceNodeConfigForm({
           value={selectedSourceNodeId}
           onChange={(event) => handleSourceNodeChange(event.target.value)}
         >
-          <option value="">选择一个已授权节点</option>
-          {readableNodeIds.map((readableNodeId) => {
-            const relatedNode =
-              availableNodes.find((candidate) => candidate.id === readableNodeId) ?? null;
+          <option value="">选择一个上游，自动补齐 sourceNodeId 与显式授权</option>
+          {availableNodes.map((candidate) => {
+            const isAuthorized = readableNodeIds.includes(candidate.id);
+            const isSelected = candidate.id === selectedSourceNodeId;
+            const typeLabel = candidate.data.typeLabel ?? candidate.data.nodeType;
             return (
-              <option key={readableNodeId} value={readableNodeId}>
-                {relatedNode?.data.label ?? readableNodeId}
+              <option key={candidate.id} value={candidate.id}>
+                {`${candidate.data.label ?? candidate.id} · ${typeLabel} · ${
+                  isSelected ? "当前 source" : isAuthorized ? "已授权" : "选择后自动授权"
+                }`}
               </option>
             );
           })}
         </select>
         <small className="section-copy">
-          当前最小实现先固定引用上游 <code>json</code> 输出；后续若补 artifact store 引用，再在这里扩展更多类型。
+          主引用会写入 <code>reference.sourceNodeId</code>，并继续固定读取上游 <code>json</code>{" "}
+          输出；后续若补 artifact store 引用，再在这里扩展更多类型。
         </small>
       </label>
 

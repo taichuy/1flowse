@@ -74,6 +74,42 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
     }
   },
   {
+    type: "reference",
+    label: "Reference",
+    description: "显式引用上游结构化结果。",
+    ecosystem: "7flows",
+    source: {
+      kind: "node",
+      scope: "builtin",
+      status: "available",
+      governance: "repo",
+      ecosystem: "7flows",
+      label: "Builtin",
+      shortLabel: "Builtin",
+      summary: "builtin"
+    },
+    capabilityGroup: "integration",
+    businessTrack: "应用新建编排",
+    tags: [],
+    supportStatus: "available",
+    supportSummary: "ready",
+    bindingRequired: false,
+    bindingSourceLanes: [],
+    palette: {
+      enabled: true,
+      order: 3,
+      defaultPosition: { x: 500, y: 120 }
+    },
+    defaults: {
+      name: "Reference",
+      config: {
+        reference: {
+          artifactType: "json"
+        }
+      }
+    }
+  },
+  {
     type: "output",
     label: "Output",
     description: "输出结果。",
@@ -97,7 +133,7 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
     bindingSourceLanes: [],
     palette: {
       enabled: true,
-      order: 3,
+      order: 4,
       defaultPosition: { x: 640, y: 120 }
     },
     defaults: {
@@ -255,6 +291,28 @@ describe("workflow-editor quick add helpers", () => {
     expect(result.edges).toHaveLength(3);
     expect(result.edges[2]?.source).toBe("trigger");
     expect(result.edges[2]?.target).toBe(result.nextNode.id);
+  });
+
+  it("auto-targets the current source when quick-adding a reference node", () => {
+    const result = insertNodeIntoCanvasGraph({
+      nodeCatalog,
+      nodes: baseNodes,
+      edges: [],
+      type: "reference",
+      sourceNodeId: "trigger"
+    });
+
+    expect(result.sourceNode?.id).toBe("trigger");
+    expect(result.nextNode.data.typeLabel).toBe("Reference");
+    expect(result.nextNode.data.config).toMatchObject({
+      contextAccess: {
+        readableNodeIds: ["trigger"]
+      },
+      reference: {
+        sourceNodeId: "trigger",
+        artifactType: "json"
+      }
+    });
   });
 
   it("reconnects and closes the gap when removing an inline node", () => {

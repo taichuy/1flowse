@@ -19,6 +19,7 @@ import { LlmAgentSkillBindingSection } from "@/components/workflow-node-config-f
 import { LlmAgentSkillSection } from "@/components/workflow-node-config-form/llm-agent-skill-section";
 import { LlmAgentToolPolicyForm } from "@/components/workflow-node-config-form/llm-agent-tool-policy-form";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
+import { getModelProviderCatalogItem } from "@/lib/model-provider-registry";
 import type {
   NativeModelProviderCatalogItem,
   WorkspaceModelProviderConfigItem,
@@ -157,9 +158,21 @@ export function LlmAgentNodeConfigForm({
     [modelProviderCatalog]
   );
   const providerPreset = getNativeLlmProviderPreset(effectiveProviderValue, modelProviderCatalog);
+  const providerCatalogItem = getModelProviderCatalogItem(
+    modelProviderCatalog,
+    selectedProviderConfig?.provider_id ?? effectiveProviderValue
+  );
   const selectedProviderProtocolLabel = selectedProviderConfig
     ? formatProtocolLabel(selectedProviderConfig.protocol)
     : null;
+  const currentModelId = typeof model.modelId === "string" ? model.modelId : "";
+  const recommendedModelIds = useMemo(() => {
+    const candidates = [selectedProviderConfig?.default_model ?? "", ...(providerCatalogItem?.default_models ?? [])]
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(candidates)).slice(0, 5);
+  }, [providerCatalogItem?.default_models, selectedProviderConfig?.default_model]);
   const selectedCredential =
     typeof model.apiKey === "string"
       ? credentials.find((credential) => `credential://${credential.id}` === model.apiKey) ?? null
@@ -414,7 +427,7 @@ export function LlmAgentNodeConfigForm({
       </div>
 
       <label className="binding-field">
-        <span className="binding-label">Provider config ref</span>
+        <span className="binding-label">Team provider</span>
         <select
           className="binding-select"
           value={effectiveProviderConfigRef}
@@ -453,10 +466,37 @@ export function LlmAgentNodeConfigForm({
           <span>
             {selectedProviderConfig.label} · {selectedProviderConfig.provider_label} · <code>{selectedProviderConfig.credential_ref}</code>
           </span>
+          <div className="tool-badge-row">
+            <span className="event-chip">default {selectedProviderConfig.default_model}</span>
+            {selectedProviderProtocolLabel ? (
+              <span className="event-chip">{selectedProviderProtocolLabel}</span>
+            ) : null}
+          </div>
           <span>
             runtime 会优先从该 provider config 解析 provider/baseUrl/credential，并以 <code>{selectedProviderConfig.default_model}</code> 作为默认模型。
             {selectedProviderProtocolLabel ? ` 当前协议面：${selectedProviderProtocolLabel}。` : ""}
           </span>
+        </div>
+      ) : null}
+
+      {selectedProviderConfig && recommendedModelIds.length > 0 ? (
+        <div className="binding-field">
+          <span className="binding-label">Recommended models</span>
+          <div className="tool-badge-row">
+            {recommendedModelIds.map((recommendedModelId) => (
+              <button
+                className={`event-chip event-chip-button${currentModelId === recommendedModelId ? " active" : ""}`}
+                key={`recommended-model-${recommendedModelId}`}
+                type="button"
+                onClick={() => updateModel("modelId", recommendedModelId)}
+              >
+                {recommendedModelId}
+              </button>
+            ))}
+          </div>
+          <small className="section-copy">
+            优先从团队 provider config 的默认模型和厂商预设里选；如需特殊版本，仍可继续手填自定义 <code>modelId</code>。
+          </small>
         </div>
       ) : null}
 
@@ -511,18 +551,25 @@ export function LlmAgentNodeConfigForm({
       ) : null}
 
       <label className="binding-field">
-        <span className="binding-label">Model ID</span>
+        <span className="binding-label">Model</span>
         <input
           className="trace-text-input"
-          value={typeof model.modelId === "string" ? model.modelId : ""}
+          value={currentModelId}
           onChange={(event) => updateModel("modelId", event.target.value.trim() || undefined)}
           disabled={shouldShowProviderRegistryLoading || shouldShowProviderSetupCallout}
           placeholder={
             shouldShowProviderSetupCallout
               ? "先在团队设置创建 provider config"
-              : providerPreset?.modelPlaceholder ?? "例如 gpt-4.1 / claude-sonnet"
+              : selectedProviderConfig?.default_model ||
+                providerPreset?.modelPlaceholder ||
+                "例如 gpt-4.1 / claude-sonnet"
           }
         />
+        <small className="section-copy">
+          {selectedProviderConfig
+            ? "上面的推荐模型会直接写入当前节点的 modelId；如需厂商未预置的版本，仍可保留手填 fallback。"
+            : "继续保留 modelId 作为 canonical 字段；如果已绑定团队 provider，优先沿 providerConfigRef + modelId 收口。"}
+        </small>
       </label>
 
       {!selectedProviderConfig && hasLegacyInlineModel ? (

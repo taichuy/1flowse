@@ -91,7 +91,7 @@ def build_node_catalog_items(
         WorkflowNodeCatalogItem(
             type="llm_agent",
             label="LLM Agent",
-            description="承载模型推理、角色设定和上下文授权的核心编排节点。",
+            description="先绑定团队模型供应商，再补 prompt、工具与上下文授权的核心 Agent 节点。",
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
             capability_group="agent",
@@ -115,8 +115,8 @@ def build_node_catalog_items(
             type="reference",
             label="Reference",
             description=(
-                "显式引用已授权的上游 JSON 输出，"
-                "把引用边界收成独立节点而不是隐式共享上下文。"
+                "把上游节点的结构化结果显式授权给后续步骤，"
+                "适合引用 LLM / Tool 的 JSON 输出，而不是隐式共享上下文。"
             ),
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,

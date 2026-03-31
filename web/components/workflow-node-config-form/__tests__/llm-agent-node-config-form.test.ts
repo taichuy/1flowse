@@ -153,9 +153,11 @@ describe("LlmAgentNodeConfigForm", () => {
       })
     );
 
-    expect(html).toContain("Provider config ref");
+    expect(html).toContain("Team provider");
     expect(html).toContain("providerConfigRef + modelId");
     expect(html).toContain("OpenAI Team · OpenAI");
+    expect(html).toContain("Recommended models");
+    expect(html).toContain("gpt-4o-mini");
     expect(html).toContain("runtime 会优先从该 provider config 解析 provider/baseUrl/credential");
     expect(html).toContain("当前协议面：OpenAI Chat Completions");
   });
@@ -188,6 +190,7 @@ describe("LlmAgentNodeConfigForm", () => {
 
     expect(html).toContain("团队 provider 已成为当前节点的主入口");
     expect(html).toContain("OpenAI Team · OpenAI");
+    expect(html).toContain("default gpt-4.1");
     expect(html).not.toContain("API Key credential");
   });
 
