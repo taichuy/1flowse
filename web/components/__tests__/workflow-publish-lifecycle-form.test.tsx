@@ -98,8 +98,8 @@ describe("WorkflowPublishLifecycleForm", () => {
         workflowGovernanceHandoff: {
           workflowId: "workflow-1",
           workflowGovernanceHref:
-            "/workflows/workflow-1?definition_issue=legacy_publish_auth",
-          workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
+            "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth",
+          workflowCatalogGapHref: "/workflows/workflow-1/editor?definition_issue=missing_tool",
           workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
           workflowCatalogGapDetail:
             "当前 publish lifecycle action 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续执行当前 lifecycle preflight。",
@@ -155,8 +155,8 @@ describe("WorkflowPublishLifecycleForm", () => {
         workflowGovernanceHandoff: {
           workflowId: "workflow-1",
           workflowGovernanceHref:
-            "/workflows/workflow-1?definition_issue=legacy_publish_auth",
-          workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
+            "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth",
+          workflowCatalogGapHref: "/workflows/workflow-1/editor?definition_issue=missing_tool",
           workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
           workflowCatalogGapDetail:
             "当前 publish lifecycle action 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续执行当前 lifecycle preflight。",
@@ -181,13 +181,13 @@ describe("WorkflowPublishLifecycleForm", () => {
             }
           }
         },
-        currentHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
+        currentHref: "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth",
         action: async (state: UpdatePublishedEndpointLifecycleState) => state
       })
     );
 
     expect(html).toContain('aria-current="page"');
-    expect(html).not.toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
-    expect(html).toContain('href="/workflows/workflow-1?definition_issue=missing_tool"');
+    expect(html).not.toContain('href="/workflows/workflow-1/editor?definition_issue=legacy_publish_auth"');
+    expect(html).toContain('href="/workflows/workflow-1/editor?definition_issue=missing_tool"');
   });
 });

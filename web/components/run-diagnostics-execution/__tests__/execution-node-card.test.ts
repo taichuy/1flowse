@@ -493,7 +493,7 @@ describe("ExecutionNodeCard", () => {
     );
 
     expect(html).toContain("workflow catalog gap · native.catalog-gap");
-    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+    expect(html).toContain('/workflows/workflow-1/editor?definition_issue=missing_tool');
     expect(html).toContain("legacy auth 1 legacy bindings");
     expect(html).toContain('data-testid="callback-waiting-summary-card"');
     expect(html).not.toContain('data-testid="workflow-governance-handoff-cards"');
@@ -569,7 +569,7 @@ describe("ExecutionNodeCard", () => {
     expect(html).toContain("优先观察定时恢复是否已重新排队。");
     expect(html).toContain("workflow catalog gap · native.catalog-gap");
     expect(html).toContain("execution timeline 对应的 workflow 版本仍有 catalog gap");
-    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
+    expect(html).toContain('/workflows/workflow-1/editor?definition_issue=missing_tool');
     expect(html).toContain("legacy auth 1 legacy bindings");
     expect(html).not.toContain('data-testid="callback-waiting-summary-card"');
     expect(html).toContain('data-testid="workflow-governance-handoff-cards"');

@@ -700,7 +700,7 @@ describe("WorkflowPublishBindingCard", () => {
     const binding = buildBinding();
     binding.auth_mode = "token";
     binding.issues = [buildLegacyPublishUnsupportedAuthIssueFixture()];
-    const currentHref = "/workflows/workflow-1?definition_issue=legacy_publish_auth";
+    const currentHref = "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth";
 
     const html = renderToStaticMarkup(
       createElement(WorkflowPublishBindingCard, {
@@ -720,7 +720,7 @@ describe("WorkflowPublishBindingCard", () => {
       })
     );
 
-    expect(html).not.toContain('href="/workflows/workflow-1?definition_issue=legacy_publish_auth"');
+    expect(html).not.toContain('href="/workflows/workflow-1/editor?definition_issue=legacy_publish_auth"');
     expect(html).toContain('href="/workflows/workflow-1/editor?definition_issue=missing_tool"');
     expect(html).toContain(`current:${currentHref}`);
   });
