@@ -144,6 +144,19 @@ export function useWorkflowEditorPanels({
     trace: runOverlay.selectedRunTrace,
     traceError: runOverlay.runOverlayError,
     selectedNodeId: graph.selectedNodeId,
+    authoringSourceNodeId:
+      graph.selectedNode?.id ??
+      graph.nodes.find((node) => node.data.nodeType === "trigger")?.id ??
+      null,
+    authoringSourceNodeLabel:
+      graph.selectedNode?.data.label ??
+      graph.nodes.find((node) => node.data.nodeType === "trigger")?.data.label ??
+      null,
+    authoringSourceContext: graph.selectedNode
+      ? "selected"
+      : graph.nodes.some((node) => node.data.nodeType === "trigger")
+        ? "default_trigger"
+        : null,
     callbackWaitingAutomation,
     sandboxReadiness,
     workspaceStarterGovernanceQueryScope,

@@ -4,12 +4,8 @@ import dynamic from "next/dynamic";
 import React, { memo, useEffect, useMemo, useState } from "react";
 import { Input, Tabs } from "antd";
 import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
-import type {
-  WorkflowLibrarySourceLane,
-  WorkflowNodeCatalogItem
-} from "@/lib/get-workflow-library";
+import type { WorkflowLibrarySourceLane } from "@/lib/get-workflow-library";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
-import type { UnsupportedWorkflowNodeSummary } from "@/lib/workflow-node-catalog";
 import type { RunDetail } from "@/lib/get-run-detail";
 import type {
   CallbackWaitingAutomationCheck,
@@ -26,10 +22,15 @@ import {
 import { appendWorkflowLibraryViewStateForWorkflow } from "@/lib/workflow-library-query";
 import { buildAuthorFacingWorkflowDetailLinkSurface } from "@/lib/workbench-entry-surfaces";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
+import {
+  getPrimaryAuthoringNodeCatalog,
+  sortWorkflowNodeCatalogForAuthoring
+} from "@/lib/workflow-node-catalog";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
 import type { WorkflowEditorDiagnosticsPanelProps } from "@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-diagnostics-panel";
 import type { WorkflowEditorRunPanelProps } from "@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-run-panel";
 import type {
+  WorkflowEditorSidebarAuthoringSourceContext,
   WorkflowEditorSidebarProps,
   WorkflowEditorSidebarTabKey
 } from "@/components/workflow-editor-workbench/types";
@@ -106,6 +107,9 @@ function WorkflowEditorSidebarComponent({
   trace,
   traceError,
   selectedNodeId,
+  authoringSourceNodeId = null,
+  authoringSourceNodeLabel = null,
+  authoringSourceContext = null,
   callbackWaitingAutomation,
   sandboxReadiness,
   workspaceStarterGovernanceQueryScope = null,
@@ -173,13 +177,21 @@ function WorkflowEditorSidebarComponent({
   ]);
   const [nodeSearch, setNodeSearch] = useState("");
   const [nodeRailView, setNodeRailView] = useState<WorkflowEditorNodeRailView>("catalog");
+  const orderedEditorNodeLibrary = useMemo(
+    () => sortWorkflowNodeCatalogForAuthoring(editorNodeLibrary),
+    [editorNodeLibrary]
+  );
+  const primaryAuthoringNodeLibrary = useMemo(
+    () => getPrimaryAuthoringNodeCatalog(orderedEditorNodeLibrary),
+    [orderedEditorNodeLibrary]
+  );
   const filteredEditorNodeLibrary = useMemo(() => {
     const keyword = nodeSearch.trim().toLowerCase();
     if (!keyword) {
-      return editorNodeLibrary;
+      return orderedEditorNodeLibrary;
     }
 
-    return editorNodeLibrary.filter((item) => {
+    return orderedEditorNodeLibrary.filter((item) => {
       const haystack = [item.label, item.type, item.description, item.supportSummary]
         .filter(Boolean)
         .join(" ")
@@ -187,7 +199,7 @@ function WorkflowEditorSidebarComponent({
 
       return haystack.includes(keyword);
     });
-  }, [editorNodeLibrary, nodeSearch]);
+  }, [nodeSearch, orderedEditorNodeLibrary]);
   const hasScopedWorkflowLinks = workflowChipLinks.length > 0;
   const railSummaryPills = useMemo(
     () =>
@@ -340,6 +352,53 @@ function WorkflowEditorSidebarComponent({
                   </div>
                 </div>
 
+                {!nodeSearch.trim() && primaryAuthoringNodeLibrary.length > 0 ? (
+                  <div
+                    className="binding-field compact-stack"
+                    data-component="workflow-editor-primary-authoring-path"
+                  >
+                    <span className="binding-label">常用主链</span>
+                    <small className="section-copy">
+                      {formatAuthoringSourceCopy(
+                        authoringSourceNodeLabel,
+                        authoringSourceContext
+                      )}{" "}
+                      {authoringSourceNodeId
+                        ? "Reference 会自动补齐 reference.sourceNodeId 与 readableNodeIds，但仍保持显式授权边界。"
+                        : "选中上游后从这里新增 Reference，会自动补齐 reference.sourceNodeId 与 readableNodeIds。"}
+                    </small>
+                    <div className="workflow-editor-catalog-list">
+                      {primaryAuthoringNodeLibrary.map((item) => (
+                        <button
+                          key={`primary-authoring-${item.type}`}
+                          className="workflow-editor-catalog-button"
+                          type="button"
+                          onClick={() =>
+                            onAddNode(
+                              item.type,
+                              authoringSourceNodeId
+                                ? { sourceNodeId: authoringSourceNodeId }
+                                : undefined
+                            )
+                          }
+                        >
+                          <div className="workflow-editor-catalog-button-mark">+</div>
+                          <div className="workflow-editor-catalog-button-copy">
+                            <div className="workflow-editor-catalog-button-label">{item.label}</div>
+                            <div className="workflow-editor-catalog-button-description">
+                              {formatPrimaryAuthoringNodeDescription(
+                                item.type,
+                                item.description,
+                                authoringSourceNodeLabel
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
 
 
                 {plannedNodeLibrary.length > 0 ? (
@@ -366,7 +425,14 @@ function WorkflowEditorSidebarComponent({
                       key={item.type}
                       className="workflow-editor-catalog-button"
                       type="button"
-                      onClick={() => onAddNode(item.type)}
+                      onClick={() =>
+                        onAddNode(
+                          item.type,
+                          authoringSourceNodeId
+                            ? { sourceNodeId: authoringSourceNodeId }
+                            : undefined
+                        )
+                      }
                     >
                       <div className="workflow-editor-catalog-button-mark">
                         +
@@ -494,3 +560,41 @@ function WorkflowEditorSidebarComponent({
 }
 
 export const WorkflowEditorSidebar = memo(WorkflowEditorSidebarComponent);
+
+function formatAuthoringSourceCopy(
+  authoringSourceNodeLabel: string | null,
+  authoringSourceContext: WorkflowEditorSidebarAuthoringSourceContext | null
+) {
+  const resolvedLabel = authoringSourceNodeLabel ?? "Trigger";
+
+  if (authoringSourceContext === "selected") {
+    return `当前已选中 ${resolvedLabel}；这里的常用节点会直接插到它后方。`;
+  }
+
+  if (authoringSourceContext === "default_trigger") {
+    return `当前未选节点；这里会默认从 ${resolvedLabel} 继续主链。`;
+  }
+
+  return "这里优先放常用节点；需要续接主链时先在画布里选中一个上游。";
+}
+
+function formatPrimaryAuthoringNodeDescription(
+  nodeType: string,
+  fallbackDescription: string,
+  authoringSourceNodeLabel: string | null
+) {
+  const resolvedLabel = authoringSourceNodeLabel ?? "当前上游";
+
+  switch (nodeType) {
+    case "llm_agent":
+      return `${resolvedLabel} 后方优先接 LLM 主节点，继续模型编排主链。`;
+    case "reference":
+      return `${resolvedLabel} 后方新增 Reference 时，会自动补齐显式引用授权。`;
+    case "tool":
+      return `${resolvedLabel} 后方直接接 Tool，保持工具编排主路径。`;
+    case "condition":
+      return `${resolvedLabel} 后方插入 Condition，快速切进分支控制。`;
+    default:
+      return fallbackDescription;
+  }
+}

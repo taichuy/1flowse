@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
-import { getPaletteNodeCatalog, getPlannedNodeCatalog } from "@/lib/workflow-node-catalog";
+import {
+  getPaletteNodeCatalog,
+  getPlannedNodeCatalog,
+  sortWorkflowNodeCatalogForAuthoring
+} from "@/lib/workflow-node-catalog";
 
 import { WorkflowEditorCanvas } from "@/components/workflow-editor-workbench/workflow-editor-canvas";
 import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
@@ -188,9 +192,13 @@ export function WorkflowEditorWorkbench({
     runOverlay.selectedRunDetail,
     runOverlay.selectedRunTrace
   );
+  const orderedEditorNodeLibrary = useMemo(
+    () => sortWorkflowNodeCatalogForAuthoring(editorNodeLibrary),
+    [editorNodeLibrary]
+  );
   const canvasQuickAddOptions = useMemo<WorkflowCanvasQuickAddOption[]>(
     () =>
-      editorNodeLibrary
+      orderedEditorNodeLibrary
         .filter((item) => item.type !== "trigger")
         .map((item) => ({
           type: item.type,
@@ -198,7 +206,7 @@ export function WorkflowEditorWorkbench({
           description: item.description,
           capabilityGroup: item.capabilityGroup
         })),
-    [editorNodeLibrary]
+    [orderedEditorNodeLibrary]
   );
   const handleCanvasQuickAdd = graph.handleAddNode;
   const handleCanvasDeleteNode = graph.handleDeleteNode;

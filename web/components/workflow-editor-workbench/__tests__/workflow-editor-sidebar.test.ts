@@ -925,4 +925,105 @@ describe("WorkflowEditorSidebar", () => {
     expect(html).toContain("Sandbox Code");
     expect(html).toContain("规划中的节点 (1) · Loop");
   });
+
+  it("surfaces a primary authoring path that continues from the selected node", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [
+          buildNodeCatalogItem("condition", "Condition"),
+          buildNodeCatalogItem("tool", "Tool"),
+          buildNodeCatalogItem("llm_agent", "LLM Agent"),
+          buildNodeCatalogItem("reference", "Reference"),
+          buildNodeCatalogItem("output", "Output")
+        ],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: "agent-1",
+        authoringSourceNodeId: "agent-1",
+        authoringSourceNodeLabel: "Planner",
+        authoringSourceContext: "selected",
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-editor-primary-authoring-path"');
+    expect(html).toContain("常用主链");
+    expect(html).toContain("当前已选中 Planner；这里的常用节点会直接插到它后方。");
+    expect(html).toContain("Planner 后方优先接 LLM 主节点，继续模型编排主链。");
+    expect(html).toContain("Planner 后方新增 Reference 时，会自动补齐显式引用授权。");
+  });
+
+  it("falls back to the trigger-centered authoring path when no node is selected", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorSidebar, {
+        workflowId: "workflow-1",
+        workflowName: "Demo workflow",
+        workflows: [],
+        nodeSourceLanes: [],
+        toolSourceLanes: [],
+        editorNodeLibrary: [
+          buildNodeCatalogItem("tool", "Tool"),
+          buildNodeCatalogItem("reference", "Reference"),
+          buildNodeCatalogItem("llm_agent", "LLM Agent"),
+          buildNodeCatalogItem("condition", "Condition"),
+          buildNodeCatalogItem("output", "Output")
+        ],
+        plannedNodeLibrary: [],
+        unsupportedNodes: [],
+        message: null,
+        messageTone: "idle",
+        persistBlockerSummary: null,
+        persistBlockers: [],
+        executionPreflightMessage: null,
+        toolExecutionValidationIssueCount: 0,
+        validationNavigatorItems: [],
+        runs: [],
+        selectedRunId: null,
+        run: null,
+        runSnapshot: null,
+        trace: null,
+        traceError: null,
+        selectedNodeId: null,
+        authoringSourceNodeId: "trigger",
+        authoringSourceNodeLabel: "Trigger",
+        authoringSourceContext: "default_trigger",
+        sandboxReadiness: buildSandboxReadiness(),
+        isLoadingRunOverlay: false,
+        isRefreshingRuns: false,
+        onAddNode: () => undefined,
+        onNavigateValidationIssue: () => undefined,
+        onSelectRunId: () => undefined,
+        onRefreshRuns: () => undefined
+      })
+    );
+
+    expect(html).toContain("当前未选节点；这里会默认从 Trigger 继续主链。");
+    expect(html).toContain(
+      "Reference 会自动补齐 reference.sourceNodeId 与 readableNodeIds，但仍保持显式授权边界。"
+    );
+  });
 });

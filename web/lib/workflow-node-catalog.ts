@@ -19,6 +19,13 @@ export type UnsupportedWorkflowNodeSummary = {
   supportSummary: string;
 };
 
+const PRIMARY_AUTHORING_NODE_TYPES = [
+  "llm_agent",
+  "reference",
+  "tool",
+  "condition"
+] as const;
+
 export function formatUnsupportedWorkflowNodes(
   items: UnsupportedWorkflowNodeSummary[]
 ) {
@@ -41,6 +48,44 @@ export function getPaletteNodeCatalog(catalog: WorkflowNodeCatalogItem[]) {
   return [...catalog]
     .filter((item) => item.palette.enabled)
     .sort((left, right) => left.palette.order - right.palette.order);
+}
+
+export function sortWorkflowNodeCatalogForAuthoring(catalog: WorkflowNodeCatalogItem[]) {
+  const primaryTypeOrder = new Map<string, number>(
+    PRIMARY_AUTHORING_NODE_TYPES.map((type, index) => [type, index])
+  );
+
+  return [...catalog].sort((left, right) => {
+    const leftPrimaryIndex = primaryTypeOrder.get(left.type);
+    const rightPrimaryIndex = primaryTypeOrder.get(right.type);
+
+    if (typeof leftPrimaryIndex === "number" || typeof rightPrimaryIndex === "number") {
+      if (typeof leftPrimaryIndex !== "number") {
+        return 1;
+      }
+      if (typeof rightPrimaryIndex !== "number") {
+        return -1;
+      }
+      if (leftPrimaryIndex !== rightPrimaryIndex) {
+        return leftPrimaryIndex - rightPrimaryIndex;
+      }
+    }
+
+    if (left.palette.order !== right.palette.order) {
+      return left.palette.order - right.palette.order;
+    }
+
+    return left.label.localeCompare(right.label);
+  });
+}
+
+export function getPrimaryAuthoringNodeCatalog(catalog: WorkflowNodeCatalogItem[]) {
+  const catalogByType = new Map(catalog.map((item) => [item.type, item]));
+
+  return PRIMARY_AUTHORING_NODE_TYPES.flatMap((type) => {
+    const item = catalogByType.get(type);
+    return item ? [item] : [];
+  });
 }
 
 export function getPlannedNodeCatalog(catalog: WorkflowNodeCatalogItem[]) {

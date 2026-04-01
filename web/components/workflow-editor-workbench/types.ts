@@ -56,6 +56,10 @@ type WorkflowEditorPersistenceState = ReturnType<
 
 export type WorkflowEditorSidebarTabKey = "1" | "2" | "3";
 
+export type WorkflowEditorSidebarAuthoringSourceContext =
+  | "selected"
+  | "default_trigger";
+
 export type WorkflowEditorSidebarProps = {
   currentHref?: string;
   workflowId: string;
@@ -85,6 +89,9 @@ export type WorkflowEditorSidebarProps = {
   trace: RunTrace | null;
   traceError: string | null;
   selectedNodeId: string | null;
+  authoringSourceNodeId?: string | null;
+  authoringSourceNodeLabel?: string | null;
+  authoringSourceContext?: WorkflowEditorSidebarAuthoringSourceContext | null;
   callbackWaitingAutomation?: CallbackWaitingAutomationCheck | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   workspaceStarterGovernanceQueryScope?: WorkspaceStarterGovernanceQueryScope | null;
@@ -94,7 +101,7 @@ export type WorkflowEditorSidebarProps = {
   isLoadingRunOverlay: boolean;
   isRefreshingRuns: boolean;
   onActiveTabChange?: (tabKey: WorkflowEditorSidebarTabKey) => void;
-  onAddNode: (type: string) => void;
+  onAddNode: (type: string, options?: { sourceNodeId?: string | null }) => void;
   onNavigateValidationIssue: (item: WorkflowValidationNavigatorItem) => void;
   onSelectRunId: (runId: string | null) => void;
   onRefreshRuns: () => void;

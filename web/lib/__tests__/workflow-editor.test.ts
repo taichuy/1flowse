@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowNodeCatalogItem } from "../get-workflow-library";
+import { sortWorkflowNodeCatalogForAuthoring } from "../workflow-node-catalog";
 import {
   buildWorkflowInsertedNodePosition,
   insertNodeIntoCanvasGraph,
@@ -313,6 +314,43 @@ describe("workflow-editor quick add helpers", () => {
         artifactType: "json"
       }
     });
+  });
+
+  it("surfaces llm/reference/tool/condition first in authoring order", () => {
+    expect(
+      sortWorkflowNodeCatalogForAuthoring([
+        nodeCatalog[3],
+        nodeCatalog[2],
+        nodeCatalog[0],
+        nodeCatalog[1]
+      ]).map((item) => item.type)
+    ).toEqual(["llm_agent", "reference", "trigger", "output"]);
+
+    expect(
+      sortWorkflowNodeCatalogForAuthoring([
+        nodeCatalog[3],
+        nodeCatalog[2],
+        {
+          ...nodeCatalog[2],
+          type: "tool",
+          label: "Tool",
+          palette: {
+            ...nodeCatalog[2].palette,
+            order: 10
+          }
+        },
+        {
+          ...nodeCatalog[2],
+          type: "condition",
+          label: "Condition",
+          palette: {
+            ...nodeCatalog[2].palette,
+            order: 11
+          }
+        },
+        nodeCatalog[1]
+      ]).map((item) => item.type)
+    ).toEqual(["llm_agent", "reference", "tool", "condition", "output"]);
   });
 
   it("reconnects and closes the gap when removing an inline node", () => {

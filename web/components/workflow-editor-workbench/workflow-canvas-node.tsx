@@ -106,9 +106,9 @@ export function WorkflowCanvasNode({
   const quickAddSections = useMemo(
     () =>
       [
-        { key: "logic", label: "流程控制" },
         { key: "agent", label: "AI 节点" },
         { key: "integration", label: "引用 / 工具" },
+        { key: "logic", label: "流程控制" },
         { key: "output", label: "结果输出" }
       ]
         .map((section) => ({
