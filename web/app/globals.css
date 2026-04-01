@@ -5007,6 +5007,11 @@ a {
   margin: 0 auto;
 }
 
+.workflow-create-shell-embedded {
+  width: 100%;
+  margin: 0;
+}
+
 .workflow-create-topbar,
 .workflow-create-topbar-left,
 .workflow-create-topbar-summary,

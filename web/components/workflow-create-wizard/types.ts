@@ -10,6 +10,8 @@ import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-start
 import type { WorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import type { WorkspaceStarterSourceGovernanceKind } from "@/lib/get-workspace-starters";
 
+export type WorkflowCreateWizardSurface = "page" | "workspace";
+
 export type WorkflowCreateWizardBootstrapRequest = {
   governanceQueryScope: WorkspaceStarterGovernanceQueryScope;
   includeLegacyAuthGovernanceSnapshot: boolean;
@@ -36,4 +38,5 @@ export type WorkflowCreateWizardProps = {
   starterSourceLanes: WorkflowLibrarySourceLane[];
   nodeCatalog: WorkflowNodeCatalogItem[];
   tools: PluginToolRegistryItem[];
+  surface?: WorkflowCreateWizardSurface;
 };

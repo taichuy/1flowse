@@ -13,6 +13,13 @@ vi.mock("next/link", () => ({
     createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    refresh: vi.fn()
+  })
+}));
+
 describe("WorkspaceAppsWorkbench", () => {
   it("renders a directory-first workspace shell with a compact create launcher", () => {
     const html = renderToStaticMarkup(
@@ -34,38 +41,86 @@ describe("WorkspaceAppsWorkbench", () => {
           { label: "应用", value: "2" },
           { label: "草稿", value: "2" }
         ],
-        quickCreateEntries: [
-          {
-            title: "创建空白应用",
-            detail: "直接生成最小 workflow 草稿，创建后进入 Studio。",
-            href: "/workflows/new",
-            badge: "Blank"
-          },
-          {
-            title: "从 Starter 模板创建",
-            detail: "先选团队模板，再把草稿送进 Studio。",
-            href: "/workspace-starters",
-            badge: "Starter"
-          }
-        ],
+        focusedCreateHref: "/workflows/new",
         workspaceUtilityEntry: {
           title: "管理成员与权限",
           detail: "管理员可直接开通成员账号，并在工作空间里完成角色配置。",
           href: WORKSPACE_TEAM_SETTINGS_HREF,
           badge: "4 种角色"
         },
-        starterHighlights: [
-          {
-            id: "starter-blank",
-            name: "Blank Flow",
-            description: "最小 trigger -> output 骨架。",
-            href: "/workflows/new?starter=blank",
-            track: "应用新建编排",
-            priority: "P0",
-            modeShortLabel: "ChatFlow"
-          }
-        ],
         starterCount: 5,
+        workflowCreateWizardProps: {
+          catalogToolCount: 0,
+          governanceQueryScope: {
+            activeTrack: "应用新建编排",
+            sourceGovernanceKind: "all",
+            needsFollowUp: false,
+            searchQuery: "",
+            selectedTemplateId: null
+          },
+          workflows: [],
+          starterSourceLanes: [],
+          nodeCatalog: [
+            {
+              type: "trigger",
+              label: "Trigger",
+              description: "Trigger node",
+              ecosystem: "native",
+              source: {
+                kind: "node",
+                scope: "builtin",
+                status: "available",
+                governance: "repo",
+                ecosystem: "native",
+                label: "Native node catalog",
+                shortLabel: "native nodes",
+                summary: "Native nodes"
+              },
+              capabilityGroup: "entry",
+              businessTrack: "应用新建编排",
+              tags: [],
+              supportStatus: "available",
+              supportSummary: "",
+              bindingRequired: false,
+              bindingSourceLanes: [],
+              palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
+              defaults: { name: "Trigger", config: {} }
+            }
+          ],
+          tools: [],
+          starters: [
+            {
+              id: "workspace-starter-1",
+              origin: "workspace",
+              workspaceId: "default",
+              name: "Workspace starter",
+              description: "Starter description",
+              businessTrack: "应用新建编排",
+              defaultWorkflowName: "Blank Workflow",
+              workflowFocus: "Create from starter",
+              recommendedNextStep: "Create workflow",
+              tags: [],
+              definition: {
+                nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+                edges: [],
+                variables: [],
+                publish: []
+              },
+              source: {
+                kind: "starter",
+                scope: "workspace",
+                status: "available",
+                governance: "workspace",
+                ecosystem: "native",
+                label: "Workspace starters",
+                shortLabel: "workspace ready",
+                summary: "Workspace starter library"
+              },
+              archived: false,
+              sourceGovernance: null
+            }
+          ]
+        },
         filteredApps: [
           {
             id: "workflow-1",
@@ -101,22 +156,24 @@ describe("WorkspaceAppsWorkbench", () => {
     expect(html).toContain('data-component="workspace-catalog-header"');
     expect(html).toContain('data-component="workspace-browse-rail"');
     expect(html).toContain('data-component="workspace-create-strip"');
+    expect(html).toContain('data-component="workflow-create-launcher-panel"');
+    expect(html).toContain('data-component="workflow-create-preview-panel"');
     expect(html).toContain('data-component="workspace-app-list-stage"');
     expect(html).toContain("workspace-filter-rail-inline");
     expect(html).toContain("workspace-catalog-stage");
     expect(html).toContain("workspace-create-strip");
-    expect(html).toContain("快速新建");
-    expect(html).toContain("创建空白应用");
+    expect(html).toContain("工作台直接新建");
+    expect(html).toContain("创建一个应用");
+    expect(html).toContain("打开全屏创建页");
     expect(html).toContain("workspace-app-row");
     expect(html).toContain("workspace-app-list-columns");
     expect(html).toContain("管理成员与权限");
     expect(html).toContain("应用目录");
     expect(html).toContain("摘要");
     expect(html).toContain("进入 Studio");
-    expect(html).toContain("草稿已就绪，继续进入 xyflow。");
-    expect(html).toContain("推荐 Starter");
+    expect(html).toContain("Workspace starter");
     expect(html).not.toContain("查看下一步");
-    expect(html.indexOf("快速新建")).toBeLessThan(html.indexOf("ChatFlow Alpha"));
+    expect(html.indexOf("工作台直接新建")).toBeLessThan(html.indexOf("ChatFlow Alpha"));
     expect(html).not.toContain("最小起步");
   });
 });

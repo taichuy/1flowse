@@ -1,27 +1,22 @@
 import Link from "next/link";
 
-import type {
-  WorkspaceQuickCreateEntry,
-  WorkspaceStarterHighlight
-} from "@/components/workspace-apps-workbench/shared";
+import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
+import type { WorkspaceQuickCreateEntry } from "@/components/workspace-apps-workbench/shared";
+import type { WorkflowCreateWizardProps } from "@/components/workflow-create-wizard/types";
 
 export function WorkspaceCreateStrip({
-  quickCreateEntries,
+  focusedCreateHref,
   requestedKeyword,
   starterCount,
-  starterHighlights,
+  workflowCreateWizardProps,
   workspaceUtilityEntry
 }: {
-  quickCreateEntries: WorkspaceQuickCreateEntry[];
+  focusedCreateHref: string;
   requestedKeyword: string;
   starterCount: number;
-  starterHighlights: WorkspaceStarterHighlight[];
+  workflowCreateWizardProps: WorkflowCreateWizardProps;
   workspaceUtilityEntry: WorkspaceQuickCreateEntry | null;
 }) {
-  const [primaryEntry, ...secondaryEntries] = quickCreateEntries;
-  const visibleSecondaryEntries = secondaryEntries.slice(0, 1);
-  const primaryStarter = starterHighlights[0] ?? null;
-
   return (
     <section
       className="workspace-create-strip workspace-catalog-card"
@@ -30,39 +25,29 @@ export function WorkspaceCreateStrip({
     >
       <div className="workspace-create-strip-copy">
         <p className="workspace-app-card-caption">Create</p>
-        <h3>快速新建</h3>
+        <h3>工作台直接新建</h3>
         <p className="workspace-muted workspace-card-copy workspace-create-strip-summary">
-          把创建入口收回主区，先选路径，再进入 Studio。
+          主 CTA 直接复用 `/workflows/new` 的 create launcher，在工作台就完成选模式、选 starter、命名并进入 Studio。
         </p>
         <div className="workspace-create-strip-footnotes">
           <span className="workspace-app-footnote">Starter {starterCount} 个</span>
           <span className="workspace-app-footnote">
-            {requestedKeyword ? `当前搜索：${requestedKeyword}` : "创建页沿用当前筛选"}
+            {requestedKeyword ? `当前搜索：${requestedKeyword}` : "创建入口沿用当前筛选范围"}
           </span>
         </div>
       </div>
 
-      <div className="workspace-create-strip-actions">
-        {primaryEntry ? (
-          <Link className="workspace-create-strip-primary" href={primaryEntry.href}>
-            <div>
-              <span>{primaryEntry.title}</span>
-              <small>{primaryEntry.detail}</small>
-            </div>
-            <strong>{primaryEntry.badge}</strong>
-          </Link>
-        ) : null}
+      <WorkflowCreateWizard {...workflowCreateWizardProps} surface="workspace" />
 
-        <div className="workspace-create-strip-secondary-list">
-          {visibleSecondaryEntries.map((entry) => (
-            <Link className="workspace-create-strip-action" href={entry.href} key={entry.title}>
-              <div>
-                <span>{entry.title}</span>
-                <small>{entry.detail}</small>
-              </div>
-              <strong>{entry.badge}</strong>
-            </Link>
-          ))}
+      <div className="workspace-create-strip-footer">
+        <div className="workspace-create-strip-secondary-list workspace-create-strip-utility-list">
+          <Link className="workspace-create-strip-action" href={focusedCreateHref}>
+            <div>
+              <span>打开全屏创建页</span>
+              <small>需要专注处理 starter 治理、深链或分享当前筛选时，再切到 `/workflows/new`。</small>
+            </div>
+            <strong>Full page</strong>
+          </Link>
 
           {workspaceUtilityEntry ? (
             <Link className="workspace-create-strip-action" href={workspaceUtilityEntry.href}>
@@ -74,22 +59,6 @@ export function WorkspaceCreateStrip({
             </Link>
           ) : null}
         </div>
-      </div>
-
-      <div className="workspace-create-strip-footer">
-        {primaryStarter ? (
-          <Link className="workspace-create-strip-starter" href={primaryStarter.href}>
-            <span>推荐 Starter</span>
-            <strong>{primaryStarter.name}</strong>
-            <small>{primaryStarter.priority} · {primaryStarter.modeShortLabel}</small>
-          </Link>
-        ) : (
-          <div className="workspace-create-strip-starter">
-            <span>推荐 Starter</span>
-            <strong>Blank Flow</strong>
-            <small>保留最小 trigger → output 骨架。</small>
-          </div>
-        )}
       </div>
     </section>
   );

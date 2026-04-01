@@ -1,11 +1,43 @@
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflows } from "@/lib/get-workflows";
 import { getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-client";
+import {
+  hasScopedWorkspaceStarterGovernanceFilters,
+  type WorkspaceStarterGovernanceQueryScope
+} from "@/lib/workspace-starter-governance-query";
 
 import type {
   WorkflowCreateWizardBootstrapRequest,
   WorkflowCreateWizardProps
 } from "./types";
+
+export function buildWorkflowCreateWizardBootstrapRequest(
+  governanceQueryScope: WorkspaceStarterGovernanceQueryScope
+): WorkflowCreateWizardBootstrapRequest {
+  const shouldScopeWorkspaceStarters = hasScopedWorkspaceStarterGovernanceFilters(
+    governanceQueryScope
+  );
+
+  return {
+    governanceQueryScope,
+    includeLegacyAuthGovernanceSnapshot:
+      shouldScopeWorkspaceStarters || governanceQueryScope.selectedTemplateId !== null,
+    libraryQuery: {
+      businessTrack:
+        governanceQueryScope.activeTrack === "all"
+          ? undefined
+          : governanceQueryScope.activeTrack,
+      search: governanceQueryScope.searchQuery,
+      sourceGovernanceKind:
+        governanceQueryScope.sourceGovernanceKind === "all"
+          ? undefined
+          : governanceQueryScope.sourceGovernanceKind,
+      needsFollowUp: governanceQueryScope.needsFollowUp,
+      includeBuiltinStarters: !shouldScopeWorkspaceStarters,
+      includeStarterDefinitions: true
+    }
+  };
+}
 
 export async function loadWorkflowCreateWizardBootstrap(
   request: WorkflowCreateWizardBootstrapRequest

@@ -1,3 +1,4 @@
+import type { WorkflowCreateWizardProps } from "@/components/workflow-create-wizard/types";
 import type { WorkspaceAppSearchFormState } from "@/lib/workspace-app-query-state";
 
 export type WorkspaceModeTab = {
@@ -32,16 +33,6 @@ export type WorkspaceQuickCreateEntry = {
   detail: string;
   href: string;
   badge: string;
-};
-
-export type WorkspaceStarterHighlight = {
-  id: string;
-  name: string;
-  description: string;
-  href: string;
-  track: string;
-  priority: string;
-  modeShortLabel: string;
 };
 
 export type WorkspaceAppCard = {
@@ -80,10 +71,10 @@ export type WorkspaceAppsWorkbenchProps = {
   scopePills: WorkspaceScopePill[];
   statusFilters: WorkspaceStatusFilter[];
   workspaceSignals: WorkspaceSignal[];
-  quickCreateEntries: WorkspaceQuickCreateEntry[];
+  focusedCreateHref: string;
   workspaceUtilityEntry: WorkspaceQuickCreateEntry | null;
-  starterHighlights: WorkspaceStarterHighlight[];
   starterCount: number;
+  workflowCreateWizardProps: WorkflowCreateWizardProps;
   filteredApps: WorkspaceAppCard[];
   searchState: WorkspaceAppSearchFormState;
 };

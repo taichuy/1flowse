@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadWorkflowCreateWizardBootstrap } from "@/components/workflow-create-wizard/bootstrap";
+import {
+  buildWorkflowCreateWizardBootstrapRequest,
+  loadWorkflowCreateWizardBootstrap
+} from "@/components/workflow-create-wizard/bootstrap";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflows } from "@/lib/get-workflows";
 import { getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-client";
@@ -51,6 +54,35 @@ beforeEach(() => {
 });
 
 describe("loadWorkflowCreateWizardBootstrap", () => {
+  it("builds a shared bootstrap request from governance scope", () => {
+    expect(
+      buildWorkflowCreateWizardBootstrapRequest({
+        activeTrack: "应用新建编排",
+        sourceGovernanceKind: "drifted",
+        needsFollowUp: true,
+        searchQuery: " drift ",
+        selectedTemplateId: "starter-1"
+      })
+    ).toEqual({
+      governanceQueryScope: {
+        activeTrack: "应用新建编排",
+        sourceGovernanceKind: "drifted",
+        needsFollowUp: true,
+        searchQuery: " drift ",
+        selectedTemplateId: "starter-1"
+      },
+      includeLegacyAuthGovernanceSnapshot: true,
+      libraryQuery: {
+        businessTrack: "应用新建编排",
+        search: " drift ",
+        sourceGovernanceKind: "drifted",
+        needsFollowUp: true,
+        includeBuiltinStarters: false,
+        includeStarterDefinitions: true
+      }
+    });
+  });
+
   it("loads create setup with scoped library query after the entry seam", async () => {
     const result = await loadWorkflowCreateWizardBootstrap({
       governanceQueryScope: {

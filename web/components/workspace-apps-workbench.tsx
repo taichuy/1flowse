@@ -18,10 +18,10 @@ export function WorkspaceAppsWorkbench({
   scopePills,
   statusFilters,
   workspaceSignals,
-  quickCreateEntries,
+  focusedCreateHref,
   workspaceUtilityEntry,
-  starterHighlights,
   starterCount,
+  workflowCreateWizardProps,
   filteredApps,
   searchState
 }: WorkspaceAppsWorkbenchProps) {
@@ -58,10 +58,10 @@ export function WorkspaceAppsWorkbench({
 
           <section className="workspace-catalog-stage">
             <WorkspaceCreateStrip
-              quickCreateEntries={quickCreateEntries}
+              focusedCreateHref={focusedCreateHref}
               requestedKeyword={requestedKeyword}
               starterCount={starterCount}
-              starterHighlights={starterHighlights}
+              workflowCreateWizardProps={workflowCreateWizardProps}
               workspaceUtilityEntry={workspaceUtilityEntry}
             />
 

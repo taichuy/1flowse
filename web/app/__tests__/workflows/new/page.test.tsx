@@ -58,7 +58,14 @@ vi.mock("@/lib/server-workspace-access", () => ({
 
 vi.mock("@/lib/workspace-starter-governance-query", () => ({
   hasScopedWorkspaceStarterGovernanceFilters: vi.fn(() => false),
-  pickWorkspaceStarterGovernanceQueryScope: vi.fn(() => ({ kind: "all" })),
+  pickWorkspaceStarterGovernanceQueryScope: vi.fn((viewState) => ({
+    activeTrack: viewState.activeTrack,
+    sourceGovernanceKind: viewState.sourceGovernanceKind,
+    needsFollowUp: viewState.needsFollowUp,
+    searchQuery: viewState.searchQuery,
+    selectedTemplateId: viewState.selectedTemplateId,
+    kind: "all"
+  })),
   readWorkspaceStarterLibraryViewState: vi.fn(() => ({
     activeTrack: "all",
     archiveFilter: "active",

@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 
+import {
+  buildWorkflowCreateWizardBootstrapRequest,
+  loadWorkflowCreateWizardBootstrap
+} from "@/components/workflow-create-wizard/bootstrap";
 import { WorkspaceAppsWorkbench } from "@/components/workspace-apps-workbench";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { getSystemOverview } from "@/lib/get-system-overview";
-import { getWorkflows } from "@/lib/get-workflows";
 import { WORKSPACE_TEAM_SETTINGS_HREF } from "@/lib/workspace-console";
 import {
   getWorkspaceAppModeMeta,
@@ -11,15 +14,8 @@ import {
   listWorkspaceAppModes,
   type WorkspaceAppModeId
 } from "@/lib/workspace-app-modes";
-import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
-import {
-  buildWorkflowCreateHrefFromWorkspaceStarterViewState,
-  buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState
-} from "@/lib/workspace-starter-governance-query";
-import {
-  getWorkflowBusinessTrack,
-  type WorkflowBusinessTrack
-} from "@/lib/workflow-business-tracks";
+import { buildWorkflowCreateHrefFromWorkspaceStarterViewState } from "@/lib/workspace-starter-governance-query";
+import { getWorkflowBusinessTrack } from "@/lib/workflow-business-tracks";
 import { inferWorkflowBusinessTrack } from "@/lib/workflow-starters";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
 import { formatWorkspaceRole } from "@/lib/workspace-access";
@@ -50,38 +46,17 @@ type WorkspaceAppCard = {
   followUpCount: number;
 };
 
-function buildWorkflowStarterCreateHref({
-  requestedKeyword,
-  starterId,
-  track
-}: {
-  requestedKeyword: string;
-  starterId?: string;
-  track: WorkflowBusinessTrack | "all";
-}) {
-  return buildWorkflowCreateHrefFromWorkspaceStarterViewState({
-    activeTrack: track,
-    needsFollowUp: false,
-    searchQuery: requestedKeyword,
-    selectedTemplateId: starterId ?? null,
-    sourceGovernanceKind: "all"
-  });
-}
-
-function buildWorkspaceStarterHref({
-  requestedKeyword,
-  track
-}: {
-  requestedKeyword: string;
-  track: WorkflowBusinessTrack | "all";
-}) {
-  return buildWorkspaceStarterLibraryHrefFromWorkspaceStarterViewState({
-    activeTrack: track,
-    needsFollowUp: false,
-    searchQuery: requestedKeyword,
-    selectedTemplateId: null,
-    sourceGovernanceKind: "all"
-  });
+function getPreferredWorkspaceCreateStarterId(activeMode: WorkspaceAppModeId) {
+  switch (activeMode) {
+    case "agent":
+      return "agent";
+    case "tool_agent":
+      return "tool-enabled-agent";
+    case "sandbox":
+      return "sandbox-code";
+    default:
+      return null;
+  }
 }
 
 export default async function WorkspacePage({ searchParams }: WorkspacePageProps) {
@@ -94,13 +69,22 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
   const { activeFilter, activeMode, activeTrack, keyword: requestedKeyword } =
     readWorkspaceAppViewState(resolvedSearchParams);
   const normalizedKeyword = requestedKeyword.toLowerCase();
+  const workspaceCreateQueryScope = {
+    activeTrack,
+    sourceGovernanceKind: "all" as const,
+    needsFollowUp: false,
+    searchQuery: requestedKeyword,
+    selectedTemplateId: getPreferredWorkspaceCreateStarterId(activeMode)
+  };
+  const workflowCreateBootstrapRequest = buildWorkflowCreateWizardBootstrapRequest(
+    workspaceCreateQueryScope
+  );
 
-  const [workflowSummaries, workflowLibrary, systemOverview] = await Promise.all([
-    getWorkflows(),
-    getWorkflowLibrarySnapshot(),
+  const [workflowCreateWizardProps, systemOverview] = await Promise.all([
+    loadWorkflowCreateWizardBootstrap(workflowCreateBootstrapRequest),
     getSystemOverview()
   ]);
-  const appCards: WorkspaceAppCard[] = workflowSummaries
+  const appCards: WorkspaceAppCard[] = workflowCreateWizardProps.workflows
     .map((workflow) => {
     const mode = getWorkspaceAppModeMeta(
       inferWorkspaceAppMode({
@@ -215,87 +199,15 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
       value: systemOverview.sandbox_readiness.primary_blocker_kind ? "需处理" : "正常"
     }
   ];
-  const starterHighlights = workflowLibrary.starters
-    .filter(
-      (starter) =>
-        activeMode === "all" ||
-        inferWorkspaceAppMode({ nodeTypes: starter.nodeTypes }) === activeMode
-    )
-    .slice(0, 3)
-    .map((starter) => ({
-      id: starter.id,
-      name: starter.name,
-      description: starter.description,
-      href: buildWorkflowStarterCreateHref({
-        requestedKeyword,
-        starterId: starter.id,
-        track: activeTrack
-      }),
-      track: starter.businessTrack,
-      priority: getWorkflowBusinessTrack(starter.businessTrack).priority,
-      mode: getWorkspaceAppModeMeta(inferWorkspaceAppMode({ nodeTypes: starter.nodeTypes }))
-    }));
   const visibleAppSummary =
     activeMode !== "all"
       ? `${activeModeMeta?.label ?? "应用"} ${filteredApps.length} 个`
       : filteredApps.length === appCards.length
       ? `全部 ${filteredApps.length} 个应用`
       : `筛选结果 ${filteredApps.length} / ${appCards.length}`;
-  const primaryCreateEntry =
-    activeMode === "agent"
-        ? {
-            title: "创建 Agent 应用",
-            detail: `${activeModeMeta?.description ?? "继续补 Agent 节点配置。"} 创建后进入 Studio。`,
-            href: buildWorkflowStarterCreateHref({
-              requestedKeyword,
-              starterId: "agent",
-              track: activeTrack
-            }),
-            badge: activeModeMeta?.shortLabel ?? "Agent"
-          }
-        : activeMode === "tool_agent"
-          ? {
-              title: "创建 Tool Agent",
-              detail: `${activeModeMeta?.description ?? "继续补工具调用链。"} 创建后进入 Studio。`,
-              href: buildWorkflowStarterCreateHref({
-                requestedKeyword,
-                starterId: "tool-enabled-agent",
-                track: activeTrack
-              }),
-              badge: activeModeMeta?.shortLabel ?? "工具 Agent"
-            }
-          : activeMode === "sandbox"
-            ? {
-                title: "创建 Sandbox Flow",
-                detail: `${activeModeMeta?.description ?? "继续补沙盒执行链路。"} 创建后进入 Studio。`,
-                href: buildWorkflowStarterCreateHref({
-                  requestedKeyword,
-                  starterId: "sandbox-code",
-                  track: activeTrack
-                }),
-                badge: activeModeMeta?.shortLabel ?? "Sandbox"
-              }
-            : {
-                title: "创建空白应用",
-                detail: "直接生成最小 workflow 草稿，创建后进入 Studio。",
-                href: buildWorkflowStarterCreateHref({
-                  requestedKeyword,
-                  track: activeTrack
-                }),
-                badge: "Blank Flow"
-              };
-  const quickCreateEntries = [
-    primaryCreateEntry,
-    {
-      title: "从 Starter 模板创建",
-      detail: "先选团队模板，再把草稿送进 Studio。",
-      href: buildWorkspaceStarterHref({
-        requestedKeyword,
-        track: activeTrack
-      }),
-      badge: `${workflowLibrary.starters.length} 个 Starter`
-    }
-  ];
+  const focusedCreateHref = buildWorkflowCreateHrefFromWorkspaceStarterViewState(
+    workflowCreateBootstrapRequest.governanceQueryScope
+  );
   const workspaceUtilityEntry = workspaceContext.can_manage_members
     ? {
         title: "管理成员与权限",
@@ -367,10 +279,6 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
         ]
       : [])
   ];
-  const starterWorkBenchHighlights = starterHighlights.map((starter) => ({
-    ...starter,
-    modeShortLabel: starter.mode.shortLabel
-  }));
   const currentRoleLabel = formatWorkspaceRole(workspaceContext.current_member.role);
   const activeModeDescription =
     activeMode === "all"
@@ -390,15 +298,15 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
         currentRoleLabel={currentRoleLabel}
         currentUserDisplayName={workspaceContext.current_user.display_name}
         filteredApps={filteredApps}
+        focusedCreateHref={focusedCreateHref}
         modeTabs={modeTabs}
-        quickCreateEntries={quickCreateEntries}
         requestedKeyword={requestedKeyword}
         searchState={searchState}
         scopePills={scopePills}
-        starterCount={workflowLibrary.starters.length}
-        starterHighlights={starterWorkBenchHighlights}
+        starterCount={workflowCreateWizardProps.starters.length}
         statusFilters={statusFilters}
         visibleAppSummary={visibleAppSummary}
+        workflowCreateWizardProps={workflowCreateWizardProps}
         workspaceUtilityEntry={workspaceUtilityEntry}
         workspaceName={workspaceContext.workspace.name}
         workspaceSignals={workspaceSignals}

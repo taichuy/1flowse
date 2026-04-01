@@ -10,6 +10,7 @@ import { getWorkflows } from "@/lib/get-workflows";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
 import { buildSystemOverviewFixture } from "@/lib/workbench-page-test-fixtures";
+import { getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-client";
 
 Object.assign(globalThis, { React });
 
@@ -21,6 +22,10 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((href: string) => {
     throw new Error(`redirect:${href}`);
+  }),
+  useRouter: () => ({
+    push: vi.fn(),
+    refresh: vi.fn()
   })
 }));
 
@@ -45,8 +50,13 @@ vi.mock("@/lib/get-system-overview", () => ({
   getSystemOverview: vi.fn()
 }));
 
+vi.mock("@/lib/workflow-publish-client", () => ({
+  getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot: vi.fn()
+}));
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot).mockResolvedValue(null);
 });
 
 function buildWorkspaceContext() {
@@ -248,11 +258,13 @@ describe("WorkspacePage", () => {
     expect(html).toContain('data-component="workspace-catalog-header"');
     expect(html).toContain('data-component="workspace-browse-rail"');
     expect(html).toContain('data-component="workspace-create-strip"');
+    expect(html).toContain('data-component="workflow-create-launcher-panel"');
+    expect(html).toContain('data-component="workflow-create-preview-panel"');
     expect(html).toContain('data-component="workspace-app-list-stage"');
     expect(html).toContain("应用目录");
-    expect(html).toContain("创建空白应用");
-    expect(html).toContain("从 Starter 模板创建");
-    expect(html).toContain("推荐 Starter");
+    expect(html).toContain("工作台直接新建");
+    expect(html).toContain("创建一个应用");
+    expect(html).toContain("打开全屏创建页");
     expect(html).toContain("Starter ChatFlow");
     expect(html).toContain("创建、筛选后直接进入 Studio。");
     expect(html).toContain("管理成员与权限");
@@ -263,9 +275,9 @@ describe("WorkspacePage", () => {
     expect(html).toContain("治理优先");
     expect(html).toContain("查看治理细节");
     expect(html).not.toContain("查看运行");
-    expect(html.indexOf("快速新建")).toBeLessThan(html.indexOf("ChatFlow Alpha"));
+    expect(html.indexOf("工作台直接新建")).toBeLessThan(html.indexOf("ChatFlow Alpha"));
     expect(html).toContain('href="/workflows/new"');
-    expect(html).toContain('href="/workspace-starters"');
+    expect(html).toContain('href="/workspace-starters?starter=starter-chatflow"');
     expect(html).toContain('href="/workspace/settings/team"');
     expect(html).toContain('href="/workflows/workflow-chatflow"');
   });
@@ -404,7 +416,7 @@ describe("WorkspacePage", () => {
     expect(html).toContain("Agent Ops");
     expect(html).not.toContain("ChatFlow Alpha");
     expect(html).toContain('href="/workspace?mode=agent"');
-    expect(html).toContain("创建 Agent 应用");
+    expect(html).toContain("当前筛选范围里没有可复用的 active workspace starter");
     expect(html).toContain('href="/workflows/new?starter=agent"');
   });
 
@@ -504,8 +516,8 @@ describe("WorkspacePage", () => {
 
     expect(html).toContain("当前筛选范围内还没有应用");
     expect(html).toContain("Blank Flow");
-    expect(html).toContain("推荐 Starter");
-    expect(html).toContain("Starter 模板");
+    expect(html).toContain("打开全屏创建页");
+    expect(html).toContain("创建一个应用");
   });
 
   it("hides member-admin entrypoints for editors without member permissions", async () => {

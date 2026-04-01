@@ -25,8 +25,11 @@ export function WorkflowCreateWizard({
   workflows,
   starters,
   nodeCatalog,
-  tools
+  tools,
+  surface = "page"
 }: WorkflowCreateWizardProps) {
+  const isWorkspaceSurface = surface === "workspace";
+  const ShellTag = isWorkspaceSurface ? "div" : "main";
   const router = useRouter();
   const searchQuery = governanceQueryScope.searchQuery;
   const sourceGovernanceKind =
@@ -160,7 +163,11 @@ export function WorkflowCreateWizard({
 
   if (!selectedStarter) {
     return (
-      <main className="editor-shell">
+      <ShellTag
+        className={
+          isWorkspaceSurface ? "workflow-create-shell workflow-create-shell-embedded" : "editor-shell"
+        }
+      >
         <section className="hero creation-hero">
           <div className="hero-copy">
             <p className="eyebrow">Starter scope</p>
@@ -189,36 +196,40 @@ export function WorkflowCreateWizard({
             </p>
           </div>
         </section>
-      </main>
+      </ShellTag>
     );
   }
 
   return (
-    <main className="workflow-create-shell">
-      <section className="workflow-create-topbar">
-        <div className="workflow-create-topbar-left">
-          <Link href={workspaceHref}>
-            <Button
-              type="text"
-              icon={<ArrowLeftOutlined />}
-              className="workflow-create-back-button"
-            >
-              返回工作台
-            </Button>
-          </Link>
-          <div className="workflow-create-topbar-copy">
-            <span>New app</span>
-            <strong>选起点后直接进入 Studio</strong>
+    <ShellTag
+      className={`workflow-create-shell${isWorkspaceSurface ? " workflow-create-shell-embedded" : ""}`}
+    >
+      {isWorkspaceSurface ? null : (
+        <section className="workflow-create-topbar">
+          <div className="workflow-create-topbar-left">
+            <Link href={workspaceHref}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                className="workflow-create-back-button"
+              >
+                返回工作台
+              </Button>
+            </Link>
+            <div className="workflow-create-topbar-copy">
+              <span>New app</span>
+              <strong>选起点后直接进入 Studio</strong>
+            </div>
           </div>
-        </div>
-        <div className="workflow-create-topbar-summary" aria-label="创建页摘要">
-          <span className="workflow-create-inline-chip">{activeTrackPresentation.label}</span>
-          <span className="workflow-create-inline-chip muted">{visibleStarters.length} 个 starter</span>
-          {workflows.length > 0 ? (
-            <span className="workflow-create-inline-chip muted">{workflows.length} 个草稿</span>
-          ) : null}
-        </div>
-      </section>
+          <div className="workflow-create-topbar-summary" aria-label="创建页摘要">
+            <span className="workflow-create-inline-chip">{activeTrackPresentation.label}</span>
+            <span className="workflow-create-inline-chip muted">{visibleStarters.length} 个 starter</span>
+            {workflows.length > 0 ? (
+              <span className="workflow-create-inline-chip muted">{workflows.length} 个草稿</span>
+            ) : null}
+          </div>
+        </section>
+      )}
 
       <section className="workflow-create-page">
         <WorkflowCreateLauncherPanel
@@ -264,6 +275,6 @@ export function WorkflowCreateWizard({
           onWorkflowNameChange={handleWorkflowNameChange}
         />
       </section>
-    </main>
+    </ShellTag>
   );
 }
