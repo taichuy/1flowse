@@ -16,6 +16,10 @@ vi.mock("next/link", () => ({
   } & Record<string, unknown>) => createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
+vi.mock("@/app/actions/publish", () => ({
+  invokePublishedEndpointSample: vi.fn()
+}));
+
 function buildBinding(
   id: string,
   overrides: Partial<WorkflowPublishedEndpointItem> = {}
@@ -62,10 +66,22 @@ function buildBinding(
   } as WorkflowPublishedEndpointItem;
 }
 
+const idleSampleQueryScope = {
+  status: "idle",
+  bindingId: null,
+  invocationId: null,
+  runId: null,
+  runStatus: null,
+  message: null,
+  requestSurface: null,
+  cleanup: null
+} as const;
+
 describe("WorkflowApiSurface", () => {
-  it("renders a navigable documentation layout from published binding facts", () => {
+  it("renders a navigable documentation layout with a local sample invocation form", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowApiSurface, {
+        workflowId: "workflow-1",
         bindings: [
           buildBinding("binding-1", {
             endpoint_name: "OpenAI Chat",
@@ -81,7 +97,11 @@ describe("WorkflowApiSurface", () => {
             protocol: "anthropic"
           })
         ],
-        publishHref: "/workflows/workflow-1/publish"
+        apiHref: "/workflows/workflow-1/api",
+        publishHref: "/workflows/workflow-1/publish",
+        logsHref: "/workflows/workflow-1/logs",
+        monitorHref: "/workflows/workflow-1/monitor",
+        sampleQueryScope: idleSampleQueryScope
       })
     );
 
@@ -98,18 +118,25 @@ describe("WorkflowApiSurface", () => {
     expect(html).toContain("anthropic-version: 2023-06-01");
     expect(html).toContain("model 字段继续使用已发布 alias chat.public");
     expect(html).toContain("/messages");
+    expect(html).toContain('data-component="workflow-api-sample-form"');
+    expect(html).toContain("运行本地 sample invocation");
   });
 
   it("keeps an honest empty state when only draft bindings exist", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowApiSurface, {
+        workflowId: "workflow-1",
         bindings: [
           buildBinding("binding-draft", {
             lifecycle_status: "draft",
             protocol: "openai"
           })
         ],
-        publishHref: "/workflows/workflow-1/publish"
+        apiHref: "/workflows/workflow-1/api",
+        publishHref: "/workflows/workflow-1/publish",
+        logsHref: "/workflows/workflow-1/logs",
+        monitorHref: "/workflows/workflow-1/monitor",
+        sampleQueryScope: idleSampleQueryScope
       })
     );
 
@@ -117,5 +144,41 @@ describe("WorkflowApiSurface", () => {
     expect(html).toContain("draft / offline publish definition");
     expect(html).toContain("前往发布治理");
     expect(html).not.toContain('data-component="workflow-api-directory"');
+  });
+
+  it("fails closed for internal-auth bindings and surfaces a fresh sample receipt when present", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowApiSurface, {
+        workflowId: "workflow-1",
+        bindings: [
+          buildBinding("binding-1", {
+            endpoint_name: "Internal native endpoint",
+            auth_mode: "internal"
+          })
+        ],
+        apiHref: "/workflows/workflow-1/api",
+        publishHref: "/workflows/workflow-1/publish",
+        logsHref: "/workflows/workflow-1/logs",
+        monitorHref: "/workflows/workflow-1/monitor",
+        sampleQueryScope: {
+          status: "error",
+          bindingId: "binding-1",
+          invocationId: "invocation-1",
+          runId: "run-1",
+          runStatus: "failed",
+          message: "当前 binding 使用 internal auth；sample invocation 已 fail-closed。",
+          requestSurface: "native.alias",
+          cleanup: "clean"
+        }
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-api-sample-blocked"');
+    expect(html).toContain("internal auth");
+    expect(html).not.toContain('data-component="workflow-api-sample-form"');
+    expect(html).toContain('data-component="workflow-api-sample-result"');
+    expect(html).toContain("/workflows/workflow-1/logs?publish_binding=binding-1&amp;publish_invocation=invocation-1&amp;run=run-1");
+    expect(html).toContain("/workflows/workflow-1/monitor?publish_binding=binding-1&amp;publish_invocation=invocation-1&amp;run=run-1");
+    expect(html).toContain("/runs/run-1");
   });
 });

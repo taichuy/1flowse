@@ -21,6 +21,10 @@ import {
   requireServerWorkflowStudioSurfaceAccess
 } from "@/lib/server-workspace-access";
 import {
+  readWorkflowApiSampleInvocationQueryScope,
+  WORKFLOW_API_SAMPLE_QUERY_KEYS
+} from "@/lib/workflow-api-surface";
+import {
   readWorkflowLogsRequestedRunId,
   selectWorkflowLogsInvocation,
   selectWorkflowLogsRun
@@ -29,7 +33,10 @@ import {
   appendWorkflowLibraryViewState,
   readWorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
-import { readWorkflowPublishActivityQueryScope } from "@/lib/workflow-publish-activity-query";
+import {
+  readWorkflowPublishActivityQueryScope,
+  resolveWorkflowPublishActivityFilters
+} from "@/lib/workflow-publish-activity-query";
 import {
   buildRunDetailHref,
   buildWorkflowStudioSurfaceHref,
@@ -409,6 +416,16 @@ async function renderWorkflowUtilitySurface(
     const bindings = await getServerWorkflowPublishedEndpoints(sharedContext.workflow.id, {
       includeAllVersions: true
     });
+    const apiSampleQueryScope = readWorkflowApiSampleInvocationQueryScope(
+      sharedContext.resolvedSearchParams
+    );
+    const apiSearchParams = buildWorkflowStudioSearchParams(sharedContext.resolvedSearchParams, {
+      omitKeys: ["surface", ...WORKFLOW_API_SAMPLE_QUERY_KEYS]
+    });
+    const canonicalApiHref = appendSearchParamsToHref(
+      buildWorkflowStudioSurfaceHref(sharedContext.workflow.id, "api"),
+      apiSearchParams
+    );
 
     return (
       <WorkflowStudioShell
@@ -428,8 +445,13 @@ async function renderWorkflowUtilitySurface(
           data-surface={surface}
         >
           <WorkflowApiSurface
+            workflowId={sharedContext.workflow.id}
             bindings={bindings}
+            apiHref={canonicalApiHref}
             publishHref={sharedContext.surfaceHrefs.publish}
+            logsHref={sharedContext.surfaceHrefs.logs}
+            monitorHref={sharedContext.surfaceHrefs.monitor}
+            sampleQueryScope={apiSampleQueryScope}
           />
         </section>
       </WorkflowStudioShell>
@@ -632,15 +654,64 @@ async function renderWorkflowUtilitySurface(
       includeAllVersions: true
     });
     const publishedBindings = bindings.filter((binding) => binding.lifecycle_status === "published");
-    const governanceSnapshot = publishedBindings.length
-      ? await getWorkflowPublishGovernanceSnapshot(sharedContext.workflow.id, publishedBindings)
-      : {
-          cacheInventories: {},
-          apiKeysByBinding: {},
-          invocationAuditsByBinding: {},
-          invocationDetailsByBinding: {},
-          rateLimitWindowAuditsByBinding: {}
-        };
+    const monitorActivityQueryScope = readWorkflowPublishActivityQueryScope(
+      sharedContext.resolvedSearchParams
+    );
+    const requestedMonitorRunId = readWorkflowLogsRequestedRunId(
+      sharedContext.resolvedSearchParams.run
+    );
+    const monitorActivityFilters = resolveWorkflowPublishActivityFilters(
+      monitorActivityQueryScope,
+      publishedBindings
+    );
+    const focusedMonitorBindings = monitorActivityFilters.governanceFetchFilter?.bindingId
+      ? publishedBindings.filter(
+          (binding) => binding.id === monitorActivityFilters.governanceFetchFilter?.bindingId
+        )
+      : publishedBindings;
+    let governanceSnapshot: Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>> = {
+      cacheInventories: {},
+      apiKeysByBinding: {},
+      invocationAuditsByBinding: {},
+      invocationDetailsByBinding: {},
+      rateLimitWindowAuditsByBinding: {}
+    };
+
+    if (focusedMonitorBindings.length > 0) {
+      let activeInvocationFilter = monitorActivityFilters.governanceFetchFilter;
+
+      if (
+        activeInvocationFilter &&
+        monitorActivityQueryScope.invocationId &&
+        monitorActivityQueryScope.timeWindow === "all"
+      ) {
+        const focusedInvocationDetail = await getPublishedEndpointInvocationDetail(
+          sharedContext.workflow.id,
+          activeInvocationFilter.bindingId,
+          monitorActivityQueryScope.invocationId
+        );
+        const focusWindow =
+          focusedInvocationDetail?.kind === "ok"
+            ? buildWorkflowMonitorFocusWindow(
+                focusedInvocationDetail.data.invocation.created_at
+              )
+            : null;
+
+        if (focusWindow) {
+          activeInvocationFilter = {
+            ...activeInvocationFilter,
+            ...focusWindow,
+            limit: 24
+          };
+        }
+      }
+
+      governanceSnapshot = await getWorkflowPublishGovernanceSnapshot(
+        sharedContext.workflow.id,
+        focusedMonitorBindings,
+        activeInvocationFilter ? { activeInvocationFilter } : undefined
+      );
+    }
 
     return (
       <WorkflowStudioShell
@@ -667,6 +738,9 @@ async function renderWorkflowUtilitySurface(
             logsHref={sharedContext.surfaceHrefs.logs}
             workflowEditorHref={sharedContext.surfaceHrefs.editor}
             currentHref={sharedContext.surfaceHrefs.monitor}
+            focusBindingId={monitorActivityQueryScope.bindingId}
+            focusInvocationId={monitorActivityQueryScope.invocationId}
+            focusRunId={requestedMonitorRunId}
           />
         </section>
       </WorkflowStudioShell>
@@ -792,7 +866,7 @@ function buildWorkflowStudioSearchParams(
   options: { omitKeys?: string[] } = {}
 ) {
   const result = new URLSearchParams();
-  const omittedKeys = new Set(options.omitKeys ?? []);
+  const omittedKeys = new Set([...(options.omitKeys ?? []), ...WORKFLOW_API_SAMPLE_QUERY_KEYS]);
 
   for (const [key, rawValue] of Object.entries(searchParams).sort(([left], [right]) =>
     left.localeCompare(right)
@@ -814,4 +888,21 @@ function buildWorkflowStudioSearchParams(
 function appendSearchParamsToHref(href: string, searchParams: URLSearchParams) {
   const query = searchParams.toString();
   return query ? `${href}?${query}` : href;
+}
+
+function buildWorkflowMonitorFocusWindow(createdAt: string | null | undefined) {
+  const timestamp = Date.parse(createdAt ?? "");
+
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const createdAtDate = new Date(timestamp);
+  const windowStart = new Date(createdAtDate);
+  windowStart.setUTCMinutes(0, 0, 0);
+
+  return {
+    createdFrom: windowStart.toISOString(),
+    createdTo: new Date(windowStart.getTime() + 60 * 60 * 1000).toISOString()
+  };
 }

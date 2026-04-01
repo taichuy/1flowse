@@ -1,18 +1,152 @@
 import React from "react";
 import Link from "next/link";
 
+import { invokePublishedEndpointSample } from "@/app/actions/publish";
 import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
 import {
   buildWorkflowApiBindingDoc,
+  buildWorkflowApiSampleBlockedMessage,
+  buildWorkflowApiSampleLogsHref,
+  buildWorkflowApiSampleMonitorHref,
+  type WorkflowApiSampleInvocationQueryScope,
   selectPublishedWorkflowBindings
 } from "@/lib/workflow-api-surface";
+import { buildRunDetailHref } from "@/lib/workbench-links";
 
 type WorkflowApiSurfaceProps = {
+  workflowId: string;
   bindings: WorkflowPublishedEndpointItem[];
+  apiHref: string;
   publishHref: string;
+  logsHref: string;
+  monitorHref: string;
+  sampleQueryScope: WorkflowApiSampleInvocationQueryScope;
 };
 
-export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurfaceProps) {
+function formatSampleSurfaceLabel(requestSurface: WorkflowApiSampleInvocationQueryScope["requestSurface"]) {
+  switch (requestSurface) {
+    case "openai.chat.completions":
+      return "OpenAI chat.completions";
+    case "anthropic.messages":
+      return "Anthropic messages";
+    case "native.alias":
+      return "7Flows native alias";
+    default:
+      return "Published gateway";
+  }
+}
+
+function renderWorkflowApiSampleResult({
+  bindingId,
+  apiHref,
+  logsHref,
+  monitorHref,
+  publishHref,
+  sampleQueryScope
+}: {
+  bindingId: string;
+  apiHref: string;
+  logsHref: string;
+  monitorHref: string;
+  publishHref: string;
+  sampleQueryScope: WorkflowApiSampleInvocationQueryScope;
+}) {
+  if (sampleQueryScope.status === "idle" || sampleQueryScope.bindingId !== bindingId) {
+    return null;
+  }
+
+  const handoff = {
+    bindingId: sampleQueryScope.bindingId,
+    invocationId: sampleQueryScope.invocationId,
+    runId: sampleQueryScope.runId
+  };
+  const hasTraceHandoff = Boolean(sampleQueryScope.invocationId || sampleQueryScope.runId);
+
+  return (
+    <div
+      className="payload-card compact-card"
+      data-component="workflow-api-sample-result"
+      data-sample-status={sampleQueryScope.status}
+    >
+      <div className="payload-card-header">
+        <span className="status-meta">
+          {sampleQueryScope.status === "success" ? "Fresh sample ready" : "Fresh sample blocked"}
+        </span>
+        <div className="workflow-api-chip-row">
+          <span className="event-chip">{formatSampleSurfaceLabel(sampleQueryScope.requestSurface)}</span>
+          {sampleQueryScope.runStatus ? (
+            <span className="event-chip">run {sampleQueryScope.runStatus}</span>
+          ) : null}
+          {sampleQueryScope.cleanup === "revoke_failed" ? (
+            <span className="event-chip">temp key revoke failed</span>
+          ) : null}
+        </div>
+      </div>
+
+      {sampleQueryScope.message ? (
+        <p className={`sync-message ${sampleQueryScope.status}`}>{sampleQueryScope.message}</p>
+      ) : null}
+
+      <dl className="compact-meta-list publish-key-meta">
+        <div>
+          <dt>Binding</dt>
+          <dd>{bindingId}</dd>
+        </div>
+        <div>
+          <dt>Invocation</dt>
+          <dd>{sampleQueryScope.invocationId ?? "未回读到 fresh invocation"}</dd>
+        </div>
+        <div>
+          <dt>Run</dt>
+          <dd>{sampleQueryScope.runId ?? "未回读到 run id"}</dd>
+        </div>
+      </dl>
+
+      <div className="binding-actions">
+        {hasTraceHandoff ? (
+          <Link
+            className="workflow-studio-secondary-link"
+            href={buildWorkflowApiSampleLogsHref(logsHref, handoff)}
+          >
+            前往日志与标注
+          </Link>
+        ) : null}
+        {hasTraceHandoff ? (
+          <Link
+            className="workflow-studio-secondary-link"
+            href={buildWorkflowApiSampleMonitorHref(monitorHref, handoff)}
+          >
+            前往监测报表
+          </Link>
+        ) : null}
+        {sampleQueryScope.runId ? (
+          <Link
+            className="workflow-studio-secondary-link"
+            href={buildRunDetailHref(sampleQueryScope.runId)}
+          >
+            查看 run 详情
+          </Link>
+        ) : null}
+        <Link className="workflow-studio-secondary-link" href={publishHref}>
+          查看发布治理
+        </Link>
+        <Link className="workflow-studio-secondary-link" href={apiHref}>
+          清除结果
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export function WorkflowApiSurface({
+  workflowId,
+  bindings,
+  apiHref,
+  publishHref,
+  logsHref,
+  monitorHref,
+  sampleQueryScope
+}: WorkflowApiSurfaceProps) {
   const publishedBindings = selectPublishedWorkflowBindings(bindings);
   const nonPublishedCount = Math.max(bindings.length - publishedBindings.length, 0);
   const docs = publishedBindings.map((binding) => buildWorkflowApiBindingDoc(binding));
@@ -53,7 +187,8 @@ export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurface
             <h2>访问 API</h2>
             <p>
               当前页面直接消费 workflow 已发布 binding 的真实 contract：围绕 base URL、鉴权、
-              endpoint 入口、最小请求示例与协议差异组织成文档页，避免再从 publish 表单或外部记忆倒推调用方式。
+              endpoint 入口、最小请求示例与协议差异组织成文档页，并在同一处提供 local-first
+              sample invocation seam，避免作者还要切去外部 client 手工点亮 logs / monitor。
             </p>
           </div>
           <div className="workspace-surface-actions workflow-api-surface-actions">
@@ -84,91 +219,140 @@ export function WorkflowApiSurface({ bindings, publishHref }: WorkflowApiSurface
 
       <div className="workflow-api-layout">
         <div className="workflow-api-doc-list">
-          {docs.map((doc) => (
-            <article
-              className="workspace-panel workflow-api-doc-card"
-              data-binding-id={doc.bindingId}
-              data-component="workflow-api-binding-doc"
-              id={doc.anchorId}
-              key={doc.bindingId}
-            >
-              <div className="workflow-api-doc-header">
-                <div>
-                  <p className="workflow-studio-placeholder-eyebrow">Endpoint</p>
-                  <h3>{doc.title}</h3>
-                  <p>{doc.endpointSummary}</p>
+          {docs.map((doc) => {
+            const binding = publishedBindings.find((item) => item.id === doc.bindingId);
+            const blockedMessage = binding ? buildWorkflowApiSampleBlockedMessage(binding) : null;
+
+            return (
+              <article
+                className="workspace-panel workflow-api-doc-card"
+                data-binding-id={doc.bindingId}
+                data-component="workflow-api-binding-doc"
+                id={doc.anchorId}
+                key={doc.bindingId}
+              >
+                <div className="workflow-api-doc-header">
+                  <div>
+                    <p className="workflow-studio-placeholder-eyebrow">Endpoint</p>
+                    <h3>{doc.title}</h3>
+                    <p>{doc.endpointSummary}</p>
+                  </div>
+                  <div className="workflow-api-chip-row">
+                    {doc.protocolChips.map((chip) => (
+                      <span className="event-chip" key={`${doc.bindingId}-${chip}`}>
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="workflow-api-chip-row">
-                  {doc.protocolChips.map((chip) => (
-                    <span className="event-chip" key={`${doc.bindingId}-${chip}`}>
-                      {chip}
-                    </span>
+
+                <div className="workspace-overview-strip workflow-api-meta-strip">
+                  <article className="workspace-stat-card">
+                    <span>Protocol</span>
+                    <strong>{doc.protocolLabel}</strong>
+                  </article>
+                  <article className="workspace-stat-card">
+                    <span>Auth mode</span>
+                    <strong>{doc.authModeLabel}</strong>
+                  </article>
+                  <article className="workspace-stat-card workspace-stat-card-wide">
+                    <span>Base URL</span>
+                    <strong>{doc.baseUrl}</strong>
+                    <p className="workspace-stat-copy">Request path: {doc.requestPath}</p>
+                  </article>
+                </div>
+
+                <div className="entry-card compact-card" data-component="workflow-api-sample-card">
+                  <p className="entry-card-title">Local smoke</p>
+                  <p className="section-copy entry-copy">
+                    这里会创建一把临时 published API key，在本机 published gateway 上打一次真实样本，随后自动吊销，
+                    让后续 `/logs`、`/monitor` 能继续沿 invocation / run trace 主链排查。
+                  </p>
+
+                  {blockedMessage ? (
+                    <div data-component="workflow-api-sample-blocked">
+                      <p className="sync-message error">{blockedMessage}</p>
+                      <div className="binding-actions">
+                        <Link className="workflow-studio-secondary-link" href={publishHref}>
+                          去发布治理切换 auth
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <form
+                      action={invokePublishedEndpointSample}
+                      className="binding-actions"
+                      data-component="workflow-api-sample-form"
+                    >
+                      <input type="hidden" name="workflowId" value={workflowId} />
+                      <input type="hidden" name="bindingId" value={doc.bindingId} />
+                      <input type="hidden" name="apiHref" value={`${apiHref}#${doc.anchorId}`} />
+                      <button className="sync-button" type="submit">
+                        运行本地 sample invocation
+                      </button>
+                      <Link className="workflow-studio-secondary-link" href={publishHref}>
+                        查看发布治理
+                      </Link>
+                    </form>
+                  )}
+
+                  {renderWorkflowApiSampleResult({
+                    bindingId: doc.bindingId,
+                    apiHref,
+                    logsHref,
+                    monitorHref,
+                    publishHref,
+                    sampleQueryScope
+                  })}
+                </div>
+
+                <div className="workflow-api-doc-grid">
+                  {doc.sections.map((section) => (
+                    <section
+                      className="workflow-api-section-card"
+                      data-component="workflow-api-doc-section"
+                      data-section-id={section.id}
+                      id={section.id}
+                      key={section.id}
+                    >
+                      <div className="workflow-api-section-heading">
+                        <p className="workflow-studio-placeholder-eyebrow">{section.eyebrow}</p>
+                        <h4>{section.title}</h4>
+                      </div>
+
+                      <p className="section-copy">{section.description}</p>
+
+                      {section.metaRows?.length ? (
+                        <dl className="workflow-api-meta-list">
+                          {section.metaRows.map((row) => (
+                            <div key={`${section.id}-${row.label}`}>
+                              <dt>{row.label}</dt>
+                              <dd>{row.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
+
+                      {section.bulletItems?.length ? (
+                        <ul className="workflow-api-bullet-list">
+                          {section.bulletItems.map((item) => (
+                            <li key={`${section.id}-${item}`}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+
+                      {section.codeBlock ? (
+                        <div className="workflow-api-code-card">
+                          <div className="workflow-api-code-header">{section.codeLabel ?? "Code"}</div>
+                          <pre className="workflow-api-code-block">{section.codeBlock}</pre>
+                        </div>
+                      ) : null}
+                    </section>
                   ))}
                 </div>
-              </div>
-
-              <div className="workspace-overview-strip workflow-api-meta-strip">
-                <article className="workspace-stat-card">
-                  <span>Protocol</span>
-                  <strong>{doc.protocolLabel}</strong>
-                </article>
-                <article className="workspace-stat-card">
-                  <span>Auth mode</span>
-                  <strong>{doc.authModeLabel}</strong>
-                </article>
-                <article className="workspace-stat-card workspace-stat-card-wide">
-                  <span>Base URL</span>
-                  <strong>{doc.baseUrl}</strong>
-                  <p className="workspace-stat-copy">Request path: {doc.requestPath}</p>
-                </article>
-              </div>
-
-              <div className="workflow-api-doc-grid">
-                {doc.sections.map((section) => (
-                  <section
-                    className="workflow-api-section-card"
-                    data-component="workflow-api-doc-section"
-                    data-section-id={section.id}
-                    id={section.id}
-                    key={section.id}
-                  >
-                    <div className="workflow-api-section-heading">
-                      <p className="workflow-studio-placeholder-eyebrow">{section.eyebrow}</p>
-                      <h4>{section.title}</h4>
-                    </div>
-
-                    <p className="section-copy">{section.description}</p>
-
-                    {section.metaRows?.length ? (
-                      <dl className="workflow-api-meta-list">
-                        {section.metaRows.map((row) => (
-                          <div key={`${section.id}-${row.label}`}>
-                            <dt>{row.label}</dt>
-                            <dd>{row.value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : null}
-
-                    {section.bulletItems?.length ? (
-                      <ul className="workflow-api-bullet-list">
-                        {section.bulletItems.map((item) => (
-                          <li key={`${section.id}-${item}`}>{item}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-
-                    {section.codeBlock ? (
-                      <div className="workflow-api-code-card">
-                        <div className="workflow-api-code-header">{section.codeLabel ?? "Code"}</div>
-                        <pre className="workflow-api-code-block">{section.codeBlock}</pre>
-                      </div>
-                    ) : null}
-                  </section>
-                ))}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
 
         <aside className="workspace-panel workflow-api-directory" data-component="workflow-api-directory">

@@ -5,6 +5,10 @@ import {
   buildWorkflowPublishPrimaryFollowUpSurface,
   listPublishedInvocationRunFollowUpSampleViews,
 } from "@/lib/published-invocation-presenters";
+import {
+  selectWorkflowLogsInvocation,
+  type WorkflowLogsSelectionSource,
+} from "@/lib/workflow-logs-surface";
 import type {
   PublishedEndpointInvocationFacetItem,
   PublishedEndpointInvocationFailureReasonItem,
@@ -41,6 +45,17 @@ type WorkflowMonitorWindowSummary = {
   chips: string[];
 };
 
+type WorkflowMonitorFocusSurface = {
+  activeBindingId: string | null;
+  selectedInvocationId: string | null;
+  selectedRunId: string | null;
+  selectionSource: WorkflowLogsSelectionSource;
+  selectionNotice: string | null;
+  headline: string;
+  detail: string;
+  chips: string[];
+};
+
 type WorkflowMonitorSurfaceModel = {
   publishedBindings: WorkflowPublishedEndpointItem[];
   totalBindings: number;
@@ -57,13 +72,126 @@ type WorkflowMonitorSurfaceModel = {
   sampledRunCards: ReturnType<typeof buildOperatorRunSampleCards>;
   primaryFollowUp: ReturnType<typeof buildWorkflowPublishPrimaryFollowUpSurface>;
   hasInvocationFacts: boolean;
+  focus: WorkflowMonitorFocusSurface | null;
 };
 
 type BuildWorkflowMonitorSurfaceModelOptions = {
   bindings: WorkflowPublishedEndpointItem[];
   invocationAuditsByBinding: Record<string, PublishedEndpointInvocationListResponse | null>;
   resolveWorkflowDetailHref?: ((workflowId: string) => string | null) | null;
+  focusBindingId?: string | null;
+  focusInvocationId?: string | null;
+  focusRunId?: string | null;
 };
+
+function buildWorkflowMonitorFocusState({
+  publishedBindings,
+  invocationAuditsByBinding,
+  focusBindingId,
+  focusInvocationId,
+  focusRunId,
+}: {
+  publishedBindings: WorkflowPublishedEndpointItem[];
+  invocationAuditsByBinding: Record<string, PublishedEndpointInvocationListResponse | null>;
+  focusBindingId: string | null;
+  focusInvocationId: string | null;
+  focusRunId: string | null;
+}) {
+  if (!focusBindingId && !focusInvocationId && !focusRunId) {
+    return null;
+  }
+
+  const invocationSelection = selectWorkflowLogsInvocation(
+    publishedBindings,
+    invocationAuditsByBinding,
+    focusBindingId,
+    focusInvocationId
+  );
+  const activeInvocationItems = invocationSelection.activeBindingId
+    ? invocationAuditsByBinding[invocationSelection.activeBindingId]?.items ?? []
+    : [];
+  const activeInvocationItem =
+    activeInvocationItems.find((item) => item.id === invocationSelection.selectedInvocationId) ??
+    activeInvocationItems[0] ??
+    null;
+  const selectedRunId = activeInvocationItem?.run_id ?? focusRunId ?? null;
+  const selectionNotice = [
+    invocationSelection.selectionNotice,
+    focusRunId && selectedRunId && focusRunId !== selectedRunId
+      ? `请求的 run ${focusRunId} 不在当前 monitor 聚焦窗口的 sampled follow-up 里，页面已回退到 invocation 关联的 run ${selectedRunId}。`
+      : null,
+    focusRunId && !selectedRunId
+      ? "请求的 run 还没有回接到 monitor 当前窗口的 sampled follow-up，页面继续保留 invocation 级摘要。"
+      : null,
+  ]
+    .filter((notice): notice is string => Boolean(notice))
+    .join(" ");
+
+  return {
+    activeBindingId: invocationSelection.activeBindingId,
+    selectedInvocationId: invocationSelection.selectedInvocationId,
+    selectedRunId,
+    selectionSource:
+      focusBindingId || focusInvocationId
+        ? invocationSelection.selectionSource
+        : focusRunId
+          ? "query"
+          : "latest",
+    selectionNotice: selectionNotice || null,
+  };
+}
+
+function buildWorkflowMonitorFocusSurface(
+  focusState: ReturnType<typeof buildWorkflowMonitorFocusState>,
+  timeWindowLabel: string
+): WorkflowMonitorFocusSurface | null {
+  if (!focusState) {
+    return null;
+  }
+
+  return {
+    ...focusState,
+    headline: focusState.selectedInvocationId
+      ? `Fresh sample 已对齐 ${focusState.selectedInvocationId}。`
+      : focusState.activeBindingId
+        ? `Fresh traffic 已聚焦 ${focusState.activeBindingId}。`
+        : focusState.selectedRunId
+          ? `Fresh run 已聚焦 ${focusState.selectedRunId}。`
+          : "当前 monitor 已聚焦 recent traffic。",
+    detail: focusState.selectedInvocationId
+      ? `summary、timeline 与 sampled run follow-up 继续围绕同一条 published invocation 所在的 ${timeWindowLabel} 展示，避免把历史流量误读成刚触发的 smoke。`
+      : focusState.activeBindingId
+        ? `当前 monitor 已按 requested binding 的 ${timeWindowLabel} 汇总流量与 follow-up。`
+        : `当前 monitor 继续保留 workflow 级 ${timeWindowLabel} 摘要。`,
+    chips: [
+      focusState.activeBindingId ? `binding · ${focusState.activeBindingId}` : null,
+      focusState.selectedInvocationId
+        ? `invocation · ${focusState.selectedInvocationId}`
+        : null,
+      focusState.selectedRunId ? `run · ${focusState.selectedRunId}` : null,
+      `window · ${timeWindowLabel}`,
+    ].filter((chip): chip is string => Boolean(chip)),
+  };
+}
+
+function prioritizeWorkflowMonitorRunSampleCards(
+  cards: ReturnType<typeof buildOperatorRunSampleCards>,
+  focusRunId: string | null
+) {
+  if (!focusRunId) {
+    return cards;
+  }
+
+  const prioritizedCards = cards.filter((card) => card.runId === focusRunId);
+  if (prioritizedCards.length === 0) {
+    return cards;
+  }
+
+  return [
+    ...prioritizedCards,
+    ...cards.filter((card) => card.runId !== focusRunId),
+  ];
+}
 
 function mergeBucketFacetCounts(
   existing: PublishedEndpointInvocationBucketFacetItem[],
@@ -659,9 +787,22 @@ export function buildWorkflowMonitorSurfaceModel({
   bindings,
   invocationAuditsByBinding,
   resolveWorkflowDetailHref = null,
+  focusBindingId = null,
+  focusInvocationId = null,
+  focusRunId = null,
 }: BuildWorkflowMonitorSurfaceModelOptions): WorkflowMonitorSurfaceModel {
   const publishedBindings = selectPublishedWorkflowBindings(bindings);
-  const audits = publishedBindings.map((binding) => invocationAuditsByBinding[binding.id] ?? null);
+  const focusState = buildWorkflowMonitorFocusState({
+    publishedBindings,
+    invocationAuditsByBinding,
+    focusBindingId,
+    focusInvocationId,
+    focusRunId,
+  });
+  const scopedBindings = focusState?.activeBindingId
+    ? publishedBindings.filter((binding) => binding.id === focusState.activeBindingId)
+    : publishedBindings;
+  const audits = scopedBindings.map((binding) => invocationAuditsByBinding[binding.id] ?? null);
   const { timeline, timelineGranularity } = mergeWorkflowMonitorTimelines(audits);
   const invocationSummary = sumInvocationSummary(audits);
   const aggregateInvocationAudit = buildWorkflowMonitorAggregateAudit(
@@ -670,16 +811,20 @@ export function buildWorkflowMonitorSurfaceModel({
     timelineGranularity
   );
   const primaryFollowUp = buildWorkflowPublishPrimaryFollowUpSurface(publishedBindings);
-  const sampledRunCards = buildOperatorRunSampleCards(collectRunSamples(audits, resolveWorkflowDetailHref), {
-    resolveWorkflowDetailHref,
-  });
+  const timeWindowLabel = buildTimelineWindowLabel(timeline, timelineGranularity);
+  const sampledRunCards = prioritizeWorkflowMonitorRunSampleCards(
+    buildOperatorRunSampleCards(collectRunSamples(audits, resolveWorkflowDetailHref), {
+      resolveWorkflowDetailHref,
+    }),
+    focusState?.selectedRunId ?? focusRunId
+  );
   const activePublishedBindingCount = audits.filter((audit) => (audit?.summary.total_count ?? 0) > 0).length;
   const hasInvocationFacts =
     invocationSummary.total_count > 0 || timeline.length > 0 || sampledRunCards.length > 0;
   const insightsSurface = aggregateInvocationAudit
     ? buildPublishedInvocationActivityInsightsSurface({
         invocationAudit: aggregateInvocationAudit,
-        timeWindowLabel: buildTimelineWindowLabel(timeline, timelineGranularity),
+        timeWindowLabel,
       })
     : null;
 
@@ -689,7 +834,7 @@ export function buildWorkflowMonitorSurfaceModel({
     totalInvocations: invocationSummary.total_count,
     timeline,
     timelineGranularity,
-    timeWindowLabel: buildTimelineWindowLabel(timeline, timelineGranularity),
+    timeWindowLabel,
     sampledRunCards,
     primaryFollowUp,
     aggregateInvocationAudit,
@@ -706,7 +851,7 @@ export function buildWorkflowMonitorSurfaceModel({
       publishedBindings,
       sampledRunCards,
       aggregateInvocationAudit,
-      timeWindowLabel: buildTimelineWindowLabel(timeline, timelineGranularity),
+      timeWindowLabel,
     }),
     insightsSurface,
     hasInvocationFacts,
@@ -716,5 +861,6 @@ export function buildWorkflowMonitorSurfaceModel({
       sampledRunCards,
       activePublishedBindingCount,
     }),
+    focus: buildWorkflowMonitorFocusSurface(focusState, timeWindowLabel),
   };
 }

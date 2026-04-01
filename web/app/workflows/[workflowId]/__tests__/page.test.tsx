@@ -50,6 +50,10 @@ vi.mock("next/link", () => ({
     createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
+vi.mock("@/app/actions/publish", () => ({
+  invokePublishedEndpointSample: vi.fn()
+}));
+
 vi.mock("@/components/workspace-shell", () => ({
   WorkspaceShell: ({ children }: { children: ReactNode }) =>
     createElement("div", { "data-component": "workspace-shell" }, children)
@@ -778,6 +782,8 @@ describe("Workflow studio routes", () => {
     expect(html).toContain("Chat endpoint");
     expect(html).toContain("http://localhost:8000/v1/chat/completions");
     expect(html).toContain("Authorization: Bearer &lt;published-api-key&gt;");
+    expect(html).toContain('data-component="workflow-api-sample-form"');
+    expect(html).toContain("运行本地 sample invocation");
     expect(html).not.toContain('data-component="workflow-studio-placeholder"');
     expect(html).toContain("/workflows/workflow-1/api");
     expect(html).toContain("/workflows/workflow-1/logs");
@@ -786,6 +792,55 @@ describe("Workflow studio routes", () => {
       includeAllVersions: true
     });
     expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).not.toHaveBeenCalled();
+  });
+
+  it("renders the fresh sample receipt from api query-state without leaking it into the clear link", async () => {
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
+      {
+        id: "binding-1",
+        workflow_id: "workflow-1",
+        workflow_version_id: "workflow-version-1",
+        workflow_version: "v1",
+        target_workflow_version_id: "workflow-version-1",
+        target_workflow_version: "v1",
+        compiled_blueprint_id: "blueprint-1",
+        endpoint_id: "chat-endpoint",
+        endpoint_name: "Chat endpoint",
+        endpoint_alias: "chat.public",
+        route_path: "/chat/public",
+        protocol: "openai",
+        auth_mode: "api_key",
+        streaming: true,
+        lifecycle_status: "published",
+        input_schema: {},
+        output_schema: null,
+        published_at: "2026-03-31T08:00:00Z",
+        created_at: "2026-03-31T08:00:00Z",
+        updated_at: "2026-03-31T08:00:00Z"
+      }
+    ] as Awaited<ReturnType<typeof getServerWorkflowPublishedEndpoints>>);
+
+    const html = renderToStaticMarkup(
+      await WorkflowApiPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({
+          api_sample_status: "success",
+          api_sample_binding: "binding-1",
+          api_sample_invocation: "invocation-1",
+          api_sample_run: "run-1",
+          api_sample_run_status: "succeeded",
+          api_sample_message: "Fresh sample recorded.",
+          api_sample_request_surface: "openai.chat.completions"
+        })
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-api-sample-result"');
+    expect(html).toContain("Fresh sample recorded.");
+    expect(html).toContain("/workflows/workflow-1/logs?publish_binding=binding-1&amp;publish_invocation=invocation-1&amp;run=run-1");
+    expect(html).toContain("/workflows/workflow-1/monitor?publish_binding=binding-1&amp;publish_invocation=invocation-1&amp;run=run-1");
+    expect(html).toContain('href="/workflows/workflow-1/api"');
+    expect(html).not.toContain("api_sample_status=success");
   });
 
   it("renders an honest empty state when the workflow has no published binding", async () => {
@@ -1208,7 +1263,178 @@ describe("Workflow studio routes", () => {
     expect(monitorHtml).not.toContain('data-component="workflow-studio-placeholder"');
     expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).toHaveBeenCalledWith(
       "workflow-1",
-      expect.arrayContaining([expect.objectContaining({ id: "binding-1" })])
+      expect.arrayContaining([expect.objectContaining({ id: "binding-1" })]),
+      undefined
+    );
+  });
+
+  it("scopes monitor handoff to the requested invocation window when fresh sample query is present", async () => {
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
+      buildPublishedBinding("binding-1"),
+      buildPublishedBinding("binding-2", {
+        endpoint_alias: "binding-2.alias",
+        route_path: "/published/binding-2",
+      })
+    ]);
+    vi.mocked(getPublishedEndpointInvocationDetail).mockResolvedValue(
+      buildPublishedInvocationDetail("invocation-1", {
+        invocation: buildPublishedInvocationItem("invocation-1", {
+          binding_id: "binding-1",
+          run_id: "run-monitor-1",
+          created_at: "2026-03-31T09:58:00Z",
+          run_follow_up: {
+            affected_run_count: 1,
+            sampled_run_count: 1,
+            waiting_run_count: 1,
+            running_run_count: 0,
+            succeeded_run_count: 0,
+            failed_run_count: 1,
+            unknown_run_count: 0,
+            recommended_action: null,
+            explanation: null,
+            sampled_runs: [
+              {
+                run_id: "run-monitor-1",
+                snapshot: {
+                  workflow_id: "workflow-1",
+                  status: "waiting_callback",
+                  current_node_id: "node-1",
+                  waiting_reason: "callback",
+                  execution_focus_node_id: "node-1",
+                  execution_focus_node_name: "LLM Agent",
+                  execution_focus_node_run_id: "node-run-1",
+                  callback_waiting_explanation: {
+                    primary_signal: "Callback still pending",
+                    follow_up: "wait for external callback"
+                  },
+                  callback_waiting_lifecycle: null
+                },
+                callback_tickets: [],
+                sensitive_access_entries: [],
+                tool_governance: null,
+                legacy_auth_governance: null,
+              }
+            ]
+          }
+        })
+      })
+    );
+    vi.mocked(getWorkflowPublishGovernanceSnapshot).mockResolvedValue({
+      cacheInventories: {},
+      apiKeysByBinding: {},
+      invocationAuditsByBinding: {
+        "binding-1": buildPublishedInvocationAudit({
+          facets: {
+            status_counts: [],
+            request_source_counts: [],
+            request_surface_counts: [{ value: "native.workflow", count: 1 }],
+            cache_status_counts: [{ value: "miss", count: 1 }],
+            run_status_counts: [{ value: "waiting_callback", count: 1 }],
+            reason_counts: [{ value: "runtime_failed", count: 1 }],
+            api_key_usage: [],
+            recent_failure_reasons: [],
+            timeline_granularity: "hour",
+            timeline: [
+              {
+                bucket_start: "2026-03-31T09:00:00Z",
+                bucket_end: "2026-03-31T10:00:00Z",
+                total_count: 1,
+                succeeded_count: 0,
+                failed_count: 1,
+                rejected_count: 0,
+                api_key_counts: [],
+                cache_status_counts: [{ value: "miss", count: 1 }],
+                run_status_counts: [{ value: "waiting_callback", count: 1 }],
+                request_surface_counts: [{ value: "native.workflow", count: 1 }],
+                reason_counts: [{ value: "runtime_failed", count: 1 }],
+              }
+            ],
+          },
+          items: [
+            buildPublishedInvocationItem("invocation-1", {
+              binding_id: "binding-1",
+              run_id: "run-monitor-1",
+              created_at: "2026-03-31T09:58:00Z",
+              run_status: "waiting_callback",
+              run_waiting_reason: "callback",
+              run_follow_up: {
+                affected_run_count: 1,
+                sampled_run_count: 1,
+                waiting_run_count: 1,
+                running_run_count: 0,
+                succeeded_run_count: 0,
+                failed_run_count: 1,
+                unknown_run_count: 0,
+                recommended_action: null,
+                explanation: null,
+                sampled_runs: [
+                  {
+                    run_id: "run-monitor-1",
+                    snapshot: {
+                      workflow_id: "workflow-1",
+                      status: "waiting_callback",
+                      current_node_id: "node-1",
+                      waiting_reason: "callback",
+                      execution_focus_node_id: "node-1",
+                      execution_focus_node_name: "LLM Agent",
+                      execution_focus_node_run_id: "node-run-1",
+                      callback_waiting_explanation: {
+                        primary_signal: "Callback still pending",
+                        follow_up: "wait for external callback"
+                      },
+                      callback_waiting_lifecycle: null
+                    },
+                    callback_tickets: [],
+                    sensitive_access_entries: [],
+                    tool_governance: null,
+                    legacy_auth_governance: null,
+                  }
+                ]
+              }
+            })
+          ]
+        })
+      },
+      invocationDetailsByBinding: {},
+      rateLimitWindowAuditsByBinding: {}
+    } as Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>>);
+
+    const monitorHtml = renderToStaticMarkup(
+      await WorkflowMonitorPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({
+          publish_binding: "binding-1",
+          publish_invocation: "invocation-1",
+          run: "run-monitor-1"
+        })
+      })
+    );
+
+    expect(monitorHtml).toContain('data-component="workflow-monitor-focus-card"');
+    expect(monitorHtml).toContain('data-selection-source="query"');
+    expect(monitorHtml).toContain("binding · binding-1");
+    expect(monitorHtml).toContain("invocation · invocation-1");
+    expect(monitorHtml).toContain("run · run-monitor-1");
+    expect(monitorHtml).toContain(
+      'href="/workflows/workflow-1/logs?publish_binding=binding-1&amp;publish_invocation=invocation-1&amp;run=run-monitor-1"'
+    );
+    expect(vi.mocked(getPublishedEndpointInvocationDetail)).toHaveBeenCalledWith(
+      "workflow-1",
+      "binding-1",
+      "invocation-1"
+    );
+    expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).toHaveBeenCalledWith(
+      "workflow-1",
+      [expect.objectContaining({ id: "binding-1" })],
+      {
+        activeInvocationFilter: expect.objectContaining({
+          bindingId: "binding-1",
+          invocationId: "invocation-1",
+          createdFrom: "2026-03-31T09:00:00.000Z",
+          createdTo: "2026-03-31T10:00:00.000Z",
+          limit: 24,
+        })
+      }
     );
   });
 

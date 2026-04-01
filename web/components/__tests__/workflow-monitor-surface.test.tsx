@@ -287,4 +287,45 @@ describe("WorkflowMonitorSurface", () => {
     expect(html).toContain("Callback still pending");
     expect(html).toContain("OpenAI responses 4");
   });
+
+  it("renders a fresh focus card for the requested invocation handoff", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowMonitorSurface, {
+        workflowId: "workflow-1",
+        bindings: [buildBinding("binding-1"), buildBinding("binding-2")],
+        invocationAuditsByBinding: {
+          "binding-1": buildInvocationAuditWithFacts(),
+          "binding-2": {
+            ...buildInvocationAuditWithFacts(),
+            items: [
+              {
+                ...buildInvocationAuditWithFacts().items[0],
+                id: "invocation-2",
+                binding_id: "binding-2",
+                run_id: "run-monitor-2",
+              },
+            ],
+          },
+        },
+        publishHref: "/workflows/workflow-1/publish",
+        logsHref:
+          "/workflows/workflow-1/logs?publish_binding=binding-1&publish_invocation=invocation-1&run=run-monitor-1",
+        workflowEditorHref: "/workflows/workflow-1/editor",
+        currentHref:
+          "/workflows/workflow-1/monitor?publish_binding=binding-1&publish_invocation=invocation-1&run=run-monitor-1",
+        focusBindingId: "binding-1",
+        focusInvocationId: "invocation-1",
+        focusRunId: "run-monitor-1",
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-monitor-focus-card"');
+    expect(html).toContain('data-selection-source="query"');
+    expect(html).toContain("binding · binding-1");
+    expect(html).toContain("invocation · invocation-1");
+    expect(html).toContain("run · run-monitor-1");
+    expect(html).toContain(
+      'href="/workflows/workflow-1/logs?publish_binding=binding-1&amp;publish_invocation=invocation-1&amp;run=run-monitor-1"'
+    );
+  });
 });

@@ -17,6 +17,9 @@ type WorkflowMonitorSurfaceProps = {
   logsHref: string;
   workflowEditorHref: string;
   currentHref: string;
+  focusBindingId?: string | null;
+  focusInvocationId?: string | null;
+  focusRunId?: string | null;
 };
 
 export function WorkflowMonitorSurface({
@@ -27,11 +30,17 @@ export function WorkflowMonitorSurface({
   logsHref,
   workflowEditorHref,
   currentHref,
+  focusBindingId = null,
+  focusInvocationId = null,
+  focusRunId = null,
 }: WorkflowMonitorSurfaceProps) {
   const model = buildWorkflowMonitorSurfaceModel({
     bindings,
     invocationAuditsByBinding,
     resolveWorkflowDetailHref: () => workflowEditorHref,
+    focusBindingId,
+    focusInvocationId,
+    focusRunId,
   });
   const hasDraftBindings = bindings.some((binding) => binding.lifecycle_status === "draft");
   const summaryFocusGovernanceHandoff =
@@ -94,6 +103,46 @@ export function WorkflowMonitorSurface({
             </article>
           ))}
         </div>
+
+        {model.focus ? (
+          <article
+            className="diagnostic-panel"
+            data-component="workflow-monitor-focus-card"
+            data-selection-source={model.focus.selectionSource}
+          >
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Fresh focus</p>
+                <h2>Current smoke window</h2>
+              </div>
+              <p className="section-copy">
+                monitor 继续沿 API sample handoff 的 binding / invocation / run 聚焦同一扇流量窗口，避免作者回到宽泛 aggregate 后再去猜哪一条才是刚触发的 smoke。
+              </p>
+            </div>
+            <p className="binding-meta">{model.focus.headline}</p>
+            <p className="section-copy entry-copy">{model.focus.detail}</p>
+            {model.focus.chips.length ? (
+              <div className="tool-badge-row">
+                {model.focus.chips.map((chip) => (
+                  <span className="event-chip" key={chip}>
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {model.focus.selectionNotice ? (
+              <p className="section-copy">{model.focus.selectionNotice}</p>
+            ) : null}
+            <div className="section-actions">
+              <Link className="activity-link" href={logsHref}>
+                打开对应日志钻取
+              </Link>
+              <Link className="inline-link secondary" href={workflowEditorHref}>
+                回到编排编辑器
+              </Link>
+            </div>
+          </article>
+        ) : null}
       </section>
 
       <section className="workflow-studio-surface workflow-studio-surface-utility" data-surface="monitor">
@@ -145,7 +194,9 @@ export function WorkflowMonitorSurface({
                 <h2>还没有 invocation / follow-up 样本</h2>
               </div>
               <p className="section-copy">
-                当前 workflow 已有 published binding，但监测页暂时还没有足够的调用样本。先从发布治理确认 endpoint 已对外暴露，再到日志页查看第一批 run。
+                {model.focus
+                  ? "当前 fresh focus 对应的 binding / window 还没有回读到足够的 invocation facts；先回到日志页确认 sample invocation 是否已经落到 published audit，再回来查看 monitor。"
+                  : "当前 workflow 已有 published binding，但监测页暂时还没有足够的调用样本。先从发布治理确认 endpoint 已对外暴露，再到日志页查看第一批 run。"}
               </p>
             </div>
             <div className="section-actions">
