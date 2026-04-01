@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkflowPublishPanel } from "@/components/workflow-publish-panel";
 import type { CallbackWaitingAutomationCheck, SandboxReadinessCheck } from "@/lib/get-system-overview";
@@ -12,21 +12,24 @@ vi.mock("next/link", () => ({
     createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
+const workflowPublishBindingCardProps: Array<Record<string, unknown>> = [];
+
 vi.mock("@/components/workflow-publish-binding-card", () => ({
-  WorkflowPublishBindingCard: ({
-    binding,
-    legacyAuthExportHint,
-    currentHref
-  }: {
-    binding: { id: string };
-    legacyAuthExportHint?: string | null;
-    currentHref?: string | null;
-  }) =>
-    createElement(
+  WorkflowPublishBindingCard: (props: Record<string, unknown>) => {
+    workflowPublishBindingCardProps.push(props);
+
+    const { binding, legacyAuthExportHint, currentHref } = props as {
+      binding: { id: string };
+      legacyAuthExportHint?: string | null;
+      currentHref?: string | null;
+    };
+
+    return createElement(
       "div",
       null,
       `binding:${binding.id}:${legacyAuthExportHint ?? "none"}:${currentHref ?? "none"}`
-    )
+    );
+  }
 }));
 
 vi.mock("@/components/workflow-publish-legacy-auth-cleanup-card", () => ({
@@ -165,6 +168,10 @@ function buildBinding(): WorkflowPublishedEndpointItem {
   };
 }
 
+beforeEach(() => {
+  workflowPublishBindingCardProps.length = 0;
+});
+
 describe("WorkflowPublishPanel", () => {
   it("surfaces missing publish bindings as the primary follow-up instead of clear summary", () => {
     const html = renderToStaticMarkup(
@@ -260,6 +267,131 @@ describe("WorkflowPublishPanel", () => {
     expect(html).toContain('/sensitive-access');
     expect(html).toContain("返回系统首页");
     expect(html).toContain('href="/"');
+  });
+
+  it("rebuilds publish into endpoint directory plus a single selected detail rail", () => {
+    const primaryBinding = buildBinding();
+    const secondaryBinding = {
+      ...buildBinding(),
+      id: "binding-2",
+      endpoint_id: "endpoint-2",
+      endpoint_name: "Assist API",
+      endpoint_alias: "assist.public",
+      route_path: "/assist/public",
+      lifecycle_status: "draft" as const,
+      published_at: null,
+      activity: {
+        ...buildBinding().activity!,
+        total_count: 0,
+        succeeded_count: 0,
+        failed_count: 0,
+        rejected_count: 0,
+        cache_hit_count: 0,
+        cache_miss_count: 0,
+        last_invoked_at: null,
+        last_status: null,
+        last_cache_status: null,
+        last_run_id: null,
+        last_run_status: null,
+        last_reason_code: null
+      }
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishPanel, {
+        workflow: buildWorkflow(),
+        tools: [],
+        bindings: [primaryBinding, secondaryBinding],
+        cacheInventories: {},
+        apiKeysByBinding: {},
+        invocationAuditsByBinding: {},
+        invocationDetailsByBinding: {},
+        selectedInvocationId: null,
+        rateLimitWindowAuditsByBinding: {},
+        activeInvocationFilter: {
+          bindingId: null,
+          status: null,
+          requestSource: null,
+          requestSurface: null,
+          cacheStatus: null,
+          runStatus: null,
+          apiKeyId: null,
+          reasonCode: null,
+          timeWindow: "all"
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness()
+      })
+    );
+
+    expect(html).toContain("Endpoint directory");
+    expect(html).toContain("Selected endpoint");
+    expect(html).toContain("Public Search");
+    expect(html).toContain("Assist API");
+    expect(html).toContain('data-component="workflow-publish-binding-directory"');
+    expect(html).toContain('data-component="workflow-publish-detail-rail"');
+    expect(html).toContain('href="/workflows/workflow-1/publish?publish_binding=binding-2"');
+    expect(workflowPublishBindingCardProps).toHaveLength(1);
+    expect(workflowPublishBindingCardProps[0]).toMatchObject({
+      binding: expect.objectContaining({ id: "binding-1" }),
+      showGovernanceDetails: false,
+      governanceDetailHref: null,
+      collapseGovernanceHref: null
+    });
+  });
+
+  it("keeps the selected detail rail anchored to the active binding query", () => {
+    const secondaryBinding = {
+      ...buildBinding(),
+      id: "binding-2",
+      endpoint_id: "endpoint-2",
+      endpoint_name: "Assist API",
+      endpoint_alias: "assist.public",
+      route_path: "/assist/public",
+      lifecycle_status: "offline" as const,
+      published_at: null,
+      unpublished_at: "2026-03-20T10:30:00Z"
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(WorkflowPublishPanel, {
+        workflow: buildWorkflow(),
+        tools: [],
+        bindings: [buildBinding(), secondaryBinding],
+        cacheInventories: {},
+        apiKeysByBinding: {},
+        invocationAuditsByBinding: {},
+        invocationDetailsByBinding: {},
+        selectedInvocationId: null,
+        rateLimitWindowAuditsByBinding: {},
+        activeInvocationFilter: {
+          bindingId: "binding-2",
+          status: null,
+          requestSource: null,
+          requestSurface: null,
+          cacheStatus: null,
+          runStatus: null,
+          apiKeyId: null,
+          reasonCode: null,
+          timeWindow: "all"
+        },
+        callbackWaitingAutomation: buildCallbackWaitingAutomation(),
+        sandboxReadiness: buildSandboxReadiness(),
+        expandedBindingId: "binding-2",
+        currentHref: "/workflows/workflow-1/publish?publish_binding=binding-2"
+      })
+    );
+
+    expect(html).toContain("Assist API");
+    expect(html).toContain("Detail active");
+    expect(html).toContain("Back to summary");
+    expect(workflowPublishBindingCardProps).toHaveLength(1);
+    expect(workflowPublishBindingCardProps[0]).toMatchObject({
+      binding: expect.objectContaining({ id: "binding-2" }),
+      showGovernanceDetails: true,
+      governanceDetailHref: null,
+      collapseGovernanceHref: null
+    });
   });
 
   it("surfaces the shared sensitive-access backlog at publish summary level", () => {
