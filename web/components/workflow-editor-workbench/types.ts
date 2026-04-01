@@ -176,6 +176,9 @@ export type WorkflowEditorWorkbenchProps = {
   sandboxReadiness?: SandboxReadinessCheck | null;
   sandboxBackends?: SandboxBackendCheck[] | null;
   initialCredentials?: CredentialItem[];
+  initialModelProviderCatalog?: NativeModelProviderCatalogItem[];
+  initialModelProviderConfigs?: WorkspaceModelProviderConfigItem[];
+  initialModelProviderRegistryStatus?: WorkspaceModelProviderRegistryStatus;
   initialRecentRuns?: WorkflowRunListItem[];
   currentEditorHref?: string;
   workflowLibraryHref?: string;
@@ -201,6 +204,9 @@ export type WorkflowEditorWorkbenchBootstrapData = Pick<
   | "callbackWaitingAutomation"
   | "sandboxReadiness"
   | "sandboxBackends"
+  | "initialModelProviderCatalog"
+  | "initialModelProviderConfigs"
+  | "initialModelProviderRegistryStatus"
 >;
 
 export type WorkflowEditorWorkbenchEntryProps = Omit<

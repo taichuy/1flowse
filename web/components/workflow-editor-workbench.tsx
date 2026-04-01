@@ -39,6 +39,9 @@ export function WorkflowEditorWorkbench({
   sandboxReadiness,
   sandboxBackends,
   initialCredentials = [],
+  initialModelProviderCatalog = [],
+  initialModelProviderConfigs = [],
+  initialModelProviderRegistryStatus = "idle",
   initialRecentRuns = [],
   currentEditorHref,
   workflowLibraryHref,
@@ -75,11 +78,14 @@ export function WorkflowEditorWorkbench({
     recentRuns
   } =
     useWorkflowEditorRuntimeData({
-    workflowId: workflow.id,
-    initialCredentials,
-    initialRecentRuns,
-    loadCredentials: Boolean(graph.selectedNodeId),
-    loadRecentRuns: hasRequestedRunOverlay
+      workflowId: workflow.id,
+      initialCredentials,
+      initialModelProviderCatalog,
+      initialModelProviderConfigs,
+      initialModelProviderRegistryStatus,
+      initialRecentRuns,
+      loadCredentials: Boolean(graph.selectedNodeId),
+      loadRecentRuns: hasRequestedRunOverlay
     });
   const currentDefinitionSignature = useMemo(
     () => JSON.stringify(graph.currentDefinition),

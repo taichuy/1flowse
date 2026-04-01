@@ -1,4 +1,5 @@
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
+import { getWorkspaceModelProviderRegistry } from "@/lib/model-provider-registry";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflows } from "@/lib/get-workflows";
@@ -11,12 +12,14 @@ import type {
 export async function loadWorkflowEditorWorkbenchBootstrap(
   _request: WorkflowEditorWorkbenchBootstrapRequest
 ): Promise<WorkflowEditorWorkbenchBootstrapData> {
-  const [workflows, workflowLibrary, pluginRegistry, systemOverview] = await Promise.all([
-    getWorkflows(),
-    getWorkflowLibrarySnapshot(),
-    getPluginRegistrySnapshot(),
-    getSystemOverview()
-  ]);
+  const [workflows, workflowLibrary, pluginRegistry, systemOverview, modelProviderRegistry] =
+    await Promise.all([
+      getWorkflows(),
+      getWorkflowLibrarySnapshot(),
+      getPluginRegistrySnapshot(),
+      getSystemOverview(),
+      getWorkspaceModelProviderRegistry()
+    ]);
 
   return {
     workflows,
@@ -27,6 +30,9 @@ export async function loadWorkflowEditorWorkbenchBootstrap(
     adapters: pluginRegistry.adapters,
     callbackWaitingAutomation: systemOverview.callback_waiting_automation,
     sandboxReadiness: systemOverview.sandbox_readiness,
-    sandboxBackends: systemOverview.sandbox_backends
+    sandboxBackends: systemOverview.sandbox_backends,
+    initialModelProviderCatalog: modelProviderRegistry?.catalog ?? [],
+    initialModelProviderConfigs: modelProviderRegistry?.items ?? [],
+    initialModelProviderRegistryStatus: modelProviderRegistry ? "ready" : "error"
   };
 }

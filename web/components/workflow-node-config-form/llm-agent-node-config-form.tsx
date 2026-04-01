@@ -136,6 +136,9 @@ export function LlmAgentNodeConfigForm({
   const activeProviderConfigs = modelProviderConfigs.filter(
     (providerConfig) => providerConfig.status === "active"
   );
+  const hasResolvedActiveProviderConfigs = activeProviderConfigs.length > 0;
+  const providerRegistryReady =
+    modelProviderRegistryStatus === "ready" || hasResolvedActiveProviderConfigs;
   const hasLegacyInlineModel = Boolean(
     currentProviderValue ||
       (typeof model.apiKey === "string" && model.apiKey.trim()) ||
@@ -143,7 +146,7 @@ export function LlmAgentNodeConfigForm({
   );
   const effectiveProviderConfigRef =
     currentProviderConfigRef ||
-    (modelProviderRegistryStatus === "ready" && !hasLegacyInlineModel
+    (providerRegistryReady && !hasLegacyInlineModel
       ? activeProviderConfigs[0]?.id ?? ""
       : "");
   const selectedProviderConfig =
@@ -178,17 +181,19 @@ export function LlmAgentNodeConfigForm({
       ? credentials.find((credential) => `credential://${credential.id}` === model.apiKey) ?? null
       : null;
   const shouldAutoBindProviderConfig =
-    modelProviderRegistryStatus === "ready" &&
+    providerRegistryReady &&
     !currentProviderConfigRef &&
     !hasLegacyInlineModel &&
     activeProviderConfigs.length > 0;
   const shouldShowProviderSetupCallout =
     !selectedProviderConfig &&
     !hasLegacyInlineModel &&
+    !hasResolvedActiveProviderConfigs &&
     (modelProviderRegistryStatus === "ready" || modelProviderRegistryStatus === "error");
   const shouldShowProviderRegistryLoading =
     !selectedProviderConfig &&
     !hasLegacyInlineModel &&
+    !hasResolvedActiveProviderConfigs &&
     (modelProviderRegistryStatus === "idle" || modelProviderRegistryStatus === "loading");
 
   useEffect(() => {

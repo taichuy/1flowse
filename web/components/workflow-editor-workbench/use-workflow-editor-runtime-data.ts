@@ -14,6 +14,9 @@ import { getWorkflowRuns, type WorkflowRunListItem } from "@/lib/get-workflow-ru
 type UseWorkflowEditorRuntimeDataOptions = {
   workflowId: string;
   initialCredentials?: CredentialItem[];
+  initialModelProviderCatalog?: NativeModelProviderCatalogItem[];
+  initialModelProviderConfigs?: WorkspaceModelProviderConfigItem[];
+  initialModelProviderRegistryStatus?: WorkspaceModelProviderRegistryStatus;
   initialRecentRuns?: WorkflowRunListItem[];
   loadCredentials?: boolean;
   loadRecentRuns?: boolean;
@@ -57,19 +60,22 @@ function cancelRuntimeDataLoad(handle: IdleCallbackHandle) {
 export function useWorkflowEditorRuntimeData({
   workflowId,
   initialCredentials = [],
+  initialModelProviderCatalog = [],
+  initialModelProviderConfigs = [],
+  initialModelProviderRegistryStatus = "idle",
   initialRecentRuns = [],
   loadCredentials = true,
   loadRecentRuns = true
 }: UseWorkflowEditorRuntimeDataOptions): RuntimeDataState {
   const [credentials, setCredentials] = useState(initialCredentials);
   const [modelProviderCatalog, setModelProviderCatalog] = useState<NativeModelProviderCatalogItem[]>(
-    []
+    initialModelProviderCatalog
   );
   const [modelProviderConfigs, setModelProviderConfigs] = useState<
     WorkspaceModelProviderConfigItem[]
-  >([]);
+  >(initialModelProviderConfigs);
   const [modelProviderRegistryStatus, setModelProviderRegistryStatus] =
-    useState<WorkspaceModelProviderRegistryStatus>(loadCredentials ? "loading" : "idle");
+    useState<WorkspaceModelProviderRegistryStatus>(initialModelProviderRegistryStatus);
   const [recentRuns, setRecentRuns] = useState(initialRecentRuns);
 
   useEffect(() => {

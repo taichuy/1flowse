@@ -194,6 +194,38 @@ describe("LlmAgentNodeConfigForm", () => {
     expect(html).not.toContain("API Key credential");
   });
 
+  it("does not keep the loading placeholder once active team providers are already resolved", () => {
+    const html = renderToStaticMarkup(
+      createElement(LlmAgentNodeConfigForm, {
+        node: {
+          id: "node-llm-fresh-loading",
+          type: "workflowNode",
+          position: { x: 0, y: 0 },
+          data: {
+            label: "Agent",
+            nodeType: "llm_agent",
+            config: {
+              assistant: {
+                enabled: false
+              }
+            }
+          }
+        } as never,
+        nodes: [],
+        tools: [],
+        credentials: [buildCredential()],
+        modelProviderConfigs,
+        modelProviderRegistryStatus: "loading",
+        onChange: () => undefined
+      })
+    );
+
+    expect(html).toContain("OpenAI Team · OpenAI");
+    expect(html).toContain("团队 provider 已成为当前节点的主入口");
+    expect(html).not.toContain("正在读取团队 provider registry...");
+    expect(html).not.toContain('data-component="llm-agent-provider-registry-loading"');
+  });
+
   it("shows team provider setup guidance when registry is unavailable for fresh nodes", () => {
     const html = renderToStaticMarkup(
       createElement(LlmAgentNodeConfigForm, {

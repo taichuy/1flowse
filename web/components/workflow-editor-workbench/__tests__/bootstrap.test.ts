@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
+import { getWorkspaceModelProviderRegistry } from "@/lib/model-provider-registry";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
 import { getWorkflows } from "@/lib/get-workflows";
@@ -16,6 +17,10 @@ vi.mock("@/lib/get-workflows", () => ({
 
 vi.mock("@/lib/get-plugin-registry", () => ({
   getPluginRegistrySnapshot: vi.fn()
+}));
+
+vi.mock("@/lib/model-provider-registry", () => ({
+  getWorkspaceModelProviderRegistry: vi.fn()
 }));
 
 vi.mock("@/lib/get-system-overview", () => ({
@@ -41,6 +46,46 @@ beforeEach(() => {
     adapters: [{ id: "adapter-1" }],
     tools: [{ id: "tool-1" }]
   } as Awaited<ReturnType<typeof getPluginRegistrySnapshot>>);
+  vi.mocked(getWorkspaceModelProviderRegistry).mockResolvedValue({
+    catalog: [
+      {
+        id: "openai",
+        label: "OpenAI",
+        description: "OpenAI",
+        help_url: null,
+        supported_model_types: ["llm"],
+        configuration_methods: ["predefined-model", "customizable-model"],
+        credential_type: "openai_api_key",
+        compatible_credential_types: ["openai_api_key", "api_key"],
+        default_base_url: "https://api.openai.com/v1",
+        default_protocol: "chat_completions",
+        default_models: ["gpt-4.1"],
+        credential_fields: []
+      }
+    ],
+    items: [
+      {
+        id: "provider-openai-team",
+        workspace_id: "workspace-default",
+        provider_id: "openai",
+        provider_label: "OpenAI",
+        label: "OpenAI Team",
+        description: "",
+        credential_id: "cred-openai-1",
+        credential_ref: "credential://cred-openai-1",
+        credential_name: "OpenAI Prod",
+        credential_type: "openai_api_key",
+        base_url: "https://api.openai.com/v1",
+        default_model: "gpt-4.1",
+        protocol: "chat_completions",
+        status: "active",
+        supported_model_types: ["llm"],
+        created_at: "2026-04-01T01:00:00Z",
+        updated_at: "2026-04-01T01:00:00Z",
+        disabled_at: null
+      }
+    ]
+  });
   vi.mocked(getSystemOverview).mockResolvedValue({
     callback_waiting_automation: {
       pending_count: 1,
@@ -90,6 +135,7 @@ describe("loadWorkflowEditorWorkbenchBootstrap", () => {
     expect(vi.mocked(getWorkflows)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(getWorkflowLibrarySnapshot)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(getPluginRegistrySnapshot)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getWorkspaceModelProviderRegistry)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(getSystemOverview)).toHaveBeenCalledTimes(1);
     expect(result.workflows).toHaveLength(2);
     expect(result.nodeCatalog).toHaveLength(1);
@@ -100,5 +146,8 @@ describe("loadWorkflowEditorWorkbenchBootstrap", () => {
     expect(result.callbackWaitingAutomation).not.toBeNull();
     expect(result.sandboxReadiness).not.toBeNull();
     expect(result.sandboxBackends).toHaveLength(1);
+    expect(result.initialModelProviderCatalog).toHaveLength(1);
+    expect(result.initialModelProviderConfigs).toHaveLength(1);
+    expect(result.initialModelProviderRegistryStatus).toBe("ready");
   });
 });
