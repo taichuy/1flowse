@@ -909,8 +909,8 @@ describe("published invocation presenters", () => {
       "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 publish sampled snapshot。"
     );
     expect(sample.workflow_governance_handoff).toMatchObject({
-      workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
-      workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth"
+      workflowCatalogGapHref: "/workflows/workflow-1/editor?definition_issue=missing_tool",
+      workflowGovernanceHref: "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth"
     });
     expect(sample.legacy_auth_handoff).toMatchObject({
       bindingChipLabel: "2 legacy bindings",
@@ -989,13 +989,13 @@ describe("published invocation presenters", () => {
     expect(
       buildPublishedInvocationRunFollowUpSampleWorkflowGovernanceHandoff(sample, {
         workflowDetailHref:
-          "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
+          "/workflows/workflow-1/editor?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"
       })
     ).toMatchObject({
       workflowCatalogGapHref:
-        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool",
+        "/workflows/workflow-1/editor?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool",
       workflowGovernanceHref:
-        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=legacy_publish_auth"
+        "/workflows/workflow-1/editor?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=legacy_publish_auth"
     });
   });
 
@@ -1151,15 +1151,15 @@ describe("published invocation presenters", () => {
       } as never,
       {
         resolveWorkflowDetailHref: (workflowId) =>
-          `/workflows/${workflowId}?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92`
+          `/workflows/${workflowId}/editor?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92`
       }
     );
 
     expect(sample?.workflow_governance_handoff).toMatchObject({
       workflowCatalogGapHref:
-        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool",
+        "/workflows/workflow-1/editor?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=missing_tool",
       workflowGovernanceHref:
-        "/workflows/workflow-1?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=legacy_publish_auth"
+        "/workflows/workflow-1/editor?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92&definition_issue=legacy_publish_auth"
     });
   });
 
@@ -2218,8 +2218,8 @@ describe("published invocation presenters", () => {
         workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
         workflowCatalogGapDetail:
           "当前 sampled run 对应的 workflow 版本仍有 catalog gap（native.catalog-gap）；先回到 workflow 编辑器补齐 binding / LLM Agent tool policy，再回来继续核对 publish sampled snapshot。",
-        workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
-        workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
+        workflowCatalogGapHref: "/workflows/workflow-1/editor?definition_issue=missing_tool",
+        workflowGovernanceHref: "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth",
         legacyAuthHandoff: {
           bindingChipLabel: "1 legacy bindings",
           statusChipLabel: "publish auth blocker",
@@ -2326,8 +2326,8 @@ describe("published invocation presenters", () => {
       key: "summary-focus",
       workflowGovernanceHandoff: {
         workflowCatalogGapSummary: "catalog gap · native.catalog-gap",
-        workflowCatalogGapHref: "/workflows/workflow-1?definition_issue=missing_tool",
-        workflowGovernanceHref: "/workflows/workflow-1?definition_issue=legacy_publish_auth",
+        workflowCatalogGapHref: "/workflows/workflow-1/editor?definition_issue=missing_tool",
+        workflowGovernanceHref: "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth",
         legacyAuthHandoff: {
           bindingChipLabel: "1 legacy bindings",
           statusChipLabel: "publish auth blocker"

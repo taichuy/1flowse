@@ -600,8 +600,8 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("2 legacy bindings");
     expect(html).toContain("publish auth blocker");
     expect(html).toContain("当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory。");
-    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
-    expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
+    expect(html).toContain('/workflows/workflow-1/editor?definition_issue=missing_tool');
+    expect(html).toContain('/workflows/workflow-1/editor?definition_issue=legacy_publish_auth');
   });
 
   it("renders the shared workflow legacy auth handoff in publish audit detail", () => {
@@ -697,7 +697,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("publish auth blocker");
     expect(html).toContain("回到 workflow 编辑器处理 publish auth contract");
     expect(html).toContain("当前 workflow 仍有 1 条 draft cleanup、1 条 published blocker、0 条 offline inventory");
-    expect(html).toContain("/workflows/workflow-1?definition_issue=legacy_publish_auth");
+    expect(html).toContain("/workflows/workflow-1/editor?definition_issue=legacy_publish_auth");
   });
 
   it("scopes the shared workflow governance handoff back to missing-tool and legacy-auth workflow detail", () => {
@@ -761,8 +761,8 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
     expect(html).toContain("Workflow governance");
     expect(html).toContain("catalog gap · native.catalog-gap");
     expect(html).toContain("当前 publish audit detail 对应的 workflow 版本仍有 catalog gap");
-    expect(html).toContain('/workflows/workflow-1?definition_issue=missing_tool');
-    expect(html).toContain('/workflows/workflow-1?definition_issue=legacy_publish_auth');
+    expect(html).toContain('/workflows/workflow-1/editor?definition_issue=missing_tool');
+    expect(html).toContain('/workflows/workflow-1/editor?definition_issue=legacy_publish_auth');
   });
 
   it("prefers shared callback recovery CTA when publish detail only carries local callback prose", () => {
@@ -1859,9 +1859,9 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
               "当前 sampled run 对应的 workflow 版本仍有 catalog gap"
             ) &&
             props.workflowCatalogGapHref ===
-              "/workflows/workflow-1?definition_issue=missing_tool" &&
+              "/workflows/workflow-1/editor?definition_issue=missing_tool" &&
             props.workflowGovernanceHref ===
-              "/workflows/workflow-1?definition_issue=legacy_publish_auth" &&
+              "/workflows/workflow-1/editor?definition_issue=legacy_publish_auth" &&
             (props.legacyAuthHandoff as { bindingChipLabel?: string } | undefined)
               ?.bindingChipLabel === "2 legacy bindings"
         )
