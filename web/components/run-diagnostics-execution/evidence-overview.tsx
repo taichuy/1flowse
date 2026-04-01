@@ -1,3 +1,5 @@
+import React from "react";
+
 import type { RunEvidenceView } from "@/lib/get-run-views";
 
 import { SummaryCard } from "@/components/run-diagnostics-execution/shared";

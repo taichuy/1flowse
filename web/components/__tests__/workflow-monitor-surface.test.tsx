@@ -258,6 +258,8 @@ describe("WorkflowMonitorSurface", () => {
     expect(html).toContain('data-surface="monitor"');
     expect(html).toContain('data-component="workflow-studio-utility-frame"');
     expect(html).toContain('data-surface="monitor"');
+    expect(html).toContain('data-component="workflow-monitor-summary-workbench"');
+    expect(html).toContain('data-component="workflow-monitor-primary-rail"');
     expect(html).toContain('data-component="workflow-monitor-no-traffic-state"');
     expect(html).toContain("当前 workflow 已有 published binding");
     expect(html).not.toContain('data-component="workflow-studio-placeholder"');
@@ -278,14 +280,19 @@ describe("WorkflowMonitorSurface", () => {
       })
     );
 
+    expect(html).toContain('data-component="workflow-monitor-report-grid"');
+    expect(html).toContain('data-component="workflow-monitor-trend-shell"');
     expect(html).toContain('data-component="workflow-monitor-trend-deck"');
     expect(html).toContain('data-trend-key="invocations"');
     expect(html).toContain('data-trend-key="success-rate"');
+    expect(html).toContain('data-component="workflow-monitor-insights-shell"');
     expect(html).toContain('data-component="workflow-monitor-insight-grid"');
     expect(html).toContain('data-component="workflow-monitor-window-summary"');
     expect(html).toContain('data-component="workflow-monitor-traffic-mix-card"');
     expect(html).toContain('data-component="workflow-monitor-waiting-card"');
     expect(html).toContain('data-component="workflow-monitor-issue-signals-card"');
+    expect(html).toContain('data-component="workflow-monitor-timeline-shell"');
+    expect(html).toContain('data-component="workflow-monitor-sampled-shell"');
     expect(html).toContain('data-component="workflow-monitor-sampled-runs"');
     expect(html).toContain("Callback still pending");
     expect(html).toContain("OpenAI responses 4");

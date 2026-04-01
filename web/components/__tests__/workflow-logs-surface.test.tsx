@@ -241,6 +241,7 @@ describe("WorkflowLogsSurface", () => {
     expect(html).toContain('data-component="workflow-studio-utility-frame"');
     expect(html).toContain('data-surface="logs"');
     expect(html).toContain('data-component="workflow-logs-run-fallback"');
+    expect(html).toContain('data-component="workflow-logs-detail-rail"');
     expect(html).toContain("run fallback");
     expect(html).toContain("run run-1");
   });
@@ -278,9 +279,11 @@ describe("WorkflowLogsSurface", () => {
 
     expect(html).toContain('data-component="workflow-studio-utility-frame"');
     expect(html).toContain('data-surface="logs"');
+    expect(html).toContain('data-component="workflow-logs-workbench"');
     expect(html).toContain('data-component="workflow-logs-invocation-list"');
     expect(html).toContain('data-component="workflow-logs-invocation-detail"');
-    expect(html).toContain('data-component="workflow-publish-invocation-entry-card"');
+    expect(html).toContain('data-component="workflow-logs-detail-rail"');
+    expect(html).toContain('data-component="workflow-logs-directory-entry"');
     expect(html).toContain("Binding");
     expect(html).toContain("当前 selection 已对齐最新 invocation。");
   });

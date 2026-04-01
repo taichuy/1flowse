@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
+import { Alert, Button, Card, Descriptions, Tag } from "antd";
 
-import { RunDiagnosticsExecutionSections } from "@/components/run-diagnostics-execution-sections";
 import {
   WorkflowStudioUtilityEmptyState,
   WorkflowStudioUtilityFrame,
@@ -10,8 +10,6 @@ import {
   type WorkflowStudioUtilityTag,
 } from "@/components/workflow-studio-utility-frame";
 import { resolveWorkflowPublishSelectedInvocationDetailSurface } from "@/components/workflow-publish-activity-panel-helpers";
-import { WorkflowPublishInvocationDetailPanel } from "@/components/workflow-publish-invocation-detail-panel";
-import { WorkflowPublishInvocationEntryCard } from "@/components/workflow-publish-invocation-entry-card";
 import type {
   PublishedEndpointInvocationDetailResponse,
   PublishedEndpointInvocationListResponse,
@@ -22,7 +20,7 @@ import type {
   SandboxReadinessCheck,
 } from "@/lib/get-system-overview";
 import type { RunEvidenceView, RunExecutionView } from "@/lib/get-run-views";
-import { formatTimestamp } from "@/lib/runtime-presenters";
+import { formatDurationMs, formatTimestamp } from "@/lib/runtime-presenters";
 import type { SensitiveAccessGuardedResult } from "@/lib/sensitive-access";
 import type { WorkflowPublishActivityWorkflowLike } from "@/lib/workflow-publish-activity-query";
 import type { WorkflowLogsSelectionSource } from "@/lib/workflow-logs-surface";
@@ -51,6 +49,19 @@ export type WorkflowLogsSurfaceBindingItem = {
   workflowVersion: string;
 };
 
+type WorkflowLogsSurfaceInvocationItem = PublishedEndpointInvocationListResponse["items"][number];
+
+type WorkflowLogsGovernanceHandoff = {
+  workflowCatalogGapSummary?: string | null;
+  workflowCatalogGapDetail?: string | null;
+  workflowCatalogGapHref?: string | null;
+  workflowGovernanceHref?: string | null;
+  legacyAuthHandoff?: {
+    detail?: string | null;
+    statusChipLabel?: string | null;
+  } | null;
+} | null;
+
 type WorkflowLogsSurfaceProps = {
   workflowId: string;
   workflow?: WorkflowPublishActivityWorkflowLike | null;
@@ -74,6 +85,25 @@ type WorkflowLogsSurfaceProps = {
   sandboxReadiness?: SandboxReadinessCheck | null;
 };
 
+function formatLogsSelectionSourceLabel(
+  selectionSource: WorkflowLogsSelectionSource,
+  latestSubject: "invocation" | "run"
+) {
+  if (selectionSource === "latest") {
+    return `latest ${latestSubject}`;
+  }
+
+  return selectionSource;
+}
+
+function formatRunTraceSummary(run: WorkflowLogsSurfaceRunItem | null) {
+  if (!run) {
+    return "当前 selection 暂无 run";
+  }
+
+  return `${run.id} · ${run.status}`;
+}
+
 function renderRunTraceHandoff({
   workflowId,
   workflowEditorHref,
@@ -94,78 +124,457 @@ function renderRunTraceHandoff({
   evidenceView: RunEvidenceView | null;
 }) {
   if (activeRunDetail) {
+    const activeRunId = activeRunDetail.id ?? activeRunSummary?.id ?? "n/a";
+    const executionFocusLabel =
+      activeRunDetail.execution_focus_node?.node_name?.trim() ||
+      activeRunDetail.current_node_id?.trim() ||
+      "当前还没有 execution focus";
+    const runFollowUp = activeRunDetail.run_follow_up;
+    const recommendedAction = runFollowUp?.recommended_action ?? null;
+    const callbackHealthLabel = callbackWaitingAutomation.status === "healthy" ? "healthy" : "attention";
+    const sandboxHealthLabel = sandboxReadiness
+      ? sandboxReadiness.healthy_backend_count > 0
+        ? "ready"
+        : "degraded"
+      : "unknown";
+
     return (
-      <div data-component="workflow-logs-run-handoff">
-        <div className="section-heading">
+      <Card className="workflow-logs-handoff-card" data-component="workflow-logs-run-handoff">
+        <div className="workflow-logs-card-heading">
           <div>
             <p className="eyebrow">Run trace handoff</p>
             <h2>Execution / evidence continuation</h2>
           </div>
-          <p className="section-copy">
-            当前 invocation 已关联到具体 run，继续复用同一份 execution / evidence facts
-            下钻，而不是在 workflow 壳层重造第二套 trace 语义。
+          <p className="workflow-studio-utility-inline-copy">
+            logs surface 只保留 workflow-scoped run 摘要与 handoff，避免把完整 run diagnostics 树直接塞回 utility
+            surface；需要深入 execution / evidence 时，继续跳到 canonical run detail。
           </p>
         </div>
 
-        <RunDiagnosticsExecutionSections
-          executionView={executionView}
-          evidenceView={evidenceView}
-          callbackWaitingAutomation={callbackWaitingAutomation}
-          sandboxReadiness={sandboxReadiness}
-          workflowDetailHref={workflowEditorHref}
-          workflowId={workflowId}
-          toolGovernance={activeRunDetail.tool_governance ?? null}
-          legacyAuthGovernance={activeRunDetail.legacy_auth_governance ?? null}
-          runDetailHref={activeRunSummary?.detailHref ?? null}
-        />
-      </div>
+        <div className="summary-strip" data-component="workflow-logs-run-summary">
+          <article className="summary-card">
+            <span>Run</span>
+            <strong>{activeRunId}</strong>
+          </article>
+          <article className="summary-card">
+            <span>Status</span>
+            <strong>{activeRunDetail.status}</strong>
+          </article>
+          <article className="summary-card">
+            <span>Execution focus</span>
+            <strong>{executionFocusLabel}</strong>
+          </article>
+          <article className="summary-card">
+            <span>Events</span>
+            <strong>{activeRunDetail.event_count}</strong>
+          </article>
+          <article className="summary-card">
+            <span>Execution nodes</span>
+            <strong>{executionView?.summary.node_run_count ?? activeRunDetail.node_runs.length}</strong>
+          </article>
+          <article className="summary-card">
+            <span>Evidence nodes</span>
+            <strong>{evidenceView?.summary.node_count ?? 0}</strong>
+          </article>
+        </div>
+
+        <Descriptions className="workflow-logs-context-descriptions" column={1} size="small">
+          <Descriptions.Item label="Workflow">{workflowId}</Descriptions.Item>
+          <Descriptions.Item label="Workflow version">{activeRunDetail.workflow_version}</Descriptions.Item>
+          <Descriptions.Item label="Current node">{activeRunDetail.current_node_id ?? "n/a"}</Descriptions.Item>
+          <Descriptions.Item label="Blocking node run">
+            {activeRunDetail.blocking_node_run_id ?? "n/a"}
+          </Descriptions.Item>
+          <Descriptions.Item label="Last event">
+            {formatTimestamp(activeRunDetail.last_event_at ?? activeRunSummary?.lastEventAt ?? null)}
+          </Descriptions.Item>
+          <Descriptions.Item label="Run trace mode">canonical run detail handoff</Descriptions.Item>
+        </Descriptions>
+
+        <div className="tool-badge-row">
+          <span className="event-chip">callback automation · {callbackHealthLabel}</span>
+          <span className="event-chip">sandbox · {sandboxHealthLabel}</span>
+          {executionView ? (
+            <span className="event-chip">tool calls · {executionView.summary.tool_call_count}</span>
+          ) : null}
+          {evidenceView ? (
+            <span className="event-chip">artifacts · {evidenceView.summary.artifact_count}</span>
+          ) : null}
+          {activeRunDetail.execution_focus_reason ? (
+            <span className="event-chip">focus reason · {activeRunDetail.execution_focus_reason}</span>
+          ) : null}
+        </div>
+
+        {activeRunDetail.execution_focus_explanation?.primary_signal ? (
+          <Alert
+            description={
+              activeRunDetail.execution_focus_explanation.follow_up ??
+              "继续沿完整 run diagnostics 查看 execution / evidence。"
+            }
+            title={activeRunDetail.execution_focus_explanation.primary_signal}
+            showIcon
+            type="info"
+          />
+        ) : null}
+
+        {activeRunDetail.error_message ? (
+          <Alert
+            description={activeRunDetail.error_message}
+            title="Run error"
+            showIcon
+            type="error"
+          />
+        ) : null}
+
+        {runFollowUp?.explanation?.primary_signal || recommendedAction?.label ? (
+          <div className="payload-card compact-card" data-component="workflow-logs-run-follow-up">
+            <div className="payload-card-header">
+              <span className="status-meta">Run follow-up</span>
+              {recommendedAction?.label ? <span className="event-chip">{recommendedAction.label}</span> : null}
+            </div>
+            {runFollowUp?.explanation?.primary_signal ? (
+              <p className="binding-meta">{runFollowUp.explanation.primary_signal}</p>
+            ) : null}
+            {runFollowUp?.explanation?.follow_up ? (
+              <p className="section-copy entry-copy">{runFollowUp.explanation.follow_up}</p>
+            ) : null}
+            {recommendedAction?.href ? (
+              <div className="tool-badge-row">
+                <Link className="event-chip inbox-filter-link" href={recommendedAction.href}>
+                  {recommendedAction.label ?? "打开 follow-up"}
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="workflow-logs-card-actions">
+          {activeRunSummary?.detailHref ? (
+            <Button href={activeRunSummary.detailHref} type="primary">
+              打开完整 run 诊断
+            </Button>
+          ) : null}
+          <Button href={workflowEditorHref}>回到编排编辑器</Button>
+        </div>
+      </Card>
     );
   }
 
   if (activeRunSummary) {
     return (
-      <article className="diagnostic-panel" data-component="workflow-logs-run-handoff-empty">
-        <div className="section-heading">
+      <Card className="workflow-logs-handoff-card" data-component="workflow-logs-run-handoff-empty">
+        <div className="workflow-logs-card-heading">
           <div>
             <p className="eyebrow">Run trace handoff</p>
             <h2>Run detail 暂不可用</h2>
           </div>
-          <p className="section-copy">
-            当前 invocation 已关联 run {activeRunSummary.id}，但 run detail payload 还没拿到；保留直接
-            跳转到完整 run diagnostics 的入口，避免在 workflow 壳层输出不完整 trace。
+          <p className="workflow-studio-utility-inline-copy">
+            当前 invocation 已关联 run {activeRunSummary.id}，但 run detail payload 还没拿到；保留直接跳转到完整
+            run diagnostics 的入口，避免在 workflow 壳层输出不完整 trace。
           </p>
         </div>
 
-        <div className="section-actions">
-          <Link className="activity-link" href={activeRunSummary.detailHref}>
+        <Alert
+          description={`当前 selection 已命中 run ${activeRunSummary.id}，但 server 还没返回 run detail payload。`}
+          title="继续跳到完整 run 诊断，避免在 workflow 壳层渲染不完整 trace。"
+          showIcon
+          type="warning"
+        />
+
+        <div className="workflow-logs-card-actions">
+          <Button href={activeRunSummary.detailHref} type="primary">
             打开完整 run 诊断
-          </Link>
-          <Link className="inline-link secondary" href={workflowEditorHref}>
-            回到编排编辑器
-          </Link>
+          </Button>
+          <Button href={workflowEditorHref}>回到编排编辑器</Button>
         </div>
-      </article>
+      </Card>
     );
   }
 
   return (
-    <article className="diagnostic-panel" data-component="workflow-logs-run-handoff-empty">
-      <div className="section-heading">
+    <Card className="workflow-logs-handoff-card" data-component="workflow-logs-run-handoff-empty">
+      <div className="workflow-logs-card-heading">
         <div>
           <p className="eyebrow">Run trace handoff</p>
           <h2>当前 invocation 暂无 run 关联</h2>
         </div>
-        <p className="section-copy">
-          当前 published invocation 还没有可继续下钻的 run trace；先保留 invocation detail 作为当前事实源。
+        <p className="workflow-studio-utility-inline-copy">
+          当前 published invocation 还没有可继续下钻的 run trace；页面保留 honest fallback，提醒作者先回到
+          publish / editor 触发一次真实运行，而不是伪造 run detail。
         </p>
       </div>
 
-      <div className="section-actions">
-        <Link className="activity-link" href={workflowEditorHref}>
+      <Alert
+        description="先回到发布治理确认 endpoint 已对外暴露，或回到编排编辑器重新触发一次运行。"
+        title="当前 selection 还没有 run trace 可继续下钻。"
+        showIcon
+        type="info"
+      />
+
+      <div className="workflow-logs-card-actions">
+        <Button href={workflowEditorHref} type="primary">
           回到编排编辑器
-        </Link>
+        </Button>
       </div>
+    </Card>
+  );
+}
+
+function renderInvocationDetailState({
+  selectedInvocationSurface,
+}: {
+  selectedInvocationSurface: ReturnType<typeof resolveWorkflowPublishSelectedInvocationDetailSurface>;
+}) {
+  if (selectedInvocationSurface.kind === "blocked") {
+    return (
+      <Alert
+        description={selectedInvocationSurface.blockedSurfaceCopy.summary}
+        title={selectedInvocationSurface.blockedSurfaceCopy.title}
+        showIcon
+        type="warning"
+      />
+    );
+  }
+
+  if (selectedInvocationSurface.kind === "unavailable") {
+    return (
+      <Alert
+        description={`${selectedInvocationSurface.unavailableSurfaceCopy.summary} ${selectedInvocationSurface.unavailableSurfaceCopy.detail}`}
+        title={selectedInvocationSurface.unavailableSurfaceCopy.title}
+        showIcon
+        type="info"
+      />
+    );
+  }
+
+  return (
+    <Alert
+      description="请先从左侧 request directory 选择一条 published invocation，再沿同一条 workflow-scoped facts 查看 detail 与 run trace。"
+      title="当前还没有选中的 invocation detail。"
+      showIcon
+      type="info"
+    />
+  );
+}
+
+function formatInvocationPreview(value: unknown) {
+  if (!value) {
+    return null;
+  }
+
+  return JSON.stringify(value, null, 2);
+}
+
+function renderInvocationDirectoryEntry({
+  item,
+  isActive,
+  detailHref,
+}: {
+  item: WorkflowLogsSurfaceInvocationItem;
+  isActive: boolean;
+  detailHref: string | null;
+}) {
+  return (
+    <article
+      className="activity-row"
+      data-active={isActive ? "true" : "false"}
+      data-component="workflow-logs-directory-entry"
+      data-invocation-id={item.id}
+      key={item.id}
+    >
+      <div className="activity-header">
+        <div>
+          <h3>{isActive ? `当前焦点 · ${item.id}` : `invocation ${item.id}`}</h3>
+          <p>
+            {item.endpoint_alias ?? item.binding_id} · {item.request_source} · {item.request_surface}
+          </p>
+        </div>
+        <span className={`health-pill ${item.status}`}>{item.status}</span>
+      </div>
+      <p className="activity-copy">
+        {item.route_path} · Created {formatTimestamp(item.created_at)}
+      </p>
+      <p className="event-run">
+        run {item.run_id ?? "n/a"} · cache {item.cache_status} · duration {formatDurationMs(item.duration_ms)}
+      </p>
+      {item.error_message ? (
+        <p className="run-error-message">{item.error_message}</p>
+      ) : item.reason_code ? (
+        <p className="section-copy">reason {item.reason_code}</p>
+      ) : (
+        <p className="section-copy">当前 invocation 没有显式错误，继续在右侧对照 detail 与 run handoff。</p>
+      )}
+      {detailHref ? (
+        <div className="section-actions">
+          <Link className="activity-link" href={detailHref}>
+            {isActive ? "保持当前焦点" : "切换到此 invocation"}
+          </Link>
+        </div>
+      ) : null}
     </article>
+  );
+}
+
+function renderWorkflowGovernanceNote(workflowGovernanceHandoff: WorkflowLogsGovernanceHandoff) {
+  if (!workflowGovernanceHandoff) {
+    return null;
+  }
+
+  return (
+    <div className="payload-card compact-card" data-component="workflow-logs-governance-note">
+      <div className="payload-card-header">
+        <span className="status-meta">Workflow governance</span>
+        {workflowGovernanceHandoff.workflowCatalogGapSummary ? (
+          <span className="event-chip">{workflowGovernanceHandoff.workflowCatalogGapSummary}</span>
+        ) : null}
+        {workflowGovernanceHandoff.legacyAuthHandoff?.statusChipLabel ? (
+          <span className="event-chip">{workflowGovernanceHandoff.legacyAuthHandoff.statusChipLabel}</span>
+        ) : null}
+      </div>
+      {workflowGovernanceHandoff.workflowCatalogGapDetail ? (
+        <p className="section-copy entry-copy">{workflowGovernanceHandoff.workflowCatalogGapDetail}</p>
+      ) : null}
+      {workflowGovernanceHandoff.legacyAuthHandoff?.detail ? (
+        <p className="binding-meta">{workflowGovernanceHandoff.legacyAuthHandoff.detail}</p>
+      ) : null}
+      <div className="tool-badge-row">
+        {workflowGovernanceHandoff.workflowCatalogGapHref ? (
+          <Link
+            className="event-chip inbox-filter-link"
+            href={workflowGovernanceHandoff.workflowCatalogGapHref}
+          >
+            处理 catalog gap
+          </Link>
+        ) : null}
+        {workflowGovernanceHandoff.workflowGovernanceHref ? (
+          <Link
+            className="event-chip inbox-filter-link"
+            href={workflowGovernanceHandoff.workflowGovernanceHref}
+          >
+            回到 workflow 编辑器
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function renderSelectedInvocationOverview({
+  selectedInvocationSurface,
+  activeInvocationItem,
+}: {
+  selectedInvocationSurface: ReturnType<typeof resolveWorkflowPublishSelectedInvocationDetailSurface>;
+  activeInvocationItem: WorkflowLogsSurfaceInvocationItem | null;
+}) {
+  if (selectedInvocationSurface.kind !== "ok") {
+    return renderInvocationDetailState({ selectedInvocationSurface });
+  }
+
+  const detail = selectedInvocationSurface.detail;
+  const invocation = detail.invocation;
+  const requestPreview = formatInvocationPreview(invocation.request_preview);
+  const responsePreview = formatInvocationPreview(invocation.response_preview);
+
+  return (
+    <div className="workflow-logs-detail-body" data-component="workflow-logs-invocation-summary">
+      <div className="summary-strip">
+        <article className="summary-card">
+          <span>Status</span>
+          <strong>{invocation.status}</strong>
+        </article>
+        <article className="summary-card">
+          <span>Created</span>
+          <strong>{formatTimestamp(invocation.created_at)}</strong>
+        </article>
+        <article className="summary-card">
+          <span>Run trace</span>
+          <strong>{detail.run?.id ?? invocation.run_id ?? "n/a"}</strong>
+        </article>
+        <article className="summary-card">
+          <span>Duration</span>
+          <strong>{formatDurationMs(invocation.duration_ms)}</strong>
+        </article>
+      </div>
+
+      <dl className="compact-meta-list">
+        <div>
+          <dt>Binding</dt>
+          <dd>{invocation.endpoint_alias ?? invocation.binding_id}</dd>
+        </div>
+        <div>
+          <dt>Route</dt>
+          <dd>{invocation.route_path}</dd>
+        </div>
+        <div>
+          <dt>Request surface</dt>
+          <dd>
+            {invocation.request_source} · {invocation.request_surface}
+          </dd>
+        </div>
+        <div>
+          <dt>Cache</dt>
+          <dd>{invocation.cache_status}</dd>
+        </div>
+        <div>
+          <dt>Reason code</dt>
+          <dd>{invocation.reason_code ?? "n/a"}</dd>
+        </div>
+        <div>
+          <dt>Selected</dt>
+          <dd>{activeInvocationItem?.id ?? invocation.id}</dd>
+        </div>
+      </dl>
+
+      {invocation.error_message ? (
+        <Alert description={invocation.error_message} title="Invocation error" showIcon type="error" />
+      ) : null}
+
+      {selectedInvocationSurface.nextStepSurface ? (
+        <div className="payload-card compact-card" data-component="workflow-logs-next-step">
+          <div className="payload-card-header">
+            <span className="status-meta">{selectedInvocationSurface.nextStepSurface.title}</span>
+            <span className="event-chip">{selectedInvocationSurface.nextStepSurface.label}</span>
+          </div>
+          <p className="section-copy entry-copy">{selectedInvocationSurface.nextStepSurface.detail}</p>
+          {selectedInvocationSurface.nextStepSurface.primaryResourceSummary ? (
+            <p className="binding-meta">{selectedInvocationSurface.nextStepSurface.primaryResourceSummary}</p>
+          ) : null}
+          <div className="tool-badge-row">
+            {selectedInvocationSurface.nextStepSurface.href &&
+            selectedInvocationSurface.nextStepSurface.hrefLabel ? (
+              <Link
+                className="event-chip inbox-filter-link"
+                href={selectedInvocationSurface.nextStepSurface.href}
+              >
+                {selectedInvocationSurface.nextStepSurface.hrefLabel}
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {renderWorkflowGovernanceNote(
+        selectedInvocationSurface.nextStepSurface?.workflowGovernanceHandoff ?? null
+      )}
+
+      {requestPreview ? (
+        <div className="payload-card compact-card" data-component="workflow-logs-request-preview">
+          <div className="payload-card-header">
+            <span className="status-meta">Request preview</span>
+          </div>
+          <pre>{requestPreview}</pre>
+        </div>
+      ) : null}
+
+      {responsePreview ? (
+        <div className="payload-card compact-card" data-component="workflow-logs-response-preview">
+          <div className="payload-card-header">
+            <span className="status-meta">Response preview</span>
+          </div>
+          <pre>{responsePreview}</pre>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -173,6 +582,7 @@ function renderRunFallbackContent({
   workflowId,
   recentRuns,
   selectionNotice,
+  selectionSource,
   activeRunSummary,
   activeRunDetail,
   callbackWaitingAutomation,
@@ -184,6 +594,7 @@ function renderRunFallbackContent({
   workflowId: string;
   recentRuns: WorkflowLogsSurfaceRunItem[];
   selectionNotice: string | null;
+  selectionSource: WorkflowLogsSelectionSource;
   activeRunSummary: WorkflowLogsSurfaceRunItem | null;
   activeRunDetail: RunDetail | null;
   callbackWaitingAutomation: CallbackWaitingAutomationCheck;
@@ -194,79 +605,101 @@ function renderRunFallbackContent({
 }) {
   const activeErrorMessage =
     activeRunDetail?.error_message?.trim() || activeRunSummary?.errorMessage?.trim() || null;
+  const activeRunId = activeRunDetail?.id ?? activeRunSummary?.id ?? "none";
 
   return (
-    <>
-      <section className="diagnostics-layout" data-component="workflow-logs-run-fallback">
-        <article className="diagnostic-panel" data-component="workflow-logs-run-list">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Recent runs</p>
-              <h2>Workflow scoped run fallback</h2>
-            </div>
-            <p className="section-copy">
-              只列出当前 workflow 的 recent runs，并保留到当前 surface 的切换入口，避免跨 workflow
-              误读 trace 上下文。
-            </p>
+    <section className="workflow-logs-workbench" data-component="workflow-logs-run-fallback">
+      <Card className="workflow-logs-directory-card" data-component="workflow-logs-run-list">
+        <div className="workflow-logs-card-heading">
+          <div>
+            <p className="eyebrow">Run directory</p>
+            <h2>Workflow scoped run fallback</h2>
           </div>
+          <p className="workflow-studio-utility-inline-copy">
+            当前 workflow 还没有可读的 published invocation 列表，因此页面诚实回退到 workflow scoped recent runs；先选
+            一条 run，再继续下钻 execution / evidence。
+          </p>
+        </div>
 
-          {selectionNotice ? <p className="section-copy">{selectionNotice}</p> : null}
+        {selectionNotice ? (
+          <Alert description={selectionNotice} title="Selection notice" showIcon type="info" />
+        ) : null}
 
-          <div className="activity-list">
-            {recentRuns.map((run) => {
-              const isActive = run.id === activeRunSummary?.id;
+        <Descriptions className="workflow-logs-context-descriptions" column={1} size="small">
+          <Descriptions.Item label="Active run">{activeRunId}</Descriptions.Item>
+          <Descriptions.Item label="Selection">
+            {formatLogsSelectionSourceLabel(selectionSource, "run")}
+          </Descriptions.Item>
+          <Descriptions.Item label="Last event">
+            {formatTimestamp(activeRunDetail?.last_event_at ?? activeRunSummary?.lastEventAt ?? null)}
+          </Descriptions.Item>
+          <Descriptions.Item label="Trace mode">workflow scoped recent runs</Descriptions.Item>
+        </Descriptions>
 
-              return (
-                <article
-                  className="activity-row"
-                  data-active={isActive ? "true" : "false"}
-                  data-run-id={run.id}
-                  key={run.id}
-                >
-                  <div className="activity-header">
-                    <div>
-                      <h3>{isActive ? `当前焦点 · ${run.id}` : `run ${run.id}`}</h3>
-                      <p>
-                        workflow {workflowId} · version {run.workflowVersion} · node runs {run.nodeRunCount}
-                      </p>
-                    </div>
-                    <span className={`health-pill ${run.status}`}>{run.status}</span>
-                  </div>
-                  <p className="activity-copy">
-                    Created {formatTimestamp(run.createdAt)} · Last event {formatTimestamp(run.lastEventAt)}
-                  </p>
-                  <p className="event-run">events {run.eventCount}</p>
-                  {run.errorMessage ? (
-                    <p className="run-error-message">{run.errorMessage}</p>
-                  ) : (
-                    <p className="section-copy">
-                      当前 run 没有记录 run 级错误，继续下钻 execution / evidence。
+        <div className="workflow-logs-directory-list activity-list">
+          {recentRuns.map((run) => {
+            const isActive = run.id === activeRunSummary?.id;
+
+            return (
+              <article
+                className="activity-row"
+                data-active={isActive ? "true" : "false"}
+                data-run-id={run.id}
+                key={run.id}
+              >
+                <div className="activity-header">
+                  <div>
+                    <h3>{isActive ? `当前焦点 · ${run.id}` : `run ${run.id}`}</h3>
+                    <p>
+                      workflow {workflowId} · version {run.workflowVersion} · node runs {run.nodeRunCount}
                     </p>
-                  )}
-                  <div className="section-actions">
-                    <Link className="activity-link" href={run.logsHref}>
-                      {isActive ? "保持当前焦点" : "切换到此 run"}
-                    </Link>
-                    <Link className="inline-link secondary" href={run.detailHref}>
-                      打开完整 run 诊断
-                    </Link>
                   </div>
-                </article>
-              );
-            })}
-          </div>
-        </article>
+                  <span className={`health-pill ${run.status}`}>{run.status}</span>
+                </div>
+                <p className="activity-copy">
+                  Created {formatTimestamp(run.createdAt)} · Last event {formatTimestamp(run.lastEventAt)}
+                </p>
+                <p className="event-run">events {run.eventCount}</p>
+                {run.errorMessage ? (
+                  <p className="run-error-message">{run.errorMessage}</p>
+                ) : (
+                  <p className="section-copy">
+                    当前 run 没有记录 run 级错误，继续下钻 execution / evidence。
+                  </p>
+                )}
+                <div className="section-actions">
+                  <Link className="activity-link" href={run.logsHref}>
+                    {isActive ? "保持当前焦点" : "切换到此 run"}
+                  </Link>
+                  <Link className="inline-link secondary" href={run.detailHref}>
+                    打开完整 run 诊断
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </Card>
 
-        <article className="diagnostic-panel" data-component="workflow-logs-active-run">
-          <div className="section-heading">
+      <div className="workflow-logs-detail-rail" data-component="workflow-logs-detail-rail">
+        <Card className="workflow-logs-detail-card" data-component="workflow-logs-active-run">
+          <div className="workflow-logs-card-heading">
             <div>
-              <p className="eyebrow">Active run</p>
+              <p className="eyebrow">Selected run</p>
               <h2>Execution / evidence drilldown</h2>
             </div>
-            <p className="section-copy">
-              先看当前焦点 run 的状态、事件边界和错误说明，再继续顺着 execution / evidence sections
-              下钻。
+            <p className="workflow-studio-utility-inline-copy">
+              先看当前焦点 run 的状态、事件边界和错误说明，再继续顺着 execution / evidence sections 下钻。
             </p>
+          </div>
+
+          <div className="workflow-logs-card-actions">
+            {activeRunSummary ? (
+              <Button href={activeRunSummary.detailHref} type="primary">
+                打开完整 run 诊断
+              </Button>
+            ) : null}
+            <Button href={workflowEditorHref}>回到编排编辑器</Button>
           </div>
 
           {activeRunDetail ? (
@@ -291,44 +724,31 @@ function renderRunFallbackContent({
               </div>
 
               {activeErrorMessage ? (
-                <div className="payload-card">
-                  <div className="payload-card-header">
-                    <span className="status-meta">Run error</span>
-                  </div>
-                  <pre>{activeErrorMessage}</pre>
-                </div>
+                <Alert description={activeErrorMessage} title="Run error" showIcon type="error" />
               ) : null}
-
-              <div className="section-actions">
-                {activeRunSummary ? (
-                  <Link className="activity-link" href={activeRunSummary.detailHref}>
-                    打开完整 run 诊断
-                  </Link>
-                ) : null}
-                <Link className="inline-link secondary" href={workflowEditorHref}>
-                  回到编排编辑器
-                </Link>
-              </div>
             </>
           ) : (
-            <p className="empty-state">
-              当前 run detail 暂时不可用；请先进入完整 run 诊断或稍后重试，避免在 workflow 壳层里渲染不完整的日志事实。
-            </p>
+            <Alert
+              description="请先进入完整 run 诊断或稍后重试，避免在 workflow 壳层里渲染不完整的日志事实。"
+              title="当前 run detail 暂时不可用。"
+              showIcon
+              type="info"
+            />
           )}
-        </article>
-      </section>
+        </Card>
 
-      {renderRunTraceHandoff({
-        workflowId,
-        workflowEditorHref,
-        callbackWaitingAutomation,
-        sandboxReadiness,
-        activeRunSummary,
-        activeRunDetail,
-        executionView,
-        evidenceView,
-      })}
-    </>
+        {renderRunTraceHandoff({
+          workflowId,
+          workflowEditorHref,
+          callbackWaitingAutomation,
+          sandboxReadiness,
+          activeRunSummary,
+          activeRunDetail,
+          executionView,
+          evidenceView,
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -356,9 +776,7 @@ export function WorkflowLogsSurface({
 }: WorkflowLogsSurfaceProps) {
   const invocationItems = invocationAudit?.items ?? [];
   const activeInvocationItem =
-    invocationItems.find((item) => item.id === selectedInvocationId) ??
-    invocationItems[0] ??
-    null;
+    invocationItems.find((item) => item.id === selectedInvocationId) ?? invocationItems[0] ?? null;
   const activeInvocationHref =
     selectedInvocationId && buildInvocationHref ? buildInvocationHref(selectedInvocationId) : null;
   const selectedInvocationSurface = resolveWorkflowPublishSelectedInvocationDetailSurface({
@@ -412,9 +830,7 @@ export function WorkflowLogsSurface({
       {
         key: "last-event",
         label: "Last event",
-        value: formatTimestamp(
-          activeRunDetail?.last_event_at ?? activeRunSummary?.lastEventAt ?? null
-        ),
+        value: formatTimestamp(activeRunDetail?.last_event_at ?? activeRunSummary?.lastEventAt ?? null),
       },
       {
         key: "execution-focus",
@@ -423,7 +839,7 @@ export function WorkflowLogsSurface({
           activeRunDetail?.execution_focus_node?.node_name?.trim() ||
           activeRunDetail?.current_node_id?.trim() ||
           "当前还没有 execution focus",
-        detail: `selection: ${selectionSource === "latest" ? "latest run" : selectionSource}`,
+        detail: `selection: ${formatLogsSelectionSourceLabel(selectionSource, "run")}`,
         wide: true,
       },
     ];
@@ -435,7 +851,7 @@ export function WorkflowLogsSurface({
       },
       {
         key: "selection-source",
-        label: `selection · ${selectionSource === "latest" ? "latest run" : selectionSource}`,
+        label: `selection · ${formatLogsSelectionSourceLabel(selectionSource, "run")}`,
         color: "default",
       },
     ];
@@ -459,6 +875,7 @@ export function WorkflowLogsSurface({
             workflowId,
             recentRuns,
             selectionNotice,
+            selectionSource,
             activeRunSummary,
             activeRunDetail,
             callbackWaitingAutomation,
@@ -487,9 +904,7 @@ export function WorkflowLogsSurface({
       key: "binding",
       label: "Binding",
       value: activeBinding?.endpointAlias ?? activeBinding?.routePath ?? "N/A",
-      detail: activeBinding
-        ? `${activeBinding.protocol} · ${activeBinding.authMode}`
-        : "当前没有 active binding",
+      detail: activeBinding ? `${activeBinding.protocol} · ${activeBinding.authMode}` : "当前没有 active binding",
       wide: true,
     },
     {
@@ -514,14 +929,14 @@ export function WorkflowLogsSurface({
       key: "run-trace",
       label: "Run trace",
       value: selectedInvocationRunId ?? "当前 invocation 暂无 run",
-      detail: `selection: ${selectionSource === "latest" ? "latest invocation" : selectionSource}`,
+      detail: `selection: ${formatLogsSelectionSourceLabel(selectionSource, "invocation")}`,
       wide: true,
     },
   ];
   const overviewTags: WorkflowStudioUtilityTag[] = [
     {
       key: "selection-source",
-      label: `selection · ${selectionSource === "latest" ? "latest invocation" : selectionSource}`,
+      label: `selection · ${formatLogsSelectionSourceLabel(selectionSource, "invocation")}`,
       color: "processing",
     },
   ];
@@ -549,100 +964,96 @@ export function WorkflowLogsSurface({
         tags={overviewTags}
         title="日志与标注"
       >
-        <section className="diagnostics-layout">
-          <article className="diagnostic-panel" data-component="workflow-logs-invocation-list">
-            <div className="section-heading">
+        <section className="workflow-logs-workbench" data-component="workflow-logs-workbench">
+          <Card className="workflow-logs-directory-card" data-component="workflow-logs-invocation-list">
+            <div className="workflow-logs-card-heading">
               <div>
-                <p className="eyebrow">Published invocations</p>
-                <h2>Workflow scoped request list</h2>
+                <p className="eyebrow">Request directory</p>
+                <h2>Workflow scoped published invocations</h2>
               </div>
-              <p className="section-copy">
+              <p className="workflow-studio-utility-inline-copy">
                 只展示当前 workflow binding 最近的 published invocations，避免作者在日志页误读跨 workflow 或跨 surface 的请求事实。
               </p>
             </div>
 
-            {selectionNotice ? <p className="section-copy">{selectionNotice}</p> : null}
+            {selectionNotice ? (
+              <Alert description={selectionNotice} title="Selection notice" showIcon type="info" />
+            ) : null}
 
-            <div className="activity-list">
-              {invocationItems.map((item) => (
-                <WorkflowPublishInvocationEntryCard
-                  key={item.id}
-                  item={item}
-                  detailHref={
-                    buildInvocationHref ? buildInvocationHref(item.id) : activeInvocationHref ?? "#"
-                  }
-                  detailActive={
-                    item.id === (selectedInvocationId ?? activeInvocationItem?.id ?? null)
-                  }
-                  hideRecommendedNextStep
-                  callbackWaitingAutomation={callbackWaitingAutomation}
-                  sandboxReadiness={sandboxReadiness}
-                />
-              ))}
-            </div>
-          </article>
+            <Descriptions className="workflow-logs-context-descriptions" column={1} size="small">
+              <Descriptions.Item label="Binding">
+                {activeBinding?.endpointAlias ?? activeBinding?.routePath ?? "N/A"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Route">
+                {activeBinding?.routePath ?? "当前没有 active binding"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Selection">
+                {formatLogsSelectionSourceLabel(selectionSource, "invocation")}
+              </Descriptions.Item>
+              <Descriptions.Item label="Run trace">{selectedInvocationRunId ?? "当前 invocation 暂无 run"}</Descriptions.Item>
+            </Descriptions>
 
-          <article className="diagnostic-panel" data-component="workflow-logs-invocation-detail">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Current invocation</p>
-                <h2>Invocation detail and operator handoff</h2>
+            {activeBinding ? (
+              <div className="workflow-logs-context-tags">
+                <Tag color="blue">{activeBinding.protocol}</Tag>
+                <Tag>{activeBinding.authMode}</Tag>
+                <Tag color="purple">workflow {activeBinding.workflowVersion}</Tag>
               </div>
-              <p className="section-copy">
-                当前焦点详情继续复用 publish activity detail payload；如果已关联 run，就在同页保留 execution / evidence 的继续下钻入口。
-              </p>
-            </div>
+            ) : null}
 
-            {selectedInvocationSurface.kind === "ok" && clearInvocationHref ? (
-              <WorkflowPublishInvocationDetailPanel
-                detail={selectedInvocationSurface.detail}
-                workflow={workflow}
-                clearHref={clearInvocationHref}
-                currentHref={activeInvocationHref}
-                tools={[]}
-                callbackWaitingAutomation={callbackWaitingAutomation}
-                sandboxReadiness={sandboxReadiness}
-                selectedNextStepSurface={selectedInvocationSurface.nextStepSurface}
-              />
-            ) : selectedInvocationSurface.kind === "blocked" ? (
-              <div className="payload-card">
-                <div className="payload-card-header">
-                  <span className="status-meta">
-                    {selectedInvocationSurface.blockedSurfaceCopy.title}
-                  </span>
+            <div className="workflow-logs-directory-list activity-list">
+              {invocationItems.map((item) =>
+                renderInvocationDirectoryEntry({
+                  item,
+                  isActive: item.id === (selectedInvocationId ?? activeInvocationItem?.id ?? null),
+                  detailHref: buildInvocationHref
+                    ? buildInvocationHref(item.id)
+                    : activeInvocationHref,
+                })
+              )}
+            </div>
+          </Card>
+
+          <div className="workflow-logs-detail-rail" data-component="workflow-logs-detail-rail">
+            <Card className="workflow-logs-detail-card" data-component="workflow-logs-invocation-detail">
+              <div className="workflow-logs-card-heading">
+                <div>
+                  <p className="eyebrow">Selected invocation</p>
+                  <h2>Invocation detail and operator handoff</h2>
                 </div>
-                <p>{selectedInvocationSurface.blockedSurfaceCopy.summary}</p>
-              </div>
-            ) : selectedInvocationSurface.kind === "unavailable" ? (
-              <div className="payload-card">
-                <div className="payload-card-header">
-                  <span className="status-meta">
-                    {selectedInvocationSurface.unavailableSurfaceCopy.title}
-                  </span>
-                </div>
-                <p>{selectedInvocationSurface.unavailableSurfaceCopy.summary}</p>
-                <p className="section-copy">
-                  {selectedInvocationSurface.unavailableSurfaceCopy.detail}
+                <p className="workflow-studio-utility-inline-copy">
+                  当前焦点详情继续复用 publish activity detail payload；如果已关联 run，就在同页保留 execution / evidence 的继续下钻入口。
                 </p>
               </div>
-            ) : (
-              <p className="empty-state">
-                当前还没有选中的 invocation detail；请先从左侧列表选择一条 published invocation。
-              </p>
-            )}
-          </article>
-        </section>
 
-        {renderRunTraceHandoff({
-          workflowId,
-          workflowEditorHref,
-          callbackWaitingAutomation,
-          sandboxReadiness,
-          activeRunSummary,
-          activeRunDetail,
-          executionView,
-          evidenceView,
-        })}
+              <div className="workflow-logs-card-actions">
+                {clearInvocationHref ? <Button href={clearInvocationHref}>回到 binding 最新 invocation</Button> : null}
+                {activeRunSummary ? (
+                  <Button href={activeRunSummary.detailHref} type="primary">
+                    打开 run 诊断
+                  </Button>
+                ) : null}
+                <Button href={workflowEditorHref}>回到编排编辑器</Button>
+              </div>
+
+              {renderSelectedInvocationOverview({
+                selectedInvocationSurface,
+                activeInvocationItem,
+              })}
+            </Card>
+
+            {renderRunTraceHandoff({
+              workflowId,
+              workflowEditorHref,
+              callbackWaitingAutomation,
+              sandboxReadiness,
+              activeRunSummary,
+              activeRunDetail,
+              executionView,
+              evidenceView,
+            })}
+          </div>
+        </section>
       </WorkflowStudioUtilityFrame>
     </div>
   );
