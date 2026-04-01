@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorkflowCreateBootstrapLoadingSurfaceCopy,
+  buildWorkflowCreateFirstScreenShellSurfaceCopy,
   buildAuthorFacingFollowUpSurfaceCopy,
   buildAuthorFacingRunDetailLinkSurface,
   buildAuthorFacingWorkflowDetailLinkSurface,
@@ -29,6 +30,31 @@ describe("workbench entry surface copy", () => {
       detail:
         "首屏先保留空白创建和 starter 入口所需的数据边界，复杂预览与后续面板稍后补齐。"
     });
+  });
+
+  it("keeps workflow create first-screen shell copy on the shared surface contract", () => {
+    const surfaceCopy = buildWorkflowCreateFirstScreenShellSurfaceCopy({
+      starterGovernanceHref:
+        "/workspace-starters?needs_follow_up=true&starter=starter-1&track=%E5%BA%94%E7%94%A8"
+    });
+
+    expect(surfaceCopy.heroLinks).toMatchObject({
+      keys: ["workspaceStarterLibrary", "home"],
+      primaryKey: "workspaceStarterLibrary",
+      variant: "inline"
+    });
+    expect(surfaceCopy.heroLinks.overrides?.workspaceStarterLibrary?.href).toContain(
+      "needs_follow_up=true"
+    );
+    expect(surfaceCopy.heroLinks.overrides?.workspaceStarterLibrary?.label).toBe(
+      "管理 workspace starters"
+    );
+    expect(surfaceCopy.activeTrackLabel).toBe("当前应用模式");
+    expect(surfaceCopy.starterLabel).toBe("当前 starter");
+    expect(surfaceCopy.governanceLabel).toBe("治理与下一步");
+    expect(surfaceCopy.recentDraftsLabel).toBe("最近草稿");
+    expect(surfaceCopy.featuredNodesLabel).toBe("常用原生节点");
+    expect(surfaceCopy.interactivePendingLabel).toContain("命名输入");
   });
 
   it("centralizes editor bootstrap loading copy", () => {

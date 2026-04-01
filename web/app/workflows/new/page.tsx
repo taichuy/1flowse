@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { buildWorkflowCreateWizardBootstrapRequest } from "@/components/workflow-create-wizard/bootstrap";
+import {
+  buildWorkflowCreateWizardBootstrapRequest,
+  loadWorkflowCreateWizardBootstrap
+} from "@/components/workflow-create-wizard/bootstrap";
 import { WorkflowCreateWizardEntry } from "@/components/workflow-create-wizard-entry";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
@@ -29,6 +32,7 @@ export default async function NewWorkflowPage({ searchParams }: NewWorkflowPageP
   const bootstrapRequest = buildWorkflowCreateWizardBootstrapRequest(
     pickWorkspaceStarterGovernanceQueryScope(workspaceStarterViewState)
   );
+  const initialBootstrapData = await loadWorkflowCreateWizardBootstrap(bootstrapRequest);
 
   return (
     <WorkspaceShell
@@ -41,6 +45,7 @@ export default async function NewWorkflowPage({ searchParams }: NewWorkflowPageP
       <div className="workspace-main workspace-workflow-create-main">
         <WorkflowCreateWizardEntry
           bootstrapRequest={bootstrapRequest}
+          initialBootstrapData={initialBootstrapData}
         />
       </div>
     </WorkspaceShell>

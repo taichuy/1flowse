@@ -27,6 +27,7 @@ export type WorkflowCreateWizardBootstrapRequest = {
 
 export type WorkflowCreateWizardEntryProps = {
   bootstrapRequest: WorkflowCreateWizardBootstrapRequest;
+  initialBootstrapData?: WorkflowCreateWizardProps | null;
 };
 
 export type WorkflowCreateWizardProps = {

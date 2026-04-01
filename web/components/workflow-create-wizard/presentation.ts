@@ -11,6 +11,11 @@ import {
   formatCatalogGapToolSummary,
   getWorkflowLegacyPublishAuthBacklogCount
 } from "@/lib/workflow-definition-governance";
+import {
+  getWorkflowBusinessTrackCreateSurface,
+  WORKFLOW_BUSINESS_TRACKS,
+  type WorkflowBusinessTrack
+} from "@/lib/workflow-business-tracks";
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
@@ -30,7 +35,12 @@ import {
   buildWorkflowCreateWizardSurfaceCopy,
   type WorkflowCreateWizardSurfaceCopy
 } from "@/lib/workbench-entry-surfaces";
-import type { WorkflowStarterTemplate } from "@/lib/workflow-starters";
+import {
+  buildWorkflowStarterTemplates,
+  type WorkflowStarterTemplate
+} from "@/lib/workflow-starters";
+
+import type { WorkflowCreateWizardProps } from "./types";
 
 export type WorkflowCreateFeaturedNode = {
   type: WorkflowNodeCatalogItem["type"];
@@ -88,6 +98,14 @@ export type WorkflowCreateWizardPresentation = {
   starterGovernanceHref: string;
   surfaceCopy: WorkflowCreateWizardSurfaceCopy;
   workspaceHref: string;
+};
+
+export type WorkflowCreateFirstScreenShellPresentation = WorkflowCreateWizardPresentation & {
+  activeTrack: WorkflowBusinessTrack;
+  activeTrackPresentation: ReturnType<typeof getWorkflowBusinessTrackCreateSurface>;
+  createSignalItems: Array<{ label: string; value: string }>;
+  selectedStarter: WorkflowStarterTemplate | null;
+  visibleStarterCount: number;
 };
 
 const WORKFLOW_CREATE_FEATURED_NODE_TYPES = [
@@ -288,6 +306,80 @@ export function buildWorkflowCreateWizardPresentation({
     surfaceCopy,
     workspaceHref
   };
+}
+
+export function buildWorkflowCreateFirstScreenShellPresentation({
+  governanceQueryScope,
+  legacyAuthGovernanceSnapshot = null,
+  nodeCatalog,
+  workflows,
+  starters,
+  tools
+}: Pick<
+  WorkflowCreateWizardProps,
+  "governanceQueryScope" | "legacyAuthGovernanceSnapshot" | "nodeCatalog" | "workflows" | "starters" | "tools"
+>): WorkflowCreateFirstScreenShellPresentation {
+  const starterTemplates = buildWorkflowStarterTemplates(starters, nodeCatalog, tools);
+  const selectedStarter = resolveInitialWorkflowCreateStarter({
+    selectedTemplateId: governanceQueryScope.selectedTemplateId,
+    starterTemplates
+  });
+  const activeTrack =
+    governanceQueryScope.activeTrack === "all"
+      ? (selectedStarter?.businessTrack ?? WORKFLOW_BUSINESS_TRACKS[0].id)
+      : governanceQueryScope.activeTrack;
+  const activeTrackPresentation = getWorkflowBusinessTrackCreateSurface(activeTrack);
+  const visibleStarterCount = starterTemplates.filter(
+    (starter) => starter.businessTrack === activeTrack
+  ).length;
+  const workspaceStarterGovernanceScope = {
+    activeTrack: governanceQueryScope.activeTrack,
+    sourceGovernanceKind: governanceQueryScope.sourceGovernanceKind,
+    needsFollowUp: governanceQueryScope.needsFollowUp,
+    searchQuery: governanceQueryScope.searchQuery,
+    selectedTemplateId:
+      selectedStarter?.origin === "workspace"
+        ? selectedStarter.id
+        : governanceQueryScope.selectedTemplateId
+  };
+  const presentation = buildWorkflowCreateWizardPresentation({
+    legacyAuthGovernanceSnapshot,
+    nodeCatalog,
+    selectedStarter,
+    workflows,
+    workspaceStarterGovernanceScope
+  });
+
+  return {
+    ...presentation,
+    activeTrack,
+    activeTrackPresentation,
+    createSignalItems: [
+      { label: "模式", value: activeTrackPresentation.label },
+      { label: "模板", value: `${visibleStarterCount} 个` },
+      { label: "草稿", value: `${workflows.length} 个` }
+    ],
+    selectedStarter,
+    visibleStarterCount
+  };
+}
+
+function resolveInitialWorkflowCreateStarter({
+  selectedTemplateId,
+  starterTemplates
+}: {
+  selectedTemplateId: string | null;
+  starterTemplates: WorkflowStarterTemplate[];
+}) {
+  if (selectedTemplateId) {
+    const matchedStarter = starterTemplates.find((starter) => starter.id === selectedTemplateId);
+
+    if (matchedStarter) {
+      return matchedStarter;
+    }
+  }
+
+  return starterTemplates[0] ?? null;
 }
 
 function toWorkspaceStarterGovernanceTemplate(

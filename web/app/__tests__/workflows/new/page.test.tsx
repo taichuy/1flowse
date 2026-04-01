@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import NewWorkflowPage from "@/app/workflows/new/page";
+import { loadWorkflowCreateWizardBootstrap } from "@/components/workflow-create-wizard/bootstrap";
 import { getServerWorkspaceContext } from "@/lib/server-workspace-access";
 
 Object.assign(globalThis, { React });
@@ -22,7 +23,8 @@ vi.mock("@/components/workspace-shell", () => ({
 
 vi.mock("@/components/workflow-create-wizard-entry", () => ({
   WorkflowCreateWizardEntry: ({
-    bootstrapRequest
+    bootstrapRequest,
+    initialBootstrapData
   }: {
     bootstrapRequest: {
       governanceQueryScope: { kind?: string };
@@ -32,11 +34,15 @@ vi.mock("@/components/workflow-create-wizard-entry", () => ({
         includeBuiltinStarters: boolean;
       };
     };
+    initialBootstrapData?: { starters?: unknown[]; workflows?: unknown[] } | null;
   }) =>
     createElement(
       "div",
       {
         "data-component": "workflow-create-wizard-entry",
+        "data-has-initial-bootstrap": initialBootstrapData ? "true" : "false",
+        "data-bootstrap-starters-count": initialBootstrapData?.starters?.length ?? 0,
+        "data-bootstrap-workflows-count": initialBootstrapData?.workflows?.length ?? 0,
         "data-governance-kind": bootstrapRequest.governanceQueryScope.kind ?? "unknown",
         "data-loads-legacy-auth": String(
           bootstrapRequest.includeLegacyAuthGovernanceSnapshot
@@ -55,6 +61,17 @@ vi.mock("@/components/workflow-create-wizard-entry", () => ({
 vi.mock("@/lib/server-workspace-access", () => ({
   getServerWorkspaceContext: vi.fn()
 }));
+
+vi.mock("@/components/workflow-create-wizard/bootstrap", async () => {
+  const actual = await vi.importActual<typeof import("@/components/workflow-create-wizard/bootstrap")>(
+    "@/components/workflow-create-wizard/bootstrap"
+  );
+
+  return {
+    ...actual,
+    loadWorkflowCreateWizardBootstrap: vi.fn()
+  };
+});
 
 vi.mock("@/lib/workspace-starter-governance-query", () => ({
   hasScopedWorkspaceStarterGovernanceFilters: vi.fn(() => false),
@@ -78,6 +95,21 @@ vi.mock("@/lib/workspace-starter-governance-query", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(loadWorkflowCreateWizardBootstrap).mockResolvedValue({
+    catalogToolCount: 1,
+    governanceQueryScope: {
+      activeTrack: "all",
+      sourceGovernanceKind: "all",
+      needsFollowUp: false,
+      searchQuery: "",
+      selectedTemplateId: null
+    },
+    workflows: [{ id: "workflow-1" }],
+    starters: [{ id: "starter-1" }],
+    starterSourceLanes: [],
+    nodeCatalog: [],
+    tools: []
+  } as unknown as Awaited<ReturnType<typeof loadWorkflowCreateWizardBootstrap>>);
 });
 
 describe("NewWorkflowPage", () => {
@@ -120,9 +152,13 @@ describe("NewWorkflowPage", () => {
 
     expect(html).toContain('data-component="workspace-shell"');
     expect(html).toContain('data-component="workflow-create-wizard-entry"');
+    expect(html).toContain('data-has-initial-bootstrap="true"');
+    expect(html).toContain('data-bootstrap-starters-count="1"');
+    expect(html).toContain('data-bootstrap-workflows-count="1"');
     expect(html).toContain('data-loads-legacy-auth="false"');
     expect(html).toContain('data-include-starter-definitions="true"');
     expect(html).toContain('data-include-builtin-starters="true"');
+    expect(vi.mocked(loadWorkflowCreateWizardBootstrap)).toHaveBeenCalledTimes(1);
   });
 
   it("marks legacy auth bootstrap only when a scoped starter is requested", async () => {
@@ -176,6 +212,7 @@ describe("NewWorkflowPage", () => {
 
     expect(html).toContain('data-loads-legacy-auth="true"');
     expect(html).toContain('data-include-builtin-starters="true"');
+    expect(html).toContain('data-has-initial-bootstrap="true"');
   });
 
   it("redirects unauthenticated users back to login", async () => {

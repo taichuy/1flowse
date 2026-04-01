@@ -133,6 +133,21 @@ export type WorkflowCreateWizardSurfaceCopy = {
   sourceGovernanceFollowUpLinkLabel: string;
 };
 
+export type WorkflowCreateFirstScreenShellSurfaceCopy = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  readyStateDetail: string;
+  heroLinks: WorkbenchEntryLinksConfig;
+  activeTrackLabel: string;
+  starterLabel: string;
+  governanceLabel: string;
+  recentDraftsLabel: string;
+  featuredNodesLabel: string;
+  governanceLinkLabel: string;
+  interactivePendingLabel: string;
+};
+
 export type AuthoringBootstrapLoadingSurfaceCopy = {
   title: string;
   summary: string;
@@ -181,6 +196,39 @@ export function buildWorkflowCreateBootstrapLoadingSurfaceCopy(): AuthoringBoots
     summary: "创建向导会在最小作者壳层之后按需加载。",
     detail:
       "首屏先保留空白创建和 starter 入口所需的数据边界，复杂预览与后续面板稍后补齐。"
+  };
+}
+
+export function buildWorkflowCreateFirstScreenShellSurfaceCopy({
+  starterGovernanceHref
+}: {
+  starterGovernanceHref: string;
+}): WorkflowCreateFirstScreenShellSurfaceCopy {
+  return {
+    eyebrow: "Create",
+    title: "workflow create 首屏壳层",
+    description:
+      "服务端先输出当前 track、starter 焦点、治理提示与最近草稿，再让 starter 浏览、命名与创建动作按需挂载。",
+    readyStateDetail:
+      "先把当前创建范围、starter 焦点与下一步 handoff 固定下来，避免作者在 hydration 前只看到一层 bootstrap 文案。",
+    heroLinks: {
+      keys: ["workspaceStarterLibrary", "home"],
+      overrides: {
+        workspaceStarterLibrary: {
+          href: starterGovernanceHref,
+          label: "管理 workspace starters"
+        }
+      },
+      primaryKey: "workspaceStarterLibrary",
+      variant: "inline"
+    },
+    activeTrackLabel: "当前应用模式",
+    starterLabel: "当前 starter",
+    governanceLabel: "治理与下一步",
+    recentDraftsLabel: "最近草稿",
+    featuredNodesLabel: "常用原生节点",
+    governanceLinkLabel: "继续处理当前治理项",
+    interactivePendingLabel: "交互 starter 浏览、命名输入与创建动作稍后挂载。"
   };
 }
 
