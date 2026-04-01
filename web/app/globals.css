@@ -2746,6 +2746,105 @@ a {
   margin-top: 10px;
 }
 
+.workflow-monitor-surface {
+  display: grid;
+  gap: 22px;
+}
+
+.workflow-monitor-surface .summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.workflow-monitor-trend-deck {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.workflow-monitor-trend-card {
+  display: grid;
+  gap: 14px;
+}
+
+.workflow-monitor-trend-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.workflow-monitor-trend-head h3 {
+  margin: 6px 0 0;
+  font-size: 1.05rem;
+}
+
+.workflow-monitor-trend-value {
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.workflow-monitor-trend-card-accent {
+  border-color: rgba(49, 92, 236, 0.18);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.94), rgba(255, 252, 246, 0.82));
+}
+
+.workflow-monitor-trend-card-success {
+  border-color: rgba(33, 110, 74, 0.18);
+  background: linear-gradient(180deg, rgba(242, 252, 247, 0.94), rgba(255, 252, 246, 0.82));
+}
+
+.workflow-monitor-trend-card-warning {
+  border-color: rgba(208, 99, 45, 0.18);
+  background: linear-gradient(180deg, rgba(255, 249, 243, 0.94), rgba(255, 252, 246, 0.82));
+}
+
+.workflow-monitor-trend-card-neutral {
+  border-color: rgba(28, 25, 21, 0.1);
+}
+
+.workflow-monitor-sparkline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+  min-height: 120px;
+}
+
+.workflow-monitor-sparkline-bar {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  padding: 0;
+}
+
+.workflow-monitor-sparkline-bar-fill {
+  display: block;
+  width: 100%;
+  min-height: 6px;
+  border-radius: 999px 999px 10px 10px;
+  background: linear-gradient(180deg, rgba(49, 92, 236, 0.24), rgba(49, 92, 236, 0.82));
+}
+
+.workflow-monitor-trend-card-success .workflow-monitor-sparkline-bar-fill {
+  background: linear-gradient(180deg, rgba(33, 110, 74, 0.2), rgba(33, 110, 74, 0.82));
+}
+
+.workflow-monitor-trend-card-warning .workflow-monitor-sparkline-bar-fill {
+  background: linear-gradient(180deg, rgba(208, 99, 45, 0.2), rgba(208, 99, 45, 0.82));
+}
+
+.workflow-monitor-trend-card-neutral .workflow-monitor-sparkline-bar-fill {
+  background: linear-gradient(180deg, rgba(102, 112, 133, 0.18), rgba(71, 84, 103, 0.72));
+}
+
+.workflow-monitor-insight-grid {
+  align-items: start;
+}
+
 .binding-list {
   display: grid;
   gap: 14px;

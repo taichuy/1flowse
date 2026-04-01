@@ -65,10 +65,10 @@ describe("buildWorkflowMonitorSurfaceModel", () => {
           facets: {
             status_counts: [],
             request_source_counts: [],
-            request_surface_counts: [],
+            request_surface_counts: [{ value: "native.workflow", count: 2 }],
             cache_status_counts: [],
             run_status_counts: [],
-            reason_counts: [],
+            reason_counts: [{ value: "runtime_failed", count: 1 }],
             api_key_usage: [],
             recent_failure_reasons: [],
             timeline_granularity: "hour",
@@ -107,10 +107,10 @@ describe("buildWorkflowMonitorSurfaceModel", () => {
           facets: {
             status_counts: [],
             request_source_counts: [],
-            request_surface_counts: [],
+            request_surface_counts: [{ value: "openai.responses", count: 3 }],
             cache_status_counts: [],
             run_status_counts: [],
-            reason_counts: [],
+            reason_counts: [{ value: "rate_limit_exceeded", count: 1 }],
             api_key_usage: [],
             recent_failure_reasons: [],
             timeline_granularity: "hour",
@@ -146,6 +146,23 @@ describe("buildWorkflowMonitorSurfaceModel", () => {
         expect.objectContaining({ value: "openai.responses", count: 3 }),
         expect.objectContaining({ value: "native.workflow", count: 2 }),
       ])
+    );
+    expect(model.activePublishedBindingCount).toBe(2);
+    expect(model.aggregateInvocationAudit?.facets.reason_counts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "rate_limit_exceeded", count: 1 }),
+        expect.objectContaining({ value: "runtime_failed", count: 1 }),
+      ])
+    );
+    expect(model.trendCards.map((card) => card.key)).toEqual([
+      "invocations",
+      "success-rate",
+      "failure-pressure",
+      "callback-pressure",
+    ]);
+    expect(model.windowSummary?.headline).toContain("峰值时间桶 5 次");
+    expect(model.insightsSurface?.trafficMixCard.requestSurfaceLabels).toEqual(
+      expect.arrayContaining(["OpenAI responses 3", "Native workflow route 2"])
     );
   });
 });

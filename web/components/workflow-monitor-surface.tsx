@@ -2,6 +2,8 @@ import React from "react";
 import Link from "next/link";
 
 import { OperatorRunSampleCardList } from "@/components/operator-run-sample-card-list";
+import { WorkflowGovernanceHandoffCards } from "@/components/workflow-governance-handoff-cards";
+import { WorkflowPublishSelectedNextStepCard } from "@/components/workflow-publish-selected-next-step-card";
 import { WorkflowPublishTrafficTimeline } from "@/components/workflow-publish-traffic-timeline";
 import type { PublishedEndpointInvocationListResponse, WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
 import { buildRunDetailHref } from "@/lib/workbench-links";
@@ -32,6 +34,9 @@ export function WorkflowMonitorSurface({
     resolveWorkflowDetailHref: () => workflowEditorHref,
   });
   const hasDraftBindings = bindings.some((binding) => binding.lifecycle_status === "draft");
+  const summaryFocusGovernanceHandoff =
+    model.insightsSurface?.summaryCards.find((card) => card.key === "summary-focus")
+      ?.workflowGovernanceHandoff ?? null;
 
   if (model.publishedBindings.length === 0) {
     return (
@@ -103,17 +108,34 @@ export function WorkflowMonitorSurface({
               而忽略共享 backlog。
             </p>
           </div>
-          <div className="payload-card compact-card">
-            <div className="payload-card-header">
-              <span className="status-meta">Summary focus</span>
-              <span className={`health-pill ${model.primaryFollowUp.tone === "healthy" ? "healthy" : "pending"}`}>
-                {model.primaryFollowUp.tone === "healthy" ? "clear" : "attention"}
-              </span>
+            <div className="payload-card compact-card">
+              <div className="payload-card-header">
+                <span className="status-meta">Summary focus</span>
+                <span className={`health-pill ${model.primaryFollowUp.tone === "healthy" ? "healthy" : "pending"}`}>
+                  {model.primaryFollowUp.tone === "healthy" ? "clear" : "attention"}
+                </span>
+              </div>
+              <p className="binding-meta">{model.primaryFollowUp.headline}</p>
+              <p className="section-copy entry-copy">{model.primaryFollowUp.detail}</p>
+              {model.primaryFollowUp.href && model.primaryFollowUp.hrefLabel ? (
+                <div className="tool-badge-row">
+                  <Link className="event-chip inbox-filter-link" href={model.primaryFollowUp.href}>
+                    {model.primaryFollowUp.hrefLabel}
+                  </Link>
+                </div>
+              ) : null}
             </div>
-            <p className="binding-meta">{model.primaryFollowUp.headline}</p>
-            <p className="section-copy entry-copy">{model.primaryFollowUp.detail}</p>
-          </div>
-        </article>
+          </article>
+
+          {summaryFocusGovernanceHandoff ? (
+            <WorkflowGovernanceHandoffCards
+              workflowCatalogGapSummary={summaryFocusGovernanceHandoff.workflowCatalogGapSummary}
+              workflowCatalogGapDetail={summaryFocusGovernanceHandoff.workflowCatalogGapDetail}
+              workflowCatalogGapHref={summaryFocusGovernanceHandoff.workflowCatalogGapHref}
+              workflowGovernanceHref={summaryFocusGovernanceHandoff.workflowGovernanceHref}
+              legacyAuthHandoff={summaryFocusGovernanceHandoff.legacyAuthHandoff}
+            />
+          ) : null}
 
         {!model.hasInvocationFacts ? (
           <article className="diagnostic-panel" data-component="workflow-monitor-no-traffic-state">
@@ -135,6 +157,178 @@ export function WorkflowMonitorSurface({
               </Link>
             </div>
           </article>
+        ) : null}
+
+        {model.hasInvocationFacts ? (
+          <section className="workflow-monitor-trend-deck" data-component="workflow-monitor-trend-deck">
+            {model.trendCards.map((card) => {
+              const seriesMax = card.series.reduce((max, value) => Math.max(max, value), 0);
+
+              return (
+                <article
+                  className={`workspace-panel workflow-monitor-trend-card workflow-monitor-trend-card-${card.tone}`}
+                  data-component="workflow-monitor-trend-card"
+                  data-trend-key={card.key}
+                  key={card.key}
+                >
+                  <div className="workflow-monitor-trend-head">
+                    <div>
+                      <p className="workflow-studio-placeholder-eyebrow">Workflow trend</p>
+                      <h3>{card.label}</h3>
+                    </div>
+                    <strong className="workflow-monitor-trend-value">{card.value}</strong>
+                  </div>
+                  {card.series.length ? (
+                    <div className="workflow-monitor-sparkline" aria-hidden="true">
+                      {card.series.map((value, index) => {
+                        const height = seriesMax > 0 ? Math.max((value / seriesMax) * 100, value > 0 ? 14 : 6) : 6;
+
+                        return (
+                          <span className="workflow-monitor-sparkline-bar" key={`${card.key}:${index}`}>
+                            <span
+                              className="workflow-monitor-sparkline-bar-fill"
+                              style={{ height: `${height}%` }}
+                            />
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="empty-state compact">当前还没有足够的时间桶样本。</p>
+                  )}
+                  <p className="binding-meta">{card.detail}</p>
+                  <p className="section-copy entry-copy">{card.trendLabel}</p>
+                </article>
+              );
+            })}
+          </section>
+        ) : null}
+
+        {model.hasInvocationFacts && (model.windowSummary || model.insightsSurface) ? (
+          <section className="publish-meta-grid workflow-monitor-insight-grid" data-component="workflow-monitor-insight-grid">
+            {model.windowSummary ? (
+              <article className="payload-card compact-card" data-component="workflow-monitor-window-summary">
+                <div className="payload-card-header">
+                  <span className="status-meta">Window summary</span>
+                </div>
+                <p className="binding-meta">{model.windowSummary.headline}</p>
+                <p className="section-copy entry-copy">{model.windowSummary.detail}</p>
+                {model.windowSummary.chips.length ? (
+                  <div className="tool-badge-row">
+                    {model.windowSummary.chips.map((chip) => (
+                      <span className="event-chip" key={chip}>
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            ) : null}
+
+            {model.insightsSurface ? (
+              <article className="payload-card compact-card" data-component="workflow-monitor-traffic-mix-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">{model.insightsSurface.trafficMixCard.title}</span>
+                </div>
+                <p className="section-copy entry-copy">{model.insightsSurface.trafficMixCard.detail}</p>
+                <dl className="compact-meta-list">
+                  {model.insightsSurface.trafficMixCard.rows.map((row) => (
+                    <div key={row.key}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {model.insightsSurface.trafficMixCard.requestSurfaceLabels.length ? (
+                  <div className="tool-badge-row">
+                    {model.insightsSurface.trafficMixCard.requestSurfaceLabels.map((label) => (
+                      <span className="event-chip" key={label}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            ) : null}
+
+            {model.insightsSurface ? (
+              <article className="payload-card compact-card" data-component="workflow-monitor-waiting-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">{model.insightsSurface.waitingFollowUpCard.title}</span>
+                </div>
+                <p className="binding-meta">{model.insightsSurface.waitingFollowUpCard.headline}</p>
+                <p className="section-copy entry-copy">{model.insightsSurface.waitingFollowUpCard.detail}</p>
+                <dl className="compact-meta-list">
+                  {model.insightsSurface.waitingFollowUpCard.rows.map((row) => (
+                    <div key={row.key}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {model.insightsSurface.waitingFollowUpCard.chips.length ? (
+                  <div className="tool-badge-row">
+                    {model.insightsSurface.waitingFollowUpCard.chips.map((chip) => (
+                      <span className="event-chip" key={chip}>
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {model.insightsSurface.waitingFollowUpCard.selectedNextStepSurface ? (
+                  <WorkflowPublishSelectedNextStepCard
+                    surface={model.insightsSurface.waitingFollowUpCard.selectedNextStepSurface}
+                    showTitle={false}
+                  />
+                ) : null}
+                {model.insightsSurface.waitingFollowUpCard.followUpHref &&
+                model.insightsSurface.waitingFollowUpCard.followUpHrefLabel ? (
+                  <div className="tool-badge-row">
+                    <Link
+                      className="event-chip inbox-filter-link"
+                      href={model.insightsSurface.waitingFollowUpCard.followUpHref}
+                    >
+                      {model.insightsSurface.waitingFollowUpCard.followUpHrefLabel}
+                    </Link>
+                  </div>
+                ) : null}
+              </article>
+            ) : null}
+
+            {model.insightsSurface?.issueSignalsSurface ? (
+              <article className="payload-card compact-card" data-component="workflow-monitor-issue-signals-card">
+                <div className="payload-card-header">
+                  <span className="status-meta">{model.insightsSurface.issueSignalsSurface.title}</span>
+                </div>
+                <p className="section-copy entry-copy">{model.insightsSurface.issueSignalsSurface.description}</p>
+                {model.insightsSurface.issueSignalsSurface.insight ? (
+                  <p className="binding-meta">{model.insightsSurface.issueSignalsSurface.insight}</p>
+                ) : null}
+                {model.insightsSurface.issueSignalsSurface.selectedNextStepSurface ? (
+                  <WorkflowPublishSelectedNextStepCard
+                    surface={model.insightsSurface.issueSignalsSurface.selectedNextStepSurface}
+                    showTitle={false}
+                  />
+                ) : null}
+                <div className="tool-badge-row">
+                  {model.insightsSurface.issueSignalsSurface.chips.map((chip) => (
+                    <span className="event-chip" key={chip}>
+                      {chip}
+                    </span>
+                  ))}
+                  {model.insightsSurface.issueSignalsSurface.followUpHref &&
+                  model.insightsSurface.issueSignalsSurface.followUpHrefLabel ? (
+                    <Link
+                      className="event-chip inbox-filter-link"
+                      href={model.insightsSurface.issueSignalsSurface.followUpHref}
+                    >
+                      {model.insightsSurface.issueSignalsSurface.followUpHrefLabel}
+                    </Link>
+                  ) : null}
+                </div>
+              </article>
+            ) : null}
+          </section>
         ) : null}
 
         <WorkflowPublishTrafficTimeline

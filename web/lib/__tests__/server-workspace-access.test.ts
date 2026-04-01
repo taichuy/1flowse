@@ -5,7 +5,10 @@ vi.mock("next/headers", () => ({
 }));
 
 import { cookies } from "next/headers";
-import { getServerAuthSession } from "@/lib/server-workspace-access";
+import {
+  getServerAuthSession,
+  getServerWorkflowDetail
+} from "@/lib/server-workspace-access";
 import {
   ACCESS_TOKEN_COOKIE_NAME,
   CSRF_TOKEN_COOKIE_NAME,
@@ -140,5 +143,42 @@ describe("server workspace access", () => {
     expect(session?.current_user.email).toBe("admin@taichuy.com");
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/auth/refresh");
+  });
+
+  it("forwards auth cookies and bearer token when loading workflow detail on the server", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "workflow-1",
+          name: "Workflow 1",
+          version: "0.1.0",
+          status: "draft",
+          created_at: "2026-03-31T10:00:00Z",
+          updated_at: "2026-03-31T10:00:00Z",
+          node_count: 1,
+          tool_governance: {
+            referenced_tool_ids: [],
+            missing_tool_ids: [],
+            governed_tool_count: 0,
+            strong_isolation_tool_count: 0
+          },
+          versions: [],
+          definition: {}
+        }),
+        { status: 200 }
+      )
+    );
+
+    const workflow = await getServerWorkflowDetail("workflow-1");
+
+    expect(workflow?.id).toBe("workflow-1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/workflows/workflow-1/detail");
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer expired-access-token");
+    expect(headers.get("Cookie")).toContain(
+      `${ACCESS_TOKEN_COOKIE_NAME}=expired-access-token`
+    );
+    expect(headers.get("Cookie")).toContain(`${CSRF_TOKEN_COOKIE_NAME}=csrf-token`);
   });
 });

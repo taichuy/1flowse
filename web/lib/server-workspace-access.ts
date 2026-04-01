@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import { getApiBaseUrl } from "@/lib/api-base-url";
 import type { CredentialItem } from "@/lib/get-credentials";
+import type { WorkflowPublishedEndpointItem } from "@/lib/get-workflow-publish";
+import type { WorkflowDetail } from "@/lib/get-workflows";
 import type {
   WorkspaceModelProviderRegistryResponse,
   WorkspaceModelProviderSettingsResponse
@@ -227,6 +229,56 @@ export const getServerWorkspaceContext = cache(async (): Promise<WorkspaceContex
   }
   return fetchWorkspaceAccessJson<WorkspaceContextResponse>("/api/workspace/context", session);
 });
+
+export async function getServerWorkflowDetail(
+  workflowId: string | null | undefined
+): Promise<WorkflowDetail | null> {
+  const normalizedWorkflowId = workflowId?.trim();
+  if (!normalizedWorkflowId) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const session = buildServerSessionCookies(cookieStore);
+  if (!session.accessToken && !session.refreshToken) {
+    return null;
+  }
+
+  return fetchWorkspaceAccessJson<WorkflowDetail>(
+    `/api/workflows/${encodeURIComponent(normalizedWorkflowId)}/detail`,
+    session
+  );
+}
+
+export async function getServerWorkflowPublishedEndpoints(
+  workflowId: string | null | undefined,
+  options?: {
+    includeAllVersions?: boolean;
+  }
+): Promise<WorkflowPublishedEndpointItem[]> {
+  const normalizedWorkflowId = workflowId?.trim();
+  if (!normalizedWorkflowId) {
+    return [];
+  }
+
+  const cookieStore = await cookies();
+  const session = buildServerSessionCookies(cookieStore);
+  if (!session.accessToken && !session.refreshToken) {
+    return [];
+  }
+
+  const searchParams = new URLSearchParams();
+  if (options?.includeAllVersions ?? true) {
+    searchParams.set("include_all_versions", "true");
+  }
+
+  return (
+    (await fetchWorkspaceAccessJson<WorkflowPublishedEndpointItem[]>(
+      `/api/workflows/${encodeURIComponent(normalizedWorkflowId)}/published-endpoints?${searchParams.toString()}`,
+      session
+    )) ?? []
+  );
+}
 
 export async function requireServerWorkflowStudioSurfaceAccess({
   surface,

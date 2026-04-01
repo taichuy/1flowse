@@ -11,18 +11,19 @@ import WorkflowLogsPage from "@/app/workflows/[workflowId]/logs/page";
 import WorkflowMonitorPage from "@/app/workflows/[workflowId]/monitor/page";
 import WorkflowPublishPage from "@/app/workflows/[workflowId]/publish/page";
 import { getRunDetail } from "@/lib/get-run-detail";
+import { getPublishedEndpointInvocationDetail } from "@/lib/get-workflow-publish";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
 import { getRunEvidenceView, getRunExecutionView } from "@/lib/get-run-views";
 import {
+  getServerWorkflowDetail,
+  getServerWorkflowPublishedEndpoints,
   getServerWorkspaceContext,
   requireServerWorkflowStudioSurfaceAccess
 } from "@/lib/server-workspace-access";
-import { getWorkflowPublishedEndpoints } from "@/lib/get-workflow-publish";
 import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getWorkflowLibrarySnapshot } from "@/lib/get-workflow-library";
-import { getWorkflowDetail, getWorkflows } from "@/lib/get-workflows";
 import {
   canAccessWorkflowStudioSurface,
   getWorkspaceConsolePageHref
@@ -38,6 +39,15 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("notFound");
   }
+}));
+
+vi.mock("next/link", () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
 }));
 
 vi.mock("@/components/workspace-shell", () => ({
@@ -109,14 +119,55 @@ vi.mock("@/components/workflow-publish-panel", () => ({
     )
 }));
 
-vi.mock("@/lib/server-workspace-access", () => ({
-  getServerWorkspaceContext: vi.fn(),
-  requireServerWorkflowStudioSurfaceAccess: vi.fn()
+vi.mock("@/components/workflow-publish-invocation-entry-card", () => ({
+  WorkflowPublishInvocationEntryCard: ({
+    item,
+    detailHref,
+    detailActive
+  }: {
+    item: { id: string };
+    detailHref: string;
+    detailActive: boolean;
+  }) =>
+    createElement(
+      "div",
+      {
+        "data-component": "workflow-publish-invocation-entry-card",
+        "data-invocation-id": item.id,
+        "data-detail-href": detailHref,
+        "data-detail-active": detailActive ? "true" : "false"
+      },
+      item.id
+    )
 }));
 
-vi.mock("@/lib/get-workflows", () => ({
-  getWorkflowDetail: vi.fn(),
-  getWorkflows: vi.fn()
+vi.mock("@/components/workflow-publish-invocation-detail-panel", () => ({
+  WorkflowPublishInvocationDetailPanel: ({
+    detail,
+    currentHref,
+    clearHref
+  }: {
+    detail: { invocation: { id: string } };
+    currentHref?: string | null;
+    clearHref: string;
+  }) =>
+    createElement(
+      "div",
+      {
+        "data-component": "workflow-publish-invocation-detail-panel",
+        "data-invocation-id": detail.invocation.id,
+        "data-current-href": currentHref ?? "none",
+        "data-clear-href": clearHref
+      },
+      detail.invocation.id
+    )
+}));
+
+vi.mock("@/lib/server-workspace-access", () => ({
+  getServerWorkflowDetail: vi.fn(),
+  getServerWorkflowPublishedEndpoints: vi.fn(),
+  getServerWorkspaceContext: vi.fn(),
+  requireServerWorkflowStudioSurfaceAccess: vi.fn()
 }));
 
 vi.mock("@/lib/get-workflow-library", () => ({
@@ -145,7 +196,7 @@ vi.mock("@/lib/get-run-views", () => ({
 }));
 
 vi.mock("@/lib/get-workflow-publish", () => ({
-  getWorkflowPublishedEndpoints: vi.fn()
+  getPublishedEndpointInvocationDetail: vi.fn()
 }));
 
 vi.mock("@/lib/get-workflow-publish-governance", () => ({
@@ -236,7 +287,7 @@ function buildPublishedBinding(id: string, overrides: Record<string, unknown> = 
       primary_sensitive_resource: null,
     },
     ...overrides,
-  } as Awaited<ReturnType<typeof getWorkflowPublishedEndpoints>>[number];
+  } as Awaited<ReturnType<typeof getServerWorkflowPublishedEndpoints>>[number];
 }
 
 function buildPublishedInvocationAudit(overrides: Record<string, unknown> = {}) {
@@ -271,6 +322,86 @@ function buildPublishedInvocationAudit(overrides: Record<string, unknown> = {}) 
   } as NonNullable<
     Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>>["invocationAuditsByBinding"][string]
   >;
+}
+
+function buildPublishedInvocationItem(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    workflow_id: "workflow-1",
+    binding_id: "binding-1",
+    endpoint_id: "binding-1-endpoint",
+    endpoint_alias: "binding-1.alias",
+    route_path: "/published/binding-1",
+    protocol: "native",
+    auth_mode: "api_key",
+    request_source: "workflow",
+    request_surface: "native.workflow",
+    status: "failed",
+    cache_status: "miss",
+    run_id: "run-1",
+    run_status: "failed",
+    run_current_node_id: "node-1",
+    run_waiting_reason: null,
+    run_waiting_lifecycle: null,
+    run_snapshot: null,
+    run_follow_up: null,
+    execution_focus_explanation: null,
+    callback_waiting_explanation: null,
+    reason_code: "runtime_failed",
+    error_message: "Tool timed out",
+    request_preview: { key_count: 1, keys: ["message"], sample: { message: "hi" } },
+    response_preview: null,
+    duration_ms: 1200,
+    created_at: "2026-03-31T09:00:00Z",
+    finished_at: "2026-03-31T09:00:01Z",
+    ...overrides
+  } as NonNullable<
+    Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>>["invocationAuditsByBinding"][string]
+  >["items"][number];
+}
+
+function buildPublishedInvocationDetail(
+  id: string,
+  overrides: Record<string, unknown> = {}
+) {
+  return {
+    kind: "ok",
+    data: {
+      invocation: buildPublishedInvocationItem(id),
+      run: {
+        id: "run-1",
+        status: "failed",
+        current_node_id: "node-1",
+        error_message: "Tool timed out",
+        created_at: "2026-03-31T09:00:00Z"
+      },
+      run_snapshot: {
+        status: "failed",
+        current_node_id: "node-1"
+      },
+      run_follow_up: null,
+      blocking_node_run_id: null,
+      execution_focus_reason: null,
+      execution_focus_node: null,
+      execution_focus_explanation: {
+        primary_signal: "Tool timed out",
+        follow_up: "打开 run trace 继续排障。"
+      },
+      callback_waiting_explanation: null,
+      skill_trace: null,
+      blocking_sensitive_access_entries: [],
+      sensitive_access_entries: [],
+      callback_tickets: [],
+      cache: {
+        cache_status: "miss",
+        cache_key: null,
+        cache_entry_id: null,
+        inventory_entry: null
+      },
+      legacy_auth_governance: null,
+      ...overrides
+    }
+  } as Awaited<ReturnType<typeof getPublishedEndpointInvocationDetail>>;
 }
 
 function buildRunDetailSnapshot(runId: string, overrides: Record<string, unknown> = {}) {
@@ -428,11 +559,10 @@ beforeEach(() => {
       return workspaceContext;
     }
   );
-  vi.mocked(getWorkflowDetail).mockResolvedValue({
+  vi.mocked(getServerWorkflowDetail).mockResolvedValue({
     id: "workflow-1",
     name: "Workflow 1"
-  } as Awaited<ReturnType<typeof getWorkflowDetail>>);
-  vi.mocked(getWorkflows).mockResolvedValue([] as Awaited<ReturnType<typeof getWorkflows>>);
+  } as Awaited<ReturnType<typeof getServerWorkflowDetail>>);
   vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue({
     nodes: [],
     starters: [],
@@ -460,8 +590,8 @@ beforeEach(() => {
       }
     }
   } as unknown as Awaited<ReturnType<typeof getSystemOverview>>);
-  vi.mocked(getWorkflowPublishedEndpoints).mockResolvedValue(
-    [] as Awaited<ReturnType<typeof getWorkflowPublishedEndpoints>>
+  vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue(
+    [] as Awaited<ReturnType<typeof getServerWorkflowPublishedEndpoints>>
   );
   vi.mocked(getWorkflowRuns).mockResolvedValue(
     [] as Awaited<ReturnType<typeof getWorkflowRuns>>
@@ -469,6 +599,7 @@ beforeEach(() => {
   vi.mocked(getRunDetail).mockResolvedValue(null);
   vi.mocked(getRunExecutionView).mockResolvedValue(null);
   vi.mocked(getRunEvidenceView).mockResolvedValue(null);
+  vi.mocked(getPublishedEndpointInvocationDetail).mockResolvedValue(null);
   vi.mocked(getWorkflowPublishGovernanceSnapshot).mockResolvedValue({
     cacheInventories: {},
     apiKeysByBinding: {},
@@ -539,11 +670,11 @@ describe("Workflow studio routes", () => {
     expect(html).toContain("/workflows/workflow-1/editor");
     expect(html).toContain("/workflows/workflow-1/publish");
     expect(html).not.toContain("?surface=");
-    expect(vi.mocked(getWorkflows)).not.toHaveBeenCalled();
+    expect(vi.mocked(getServerWorkflowPublishedEndpoints)).not.toHaveBeenCalled();
     expect(vi.mocked(getWorkflowLibrarySnapshot)).not.toHaveBeenCalled();
     expect(vi.mocked(getPluginRegistrySnapshot)).not.toHaveBeenCalled();
     expect(vi.mocked(getSystemOverview)).not.toHaveBeenCalled();
-    expect(vi.mocked(getWorkflowPublishedEndpoints)).not.toHaveBeenCalled();
+    expect(vi.mocked(getServerWorkflowPublishedEndpoints)).not.toHaveBeenCalled();
     expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).not.toHaveBeenCalled();
   });
 
@@ -563,20 +694,19 @@ describe("Workflow studio routes", () => {
     expect(html).toContain("draft only");
     expect(html).toContain("/workflows/workflow-1/editor");
     expect(html).toContain("/workflows/workflow-1/publish");
-    expect(vi.mocked(getWorkflowPublishedEndpoints)).toHaveBeenCalledWith("workflow-1", {
+    expect(vi.mocked(getServerWorkflowPublishedEndpoints)).toHaveBeenCalledWith("workflow-1", {
       includeAllVersions: true
     });
     expect(vi.mocked(getPluginRegistrySnapshot)).not.toHaveBeenCalled();
     expect(vi.mocked(getSystemOverview)).not.toHaveBeenCalled();
     expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).not.toHaveBeenCalled();
-    expect(vi.mocked(getWorkflows)).not.toHaveBeenCalled();
     expect(vi.mocked(getWorkflowLibrarySnapshot)).not.toHaveBeenCalled();
   });
 
   it("loads publish governance detail only when a binding is explicitly selected", async () => {
-    vi.mocked(getWorkflowPublishedEndpoints).mockResolvedValue([
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
       { id: "binding-1" }
-    ] as Awaited<ReturnType<typeof getWorkflowPublishedEndpoints>>);
+    ] as Awaited<ReturnType<typeof getServerWorkflowPublishedEndpoints>>);
 
     const html = renderToStaticMarkup(
       await WorkflowPublishPage({
@@ -609,7 +739,7 @@ describe("Workflow studio routes", () => {
   });
 
   it("renders the api surface from published bindings instead of a placeholder", async () => {
-    vi.mocked(getWorkflowPublishedEndpoints).mockResolvedValue([
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
       {
         id: "binding-1",
         workflow_id: "workflow-1",
@@ -632,7 +762,7 @@ describe("Workflow studio routes", () => {
         created_at: "2026-03-31T08:00:00Z",
         updated_at: "2026-03-31T08:00:00Z"
       }
-    ] as Awaited<ReturnType<typeof getWorkflowPublishedEndpoints>>);
+    ] as Awaited<ReturnType<typeof getServerWorkflowPublishedEndpoints>>);
 
     const html = renderToStaticMarkup(
       await WorkflowApiPage({
@@ -652,14 +782,14 @@ describe("Workflow studio routes", () => {
     expect(html).toContain("/workflows/workflow-1/api");
     expect(html).toContain("/workflows/workflow-1/logs");
     expect(html).toContain("/workflows/workflow-1/monitor");
-    expect(vi.mocked(getWorkflowPublishedEndpoints)).toHaveBeenCalledWith("workflow-1", {
+    expect(vi.mocked(getServerWorkflowPublishedEndpoints)).toHaveBeenCalledWith("workflow-1", {
       includeAllVersions: true
     });
     expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).not.toHaveBeenCalled();
   });
 
   it("renders an honest empty state when the workflow has no published binding", async () => {
-    vi.mocked(getWorkflowPublishedEndpoints).mockResolvedValue([
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
       {
         id: "binding-draft",
         workflow_id: "workflow-1",
@@ -681,7 +811,7 @@ describe("Workflow studio routes", () => {
         created_at: "2026-03-31T09:00:00Z",
         updated_at: "2026-03-31T09:00:00Z"
       }
-    ] as Awaited<ReturnType<typeof getWorkflowPublishedEndpoints>>);
+    ] as Awaited<ReturnType<typeof getServerWorkflowPublishedEndpoints>>);
 
     const html = renderToStaticMarkup(
       await WorkflowApiPage({
@@ -696,18 +826,55 @@ describe("Workflow studio routes", () => {
     expect(html).not.toContain('data-component="workflow-studio-placeholder"');
   });
 
-  it("renders the logs surface from workflow recent runs by default", async () => {
+  it("renders the logs surface from published invocation facts by default", async () => {
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
+      buildPublishedBinding("binding-1")
+    ]);
+    vi.mocked(getWorkflowPublishGovernanceSnapshot).mockResolvedValue({
+      cacheInventories: {},
+      apiKeysByBinding: {},
+      invocationAuditsByBinding: {
+        "binding-1": buildPublishedInvocationAudit({
+          items: [
+            buildPublishedInvocationItem("invocation-2", {
+              run_id: "run-2",
+              created_at: "2026-03-31T09:10:00Z",
+              error_message: "Tool timed out"
+            }),
+            buildPublishedInvocationItem("invocation-1", {
+              run_id: "run-1",
+              status: "succeeded",
+              error_message: null,
+              created_at: "2026-03-31T08:10:00Z"
+            })
+          ]
+        })
+      },
+      invocationDetailsByBinding: {},
+      rateLimitWindowAuditsByBinding: {}
+    } as Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>>);
+    vi.mocked(getPublishedEndpointInvocationDetail).mockResolvedValue(
+      buildPublishedInvocationDetail("invocation-2", {
+        invocation: buildPublishedInvocationItem("invocation-2", {
+          run_id: "run-2",
+          error_message: "Tool timed out"
+        }),
+        run: {
+          id: "run-2",
+          status: "failed",
+          current_node_id: "node-2",
+          error_message: "Tool timed out",
+          created_at: "2026-03-31T09:10:00Z"
+        }
+      })
+    );
     vi.mocked(getWorkflowRuns).mockResolvedValue([
       buildWorkflowRun("run-2", {
         status: "failed",
         error_message: "Tool timed out",
-        last_event_at: "2026-03-31T09:00:20Z"
+        last_event_at: "2026-03-31T09:10:20Z"
       }),
-      buildWorkflowRun("run-1", {
-        status: "succeeded",
-        created_at: "2026-03-31T08:00:00Z",
-        last_event_at: "2026-03-31T08:00:20Z"
-      })
+      buildWorkflowRun("run-1")
     ]);
     vi.mocked(getRunDetail).mockResolvedValue(
       buildRunDetailSnapshot("run-2", { status: "failed", error_message: "Tool timed out" })
@@ -721,22 +888,129 @@ describe("Workflow studio routes", () => {
         searchParams: Promise.resolve({})
       })
     );
+
     expect(logsHtml).toContain('data-component="workflow-logs-surface"');
     expect(logsHtml).toContain('data-selection-source="latest"');
-    expect(logsHtml).toContain('data-component="workflow-logs-run-list"');
-    expect(logsHtml).toContain('data-component="workflow-logs-active-run"');
-    expect(logsHtml).toContain('data-run-id="run-2"');
-    expect(logsHtml).toContain("Tool timed out");
+    expect(logsHtml).toContain('data-component="workflow-logs-invocation-list"');
+    expect(logsHtml).toContain('data-component="workflow-logs-invocation-detail"');
+    expect(logsHtml).toContain('data-component="workflow-publish-invocation-entry-card"');
+    expect(logsHtml).toContain(
+      'data-detail-href="/workflows/workflow-1/logs?publish_binding=binding-1&amp;publish_invocation=invocation-2"'
+    );
+    expect(logsHtml).toContain('data-component="workflow-publish-invocation-detail-panel"');
+    expect(logsHtml).toContain('data-component="workflow-logs-run-handoff"');
     expect(logsHtml).toContain('data-component="run-diagnostics-execution-sections"');
-    expect(logsHtml).not.toContain('data-component="workflow-studio-placeholder"');
-    expect(vi.mocked(getWorkflowRuns)).toHaveBeenCalledWith("workflow-1");
+    expect(vi.mocked(getPublishedEndpointInvocationDetail)).toHaveBeenCalledWith(
+      "workflow-1",
+      "binding-1",
+      "invocation-2"
+    );
     expect(vi.mocked(getRunDetail)).toHaveBeenCalledWith("run-2");
-    expect(vi.mocked(getRunExecutionView)).toHaveBeenCalledWith("run-2");
-    expect(vi.mocked(getRunEvidenceView)).toHaveBeenCalledWith("run-2");
-    expect(vi.mocked(getSystemOverview)).toHaveBeenCalledTimes(1);
   });
 
-  it("selects the requested run on the canonical logs route", async () => {
+  it("selects the requested invocation on the canonical logs route", async () => {
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
+      buildPublishedBinding("binding-1")
+    ]);
+    vi.mocked(getWorkflowPublishGovernanceSnapshot).mockResolvedValue({
+      cacheInventories: {},
+      apiKeysByBinding: {},
+      invocationAuditsByBinding: {
+        "binding-1": buildPublishedInvocationAudit({
+          items: [
+            buildPublishedInvocationItem("invocation-2", { run_id: "run-2" }),
+            buildPublishedInvocationItem("invocation-1", {
+              run_id: "run-1",
+              status: "succeeded",
+              error_message: null
+            })
+          ]
+        })
+      },
+      invocationDetailsByBinding: {},
+      rateLimitWindowAuditsByBinding: {}
+    } as Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>>);
+    vi.mocked(getPublishedEndpointInvocationDetail).mockResolvedValue(
+      buildPublishedInvocationDetail("invocation-1", {
+        invocation: buildPublishedInvocationItem("invocation-1", {
+          run_id: "run-1",
+          status: "succeeded",
+          error_message: null
+        }),
+        run: {
+          id: "run-1",
+          status: "succeeded",
+          current_node_id: "node-1",
+          error_message: null,
+          created_at: "2026-03-31T08:10:00Z"
+        }
+      })
+    );
+    vi.mocked(getWorkflowRuns).mockResolvedValue([
+      buildWorkflowRun("run-2"),
+      buildWorkflowRun("run-1", {
+        status: "succeeded",
+        error_message: null,
+        last_event_at: "2026-03-31T08:10:20Z"
+      })
+    ]);
+    vi.mocked(getRunDetail).mockResolvedValue(buildRunDetailSnapshot("run-1"));
+    vi.mocked(getRunExecutionView).mockResolvedValue(buildExecutionView("run-1"));
+    vi.mocked(getRunEvidenceView).mockResolvedValue(buildEvidenceView("run-1"));
+
+    const logsHtml = renderToStaticMarkup(
+      await WorkflowLogsPage({
+        params: Promise.resolve({ workflowId: "workflow-1" }),
+        searchParams: Promise.resolve({
+          publish_binding: "binding-1",
+          publish_invocation: "invocation-1"
+        })
+      })
+    );
+
+    expect(logsHtml).toContain('data-selection-source="query"');
+    expect(logsHtml).toContain('data-invocation-id="invocation-1"');
+    expect(logsHtml).toContain(
+      'data-current-href="/workflows/workflow-1/logs?publish_binding=binding-1&amp;publish_invocation=invocation-1"'
+    );
+    expect(vi.mocked(getPublishedEndpointInvocationDetail)).toHaveBeenCalledWith(
+      "workflow-1",
+      "binding-1",
+      "invocation-1"
+    );
+    expect(vi.mocked(getRunDetail)).toHaveBeenCalledWith("run-1");
+  });
+
+  it("falls back to the requested run when invocation facts are absent", async () => {
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
+      buildPublishedBinding("binding-1")
+    ]);
+    vi.mocked(getWorkflowPublishGovernanceSnapshot).mockResolvedValue({
+      cacheInventories: {},
+      apiKeysByBinding: {},
+      invocationAuditsByBinding: {
+        "binding-1": buildPublishedInvocationAudit({
+          summary: {
+            total_count: 0,
+            succeeded_count: 0,
+            failed_count: 0,
+            rejected_count: 0,
+            cache_hit_count: 0,
+            cache_miss_count: 0,
+            cache_bypass_count: 0,
+            last_invoked_at: null,
+            last_status: null,
+            last_cache_status: null,
+            last_run_id: null,
+            last_run_status: null,
+            last_reason_code: null
+          },
+          items: []
+        })
+      },
+      invocationDetailsByBinding: {},
+      rateLimitWindowAuditsByBinding: {}
+    } as Awaited<ReturnType<typeof getWorkflowPublishGovernanceSnapshot>>);
     vi.mocked(getWorkflowRuns).mockResolvedValue([
       buildWorkflowRun("run-2"),
       buildWorkflowRun("run-1", {
@@ -762,14 +1036,17 @@ describe("Workflow studio routes", () => {
       })
     );
 
+    expect(logsHtml).toContain('data-component="workflow-logs-run-fallback"');
     expect(logsHtml).toContain('data-selection-source="query"');
     expect(logsHtml).toContain('data-run-id="run-1"');
+    expect(logsHtml).toContain("当前 published binding 还没有 recent invocations");
     expect(logsHtml).toContain('/workflows/workflow-1/logs?run=run-1');
     expect(logsHtml).toContain('data-run-detail-href="/runs/run-1"');
+    expect(vi.mocked(getPublishedEndpointInvocationDetail)).not.toHaveBeenCalled();
     expect(vi.mocked(getRunDetail)).toHaveBeenCalledWith("run-1");
   });
 
-  it("renders an honest logs empty state when the workflow has no recent runs", async () => {
+  it("renders an honest logs empty state when the workflow has no invocation or run facts", async () => {
     const logsHtml = renderToStaticMarkup(
       await WorkflowLogsPage({
         params: Promise.resolve({ workflowId: "workflow-1" }),
@@ -778,8 +1055,9 @@ describe("Workflow studio routes", () => {
     );
 
     expect(logsHtml).toContain('data-component="workflow-logs-empty-state"');
-    expect(logsHtml).toContain("当前 workflow 还没有 recent runs");
+    expect(logsHtml).toContain("recent published invocations 或 recent runs");
     expect(logsHtml).not.toContain('data-component="workflow-studio-placeholder"');
+    expect(vi.mocked(getPublishedEndpointInvocationDetail)).not.toHaveBeenCalled();
     expect(vi.mocked(getRunDetail)).not.toHaveBeenCalled();
     expect(vi.mocked(getRunExecutionView)).not.toHaveBeenCalled();
     expect(vi.mocked(getRunEvidenceView)).not.toHaveBeenCalled();
@@ -800,7 +1078,7 @@ describe("Workflow studio routes", () => {
   });
 
   it("renders the monitor surface from publish invocation and follow-up facts", async () => {
-    vi.mocked(getWorkflowPublishedEndpoints).mockResolvedValue([
+    vi.mocked(getServerWorkflowPublishedEndpoints).mockResolvedValue([
       buildPublishedBinding("binding-1")
     ]);
     vi.mocked(getWorkflowPublishGovernanceSnapshot).mockResolvedValue({
@@ -921,6 +1199,9 @@ describe("Workflow studio routes", () => {
     expect(monitorHtml).toContain('data-component="workflow-monitor-surface"');
     expect(monitorHtml).toContain('data-component="workflow-monitor-summary-strip"');
     expect(monitorHtml).toContain('data-component="workflow-monitor-primary-follow-up"');
+    expect(monitorHtml).toContain('data-component="workflow-monitor-trend-deck"');
+    expect(monitorHtml).toContain('data-component="workflow-monitor-insight-grid"');
+    expect(monitorHtml).toContain('data-component="workflow-monitor-window-summary"');
     expect(monitorHtml).toContain('data-component="workflow-monitor-sampled-runs"');
     expect(monitorHtml).toContain("Traffic timeline");
     expect(monitorHtml).toContain("Callback still pending");
@@ -941,7 +1222,7 @@ describe("Workflow studio routes", () => {
       })
     ).rejects.toThrowError("redirect:/login?next=%2Fworkflows%2Fworkflow-1%2Feditor");
 
-    expect(vi.mocked(getWorkflowDetail)).not.toHaveBeenCalled();
+    expect(vi.mocked(getServerWorkflowDetail)).not.toHaveBeenCalled();
   });
 
   it("redirects unauthorized publish access before loading workflow detail or bindings", async () => {
@@ -970,8 +1251,8 @@ describe("Workflow studio routes", () => {
       })
     ).rejects.toThrowError("redirect:/workspace");
 
-    expect(vi.mocked(getWorkflowDetail)).not.toHaveBeenCalled();
-    expect(vi.mocked(getWorkflowPublishedEndpoints)).not.toHaveBeenCalled();
+    expect(vi.mocked(getServerWorkflowDetail)).not.toHaveBeenCalled();
+    expect(vi.mocked(getServerWorkflowPublishedEndpoints)).not.toHaveBeenCalled();
     expect(vi.mocked(getWorkflowPublishGovernanceSnapshot)).not.toHaveBeenCalled();
   });
 
@@ -1001,7 +1282,7 @@ describe("Workflow studio routes", () => {
       })
     ).rejects.toThrowError("redirect:/workspace");
 
-    expect(vi.mocked(getWorkflowDetail)).not.toHaveBeenCalled();
+    expect(vi.mocked(getServerWorkflowDetail)).not.toHaveBeenCalled();
     expect(vi.mocked(getWorkflowRuns)).not.toHaveBeenCalled();
     expect(vi.mocked(getRunDetail)).not.toHaveBeenCalled();
     expect(vi.mocked(getRunExecutionView)).not.toHaveBeenCalled();

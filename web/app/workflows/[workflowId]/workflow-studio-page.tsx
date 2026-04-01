@@ -11,19 +11,25 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { getRunDetail } from "@/lib/get-run-detail";
 import { getSystemOverview } from "@/lib/get-system-overview";
 import { getRunEvidenceView, getRunExecutionView } from "@/lib/get-run-views";
+import { getPublishedEndpointInvocationDetail } from "@/lib/get-workflow-publish";
 import type { PluginToolRegistryItem } from "@/lib/get-plugin-registry";
-import { getWorkflowPublishedEndpoints } from "@/lib/get-workflow-publish";
 import { getWorkflowPublishGovernanceSnapshot } from "@/lib/get-workflow-publish-governance";
 import { getWorkflowRuns } from "@/lib/get-workflow-runs";
-import { requireServerWorkflowStudioSurfaceAccess } from "@/lib/server-workspace-access";
+import {
+  getServerWorkflowDetail,
+  getServerWorkflowPublishedEndpoints,
+  requireServerWorkflowStudioSurfaceAccess
+} from "@/lib/server-workspace-access";
 import {
   readWorkflowLogsRequestedRunId,
+  selectWorkflowLogsInvocation,
   selectWorkflowLogsRun
 } from "@/lib/workflow-logs-surface";
 import {
   appendWorkflowLibraryViewState,
   readWorkflowLibraryViewState
 } from "@/lib/workflow-library-query";
+import { readWorkflowPublishActivityQueryScope } from "@/lib/workflow-publish-activity-query";
 import {
   buildRunDetailHref,
   buildWorkflowStudioSurfaceHref,
@@ -41,7 +47,6 @@ import {
   pickWorkspaceStarterGovernanceQueryScope,
   readWorkspaceStarterLibraryViewState
 } from "@/lib/workspace-starter-governance-query";
-import { getWorkflowDetail } from "@/lib/get-workflows";
 import type { WorkspaceMemberRole } from "@/lib/workspace-access";
 
 export type WorkflowStudioPageProps = {
@@ -53,7 +58,7 @@ type WorkflowStudioSharedContext = {
   workspaceName: string;
   userName: string;
   userRole: WorkspaceMemberRole;
-  workflow: NonNullable<Awaited<ReturnType<typeof getWorkflowDetail>>>;
+  workflow: NonNullable<Awaited<ReturnType<typeof getServerWorkflowDetail>>>;
   workflowStageLabel: string;
   resolvedSearchParams: Record<string, string | string[] | undefined>;
   workflowLibraryHref: string;
@@ -156,7 +161,7 @@ async function resolveWorkflowStudioSharedContext({
     surface,
     requestedHref: requestedSurfaceHref
   });
-  const workflow = await getWorkflowDetail(workflowId);
+  const workflow = await getServerWorkflowDetail(workflowId);
 
   if (!workflow) {
     notFound();
@@ -281,16 +286,14 @@ async function renderWorkflowEditorSurface(sharedContext: WorkflowStudioSharedCo
 async function renderWorkflowPublishSurface(sharedContext: WorkflowStudioSharedContext) {
   const [
     { WorkflowPublishPanel },
-    workflowPublishModule,
     workflowPublishGovernanceModule,
     workflowPublishActivityQueryModule
   ] = await Promise.all([
     import("@/components/workflow-publish-panel"),
-    import("@/lib/get-workflow-publish"),
     import("@/lib/get-workflow-publish-governance"),
     import("@/lib/workflow-publish-activity-query")
   ]);
-  const publishedEndpoints = await workflowPublishModule.getWorkflowPublishedEndpoints(
+  const publishedEndpoints = await getServerWorkflowPublishedEndpoints(
     sharedContext.workflow.id,
     {
       includeAllVersions: true
@@ -403,7 +406,7 @@ async function renderWorkflowUtilitySurface(
   surface: Exclude<WorkflowStudioSurface, "editor" | "publish">
 ) {
   if (surface === "api") {
-    const bindings = await getWorkflowPublishedEndpoints(sharedContext.workflow.id, {
+    const bindings = await getServerWorkflowPublishedEndpoints(sharedContext.workflow.id, {
       includeAllVersions: true
     });
 
@@ -434,13 +437,55 @@ async function renderWorkflowUtilitySurface(
   }
 
   if (surface === "logs") {
-    const recentRuns = await getWorkflowRuns(sharedContext.workflow.id);
+    const [bindings, recentRuns] = await Promise.all([
+      getServerWorkflowPublishedEndpoints(sharedContext.workflow.id, {
+        includeAllVersions: true
+      }),
+      getWorkflowRuns(sharedContext.workflow.id)
+    ]);
+    const publishedBindings = bindings.filter((binding) => binding.lifecycle_status === "published");
+    const governanceSnapshot = publishedBindings.length
+      ? await getWorkflowPublishGovernanceSnapshot(sharedContext.workflow.id, publishedBindings)
+      : {
+          cacheInventories: {},
+          apiKeysByBinding: {},
+          invocationAuditsByBinding: {},
+          invocationDetailsByBinding: {},
+          rateLimitWindowAuditsByBinding: {}
+        };
+    const publishActivityQueryScope = readWorkflowPublishActivityQueryScope(
+      sharedContext.resolvedSearchParams
+    );
+    const invocationSelection = selectWorkflowLogsInvocation(
+      publishedBindings,
+      governanceSnapshot.invocationAuditsByBinding,
+      publishActivityQueryScope.bindingId,
+      publishActivityQueryScope.invocationId
+    );
+    const activeBinding =
+      publishedBindings.find((binding) => binding.id === invocationSelection.activeBindingId) ?? null;
+    const activeInvocationAudit = activeBinding
+      ? governanceSnapshot.invocationAuditsByBinding[activeBinding.id] ?? null
+      : null;
+    const activeInvocationItem =
+      activeInvocationAudit?.items.find(
+        (item) => item.id === invocationSelection.selectedInvocationId
+      ) ?? null;
     const requestedRunId = readWorkflowLogsRequestedRunId(sharedContext.resolvedSearchParams.run);
-    const selection = selectWorkflowLogsRun(recentRuns, requestedRunId);
-    const activeRunSummary = selection.activeRun;
+    const runSelection = selectWorkflowLogsRun(recentRuns, requestedRunId);
     const logsSearchParams = buildWorkflowStudioSearchParams(sharedContext.resolvedSearchParams, {
-      omitKeys: ["surface", "run"]
+      omitKeys: ["surface", "run", "publish_binding", "publish_invocation"]
     });
+    const canonicalLogsHref = buildWorkflowStudioSurfaceHref(sharedContext.workflow.id, "logs");
+    const buildLogsHrefWithInvocation = (bindingId: string, invocationId?: string | null) => {
+      const searchParams = new URLSearchParams(logsSearchParams.toString());
+      searchParams.set("publish_binding", bindingId);
+      if (invocationId) {
+        searchParams.set("publish_invocation", invocationId);
+      }
+
+      return appendSearchParamsToHref(canonicalLogsHref, searchParams);
+    };
     const runs = recentRuns.map((run) => {
       const runLogsParams = new URLSearchParams(logsSearchParams.toString());
       runLogsParams.set("run", run.id);
@@ -456,24 +501,53 @@ async function renderWorkflowUtilitySurface(
         nodeRunCount: run.node_run_count,
         eventCount: run.event_count,
         errorMessage: run.error_message,
-        logsHref: appendSearchParamsToHref(sharedContext.surfaceHrefs.logs, runLogsParams),
+        logsHref: appendSearchParamsToHref(canonicalLogsHref, runLogsParams),
         detailHref: buildRunDetailHref(run.id)
       };
     });
 
+    const activeInvocationDetail =
+      activeBinding && invocationSelection.selectedInvocationId
+        ? await getPublishedEndpointInvocationDetail(
+            sharedContext.workflow.id,
+            activeBinding.id,
+            invocationSelection.selectedInvocationId
+          )
+        : null;
+    const activeInvocationRunId =
+      activeInvocationDetail?.kind === "ok"
+        ? activeInvocationDetail.data.run?.id ??
+          activeInvocationDetail.data.invocation.run_id ??
+          activeInvocationItem?.run_id ??
+          null
+        : activeInvocationItem?.run_id ?? null;
+    const fallbackRunSummary =
+      runs.find((run) => run.id === runSelection.activeRun?.id) ?? null;
+    const activeRunSummary =
+      runs.find((run) => run.id === activeInvocationRunId) ?? fallbackRunSummary;
     let activeRunDetail = null;
     let executionView = null;
     let evidenceView = null;
     let systemOverview = null;
 
-    if (activeRunSummary) {
+    if (activeRunSummary || (activeInvocationAudit?.items.length ?? 0) > 0) {
       [activeRunDetail, executionView, evidenceView, systemOverview] = await Promise.all([
-        getRunDetail(activeRunSummary.id),
-        getRunExecutionView(activeRunSummary.id),
-        getRunEvidenceView(activeRunSummary.id),
+        activeRunSummary ? getRunDetail(activeRunSummary.id) : Promise.resolve(null),
+        activeRunSummary ? getRunExecutionView(activeRunSummary.id) : Promise.resolve(null),
+        activeRunSummary ? getRunEvidenceView(activeRunSummary.id) : Promise.resolve(null),
         getSystemOverview()
       ]);
     }
+
+    const logsSelectionNotice = [
+      (activeInvocationAudit?.items.length ?? 0) > 0 ? invocationSelection.selectionNotice : null,
+      activeBinding && (activeInvocationAudit?.items.length ?? 0) === 0 && recentRuns.length > 0
+        ? "当前 published binding 还没有 recent invocations，页面已回退到 workflow recent runs 事实，避免把空审计面伪装成完整日志。"
+        : null,
+      (activeInvocationAudit?.items.length ?? 0) === 0 ? runSelection.selectionNotice : null
+    ]
+      .filter((notice): notice is string => Boolean(notice))
+      .join(" ");
 
     return (
       <WorkflowStudioShell
@@ -494,10 +568,38 @@ async function renderWorkflowUtilitySurface(
         >
           <WorkflowLogsSurface
             workflowId={sharedContext.workflow.id}
+            workflow={sharedContext.workflow}
+            activeBinding={
+              activeBinding
+                ? {
+                    id: activeBinding.id,
+                    endpointAlias: activeBinding.endpoint_alias,
+                    routePath: activeBinding.route_path,
+                    protocol: activeBinding.protocol,
+                    authMode: activeBinding.auth_mode,
+                    workflowVersion: activeBinding.workflow_version
+                  }
+                : null
+            }
+            invocationAudit={activeInvocationAudit}
+            selectedInvocationId={invocationSelection.selectedInvocationId}
+            selectedInvocationDetail={activeInvocationDetail}
+            buildInvocationHref={
+              activeBinding ? (invocationId) => buildLogsHrefWithInvocation(activeBinding.id, invocationId) : undefined
+            }
+            clearInvocationHref={
+              activeBinding
+                ? buildLogsHrefWithInvocation(activeBinding.id)
+                : appendSearchParamsToHref(canonicalLogsHref, logsSearchParams)
+            }
             recentRuns={runs}
-            selectionSource={selection.selectionSource}
-            selectionNotice={selection.selectionNotice}
-            activeRunSummary={runs.find((run) => run.id === activeRunSummary?.id) ?? null}
+            selectionSource={
+              (activeInvocationAudit?.items.length ?? 0) > 0
+                ? invocationSelection.selectionSource
+                : runSelection.selectionSource
+            }
+            selectionNotice={logsSelectionNotice || null}
+            activeRunSummary={activeRunSummary}
             activeRunDetail={activeRunDetail}
             executionView={executionView}
             evidenceView={evidenceView}
@@ -526,7 +628,7 @@ async function renderWorkflowUtilitySurface(
   }
 
   if (surface === "monitor") {
-    const bindings = await getWorkflowPublishedEndpoints(sharedContext.workflow.id, {
+    const bindings = await getServerWorkflowPublishedEndpoints(sharedContext.workflow.id, {
       includeAllVersions: true
     });
     const publishedBindings = bindings.filter((binding) => binding.lifecycle_status === "published");
