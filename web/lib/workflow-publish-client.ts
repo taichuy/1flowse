@@ -14,14 +14,10 @@ import type {
   WorkflowPublishedEndpointItem
 } from "@/lib/workflow-publish-types";
 
-function getWorkflowPublishLegacyAuthBaseUrl() {
-  return typeof window === "undefined" ? getApiBaseUrl() : "";
-}
-
 export async function getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot(): Promise<WorkflowPublishedEndpointLegacyAuthGovernanceSnapshot | null> {
   try {
     const response = await fetch(
-      `${getWorkflowPublishLegacyAuthBaseUrl()}/api/workflows/published-endpoints/legacy-auth-governance`,
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/published-endpoints/legacy-auth-governance`,
       {
         cache: "no-store"
       }
@@ -55,7 +51,7 @@ export async function getWorkflowPublishedEndpoints(
 
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(normalizedWorkflowId)}/published-endpoints?${searchParams.toString()}`,
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(normalizedWorkflowId)}/published-endpoints?${searchParams.toString()}`,
       {
         cache: "no-store"
       }
@@ -78,7 +74,7 @@ export async function getPublishedEndpointCacheInventory(
 ): Promise<SensitiveAccessGuardedResult<PublishedEndpointCacheInventoryResponse>> {
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(
         workflowId
       )}/published-endpoints/${encodeURIComponent(bindingId)}/cache-entries?limit=${Math.min(
         Math.max(limit, 1),
@@ -103,7 +99,7 @@ export async function getPublishedEndpointApiKeys(
 ): Promise<PublishedEndpointApiKeyItem[]> {
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(
         workflowId
       )}/published-endpoints/${encodeURIComponent(bindingId)}/api-keys`,
       {
@@ -133,7 +129,7 @@ export async function getPublishedEndpointInvocations(
     });
 
     const response = await fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(
         workflowId
       )}/published-endpoints/${encodeURIComponent(bindingId)}/invocations?${searchParams.toString()}`,
       {
@@ -163,7 +159,7 @@ export function buildPublishedEndpointInvocationExportUrl(
   });
   searchParams.set("format", format);
 
-  return `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+  return `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(
     workflowId
   )}/published-endpoints/${encodeURIComponent(bindingId)}/invocations/export?${searchParams.toString()}`;
 }
@@ -175,7 +171,7 @@ export async function getPublishedEndpointInvocationDetail(
 ): Promise<SensitiveAccessGuardedResult<PublishedEndpointInvocationDetailResponse>> {
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(
         workflowId
       )}/published-endpoints/${encodeURIComponent(bindingId)}/invocations/${encodeURIComponent(invocationId)}`,
       {

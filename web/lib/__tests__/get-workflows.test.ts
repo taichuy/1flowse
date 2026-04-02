@@ -14,7 +14,10 @@ import {
 } from "@/lib/get-workflows";
 
 vi.mock("@/lib/api-base-url", () => ({
-  getApiBaseUrl: () => "http://api.test"
+  getApiBaseUrl: (options?: { browserMode?: "backend-direct" | "same-origin" }) =>
+    options?.browserMode === "same-origin" && typeof window !== "undefined"
+      ? ""
+      : "http://api.test"
 }));
 
 describe("getWorkflows", () => {
@@ -100,6 +103,21 @@ describe("getWorkflows", () => {
 
     expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
       "http://api.test/api/workflows/wf-1/detail",
+      getWorkflowDetailFetchOptions("wf-1")
+    );
+  });
+
+  it("uses the same-origin workflow proxy when loading detail in the browser", async () => {
+    vi.stubGlobal("window", {});
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "wf-1", definition: { nodes: [], edges: [] } })
+    } as Response);
+
+    await getWorkflowDetail("wf-1");
+
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+      "/api/workflows/wf-1/detail",
       getWorkflowDetailFetchOptions("wf-1")
     );
   });

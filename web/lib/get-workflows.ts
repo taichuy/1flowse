@@ -135,19 +135,11 @@ export function parseWorkflowValidationError(
   );
 }
 
-function getWorkflowMutationApiBaseUrl() {
-  return typeof window === "undefined" ? getApiBaseUrl() : "";
-}
-
-function getWorkflowReadApiBaseUrl() {
-  return typeof window === "undefined" ? getApiBaseUrl() : "";
-}
-
 export async function createWorkflow(payload: {
   name: string;
   definition: WorkflowDetail["definition"];
 }): Promise<WorkflowDetail> {
-  const response = await fetch(`${getWorkflowMutationApiBaseUrl()}/api/workflows`, {
+  const response = await fetch(`${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -174,7 +166,7 @@ export async function updateWorkflow(
   }
 ): Promise<WorkflowDetail> {
   const response = await fetch(
-    `${getWorkflowMutationApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowId)}`,
+    `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(workflowId)}`,
     {
       method: "PUT",
       headers: {
@@ -204,7 +196,7 @@ export async function getWorkflows(options?: {
     });
     const query = searchParams.toString();
     const response = await fetch(
-      `${getWorkflowReadApiBaseUrl()}/api/workflows${query ? `?${query}` : ""}`,
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows${query ? `?${query}` : ""}`,
       getWorkflowInventoryFetchOptions()
     );
 
@@ -228,7 +220,7 @@ export async function getWorkflowDetail(
 
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/workflows/${encodeURIComponent(normalizedWorkflowId)}/detail`,
+      `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(normalizedWorkflowId)}/detail`,
       getWorkflowDetailFetchOptions(normalizedWorkflowId)
     );
 
@@ -249,7 +241,7 @@ export async function validateWorkflowDefinition(
   type WorkflowDefinitionPreflightSuccessBody = Partial<WorkflowDefinitionPreflightResult>;
 
   const response = await fetch(
-    `${getWorkflowMutationApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowId)}/validate-definition`,
+    `${getApiBaseUrl({ browserMode: "same-origin" })}/api/workflows/${encodeURIComponent(workflowId)}/validate-definition`,
     {
       method: "POST",
       headers: {

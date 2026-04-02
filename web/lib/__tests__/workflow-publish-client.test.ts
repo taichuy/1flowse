@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot } from "@/lib/workflow-publish-client";
+import {
+  buildPublishedEndpointInvocationExportUrl,
+  getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot,
+  getWorkflowPublishedEndpoints
+} from "@/lib/workflow-publish-client";
 
 vi.mock("@/lib/api-base-url", () => ({
-  getApiBaseUrl: () => "http://api.test"
+  getApiBaseUrl: (options?: { browserMode?: "backend-direct" | "same-origin" }) =>
+    options?.browserMode === "same-origin" && typeof window !== "undefined"
+      ? ""
+      : "http://api.test"
 }));
 
 describe("workflow publish client", () => {
@@ -30,6 +37,49 @@ describe("workflow publish client", () => {
       {
         cache: "no-store"
       }
+    );
+  });
+
+  it("keeps SSR published endpoint inventory on the direct backend base", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => []
+    } as Response);
+
+    await getWorkflowPublishedEndpoints("wf-1");
+
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+      "http://api.test/api/workflows/wf-1/published-endpoints?include_all_versions=true",
+      {
+        cache: "no-store"
+      }
+    );
+  });
+
+  it("uses the same-origin published endpoint inventory proxy in the browser", async () => {
+    vi.stubGlobal("window", {});
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => []
+    } as Response);
+
+    await getWorkflowPublishedEndpoints("wf-1");
+
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
+      "/api/workflows/wf-1/published-endpoints?include_all_versions=true",
+      {
+        cache: "no-store"
+      }
+    );
+  });
+
+  it("builds browser export URLs on the same-origin API gateway seam", () => {
+    vi.stubGlobal("window", {});
+
+    expect(
+      buildPublishedEndpointInvocationExportUrl("wf-1", "binding-1", { status: "succeeded" }, "jsonl")
+    ).toBe(
+      "/api/workflows/wf-1/published-endpoints/binding-1/invocations/export?limit=200&status=succeeded&format=jsonl"
     );
   });
 });

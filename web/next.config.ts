@@ -12,17 +12,44 @@ type NextConfigWithDevOrigins = NextConfig & {
   allowedDevOrigins?: string[];
 };
 
+function resolveApiProxyTarget() {
+  return (
+    process.env.SEVENFLOWS_API_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:8000"
+  ).replace(/\/+$/, "");
+}
+
 export default function createNextConfig(phase: string): NextConfigWithDevOrigins {
+  const isProductionPhase =
+    phase === PHASE_PRODUCTION_BUILD || phase === PHASE_PRODUCTION_SERVER;
+
   return {
-    ...(phase === PHASE_PRODUCTION_BUILD || phase === PHASE_PRODUCTION_SERVER
-      ? { outputFileTracingRoot: path.resolve(__dirname, "..") }
-      : {}),
+    ...(isProductionPhase ? { outputFileTracingRoot: path.resolve(__dirname, "..") } : {}),
     allowedDevOrigins: NEXT_DEV_ALLOWED_ORIGINS,
     turbopack: {
       root: path.resolve(__dirname, "..")
     },
     images: {
       maximumDiskCacheSize: 0
+    },
+    async rewrites() {
+      if (isProductionPhase) {
+        return [];
+      }
+
+      const apiProxyTarget = resolveApiProxyTarget();
+
+      return [
+        {
+          source: "/api/:path*",
+          destination: `${apiProxyTarget}/api/:path*`
+        },
+        {
+          source: "/v1/:path*",
+          destination: `${apiProxyTarget}/v1/:path*`
+        }
+      ];
     },
     webpack: (config, { dev }) => {
       if (dev) {
