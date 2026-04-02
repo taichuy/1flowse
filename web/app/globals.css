@@ -3721,25 +3721,10 @@ a {
 }
 
 .editor-workspace {
-  display: grid;
-  gap: 0;
-  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  position: relative;
   flex: 1;
   min-height: 0;
-  align-items: stretch;
   background: linear-gradient(180deg, rgba(250, 251, 255, 0.94), rgba(255, 255, 255, 0.94));
-}
-
-.editor-workspace.sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr) 320px;
-}
-
-.editor-workspace.inspector-collapsed {
-  grid-template-columns: 280px minmax(0, 1fr);
-}
-
-.editor-workspace.sidebar-collapsed.inspector-collapsed {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .editor-sidebar,
@@ -3853,6 +3838,26 @@ a {
   background: #f8faff;
   color: #526079;
   font-size: 0.78rem;
+}
+
+.workflow-editor-floating-drawer {
+  position: absolute;
+}
+
+.workflow-editor-floating-drawer .ant-drawer-content {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.96));
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.14);
+}
+
+.workflow-editor-floating-drawer .ant-drawer-body {
+  display: flex;
+  min-height: 0;
+}
+
+.workflow-editor-drawer-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .workflow-editor-assistant-hero {
@@ -4233,6 +4238,29 @@ a {
 
 .editor-canvas .react-flow__edge.selected .react-flow__edge-path {
   stroke: #1f5ed5;
+}
+
+.workflow-editor-action-strip-panel {
+  margin: 18px;
+}
+
+.workflow-editor-action-strip {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(31, 94, 213, 0.12);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.workflow-editor-action-strip .ant-space-item {
+  display: inline-flex;
+}
+
+.workflow-editor-action-strip-button.ant-btn {
+  border-radius: 999px;
 }
 
 .workflow-canvas-helper-panel {

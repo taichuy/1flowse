@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Drawer } from "antd";
 
 import {
   getPaletteNodeCatalog,
@@ -256,21 +257,15 @@ export function WorkflowEditorWorkbench({
     }),
     [canvasQuickAddOptions, handleCanvasDeleteNode, handleCanvasOpenConfig, handleCanvasQuickAdd]
   );
-  const editorWorkspaceClassName = [
-    "editor-workspace",
-    shell.isSidebarCollapsed ? "sidebar-collapsed" : null,
-    shell.isInspectorCollapsed ? "inspector-collapsed" : null
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const isSidebarOpen = !shell.isSidebarCollapsed;
+  const isInspectorOpen = !shell.isInspectorCollapsed;
+  const hasCanvasSelection = Boolean(graph.selectedNodeId || graph.selectedEdgeId);
 
   return (
     <main className="editor-shell" data-component="workflow-editor-workbench">
       <WorkflowEditorHero {...panels.heroProps} />
 
-      <section className={editorWorkspaceClassName}>
-        {shell.isSidebarCollapsed ? null : <WorkflowEditorSidebar {...panels.sidebarProps} />}
-
+      <section className="editor-workspace">
         <LazyWorkflowEditorCanvas
           nodes={displayedNodes}
           edges={graph.edges}
@@ -279,14 +274,57 @@ export function WorkflowEditorWorkbench({
           onEdgesChange={graph.onEdgesChange}
           onConnect={graph.onConnect}
           onSelectionChange={graph.handleSelectionChange}
+          isSidebarOpen={isSidebarOpen}
+          isInspectorOpen={isInspectorOpen}
+          hasSelection={hasCanvasSelection}
+          hasNodeAssistant={Boolean(graph.selectedNodeId)}
+          onToggleSidebar={shell.toggleSidebar}
+          onToggleInspector={shell.toggleInspector}
+          onOpenAssistant={shell.openNodeAssistant}
         />
-
-        {shell.isInspectorCollapsed ? null : (
-          <aside className="editor-inspector">
-            <WorkflowEditorInspector {...panels.inspectorProps} />
-          </aside>
-        )}
       </section>
+
+      <Drawer
+        open={isSidebarOpen}
+        placement="left"
+        width={360}
+        title={null}
+        closable={false}
+        getContainer={false}
+        mask={false}
+        destroyOnClose={false}
+        bodyStyle={{ padding: 0 }}
+        className="workflow-editor-floating-drawer workflow-editor-sidebar-drawer"
+        onClose={() => shell.setIsSidebarCollapsed(true)}
+      >
+        <div
+          className="workflow-editor-drawer-panel"
+          data-component="workflow-editor-sidebar-drawer"
+        >
+          <WorkflowEditorSidebar {...panels.sidebarProps} />
+        </div>
+      </Drawer>
+
+      <Drawer
+        open={isInspectorOpen}
+        placement="right"
+        width={420}
+        title={null}
+        closable={false}
+        getContainer={false}
+        mask={false}
+        destroyOnClose={false}
+        bodyStyle={{ padding: 0 }}
+        className="workflow-editor-floating-drawer workflow-editor-inspector-drawer"
+        onClose={() => shell.setIsInspectorCollapsed(true)}
+      >
+        <div
+          className="workflow-editor-drawer-panel"
+          data-component="workflow-editor-inspector-drawer"
+        >
+          <WorkflowEditorInspector {...panels.inspectorProps} />
+        </div>
+      </Drawer>
 
       <WorkflowEditorRunLauncherSurface {...panels.runLauncherSurfaceProps} />
     </main>
