@@ -11,6 +11,13 @@ describe("resolveWorkflowEditorPanelCollapsedPreference", () => {
     expect(resolveWorkflowEditorPanelCollapsedPreference("true")).toBe(true);
     expect(resolveWorkflowEditorPanelCollapsedPreference("false")).toBe(false);
   });
+
+  it("resets legacy panel preferences back to the canvas-first default", () => {
+    expect(resolveWorkflowEditorPanelCollapsedPreference("false", null)).toBe(true);
+    expect(resolveWorkflowEditorPanelCollapsedPreference("false", "legacy-editor-layout")).toBe(
+      true
+    );
+  });
 });
 
 describe("resolveWorkflowEditorInspectorFocusState", () => {

@@ -48,7 +48,7 @@ export function useWorkflowEditorGraph({
   const { resetWorkflowState } = workflowState;
   const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(initialGraph.nodes[0]?.id ?? null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const nodeActions = useWorkflowEditorNodeActions({
     nodeCatalog,
@@ -81,7 +81,7 @@ export function useWorkflowEditorGraph({
     resetWorkflowState(workflow.definition);
     setNodes(nextGraph.nodes);
     setEdges(nextGraph.edges);
-    setSelectedNodeId(nextGraph.nodes[0]?.id ?? null);
+    setSelectedNodeId(null);
     setSelectedEdgeId(null);
   }, [nodeCatalog, workflow, resetWorkflowState, setEdges, setNodes]);
 

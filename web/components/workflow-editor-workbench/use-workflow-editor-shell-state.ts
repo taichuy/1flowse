@@ -10,10 +10,17 @@ import type { WorkflowEditorMessageKind, WorkflowEditorMessageTone } from "./sha
 
 const SIDEBAR_PREFERENCE_STORAGE_KEY = "sevenflows.editor.sidebarCollapsed";
 const INSPECTOR_PREFERENCE_STORAGE_KEY = "sevenflows.editor.inspectorCollapsed";
+const PANEL_PREFERENCE_VERSION_STORAGE_KEY = "sevenflows.editor.panelPreferenceVersion";
+const PANEL_PREFERENCE_VERSION = "phase42-canvas-default";
 
 export function resolveWorkflowEditorPanelCollapsedPreference(
-  storedValue: string | null
+  storedValue: string | null,
+  storedVersion: string | null = PANEL_PREFERENCE_VERSION
 ) {
+  if (storedVersion !== PANEL_PREFERENCE_VERSION) {
+    return true;
+  }
+
   return storedValue !== "false";
 }
 
@@ -102,15 +109,17 @@ export function useWorkflowEditorShellState({
       return;
     }
 
+    const storedPreferenceVersion = window.localStorage.getItem(
+      PANEL_PREFERENCE_VERSION_STORAGE_KEY
+    );
     const sidebarPreference = window.localStorage.getItem(SIDEBAR_PREFERENCE_STORAGE_KEY);
     const inspectorPreference = window.localStorage.getItem(INSPECTOR_PREFERENCE_STORAGE_KEY);
 
-    // Default to collapsed if no preference is set, to reduce default noise
     setIsSidebarCollapsed(
-      resolveWorkflowEditorPanelCollapsedPreference(sidebarPreference)
+      resolveWorkflowEditorPanelCollapsedPreference(sidebarPreference, storedPreferenceVersion)
     );
     setIsInspectorCollapsed(
-      resolveWorkflowEditorPanelCollapsedPreference(inspectorPreference)
+      resolveWorkflowEditorPanelCollapsedPreference(inspectorPreference, storedPreferenceVersion)
     );
 
     setHasLoadedPanelPreferences(true);
@@ -128,6 +137,10 @@ export function useWorkflowEditorShellState({
     window.localStorage.setItem(
       INSPECTOR_PREFERENCE_STORAGE_KEY,
       String(isInspectorCollapsed)
+    );
+    window.localStorage.setItem(
+      PANEL_PREFERENCE_VERSION_STORAGE_KEY,
+      PANEL_PREFERENCE_VERSION
     );
   }, [hasLoadedPanelPreferences, isInspectorCollapsed, isSidebarCollapsed]);
 

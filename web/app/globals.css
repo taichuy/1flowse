@@ -3539,33 +3539,33 @@ a {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 10px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid #e7ecf4;
   background: rgba(255, 255, 255, 0.98);
 }
 
 .workflow-editor-topbar.canvas-focused {
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px 12px;
+  padding: 7px 12px;
 }
 
 .workflow-editor-topbar-copy {
   display: grid;
-  gap: 6px;
-  min-width: min(420px, 100%);
+  gap: 4px;
+  min-width: min(360px, 100%);
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-topbar-copy {
-  gap: 6px;
-  min-width: min(360px, 100%);
+  gap: 4px;
+  min-width: min(320px, 100%);
 }
 
 .workflow-editor-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .workflow-editor-title-button {
@@ -3582,11 +3582,11 @@ a {
 
 .workflow-editor-title-button .ant-typography {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-title-button .ant-typography {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .workflow-editor-title-button .anticon {
@@ -3601,29 +3601,29 @@ a {
 .workflow-editor-meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-meta-row {
-  gap: 6px;
+  gap: 4px;
 }
 
 .workflow-editor-meta-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 10px;
+  min-height: 28px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid #dfe7f2;
   background: #f8faff;
   color: #526079;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-meta-pill {
-  min-height: 28px;
-  padding: 0 8px;
-  font-size: 0.74rem;
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 0.72rem;
 }
 
 .workflow-editor-meta-pill.focus {
@@ -3652,28 +3652,30 @@ a {
 .workflow-editor-action-row {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
 .workflow-editor-action-row .ant-btn {
   border-radius: 999px;
   min-width: 0;
-  padding-inline: 12px;
+  height: 32px;
+  padding-inline: 10px;
   white-space: nowrap;
 }
 
 .workflow-editor-toggle-button.ant-btn {
-  padding-inline: 10px;
+  padding-inline: 8px;
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-action-row {
-  gap: 8px;
+  gap: 6px;
 }
 
 .workflow-editor-topbar.canvas-focused .workflow-editor-action-row .ant-btn {
   min-width: auto;
-  padding-inline: 12px;
+  height: 30px;
+  padding-inline: 9px;
 }
 
 .workflow-editor-run-button.ant-btn {
@@ -3721,7 +3723,7 @@ a {
 .editor-workspace {
   display: grid;
   gap: 0;
-  grid-template-columns: 300px minmax(0, 1fr) 360px;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
   flex: 1;
   min-height: 0;
   align-items: stretch;
@@ -3729,11 +3731,11 @@ a {
 }
 
 .editor-workspace.sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .editor-workspace.inspector-collapsed {
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .editor-workspace.sidebar-collapsed.inspector-collapsed {
