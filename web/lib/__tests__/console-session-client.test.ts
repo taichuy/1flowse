@@ -40,7 +40,7 @@ describe("fetchConsoleApi", () => {
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/workspace/members");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/session/refresh");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/refresh");
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/workspace/members");
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).credentials).toBe("include");
     expect(((fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Headers).get(CSRF_TOKEN_HEADER_NAME)).toBe(

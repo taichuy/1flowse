@@ -33,7 +33,7 @@ export function WorkspaceLoginForm() {
     setMessageTone("idle");
 
     try {
-      const response = await fetch("/api/session/login", {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         credentials: "include",
         headers: {
@@ -58,7 +58,7 @@ export function WorkspaceLoginForm() {
       router.replace(nextHref);
       router.refresh();
     } catch {
-      setMessage("无法连接登录服务，请确认 web 与 api 都已启动。");
+      setMessage("无法连接认证服务，请确认 web 与 api 都已启动。");
       setMessageTone("error");
     } finally {
       setIsSubmitting(false);

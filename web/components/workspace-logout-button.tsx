@@ -12,7 +12,7 @@ export function WorkspaceLogoutButton({
   const router = useRouter();
 
   const handleLogout = async () => {
-    await fetch("/api/session/logout", {
+    await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include"
     }).catch(() => null);

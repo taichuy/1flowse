@@ -62,7 +62,7 @@ export async function fetchConsoleApi(
     fetchImpl = fetch,
     onUnauthorized,
     redirectOnUnauthorized = true,
-    refreshPath = "/api/session/refresh",
+    refreshPath = "/api/auth/refresh",
     retryOnUnauthorized = true
   }: ConsoleFetchOptions = {}
 ) {
