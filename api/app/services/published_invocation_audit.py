@@ -13,6 +13,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.run import AICallRecord
 from app.models.workflow import (
     WorkflowPublishedApiKey,
     WorkflowPublishedInvocation,
@@ -26,10 +27,16 @@ from app.services.published_invocation_audit_aggregation import (
 from app.services.published_invocation_audit_timeline import (
     build_timeline,
     resolve_timeline_granularity,
+    truncate_bucket_start,
 )
 from app.services.published_invocation_types import (
+    PUBLISHED_INVOCATION_MONITOR_WINDOWS,
     REQUEST_SURFACE_ORDER,
     PublishedInvocationAudit,
+    PublishedInvocationMonitor,
+    PublishedInvocationMonitorMetric,
+    PublishedInvocationMonitorTimeBucket,
+    PublishedInvocationMonitorWindow,
     PublishedInvocationRequestSurface,
     PublishedInvocationSummary,
     classify_invocation_reason,
@@ -143,6 +150,147 @@ def _resolve_request_surface(
     return "unknown"
 
 
+def _extract_output_tokens(token_usage: object) -> int | None:
+    if not isinstance(token_usage, dict):
+        return None
+
+    for key in ("output_tokens", "completion_tokens"):
+        value = token_usage.get(key)
+        if isinstance(value, (int, float)) and value >= 0:
+            return int(value)
+
+    return None
+
+
+def _build_monitor_surface(
+    db: Session,
+    *,
+    records: list[WorkflowPublishedInvocation],
+    timeline: list,
+    granularity: PublishedInvocationMonitorWindow,
+) -> PublishedInvocationMonitor:
+    session_metric = PublishedInvocationMonitorMetric(
+        status="unavailable",
+        detail=(
+            "workflow_published_invocations 当前未持久化稳定 session identity；"
+            "不能把 invocation/run 数量冒充会话数。"
+        ),
+        fact_source="workflow_published_invocations.request_preview",
+    )
+    message_metric = PublishedInvocationMonitorMetric(
+        status="unavailable",
+        detail=(
+            "workflow_published_invocations / ai_call_records 当前没有跨 "
+            "native/openai/anthropic 的 canonical message count seam；"
+            "全部消息数保持 fail-closed。"
+        ),
+        fact_source="workflow_published_invocations.request_preview + ai_call_records.token_usage",
+    )
+    if not records:
+        return PublishedInvocationMonitor(
+            supported_windows=PUBLISHED_INVOCATION_MONITOR_WINDOWS,
+            token_output_speed=PublishedInvocationMonitorMetric(
+                status="unavailable",
+                detail=(
+                    "当前时间窗还没有 published invocation 事实，"
+                    "Token 输出速度保持 fail-closed。"
+                ),
+                fact_source="ai_call_records.token_usage + ai_call_records.latency_ms",
+            ),
+            session_count=session_metric,
+            message_count=message_metric,
+            timeline=[],
+        )
+
+    run_id_to_bucket_start = {
+        record.run_id: truncate_bucket_start(record.created_at, granularity=granularity)
+        for record in records
+        if record.run_id
+    }
+    ai_calls = (
+        db.scalars(select(AICallRecord).where(AICallRecord.run_id.in_(list(run_id_to_bucket_start))))
+        .all()
+        if run_id_to_bucket_start
+        else []
+    )
+
+    bucket_token_totals: dict[datetime, dict[str, int]] = {}
+    total_output_tokens = 0
+    total_latency_ms = 0
+    covered_ai_call_count = 0
+
+    for ai_call in ai_calls:
+        bucket_start = run_id_to_bucket_start.get(ai_call.run_id)
+        if bucket_start is None or ai_call.latency_ms <= 0:
+            continue
+
+        output_tokens = _extract_output_tokens(ai_call.token_usage)
+        if output_tokens is None:
+            continue
+
+        bucket = bucket_token_totals.setdefault(
+            bucket_start,
+            {"token_output_tokens": 0, "token_latency_ms": 0},
+        )
+        bucket["token_output_tokens"] += output_tokens
+        bucket["token_latency_ms"] += ai_call.latency_ms
+        total_output_tokens += output_tokens
+        total_latency_ms += ai_call.latency_ms
+        covered_ai_call_count += 1
+
+    monitor_timeline: list[PublishedInvocationMonitorTimeBucket] = []
+    for bucket in timeline:
+        token_totals = bucket_token_totals.get(bucket.bucket_start)
+        token_output_speed = None
+        token_output_tokens = 0
+        token_latency_ms = 0
+        if token_totals and token_totals["token_latency_ms"] > 0:
+            token_output_tokens = token_totals["token_output_tokens"]
+            token_latency_ms = token_totals["token_latency_ms"]
+            token_output_speed = round(token_output_tokens / (token_latency_ms / 1000), 2)
+
+        monitor_timeline.append(
+            PublishedInvocationMonitorTimeBucket(
+                bucket_start=bucket.bucket_start,
+                bucket_end=bucket.bucket_end,
+                token_output_speed=token_output_speed,
+                token_output_tokens=token_output_tokens,
+                token_latency_ms=token_latency_ms,
+            )
+        )
+
+    token_output_metric = PublishedInvocationMonitorMetric(
+        status="unavailable",
+        detail=(
+            "当前时间窗没有可用于计算 Token 输出速度的 "
+            "ai_call_records.token_usage/output_tokens 与 latency_ms 事实，"
+            "保持 fail-closed。"
+        ),
+        fact_source="ai_call_records.token_usage + ai_call_records.latency_ms",
+    )
+    if total_latency_ms > 0 and covered_ai_call_count > 0:
+        token_output_metric = PublishedInvocationMonitorMetric(
+            status="available",
+            value=round(total_output_tokens / (total_latency_ms / 1000), 2),
+            unit="tokens/s",
+            detail=(
+                f"基于 {covered_ai_call_count} 条 ai_call_records 的 "
+                "output_tokens/completion_tokens 与 latency_ms 聚合，"
+                "只覆盖存在稳定 token 事实的 published runs。"
+            ),
+            fact_source="ai_call_records.token_usage + ai_call_records.latency_ms",
+            coverage_count=covered_ai_call_count,
+        )
+
+    return PublishedInvocationMonitor(
+        supported_windows=PUBLISHED_INVOCATION_MONITOR_WINDOWS,
+        token_output_speed=token_output_metric,
+        session_count=session_metric,
+        message_count=message_metric,
+        timeline=monitor_timeline,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Mixin
 # ---------------------------------------------------------------------------
@@ -224,6 +372,13 @@ class PublishedInvocationAuditMixin:
             created_to=created_to,
             records=records,
         )
+        timeline = build_timeline(
+            records,
+            granularity=timeline_granularity,
+            api_key_lookup=api_key_lookup,
+            resolve_request_surface=_resolve_request_surface,
+            resolve_reason_code=_resolve_record_reason_code,
+        )
 
         return PublishedInvocationAudit(
             summary=summary,
@@ -236,12 +391,12 @@ class PublishedInvocationAuditMixin:
             api_key_usage=api_key_usage,
             recent_failure_reasons=facets.recent_failure_reasons,
             timeline_granularity=timeline_granularity,
-            timeline=build_timeline(
-                records,
+            timeline=timeline,
+            monitor=_build_monitor_surface(
+                db,
+                records=records,
+                timeline=timeline,
                 granularity=timeline_granularity,
-                api_key_lookup=api_key_lookup,
-                resolve_request_surface=_resolve_request_surface,
-                resolve_reason_code=_resolve_record_reason_code,
             ),
         )
 

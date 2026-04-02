@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any
 
 from app.models.workflow import WorkflowPublishedApiKey, WorkflowPublishedInvocation
 from app.services.published_invocation_types import (
@@ -18,6 +18,7 @@ from app.services.published_invocation_types import (
     RUN_STATUS_ORDER,
     PublishedInvocationApiKeyBucketFacet,
     PublishedInvocationBucketFacet,
+    PublishedInvocationMonitorWindow,
     PublishedInvocationRequestSurface,
     PublishedInvocationTimeBucket,
 )
@@ -40,30 +41,67 @@ def resolve_timeline_granularity(
     created_from: datetime | None,
     created_to: datetime | None,
     records: list[WorkflowPublishedInvocation],
-) -> Literal["hour", "day"]:
+) -> PublishedInvocationMonitorWindow:
     normalized_from = _as_utc(created_from) if created_from is not None else None
     normalized_to = _as_utc(created_to) if created_to is not None else None
 
     if normalized_from is not None and normalized_to is not None:
-        return "hour" if normalized_to - normalized_from <= timedelta(days=2) else "day"
+        return _resolve_granularity_for_delta(normalized_to - normalized_from)
 
     if records:
         last_record_at = _as_utc(records[0].created_at)
         first_record_at = _as_utc(records[-1].created_at)
-        return "hour" if last_record_at - first_record_at <= timedelta(days=2) else "day"
+        return _resolve_granularity_for_delta(last_record_at - first_record_at)
 
     return "day"
 
 
-def _truncate_bucket_start(
+def _resolve_granularity_for_delta(delta: timedelta) -> PublishedInvocationMonitorWindow:
+    if delta <= timedelta(days=2):
+        return "hour"
+    if delta <= timedelta(days=90):
+        return "day"
+    if delta <= timedelta(days=730):
+        return "month"
+    return "year"
+
+
+def truncate_bucket_start(
     value: datetime,
     *,
-    granularity: Literal["hour", "day"],
+    granularity: PublishedInvocationMonitorWindow,
 ) -> datetime:
     normalized = _as_utc(value)
     if granularity == "hour":
         return normalized.replace(minute=0, second=0, microsecond=0)
-    return normalized.replace(hour=0, minute=0, second=0, microsecond=0)
+    if granularity == "day":
+        return normalized.replace(hour=0, minute=0, second=0, microsecond=0)
+    if granularity == "month":
+        return normalized.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return normalized.replace(
+        month=1,
+        day=1,
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+
+def _advance_bucket_start(
+    value: datetime,
+    *,
+    granularity: PublishedInvocationMonitorWindow,
+) -> datetime:
+    if granularity == "hour":
+        return value + timedelta(hours=1)
+    if granularity == "day":
+        return value + timedelta(days=1)
+    if granularity == "month":
+        if value.month == 12:
+            return value.replace(year=value.year + 1, month=1)
+        return value.replace(month=value.month + 1)
+    return value.replace(year=value.year + 1)
 
 
 def _build_bucket_facets(
@@ -138,7 +176,7 @@ def _build_run_status_bucket_facets(
 def build_timeline(
     records: list[WorkflowPublishedInvocation],
     *,
-    granularity: Literal["hour", "day"],
+    granularity: PublishedInvocationMonitorWindow,
     api_key_lookup: dict[str, WorkflowPublishedApiKey],
     resolve_request_surface: ResolveRequestSurface,
     resolve_reason_code: ResolveReasonCode,
@@ -146,11 +184,10 @@ def build_timeline(
     if not records:
         return []
 
-    bucket_size = timedelta(hours=1 if granularity == "hour" else 24)
     buckets: dict[datetime, dict[str, Any]] = {}
 
     for record in records:
-        bucket_start = _truncate_bucket_start(record.created_at, granularity=granularity)
+        bucket_start = truncate_bucket_start(record.created_at, granularity=granularity)
         bucket = buckets.setdefault(
             bucket_start,
             {
@@ -181,7 +218,7 @@ def build_timeline(
     return [
         PublishedInvocationTimeBucket(
             bucket_start=bucket_start,
-            bucket_end=bucket_start + bucket_size,
+            bucket_end=_advance_bucket_start(bucket_start, granularity=granularity),
             total_count=int(counts["total_count"]),
             succeeded_count=int(counts["succeeded_count"]),
             failed_count=int(counts["failed_count"]),

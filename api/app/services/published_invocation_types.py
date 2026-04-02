@@ -52,6 +52,8 @@ PublishedInvocationReasonCode = Literal[
     "unknown",
     "workflow_missing",
 ]
+PublishedInvocationMonitorWindow = Literal["hour", "day", "month", "year"]
+PublishedInvocationMonitorMetricStatus = Literal["available", "unavailable"]
 
 # ---------------------------------------------------------------------------
 # Ordered constants
@@ -88,6 +90,12 @@ RUN_STATUS_ORDER: tuple[str, ...] = (
     "failed",
     "canceled",
     "timed_out",
+)
+PUBLISHED_INVOCATION_MONITOR_WINDOWS: tuple[PublishedInvocationMonitorWindow, ...] = (
+    "hour",
+    "day",
+    "month",
+    "year",
 )
 
 # ---------------------------------------------------------------------------
@@ -185,6 +193,44 @@ class PublishedInvocationTimeBucket:
 
 
 @dataclass(frozen=True)
+class PublishedInvocationMonitorMetric:
+    status: PublishedInvocationMonitorMetricStatus = "unavailable"
+    value: float | int | None = None
+    unit: str | None = None
+    detail: str = ""
+    fact_source: str = ""
+    coverage_count: int = 0
+
+
+@dataclass(frozen=True)
+class PublishedInvocationMonitorTimeBucket:
+    bucket_start: datetime
+    bucket_end: datetime
+    token_output_speed: float | None = None
+    session_count: int | None = None
+    message_count: int | None = None
+    token_output_tokens: int = 0
+    token_latency_ms: int = 0
+
+
+@dataclass(frozen=True)
+class PublishedInvocationMonitor:
+    supported_windows: tuple[PublishedInvocationMonitorWindow, ...] = (
+        PUBLISHED_INVOCATION_MONITOR_WINDOWS
+    )
+    token_output_speed: PublishedInvocationMonitorMetric = field(
+        default_factory=PublishedInvocationMonitorMetric
+    )
+    session_count: PublishedInvocationMonitorMetric = field(
+        default_factory=PublishedInvocationMonitorMetric
+    )
+    message_count: PublishedInvocationMonitorMetric = field(
+        default_factory=PublishedInvocationMonitorMetric
+    )
+    timeline: list[PublishedInvocationMonitorTimeBucket] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class PublishedInvocationAudit:
     summary: PublishedInvocationSummary
     status_counts: list[PublishedInvocationFacet]
@@ -195,8 +241,9 @@ class PublishedInvocationAudit:
     reason_counts: list[PublishedInvocationFacet]
     api_key_usage: list[PublishedInvocationApiKeyUsage]
     recent_failure_reasons: list[PublishedInvocationFailureReason]
-    timeline_granularity: Literal["hour", "day"]
+    timeline_granularity: PublishedInvocationMonitorWindow
     timeline: list[PublishedInvocationTimeBucket]
+    monitor: PublishedInvocationMonitor = field(default_factory=PublishedInvocationMonitor)
 
 
 # ---------------------------------------------------------------------------

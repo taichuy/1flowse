@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models.run import NodeRun
+from app.models.run import AICallRecord, NodeRun
 from app.models.sensitive_access import (
     SensitiveAccessRequestRecord,
     SensitiveResourceRecord,
@@ -475,6 +475,40 @@ def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
         timestamp = source_to_timestamp[source]
         record.created_at = timestamp
         record.finished_at = timestamp
+
+    node_runs = sqlite_session.scalars(
+        select(NodeRun).where(
+            NodeRun.run_id.in_([record.run_id for record in records if record.run_id])
+        )
+    ).all()
+    first_node_run_by_run_id: dict[str, NodeRun] = {}
+    for node_run in sorted(node_runs, key=lambda item: (item.created_at, item.id)):
+        first_node_run_by_run_id.setdefault(node_run.run_id, node_run)
+
+    for record in records:
+        if record.run_id is None:
+            continue
+        source = record.request_preview["sample"]["source"]
+        if source != "alias-mid":
+            continue
+        sqlite_session.add(
+            AICallRecord(
+                id="ai-call-alias-mid",
+                run_id=record.run_id,
+                node_run_id=first_node_run_by_run_id[record.run_id].id,
+                role="assistant_distill",
+                status="succeeded",
+                provider="mock-provider",
+                model_id="mock-model",
+                input_summary="Summarize published invocation",
+                output_summary="Timeline alias response",
+                latency_ms=900,
+                token_usage={"output_tokens": 18, "total_tokens": 42},
+                assistant=True,
+                created_at=record.created_at,
+                finished_at=record.finished_at,
+            )
+        )
     sqlite_session.commit()
 
     filtered_response = client.get(
@@ -538,6 +572,57 @@ def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
             ],
         }
     ]
+    assert filtered_body["facets"]["monitor"] == {
+        "supported_windows": ["hour", "day", "month", "year"],
+        "token_output_speed": {
+            "status": "available",
+            "value": 20.0,
+            "unit": "tokens/s",
+            "detail": (
+                "基于 1 条 ai_call_records 的 output_tokens/completion_tokens 与 "
+                "latency_ms 聚合，只覆盖存在稳定 token 事实的 published runs。"
+            ),
+            "fact_source": "ai_call_records.token_usage + ai_call_records.latency_ms",
+            "coverage_count": 1,
+        },
+        "session_count": {
+            "status": "unavailable",
+            "value": None,
+            "unit": None,
+            "detail": (
+                "workflow_published_invocations 当前未持久化稳定 session identity；"
+                "不能把 invocation/run 数量冒充会话数。"
+            ),
+            "fact_source": "workflow_published_invocations.request_preview",
+            "coverage_count": 0,
+        },
+        "message_count": {
+            "status": "unavailable",
+            "value": None,
+            "unit": None,
+            "detail": (
+                "workflow_published_invocations / ai_call_records 当前没有跨 "
+                "native/openai/anthropic 的 canonical message count seam；"
+                "全部消息数保持 fail-closed。"
+            ),
+            "fact_source": (
+                "workflow_published_invocations.request_preview + "
+                "ai_call_records.token_usage"
+            ),
+            "coverage_count": 0,
+        },
+        "timeline": [
+            {
+                "bucket_start": "2026-03-12T09:00:00Z",
+                "bucket_end": "2026-03-12T10:00:00Z",
+                "token_output_speed": 20.0,
+                "session_count": None,
+                "message_count": None,
+                "token_output_tokens": 18,
+                "token_latency_ms": 900,
+            }
+        ],
+    }
 
     invalid_range_response = client.get(
         f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
@@ -551,6 +636,160 @@ def test_list_published_endpoint_invocations_supports_time_window_and_timeline(
         invalid_range_response.json()["detail"]
         == "'created_from' must be earlier than or equal to 'created_to'."
     )
+
+    source_to_wide_timestamp = {
+        "workflow-early": datetime(2024, 1, 15, 8, 0, tzinfo=UTC),
+        "alias-mid": datetime(2025, 6, 12, 9, 15, tzinfo=UTC),
+        "workflow-rejected": datetime(2026, 2, 5, 9, 45, tzinfo=UTC),
+        "path-late": datetime(2026, 12, 1, 10, 0, tzinfo=UTC),
+    }
+    for record in records:
+        source = record.request_preview["sample"]["source"]
+        timestamp = source_to_wide_timestamp[source]
+        record.created_at = timestamp
+        record.finished_at = timestamp
+    sqlite_session.commit()
+
+    month_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
+        params={
+            "created_from": "2025-01-01T00:00:00Z",
+            "created_to": "2025-12-31T23:59:59Z",
+        },
+    )
+    assert month_response.status_code == 200
+    month_body = month_response.json()
+    assert month_body["facets"]["timeline_granularity"] == "month"
+    assert month_body["facets"]["timeline"] == [
+        {
+            "bucket_start": "2025-06-01T00:00:00Z",
+            "bucket_end": "2025-07-01T00:00:00Z",
+            "total_count": 1,
+            "succeeded_count": 1,
+            "failed_count": 0,
+            "rejected_count": 0,
+            "api_key_counts": [
+                {
+                    "api_key_id": api_key["id"],
+                    "name": "Timeline Key",
+                    "key_prefix": api_key["key_prefix"],
+                    "count": 1,
+                }
+            ],
+            "cache_status_counts": [
+                {"value": "hit", "count": 0},
+                {"value": "miss", "count": 0},
+                {"value": "bypass", "count": 1},
+            ],
+            "run_status_counts": [
+                {"value": "succeeded", "count": 1},
+            ],
+            "request_surface_counts": [
+                {"value": "native.alias", "count": 1},
+            ],
+            "reason_counts": [],
+        }
+    ]
+
+    year_response = client.get(
+        f"/api/workflows/{workflow_id}/published-endpoints/{binding['id']}/invocations",
+        params={
+            "created_from": "2024-01-01T00:00:00Z",
+            "created_to": "2026-12-31T23:59:59Z",
+        },
+    )
+    assert year_response.status_code == 200
+    year_body = year_response.json()
+    assert year_body["facets"]["timeline_granularity"] == "year"
+    assert year_body["facets"]["timeline"] == [
+        {
+            "bucket_start": "2026-01-01T00:00:00Z",
+            "bucket_end": "2027-01-01T00:00:00Z",
+            "total_count": 2,
+            "succeeded_count": 1,
+            "failed_count": 0,
+            "rejected_count": 1,
+            "api_key_counts": [
+                {
+                    "api_key_id": api_key["id"],
+                    "name": "Timeline Key",
+                    "key_prefix": api_key["key_prefix"],
+                    "count": 1,
+                }
+            ],
+            "cache_status_counts": [
+                {"value": "hit", "count": 0},
+                {"value": "miss", "count": 0},
+                {"value": "bypass", "count": 2},
+            ],
+            "run_status_counts": [
+                {"value": "succeeded", "count": 1},
+            ],
+            "request_surface_counts": [
+                {"value": "native.workflow", "count": 1},
+                {"value": "native.path", "count": 1},
+            ],
+            "reason_counts": [
+                {"value": "api_key_invalid", "count": 1},
+            ],
+        },
+        {
+            "bucket_start": "2025-01-01T00:00:00Z",
+            "bucket_end": "2026-01-01T00:00:00Z",
+            "total_count": 1,
+            "succeeded_count": 1,
+            "failed_count": 0,
+            "rejected_count": 0,
+            "api_key_counts": [
+                {
+                    "api_key_id": api_key["id"],
+                    "name": "Timeline Key",
+                    "key_prefix": api_key["key_prefix"],
+                    "count": 1,
+                }
+            ],
+            "cache_status_counts": [
+                {"value": "hit", "count": 0},
+                {"value": "miss", "count": 0},
+                {"value": "bypass", "count": 1},
+            ],
+            "run_status_counts": [
+                {"value": "succeeded", "count": 1},
+            ],
+            "request_surface_counts": [
+                {"value": "native.alias", "count": 1},
+            ],
+            "reason_counts": [],
+        },
+        {
+            "bucket_start": "2024-01-01T00:00:00Z",
+            "bucket_end": "2025-01-01T00:00:00Z",
+            "total_count": 1,
+            "succeeded_count": 1,
+            "failed_count": 0,
+            "rejected_count": 0,
+            "api_key_counts": [
+                {
+                    "api_key_id": api_key["id"],
+                    "name": "Timeline Key",
+                    "key_prefix": api_key["key_prefix"],
+                    "count": 1,
+                }
+            ],
+            "cache_status_counts": [
+                {"value": "hit", "count": 0},
+                {"value": "miss", "count": 0},
+                {"value": "bypass", "count": 1},
+            ],
+            "run_status_counts": [
+                {"value": "succeeded", "count": 1},
+            ],
+            "request_surface_counts": [
+                {"value": "native.workflow", "count": 1},
+            ],
+            "reason_counts": [],
+        },
+    ]
 
 
 def test_list_published_endpoint_invocations_supports_cache_status_filter(

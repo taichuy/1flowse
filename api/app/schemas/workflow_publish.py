@@ -79,7 +79,8 @@ PublishedEndpointInvocationReasonCode = Literal[
     "unknown",
     "workflow_missing",
 ]
-PublishedEndpointInvocationTimeBucketGranularity = Literal["hour", "day"]
+PublishedEndpointInvocationTimeBucketGranularity = Literal["hour", "day", "month", "year"]
+PublishedEndpointInvocationMonitorMetricStatus = Literal["available", "unavailable"]
 PublishedEndpointIssueCategory = Literal["unsupported_auth_mode"]
 WorkflowPublishedEndpointLegacyAuthCleanupSkipReason = Literal[
     "binding_not_found",
@@ -497,6 +498,43 @@ class PublishedEndpointInvocationTimeBucketItem(BaseModel):
     reason_counts: list[PublishedEndpointInvocationBucketFacetItem] = Field(default_factory=list)
 
 
+class PublishedEndpointInvocationMonitorMetricItem(BaseModel):
+    status: PublishedEndpointInvocationMonitorMetricStatus = "unavailable"
+    value: float | int | None = None
+    unit: str | None = None
+    detail: str = ""
+    fact_source: str = ""
+    coverage_count: int = 0
+
+
+class PublishedEndpointInvocationMonitorTimeBucketItem(BaseModel):
+    bucket_start: datetime
+    bucket_end: datetime
+    token_output_speed: float | None = None
+    session_count: int | None = None
+    message_count: int | None = None
+    token_output_tokens: int = 0
+    token_latency_ms: int = 0
+
+
+class PublishedEndpointInvocationMonitorItem(BaseModel):
+    supported_windows: list[PublishedEndpointInvocationTimeBucketGranularity] = Field(
+        default_factory=lambda: ["hour", "day", "month", "year"]
+    )
+    token_output_speed: PublishedEndpointInvocationMonitorMetricItem = Field(
+        default_factory=PublishedEndpointInvocationMonitorMetricItem
+    )
+    session_count: PublishedEndpointInvocationMonitorMetricItem = Field(
+        default_factory=PublishedEndpointInvocationMonitorMetricItem
+    )
+    message_count: PublishedEndpointInvocationMonitorMetricItem = Field(
+        default_factory=PublishedEndpointInvocationMonitorMetricItem
+    )
+    timeline: list[PublishedEndpointInvocationMonitorTimeBucketItem] = Field(
+        default_factory=list
+    )
+
+
 class PublishedEndpointInvocationFacets(BaseModel):
     status_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
     request_source_counts: list[PublishedEndpointInvocationFacetItem] = Field(default_factory=list)
@@ -510,6 +548,9 @@ class PublishedEndpointInvocationFacets(BaseModel):
     )
     timeline_granularity: PublishedEndpointInvocationTimeBucketGranularity = "day"
     timeline: list[PublishedEndpointInvocationTimeBucketItem] = Field(default_factory=list)
+    monitor: PublishedEndpointInvocationMonitorItem = Field(
+        default_factory=PublishedEndpointInvocationMonitorItem
+    )
 
 
 class PublishedEndpointInvocationListResponse(BaseModel):

@@ -29,6 +29,9 @@ from app.schemas.workflow_publish import (
     PublishedEndpointInvocationFailureReasonItem,
     PublishedEndpointInvocationFilters,
     PublishedEndpointInvocationListResponse,
+    PublishedEndpointInvocationMonitorItem,
+    PublishedEndpointInvocationMonitorMetricItem,
+    PublishedEndpointInvocationMonitorTimeBucketItem,
     PublishedEndpointInvocationReasonCode,
     PublishedEndpointInvocationRequestSource,
     PublishedEndpointInvocationRequestSurface,
@@ -155,6 +158,39 @@ def _serialize_timeline_item(item) -> PublishedEndpointInvocationTimeBucketItem:
     )
 
 
+def _serialize_monitor_metric_item(item) -> PublishedEndpointInvocationMonitorMetricItem:
+    return PublishedEndpointInvocationMonitorMetricItem(
+        status=item.status,
+        value=item.value,
+        unit=item.unit,
+        detail=item.detail,
+        fact_source=item.fact_source,
+        coverage_count=item.coverage_count,
+    )
+
+
+def _serialize_monitor_timeline_item(item) -> PublishedEndpointInvocationMonitorTimeBucketItem:
+    return PublishedEndpointInvocationMonitorTimeBucketItem(
+        bucket_start=item.bucket_start,
+        bucket_end=item.bucket_end,
+        token_output_speed=item.token_output_speed,
+        session_count=item.session_count,
+        message_count=item.message_count,
+        token_output_tokens=item.token_output_tokens,
+        token_latency_ms=item.token_latency_ms,
+    )
+
+
+def _serialize_monitor_item(item) -> PublishedEndpointInvocationMonitorItem:
+    return PublishedEndpointInvocationMonitorItem(
+        supported_windows=list(item.supported_windows),
+        token_output_speed=_serialize_monitor_metric_item(item.token_output_speed),
+        session_count=_serialize_monitor_metric_item(item.session_count),
+        message_count=_serialize_monitor_metric_item(item.message_count),
+        timeline=[_serialize_monitor_timeline_item(bucket) for bucket in item.timeline],
+    )
+
+
 def _validate_created_range(
     created_from: datetime | None,
     created_to: datetime | None,
@@ -277,6 +313,7 @@ def _build_published_endpoint_invocation_list_response(
             ],
             timeline_granularity=audit.timeline_granularity,
             timeline=[_serialize_timeline_item(item) for item in audit.timeline],
+            monitor=_serialize_monitor_item(audit.monitor),
         ),
         items=[
             serialize_published_invocation_item(
