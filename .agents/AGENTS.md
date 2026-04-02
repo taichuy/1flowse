@@ -12,6 +12,7 @@
 - 技能描述优先写“何时触发”，不要在 `description` 里塞完整流程。
 - 共享规则放根 `AGENTS.md` 或 `docs/dev/team-conventions.md`；技能正文只保留可复用流程。
 - 详细案例、长清单和参考资料优先下沉到 `references/` 或 `.agents/skills/README.md`。
+- 前端技能继续保持“实现 / review / testing / refactor”分层，不要把前端实现流程硬塞进 review 或 testing skill。
 - 当前技能按“元流程 / 后端 / 前端 / 插件服务 / 工具 / 特例”分组维护。
 
 ## 同步要求

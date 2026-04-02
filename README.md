@@ -36,6 +36,7 @@
 6. [docs/dev/team-conventions.md](/E:/code/taichuCode/7flows/docs/dev/team-conventions.md)
 7. [.agents/skills/README.md](/E:/code/taichuCode/7flows/.agents/skills/README.md)
    - 如需本地页面 smoke、浏览器操作或截图留证，可继续看 `browser-automation`；当前默认优先 `Playwright CLI / 系统 Chrome`，避免重型 DevTools 常驻会话
+   - 如需按当前 `Ant Design + xyflow` 现实推进前端实现，并把界面收口到 `Minimalist Monochrome` 风格，可继续看 `frontend-development`
 8. 需要时再读 `docs/.private/AGENTS.md` 与它指向的当前开发者本地连续性文档
 
 ## 本地开发

@@ -94,7 +94,7 @@
 
 - 元流程：`autonomous-development`、`development-closure`、`skill-governance`、`safe-change-review`
 - 后端：`backend-code-review`、`backend-testing`
-- 前端：`frontend-code-review`、`frontend-testing`、`component-refactoring`
+- 前端：`frontend-development`、`frontend-code-review`、`frontend-testing`、`component-refactoring`
 - 插件 / 兼容服务：`plugin-service-development`
 - 工具：`browser-automation`
 - 特例：`orpc-contract-first`、`pua`

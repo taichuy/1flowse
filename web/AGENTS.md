@@ -4,6 +4,7 @@
 
 ## 默认技能
 
+- 前端实现：`frontend-development`
 - 前端审查：`frontend-code-review`
 - 前端测试：`frontend-testing`
 - 复杂组件拆分：`component-refactoring`

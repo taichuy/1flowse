@@ -29,6 +29,8 @@
 
 ## 前端服务技能
 
+- `frontend-development`
+  - 面向 `web/` 页面、组件、Ant Design 主题收敛和 xyflow infinite canvas 的真实实现。
 - `frontend-code-review`
   - 面向 `web/` 页面、组件、编辑器与治理入口的实现审查。
 - `frontend-testing`
@@ -38,6 +40,7 @@
 
 使用案例：
 
+- 要把旧页面从“卡片堆叠 + 长文案”收口到更结构化的 Ant Design 交互，或按 `Minimalist Monochrome + xyflow` 实现新的作者工作台 / editor 表面时，优先使用 `frontend-development`。
 - 改 workflow editor、run diagnostics、publish panel、sensitive access inbox 或大型前端容器组件时，优先组合前端技能。
 
 ## 插件 / 兼容服务技能
