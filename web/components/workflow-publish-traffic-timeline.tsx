@@ -1,6 +1,9 @@
 import React from "react";
 
-import type { PublishedEndpointInvocationTimeBucketItem } from "@/lib/get-workflow-publish";
+import type {
+  PublishedEndpointInvocationTimeBucketGranularity,
+  PublishedEndpointInvocationTimeBucketItem,
+} from "@/lib/get-workflow-publish";
 import {
   buildPublishedInvocationTrafficTimelineBucketSurface,
   buildPublishedInvocationTrafficTimelineSurfaceCopy
@@ -8,15 +11,18 @@ import {
 
 type WorkflowPublishTrafficTimelineProps = {
   timeline: PublishedEndpointInvocationTimeBucketItem[];
-  timelineGranularity: "hour" | "day";
+  timelineGranularity: PublishedEndpointInvocationTimeBucketGranularity;
   timeWindowLabel: string;
 };
 function formatTimelineBucketLabel(
   value: string,
-  granularity: "hour" | "day"
+  granularity: PublishedEndpointInvocationTimeBucketGranularity
 ) {
   const date = new Date(value);
   return new Intl.DateTimeFormat("zh-CN", {
+    ...(granularity === "year"
+      ? { year: "numeric" }
+      : {}),
     month: "2-digit",
     day: "2-digit",
     ...(granularity === "hour"

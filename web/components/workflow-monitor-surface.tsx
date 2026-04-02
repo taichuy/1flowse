@@ -204,6 +204,55 @@ function renderMonitorSampledRunCards(cards: OperatorRunSampleCard[]) {
   );
 }
 
+const MONITOR_WINDOW_OPTIONS = [
+  { key: "hour", label: "小时" },
+  { key: "day", label: "天" },
+  { key: "month", label: "月" },
+  { key: "year", label: "年" },
+] as const;
+
+function buildMonitorWindowHref(currentHref: string, window: (typeof MONITOR_WINDOW_OPTIONS)[number]["key"]) {
+  try {
+    const url = new URL(currentHref, "https://7flows.local");
+    url.searchParams.set("publish_window", window);
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return currentHref;
+  }
+}
+
+function renderMonitorMetricSparkline(series: Array<number | null>, dataComponent: string) {
+  const numericSeries = series.map((value) => (typeof value === "number" ? value : 0));
+  const hasVisiblePoint = series.some((value) => typeof value === "number");
+
+  if (!hasVisiblePoint) {
+    return (
+      <div className="workflow-monitor-sparkline" aria-hidden="true" data-component={dataComponent}>
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ height: 72, width: "100%" }}>
+          <line stroke="currentColor" strokeDasharray="4 3" strokeOpacity="0.35" strokeWidth="2" x1="0" x2="100" y1="20" y2="20" />
+        </svg>
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...numericSeries, 1);
+  const points = numericSeries
+    .map((value, index) => {
+      const x = numericSeries.length === 1 ? 50 : (index / (numericSeries.length - 1)) * 100;
+      const y = 34 - (value / maxValue) * 24;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="workflow-monitor-sparkline" aria-hidden="true" data-component={dataComponent}>
+      <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ height: 72, width: "100%" }}>
+        <polyline fill="none" points={points} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+      </svg>
+    </div>
+  );
+}
+
 export function WorkflowMonitorSurface({
   workflowId,
   bindings,
@@ -287,9 +336,25 @@ export function WorkflowMonitorSurface({
     });
   }
 
+  const supportedWindowLabels = MONITOR_WINDOW_OPTIONS.filter((option) =>
+    model.supportedWindows.includes(option.key)
+  ).map((option) => option.label);
+
+  const monitorWindowButtons = MONITOR_WINDOW_OPTIONS.map((option) => {
+    const enabled = model.supportedWindows.includes(option.key);
+    return {
+      ...option,
+      enabled,
+      href: buildMonitorWindowHref(currentHref, option.key),
+      active: model.timelineGranularity === option.key,
+    };
+  });
+
   const contractNotice = (
     <p className="workflow-studio-utility-inline-copy" data-component="workflow-monitor-contract-notice">
-      当前 monitor 仅展示 published invocation 聚合指标与 hour / day timeline；Token 输出速度、全部会话数、全部消息数，以及 month / year 筛选当前没有后端契约，因此保持 fail-closed，不伪造图表或筛选项。
+      当前 monitor 主视觉直接消费 `T120` 回传的 metric contract：时间窗支持
+      {` ${supportedWindowLabels.join(" / ") || "小时 / 天 / 月 / 年"}`}，Token 输出速度基于真实
+      `ai_call_records` 聚合；全部会话数与全部消息数若缺 stable seam，会继续显式 fail-closed。
     </p>
   );
 
@@ -430,12 +495,25 @@ export function WorkflowMonitorSurface({
             <Card className="workflow-monitor-report-card" data-component="workflow-monitor-trend-shell">
               <div className="workflow-monitor-card-heading">
                 <div>
-                  <p className="eyebrow">Traffic trend</p>
-                  <h2>Window trend deck</h2>
+                  <p className="eyebrow">Metric-first monitor</p>
+                  <h2>核心指标工作台</h2>
                 </div>
                 <p className="workflow-studio-utility-inline-copy">
-                  先看时间窗里的 aggregate traffic 变化，再决定是否回到日志页或发布治理继续处理具体 follow-up。
+                  先看三条用户侧核心指标，再根据 fail-closed 提示决定是否回到日志、发布治理或编排编辑器继续补 seam。
                 </p>
+              </div>
+
+              <div className="workflow-monitor-card-actions" data-component="workflow-monitor-window-switcher">
+                {monitorWindowButtons.map((option) => (
+                  <Button
+                    disabled={!option.enabled}
+                    href={option.enabled ? option.href : undefined}
+                    key={option.key}
+                    type={option.active ? "primary" : "default"}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
               </div>
 
               <section className="workflow-monitor-trend-deck" data-component="workflow-monitor-trend-deck">
@@ -448,24 +526,21 @@ export function WorkflowMonitorSurface({
                   >
                     <div className="workflow-monitor-trend-head">
                       <div>
-                        <p className="eyebrow">{card.trendLabel}</p>
+                        <p className="eyebrow">{card.label}</p>
                         <h3>{card.label}</h3>
                       </div>
                       <strong className="workflow-monitor-trend-value">{card.value}</strong>
                     </div>
-                    <p className="section-copy entry-copy">{card.detail}</p>
-                    <div className="workflow-monitor-sparkline" aria-hidden="true">
-                      {card.series.map((value, index) => {
-                        const maxValue = Math.max(...card.series, 1);
-                        const height = `${Math.max(12, Math.round((value / maxValue) * 100))}%`;
-
-                        return (
-                          <span className="workflow-monitor-sparkline-bar" key={`${card.key}:${index}`}>
-                            <span className="workflow-monitor-sparkline-bar-fill" style={{ height }} />
-                          </span>
-                        );
-                      })}
+                    <div className="tool-badge-row">
+                      <Tag color={card.status === "available" ? "success" : "warning"}>
+                        {card.status === "available" ? "available" : "fail-closed"}
+                      </Tag>
+                      <span className="event-chip">{card.coverageLabel}</span>
                     </div>
+                    <p className="section-copy entry-copy">{card.detail}</p>
+                    <p className="binding-meta">{card.trendLabel}</p>
+                    <p className="binding-meta">fact source · {card.factSource || "n/a"}</p>
+                    {renderMonitorMetricSparkline(card.series, `workflow-monitor-metric-chart-${card.key}`)}
                   </article>
                 ))}
               </section>

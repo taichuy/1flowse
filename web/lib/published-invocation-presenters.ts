@@ -745,13 +745,22 @@ export function buildPublishedInvocationTrafficTimelineSurfaceCopy({
   timelineGranularity,
   timeWindowLabel
 }: {
-  timelineGranularity: "hour" | "day";
+  timelineGranularity: "hour" | "day" | "month" | "year";
   timeWindowLabel: string;
 }): PublishedInvocationTrafficTimelineSurfaceCopy {
+  const granularityLabel =
+    timelineGranularity === "hour"
+      ? "小时"
+      : timelineGranularity === "day"
+        ? "天"
+        : timelineGranularity === "month"
+          ? "月"
+          : "年";
+
   return {
     title: "Traffic timeline",
     description:
-      `按${timelineGranularity === "hour" ? "小时" : "天"}聚合最近调用，补足 publish activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：${timeWindowLabel}。`,
+      `按${granularityLabel}聚合最近调用，补足 publish activity 的趋势视图，方便判断流量抬升、拒绝峰值和缓存命中变化。当前时间窗：${timeWindowLabel}。`,
     emptyState:
       "当前还没有足够的 invocation timeline 数据，后续命中 published endpoint 后这里会显示趋势桶。",
     totalCountLabel: "total",

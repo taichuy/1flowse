@@ -114,7 +114,22 @@ export function facetCount(
   return facets?.find((item) => item.value === value)?.count ?? 0;
 }
 
-export function formatTimeWindowLabel(value: "24h" | "7d" | "30d" | "all") {
+export function formatTimeWindowLabel(
+  value: "24h" | "7d" | "30d" | "hour" | "day" | "month" | "year" | "all"
+) {
+  if (value === "hour") {
+    return "最近小时窗口";
+  }
+  if (value === "day") {
+    return "最近天窗口";
+  }
+  if (value === "month") {
+    return "最近月窗口";
+  }
+  if (value === "year") {
+    return "最近年窗口";
+  }
+
   return TIME_WINDOW_OPTIONS.find((option) => option.value === value)?.label ?? "全部时间";
 }
 

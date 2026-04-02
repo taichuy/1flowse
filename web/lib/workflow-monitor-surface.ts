@@ -22,6 +22,45 @@ import type {
 
 import { selectPublishedWorkflowBindings } from "@/lib/workflow-api-surface";
 
+type WorkflowMonitorWindow = "hour" | "day" | "month" | "year";
+type WorkflowMonitorMetricStatus = "available" | "unavailable";
+
+type WorkflowMonitorMetricItem = {
+  status: WorkflowMonitorMetricStatus;
+  value: number | null;
+  unit?: string | null;
+  detail: string;
+  fact_source: string;
+  coverage_count: number;
+};
+
+type WorkflowMonitorTimeBucketItem = {
+  bucket_start: string;
+  bucket_end: string;
+  token_output_speed: number | null;
+  session_count: number | null;
+  message_count: number | null;
+  token_output_tokens: number;
+  token_latency_ms: number;
+};
+
+type WorkflowMonitorContract = {
+  supported_windows: WorkflowMonitorWindow[];
+  token_output_speed: WorkflowMonitorMetricItem;
+  session_count: WorkflowMonitorMetricItem;
+  message_count: WorkflowMonitorMetricItem;
+  timeline: WorkflowMonitorTimeBucketItem[];
+};
+
+type WorkflowMonitorInvocationAudit = PublishedEndpointInvocationListResponse & {
+  facets: PublishedEndpointInvocationListResponse["facets"] & {
+    timeline_granularity: WorkflowMonitorWindow;
+    monitor?: WorkflowMonitorContract;
+  };
+};
+
+const MONITOR_WINDOW_ORDER: WorkflowMonitorWindow[] = ["hour", "day", "month", "year"];
+
 type WorkflowMonitorSummaryCard = {
   key: string;
   label: string;
@@ -36,7 +75,10 @@ type WorkflowMonitorTrendCard = {
   detail: string;
   trendLabel: string;
   tone: "accent" | "success" | "warning" | "neutral";
-  series: number[];
+  series: Array<number | null>;
+  status: WorkflowMonitorMetricStatus;
+  factSource: string;
+  coverageLabel: string;
 };
 
 type WorkflowMonitorWindowSummary = {
@@ -61,8 +103,9 @@ type WorkflowMonitorSurfaceModel = {
   totalBindings: number;
   totalInvocations: number;
   timeline: PublishedEndpointInvocationTimeBucketItem[];
-  timelineGranularity: "hour" | "day";
+  timelineGranularity: WorkflowMonitorWindow;
   timeWindowLabel: string;
+  supportedWindows: WorkflowMonitorWindow[];
   summaryCards: WorkflowMonitorSummaryCard[];
   trendCards: WorkflowMonitorTrendCard[];
   aggregateInvocationAudit: PublishedEndpointInvocationListResponse | null;
@@ -193,6 +236,61 @@ function prioritizeWorkflowMonitorRunSampleCards(
   ];
 }
 
+function buildUnavailableMonitorMetric(
+  detail: string,
+  factSource: string
+): WorkflowMonitorMetricItem {
+  return {
+    status: "unavailable",
+    value: null,
+    unit: null,
+    detail,
+    fact_source: factSource,
+    coverage_count: 0,
+  };
+}
+
+function buildFallbackMonitorContract(): WorkflowMonitorContract {
+  return {
+    supported_windows: [...MONITOR_WINDOW_ORDER],
+    token_output_speed: buildUnavailableMonitorMetric(
+      "当前响应还没有回读到 Token 输出速度 contract；monitor 保持 fail-closed。",
+      "ai_call_records.token_usage + ai_call_records.latency_ms"
+    ),
+    session_count: buildUnavailableMonitorMetric(
+      "当前还没有 stable session identity seam；全部会话数继续 fail-closed。",
+      "published request metadata.session_id"
+    ),
+    message_count: buildUnavailableMonitorMetric(
+      "当前还没有跨协议统一的 canonical message seam；全部消息数继续 fail-closed。",
+      "published request metadata.message_count"
+    ),
+    timeline: [],
+  };
+}
+
+function readWorkflowMonitorWindow(audit: PublishedEndpointInvocationListResponse | null): WorkflowMonitorWindow {
+  return ((audit as WorkflowMonitorInvocationAudit | null)?.facets.timeline_granularity ??
+    "day") as WorkflowMonitorWindow;
+}
+
+function readWorkflowMonitorContract(
+  audit: PublishedEndpointInvocationListResponse | null
+): WorkflowMonitorContract {
+  return (audit as WorkflowMonitorInvocationAudit | null)?.facets.monitor ?? buildFallbackMonitorContract();
+}
+
+function mergeOptionalMetricValue(
+  previous: number | null | undefined,
+  next: number | null | undefined
+) {
+  if (typeof previous !== "number" && typeof next !== "number") {
+    return null;
+  }
+
+  return (typeof previous === "number" ? previous : 0) + (typeof next === "number" ? next : 0);
+}
+
 function mergeBucketFacetCounts(
   existing: PublishedEndpointInvocationBucketFacetItem[],
   next: PublishedEndpointInvocationBucketFacetItem[]
@@ -307,9 +405,9 @@ function mergeApiKeyBucketCounts(
 function mergeWorkflowMonitorTimelines(
   audits: Array<PublishedEndpointInvocationListResponse | null>
 ) {
-  const granularity =
-    audits.find((audit) => audit?.facets.timeline_granularity)?.facets.timeline_granularity ??
-    "hour";
+  const granularity = audits.find((audit) => audit != null)
+    ? readWorkflowMonitorWindow(audits.find((audit) => audit != null) ?? null)
+    : "day";
   const merged = new Map<string, PublishedEndpointInvocationTimeBucketItem>();
 
   for (const audit of audits) {
@@ -358,19 +456,105 @@ function mergeWorkflowMonitorTimelines(
   };
 }
 
+function mergeWorkflowMonitorMetricTimeline(
+  audits: Array<PublishedEndpointInvocationListResponse | null>
+) {
+  const granularity = audits.find((audit) => audit != null)
+    ? readWorkflowMonitorWindow(audits.find((audit) => audit != null) ?? null)
+    : "day";
+  const merged = new Map<string, WorkflowMonitorTimeBucketItem>();
+
+  for (const audit of audits) {
+    for (const bucket of readWorkflowMonitorContract(audit).timeline) {
+      const key = `${bucket.bucket_start}:${bucket.bucket_end}`;
+      const previous = merged.get(key);
+
+      if (!previous) {
+        merged.set(key, { ...bucket });
+        continue;
+      }
+
+      previous.session_count = mergeOptionalMetricValue(previous.session_count, bucket.session_count);
+      previous.message_count = mergeOptionalMetricValue(previous.message_count, bucket.message_count);
+      previous.token_output_tokens += bucket.token_output_tokens;
+      previous.token_latency_ms += bucket.token_latency_ms;
+    }
+  }
+
+  const timeline = [...merged.values()]
+    .sort((left, right) => left.bucket_start.localeCompare(right.bucket_start))
+    .map((bucket) => ({
+      ...bucket,
+      token_output_speed:
+        bucket.token_latency_ms > 0
+          ? Number((bucket.token_output_tokens / (bucket.token_latency_ms / 1000)).toFixed(2))
+          : null,
+    }));
+
+  return {
+    timelineGranularity: granularity,
+    timeline,
+  };
+}
+
+function mergeWorkflowMonitorSupportedWindows(
+  audits: Array<PublishedEndpointInvocationListResponse | null>
+) {
+  const supported = new Set<WorkflowMonitorWindow>();
+
+  for (const audit of audits) {
+    for (const window of readWorkflowMonitorContract(audit).supported_windows) {
+      supported.add(window);
+    }
+  }
+
+  if (supported.size === 0) {
+    return [...MONITOR_WINDOW_ORDER];
+  }
+
+  return MONITOR_WINDOW_ORDER.filter((window) => supported.has(window));
+}
+
 function buildTimelineWindowLabel(
-  timeline: PublishedEndpointInvocationTimeBucketItem[],
-  granularity: "hour" | "day"
+  timeline: PublishedEndpointInvocationTimeBucketItem[] | WorkflowMonitorTimeBucketItem[],
+  granularity: WorkflowMonitorWindow
 ) {
   if (timeline.length === 0) {
-    return granularity === "hour" ? "最近小时窗口" : "最近天窗口";
+    if (granularity === "hour") {
+      return "最近小时窗口";
+    }
+    if (granularity === "day") {
+      return "最近天窗口";
+    }
+    if (granularity === "month") {
+      return "最近月窗口";
+    }
+    return "最近年窗口";
   }
 
   if (timeline.length === 1) {
-    return granularity === "hour" ? "最近 1 小时窗口" : "最近 1 天窗口";
+    if (granularity === "hour") {
+      return "最近 1 小时窗口";
+    }
+    if (granularity === "day") {
+      return "最近 1 天窗口";
+    }
+    if (granularity === "month") {
+      return "最近 1 个月窗口";
+    }
+    return "最近 1 年窗口";
   }
 
-  return `最近 ${timeline.length} 个${granularity === "hour" ? "小时" : "天"}时间桶`;
+  if (granularity === "hour") {
+    return `最近 ${timeline.length} 个小时时间桶`;
+  }
+  if (granularity === "day") {
+    return `最近 ${timeline.length} 个天时间桶`;
+  }
+  if (granularity === "month") {
+    return `最近 ${timeline.length} 个月时间桶`;
+  }
+  return `最近 ${timeline.length} 个年时间桶`;
 }
 
 function sumInvocationSummary(
@@ -458,7 +642,7 @@ function sumInvocationSummary(
 function buildWorkflowMonitorAggregateAudit(
   audits: Array<PublishedEndpointInvocationListResponse | null>,
   timeline: PublishedEndpointInvocationTimeBucketItem[],
-  timelineGranularity: "hour" | "day"
+  timelineGranularity: WorkflowMonitorWindow
 ) {
   if (audits.every((audit) => audit == null)) {
     return null;
@@ -509,10 +693,6 @@ function buildWorkflowMonitorAggregateAudit(
   } satisfies PublishedEndpointInvocationListResponse;
 }
 
-function formatMonitorPercentageLabel(value: number) {
-  return `${Math.round(value)}%`;
-}
-
 function formatMonitorDeltaLabel({
   current,
   previous,
@@ -539,115 +719,140 @@ function formatMonitorDeltaLabel({
   return `${neutralLabel} · 较上一桶 ${sign}${absoluteValue}${suffix}`;
 }
 
-function readTimelineRunStatusCount(
-  bucket: PublishedEndpointInvocationTimeBucketItem,
-  status: string
+function formatWorkflowMonitorMetricValue(metric: WorkflowMonitorMetricItem) {
+  if (metric.status !== "available" || typeof metric.value !== "number") {
+    return "Fail-closed";
+  }
+
+  if (metric.unit === "tokens/s") {
+    return `${metric.value.toFixed(metric.value >= 100 ? 0 : 2)} tok/s`;
+  }
+
+  return String(metric.value);
+}
+
+function buildWorkflowMonitorCoverageLabel(metric: WorkflowMonitorMetricItem) {
+  return `coverage · ${metric.coverage_count}`;
+}
+
+function buildWorkflowMonitorMetricSeries(
+  timeline: WorkflowMonitorTimeBucketItem[],
+  key: keyof Pick<WorkflowMonitorTimeBucketItem, "token_output_speed" | "session_count" | "message_count">
 ) {
-  return bucket.run_status_counts.find((item) => item.value === status)?.count ?? 0;
+  return timeline.map((bucket) => bucket[key]);
+}
+
+function aggregateWorkflowMonitorMetric(
+  audits: Array<PublishedEndpointInvocationListResponse | null>,
+  key: keyof Pick<WorkflowMonitorContract, "token_output_speed" | "session_count" | "message_count">,
+  timeline: WorkflowMonitorTimeBucketItem[]
+): WorkflowMonitorMetricItem {
+  const metrics = audits.map((audit) => readWorkflowMonitorContract(audit)[key]);
+  const availableMetrics = metrics.filter((metric) => metric.status === "available");
+  const fallbackMetric =
+    metrics.find((metric) => metric.detail || metric.fact_source) ?? readWorkflowMonitorContract(null)[key];
+
+  if (key === "token_output_speed") {
+    const totalOutputTokens = timeline.reduce((sum, bucket) => sum + bucket.token_output_tokens, 0);
+    const totalLatencyMs = timeline.reduce((sum, bucket) => sum + bucket.token_latency_ms, 0);
+    const coverageCount = availableMetrics.reduce((sum, metric) => sum + metric.coverage_count, 0);
+
+    if (totalLatencyMs > 0) {
+      return {
+        status: "available",
+        value: Number((totalOutputTokens / (totalLatencyMs / 1000)).toFixed(2)),
+        unit: availableMetrics[0]?.unit ?? "tokens/s",
+        detail:
+          coverageCount > 0
+            ? `基于 ${coverageCount} 条 covered AI calls 的 token output / latency 汇总。`
+            : availableMetrics[0]?.detail ?? fallbackMetric.detail,
+        fact_source: availableMetrics[0]?.fact_source ?? fallbackMetric.fact_source,
+        coverage_count: coverageCount,
+      };
+    }
+  }
+
+  if (availableMetrics.length > 0) {
+    return {
+      status: "available",
+      value: availableMetrics.reduce(
+        (sum, metric) => sum + (typeof metric.value === "number" ? metric.value : 0),
+        0
+      ),
+      unit: availableMetrics[0]?.unit ?? null,
+      detail: availableMetrics[0]?.detail ?? fallbackMetric.detail,
+      fact_source: availableMetrics[0]?.fact_source ?? fallbackMetric.fact_source,
+      coverage_count: availableMetrics.reduce((sum, metric) => sum + metric.coverage_count, 0),
+    };
+  }
+
+  return fallbackMetric;
 }
 
 function buildWorkflowMonitorTrendCards({
-  timeline,
-  invocationSummary,
-  activePublishedBindingCount,
-  publishedBindings,
-  sampledRunCards,
-  aggregateInvocationAudit,
+  audits,
+  metricTimeline,
   timeWindowLabel,
 }: {
-  timeline: PublishedEndpointInvocationTimeBucketItem[];
-  invocationSummary: PublishedEndpointInvocationSummary;
-  activePublishedBindingCount: number;
-  publishedBindings: WorkflowPublishedEndpointItem[];
-  sampledRunCards: ReturnType<typeof buildOperatorRunSampleCards>;
-  aggregateInvocationAudit: PublishedEndpointInvocationListResponse | null;
+  audits: Array<PublishedEndpointInvocationListResponse | null>;
+  metricTimeline: WorkflowMonitorTimeBucketItem[];
   timeWindowLabel: string;
 }) {
-  const latestBucket = timeline.at(-1) ?? null;
-  const previousBucket = timeline.length > 1 ? timeline.at(-2) ?? null : null;
-  const totalFailureCount = invocationSummary.failed_count + invocationSummary.rejected_count;
-  const successRate =
-    invocationSummary.total_count > 0
-      ? (invocationSummary.succeeded_count / invocationSummary.total_count) * 100
-      : 0;
-  const successRateSeries = timeline.map((bucket) =>
-    bucket.total_count > 0 ? Math.round((bucket.succeeded_count / bucket.total_count) * 100) : 0
-  );
-  const failureSeries = timeline.map((bucket) => bucket.failed_count + bucket.rejected_count);
-  const callbackWaitingSeries = timeline.map((bucket) => readTimelineRunStatusCount(bucket, "waiting_callback"));
-  const callbackWaitingCount = callbackWaitingSeries.reduce((sum, value) => sum + value, 0);
-  const topReason = aggregateInvocationAudit?.facets.reason_counts.at(0)?.value ?? null;
-  const latestSuccessRate =
-    latestBucket && latestBucket.total_count > 0
-      ? Math.round((latestBucket.succeeded_count / latestBucket.total_count) * 100)
-      : 0;
-  const previousSuccessRate =
-    previousBucket && previousBucket.total_count > 0
-      ? Math.round((previousBucket.succeeded_count / previousBucket.total_count) * 100)
-      : null;
+  const tokenMetric = aggregateWorkflowMonitorMetric(audits, "token_output_speed", metricTimeline);
+  const sessionMetric = aggregateWorkflowMonitorMetric(audits, "session_count", metricTimeline);
+  const messageMetric = aggregateWorkflowMonitorMetric(audits, "message_count", metricTimeline);
 
   return [
     {
-      key: "invocations",
-      label: "全部调用数",
-      value: String(invocationSummary.total_count),
-      detail:
-        activePublishedBindingCount > 0
-          ? `${activePublishedBindingCount}/${publishedBindings.length} 个 published bindings 已看到流量。`
-          : "当前 published bindings 还没有活跃调用。",
-      trendLabel: formatMonitorDeltaLabel({
-        current: latestBucket?.total_count ?? 0,
-        previous: previousBucket?.total_count ?? null,
-        neutralLabel: `${timeWindowLabel} 最近一桶 ${latestBucket?.total_count ?? 0} 次`,
-      }),
-      tone: "accent" as const,
-      series: timeline.map((bucket) => bucket.total_count),
+      key: "token-output-speed",
+      label: "Token 输出速度",
+      metric: tokenMetric,
+      tone: tokenMetric.status === "available" ? ("accent" as const) : ("warning" as const),
+      series: buildWorkflowMonitorMetricSeries(metricTimeline, "token_output_speed"),
     },
     {
-      key: "success-rate",
-      label: "成功率",
-      value: formatMonitorPercentageLabel(successRate),
-      detail: `success ${invocationSummary.succeeded_count} · failed ${invocationSummary.failed_count} · rejected ${invocationSummary.rejected_count}`,
-      trendLabel: formatMonitorDeltaLabel({
-        current: latestSuccessRate,
-        previous: previousSuccessRate,
-        suffix: "pp",
-        neutralLabel: `${timeWindowLabel} 最近一桶 ${formatMonitorPercentageLabel(latestSuccessRate)}`,
-      }),
-      tone: invocationSummary.failed_count === 0 && invocationSummary.rejected_count === 0 ? "success" : "neutral",
-      series: successRateSeries,
+      key: "session-count",
+      label: "全部会话数",
+      metric: sessionMetric,
+      tone: sessionMetric.status === "available" ? ("neutral" as const) : ("warning" as const),
+      series: buildWorkflowMonitorMetricSeries(metricTimeline, "session_count"),
     },
     {
-      key: "failure-pressure",
-      label: "失败 / 拒绝",
-      value: String(totalFailureCount),
-      detail: topReason ? `主要错误信号：${topReason}` : "当前时间窗没有聚合出的错误原因峰值。",
-      trendLabel: formatMonitorDeltaLabel({
-        current: (latestBucket?.failed_count ?? 0) + (latestBucket?.rejected_count ?? 0),
-        previous:
-          previousBucket == null ? null : previousBucket.failed_count + previousBucket.rejected_count,
-        neutralLabel: `${timeWindowLabel} 最近一桶 ${(latestBucket?.failed_count ?? 0) + (latestBucket?.rejected_count ?? 0)} 次`,
-      }),
-      tone: totalFailureCount > 0 ? "warning" : "success",
-      series: failureSeries,
+      key: "message-count",
+      label: "全部消息数",
+      metric: messageMetric,
+      tone: messageMetric.status === "available" ? ("success" as const) : ("warning" as const),
+      series: buildWorkflowMonitorMetricSeries(metricTimeline, "message_count"),
     },
-    {
-      key: "callback-pressure",
-      label: "Waiting callback",
-      value: String(callbackWaitingCount),
-      detail:
-        sampledRunCards.length > 0
-          ? `${sampledRunCards.filter((card) => card.hasCallbackWaitingSummary).length} 个 sampled runs 仍在等待 callback 或 follow-up。`
-          : "当前时间窗还没有 sampled run follow-up。",
-      trendLabel: formatMonitorDeltaLabel({
-        current: callbackWaitingSeries.at(-1) ?? 0,
-        previous: callbackWaitingSeries.length > 1 ? callbackWaitingSeries.at(-2) ?? null : null,
-        neutralLabel: `${timeWindowLabel} 最近一桶 ${callbackWaitingSeries.at(-1) ?? 0} 个 waiting runs`,
-      }),
-      tone: callbackWaitingCount > 0 ? "warning" : "neutral",
-      series: callbackWaitingSeries,
-    },
-  ] satisfies WorkflowMonitorTrendCard[];
+  ].map(({ key, label, metric, tone, series }) => {
+    const numericSeries = series.filter((value): value is number => typeof value === "number");
+    const latestValue = numericSeries.at(-1) ?? null;
+    const previousValue = numericSeries.length > 1 ? numericSeries.at(-2) ?? null : null;
+
+    return {
+      key,
+      label,
+      value: formatWorkflowMonitorMetricValue(metric),
+      detail: metric.detail,
+      trendLabel:
+        metric.status === "available" && latestValue !== null
+          ? formatMonitorDeltaLabel({
+              current: latestValue,
+              previous: previousValue,
+              suffix: metric.unit === "tokens/s" ? " tok/s" : "",
+              neutralLabel:
+                metric.unit === "tokens/s"
+                  ? `${timeWindowLabel} 最近一桶 ${latestValue.toFixed(latestValue >= 100 ? 0 : 2)} tok/s`
+                  : `${timeWindowLabel} 最近一桶 ${latestValue}`,
+            })
+          : `${timeWindowLabel} 当前保持 fail-closed`,
+      tone,
+      series,
+      status: metric.status,
+      factSource: metric.fact_source,
+      coverageLabel: buildWorkflowMonitorCoverageLabel(metric),
+    } satisfies WorkflowMonitorTrendCard;
+  });
 }
 
 function buildWorkflowMonitorWindowSummary({
@@ -804,6 +1009,8 @@ export function buildWorkflowMonitorSurfaceModel({
     : publishedBindings;
   const audits = scopedBindings.map((binding) => invocationAuditsByBinding[binding.id] ?? null);
   const { timeline, timelineGranularity } = mergeWorkflowMonitorTimelines(audits);
+  const { timeline: metricTimeline, timelineGranularity: metricTimelineGranularity } =
+    mergeWorkflowMonitorMetricTimeline(audits);
   const invocationSummary = sumInvocationSummary(audits);
   const aggregateInvocationAudit = buildWorkflowMonitorAggregateAudit(
     audits,
@@ -811,7 +1018,11 @@ export function buildWorkflowMonitorSurfaceModel({
     timelineGranularity
   );
   const primaryFollowUp = buildWorkflowPublishPrimaryFollowUpSurface(publishedBindings);
-  const timeWindowLabel = buildTimelineWindowLabel(timeline, timelineGranularity);
+  const supportedWindows = mergeWorkflowMonitorSupportedWindows(audits);
+  const timeWindowLabel = buildTimelineWindowLabel(
+    metricTimeline.length > 0 ? metricTimeline : timeline,
+    metricTimeline.length > 0 ? metricTimelineGranularity : timelineGranularity
+  );
   const sampledRunCards = prioritizeWorkflowMonitorRunSampleCards(
     buildOperatorRunSampleCards(collectRunSamples(audits, resolveWorkflowDetailHref), {
       resolveWorkflowDetailHref,
@@ -833,8 +1044,9 @@ export function buildWorkflowMonitorSurfaceModel({
     totalBindings: bindings.length,
     totalInvocations: invocationSummary.total_count,
     timeline,
-    timelineGranularity,
+    timelineGranularity: metricTimeline.length > 0 ? metricTimelineGranularity : timelineGranularity,
     timeWindowLabel,
+    supportedWindows,
     sampledRunCards,
     primaryFollowUp,
     aggregateInvocationAudit,
@@ -845,12 +1057,8 @@ export function buildWorkflowMonitorSurfaceModel({
       activePublishedBindingCount,
     }),
     trendCards: buildWorkflowMonitorTrendCards({
-      timeline,
-      invocationSummary,
-      activePublishedBindingCount,
-      publishedBindings,
-      sampledRunCards,
-      aggregateInvocationAudit,
+      audits,
+      metricTimeline,
       timeWindowLabel,
     }),
     insightsSurface,

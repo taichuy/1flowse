@@ -125,6 +125,53 @@ function buildInvocationAuditWithFacts(): PublishedEndpointInvocationListRespons
           reason_counts: [{ value: "rate_limit_exceeded", count: 1 }],
         },
       ],
+      monitor: {
+        supported_windows: ["hour", "day", "month", "year"],
+        token_output_speed: {
+          status: "available",
+          value: 26.67,
+          unit: "tokens/s",
+          detail: "基于 3 条 covered AI calls 的 token output / latency 汇总。",
+          fact_source: "ai_call_records.token_usage + ai_call_records.latency_ms",
+          coverage_count: 3,
+        },
+        session_count: {
+          status: "unavailable",
+          value: null,
+          unit: null,
+          detail: "当前还没有 stable session identity seam；全部会话数继续 fail-closed。",
+          fact_source: "published request metadata.session_id",
+          coverage_count: 0,
+        },
+        message_count: {
+          status: "unavailable",
+          value: null,
+          unit: null,
+          detail: "当前还没有跨协议统一的 canonical message seam；全部消息数继续 fail-closed。",
+          fact_source: "published request metadata.message_count",
+          coverage_count: 0,
+        },
+        timeline: [
+          {
+            bucket_start: "2026-03-31T08:00:00Z",
+            bucket_end: "2026-03-31T09:00:00Z",
+            token_output_speed: 20,
+            session_count: null,
+            message_count: null,
+            token_output_tokens: 40,
+            token_latency_ms: 2000,
+          },
+          {
+            bucket_start: "2026-03-31T09:00:00Z",
+            bucket_end: "2026-03-31T10:00:00Z",
+            token_output_speed: 30,
+            session_count: null,
+            message_count: null,
+            token_output_tokens: 90,
+            token_latency_ms: 3000,
+          },
+        ],
+      },
     },
     items: [
       {
@@ -242,6 +289,34 @@ describe("WorkflowMonitorSurface", () => {
               recent_failure_reasons: [],
               timeline_granularity: "hour",
               timeline: [],
+              monitor: {
+                supported_windows: ["hour", "day", "month", "year"],
+                token_output_speed: {
+                  status: "unavailable",
+                  value: null,
+                  unit: null,
+                  detail: "当前时间窗还没有 published invocation 事实，Token 输出速度保持 fail-closed。",
+                  fact_source: "ai_call_records.token_usage + ai_call_records.latency_ms",
+                  coverage_count: 0,
+                },
+                session_count: {
+                  status: "unavailable",
+                  value: null,
+                  unit: null,
+                  detail: "当前还没有 stable session identity seam；全部会话数继续 fail-closed。",
+                  fact_source: "published request metadata.session_id",
+                  coverage_count: 0,
+                },
+                message_count: {
+                  status: "unavailable",
+                  value: null,
+                  unit: null,
+                  detail: "当前还没有跨协议统一的 canonical message seam；全部消息数继续 fail-closed。",
+                  fact_source: "published request metadata.message_count",
+                  coverage_count: 0,
+                },
+                timeline: [],
+              },
             },
             items: [],
           },
@@ -284,9 +359,14 @@ describe("WorkflowMonitorSurface", () => {
     expect(html).toContain('data-component="workflow-monitor-trend-shell"');
     expect(html).toContain('data-component="workflow-monitor-trend-deck"');
     expect(html).toContain('data-component="workflow-monitor-contract-notice"');
-    expect(html).toContain("Token 输出速度、全部会话数、全部消息数，以及 month / year 筛选当前没有后端契约");
-    expect(html).toContain('data-trend-key="invocations"');
-    expect(html).toContain('data-trend-key="success-rate"');
+    expect(html).toContain("Token 输出速度基于真实");
+    expect(html).toContain('data-component="workflow-monitor-window-switcher"');
+    expect(html).toContain('data-trend-key="token-output-speed"');
+    expect(html).toContain('data-trend-key="session-count"');
+    expect(html).toContain('data-trend-key="message-count"');
+    expect(html).toContain("tok/s");
+    expect(html).toContain("Fail-closed");
+    expect(html).toContain("publish_window=month");
     expect(html).toContain('data-component="workflow-monitor-insights-shell"');
     expect(html).toContain('data-component="workflow-monitor-insight-grid"');
     expect(html).toContain('data-component="workflow-monitor-window-summary"');

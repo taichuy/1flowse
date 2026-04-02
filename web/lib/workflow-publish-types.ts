@@ -176,6 +176,35 @@ export type PublishedEndpointInvocationTimeBucketItem = {
   reason_counts: PublishedEndpointInvocationBucketFacetItem[];
 };
 
+export type PublishedEndpointInvocationTimeBucketGranularity = "hour" | "day" | "month" | "year";
+
+export type PublishedEndpointInvocationMonitorMetricItem = {
+  status: "available" | "unavailable";
+  value: number | null;
+  unit?: string | null;
+  detail: string;
+  fact_source: string;
+  coverage_count: number;
+};
+
+export type PublishedEndpointInvocationMonitorTimeBucketItem = {
+  bucket_start: string;
+  bucket_end: string;
+  token_output_speed: number | null;
+  session_count: number | null;
+  message_count: number | null;
+  token_output_tokens: number;
+  token_latency_ms: number;
+};
+
+export type PublishedEndpointInvocationMonitorItem = {
+  supported_windows: PublishedEndpointInvocationTimeBucketGranularity[];
+  token_output_speed: PublishedEndpointInvocationMonitorMetricItem;
+  session_count: PublishedEndpointInvocationMonitorMetricItem;
+  message_count: PublishedEndpointInvocationMonitorMetricItem;
+  timeline: PublishedEndpointInvocationMonitorTimeBucketItem[];
+};
+
 export type PublishedEndpointInvocationFilters = {
   status?: PublishedEndpointInvocationStatus | null;
   request_source?: PublishedEndpointInvocationRequestSource | null;
@@ -210,8 +239,9 @@ export type PublishedEndpointInvocationFacets = {
   reason_counts: PublishedEndpointInvocationFacetItem[];
   api_key_usage: PublishedEndpointInvocationApiKeyUsageItem[];
   recent_failure_reasons: PublishedEndpointInvocationFailureReasonItem[];
-  timeline_granularity: "hour" | "day";
+  timeline_granularity: PublishedEndpointInvocationTimeBucketGranularity;
   timeline: PublishedEndpointInvocationTimeBucketItem[];
+  monitor?: PublishedEndpointInvocationMonitorItem;
 };
 
 export type PublishedEndpointInvocationListResponse = {
