@@ -755,20 +755,15 @@ describe("Workflow studio routes", () => {
     expect(html).toContain('data-layout="editor"');
     expect(html).toContain('data-component="workflow-studio-shell"');
     expect(html).toContain('data-component="workflow-studio-rail"');
-    expect(html).toContain('data-component="workflow-editor-entry-shell"');
     expect(html).toContain('data-component="workflow-editor-workbench-entry"');
     expect(html).toContain('data-has-initial-bootstrap="true"');
     expect(html).toContain('data-bootstrap-workflows-count="2"');
     expect(html).toContain('data-bootstrap-provider-config-count="0"');
-    expect(html.indexOf('data-component="workflow-editor-workbench-entry"')).toBeLessThan(
-      html.indexOf('data-component="workflow-editor-entry-shell"')
-    );
     expect(html).not.toContain('data-component="workflow-publish-panel"');
+    expect(html).not.toContain('data-component="workflow-editor-entry-shell"');
     expect(html).toContain('data-workflow-id="workflow-1"');
     expect(html).toContain('data-bootstrap-workflow-id="workflow-1"');
     expect(html).toContain('data-bootstrap-surface="editor"');
-    expect(html).toContain('data-node-count="2"');
-    expect(html).toContain('data-missing-tool-count="1"');
     expect(html).toContain("workflow-studio-shell-bar workflow-studio-rail");
     expect(html).toContain("画布编排");
     expect(html).toContain("访问 API");
@@ -777,16 +772,6 @@ describe("Workflow studio routes", () => {
     expect(html).toContain("发布治理");
     expect(html).toContain("Workflow 1");
     expect(html).toContain("draft only");
-    expect(html).toContain("xyflow Studio 首屏壳层");
-    expect(html).toContain("管理工具目录");
-    expect(html).toContain("查看发布治理");
-    expect(html).toContain("查看运行日志");
-    expect(html).toContain("查看实时监控");
-    expect(html).toContain("2 节点 · 1 连线");
-    expect(html).toContain("v0.1.0 · draft only · 2 个历史版本");
-    expect(html).toContain("1 变量 · 1 个 publish 草案");
-    expect(html).toContain("1 个缺失工具引用 · 1 个 definition 提示");
-    expect(html).toContain("当前还有 1 个工具引用待治理");
     expect(html).toContain("xyflow studio");
     expect(html).toContain("运行诊断");
     expect(html).toContain("Starter 模板");
