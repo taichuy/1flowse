@@ -1,6 +1,13 @@
+import json
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
+import httpx
+import jwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -12,6 +19,9 @@ from app.services.workspace_access import (
     can_access,
     ensure_console_route_access,
     get_workspace_access_context,
+    get_workspace_csrf_cookie_name,
+    get_workspace_csrf_header_name,
+    get_workspace_oidc_state_cookie_name,
     resolve_external_identity_binding,
 )
 
@@ -47,6 +57,95 @@ def _external_identity_context(resolved_identity) -> WorkspaceAccessContext:
         user=resolved_identity.user,
         member=resolved_identity.member,
     )
+
+
+def _build_oidc_settings():
+    return SimpleNamespace(
+        secret_key="oidc-test-secret",
+        env="test",
+        oidc_enabled=True,
+        oidc_provider="zitadel",
+        oidc_issuer="https://zitadel.example.com",
+        oidc_client_id="sevenflows-web",
+        oidc_client_secret="sevenflows-secret",
+        oidc_redirect_uri="http://testserver/api/auth/callback",
+        oidc_scopes="openid profile email",
+    )
+
+
+def _build_oidc_signing_materials() -> tuple[bytes, dict[str, object]]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["kid"] = "zitadel-test-key"
+    return private_key_pem, {"keys": [public_jwk]}
+
+
+def _install_oidc_mocks(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    email: str = "admin@taichuy.com",
+    email_verified: bool = True,
+    subject: str = "zitadel-admin-subject",
+):
+    settings = _build_oidc_settings()
+    private_key_pem, jwks_payload = _build_oidc_signing_materials()
+    runtime = {"nonce": None}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/.well-known/openid-configuration"):
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": settings.oidc_issuer,
+                    "authorization_endpoint": f"{settings.oidc_issuer}/oauth/v2/authorize",
+                    "token_endpoint": f"{settings.oidc_issuer}/oauth/v2/token",
+                    "jwks_uri": f"{settings.oidc_issuer}/oauth/v2/keys",
+                },
+            )
+
+        if request.url.path.endswith("/oauth/v2/token"):
+            assert request.method == "POST"
+            claims = {
+                "iss": settings.oidc_issuer,
+                "sub": subject,
+                "aud": settings.oidc_client_id,
+                "exp": int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
+                "iat": int(datetime.now(UTC).timestamp()),
+                "email": email,
+                "email_verified": email_verified,
+                "nonce": runtime["nonce"],
+            }
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "zitadel-access-token",
+                    "token_type": "Bearer",
+                    "expires_in": 300,
+                    "id_token": jwt.encode(
+                        claims,
+                        private_key_pem,
+                        algorithm="RS256",
+                        headers={"kid": "zitadel-test-key"},
+                    ),
+                },
+            )
+
+        if request.url.path.endswith("/oauth/v2/keys"):
+            return httpx.Response(200, json=jwks_payload)
+
+        raise AssertionError(f"unexpected OIDC request: {request.method} {request.url}")
+
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "app.services.workspace_access.default_workspace_oidc_http_client_factory",
+        lambda: httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True),
+    )
+    return settings, runtime
 
 
 def test_default_admin_login_and_session_contract(client: TestClient) -> None:
@@ -206,6 +305,123 @@ def test_external_identity_binding_requires_verified_email_for_first_link(sqlite
             email="admin@taichuy.com",
             email_verified=False,
         )
+
+
+def test_oidc_start_redirects_to_provider_and_sets_state_cookie(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings, runtime = _install_oidc_mocks(monkeypatch)
+
+    response = client.get(
+        "/api/auth/oidc/start",
+        params={"next": "/workspace"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    location = response.headers["location"]
+    parsed = urlparse(location)
+    query = parse_qs(parsed.query)
+    assert location.startswith(f"{settings.oidc_issuer}/oauth/v2/authorize")
+    assert query["client_id"] == [settings.oidc_client_id]
+    assert query["redirect_uri"] == [settings.oidc_redirect_uri]
+    assert query["scope"] == [settings.oidc_scopes]
+    assert query["state"]
+    assert query["nonce"]
+    runtime["nonce"] = query["nonce"][0]
+    assert client.cookies.get(get_workspace_oidc_state_cookie_name()) == query["state"][0]
+
+
+def test_oidc_callback_issues_existing_workspace_session_contract(
+    client: TestClient,
+    sqlite_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings, runtime = _install_oidc_mocks(monkeypatch)
+
+    start_response = client.get(
+        "/api/auth/oidc/start",
+        params={"next": "/workspace"},
+        follow_redirects=False,
+    )
+    start_query = parse_qs(urlparse(start_response.headers["location"]).query)
+    runtime["nonce"] = start_query["nonce"][0]
+    state_token = start_query["state"][0]
+
+    callback_response = client.get(
+        "/api/auth/callback",
+        params={"code": "oidc-good-code", "state": state_token},
+        follow_redirects=False,
+    )
+
+    assert callback_response.status_code == 303
+    assert callback_response.headers["location"] == "/workspace"
+    assert client.cookies.get(get_workspace_oidc_state_cookie_name()) is None
+
+    session_response = client.get("/api/auth/session")
+    assert session_response.status_code == 200
+    session_body = session_response.json()
+    assert session_body["current_user"]["email"] == "admin@taichuy.com"
+    assert session_body["current_member"]["role"] == "owner"
+    assert session_body["cookie_contract"]["access_token_cookie_name"] in client.cookies
+    assert session_body["cookie_contract"]["refresh_token_cookie_name"] in client.cookies
+    assert session_body["cookie_contract"]["csrf_token_cookie_name"] in client.cookies
+
+    refresh_response = client.post(
+        "/api/auth/refresh",
+        headers={
+            get_workspace_csrf_header_name(): str(
+                client.cookies.get(get_workspace_csrf_cookie_name())
+            )
+        },
+    )
+    assert refresh_response.status_code == 200
+
+    logout_response = client.post("/api/auth/logout")
+    assert logout_response.status_code == 200
+    assert logout_response.json() == {"ok": True}
+
+    bindings = sqlite_session.scalars(select(ExternalIdentityBindingRecord)).all()
+    assert len(bindings) == 1
+    assert bindings[0].provider == settings.oidc_provider
+    assert bindings[0].subject == "zitadel-admin-subject"
+
+
+def test_oidc_callback_rejects_unverified_first_time_identity_binding(
+    client: TestClient,
+    sqlite_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, runtime = _install_oidc_mocks(
+        monkeypatch,
+        email="admin@taichuy.com",
+        email_verified=False,
+        subject="zitadel-unverified-subject",
+    )
+
+    start_response = client.get(
+        "/api/auth/oidc/start",
+        params={"next": "/workspace"},
+        follow_redirects=False,
+    )
+    start_query = parse_qs(urlparse(start_response.headers["location"]).query)
+    runtime["nonce"] = start_query["nonce"][0]
+    state_token = start_query["state"][0]
+
+    callback_response = client.get(
+        "/api/auth/callback",
+        params={"code": "oidc-unverified-code", "state": state_token},
+        follow_redirects=False,
+    )
+
+    assert callback_response.status_code == 303
+    assert callback_response.headers["location"] == "/login?error=oidc_callback_failed"
+    assert client.cookies.get(get_workspace_oidc_state_cookie_name()) is None
+    assert sqlite_session.scalars(select(ExternalIdentityBindingRecord)).all() == []
+
+    session_response = client.get("/api/auth/session")
+    assert session_response.status_code == 401
 
 
 def test_workspace_member_writes_require_csrf_double_submit(client: TestClient) -> None:

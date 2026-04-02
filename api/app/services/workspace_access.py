@@ -5,11 +5,14 @@ import hmac
 import json
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, Literal
 
+import httpx
+import jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -41,8 +44,12 @@ TOKEN_PURPOSE_CSRF = "csrf"
 ACCESS_TOKEN_COOKIE_BASE_NAME = "sevenflows_access_token"
 REFRESH_TOKEN_COOKIE_BASE_NAME = "sevenflows_refresh_token"
 CSRF_TOKEN_COOKIE_BASE_NAME = "sevenflows_csrf_token"
+OIDC_STATE_COOKIE_BASE_NAME = "sevenflows_oidc_state"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 COOKIE_SAME_SITE = "lax"
+OIDC_STATE_TTL = timedelta(minutes=10)
+OIDC_HTTP_TIMEOUT_SECONDS = 10.0
+TOKEN_PURPOSE_OIDC_STATE = "oidc_state"
 CONSOLE_ACCESS_LEVEL_RANK = {"guest": 0, "authenticated": 1, "manager": 2}
 WorkspaceAccessResource = Literal[
     "workspace",
@@ -244,6 +251,10 @@ def get_workspace_refresh_cookie_name() -> str:
 
 def get_workspace_csrf_cookie_name() -> str:
     return _real_cookie_name(CSRF_TOKEN_COOKIE_BASE_NAME)
+
+
+def get_workspace_oidc_state_cookie_name() -> str:
+    return _real_cookie_name(OIDC_STATE_COOKIE_BASE_NAME)
 
 
 def get_workspace_csrf_header_name() -> str:
@@ -524,6 +535,20 @@ def build_console_route_access_policy_matrix() -> list[ConsoleRouteAccessPolicy]
             access_level="guest",
             methods=["POST"],
             description="访客登录入口，签发 access/refresh/csrf 三类令牌。",
+        ),
+        _build_route_access_policy(
+            route="/api/auth/oidc/start",
+            access_level="guest",
+            methods=["GET"],
+            description="OIDC 登录入口，签发 state 后跳转到外部 identity provider。",
+            expose_in_contract=False,
+        ),
+        _build_route_access_policy(
+            route="/api/auth/callback",
+            access_level="guest",
+            methods=["GET"],
+            description="OIDC 回调入口，完成 code exchange、token 校验与会话签发。",
+            expose_in_contract=False,
         ),
         _build_route_access_policy(
             route="/api/auth/session",
@@ -820,6 +845,202 @@ def _get_active_session_record(db: Session, *, session_id: str) -> AuthSessionRe
     return session_record
 
 
+def _normalize_workspace_oidc_next_path(next_path: str | None) -> str:
+    normalized = (next_path or "").strip()
+    if (
+        not normalized
+        or not normalized.startswith("/")
+        or normalized.startswith("//")
+        or "\\" in normalized
+    ):
+        return "/workspace"
+    return normalized
+
+
+def _require_workspace_oidc_settings():
+    settings = get_settings()
+    if not settings.oidc_enabled:
+        raise AuthenticationError("OIDC 登录当前未启用。")
+
+    required_fields = {
+        "issuer": settings.oidc_issuer,
+        "client_id": settings.oidc_client_id,
+        "client_secret": settings.oidc_client_secret,
+        "redirect_uri": settings.oidc_redirect_uri,
+    }
+    missing_fields = [name for name, value in required_fields.items() if not str(value).strip()]
+    if missing_fields:
+        joined_fields = ", ".join(missing_fields)
+        raise AuthenticationError(f"OIDC 配置缺失：{joined_fields}。")
+    return settings
+
+
+def default_workspace_oidc_http_client_factory() -> httpx.Client:
+    return httpx.Client(
+        timeout=httpx.Timeout(OIDC_HTTP_TIMEOUT_SECONDS, connect=OIDC_HTTP_TIMEOUT_SECONDS),
+        follow_redirects=True,
+    )
+
+
+def _fetch_workspace_oidc_discovery_document(
+    *,
+    client: httpx.Client,
+    issuer: str,
+) -> dict[str, Any]:
+    discovery_url = f"{issuer.rstrip('/')}/.well-known/openid-configuration"
+    response = client.get(discovery_url)
+    if response.status_code >= 400:
+        raise AuthenticationError("OIDC discovery 获取失败，请稍后重试。")
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise AuthenticationError("OIDC discovery 返回了无效响应。") from exc
+
+    if not isinstance(payload, dict):
+        raise AuthenticationError("OIDC discovery 返回了无效响应。")
+
+    configured_issuer = issuer.rstrip("/")
+    discovered_issuer = str(payload.get("issuer") or "").strip().rstrip("/")
+    if not discovered_issuer or discovered_issuer != configured_issuer:
+        raise AuthenticationError("OIDC issuer 与配置不一致。")
+
+    required_keys = ("authorization_endpoint", "token_endpoint", "jwks_uri")
+    if any(not str(payload.get(key) or "").strip() for key in required_keys):
+        raise AuthenticationError("OIDC discovery 缺少必要端点配置。")
+    return payload
+
+
+def _decode_workspace_oidc_state_token(state_token: str) -> tuple[str, str]:
+    payload = _decode_signed_payload(
+        state_token,
+        error_message="OIDC state 无效，请重新发起登录。",
+    )
+    purpose = payload.get("purpose")
+    expires_at_raw = payload.get("exp")
+    nonce = payload.get("nonce")
+    next_path = payload.get("next")
+    provider = payload.get("provider")
+    if (
+        purpose != TOKEN_PURPOSE_OIDC_STATE
+        or not isinstance(expires_at_raw, int)
+        or not isinstance(nonce, str)
+        or not nonce.strip()
+        or not isinstance(provider, str)
+    ):
+        raise AuthenticationError("OIDC state 无效，请重新发起登录。")
+
+    expires_at = datetime.fromtimestamp(expires_at_raw, UTC)
+    if expires_at <= _utc_now():
+        raise AuthenticationError("OIDC state 已过期，请重新发起登录。")
+
+    expected_provider = _normalize_external_identity_provider(
+        _require_workspace_oidc_settings().oidc_provider
+    )
+    if _normalize_external_identity_provider(provider) != expected_provider:
+        raise AuthenticationError("OIDC state 与当前 provider 不匹配。")
+
+    return (
+        _normalize_workspace_oidc_next_path(next_path if isinstance(next_path, str) else None),
+        nonce,
+    )
+
+
+def _extract_workspace_oidc_signing_key(
+    jwks_payload: dict[str, Any],
+    *,
+    key_id: str | None,
+):
+    try:
+        jwk_set = jwt.PyJWKSet.from_dict(jwks_payload)
+    except jwt.PyJWTError as exc:
+        raise AuthenticationError("OIDC JWKS 无效。") from exc
+
+    if key_id:
+        for key in jwk_set.keys:
+            if key.key_id == key_id:
+                return key.key
+        raise AuthenticationError("OIDC token signing key 不存在。")
+
+    if len(jwk_set.keys) == 1:
+        return jwk_set.keys[0].key
+    raise AuthenticationError("OIDC token signing key 缺失。")
+
+
+def _decode_workspace_oidc_id_token(
+    id_token: str,
+    *,
+    client: httpx.Client,
+    discovery_payload: dict[str, Any],
+    issuer: str,
+    client_id: str,
+    expected_nonce: str,
+) -> dict[str, Any]:
+    try:
+        unverified_header = jwt.get_unverified_header(id_token)
+    except jwt.PyJWTError as exc:
+        raise AuthenticationError("OIDC id_token 无法解析。") from exc
+
+    algorithm = str(unverified_header.get("alg") or "").strip()
+    if not algorithm or algorithm.lower() == "none":
+        raise AuthenticationError("OIDC id_token 算法无效。")
+
+    jwks_response = client.get(str(discovery_payload["jwks_uri"]))
+    if jwks_response.status_code >= 400:
+        raise AuthenticationError("OIDC JWKS 获取失败，请稍后重试。")
+
+    try:
+        jwks_payload = jwks_response.json()
+    except ValueError as exc:
+        raise AuthenticationError("OIDC JWKS 返回了无效响应。") from exc
+
+    signing_key = _extract_workspace_oidc_signing_key(
+        jwks_payload,
+        key_id=str(unverified_header.get("kid") or "") or None,
+    )
+    try:
+        claims = jwt.decode(
+            id_token,
+            key=signing_key,
+            algorithms=[algorithm],
+            audience=client_id,
+            issuer=issuer,
+            options={"require": ["sub", "iss", "aud", "exp"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise AuthenticationError("OIDC id_token 校验失败，请重新登录。") from exc
+
+    if claims.get("nonce") != expected_nonce:
+        raise AuthenticationError("OIDC nonce 校验失败，请重新发起登录。")
+    if not isinstance(claims.get("sub"), str) or not str(claims.get("sub") or "").strip():
+        raise AuthenticationError("OIDC id_token 缺少 subject。")
+    return claims
+
+
+def create_workspace_access_session(
+    db: Session,
+    *,
+    workspace: WorkspaceRecord,
+    user: UserAccountRecord,
+    member: WorkspaceMemberRecord,
+) -> WorkspaceAccessContext:
+    user.last_login_at = _utc_now()
+    session_record = AuthSessionRecord(
+        token=_generate_session_token(),
+        user_id=user.id,
+        workspace_id=workspace.id,
+        expires_at=_utc_now() + SESSION_TTL,
+    )
+    db.add(session_record)
+    db.flush()
+    return WorkspaceAccessContext(
+        session=session_record,
+        workspace=workspace,
+        user=user,
+        member=member,
+    )
+
+
 def ensure_default_workspace_access_seed(db: Session) -> None:
     workspace = db.get(WorkspaceRecord, DEFAULT_WORKSPACE_ID)
     if workspace is None:
@@ -955,21 +1176,133 @@ def authenticate_workspace_user(
     if member is None or workspace is None:
         raise AuthenticationError("当前账号尚未加入默认工作空间。")
 
-    user.last_login_at = _utc_now()
-    session_record = AuthSessionRecord(
-        token=_generate_session_token(),
-        user_id=user.id,
-        workspace_id=workspace.id,
-        expires_at=_utc_now() + SESSION_TTL,
-    )
-    db.add(session_record)
-    db.flush()
-    return WorkspaceAccessContext(
-        session=session_record,
+    return create_workspace_access_session(
+        db,
         workspace=workspace,
         user=user,
         member=member,
     )
+
+
+def build_workspace_oidc_authorization_redirect(
+    *,
+    next_path: str | None,
+    client_factory: Callable[[], httpx.Client] | None = None,
+) -> tuple[str, str]:
+    settings = _require_workspace_oidc_settings()
+    issuer = settings.oidc_issuer.strip().rstrip("/")
+    normalized_next_path = _normalize_workspace_oidc_next_path(next_path)
+    http_client_factory = client_factory or default_workspace_oidc_http_client_factory
+    with http_client_factory() as client:
+        discovery_payload = _fetch_workspace_oidc_discovery_document(
+            client=client,
+            issuer=issuer,
+        )
+
+    nonce = secrets.token_urlsafe(16)
+    state_token = _encode_signed_payload(
+        {
+            "purpose": TOKEN_PURPOSE_OIDC_STATE,
+            "provider": _normalize_external_identity_provider(settings.oidc_provider),
+            "next": normalized_next_path,
+            "nonce": nonce,
+            "exp": int((_utc_now() + OIDC_STATE_TTL).timestamp()),
+        }
+    )
+    authorization_url = str(
+        httpx.URL(str(discovery_payload["authorization_endpoint"])).copy_merge_params(
+            {
+                "response_type": "code",
+                "client_id": settings.oidc_client_id.strip(),
+                "redirect_uri": settings.oidc_redirect_uri.strip(),
+                "scope": settings.oidc_scopes.strip() or "openid profile email",
+                "state": state_token,
+                "nonce": nonce,
+            }
+        )
+    )
+    return authorization_url, state_token
+
+
+def authenticate_workspace_oidc_callback(
+    db: Session,
+    *,
+    code: str | None,
+    state_token: str | None,
+    state_cookie_token: str | None,
+    client_factory: Callable[[], httpx.Client] | None = None,
+) -> tuple[WorkspaceAccessContext, WorkspaceIssuedAuthTokens, str]:
+    normalized_code = (code or "").strip()
+    normalized_state_token = (state_token or "").strip()
+    normalized_state_cookie = (state_cookie_token or "").strip()
+    if not normalized_code:
+        raise AuthenticationError("OIDC authorization code 缺失。")
+    if (
+        not normalized_state_token
+        or not normalized_state_cookie
+        or not hmac.compare_digest(normalized_state_token, normalized_state_cookie)
+    ):
+        raise AuthenticationError("OIDC state 无效，请重新发起登录。")
+
+    next_path, expected_nonce = _decode_workspace_oidc_state_token(normalized_state_token)
+    settings = _require_workspace_oidc_settings()
+    issuer = settings.oidc_issuer.strip().rstrip("/")
+    http_client_factory = client_factory or default_workspace_oidc_http_client_factory
+    with http_client_factory() as client:
+        discovery_payload = _fetch_workspace_oidc_discovery_document(
+            client=client,
+            issuer=issuer,
+        )
+        token_response = client.post(
+            str(discovery_payload["token_endpoint"]),
+            data={
+                "grant_type": "authorization_code",
+                "code": normalized_code,
+                "redirect_uri": settings.oidc_redirect_uri.strip(),
+                "client_id": settings.oidc_client_id.strip(),
+                "client_secret": settings.oidc_client_secret.strip(),
+            },
+            headers={"Accept": "application/json"},
+        )
+        if token_response.status_code >= 400:
+            raise AuthenticationError("OIDC token exchange 失败，请重新登录。")
+        try:
+            token_payload = token_response.json()
+        except ValueError as exc:
+            raise AuthenticationError("OIDC token 响应无效。") from exc
+
+        id_token = token_payload.get("id_token")
+        if not isinstance(id_token, str) or not id_token.strip():
+            raise AuthenticationError("OIDC token 响应缺少 id_token。")
+        identity_claims = _decode_workspace_oidc_id_token(
+            id_token,
+            client=client,
+            discovery_payload=discovery_payload,
+            issuer=issuer,
+            client_id=settings.oidc_client_id.strip(),
+            expected_nonce=expected_nonce,
+        )
+
+    email = identity_claims.get("email")
+    email_verified = identity_claims.get("email_verified") is True or (
+        isinstance(identity_claims.get("email_verified"), str)
+        and identity_claims.get("email_verified", "").strip().lower() == "true"
+    )
+    resolved_identity = resolve_external_identity_binding(
+        db,
+        provider=settings.oidc_provider,
+        subject=str(identity_claims["sub"]),
+        email=str(email).strip().lower() if isinstance(email, str) else None,
+        email_verified=email_verified,
+    )
+    access_context = create_workspace_access_session(
+        db,
+        workspace=resolved_identity.workspace,
+        user=resolved_identity.user,
+        member=resolved_identity.member,
+    )
+    tokens = issue_workspace_auth_tokens(access_context)
+    return access_context, tokens, next_path
 
 
 def issue_workspace_auth_tokens(

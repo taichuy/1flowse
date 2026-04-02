@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -19,14 +20,17 @@ from app.services.workspace_access import (
     CsrfValidationError,
     WorkspaceAccessContext,
     WorkspaceIssuedAuthTokens,
+    authenticate_workspace_oidc_callback,
     authenticate_workspace_user,
     build_console_route_permission_matrix,
+    build_workspace_oidc_authorization_redirect,
     ensure_console_route_access,
     get_workspace_access_context,
     get_workspace_access_cookie_name,
     get_workspace_auth_cookie_contract,
     get_workspace_csrf_cookie_name,
     get_workspace_csrf_header_name,
+    get_workspace_oidc_state_cookie_name,
     get_workspace_refresh_cookie_name,
     issue_workspace_auth_tokens,
     refresh_workspace_session,
@@ -36,6 +40,7 @@ from app.services.workspace_access import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+OIDC_STATE_COOKIE_MAX_AGE_SECONDS = 600
 
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
@@ -179,6 +184,26 @@ def _clear_auth_cookies(response: Response) -> None:
         )
 
 
+def _clear_oidc_state_cookie(response: Response) -> None:
+    cookie_contract = get_workspace_auth_cookie_contract()
+    response.delete_cookie(
+        key=get_workspace_oidc_state_cookie_name(),
+        path="/",
+        secure=cookie_contract.secure,
+        httponly=True,
+        samesite=cookie_contract.same_site,
+    )
+
+
+def _build_oidc_failure_redirect(error_code: str) -> RedirectResponse:
+    response = RedirectResponse(
+        url=f"/login?error={error_code}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    _clear_oidc_state_cookie(response)
+    return response
+
+
 def get_authenticated_access_context(
     request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
@@ -272,6 +297,68 @@ def login(
     db.commit()
     _apply_auth_cookies(response, tokens)
     return _serialize_access_context(access_context, tokens=tokens)
+
+
+@router.get("/oidc/start")
+def start_oidc_login(
+    next_path: str | None = Query(default=None, alias="next"),
+) -> RedirectResponse:
+    try:
+        authorization_url, state_token = build_workspace_oidc_authorization_redirect(
+            next_path=next_path,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    response = RedirectResponse(
+        url=authorization_url,
+        status_code=status.HTTP_302_FOUND,
+    )
+    _set_cookie(
+        response,
+        name=get_workspace_oidc_state_cookie_name(),
+        value=state_token,
+        max_age=OIDC_STATE_COOKIE_MAX_AGE_SECONDS,
+        http_only=True,
+    )
+    return response
+
+
+@router.get("/callback")
+def oidc_callback(
+    request: Request,
+    response: Response,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+    db: Session = Depends(get_db),
+) -> Response:
+    if error:
+        return _build_oidc_failure_redirect(str(error).strip() or "oidc_callback_failed")
+    _ = error_description
+    try:
+        access_context, tokens, next_path = authenticate_workspace_oidc_callback(
+            db,
+            code=code,
+            state_token=state,
+            state_cookie_token=request.cookies.get(get_workspace_oidc_state_cookie_name()),
+        )
+    except AuthenticationError:
+        db.rollback()
+        return _build_oidc_failure_redirect("oidc_callback_failed")
+
+    db.commit()
+    redirect_response = RedirectResponse(
+        url=next_path,
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    _clear_oidc_state_cookie(redirect_response)
+    _apply_auth_cookies(redirect_response, tokens)
+    return redirect_response
 
 
 @router.get("/session", response_model=AuthSessionResponse)
