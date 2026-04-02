@@ -118,26 +118,16 @@ export function useWorkflowEditorGraph({
   setMessage,
   setMessageTone
 }: UseWorkflowEditorGraphOptions) {
-  const initialGraph = useMemo(
-    () => workflowDefinitionToReactFlow(nodeCatalog, workflow.definition),
+  const initialDocumentState = useMemo(
+    () => createWorkflowEditorCanonicalState(nodeCatalog, workflow.definition),
     [nodeCatalog, workflow.definition]
   );
-  const initialDocumentDefinition = useMemo(
-    () =>
-      buildWorkflowEditorDefinition({
-        nodes: initialGraph.nodes,
-        edges: initialGraph.edges,
-        workflowVariables: Array.isArray(workflow.definition.variables)
-          ? workflow.definition.variables
-          : [],
-        workflowPublish: Array.isArray(workflow.definition.publish) ? workflow.definition.publish : []
-      }),
-    [initialGraph.edges, initialGraph.nodes, workflow.definition.publish, workflow.definition.variables]
-  );
+  const initialGraph = initialDocumentState.graph;
+  const initialDocumentDefinition = initialDocumentState.definition;
   const [workflowName, setWorkflowName] = useState(workflow.name);
   const [persistedWorkflowName, setPersistedWorkflowName] = useState(workflow.name);
   const [workflowVersion, setWorkflowVersion] = useState(workflow.version);
-  const [persistedDefinition, setPersistedDefinition] = useState(workflow.definition);
+  const [persistedDefinitionState, setPersistedDefinitionState] = useState(initialDocumentDefinition);
   const [documentHistory, setDocumentHistory] = useState(() =>
     createWorkflowEditorDocumentHistory(initialDocumentDefinition)
   );
@@ -184,24 +174,22 @@ export function useWorkflowEditorGraph({
     workflowName,
     persistedWorkflowName,
     currentDefinition,
-    persistedDefinition
+    persistedDefinition: persistedDefinitionState
   });
 
+  const setPersistedDefinition = (definition: WorkflowDefinition) => {
+    setPersistedDefinitionState(createWorkflowEditorCanonicalState(nodeCatalog, definition).definition);
+  };
+
   useEffect(() => {
-    const nextGraph = workflowDefinitionToReactFlow(nodeCatalog, workflow.definition);
-    const nextInitialDefinition = buildWorkflowEditorDefinition({
-      nodes: nextGraph.nodes,
-      edges: nextGraph.edges,
-      workflowVariables: Array.isArray(workflow.definition.variables)
-        ? workflow.definition.variables
-        : [],
-      workflowPublish: Array.isArray(workflow.definition.publish) ? workflow.definition.publish : []
-    });
+    const nextInitialState = createWorkflowEditorCanonicalState(nodeCatalog, workflow.definition);
+    const nextGraph = nextInitialState.graph;
+    const nextInitialDefinition = nextInitialState.definition;
     skipNextHistorySyncRef.current = true;
     setWorkflowName(workflow.name);
     setPersistedWorkflowName(workflow.name);
     setWorkflowVersion(workflow.version);
-    setPersistedDefinition(workflow.definition);
+    setPersistedDefinitionState(nextInitialDefinition);
     setDocumentHistory(createWorkflowEditorDocumentHistory(nextInitialDefinition));
     resetWorkflowState(workflow.definition);
     setNodes(nextGraph.nodes);
@@ -236,6 +224,23 @@ export function useWorkflowEditorGraph({
 
   const canUndo = documentHistory.past.length > 0;
   const canRedo = documentHistory.future.length > 0;
+
+  const commitWorkflowDraftUpdate = (
+    nextDefinition: WorkflowDefinition,
+    applyUpdate: () => void
+  ) => {
+    const currentDefinitionSignature = serializeWorkflowEditorDefinition(currentDefinitionRef.current);
+    const nextDefinitionSignature = serializeWorkflowEditorDefinition(nextDefinition);
+
+    if (currentDefinitionSignature !== nextDefinitionSignature) {
+      skipNextHistorySyncRef.current = true;
+      setDocumentHistory((currentHistory) =>
+        recordWorkflowEditorDocumentHistory(currentHistory, nextDefinition)
+      );
+    }
+
+    applyUpdate();
+  };
 
   const undo = () => {
     const nextHistory = undoWorkflowEditorDocumentHistory(documentHistory);
@@ -341,7 +346,7 @@ export function useWorkflowEditorGraph({
     setWorkflowVersion,
     persistedWorkflowName,
     setPersistedWorkflowName,
-    persistedDefinition,
+    persistedDefinition: persistedDefinitionState,
     setPersistedDefinition,
     nodes,
     setNodes,
@@ -378,8 +383,53 @@ export function useWorkflowEditorGraph({
     handleDeleteSelectedNode: nodeActions.handleDeleteSelectedNode,
     handleDeleteSelectedEdge,
     updateSelectedEdge,
-    updateWorkflowVariables: workflowState.updateWorkflowVariables,
-    updateWorkflowPublish: workflowState.updateWorkflowPublish
+    updateWorkflowVariables: (
+      nextVariables: Array<Record<string, unknown>>,
+      options?: { successMessage?: string }
+    ) => {
+      const normalizedWorkflowVariables = cloneWorkflowEditorDraftRecords(nextVariables);
+
+      commitWorkflowDraftUpdate(
+        applyWorkflowEditorDraftPatch(currentDefinitionRef.current, {
+          variables: normalizedWorkflowVariables
+        }),
+        () => workflowState.updateWorkflowVariables(normalizedWorkflowVariables, options)
+      );
+    },
+    updateWorkflowPublish: (
+      nextPublish: Array<Record<string, unknown>>,
+      options?: { successMessage?: string }
+    ) => {
+      const normalizedWorkflowPublish = cloneWorkflowEditorDraftRecords(nextPublish);
+
+      commitWorkflowDraftUpdate(
+        applyWorkflowEditorDraftPatch(currentDefinitionRef.current, {
+          publish: normalizedWorkflowPublish
+        }),
+        () => workflowState.updateWorkflowPublish(normalizedWorkflowPublish, options)
+      );
+    }
+  };
+}
+
+function createWorkflowEditorCanonicalState(
+  nodeCatalog: WorkflowNodeCatalogItem[],
+  definition: WorkflowDefinition
+) {
+  const graph = workflowDefinitionToReactFlow(nodeCatalog, definition);
+
+  return {
+    graph,
+    definition: buildWorkflowEditorDefinition({
+      nodes: graph.nodes,
+      edges: graph.edges,
+      workflowVariables: Array.isArray(definition.variables)
+        ? cloneWorkflowEditorDraftRecords(definition.variables)
+        : [],
+      workflowPublish: Array.isArray(definition.publish)
+        ? cloneWorkflowEditorDraftRecords(definition.publish)
+        : []
+    })
   };
 }
 
@@ -395,6 +445,27 @@ function buildWorkflowEditorDefinition(options: {
     variables: options.workflowVariables,
     publish: options.workflowPublish
   });
+}
+
+function applyWorkflowEditorDraftPatch(
+  definition: WorkflowDefinition,
+  patch: Partial<Pick<WorkflowDefinition, "variables" | "publish">>
+) {
+  const nextDefinition = cloneWorkflowDefinition(definition);
+
+  if (patch.variables) {
+    nextDefinition.variables = cloneWorkflowEditorDraftRecords(patch.variables);
+  }
+
+  if (patch.publish) {
+    nextDefinition.publish = cloneWorkflowEditorDraftRecords(patch.publish);
+  }
+
+  return nextDefinition;
+}
+
+function cloneWorkflowEditorDraftRecords(records: Array<Record<string, unknown>>) {
+  return records.map((record) => ({ ...record }));
 }
 
 function cloneWorkflowDefinition(definition: WorkflowDefinition) {
