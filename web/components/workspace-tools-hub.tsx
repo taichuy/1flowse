@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, Card, Empty, Select, Tag, Typography } from "antd";
+import { Button, Card, Empty, Modal, Select, Tag, Typography } from "antd";
 
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import type {
@@ -28,6 +28,21 @@ const SPOTLIGHT_NODE_TYPES = [
 
 type ToolSourceFilter = "native" | "dify";
 
+type WorkspaceToolsDetailState =
+  | {
+      kind: "node";
+      nodeType: string;
+    }
+  | {
+      kind: "provider";
+      providerId: string;
+    }
+  | {
+      kind: "tool";
+      toolId: string;
+      toolSource: ToolSourceFilter;
+    };
+
 type WorkspaceToolsHubProps = {
   handoff: {
     returnHref: string | null;
@@ -47,6 +62,7 @@ type WorkspaceToolsHubProps = {
   pluginAdapters: PluginAdapterRegistryItem[];
   pluginGovernanceHref: string;
   initialToolSource?: ToolSourceFilter;
+  initialDetailState?: WorkspaceToolsDetailState | null;
 };
 
 const TOOL_SOURCE_OPTIONS = [
@@ -71,15 +87,203 @@ export function WorkspaceToolsHub({
   pluginTools,
   pluginAdapters,
   pluginGovernanceHref,
-  initialToolSource = "native"
+  initialToolSource = "native",
+  initialDetailState = null
 }: WorkspaceToolsHubProps) {
   const [toolSource, setToolSource] = useState<ToolSourceFilter>(initialToolSource);
+  const [detailState, setDetailState] = useState<WorkspaceToolsDetailState | null>(
+    initialDetailState
+  );
   const resolvedProviderCatalog = useMemo(
     () => resolveNativeModelProviderCatalog(providerCatalog),
     [providerCatalog]
   );
   const spotlightNodes = useMemo(() => buildSpotlightNodeCatalog(nodeCatalog), [nodeCatalog]);
   const toolRegistryItems = toolSource === "native" ? nativeTools : pluginTools;
+  const detailView = useMemo(() => {
+    if (!detailState) {
+      return null;
+    }
+
+    if (detailState.kind === "node") {
+      const item = spotlightNodes.find((candidate) => candidate.type === detailState.nodeType);
+      if (!item) {
+        return null;
+      }
+
+      return {
+        kind: "node" as const,
+        id: item.type,
+        title: `${item.label} 节点详情`,
+        summary: item.description,
+        tags: [
+          { label: item.type },
+          { label: item.capabilityGroup, color: "geekblue" },
+          {
+            label: item.bindingRequired ? "需要绑定" : "原生语义",
+            color: item.bindingRequired ? "gold" : "blue"
+          },
+          {
+            label: item.supportStatus === "available" ? "可编排" : "规划中",
+            color: item.supportStatus === "available" ? "success" : "default"
+          }
+        ],
+        notes: [item.supportSummary],
+        actions: [
+          handoff.returnHref
+            ? {
+                href: handoff.returnHref,
+                label: "回到编辑器添加节点",
+                type: "primary" as const
+              }
+            : {
+                href: "/workspace",
+                label: "返回工作台",
+                type: "default" as const
+              }
+        ]
+      };
+    }
+
+    if (detailState.kind === "provider") {
+      const provider = resolvedProviderCatalog.find(
+        (candidate) => candidate.id === detailState.providerId
+      );
+      if (!provider) {
+        return null;
+      }
+
+      const configs = providerConfigs.filter((item) => item.provider_id === provider.id);
+
+      return {
+        kind: "provider" as const,
+        id: provider.id,
+        title: `${provider.label} Provider 详情`,
+        summary: provider.description,
+        tags: [
+          { label: provider.id },
+          {
+            label: `默认协议 ${getModelProviderProtocolLabel(provider, provider.default_protocol)}`,
+            color: "blue"
+          },
+          {
+            label: configs.length > 0 ? `已配置 ${configs.length}` : "尚未配置",
+            color: configs.length > 0 ? "success" : "default"
+          },
+          { label: provider.credential_type, color: "purple" }
+        ],
+        notes: [
+          `默认模型：${provider.default_models.slice(0, 3).join("、") || "待团队补充"}`,
+          `支持模型类型：${provider.supported_model_types.join("、") || "未声明"}`,
+          `兼容凭据：${provider.compatible_credential_types.join("、") || provider.credential_type}`,
+          configs.length > 0
+            ? `当前团队配置：${configs.map((config) => `${config.label} · ${config.default_model}`).join("；")}`
+            : "当前没有团队配置引用这个 provider；仍可先把它作为原生 provider plugin 目录事实查看。",
+          providerRegistryState.message
+            ? `当前 registry 状态：${providerRegistryState.message}`
+            : "当前 registry 状态：目录与团队配置读取正常。"
+        ],
+        actions: [
+          providerManageHref
+            ? {
+                href: providerManageHref,
+                label: "管理 Provider Registry",
+                type: "primary" as const
+              }
+            : {
+                href: null,
+                label: "仅团队管理员可管理",
+                type: "default" as const,
+                disabled: true
+              },
+          handoff.returnHref
+            ? {
+                href: handoff.returnHref,
+                label: "回到当前编排",
+                type: "default" as const
+              }
+            : {
+                href: "/workspace",
+                label: "返回工作台",
+                type: "default" as const
+              }
+        ]
+      };
+    }
+
+    const tools = detailState.toolSource === "native" ? nativeTools : pluginTools;
+    const tool = tools.find((candidate) => candidate.id === detailState.toolId);
+    if (!tool) {
+      return null;
+    }
+
+    const runtimeBinding = readRuntimeBinding(tool.plugin_meta);
+    const boundAdapter = runtimeBinding
+      ? pluginAdapters.find((candidate) => candidate.id === runtimeBinding.provider)
+      : null;
+
+    return {
+      kind: "tool" as const,
+      id: tool.id,
+      title: `${tool.name} 工具详情`,
+      summary: tool.description || "当前目录项还没有补充描述。",
+      tags: [
+        { label: tool.id },
+        {
+          label: detailState.toolSource === "native" ? "7Flows Native" : "Dify Plugin",
+          color: detailState.toolSource === "native" ? "purple" : "cyan"
+        },
+        { label: tool.ecosystem },
+        { label: tool.source },
+        ...(tool.default_execution_class ? [{ label: tool.default_execution_class }] : []),
+        ...(tool.sensitivity_level
+          ? [{ label: tool.sensitivity_level, color: "gold" }]
+          : [])
+      ],
+      notes: [
+        `输入字段：${getInputFieldNames(tool.input_schema).join("、") || "未声明"}`,
+        `调用状态：${tool.callable ? "callable" : "只读目录"}`,
+        runtimeBinding
+          ? `compat runtime：${runtimeBinding.provider} / ${runtimeBinding.plugin_id} / ${runtimeBinding.tool_name}`
+          : "当前工具不依赖 compat runtime 绑定。",
+        boundAdapter
+          ? `当前 adapter：${boundAdapter.endpoint} · ${boundAdapter.status}`
+          : detailState.toolSource === "dify"
+            ? "当前没有命中可用 adapter 详情；保持 fail-closed，不伪造 runtime 健康度。"
+            : "当前工具无需 adapter 桥接。"
+      ],
+      actions: [
+        {
+          href: pluginGovernanceHref,
+          label: "查看模板与插件治理",
+          type: "default" as const
+        },
+        handoff.returnHref
+          ? {
+              href: handoff.returnHref,
+              label: "回到当前编排绑定工具",
+              type: "primary" as const
+            }
+          : {
+              href: "/workspace",
+              label: "返回工作台",
+              type: "default" as const
+            }
+      ]
+    };
+  }, [
+    detailState,
+    handoff.returnHref,
+    nativeTools,
+    pluginAdapters,
+    pluginGovernanceHref,
+    pluginTools,
+    providerConfigs,
+    providerManageHref,
+    providerRegistryState.message,
+    resolvedProviderCatalog,
+    spotlightNodes
+  ]);
 
   return (
     <div className="workspace-tools-hub" data-component="workspace-tools-hub" data-tool-source={toolSource}>
@@ -158,6 +362,16 @@ export function WorkspaceToolsHub({
                   </Tag>
                 </div>
                 <Paragraph className="workspace-tools-card-note">{item.supportSummary}</Paragraph>
+                <div className="workspace-tools-action-row">
+                  <Button
+                    data-component="workspace-tools-detail-trigger"
+                    data-detail-kind="node"
+                    onClick={() => setDetailState({ kind: "node", nodeType: item.type })}
+                    size="small"
+                  >
+                    查看详情
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>
@@ -231,6 +445,16 @@ export function WorkspaceToolsHub({
                     当前没有团队配置引用这个 provider；仍可先把它作为原生 provider plugin 目录事实查看。
                   </Paragraph>
                 )}
+                <div className="workspace-tools-action-row">
+                  <Button
+                    data-component="workspace-tools-detail-trigger"
+                    data-detail-kind="provider"
+                    onClick={() => setDetailState({ kind: "provider", providerId: provider.id })}
+                    size="small"
+                  >
+                    查看详情
+                  </Button>
+                </div>
               </Card>
             );
           })}
@@ -355,12 +579,71 @@ export function WorkspaceToolsHub({
                       compat runtime：{provider.provider} / {provider.plugin_id} / {provider.tool_name}
                     </Paragraph>
                   ) : null}
+                  <div className="workspace-tools-action-row">
+                    <Button
+                      data-component="workspace-tools-detail-trigger"
+                      data-detail-kind="tool"
+                      onClick={() =>
+                        setDetailState({
+                          kind: "tool",
+                          toolId: tool.id,
+                          toolSource
+                        })
+                      }
+                      size="small"
+                    >
+                      查看详情
+                    </Button>
+                  </div>
                 </Card>
               );
             })}
           </div>
         )}
       </section>
+
+      <Modal
+        destroyOnClose
+        footer={null}
+        onCancel={() => setDetailState(null)}
+        open={Boolean(detailView)}
+        title={detailView?.title ?? "详情"}
+      >
+        {detailView ? (
+          <div
+            data-component="workspace-tools-detail-modal"
+            data-detail-id={detailView.id}
+            data-detail-kind={detailView.kind}
+          >
+            <Paragraph className="workspace-tools-card-copy">{detailView.summary}</Paragraph>
+            <div className="workspace-tools-tag-row">
+              {detailView.tags.map((tag) => (
+                <Tag color={tag.color} key={`${detailView.kind}-${detailView.id}-${tag.label}`}>
+                  {tag.label}
+                </Tag>
+              ))}
+            </div>
+            {detailView.notes.map((note) => (
+              <Paragraph className="workspace-tools-card-note" key={`${detailView.id}-${note}`}>
+                {note}
+              </Paragraph>
+            ))}
+            <div className="workspace-tools-action-row" data-component="workspace-tools-detail-actions">
+              {detailView.actions.map((action) =>
+                action.href ? (
+                  <Button href={action.href} key={`${detailView.id}-${action.label}`} type={action.type}>
+                    {action.label}
+                  </Button>
+                ) : (
+                  <Button disabled key={`${detailView.id}-${action.label}`} type={action.type}>
+                    {action.label}
+                  </Button>
+                )
+              )}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

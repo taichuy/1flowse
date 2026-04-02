@@ -1,7 +1,34 @@
 import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("antd", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("antd")>();
+  const { createElement: createReactElement } = await import("react");
+
+  return {
+    ...actual,
+    Modal: ({ open, title, children }: { open?: boolean; title?: unknown; children?: unknown }) =>
+      open
+        ? createReactElement(
+            "section",
+            { "data-component": "workspace-tools-detail-modal-shell" },
+            title
+              ? createReactElement(
+                  "div",
+                  {
+                    "data-component": "workspace-tools-detail-modal-title",
+                    key: "title"
+                  },
+                  title as never
+                )
+              : null,
+            children as never
+          )
+        : null
+  };
+});
 
 import { WorkspaceToolsHub } from "@/components/workspace-tools-hub";
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
@@ -181,16 +208,54 @@ describe("WorkspaceToolsHub", () => {
     expect(html).toContain("OpenAI Production · gpt-4.1");
     expect(html).toContain("Native Search");
     expect(html).toContain("回到当前编排");
+    expect(html).toContain("查看详情");
     expect(html).not.toContain("Dify Search");
   });
 
-  it("can render Dify plugin registry filtering with adapter health", () => {
+  it("can render a node detail modal without changing the native tool filter", () => {
     const html = renderToStaticMarkup(
       createElement(WorkspaceToolsHub, {
         handoff: {
-          returnHref: null,
-          workflowId: null,
-          workflowSurfaceLabel: null
+          returnHref: "/workflows/workflow-1/editor",
+          workflowId: "workflow-1",
+          workflowSurfaceLabel: "编排"
+        },
+        nodeCatalog,
+        providerCatalog,
+        providerConfigs,
+        providerRegistryState: {
+          kind: "ready",
+          message: null
+        },
+        providerManageHref: "/workspace/settings/providers",
+        nativeTools,
+        pluginTools,
+        pluginAdapters,
+        pluginGovernanceHref: "/workspace-starters",
+        initialDetailState: {
+          kind: "node",
+          nodeType: "tool"
+        }
+      })
+    );
+
+    expect(html).toContain('data-component="workspace-tools-detail-modal"');
+    expect(html).toContain('data-detail-kind="node"');
+    expect(html).toContain('data-detail-id="tool"');
+    expect(html).toContain("Tool 节点详情");
+    expect(html).toContain("回到编辑器添加节点");
+    expect(html).toContain('data-tool-source="native"');
+    expect(html).toContain("Native Search");
+    expect(html).not.toContain("Dify Search");
+  });
+
+  it("can render Dify plugin registry filtering with adapter health and tool detail modal", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceToolsHub, {
+        handoff: {
+          returnHref: "/workflows/workflow-1/editor",
+          workflowId: "workflow-1",
+          workflowSurfaceLabel: "编排"
         },
         nodeCatalog,
         providerCatalog,
@@ -204,19 +269,28 @@ describe("WorkspaceToolsHub", () => {
         pluginTools,
         pluginAdapters,
         pluginGovernanceHref: "/workspace-starters",
-        initialToolSource: "dify"
+        initialToolSource: "dify",
+        initialDetailState: {
+          kind: "tool",
+          toolId: "compat:dify:plugin:demo/search",
+          toolSource: "dify"
+        }
       })
     );
 
     expect(html).toContain('data-tool-source="dify"');
+    expect(html).toContain('data-detail-kind="tool"');
+    expect(html).toContain('data-detail-id="compat:dify:plugin:demo/search"');
     expect(html).toContain("Dify Search");
+    expect(html).toContain("Dify Search 工具详情");
     expect(html).toContain("dify-default");
     expect(html).toContain("mode translate");
     expect(html).toContain("compat runtime：dify-default / demo-plugin / search");
+    expect(html).toContain("回到当前编排绑定工具");
     expect(html).not.toContain("Native Search");
   });
 
-  it("shows restricted provider access honestly while keeping provider facts visible", () => {
+  it("shows restricted provider access honestly while keeping provider detail facts visible", () => {
     const html = renderToStaticMarkup(
       createElement(WorkspaceToolsHub, {
         handoff: {
@@ -235,14 +309,22 @@ describe("WorkspaceToolsHub", () => {
         nativeTools,
         pluginTools,
         pluginAdapters,
-        pluginGovernanceHref: "/workspace-starters"
+        pluginGovernanceHref: "/workspace-starters",
+        initialDetailState: {
+          kind: "provider",
+          providerId: "openai"
+        }
       })
     );
 
+    expect(html).toContain('data-detail-kind="provider"');
+    expect(html).toContain('data-detail-id="openai"');
+    expect(html).toContain("OpenAI Provider 详情");
     expect(html).toContain("权限受限");
     expect(html).toContain("当前账号没有团队模型供应商配置权限。");
     expect(html).toContain("OpenAI");
     expect(html).toContain("Anthropic");
+    expect(html).toContain("默认模型：gpt-4.1、gpt-4o");
     expect(html).toContain("仅团队管理员可管理");
   });
 });
