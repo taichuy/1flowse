@@ -628,3 +628,23 @@ def test_login_rejects_invalid_password(client: TestClient) -> None:
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "邮箱或密码错误。"
+
+
+def test_login_is_rejected_when_local_password_fallback_is_disabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.workspace_access.get_settings",
+        lambda: SimpleNamespace(
+            env="production",
+            local_password_fallback_enabled=False,
+        ),
+    )
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "admin@taichuy.com", "password": "admin123"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "当前环境未开放本地密码辅助登录。"

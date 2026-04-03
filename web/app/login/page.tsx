@@ -8,14 +8,24 @@ function isEnvFlagEnabled(value: string | undefined) {
   return value?.trim().toLowerCase() === "true";
 }
 
+function resolveEnvFlag(value: string | undefined, defaultValue: boolean) {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  return isEnvFlagEnabled(value);
+}
+
 export default async function LoginPage() {
   const session = await getServerAuthSession();
   if (session) {
     redirect("/workspace");
   }
 
-  const oidcEnabled = isEnvFlagEnabled(process.env.SEVENFLOWS_OIDC_ENABLED);
-  const allowLocalPasswordFallback = process.env.NODE_ENV !== "production";
+  const oidcEnabled = resolveEnvFlag(process.env.SEVENFLOWS_OIDC_ENABLED, true);
+  const allowLocalPasswordFallback = resolveEnvFlag(
+    process.env.SEVENFLOWS_LOCAL_PASSWORD_FALLBACK_ENABLED,
+    process.env.NODE_ENV !== "production"
+  );
 
   return (
     <main className="login-shell login-shell-dify">
@@ -42,7 +52,7 @@ export default async function LoginPage() {
             <p className="workspace-muted workspace-copy-wide">
               {oidcEnabled
                 ? "浏览器统一走同源 /api/auth/*，完成 ZITADEL 登录后回到工作台；授权继续只由 backend can_access 收口。"
-                : "当前环境尚未启用 ZITADEL OIDC；开发环境可显式切到本地密码辅助入口，正式环境仍应统一走同源 /api/auth/*。"}
+                : "当前环境显式关闭了 ZITADEL OIDC 主入口；仅保留本地密码辅助入口用于 local-first 联调，正式环境仍应统一走同源 /api/auth/*。"}
             </p>
             <div className="login-stage-fact-list" aria-label="Workspace 登录能力">
               <article className="login-stage-fact-card">
@@ -67,11 +77,11 @@ export default async function LoginPage() {
           <section className="login-card login-card-dify">
             <div className="login-copy">
               <p className="workspace-eyebrow">Sign in</p>
-              <h2>{oidcEnabled ? "继续使用 ZITADEL 登录" : "选择当前环境可用的登录入口"}</h2>
+              <h2>{oidcEnabled ? "继续使用 ZITADEL 登录" : "使用本地开发辅助入口"}</h2>
               <p className="workspace-muted">
                 {oidcEnabled
                   ? "浏览器会先跳到同源 OIDC start，再由 backend callback 发放现有 auth session。"
-                  : "当前页面会诚实暴露开发环境辅助入口，不再把本地默认管理员密码当作主视觉。"}
+                  : "当前页面只暴露显式开启的开发辅助入口，不再把本地默认管理员密码当作正式登录主路径。"}
               </p>
             </div>
             <WorkspaceLoginForm

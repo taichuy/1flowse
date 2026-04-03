@@ -17,7 +17,7 @@ type WorkspaceLoginFormProps = {
 };
 
 export function WorkspaceLoginForm({
-  oidcEnabled = false,
+  oidcEnabled = true,
   allowLocalPasswordFallback = false
 }: WorkspaceLoginFormProps) {
   const router = useRouter();
@@ -115,7 +115,8 @@ export function WorkspaceLoginForm({
           <div>
             <p className="login-credential-label">开发环境辅助入口</p>
             <p className="login-hint">
-              当前环境未开启 ZITADEL OIDC；仅在 local-first 开发时使用本地密码进入{nextLabel}。
+              当前环境显式关闭了 ZITADEL OIDC 主入口；仅在 local-first 开发时使用本地密码进入
+              {nextLabel}。
             </p>
           </div>
         </section>
@@ -123,7 +124,7 @@ export function WorkspaceLoginForm({
       <p className="login-helper-copy">
         {oidcEnabled
           ? `登录完成后将回到 ${nextLabel}；浏览器与 SSR 继续共用同源 /api/auth/* 会话链。`
-          : `当前环境将先使用本地开发密码进入 ${nextLabel}；正式环境仍应切回同源 OIDC。`}
+          : `当前环境将通过本地开发密码进入 ${nextLabel}；正式环境仍应切回同源 OIDC。`}
       </p>
       {resolvedMessage ? (
         <p className={`workspace-inline-message ${resolvedMessageTone === "error" ? "error" : "idle"}`}>
@@ -185,7 +186,7 @@ export function WorkspaceLoginForm({
       ) : null}
       {!oidcEnabled && !allowLocalPasswordFallback ? (
         <p className="workspace-inline-message error">
-          当前环境未启用 ZITADEL OIDC，也没有开放本地密码辅助入口。
+          当前环境关闭了 OIDC 主入口，也没有开放本地密码辅助入口。
         </p>
       ) : null}
     </div>

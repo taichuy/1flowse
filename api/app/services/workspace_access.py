@@ -227,6 +227,13 @@ def _normalize_external_identity_subject(subject: str) -> str:
     return normalized
 
 
+def is_workspace_local_password_fallback_enabled() -> bool:
+    settings = get_settings()
+    if settings.local_password_fallback_enabled is not None:
+        return settings.local_password_fallback_enabled
+    return settings.env.strip().lower() in {"local", "test", "development"}
+
+
 def _auth_cookie_secure() -> bool:
     return get_settings().env.strip().lower() not in {"local", "test", "development"}
 
@@ -538,7 +545,8 @@ def build_console_route_access_policy_matrix() -> list[ConsoleRouteAccessPolicy]
             route="/api/auth/login",
             access_level="guest",
             methods=["POST"],
-            description="访客登录入口，签发 access/refresh/csrf 三类令牌。",
+            description="本地密码辅助登录入口，仅在开发环境或显式开启 fallback 时可用。",
+            expose_in_contract=False,
         ),
         _build_route_access_policy(
             route="/api/auth/oidc/start",

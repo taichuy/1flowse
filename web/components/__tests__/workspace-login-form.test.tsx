@@ -49,7 +49,7 @@ describe("WorkspaceLoginForm", () => {
     );
 
     expect(html).toContain("开发环境辅助入口");
-    expect(html).toContain("当前环境未开启 ZITADEL OIDC");
+    expect(html).toContain("当前环境显式关闭了 ZITADEL OIDC 主入口");
     expect(html).toContain("使用本地密码进入");
     expect(html).toContain('name="email"');
     expect(html).toContain('name="password"');

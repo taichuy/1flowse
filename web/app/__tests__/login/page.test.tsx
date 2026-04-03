@@ -10,6 +10,7 @@ import { getServerAuthSession } from "@/lib/server-workspace-access";
 Object.assign(globalThis, { React });
 
 const originalOidcEnabled = process.env.SEVENFLOWS_OIDC_ENABLED;
+const originalLocalPasswordFallbackEnabled = process.env.SEVENFLOWS_LOCAL_PASSWORD_FALLBACK_ENABLED;
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
@@ -48,19 +49,25 @@ vi.mock("@/lib/server-workspace-access", () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   delete process.env.SEVENFLOWS_OIDC_ENABLED;
+  delete process.env.SEVENFLOWS_LOCAL_PASSWORD_FALLBACK_ENABLED;
 });
 
 afterAll(() => {
   if (originalOidcEnabled === undefined) {
     delete process.env.SEVENFLOWS_OIDC_ENABLED;
+  } else {
+    process.env.SEVENFLOWS_OIDC_ENABLED = originalOidcEnabled;
+  }
+
+  if (originalLocalPasswordFallbackEnabled === undefined) {
+    delete process.env.SEVENFLOWS_LOCAL_PASSWORD_FALLBACK_ENABLED;
     return;
   }
-  process.env.SEVENFLOWS_OIDC_ENABLED = originalOidcEnabled;
+  process.env.SEVENFLOWS_LOCAL_PASSWORD_FALLBACK_ENABLED = originalLocalPasswordFallbackEnabled;
 });
 
 describe("LoginPage", () => {
-  it("renders the same-origin oidc login shell when the environment enables oidc", async () => {
-    process.env.SEVENFLOWS_OIDC_ENABLED = "true";
+  it("renders the same-origin oidc login shell by default", async () => {
     vi.mocked(getServerAuthSession).mockResolvedValue(null);
 
     const html = renderToStaticMarkup(await LoginPage());
@@ -72,13 +79,14 @@ describe("LoginPage", () => {
     expect(html).toContain('data-local-password-fallback="true"');
   });
 
-  it("renders honest local fallback copy when oidc is not enabled", async () => {
+  it("renders honest local fallback copy when oidc is explicitly disabled", async () => {
+    process.env.SEVENFLOWS_OIDC_ENABLED = "false";
     vi.mocked(getServerAuthSession).mockResolvedValue(null);
 
     const html = renderToStaticMarkup(await LoginPage());
 
-    expect(html).toContain("当前环境尚未启用 ZITADEL OIDC");
-    expect(html).toContain("选择当前环境可用的登录入口");
+    expect(html).toContain("当前环境显式关闭了 ZITADEL OIDC 主入口");
+    expect(html).toContain("使用本地开发辅助入口");
     expect(html).toContain('data-oidc-enabled="false"');
   });
 

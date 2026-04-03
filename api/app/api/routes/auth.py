@@ -32,6 +32,7 @@ from app.services.workspace_access import (
     get_workspace_csrf_header_name,
     get_workspace_oidc_state_cookie_name,
     get_workspace_refresh_cookie_name,
+    is_workspace_local_password_fallback_enabled,
     issue_workspace_auth_tokens,
     refresh_workspace_session,
     resolve_console_route_access_policy,
@@ -281,6 +282,12 @@ def login(
     response: Response,
     db: Session = Depends(get_db),
 ) -> AuthSessionResponse:
+    if not is_workspace_local_password_fallback_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="当前环境未开放本地密码辅助登录。",
+        )
+
     try:
         access_context = authenticate_workspace_user(
             db,
