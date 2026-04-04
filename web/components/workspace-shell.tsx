@@ -70,7 +70,7 @@ export function WorkspaceShell({
       <header className="workspace-topbar">
         <div className={`workspace-topbar-inner ${isEditorLayout ? "workspace-topbar-inner-editor" : ""}`.trim()}>
           <div className="workspace-brand-row">
-            <Link className="workspace-brand" href="/workspace">
+            <Link className="workspace-brand" href="/workspace" suppressHydrationWarning>
               <span className="workspace-brand-mark">7</span>
               <span>Flows</span>
             </Link>
@@ -89,20 +89,30 @@ export function WorkspaceShell({
             aria-label="Workspace"
             data-component="workspace-shell-nav"
           >
-            {visibleNavigationItems.map((item) => (
-              <Link
-                aria-current={item.key === activeNav ? "page" : undefined}
-                className={`workspace-nav-link ${item.key === activeNav ? "active" : ""}`}
-                href={navigationHrefOverrides?.[item.key] ?? item.href}
-                key={item.key}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {visibleNavigationItems.map((item) => {
+              const isActive = item.key === activeNav;
+              const href = navigationHrefOverrides?.[item.key] ?? item.href;
+
+              return (
+                <Link
+                  aria-current={isActive ? "page" : undefined}
+                  className={isActive ? "workspace-nav-link active" : "workspace-nav-link"}
+                  href={href}
+                  key={item.key}
+                  suppressHydrationWarning
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
           <div className="workspace-user-actions" data-component="workspace-shell-actions">
             {primaryAction ? (
-              <Link className="workspace-primary-button compact workspace-topbar-create" href={primaryAction.href}>
+              <Link
+                className="workspace-primary-button compact workspace-topbar-create"
+                href={primaryAction.href}
+                suppressHydrationWarning
+              >
                 {primaryAction.label}
               </Link>
             ) : null}

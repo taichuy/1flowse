@@ -41,6 +41,8 @@ describe("WorkspaceShell", () => {
     expect(html).toContain('data-component="workspace-shell"');
     expect(html).toContain('data-layout="default"');
     expect(html).toContain('data-navigation-mode="all"');
+    expect(html).toContain('class="workspace-nav-link active"');
+    expect(html).not.toContain('class="workspace-nav-link "');
     expect(html).toContain("作者工作台");
     expect(html).toContain("新建应用");
     expect(html).toContain(">工具<");
