@@ -135,20 +135,18 @@ export function WorkspaceAppsWorkbench({
                 <WorkspaceCatalogHeader
                   workspaceName={workspaceName}
                   currentRoleLabel={currentRoleLabel}
-                  catalogDescription={catalogDescription}
                   workspaceSignals={workspaceSignals}
+                  focusedCreateHref={focusedCreateHref}
+                  workspaceUtilityEntry={workspaceUtilityEntry}
+                  onOpenCreate={handleOpenCreateModal}
                 />
 
                 <WorkspaceBrowseRail
-                  currentScopeSummary={currentScopeSummary}
                   modeTabs={modeTabs}
                   scopePills={scopePills}
                   statusFilters={statusFilters}
                   requestedKeyword={requestedKeyword}
                   searchState={searchState}
-                  focusedCreateHref={focusedCreateHref}
-                  workspaceUtilityEntry={workspaceUtilityEntry}
-                  onOpenCreate={handleOpenCreateModal}
                 />
               </Card>
             </section>

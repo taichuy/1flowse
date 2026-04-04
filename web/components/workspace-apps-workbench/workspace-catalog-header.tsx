@@ -1,50 +1,52 @@
-import { Card, Space, Statistic, Tag, Typography } from "antd";
+import { Button, Divider, Space, Tag, Typography } from "antd";
 
-import type { WorkspaceSignal } from "@/components/workspace-apps-workbench/shared";
+import type { WorkspaceSignal, WorkspaceQuickCreateEntry } from "@/components/workspace-apps-workbench/shared";
 
-const { Paragraph, Text, Title } = Typography;
+const { Title } = Typography;
 
 export function WorkspaceCatalogHeader({
   workspaceName,
   currentRoleLabel,
-  catalogDescription,
-  workspaceSignals
+  workspaceSignals,
+  focusedCreateHref,
+  workspaceUtilityEntry,
+  onOpenCreate
 }: {
   workspaceName: string;
   currentRoleLabel: string;
-  catalogDescription: string;
   workspaceSignals: WorkspaceSignal[];
+  focusedCreateHref: string;
+  workspaceUtilityEntry: WorkspaceQuickCreateEntry | null;
+  onOpenCreate: () => void;
 }) {
   return (
-    <section
-      className="workspace-apps-stage-header"
-      data-component="workspace-catalog-header"
-      style={{ marginBottom: 24 }}
-    >
-      <Space className="workspace-apps-stage-copy" orientation="vertical" size={16} style={{ width: "100%" }}>
-        <Space size={8} wrap>
-          <Text type="secondary">Workspace</Text>
-          <Tag color="blue">{workspaceName}</Tag>
-          <Tag color="gold">当前身份：{currentRoleLabel}</Tag>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+      <div>
+        <Space align="center" size={12} wrap>
+          <Title level={3} style={{ margin: 0 }}>应用</Title>
+          <Tag color="blue" bordered={false}>{workspaceName}</Tag>
+          <Tag color="gold" bordered={false}>{currentRoleLabel}</Tag>
         </Space>
-
-        <div className="workspace-apps-stage-title-row">
-          <div>
-            <Title level={2} style={{ margin: 0 }}>应用工作台</Title>
-            <Paragraph className="workspace-muted workspace-apps-stage-copy-text" style={{ marginTop: 8, marginBottom: 0 }}>
-              {catalogDescription}
-            </Paragraph>
-          </div>
+        <div style={{ marginTop: 12 }}>
+          <Space split={<Divider type="vertical" style={{ margin: "0 8px" }} />} size={0} wrap style={{ color: "#595959", fontSize: 14 }}>
+            {workspaceSignals.map((signal) => (
+              <span key={signal.label}>
+                {signal.label} <strong style={{ color: "#262626", marginLeft: 4 }}>{signal.value}</strong>
+              </span>
+            ))}
+          </Space>
         </div>
+      </div>
 
-        <Space size={12} wrap style={{ marginTop: 8 }}>
-          {workspaceSignals.map((signal) => (
-            <Card key={signal.label} size="small">
-              <Statistic title={signal.label} value={signal.value} />
-            </Card>
-          ))}
-        </Space>
+      <Space size={8} wrap>
+        {workspaceUtilityEntry ? (
+          <Button href={workspaceUtilityEntry.href}>{workspaceUtilityEntry.title}</Button>
+        ) : null}
+        <Button href={focusedCreateHref}>全屏创建页</Button>
+        <Button onClick={onOpenCreate} type="primary">
+          创建应用
+        </Button>
       </Space>
-    </section>
+    </div>
   );
 }

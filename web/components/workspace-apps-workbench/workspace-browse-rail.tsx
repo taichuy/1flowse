@@ -1,14 +1,11 @@
-import { Button, Card, Input, Space, Tag, Typography } from "antd";
+import { Button, Input, Space } from "antd";
 
 import type {
   WorkspaceModeTab,
-  WorkspaceQuickCreateEntry,
   WorkspaceScopePill,
   WorkspaceStatusFilter
 } from "@/components/workspace-apps-workbench/shared";
 import type { WorkspaceAppSearchFormState } from "@/lib/workspace-app-query-state";
-
-const { Paragraph, Text, Title } = Typography;
 
 function WorkspaceScopePills({ scopePills }: { scopePills: WorkspaceScopePill[] }) {
   if (scopePills.length === 0) {
@@ -27,54 +24,27 @@ function WorkspaceScopePills({ scopePills }: { scopePills: WorkspaceScopePill[] 
 }
 
 export function WorkspaceBrowseRail({
-  currentScopeSummary,
   modeTabs,
   statusFilters,
   scopePills,
   requestedKeyword,
-  searchState,
-  focusedCreateHref,
-  workspaceUtilityEntry,
-  onOpenCreate
+  searchState
 }: {
-  currentScopeSummary: string;
   modeTabs: WorkspaceModeTab[];
   statusFilters: WorkspaceStatusFilter[];
   scopePills: WorkspaceScopePill[];
   requestedKeyword: string;
   searchState: WorkspaceAppSearchFormState;
-  focusedCreateHref: string;
-  workspaceUtilityEntry: WorkspaceQuickCreateEntry | null;
-  onOpenCreate: () => void;
 }) {
   return (
     <section
       className="workspace-filter-rail workspace-filter-rail-inline"
       aria-label="Workspace filters"
       data-component="workspace-browse-rail"
-      style={{ borderTop: "1px solid #f0f0f0", paddingTop: 24 }}
+      style={{ borderTop: "1px solid #f0f0f0", paddingTop: 16 }}
     >
       <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-        <div className="workspace-filter-rail-header workspace-filter-rail-header-inline" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div className="workspace-filter-rail-copy">
-            <Title level={4} style={{ margin: 0 }}>应用目录</Title>
-            <Paragraph className="workspace-muted workspace-card-copy" style={{ margin: 0, marginTop: 4 }}>
-              {currentScopeSummary}
-            </Paragraph>
-          </div>
-
-          <Space size={8} wrap>
-            {workspaceUtilityEntry ? (
-              <Button href={workspaceUtilityEntry.href}>{workspaceUtilityEntry.title}</Button>
-            ) : null}
-            <Button href={focusedCreateHref}>全屏创建页</Button>
-            <Button onClick={onOpenCreate} type="primary">
-              创建应用
-            </Button>
-          </Space>
-        </div>
-
-        <form action="/workspace" className="workspace-search-form workspace-search-form-board workspace-search-form-studio" style={{ marginTop: 8 }}>
+        <form action="/workspace" className="workspace-search-form workspace-search-form-board workspace-search-form-studio">
           {searchState.filter ? <input name="filter" type="hidden" value={searchState.filter} /> : null}
           {searchState.mode ? <input name="mode" type="hidden" value={searchState.mode} /> : null}
           {searchState.track ? <input name="track" type="hidden" value={searchState.track} /> : null}
@@ -87,7 +57,7 @@ export function WorkspaceBrowseRail({
           </Space.Compact>
         </form>
 
-        <div className="workspace-filter-rail-body workspace-filter-rail-body-inline" style={{ marginTop: 8 }}>
+        <div className="workspace-filter-rail-body workspace-filter-rail-body-inline">
           <div className="workspace-filter-rail-group" style={{ marginBottom: 12 }}>
             <span className="workspace-filter-rail-label" style={{ display: "inline-block", width: 80, color: "#8c8c8c" }}>应用类型</span>
             <Space className="workspace-filter-rail-tab-list" aria-label="App modes" size={8} wrap>
