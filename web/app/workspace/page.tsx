@@ -48,10 +48,12 @@ type WorkspaceAppCard = {
 
 function getPreferredWorkspaceCreateStarterId(activeMode: WorkspaceAppModeId) {
   switch (activeMode) {
+    case "chatflow":
+      return "blank";
     case "agent":
       return "agent";
     case "tool_agent":
-      return "tool-enabled-agent";
+      return "tooling";
     case "sandbox":
       return "sandbox-code";
     default:
@@ -73,7 +75,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     activeTrack,
     sourceGovernanceKind: "all" as const,
     needsFollowUp: false,
-    searchQuery: requestedKeyword,
+    searchQuery: "",
     selectedTemplateId: getPreferredWorkspaceCreateStarterId(activeMode)
   };
   const workflowCreateBootstrapRequest = buildWorkflowCreateWizardBootstrapRequest(

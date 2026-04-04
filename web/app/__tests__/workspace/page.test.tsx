@@ -248,28 +248,24 @@ describe("WorkspacePage", () => {
       })
     );
 
-    expect(html).toContain("应用工作台");
+    expect(html).toContain(">应用<");
     expect(html).toContain("Workspace");
     expect(html).toContain("ChatFlow");
     expect(html).toContain("Agent");
     expect(html).toContain("Tool Agent");
     expect(html).toContain("全部 2");
     expect(html).toContain("搜索应用或治理焦点");
-    expect(html).toContain('data-component="workspace-catalog-header"');
     expect(html).toContain('data-component="workspace-browse-rail"');
     expect(html).toContain('data-component="workspace-board-overview"');
     expect(html).toContain('data-component="workspace-app-list-stage"');
     expect(html).toContain('data-component="workspace-app-card-directory"');
-    expect(html).toContain("应用目录");
     expect(html).toContain("创建应用");
     expect(html).toContain("全屏创建页");
-    expect(html).toContain("创建、筛选后直接进入 Studio。");
     expect(html).toContain("管理成员与权限");
     expect(html).toContain("全部 2 个应用");
-    expect(html).toContain("卡片目录支持分页；创建与基础编辑都收口进工作台 modal。");
+    expect(html).toContain("支持分页浏览，进入 Studio 继续编排。");
     expect(html).toContain("进入 Studio");
     expect(html).toContain("编辑基础信息");
-    expect(html).toContain("当前仅提供进入 Studio 与编辑基础信息；删除与复制待后端契约。");
     expect(html).toContain("治理优先");
     expect(html).not.toContain("workspace-app-row");
     expect(html).not.toContain("查看运行");
@@ -352,9 +348,16 @@ describe("WorkspacePage", () => {
     expect(html).toContain("ChatFlow Alpha");
     expect(html).not.toContain("Plugin Bridge");
     expect(html).toContain('href="/workspace?filter=draft&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"');
-    expect(html).toContain(
-      'href="/workflows/new?q=Alpha&amp;track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"'
-    );
+    expect(html).toContain('href="/workflows/new?track=%E5%BA%94%E7%94%A8%E6%96%B0%E5%BB%BA%E7%BC%96%E6%8E%92"');
+    expect(html).not.toContain('href="/workflows/new?q=Alpha');
+    expect(vi.mocked(getWorkflowLibrarySnapshot)).toHaveBeenCalledWith({
+      businessTrack: "应用新建编排",
+      search: "",
+      sourceGovernanceKind: undefined,
+      needsFollowUp: false,
+      includeBuiltinStarters: true,
+      includeStarterDefinitions: true
+    });
   });
 
   it("filters workspace apps by application mode before rendering cards", async () => {
@@ -410,8 +413,25 @@ describe("WorkspacePage", () => {
     expect(html).toContain("Agent Ops");
     expect(html).not.toContain("ChatFlow Alpha");
     expect(html).toContain('href="/workspace?mode=agent"');
-    expect(html).toContain("当前筛选：Agent");
     expect(html).toContain('href="/workflows/new?starter=agent"');
+  });
+
+  it("maps tool-agent quick create to the real builtin starter id", async () => {
+    vi.mocked(getServerWorkspaceContext).mockResolvedValue(buildWorkspaceContext());
+    vi.mocked(getWorkflows).mockResolvedValue([]);
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue(buildWorkflowLibrarySnapshotFixture());
+    vi.mocked(getSystemOverview).mockResolvedValue(buildSystemOverviewFixture());
+
+    const html = renderToStaticMarkup(
+      await WorkspacePage({
+        searchParams: Promise.resolve({
+          mode: "tool_agent"
+        })
+      })
+    );
+
+    expect(html).toContain("Tool Agent 0 个");
+    expect(html).toContain('href="/workflows/new?starter=tooling"');
   });
 
   it("orders workspace apps by latest update before rendering the directory rows", async () => {
@@ -508,7 +528,7 @@ describe("WorkspacePage", () => {
       })
     );
 
-    expect(html).toContain("当前筛选范围内还没有应用");
+    expect(html).toContain("当前没有应用");
     expect(html).toContain("立即创建");
     expect(html).toContain("查看 Starter");
     expect(html).toContain('href="/workflows/new"');
