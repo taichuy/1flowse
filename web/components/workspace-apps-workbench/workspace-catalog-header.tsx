@@ -1,4 +1,4 @@
-import { Button, Divider, Space, Tag, Typography } from "antd";
+import { Button, Space, Tag, Typography } from "antd";
 
 import type { WorkspaceSignal, WorkspaceQuickCreateEntry } from "@/components/workspace-apps-workbench/shared";
 
@@ -27,15 +27,6 @@ export function WorkspaceCatalogHeader({
           <Tag color="blue" bordered={false}>{workspaceName}</Tag>
           <Tag color="gold" bordered={false}>{currentRoleLabel}</Tag>
         </Space>
-        <div style={{ marginTop: 12 }}>
-          <Space split={<Divider type="vertical" style={{ margin: "0 8px" }} />} size={0} wrap style={{ color: "#595959", fontSize: 14 }}>
-            {workspaceSignals.map((signal) => (
-              <span key={signal.label}>
-                {signal.label} <strong style={{ color: "#262626", marginLeft: 4 }}>{signal.value}</strong>
-              </span>
-            ))}
-          </Space>
-        </div>
       </div>
 
       <Space size={8} wrap>
