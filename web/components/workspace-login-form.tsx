@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Alert, Button, Input, Typography, Space } from "antd";
 
 import type { PublicAuthOptionsResponse } from "@/lib/workspace-access";
 import {
   LEGACY_WORKSPACE_TEAM_SETTINGS_HREF,
   WORKSPACE_TEAM_SETTINGS_HREF
 } from "@/lib/workspace-console";
+
+const { Text, Title } = Typography;
 
 type WorkspaceLoginMethod = "password" | "oidc_redirect" | "unavailable";
 
@@ -87,7 +90,7 @@ export function WorkspaceLoginForm({ authOptions }: WorkspaceLoginFormProps) {
       router.replace(nextHref);
       router.refresh();
     } catch {
-      setMessage("无法连接认证服务，请确认 web 与 api 都已启动。");
+      setMessage("无法连接认证服务，请确认网络连接。");
       setMessageTone("error");
     } finally {
       setIsSubmitting(false);
@@ -95,91 +98,93 @@ export function WorkspaceLoginForm({ authOptions }: WorkspaceLoginFormProps) {
   };
 
   return (
-    <div className="login-form" data-component={methodMetadata.componentName}>
-      <div className="login-copy">
-        <p className="workspace-eyebrow">{methodMetadata.eyebrow}</p>
-        <h2>{methodMetadata.title}</h2>
-        <p className="workspace-muted">{methodMetadata.description}</p>
-      </div>
-
-      {primaryMethod === "oidc_redirect" ? (
-        <div className="login-form">
-          <a className="workspace-primary-button" href={oidcStartHref}>
-            {`跳转到${nextLabel}登录`}
-          </a>
-          <p className="login-helper-copy">认证完成后将自动返回{nextLabel}。</p>
+    <div data-component={methodMetadata.componentName}>
+      <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+        <div style={{ textAlign: "center" }}>
+          <Title level={4} style={{ marginBottom: 4 }}>{methodMetadata.title}</Title>
+          <Text type="secondary">{methodMetadata.description}</Text>
         </div>
-      ) : null}
 
-      {primaryMethod === "password" ? (
-        <form className="login-form" onSubmit={handleSubmit}>
-          <div className="login-form-field">
-            <label htmlFor="workspace-login-identifier">{methodMetadata.identifierLabel}</label>
-            <input
-              id="workspace-login-identifier"
-              autoComplete="username"
-              className="workspace-input"
-              name={methodMetadata.identifierFieldName}
-              onChange={(event) => setIdentifier(event.target.value)}
-              required
-              value={identifier}
-            />
+        {primaryMethod === "oidc_redirect" && (
+          <div style={{ textAlign: "center" }}>
+            <Button type="primary" size="large" href={oidcStartHref} block>
+              {`跳转到${nextLabel}登录`}
+            </Button>
+            <div style={{ marginTop: 12 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>认证完成后将自动返回{nextLabel}。</Text>
+            </div>
           </div>
-          <div className="login-form-field">
-            <label htmlFor="workspace-password">密码</label>
-            <input
-              id="workspace-password"
-              autoComplete="current-password"
-              className="workspace-input"
-              name="password"
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              type="password"
-              value={password}
-            />
-          </div>
-          <button className="workspace-primary-button" disabled={isSubmitting} type="submit">
-            {isSubmitting ? "登录中..." : `进入${nextLabel}`}
-          </button>
-          <p className="login-helper-copy">{methodMetadata.helperCopy}</p>
-        </form>
-      ) : null}
+        )}
 
-      {primaryMethod === "unavailable" ? (
-        <p className="workspace-inline-message error">
-          当前登录能力都不可用，请先补齐认证配置后再重试。
-        </p>
-      ) : null}
+        {primaryMethod === "password" && (
+          <form onSubmit={handleSubmit} style={{ width: "100%" }}>
+            <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
+              <div>
+                <div style={{ marginBottom: 4 }}><Text>{methodMetadata.identifierLabel}</Text></div>
+                <Input
+                  id="workspace-login-identifier"
+                  autoComplete="username"
+                  name={methodMetadata.identifierFieldName}
+                  onChange={(event) => setIdentifier(event.target.value)}
+                  required
+                  value={identifier}
+                  size="large"
+                />
+              </div>
+              <div>
+                <div style={{ marginBottom: 4 }}><Text>密码</Text></div>
+                <Input.Password
+                  id="workspace-password"
+                  autoComplete="current-password"
+                  name="password"
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  value={password}
+                  size="large"
+                />
+              </div>
+              <Button type="primary" htmlType="submit" size="large" block loading={isSubmitting}>
+                {isSubmitting ? "登录中..." : `进入${nextLabel}`}
+              </Button>
+              {methodMetadata.helperCopy && (
+                <div style={{ textAlign: "center" }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{methodMetadata.helperCopy}</Text>
+                </div>
+              )}
+            </Space>
+          </form>
+        )}
 
-      {capabilityMessages.map((capabilityMessage) => (
-        <p className="workspace-inline-message idle" key={capabilityMessage}>
-          {capabilityMessage}
-        </p>
-      ))}
+        {primaryMethod === "unavailable" && (
+          <Alert title="当前无可用登录方式，请检查配置。" type="error" showIcon />
+        )}
 
-      {resolvedMessage ? (
-        <p className={`workspace-inline-message ${resolvedMessageTone === "error" ? "error" : "idle"}`}>
-          {resolvedMessage}
-        </p>
-      ) : null}
+        {capabilityMessages.length > 0 && (
+          <Space orientation="vertical" size="small" style={{ width: "100%" }}>
+            {capabilityMessages.map((msg) => (
+              <Alert key={msg} title={msg} type="warning" showIcon />
+            ))}
+          </Space>
+        )}
+
+        {resolvedMessage && (
+          <Alert
+            title={resolvedMessage}
+            type={resolvedMessageTone === "error" ? "error" : "info"}
+            showIcon
+          />
+        )}
+      </Space>
     </div>
   );
 }
 
 function resolvePrimaryLoginMethod(authOptions: PublicAuthOptionsResponse): WorkspaceLoginMethod {
   const preferred = authOptions.recommended_method;
-  if (preferred === "oidc_redirect" && authOptions.oidc_redirect.enabled) {
-    return preferred;
-  }
-  if (preferred === "password" && authOptions.password.enabled) {
-    return preferred;
-  }
-  if (authOptions.oidc_redirect.enabled) {
-    return "oidc_redirect";
-  }
-  if (authOptions.password.enabled) {
-    return "password";
-  }
+  if (preferred === "oidc_redirect" && authOptions.oidc_redirect.enabled) return preferred;
+  if (preferred === "password" && authOptions.password.enabled) return preferred;
+  if (authOptions.oidc_redirect.enabled) return "oidc_redirect";
+  if (authOptions.password.enabled) return "password";
   return "unavailable";
 }
 
@@ -188,23 +193,14 @@ function buildCapabilityMessages(
   primaryMethod: WorkspaceLoginMethod
 ) {
   const messages: string[] = [];
-
-  if (
-    primaryMethod === "password" &&
-    authOptions.provider === "zitadel" &&
-    authOptions.oidc_redirect.reason
-  ) {
-    messages.push(`OIDC 跳转登录暂不可用：${authOptions.oidc_redirect.reason}`);
+  if (primaryMethod === "password" && authOptions.provider === "zitadel" && authOptions.oidc_redirect.reason) {
+    messages.push(`OIDC 暂不可用：${authOptions.oidc_redirect.reason}`);
   }
-
   if (primaryMethod === "unavailable") {
     for (const reason of [authOptions.password.reason, authOptions.oidc_redirect.reason]) {
-      if (reason) {
-        messages.push(reason);
-      }
+      if (reason) messages.push(reason);
     }
   }
-
   return messages;
 }
 
@@ -213,84 +209,61 @@ function getLoginMethodMetadata(method: WorkspaceLoginMethod, provider: string) 
     case "oidc_redirect":
       return {
         componentName: "workspace-login-oidc-redirect",
-        eyebrow: "OIDC Redirect",
-        title: "继续使用标准 OIDC 跳转登录",
-        description:
-          "当前环境已经具备完整 OIDC 配置，点击后将跳转到身份提供方完成认证，再自动回到 7Flows。",
+        title: "OIDC 登录",
+        description: "使用标准 OIDC 跳转认证",
         identifierLabel: "账号",
         identifierFieldName: "login_name",
         helperCopy: "",
-        pendingMessage: "正在跳转到身份提供方...",
+        pendingMessage: "正在跳转...",
         submitPath: "/api/auth/oidc/start"
       };
     case "password":
       if (provider === "builtin") {
         return {
           componentName: "workspace-login-builtin-password-form",
-          eyebrow: "Builtin Auth",
-          title: "继续使用内置账号密码登录",
-          description:
-            "当前环境默认启用 7Flows 内置认证 provider，账号密码由 backend 直接校验并换发当前工作空间 session。",
+          title: "内置账号登录",
+          description: "使用 7Flows 内置账号密码",
           identifierLabel: "邮箱",
           identifierFieldName: "login_name",
-          helperCopy: "登录成功后将直接回到目标页面。",
-          pendingMessage: "正在验证内置账号...",
+          helperCopy: "",
+          pendingMessage: "登录中...",
           submitPath: "/api/auth/password/login"
         };
       }
-
       return {
         componentName: "workspace-login-password-form",
-        eyebrow: "ZITADEL Sign In",
-        title: "继续使用 ZITADEL 账号密码登录",
-        description:
-          "浏览器只把账号密码提交到同源统一登录接口，由 backend 校验 ZITADEL 会话后换成当前工作空间 session。",
+        title: "ZITADEL 登录",
+        description: "使用 ZITADEL 账号密码",
         identifierLabel: "账号",
         identifierFieldName: "login_name",
-        helperCopy: "登录成功后将直接回到目标页面。",
-        pendingMessage: "正在验证 ZITADEL 账号...",
+        helperCopy: "",
+        pendingMessage: "登录中...",
         submitPath: "/api/auth/password/login"
       };
     default:
       return {
         componentName: "workspace-login-unavailable",
-        eyebrow: "Auth Unavailable",
-        title: "当前没有可用的登录入口",
-        description:
-          "认证服务可达，但当前 provider 没有暴露可用的统一登录入口。",
+        title: "无法登录",
+        description: "未发现有效认证配置",
         identifierLabel: "账号",
         identifierFieldName: "login_name",
         helperCopy: "",
-        pendingMessage: "正在验证登录能力...",
+        pendingMessage: "正在验证...",
         submitPath: ""
       };
   }
 }
 
 function getLoginNextLabel(nextHref: string) {
-  if (
-    nextHref === WORKSPACE_TEAM_SETTINGS_HREF ||
-    nextHref === LEGACY_WORKSPACE_TEAM_SETTINGS_HREF
-  ) {
-    return "成员管理";
-  }
-
-  if (nextHref.startsWith("/workflows")) {
-    return "应用编排";
-  }
-
-  if (nextHref.startsWith("/runs")) {
-    return "运行追踪";
-  }
-
+  if (nextHref === WORKSPACE_TEAM_SETTINGS_HREF || nextHref === LEGACY_WORKSPACE_TEAM_SETTINGS_HREF) return "成员管理";
+  if (nextHref.startsWith("/workflows")) return "应用编排";
+  if (nextHref.startsWith("/runs")) return "运行追踪";
   return "应用工作台";
 }
 
 function getWorkspaceLoginErrorMessage(errorCode: string | null) {
   switch ((errorCode ?? "").trim()) {
-    case "oidc_callback_failed":
-      return "上一轮 ZITADEL OIDC 登录未完成，请重新发起跳转登录。";
-    default:
-      return null;
+    case "oidc_callback_failed": return "OIDC 登录未完成，请重试。";
+    default: return null;
   }
 }

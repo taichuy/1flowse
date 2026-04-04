@@ -59,8 +59,8 @@ describe("LoginPage", () => {
 
     const html = renderToStaticMarkup(await LoginPage());
 
-    expect(html).toContain("使用内置账号密码进入 7Flows Workspace");
-    expect(html).toContain("本地开发默认启用 7Flows 内置认证 provider");
+    expect(html).toContain("7Flows");
+    expect(html).toContain("Workspace Sign In");
     expect(html).toContain('data-component="workspace-login-form"');
     expect(html).toContain('data-recommended-method="password"');
   });

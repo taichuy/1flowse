@@ -84,8 +84,8 @@ describe("WorkspaceLoginForm", () => {
     expect(html).toContain('data-component="workspace-login-builtin-password-form"');
     expect(html).toContain('name="login_name"');
     expect(html).toContain('name="password"');
-    expect(html).toContain("继续使用内置账号密码登录");
-    expect(html).toContain("当前环境默认启用 7Flows 内置认证 provider");
+    expect(html).toContain("内置账号登录");
+    expect(html).toContain("使用 7Flows 内置账号密码");
   });
 
   it("renders the zitadel password form when external password login is the active method", () => {
@@ -96,9 +96,9 @@ describe("WorkspaceLoginForm", () => {
     expect(html).toContain('data-component="workspace-login-password-form"');
     expect(html).toContain('name="login_name"');
     expect(html).toContain('name="password"');
-    expect(html).toContain("继续使用 ZITADEL 账号密码登录");
+    expect(html).toContain("ZITADEL 登录");
     expect(html).toContain("进入应用工作台");
-    expect(html).toContain("OIDC 跳转登录暂不可用");
+    expect(html).toContain("OIDC 暂不可用");
   });
 
   it("adapts the submit button and redirect copy to the requested next path", () => {
@@ -109,7 +109,6 @@ describe("WorkspaceLoginForm", () => {
     );
 
     expect(html).toContain("进入成员管理");
-    expect(html).toContain("登录成功后将直接回到目标页面。");
   });
 
   it("renders the oidc redirect entry when oidc is the active method", () => {
@@ -129,7 +128,7 @@ describe("WorkspaceLoginForm", () => {
       createElement(WorkspaceLoginForm, { authOptions: oidcRedirectOptions })
     );
 
-    expect(html).toContain("上一轮 ZITADEL OIDC 登录未完成，请重新发起跳转登录。");
+    expect(html).toContain("OIDC 登录未完成，请重试。");
   });
 
   it("surfaces both remote auth blockers when neither method is configured", () => {
@@ -137,7 +136,7 @@ describe("WorkspaceLoginForm", () => {
       createElement(WorkspaceLoginForm, { authOptions: unavailableOptions })
     );
 
-    expect(html).toContain("当前登录能力都不可用，请先补齐认证配置后再重试。");
+    expect(html).toContain("当前无可用登录方式，请检查配置。");
     expect(html).toContain("ZITADEL 账号密码登录配置缺失：service user token。");
     expect(html).toContain("OIDC 配置缺失：client_id, client_secret。");
   });
