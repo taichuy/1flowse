@@ -151,6 +151,13 @@ class WorkspaceIssuedAuthTokens:
 
 
 @dataclass(slots=True)
+class ZitadelAuthenticatedUser:
+    subject: str
+    login_name: str
+    display_name: str | None = None
+
+
+@dataclass(slots=True)
 class ResolvedExternalIdentity:
     binding: ExternalIdentityBindingRecord
     workspace: WorkspaceRecord
@@ -546,6 +553,13 @@ def build_console_route_access_policy_matrix() -> list[ConsoleRouteAccessPolicy]
             access_level="guest",
             methods=["POST"],
             description="本地密码辅助登录入口，仅在开发环境或显式开启 fallback 时可用。",
+            expose_in_contract=False,
+        ),
+        _build_route_access_policy(
+            route="/api/auth/zitadel/login",
+            access_level="guest",
+            methods=["POST"],
+            description="ZITADEL 账号密码登录入口，由 backend 调用 Session API 校验并换发 workspace session。",
             expose_in_contract=False,
         ),
         _build_route_access_policy(
@@ -1452,6 +1466,143 @@ def _require_workspace_oidc_settings():
     return settings
 
 
+def _require_workspace_zitadel_password_login_settings():
+    settings = _require_workspace_oidc_settings()
+    if _normalize_external_identity_provider(settings.oidc_provider) != "zitadel":
+        raise AuthenticationError("当前 OIDC provider 不支持 ZITADEL 账号密码登录。")
+    if not settings.zitadel_service_user_token.strip():
+        raise AuthenticationError("ZITADEL 账号密码登录缺少 service user token 配置。")
+    return settings
+
+
+def _build_zitadel_api_headers(service_token: str) -> dict[str, str]:
+    return {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {service_token}",
+        "Content-Type": "application/json",
+    }
+
+
+def _parse_zitadel_json_response(
+    response: httpx.Response,
+    *,
+    error_message: str,
+) -> dict[str, Any]:
+    if response.status_code >= 400:
+        raise AuthenticationError(error_message)
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise AuthenticationError(error_message) from exc
+
+    if not isinstance(payload, dict):
+        raise AuthenticationError(error_message)
+    return payload
+
+
+def _extract_zitadel_session_id(payload: dict[str, Any]) -> str:
+    session_id = str(payload.get("sessionId") or "").strip()
+    if session_id:
+        return session_id
+
+    session_payload = payload.get("session")
+    if isinstance(session_payload, dict):
+        nested_session_id = str(session_payload.get("id") or "").strip()
+        if nested_session_id:
+            return nested_session_id
+
+    raise AuthenticationError("ZITADEL 登录会话创建失败，请稍后重试。")
+
+
+def _extract_zitadel_verified_user(session_payload: dict[str, Any]) -> ZitadelAuthenticatedUser:
+    session = session_payload.get("session")
+    resolved_session = session if isinstance(session, dict) else session_payload
+    factors = resolved_session.get("factors")
+    if not isinstance(factors, dict):
+        raise AuthenticationError("ZITADEL 登录状态无效，请重新输入账号密码。")
+
+    user_factor = factors.get("user")
+    password_factor = factors.get("password")
+    if not isinstance(user_factor, dict) or not isinstance(password_factor, dict):
+        raise AuthenticationError("ZITADEL 登录状态无效，请重新输入账号密码。")
+
+    subject = str(user_factor.get("id") or "").strip()
+    login_name = str(user_factor.get("loginName") or "").strip()
+    display_name = str(user_factor.get("displayName") or "").strip() or None
+    password_verified_at = str(password_factor.get("verifiedAt") or "").strip()
+    if not subject or not login_name or not password_verified_at:
+        raise AuthenticationError("ZITADEL 账号或密码错误。")
+
+    return ZitadelAuthenticatedUser(
+        subject=subject,
+        login_name=login_name,
+        display_name=display_name,
+    )
+
+
+def _extract_zitadel_user_email(
+    user_payload: dict[str, Any],
+    *,
+    fallback_login_name: str,
+) -> tuple[str | None, bool]:
+    email_candidates: list[str] = []
+    email_verified = False
+
+    def _add_email_candidate(value: Any) -> None:
+        if not isinstance(value, str):
+            return
+        normalized_value = value.strip().lower()
+        if normalized_value and normalized_value not in email_candidates:
+            email_candidates.append(normalized_value)
+
+    human_payload = user_payload.get("human")
+    if isinstance(human_payload, dict):
+        human_email_payload = human_payload.get("email")
+        if isinstance(human_email_payload, dict):
+            _add_email_candidate(human_email_payload.get("email"))
+            email_verified = (
+                human_email_payload.get("isVerified") is True
+                or str(human_email_payload.get("isVerified") or "").strip().lower() == "true"
+            )
+        else:
+            _add_email_candidate(human_email_payload)
+
+    preferred_login_name = user_payload.get("preferredLoginName")
+    if isinstance(preferred_login_name, str) and "@" in preferred_login_name:
+        _add_email_candidate(preferred_login_name)
+
+    user_login_name = user_payload.get("loginName")
+    if isinstance(user_login_name, str) and "@" in user_login_name:
+        _add_email_candidate(user_login_name)
+
+    if "@" in fallback_login_name:
+        _add_email_candidate(fallback_login_name)
+
+    return (email_candidates[0] if email_candidates else None), email_verified
+
+
+def _fetch_zitadel_user_profile(
+    *,
+    client: httpx.Client,
+    issuer: str,
+    service_token: str,
+    user_id: str,
+) -> dict[str, Any]:
+    response = client.get(
+        f"{issuer}/v2/users/{user_id}",
+        headers=_build_zitadel_api_headers(service_token),
+    )
+    payload = _parse_zitadel_json_response(
+        response,
+        error_message="ZITADEL 用户信息获取失败，请稍后重试。",
+    )
+    user_payload = payload.get("user")
+    if not isinstance(user_payload, dict):
+        raise AuthenticationError("ZITADEL 用户信息获取失败，请稍后重试。")
+    return user_payload
+
+
 def default_workspace_oidc_http_client_factory() -> httpx.Client:
     return httpx.Client(
         timeout=httpx.Timeout(OIDC_HTTP_TIMEOUT_SECONDS, connect=OIDC_HTTP_TIMEOUT_SECONDS),
@@ -1758,6 +1909,99 @@ def authenticate_workspace_user(
         workspace=workspace,
         user=user,
         member=member,
+    )
+
+
+def authenticate_workspace_zitadel_password_login(
+    db: Session,
+    *,
+    login_name: str,
+    password: str,
+    client_factory: Callable[[], httpx.Client] | None = None,
+) -> WorkspaceAccessContext:
+    normalized_login_name = login_name.strip()
+    if not normalized_login_name or not password.strip():
+        raise AuthenticationError("账号和密码不能为空。")
+
+    settings = _require_workspace_zitadel_password_login_settings()
+    issuer = settings.oidc_issuer.strip().rstrip("/")
+    service_token = settings.zitadel_service_user_token.strip()
+    http_client_factory = client_factory or default_workspace_oidc_http_client_factory
+
+    with http_client_factory() as client:
+        create_session_response = client.post(
+            f"{issuer}/v2/sessions",
+            headers=_build_zitadel_api_headers(service_token),
+            json={
+                "checks": {
+                    "user": {
+                        "loginName": normalized_login_name,
+                    }
+                }
+            },
+        )
+        create_session_payload = _parse_zitadel_json_response(
+            create_session_response,
+            error_message="ZITADEL 登录服务暂时不可用，请稍后重试。",
+        )
+        session_id = _extract_zitadel_session_id(create_session_payload)
+
+        verify_password_response = client.patch(
+            f"{issuer}/v2/sessions/{session_id}",
+            headers=_build_zitadel_api_headers(service_token),
+            json={
+                "checks": {
+                    "password": {
+                        "password": password,
+                    }
+                }
+            },
+        )
+        if verify_password_response.status_code >= 400:
+            raise AuthenticationError("ZITADEL 账号或密码错误。")
+
+        session_response = client.get(
+            f"{issuer}/v2/sessions/{session_id}",
+            headers=_build_zitadel_api_headers(service_token),
+        )
+        session_payload = _parse_zitadel_json_response(
+            session_response,
+            error_message="ZITADEL 登录状态确认失败，请稍后重试。",
+        )
+        authenticated_user = _extract_zitadel_verified_user(session_payload)
+        user_payload = _fetch_zitadel_user_profile(
+            client=client,
+            issuer=issuer,
+            service_token=service_token,
+            user_id=authenticated_user.subject,
+        )
+
+    resolved_email, email_verified = _extract_zitadel_user_email(
+        user_payload,
+        fallback_login_name=authenticated_user.login_name,
+    )
+    resolved_identity = resolve_external_identity_binding(
+        db,
+        provider=settings.oidc_provider,
+        subject=authenticated_user.subject,
+        email=resolved_email,
+        email_verified=(
+            email_verified
+            or (
+                resolved_email is not None
+                and "@" in authenticated_user.login_name
+                and resolved_email == authenticated_user.login_name.lower()
+            )
+        ),
+    )
+    if authenticated_user.display_name and not resolved_identity.user.display_name:
+        resolved_identity.user.display_name = authenticated_user.display_name
+
+    return create_workspace_access_session(
+        db,
+        workspace=resolved_identity.workspace,
+        user=resolved_identity.user,
+        member=resolved_identity.member,
     )
 
 

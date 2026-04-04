@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     oidc_client_secret: str = ""
     oidc_redirect_uri: str = ""
     oidc_scopes: str = "openid profile email"
+    zitadel_service_user_token: str = ""
     local_password_fallback_enabled: bool | None = None
 
     s3_endpoint: str = "http://localhost:39000"

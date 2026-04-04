@@ -70,6 +70,8 @@ def _build_oidc_settings():
         oidc_client_secret="sevenflows-secret",
         oidc_redirect_uri="http://testserver/api/auth/callback",
         oidc_scopes="openid profile email",
+        zitadel_service_user_token="zitadel-service-token",
+        local_password_fallback_enabled=True,
     )
 
 
@@ -146,6 +148,81 @@ def _install_oidc_mocks(
         lambda: httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True),
     )
     return settings, runtime
+
+
+def _install_zitadel_password_login_mocks(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    login_name: str = "admin@taichuy.com",
+    password: str = "zitadel-admin-pass",
+    user_id: str = "zitadel-admin-user",
+    email: str = "admin@taichuy.com",
+    email_verified: bool = True,
+    display_name: str = "7Flows Admin",
+):
+    settings = _build_oidc_settings()
+    issued_session_id = "zitadel-session-id"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers.get("authorization") == f"Bearer {settings.zitadel_service_user_token}"
+
+        if request.method == "POST" and request.url.path.endswith("/v2/sessions"):
+            payload = json.loads(request.content.decode())
+            assert payload["checks"]["user"]["loginName"] == login_name
+            return httpx.Response(200, json={"sessionId": issued_session_id})
+
+        if request.method == "PATCH" and request.url.path.endswith(f"/v2/sessions/{issued_session_id}"):
+            payload = json.loads(request.content.decode())
+            if payload["checks"]["password"]["password"] != password:
+                return httpx.Response(400, json={"message": "invalid password"})
+            return httpx.Response(200, json={"sessionId": issued_session_id})
+
+        if request.method == "GET" and request.url.path.endswith(f"/v2/sessions/{issued_session_id}"):
+            return httpx.Response(
+                200,
+                json={
+                    "session": {
+                        "id": issued_session_id,
+                        "factors": {
+                            "user": {
+                                "id": user_id,
+                                "loginName": login_name,
+                                "displayName": display_name,
+                            },
+                            "password": {
+                                "verifiedAt": "2026-04-04T00:00:00Z",
+                            },
+                        },
+                    }
+                },
+            )
+
+        if request.method == "GET" and request.url.path.endswith(f"/v2/users/{user_id}"):
+            return httpx.Response(
+                200,
+                json={
+                    "user": {
+                        "id": user_id,
+                        "loginName": login_name,
+                        "preferredLoginName": email,
+                        "human": {
+                            "email": {
+                                "email": email,
+                                "isVerified": email_verified,
+                            }
+                        },
+                    }
+                },
+            )
+
+        raise AssertionError(f"unexpected ZITADEL request: {request.method} {request.url}")
+
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "app.services.workspace_access.default_workspace_oidc_http_client_factory",
+        lambda: httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True),
+    )
+    return settings
 
 
 def test_default_admin_login_and_session_contract(client: TestClient) -> None:
@@ -231,6 +308,54 @@ def test_default_admin_login_and_session_contract(client: TestClient) -> None:
     assert context_body["can_manage_members"] is True
     assert context_body["workspace"]["name"] == "7Flows Workspace"
     assert len(context_body["route_permissions"]) >= 5
+
+
+def test_zitadel_password_login_issues_existing_workspace_session_contract(
+    client: TestClient,
+    sqlite_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _install_zitadel_password_login_mocks(monkeypatch)
+
+    response = client.post(
+        "/api/auth/zitadel/login",
+        json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert body["current_user"]["email"] == "admin@taichuy.com"
+    assert body["current_member"]["role"] == "owner"
+    assert body["cookie_contract"]["access_token_cookie_name"] in client.cookies
+    assert body["cookie_contract"]["refresh_token_cookie_name"] in client.cookies
+    assert body["cookie_contract"]["csrf_token_cookie_name"] in client.cookies
+
+    session_response = client.get("/api/auth/session")
+    assert session_response.status_code == 200
+    assert session_response.json()["current_user"]["email"] == "admin@taichuy.com"
+
+    bindings = sqlite_session.scalars(select(ExternalIdentityBindingRecord)).all()
+    assert len(bindings) == 1
+    assert bindings[0].provider == settings.oidc_provider
+    assert bindings[0].subject == "zitadel-admin-user"
+
+
+def test_zitadel_password_login_requires_service_token(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _build_oidc_settings()
+    settings.zitadel_service_user_token = ""
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+
+    response = client.post(
+        "/api/auth/zitadel/login",
+        json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "ZITADEL 账号密码登录缺少 service user token 配置。"
 
 
 def test_refresh_issues_new_access_and_csrf_tokens(client: TestClient) -> None:

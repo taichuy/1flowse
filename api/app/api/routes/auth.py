@@ -13,6 +13,7 @@ from app.schemas.workspace_access import (
     WorkspaceItem,
     WorkspaceLogoutResponse,
     WorkspaceMemberItem,
+    ZitadelPasswordLoginRequest,
 )
 from app.services.workspace_access import (
     AuthenticationError,
@@ -20,6 +21,7 @@ from app.services.workspace_access import (
     CsrfValidationError,
     WorkspaceAccessContext,
     WorkspaceIssuedAuthTokens,
+    authenticate_workspace_zitadel_password_login,
     authenticate_workspace_oidc_callback,
     authenticate_workspace_user,
     build_console_route_permission_matrix,
@@ -299,6 +301,44 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
+        ) from exc
+
+    db.commit()
+    _apply_auth_cookies(response, tokens)
+    return _serialize_access_context(access_context, tokens=tokens)
+
+
+@router.post("/zitadel/login", response_model=AuthSessionResponse)
+def login_with_zitadel_password(
+    payload: ZitadelPasswordLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> AuthSessionResponse:
+    try:
+        access_context = authenticate_workspace_zitadel_password_login(
+            db,
+            login_name=payload.login_name,
+            password=payload.password,
+        )
+        tokens = issue_workspace_auth_tokens(access_context)
+    except AuthenticationError as exc:
+        detail = str(exc)
+        status_code_value = status.HTTP_401_UNAUTHORIZED
+        if any(
+            marker in detail
+            for marker in (
+                "缺少 service user token",
+                "当前 OIDC provider 不支持",
+                "OIDC 登录当前未启用",
+                "OIDC 配置缺失",
+                "服务暂时不可用",
+                "用户信息获取失败",
+            )
+        ):
+            status_code_value = status.HTTP_503_SERVICE_UNAVAILABLE
+        raise HTTPException(
+            status_code=status_code_value,
+            detail=detail,
         ) from exc
 
     db.commit()

@@ -24,49 +24,31 @@ beforeEach(() => {
 });
 
 describe("WorkspaceLoginForm", () => {
-  it("renders a same-origin oidc CTA and hides the local password fallback by default", () => {
-    const html = renderToStaticMarkup(
-      createElement(WorkspaceLoginForm, {
-        allowLocalPasswordFallback: true,
-        oidcEnabled: true
-      })
-    );
+  it("renders only the zitadel username password form", () => {
+    const html = renderToStaticMarkup(createElement(WorkspaceLoginForm));
 
-    expect(html).toContain("同源 OIDC 主入口");
-    expect(html).toContain("使用 ZITADEL 登录");
-    expect(html).toContain("/api/auth/oidc/start?next=%2Fworkspace");
-    expect(html).toContain("使用本地开发密码（仅辅助）");
-    expect(html).not.toContain("本地默认管理员");
-    expect(html).not.toContain('name="email"');
-  });
-
-  it("renders the local password form when oidc is disabled for the current environment", () => {
-    const html = renderToStaticMarkup(
-      createElement(WorkspaceLoginForm, {
-        allowLocalPasswordFallback: true,
-        oidcEnabled: false
-      })
-    );
-
-    expect(html).toContain("开发环境辅助入口");
-    expect(html).toContain("当前环境显式关闭了 ZITADEL OIDC 主入口");
-    expect(html).toContain("使用本地密码进入");
-    expect(html).toContain('name="email"');
+    expect(html).toContain('data-component="workspace-login-zitadel-password-form"');
+    expect(html).toContain('name="login_name"');
     expect(html).toContain('name="password"');
+    expect(html).toContain("进入应用工作台");
     expect(html).not.toContain("使用 ZITADEL 登录");
-    expect(html).not.toContain("本地默认管理员");
+    expect(html).not.toContain("本地开发密码");
   });
 
-  it("surfaces oidc callback failures on the login shell", () => {
+  it("adapts the submit button and redirect copy to the requested next path", () => {
+    searchParamValues.set("next", "/workspace/settings/team");
+
+    const html = renderToStaticMarkup(createElement(WorkspaceLoginForm));
+
+    expect(html).toContain("进入成员管理");
+    expect(html).toContain("登录成功后将直接回到成员管理。");
+  });
+
+  it("surfaces callback failures as a password re-entry prompt", () => {
     searchParamValues.set("error", "oidc_callback_failed");
 
-    const html = renderToStaticMarkup(
-      createElement(WorkspaceLoginForm, {
-        allowLocalPasswordFallback: true,
-        oidcEnabled: true
-      })
-    );
+    const html = renderToStaticMarkup(createElement(WorkspaceLoginForm));
 
-    expect(html).toContain("ZITADEL 登录未完成，请重新发起同源登录");
+    expect(html).toContain("上一轮 ZITADEL 登录未完成，请重新输入账号密码。");
   });
 });
