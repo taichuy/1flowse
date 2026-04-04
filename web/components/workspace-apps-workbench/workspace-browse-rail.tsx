@@ -52,88 +52,82 @@ export function WorkspaceBrowseRail({
       className="workspace-filter-rail workspace-filter-rail-inline"
       aria-label="Workspace filters"
       data-component="workspace-browse-rail"
+      style={{ borderTop: "1px solid #f0f0f0", paddingTop: 24 }}
     >
-      <Card className="workspace-catalog-card" variant="borderless">
-        <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-          <div className="workspace-filter-rail-header workspace-filter-rail-header-inline">
-            <div className="workspace-filter-rail-copy">
-              <Text type="secondary">Board controls</Text>
-              <Title level={4}>应用目录</Title>
-              <Paragraph className="workspace-muted workspace-card-copy">
-                {currentScopeSummary}
-              </Paragraph>
-            </div>
-
-            <Space size={8} wrap>
-              {workspaceUtilityEntry ? (
-                <Button href={workspaceUtilityEntry.href}>{workspaceUtilityEntry.title}</Button>
-              ) : null}
-              <Button href={focusedCreateHref}>全屏创建页</Button>
-              <Button onClick={onOpenCreate} type="primary">
-                创建应用
-              </Button>
-            </Space>
-          </div>
-
-          <form action="/workspace" className="workspace-search-form workspace-search-form-board workspace-search-form-studio">
-            {searchState.filter ? <input name="filter" type="hidden" value={searchState.filter} /> : null}
-            {searchState.mode ? <input name="mode" type="hidden" value={searchState.mode} /> : null}
-            {searchState.track ? <input name="track" type="hidden" value={searchState.track} /> : null}
-            <Space.Compact block>
-              <Input defaultValue={requestedKeyword} name="keyword" placeholder="搜索应用或治理焦点" type="search" />
-              <Button htmlType="submit" type="primary">
-                搜索
-              </Button>
-              {searchState.clearHref ? <Button href={searchState.clearHref}>清除</Button> : null}
-            </Space.Compact>
-          </form>
-
-          <div className="workspace-filter-rail-body workspace-filter-rail-body-inline">
-            <div className="workspace-filter-rail-group">
-              <span className="workspace-filter-rail-label">应用类型</span>
-              <Space className="workspace-filter-rail-tab-list" aria-label="App modes" size={8} wrap>
-                {modeTabs.map((modeTab) => (
-                  <Button
-                    href={modeTab.href}
-                    key={modeTab.key}
-                    size="small"
-                    type={modeTab.active ? "primary" : "default"}
-                  >
-                    {modeTab.label} {modeTab.count}
-                  </Button>
-                ))}
-              </Space>
-            </div>
-
-            <div className="workspace-filter-rail-group">
-              <span className="workspace-filter-rail-label">状态</span>
-              <Space className="workspace-filter-row workspace-filter-row-board workspace-filter-rail-chip-list" size={8} wrap>
-                {statusFilters.map((statusFilter) => (
-                  <Button
-                    href={statusFilter.href}
-                    key={statusFilter.key}
-                    size="small"
-                    type={statusFilter.active ? "primary" : "default"}
-                  >
-                    {statusFilter.label}
-                  </Button>
-                ))}
-              </Space>
-            </div>
-
-            {scopePills.length > 0 ? (
-              <div className="workspace-filter-rail-group">
-                <span className="workspace-filter-rail-label">当前聚焦</span>
-                <WorkspaceScopePills scopePills={scopePills} />
-              </div>
-            ) : null}
+      <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+        <div className="workspace-filter-rail-header workspace-filter-rail-header-inline" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="workspace-filter-rail-copy">
+            <Title level={4} style={{ margin: 0 }}>应用目录</Title>
+            <Paragraph className="workspace-muted workspace-card-copy" style={{ margin: 0, marginTop: 4 }}>
+              {currentScopeSummary}
+            </Paragraph>
           </div>
 
           <Space size={8} wrap>
-            <Tag color="processing">搜索、筛选与主操作已收口到同一工具栏</Tag>
+            {workspaceUtilityEntry ? (
+              <Button href={workspaceUtilityEntry.href}>{workspaceUtilityEntry.title}</Button>
+            ) : null}
+            <Button href={focusedCreateHref}>全屏创建页</Button>
+            <Button onClick={onOpenCreate} type="primary">
+              创建应用
+            </Button>
           </Space>
-        </Space>
-      </Card>
+        </div>
+
+        <form action="/workspace" className="workspace-search-form workspace-search-form-board workspace-search-form-studio" style={{ marginTop: 8 }}>
+          {searchState.filter ? <input name="filter" type="hidden" value={searchState.filter} /> : null}
+          {searchState.mode ? <input name="mode" type="hidden" value={searchState.mode} /> : null}
+          {searchState.track ? <input name="track" type="hidden" value={searchState.track} /> : null}
+          <Space.Compact block>
+            <Input defaultValue={requestedKeyword} name="keyword" placeholder="搜索应用或治理焦点" type="search" />
+            <Button htmlType="submit" type="primary">
+              搜索
+            </Button>
+            {searchState.clearHref ? <Button href={searchState.clearHref}>清除</Button> : null}
+          </Space.Compact>
+        </form>
+
+        <div className="workspace-filter-rail-body workspace-filter-rail-body-inline" style={{ marginTop: 8 }}>
+          <div className="workspace-filter-rail-group" style={{ marginBottom: 12 }}>
+            <span className="workspace-filter-rail-label" style={{ display: "inline-block", width: 80, color: "#8c8c8c" }}>应用类型</span>
+            <Space className="workspace-filter-rail-tab-list" aria-label="App modes" size={8} wrap>
+              {modeTabs.map((modeTab) => (
+                <Button
+                  href={modeTab.href}
+                  key={modeTab.key}
+                  size="small"
+                  type={modeTab.active ? "primary" : "default"}
+                >
+                  {modeTab.label} {modeTab.count}
+                </Button>
+              ))}
+            </Space>
+          </div>
+
+          <div className="workspace-filter-rail-group" style={{ marginBottom: 12 }}>
+            <span className="workspace-filter-rail-label" style={{ display: "inline-block", width: 80, color: "#8c8c8c" }}>状态</span>
+            <Space className="workspace-filter-row workspace-filter-row-board workspace-filter-rail-chip-list" size={8} wrap>
+              {statusFilters.map((statusFilter) => (
+                <Button
+                  href={statusFilter.href}
+                  key={statusFilter.key}
+                  size="small"
+                  type={statusFilter.active ? "primary" : "default"}
+                >
+                  {statusFilter.label}
+                </Button>
+              ))}
+            </Space>
+          </div>
+
+          {scopePills.length > 0 ? (
+            <div className="workspace-filter-rail-group" style={{ marginBottom: 12 }}>
+              <span className="workspace-filter-rail-label" style={{ display: "inline-block", width: 80, color: "#8c8c8c" }}>当前聚焦</span>
+              <WorkspaceScopePills scopePills={scopePills} />
+            </div>
+          ) : null}
+        </div>
+      </Space>
     </section>
   );
 }

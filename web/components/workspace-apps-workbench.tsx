@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Alert, Button, Form, Input, Modal, Space, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Space, Typography } from "antd";
 
 import { WorkspaceAppListStage } from "@/components/workspace-apps-workbench/workspace-app-list-stage";
 import { WorkspaceBrowseRail } from "@/components/workspace-apps-workbench/workspace-browse-rail";
@@ -131,24 +131,26 @@ export function WorkspaceAppsWorkbench({
         <section className="workspace-apps-dify-shell">
           <section className="workspace-apps-dify-stage">
             <section className="workspace-board-overview" data-component="workspace-board-overview">
-              <WorkspaceCatalogHeader
-                workspaceName={workspaceName}
-                currentRoleLabel={currentRoleLabel}
-                catalogDescription={catalogDescription}
-                workspaceSignals={workspaceSignals}
-              />
+              <Card className="workspace-catalog-card" variant="borderless" style={{ marginBottom: 16 }}>
+                <WorkspaceCatalogHeader
+                  workspaceName={workspaceName}
+                  currentRoleLabel={currentRoleLabel}
+                  catalogDescription={catalogDescription}
+                  workspaceSignals={workspaceSignals}
+                />
 
-              <WorkspaceBrowseRail
-                currentScopeSummary={currentScopeSummary}
-                modeTabs={modeTabs}
-                scopePills={scopePills}
-                statusFilters={statusFilters}
-                requestedKeyword={requestedKeyword}
-                searchState={searchState}
-                focusedCreateHref={focusedCreateHref}
-                workspaceUtilityEntry={workspaceUtilityEntry}
-                onOpenCreate={handleOpenCreateModal}
-              />
+                <WorkspaceBrowseRail
+                  currentScopeSummary={currentScopeSummary}
+                  modeTabs={modeTabs}
+                  scopePills={scopePills}
+                  statusFilters={statusFilters}
+                  requestedKeyword={requestedKeyword}
+                  searchState={searchState}
+                  focusedCreateHref={focusedCreateHref}
+                  workspaceUtilityEntry={workspaceUtilityEntry}
+                  onOpenCreate={handleOpenCreateModal}
+                />
+              </Card>
             </section>
 
             <section className="workspace-catalog-stage">
