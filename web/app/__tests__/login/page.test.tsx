@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LoginPage from "@/app/login/page";
-import { getServerAuthSession } from "@/lib/server-workspace-access";
+import { getServerAuthSession, getServerPublicAuthOptions } from "@/lib/server-workspace-access";
 
 Object.assign(globalThis, { React });
 
@@ -21,34 +21,48 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/workspace-login-form", () => ({
-  WorkspaceLoginForm: () =>
+  WorkspaceLoginForm: ({ authOptions }: { authOptions: { recommended_method: string } }) =>
     createElement(
       "div",
       {
-        "data-component": "workspace-login-form"
+        "data-component": "workspace-login-form",
+        "data-recommended-method": authOptions.recommended_method
       },
       "form"
     )
 }));
 
 vi.mock("@/lib/server-workspace-access", () => ({
-  getServerAuthSession: vi.fn()
+  getServerAuthSession: vi.fn(),
+  getServerPublicAuthOptions: vi.fn()
 }));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getServerPublicAuthOptions).mockResolvedValue({
+    provider: "zitadel",
+    recommended_method: "zitadel_password",
+    zitadel_password: {
+      enabled: true,
+      reason: null
+    },
+    oidc_redirect: {
+      enabled: false,
+      reason: "OIDC 配置缺失：client_id, client_secret。"
+    }
+  });
 });
 
 describe("LoginPage", () => {
-  it("renders the dedicated zitadel password login shell", async () => {
+  it("renders the zitadel password shell when public auth options recommend password login", async () => {
     vi.mocked(getServerAuthSession).mockResolvedValue(null);
 
     const html = renderToStaticMarkup(await LoginPage());
 
     expect(html).toContain("使用 ZITADEL 账号密码进入 7Flows Workspace");
-    expect(html).toContain("继续使用 ZITADEL 账号密码登录");
-    expect(html).toContain("不再展示本地密码辅助入口或额外跳转式 OIDC 卡片");
+    expect(html).toContain("同源统一认证接口");
     expect(html).toContain('data-component="workspace-login-form"');
+    expect(html).toContain('data-recommended-method="zitadel_password"');
   });
 
   it("redirects to workspace when an auth session already exists", async () => {

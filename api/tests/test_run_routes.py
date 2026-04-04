@@ -29,6 +29,7 @@ from app.services.sandbox_backends import (
     SandboxBackendRegistration,
     SandboxBackendRegistry,
 )
+from tests.workspace_auth_helpers import issue_workspace_console_auth
 from tests.workflow_publish_helpers import legacy_auth_mode_contract
 
 pytestmark = pytest.mark.usefixtures(
@@ -78,12 +79,7 @@ def _bound_tool_definition(*, tool_id: str, ecosystem: str) -> dict:
 
 
 def _login(client: TestClient, *, email: str, password: str) -> dict[str, object]:
-    response = client.post(
-        "/api/auth/login",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200
-    return response.json()
+    return issue_workspace_console_auth(client, email=email, password=password)
 
 
 def _auth_headers(token: str) -> dict[str, str]:

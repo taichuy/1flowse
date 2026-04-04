@@ -6,6 +6,7 @@ from app.services.model_provider_registry import (
     ModelProviderRegistryError,
     ModelProviderRegistryService,
 )
+from tests.workspace_auth_helpers import issue_workspace_console_auth
 
 
 def _auth_headers(token: str | None) -> dict[str, str]:
@@ -23,12 +24,7 @@ def _csrf_headers(body: dict[str, object]) -> dict[str, str]:
 
 
 def _login(client: TestClient, *, email: str, password: str) -> dict[str, object]:
-    response = client.post(
-        "/api/auth/login",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200
-    return response.json()
+    return issue_workspace_console_auth(client, email=email, password=password)
 
 
 def test_model_provider_registry_service_rejects_incompatible_credential_type(

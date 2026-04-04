@@ -56,6 +56,20 @@ export type ConsoleRoutePermissionItem = {
   description: string;
 };
 
+export type AuthMethod = "zitadel_password" | "oidc_redirect" | "unavailable";
+
+export type PublicAuthOptionItem = {
+  enabled: boolean;
+  reason?: string | null;
+};
+
+export type PublicAuthOptionsResponse = {
+  provider: string;
+  recommended_method: AuthMethod;
+  zitadel_password: PublicAuthOptionItem;
+  oidc_redirect: PublicAuthOptionItem;
+};
+
 export type AuthSessionResponse = {
   token_type?: "bearer";
   token?: string | null;

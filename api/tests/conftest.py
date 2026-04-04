@@ -2,16 +2,21 @@ from collections.abc import Generator
 from datetime import UTC, datetime
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import get_settings
 from app.core.database import Base, get_db
 from app.main import app
 from app.models.plugin import PluginAdapterRecord, PluginToolRecord  # noqa: F401
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.compiled_blueprints import CompiledBlueprintService
+from tests.workspace_auth_helpers import issue_workspace_console_auth
+
+_TEST_CREDENTIAL_KEY = Fernet.generate_key().decode("utf-8")
 
 
 @pytest.fixture
@@ -43,14 +48,18 @@ def client(sqlite_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def credential_encryption_key_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(get_settings(), "credential_encryption_key", _TEST_CREDENTIAL_KEY)
+
+
 @pytest.fixture
 def workspace_console_auth(client: TestClient) -> dict[str, object]:
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "admin@taichuy.com", "password": "admin123"},
+    return issue_workspace_console_auth(
+        client,
+        email="admin@taichuy.com",
+        password="admin123",
     )
-    assert response.status_code == 200
-    return response.json()
 
 
 @pytest.fixture

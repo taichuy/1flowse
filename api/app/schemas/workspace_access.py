@@ -51,14 +51,24 @@ class WorkspaceMemberItem(BaseModel):
     updated_at: datetime
 
 
-class AuthLoginRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=255)
-    password: str = Field(min_length=6, max_length=128)
-
-
 class ZitadelPasswordLoginRequest(BaseModel):
     login_name: str = Field(min_length=1, max_length=255)
     password: str = Field(min_length=1, max_length=128)
+
+
+AuthMethod = Literal["zitadel_password", "oidc_redirect", "unavailable"]
+
+
+class PublicAuthOptionItem(BaseModel):
+    enabled: bool
+    reason: str | None = None
+
+
+class PublicAuthOptionsResponse(BaseModel):
+    provider: str
+    recommended_method: AuthMethod = "unavailable"
+    zitadel_password: PublicAuthOptionItem
+    oidc_redirect: PublicAuthOptionItem
 
 
 class AuthSessionResponse(BaseModel):

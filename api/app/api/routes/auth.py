@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.schemas.workspace_access import (
-    AuthLoginRequest,
     AuthRefreshRequest,
     AuthSessionResponse,
+    PublicAuthOptionsResponse,
     UserAccountItem,
     WorkspaceItem,
     WorkspaceLogoutResponse,
@@ -23,8 +23,8 @@ from app.services.workspace_access import (
     WorkspaceIssuedAuthTokens,
     authenticate_workspace_zitadel_password_login,
     authenticate_workspace_oidc_callback,
-    authenticate_workspace_user,
     build_console_route_permission_matrix,
+    build_workspace_public_auth_options,
     build_workspace_oidc_authorization_redirect,
     ensure_console_route_access,
     get_workspace_access_context,
@@ -34,7 +34,6 @@ from app.services.workspace_access import (
     get_workspace_csrf_header_name,
     get_workspace_oidc_state_cookie_name,
     get_workspace_refresh_cookie_name,
-    is_workspace_local_password_fallback_enabled,
     issue_workspace_auth_tokens,
     refresh_workspace_session,
     resolve_console_route_access_policy,
@@ -278,36 +277,6 @@ def get_authenticated_write_access_context(
         ) from exc
 
 
-@router.post("/login", response_model=AuthSessionResponse)
-def login(
-    payload: AuthLoginRequest,
-    response: Response,
-    db: Session = Depends(get_db),
-) -> AuthSessionResponse:
-    if not is_workspace_local_password_fallback_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="当前环境未开放本地密码辅助登录。",
-        )
-
-    try:
-        access_context = authenticate_workspace_user(
-            db,
-            email=payload.email,
-            password=payload.password,
-        )
-        tokens = issue_workspace_auth_tokens(access_context)
-    except AuthenticationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
-
-    db.commit()
-    _apply_auth_cookies(response, tokens)
-    return _serialize_access_context(access_context, tokens=tokens)
-
-
 @router.post("/zitadel/login", response_model=AuthSessionResponse)
 def login_with_zitadel_password(
     payload: ZitadelPasswordLoginRequest,
@@ -343,6 +312,11 @@ def login_with_zitadel_password(
     db.commit()
     _apply_auth_cookies(response, tokens)
     return _serialize_access_context(access_context, tokens=tokens)
+
+
+@router.get("/options", response_model=PublicAuthOptionsResponse)
+def get_public_auth_options() -> PublicAuthOptionsResponse:
+    return build_workspace_public_auth_options()
 
 
 @router.get("/oidc/start")

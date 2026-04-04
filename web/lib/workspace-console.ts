@@ -52,7 +52,7 @@ const workspaceConsolePagePermissions: WorkspaceConsolePagePermission[] = [
     href: "/login",
     label: "登录",
     accessLevel: "guest",
-    description: "访客通过本地管理员登录进入 workspace console。"
+    description: "访客通过统一的 ZITADEL 认证入口进入 workspace console。"
   },
   {
     key: "workspace",

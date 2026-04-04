@@ -25,7 +25,12 @@ from app.models.workspace_access import (
     WorkspaceMemberRecord,
     WorkspaceRecord,
 )
-from app.schemas.workspace_access import ConsoleAuthCookieContract, ConsoleRoutePermissionItem
+from app.schemas.workspace_access import (
+    ConsoleAuthCookieContract,
+    ConsoleRoutePermissionItem,
+    PublicAuthOptionItem,
+    PublicAuthOptionsResponse,
+)
 
 DEFAULT_WORKSPACE_ID = "default"
 DEFAULT_WORKSPACE_NAME = "7Flows Workspace"
@@ -232,13 +237,6 @@ def _normalize_external_identity_subject(subject: str) -> str:
     if not normalized:
         raise AuthenticationError("外部身份 subject 缺失。")
     return normalized
-
-
-def is_workspace_local_password_fallback_enabled() -> bool:
-    settings = get_settings()
-    if settings.local_password_fallback_enabled is not None:
-        return settings.local_password_fallback_enabled
-    return settings.env.strip().lower() in {"local", "test", "development"}
 
 
 def _auth_cookie_secure() -> bool:
@@ -549,17 +547,20 @@ def ensure_can_access(
 def build_console_route_access_policy_matrix() -> list[ConsoleRouteAccessPolicy]:
     return [
         _build_route_access_policy(
-            route="/api/auth/login",
+            route="/api/auth/options",
             access_level="guest",
-            methods=["POST"],
-            description="本地密码辅助登录入口，仅在开发环境或显式开启 fallback 时可用。",
+            methods=["GET"],
+            description="公开认证能力摘要，用于登录页选择当前可用的登录入口。",
             expose_in_contract=False,
         ),
         _build_route_access_policy(
             route="/api/auth/zitadel/login",
             access_level="guest",
             methods=["POST"],
-            description="ZITADEL 账号密码登录入口，由 backend 调用 Session API 校验并换发 workspace session。",
+            description=(
+                "ZITADEL 账号密码登录入口，由 backend 调用 Session API "
+                "校验并换发 workspace session。"
+            ),
             expose_in_contract=False,
         ),
         _build_route_access_policy(
@@ -1453,13 +1454,7 @@ def _require_workspace_oidc_settings():
     if not settings.oidc_enabled:
         raise AuthenticationError("OIDC 登录当前未启用。")
 
-    required_fields = {
-        "issuer": settings.oidc_issuer,
-        "client_id": settings.oidc_client_id,
-        "client_secret": settings.oidc_client_secret,
-        "redirect_uri": settings.oidc_redirect_uri,
-    }
-    missing_fields = [name for name, value in required_fields.items() if not str(value).strip()]
+    missing_fields = _collect_workspace_oidc_missing_fields(settings)
     if missing_fields:
         joined_fields = ", ".join(missing_fields)
         raise AuthenticationError(f"OIDC 配置缺失：{joined_fields}。")
@@ -1470,11 +1465,78 @@ def _require_workspace_zitadel_password_login_settings():
     settings = get_settings()
     if _normalize_external_identity_provider(settings.oidc_provider) != "zitadel":
         raise AuthenticationError("当前 OIDC provider 不支持 ZITADEL 账号密码登录。")
-    if not settings.oidc_issuer.strip():
+    missing_fields = _collect_workspace_zitadel_password_login_missing_fields(settings)
+    if "issuer" in missing_fields:
         raise AuthenticationError("ZITADEL 账号密码登录缺少 issuer 配置。")
-    if not settings.zitadel_service_user_token.strip():
+    if "service user token" in missing_fields:
         raise AuthenticationError("ZITADEL 账号密码登录缺少 service user token 配置。")
     return settings
+
+
+def _collect_workspace_oidc_missing_fields(settings) -> list[str]:
+    required_fields = {
+        "issuer": settings.oidc_issuer,
+        "client_id": settings.oidc_client_id,
+        "client_secret": settings.oidc_client_secret,
+        "redirect_uri": settings.oidc_redirect_uri,
+    }
+    return [name for name, value in required_fields.items() if not str(value).strip()]
+
+
+def _collect_workspace_zitadel_password_login_missing_fields(settings) -> list[str]:
+    required_fields = {
+        "issuer": settings.oidc_issuer,
+        "service user token": settings.zitadel_service_user_token,
+    }
+    return [name for name, value in required_fields.items() if not str(value).strip()]
+
+
+def build_workspace_public_auth_options() -> PublicAuthOptionsResponse:
+    settings = get_settings()
+    normalized_provider = (settings.oidc_provider or "").strip().lower() or "unknown"
+
+    oidc_redirect_enabled = False
+    oidc_redirect_reason: str | None = None
+    if not settings.oidc_enabled:
+        oidc_redirect_reason = "OIDC 登录当前未启用。"
+    else:
+        oidc_missing_fields = _collect_workspace_oidc_missing_fields(settings)
+        if oidc_missing_fields:
+            oidc_redirect_reason = f"OIDC 配置缺失：{', '.join(oidc_missing_fields)}。"
+        else:
+            oidc_redirect_enabled = True
+
+    zitadel_password_enabled = False
+    zitadel_password_reason: str | None = None
+    if normalized_provider != "zitadel":
+        zitadel_password_reason = "当前 OIDC provider 不支持 ZITADEL 账号密码登录。"
+    else:
+        zitadel_missing_fields = _collect_workspace_zitadel_password_login_missing_fields(settings)
+        if zitadel_missing_fields:
+            zitadel_password_reason = (
+                f"ZITADEL 账号密码登录配置缺失：{', '.join(zitadel_missing_fields)}。"
+            )
+        else:
+            zitadel_password_enabled = True
+
+    recommended_method: Literal["zitadel_password", "oidc_redirect", "unavailable"] = "unavailable"
+    if zitadel_password_enabled:
+        recommended_method = "zitadel_password"
+    elif oidc_redirect_enabled:
+        recommended_method = "oidc_redirect"
+
+    return PublicAuthOptionsResponse(
+        provider=normalized_provider,
+        recommended_method=recommended_method,
+        zitadel_password=PublicAuthOptionItem(
+            enabled=zitadel_password_enabled,
+            reason=zitadel_password_reason,
+        ),
+        oidc_redirect=PublicAuthOptionItem(
+            enabled=oidc_redirect_enabled,
+            reason=oidc_redirect_reason,
+        ),
+    )
 
 
 def _build_zitadel_api_headers(service_token: str) -> dict[str, str]:

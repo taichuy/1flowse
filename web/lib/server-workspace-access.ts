@@ -32,6 +32,7 @@ import {
   buildCookieHeader,
   CSRF_TOKEN_COOKIE_NAME,
   CSRF_TOKEN_HEADER_NAME,
+  type PublicAuthOptionsResponse,
   REFRESH_TOKEN_COOKIE_NAME,
   SESSION_COOKIE_NAME,
   type AuthSessionResponse,
@@ -224,6 +225,32 @@ async function fetchWorkspaceAccessJson<T>(path: string, session: ServerSessionC
   return result.data;
 }
 
+async function fetchPublicAuthOptions(): Promise<PublicAuthOptionsResponse> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/auth/options`, {
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error(`auth-options-${response.status}`);
+    }
+
+    return (await response.json()) as PublicAuthOptionsResponse;
+  } catch {
+    return {
+      provider: "unknown",
+      recommended_method: "unavailable",
+      zitadel_password: {
+        enabled: false,
+        reason: "无法连接认证服务，请确认 API 服务可用。"
+      },
+      oidc_redirect: {
+        enabled: false,
+        reason: "无法连接认证服务，请确认 API 服务可用。"
+      }
+    };
+  }
+}
+
 async function fetchWorkspaceAccessResponse(
   path: string,
   session: ServerSessionCookies,
@@ -403,6 +430,10 @@ export const getServerWorkspaceContext = cache(async (): Promise<WorkspaceContex
     return null;
   }
   return fetchWorkspaceAccessJson<WorkspaceContextResponse>("/api/workspace/context", session);
+});
+
+export const getServerPublicAuthOptions = cache(async (): Promise<PublicAuthOptionsResponse> => {
+  return fetchPublicAuthOptions();
 });
 
 export async function getServerWorkflowDetail(

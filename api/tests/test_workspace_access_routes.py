@@ -24,15 +24,11 @@ from app.services.workspace_access import (
     get_workspace_oidc_state_cookie_name,
     resolve_external_identity_binding,
 )
+from tests.workspace_auth_helpers import issue_workspace_console_auth
 
 
 def _login(client: TestClient, *, email: str, password: str) -> dict:
-    response = client.post(
-        "/api/auth/login",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200
-    return response.json()
+    return issue_workspace_console_auth(client, email=email, password=password)
 
 
 def _auth_headers(token: str) -> dict[str, str]:
@@ -71,7 +67,6 @@ def _build_oidc_settings():
         oidc_redirect_uri="http://testserver/api/auth/callback",
         oidc_scopes="openid profile email",
         zitadel_service_user_token="zitadel-service-token",
-        local_password_fallback_enabled=True,
     )
 
 
@@ -164,20 +159,26 @@ def _install_zitadel_password_login_mocks(
     issued_session_id = "zitadel-session-id"
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.headers.get("authorization") == f"Bearer {settings.zitadel_service_user_token}"
+        assert request.headers.get("authorization") == (
+            f"Bearer {settings.zitadel_service_user_token}"
+        )
 
         if request.method == "POST" and request.url.path.endswith("/v2/sessions"):
             payload = json.loads(request.content.decode())
             assert payload["checks"]["user"]["loginName"] == login_name
             return httpx.Response(200, json={"sessionId": issued_session_id})
 
-        if request.method == "PATCH" and request.url.path.endswith(f"/v2/sessions/{issued_session_id}"):
+        if request.method == "PATCH" and request.url.path.endswith(
+            f"/v2/sessions/{issued_session_id}"
+        ):
             payload = json.loads(request.content.decode())
             if payload["checks"]["password"]["password"] != password:
                 return httpx.Response(400, json={"message": "invalid password"})
             return httpx.Response(200, json={"sessionId": issued_session_id})
 
-        if request.method == "GET" and request.url.path.endswith(f"/v2/sessions/{issued_session_id}"):
+        if request.method == "GET" and request.url.path.endswith(
+            f"/v2/sessions/{issued_session_id}"
+        ):
             return httpx.Response(
                 200,
                 json={
@@ -394,6 +395,64 @@ def test_zitadel_password_login_requires_issuer(
     assert response.json()["detail"] == "ZITADEL 账号密码登录缺少 issuer 配置。"
 
 
+def test_public_auth_options_report_unavailable_when_remote_auth_is_incomplete(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _build_oidc_settings()
+    settings.oidc_client_id = ""
+    settings.oidc_client_secret = ""
+    settings.zitadel_service_user_token = ""
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+
+    response = client.get("/api/auth/options")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "zitadel"
+    assert body["recommended_method"] == "unavailable"
+    assert body["zitadel_password"]["enabled"] is False
+    assert (
+        body["zitadel_password"]["reason"]
+        == "ZITADEL 账号密码登录配置缺失：service user token。"
+    )
+    assert body["oidc_redirect"]["enabled"] is False
+    assert body["oidc_redirect"]["reason"] == "OIDC 配置缺失：client_id, client_secret。"
+
+
+def test_public_auth_options_prefer_zitadel_password_when_full_remote_auth_config_exists(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _build_oidc_settings()
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+
+    response = client.get("/api/auth/options")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recommended_method"] == "zitadel_password"
+    assert body["zitadel_password"]["enabled"] is True
+    assert body["oidc_redirect"]["enabled"] is True
+
+
+def test_public_auth_options_fall_back_to_oidc_when_password_login_is_not_configured(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _build_oidc_settings()
+    settings.zitadel_service_user_token = ""
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+
+    response = client.get("/api/auth/options")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recommended_method"] == "oidc_redirect"
+    assert body["oidc_redirect"]["enabled"] is True
+    assert body["zitadel_password"]["enabled"] is False
+
+
 def test_refresh_issues_new_access_and_csrf_tokens(client: TestClient) -> None:
     login_body = _login(client, email="admin@taichuy.com", password="admin123")
 
@@ -407,7 +466,7 @@ def test_refresh_issues_new_access_and_csrf_tokens(client: TestClient) -> None:
     assert refresh_body["csrf_token"]
     assert refresh_body["access_token"] != login_body["access_token"]
     assert refresh_body["csrf_token"] != login_body["csrf_token"]
-    assert refresh_body["expires_at"] == login_body["expires_at"]
+    assert refresh_body["expires_at"].removesuffix("Z") == login_body["expires_at"].removesuffix("Z")
 
 
 def test_external_identity_binding_can_bind_existing_workspace_member(sqlite_session) -> None:
@@ -782,30 +841,14 @@ def test_logout_revokes_current_session(client: TestClient) -> None:
     assert session_response.json()["detail"] == "登录会话无效，请重新登录。"
 
 
-def test_login_rejects_invalid_password(client: TestClient) -> None:
-    response = client.post(
-        "/api/auth/login",
-        json={"email": "admin@taichuy.com", "password": "wrongpass"},
-    )
-    assert response.status_code == 401
-    assert response.json()["detail"] == "邮箱或密码错误。"
+def test_test_auth_helper_rejects_invalid_password(client: TestClient) -> None:
+    with pytest.raises(AuthenticationError, match="邮箱或密码错误。"):
+        issue_workspace_console_auth(client, email="admin@taichuy.com", password="wrongpass")
 
 
-def test_login_is_rejected_when_local_password_fallback_is_disabled(
-    client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "app.services.workspace_access.get_settings",
-        lambda: SimpleNamespace(
-            env="production",
-            local_password_fallback_enabled=False,
-        ),
-    )
-
+def test_local_password_login_route_is_not_registered(client: TestClient) -> None:
     response = client.post(
         "/api/auth/login",
         json={"email": "admin@taichuy.com", "password": "admin123"},
     )
-    assert response.status_code == 403
-    assert response.json()["detail"] == "当前环境未开放本地密码辅助登录。"
+    assert response.status_code == 404

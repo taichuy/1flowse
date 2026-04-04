@@ -2,13 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { WorkspaceLoginForm } from "@/components/workspace-login-form";
-import { getServerAuthSession } from "@/lib/server-workspace-access";
+import { getServerAuthSession, getServerPublicAuthOptions } from "@/lib/server-workspace-access";
 
 export default async function LoginPage() {
   const session = await getServerAuthSession();
   if (session) {
     redirect("/workspace");
   }
+
+  const authOptions = await getServerPublicAuthOptions();
+  const loginHeadline = getLoginHeadline(authOptions.recommended_method);
+  const loginSummary = getLoginSummary(authOptions.recommended_method);
 
   return (
     <main className="login-shell login-shell-dify">
@@ -26,26 +30,38 @@ export default async function LoginPage() {
 
         <div className="login-stage-body login-stage-body-compact login-stage-body-dify">
           <div className="login-stage-copy login-stage-copy-compact">
-            <p className="workspace-eyebrow">ZITADEL Sign In</p>
-            <h1>使用 ZITADEL 账号密码进入 7Flows Workspace</h1>
-            <p className="workspace-muted workspace-copy-wide">
-              浏览器只把账号密码提交到同源登录接口，由 backend 校验 ZITADEL 会话后换成现有
-              7Flows workspace session，并在成功后直接回到你的目标页面。
-            </p>
+            <p className="workspace-eyebrow">Workspace Sign In</p>
+            <h1>{loginHeadline}</h1>
+            <p className="workspace-muted workspace-copy-wide">{loginSummary}</p>
           </div>
 
           <section className="login-card login-card-dify">
-            <div className="login-copy">
-              <p className="workspace-eyebrow">Sign in</p>
-              <h2>继续使用 ZITADEL 账号密码登录</h2>
-              <p className="workspace-muted">
-                当前页面只保留一个登录入口，不再展示本地密码辅助入口或额外跳转式 OIDC 卡片。
-              </p>
-            </div>
-            <WorkspaceLoginForm />
+            <WorkspaceLoginForm authOptions={authOptions} />
           </section>
         </div>
       </section>
     </main>
   );
+}
+
+function getLoginHeadline(recommendedMethod: string) {
+  switch (recommendedMethod) {
+    case "oidc_redirect":
+      return "使用标准 OIDC 登录进入 7Flows Workspace";
+    case "zitadel_password":
+      return "使用 ZITADEL 账号密码进入 7Flows Workspace";
+    default:
+      return "当前环境还没有可用的 ZITADEL 登录入口";
+  }
+}
+
+function getLoginSummary(recommendedMethod: string) {
+  switch (recommendedMethod) {
+    case "oidc_redirect":
+      return "统一认证层已经具备完整 OIDC 配置，浏览器会先跳转到身份提供方，成功后再回到当前目标页面。";
+    case "zitadel_password":
+      return "浏览器只把账号密码提交到同源统一认证接口，由 backend 校验 ZITADEL 会话后换成现有 7Flows workspace session。";
+    default:
+      return "统一认证层已经接入，但当前环境既没有完整 OIDC 配置，也没有可用的 ZITADEL 账号密码登录凭据。";
+  }
 }
