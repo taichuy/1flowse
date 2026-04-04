@@ -9,7 +9,7 @@ import {
   WORKSPACE_TEAM_SETTINGS_HREF
 } from "@/lib/workspace-console";
 
-type WorkspaceLoginMethod = "zitadel_password" | "oidc_redirect" | "unavailable";
+type WorkspaceLoginMethod = "password" | "oidc_redirect" | "unavailable";
 
 type WorkspaceLoginFormProps = {
   authOptions: PublicAuthOptionsResponse;
@@ -38,8 +38,8 @@ export function WorkspaceLoginForm({ authOptions }: WorkspaceLoginFormProps) {
     [authOptions]
   );
   const methodMetadata = useMemo(
-    () => getLoginMethodMetadata(primaryMethod),
-    [primaryMethod]
+    () => getLoginMethodMetadata(primaryMethod, authOptions.provider),
+    [authOptions.provider, primaryMethod]
   );
   const oidcStartHref = useMemo(
     () => `/api/auth/oidc/start?next=${encodeURIComponent(nextHref)}`,
@@ -54,7 +54,7 @@ export function WorkspaceLoginForm({ authOptions }: WorkspaceLoginFormProps) {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (primaryMethod !== "zitadel_password") {
+    if (primaryMethod !== "password") {
       return;
     }
 
@@ -111,7 +111,7 @@ export function WorkspaceLoginForm({ authOptions }: WorkspaceLoginFormProps) {
         </div>
       ) : null}
 
-      {primaryMethod === "zitadel_password" ? (
+      {primaryMethod === "password" ? (
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="login-form-field">
             <label htmlFor="workspace-login-identifier">{methodMetadata.identifierLabel}</label>
@@ -171,14 +171,14 @@ function resolvePrimaryLoginMethod(authOptions: PublicAuthOptionsResponse): Work
   if (preferred === "oidc_redirect" && authOptions.oidc_redirect.enabled) {
     return preferred;
   }
-  if (preferred === "zitadel_password" && authOptions.zitadel_password.enabled) {
+  if (preferred === "password" && authOptions.password.enabled) {
     return preferred;
   }
   if (authOptions.oidc_redirect.enabled) {
     return "oidc_redirect";
   }
-  if (authOptions.zitadel_password.enabled) {
-    return "zitadel_password";
+  if (authOptions.password.enabled) {
+    return "password";
   }
   return "unavailable";
 }
@@ -189,12 +189,16 @@ function buildCapabilityMessages(
 ) {
   const messages: string[] = [];
 
-  if (primaryMethod === "zitadel_password" && authOptions.oidc_redirect.reason) {
+  if (
+    primaryMethod === "password" &&
+    authOptions.provider === "zitadel" &&
+    authOptions.oidc_redirect.reason
+  ) {
     messages.push(`OIDC 跳转登录暂不可用：${authOptions.oidc_redirect.reason}`);
   }
 
   if (primaryMethod === "unavailable") {
-    for (const reason of [authOptions.zitadel_password.reason, authOptions.oidc_redirect.reason]) {
+    for (const reason of [authOptions.password.reason, authOptions.oidc_redirect.reason]) {
       if (reason) {
         messages.push(reason);
       }
@@ -204,7 +208,7 @@ function buildCapabilityMessages(
   return messages;
 }
 
-function getLoginMethodMetadata(method: WorkspaceLoginMethod) {
+function getLoginMethodMetadata(method: WorkspaceLoginMethod, provider: string) {
   switch (method) {
     case "oidc_redirect":
       return {
@@ -219,18 +223,33 @@ function getLoginMethodMetadata(method: WorkspaceLoginMethod) {
         pendingMessage: "正在跳转到身份提供方...",
         submitPath: "/api/auth/oidc/start"
       };
-    case "zitadel_password":
+    case "password":
+      if (provider === "builtin") {
+        return {
+          componentName: "workspace-login-builtin-password-form",
+          eyebrow: "Builtin Auth",
+          title: "继续使用内置账号密码登录",
+          description:
+            "当前环境默认启用 7Flows 内置认证 provider，账号密码由 backend 直接校验并换发当前工作空间 session。",
+          identifierLabel: "邮箱",
+          identifierFieldName: "login_name",
+          helperCopy: "登录成功后将直接回到目标页面。",
+          pendingMessage: "正在验证内置账号...",
+          submitPath: "/api/auth/password/login"
+        };
+      }
+
       return {
-        componentName: "workspace-login-zitadel-password-form",
+        componentName: "workspace-login-password-form",
         eyebrow: "ZITADEL Sign In",
         title: "继续使用 ZITADEL 账号密码登录",
         description:
-          "浏览器只把账号密码提交到同源登录接口，由 backend 校验 ZITADEL 会话后换成当前工作空间 session。",
+          "浏览器只把账号密码提交到同源统一登录接口，由 backend 校验 ZITADEL 会话后换成当前工作空间 session。",
         identifierLabel: "账号",
         identifierFieldName: "login_name",
         helperCopy: "登录成功后将直接回到目标页面。",
         pendingMessage: "正在验证 ZITADEL 账号...",
-        submitPath: "/api/auth/zitadel/login"
+        submitPath: "/api/auth/password/login"
       };
     default:
       return {
@@ -238,7 +257,7 @@ function getLoginMethodMetadata(method: WorkspaceLoginMethod) {
         eyebrow: "Auth Unavailable",
         title: "当前没有可用的登录入口",
         description:
-          "认证服务可达，但公开配置显示当前环境既没有完整 OIDC 配置，也没有可用的 ZITADEL 账号密码登录凭据。",
+          "认证服务可达，但当前 provider 没有暴露可用的统一登录入口。",
         identifierLabel: "账号",
         identifierFieldName: "login_name",
         helperCopy: "",

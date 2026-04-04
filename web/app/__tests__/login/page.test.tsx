@@ -40,29 +40,29 @@ vi.mock("@/lib/server-workspace-access", () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getServerPublicAuthOptions).mockResolvedValue({
-    provider: "zitadel",
-    recommended_method: "zitadel_password",
-    zitadel_password: {
+    provider: "builtin",
+    recommended_method: "password",
+    password: {
       enabled: true,
       reason: null
     },
     oidc_redirect: {
       enabled: false,
-      reason: "OIDC 配置缺失：client_id, client_secret。"
+      reason: "当前认证 provider 不支持 OIDC 跳转登录。"
     }
   });
 });
 
 describe("LoginPage", () => {
-  it("renders the zitadel password shell when public auth options recommend password login", async () => {
+  it("renders the builtin password shell when public auth options recommend password login", async () => {
     vi.mocked(getServerAuthSession).mockResolvedValue(null);
 
     const html = renderToStaticMarkup(await LoginPage());
 
-    expect(html).toContain("使用 ZITADEL 账号密码进入 7Flows Workspace");
-    expect(html).toContain("同源统一认证接口");
+    expect(html).toContain("使用内置账号密码进入 7Flows Workspace");
+    expect(html).toContain("本地开发默认启用 7Flows 内置认证 provider");
     expect(html).toContain('data-component="workspace-login-form"');
-    expect(html).toContain('data-recommended-method="zitadel_password"');
+    expect(html).toContain('data-recommended-method="password"');
   });
 
   it("redirects to workspace when an auth session already exists", async () => {

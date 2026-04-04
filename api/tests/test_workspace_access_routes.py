@@ -59,6 +59,7 @@ def _build_oidc_settings():
     return SimpleNamespace(
         secret_key="oidc-test-secret",
         env="test",
+        auth_provider="zitadel",
         oidc_enabled=True,
         oidc_provider="zitadel",
         oidc_issuer="https://zitadel.example.com",
@@ -311,6 +312,28 @@ def test_default_admin_login_and_session_contract(client: TestClient) -> None:
     assert len(context_body["route_permissions"]) >= 5
 
 
+def test_builtin_password_login_issues_existing_workspace_session_contract(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/auth/password/login",
+        json={"login_name": "admin@taichuy.com", "password": "admin123"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert body["current_user"]["email"] == "admin@taichuy.com"
+    assert body["current_member"]["role"] == "owner"
+    assert body["cookie_contract"]["access_token_cookie_name"] in client.cookies
+    assert body["cookie_contract"]["refresh_token_cookie_name"] in client.cookies
+    assert body["cookie_contract"]["csrf_token_cookie_name"] in client.cookies
+
+    session_response = client.get("/api/auth/session")
+    assert session_response.status_code == 200
+    assert session_response.json()["current_user"]["email"] == "admin@taichuy.com"
+
+
 def test_zitadel_password_login_issues_existing_workspace_session_contract(
     client: TestClient,
     sqlite_session,
@@ -319,7 +342,7 @@ def test_zitadel_password_login_issues_existing_workspace_session_contract(
     settings = _install_zitadel_password_login_mocks(monkeypatch)
 
     response = client.post(
-        "/api/auth/zitadel/login",
+        "/api/auth/password/login",
         json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
     )
 
@@ -338,7 +361,7 @@ def test_zitadel_password_login_issues_existing_workspace_session_contract(
 
     bindings = sqlite_session.scalars(select(ExternalIdentityBindingRecord)).all()
     assert len(bindings) == 1
-    assert bindings[0].provider == settings.oidc_provider
+    assert bindings[0].provider == settings.auth_provider
     assert bindings[0].subject == "zitadel-admin-user"
 
 
@@ -353,7 +376,7 @@ def test_zitadel_password_login_does_not_require_full_oidc_client_config(
     settings.oidc_redirect_uri = ""
 
     response = client.post(
-        "/api/auth/zitadel/login",
+        "/api/auth/password/login",
         json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
     )
 
@@ -370,7 +393,7 @@ def test_zitadel_password_login_requires_service_token(
     monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
 
     response = client.post(
-        "/api/auth/zitadel/login",
+        "/api/auth/password/login",
         json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
     )
 
@@ -388,7 +411,7 @@ def test_zitadel_password_login_requires_issuer(
     monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
 
     response = client.post(
-        "/api/auth/zitadel/login",
+        "/api/auth/password/login",
         json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
     )
 
@@ -409,7 +432,7 @@ def test_zitadel_password_login_reports_provider_init_failures_as_restful_json(
     )
 
     response = client.post(
-        "/api/auth/zitadel/login",
+        "/api/auth/password/login",
         json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
     )
 
@@ -424,7 +447,7 @@ def test_zitadel_password_login_reports_validation_failures_as_restful_json(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/api/auth/zitadel/login",
+        "/api/auth/password/login",
         json={"email": "admin@taichuy.com", "password": "admin123"},
     )
 
@@ -435,6 +458,18 @@ def test_zitadel_password_login_reports_validation_failures_as_restful_json(
     assert body["message"] == body["detail"]
     assert body["errors"][0]["field"] == "login_name"
     assert body["errors"][0]["type"] == "missing"
+
+
+def test_public_auth_options_default_to_builtin_password_provider(client: TestClient) -> None:
+    response = client.get("/api/auth/options")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "builtin"
+    assert body["recommended_method"] == "password"
+    assert body["password"]["enabled"] is True
+    assert body["oidc_redirect"]["enabled"] is False
+    assert body["oidc_redirect"]["reason"] == "当前认证 provider 不支持 OIDC 跳转登录。"
 
 
 def test_public_auth_options_report_unavailable_when_remote_auth_is_incomplete(
@@ -453,9 +488,9 @@ def test_public_auth_options_report_unavailable_when_remote_auth_is_incomplete(
     body = response.json()
     assert body["provider"] == "zitadel"
     assert body["recommended_method"] == "unavailable"
-    assert body["zitadel_password"]["enabled"] is False
+    assert body["password"]["enabled"] is False
     assert (
-        body["zitadel_password"]["reason"]
+        body["password"]["reason"]
         == "ZITADEL 账号密码登录配置缺失：service user token。"
     )
     assert body["oidc_redirect"]["enabled"] is False
@@ -473,8 +508,8 @@ def test_public_auth_options_prefer_zitadel_password_when_full_remote_auth_confi
 
     assert response.status_code == 200
     body = response.json()
-    assert body["recommended_method"] == "zitadel_password"
-    assert body["zitadel_password"]["enabled"] is True
+    assert body["recommended_method"] == "password"
+    assert body["password"]["enabled"] is True
     assert body["oidc_redirect"]["enabled"] is True
 
 
@@ -492,7 +527,7 @@ def test_public_auth_options_fall_back_to_oidc_when_password_login_is_not_config
     body = response.json()
     assert body["recommended_method"] == "oidc_redirect"
     assert body["oidc_redirect"]["enabled"] is True
-    assert body["zitadel_password"]["enabled"] is False
+    assert body["password"]["enabled"] is False
 
 
 def test_refresh_issues_new_access_and_csrf_tokens(client: TestClient) -> None:
@@ -694,7 +729,7 @@ def test_oidc_callback_issues_existing_workspace_session_contract(
 
     bindings = sqlite_session.scalars(select(ExternalIdentityBindingRecord)).all()
     assert len(bindings) == 1
-    assert bindings[0].provider == settings.oidc_provider
+    assert bindings[0].provider == settings.auth_provider
     assert bindings[0].subject == "zitadel-admin-subject"
 
 

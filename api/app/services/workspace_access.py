@@ -233,6 +233,15 @@ def _normalize_external_identity_provider(provider: str) -> str:
     return normalized
 
 
+def _normalize_workspace_auth_provider(provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized in {"", "builtin"}:
+        return "builtin"
+    if normalized == "zitadel":
+        return normalized
+    raise AuthenticationError(f"当前认证 provider 不受支持：{provider}。")
+
+
 def _normalize_external_identity_subject(subject: str) -> str:
     normalized = subject.strip()
     if not normalized:
@@ -555,12 +564,12 @@ def build_console_route_access_policy_matrix() -> list[ConsoleRouteAccessPolicy]
             expose_in_contract=False,
         ),
         _build_route_access_policy(
-            route="/api/auth/zitadel/login",
+            route="/api/auth/password/login",
             access_level="guest",
             methods=["POST"],
             description=(
-                "ZITADEL 账号密码登录入口，由 backend 调用 Session API "
-                "校验并换发 workspace session。"
+                "统一账号密码登录入口；当前 provider 可为 builtin 或 ZITADEL，"
+                "由 backend 负责校验并换发 workspace session。"
             ),
             expose_in_contract=False,
         ),
@@ -1452,6 +1461,8 @@ def _normalize_workspace_oidc_next_path(next_path: str | None) -> str:
 
 def _require_workspace_oidc_settings():
     settings = get_settings()
+    if _normalize_workspace_auth_provider(settings.auth_provider) != "zitadel":
+        raise AuthenticationError("当前认证 provider 不支持 OIDC 跳转登录。")
     if not settings.oidc_enabled:
         raise AuthenticationError("OIDC 登录当前未启用。")
 
@@ -1464,8 +1475,8 @@ def _require_workspace_oidc_settings():
 
 def _require_workspace_zitadel_password_login_settings():
     settings = get_settings()
-    if _normalize_external_identity_provider(settings.oidc_provider) != "zitadel":
-        raise AuthenticationError("当前 OIDC provider 不支持 ZITADEL 账号密码登录。")
+    if _normalize_workspace_auth_provider(settings.auth_provider) != "zitadel":
+        raise AuthenticationError("当前认证 provider 不支持 ZITADEL 账号密码登录。")
     missing_fields = _collect_workspace_zitadel_password_login_missing_fields(settings)
     if "issuer" in missing_fields:
         raise AuthenticationError("ZITADEL 账号密码登录缺少 issuer 配置。")
@@ -1494,11 +1505,13 @@ def _collect_workspace_zitadel_password_login_missing_fields(settings) -> list[s
 
 def build_workspace_public_auth_options() -> PublicAuthOptionsResponse:
     settings = get_settings()
-    normalized_provider = (settings.oidc_provider or "").strip().lower() or "unknown"
+    auth_provider = _normalize_workspace_auth_provider(settings.auth_provider)
 
     oidc_redirect_enabled = False
     oidc_redirect_reason: str | None = None
-    if not settings.oidc_enabled:
+    if auth_provider != "zitadel":
+        oidc_redirect_reason = "当前认证 provider 不支持 OIDC 跳转登录。"
+    elif not settings.oidc_enabled:
         oidc_redirect_reason = "OIDC 登录当前未启用。"
     else:
         oidc_missing_fields = _collect_workspace_oidc_missing_fields(settings)
@@ -1507,31 +1520,33 @@ def build_workspace_public_auth_options() -> PublicAuthOptionsResponse:
         else:
             oidc_redirect_enabled = True
 
-    zitadel_password_enabled = False
-    zitadel_password_reason: str | None = None
-    if normalized_provider != "zitadel":
-        zitadel_password_reason = "当前 OIDC provider 不支持 ZITADEL 账号密码登录。"
+    password_enabled = False
+    password_reason: str | None = None
+    if auth_provider == "builtin":
+        password_enabled = True
+    elif auth_provider != "zitadel":
+        password_reason = "当前认证 provider 不支持账号密码登录。"
     else:
         zitadel_missing_fields = _collect_workspace_zitadel_password_login_missing_fields(settings)
         if zitadel_missing_fields:
-            zitadel_password_reason = (
+            password_reason = (
                 f"ZITADEL 账号密码登录配置缺失：{', '.join(zitadel_missing_fields)}。"
             )
         else:
-            zitadel_password_enabled = True
+            password_enabled = True
 
-    recommended_method: Literal["zitadel_password", "oidc_redirect", "unavailable"] = "unavailable"
-    if zitadel_password_enabled:
-        recommended_method = "zitadel_password"
+    recommended_method: Literal["password", "oidc_redirect", "unavailable"] = "unavailable"
+    if password_enabled:
+        recommended_method = "password"
     elif oidc_redirect_enabled:
         recommended_method = "oidc_redirect"
 
     return PublicAuthOptionsResponse(
-        provider=normalized_provider,
+        provider=auth_provider,
         recommended_method=recommended_method,
-        zitadel_password=PublicAuthOptionItem(
-            enabled=zitadel_password_enabled,
-            reason=zitadel_password_reason,
+        password=PublicAuthOptionItem(
+            enabled=password_enabled,
+            reason=password_reason,
         ),
         oidc_redirect=PublicAuthOptionItem(
             enabled=oidc_redirect_enabled,
@@ -1746,7 +1761,7 @@ def _decode_workspace_oidc_state_token(state_token: str) -> tuple[str, str]:
         raise AuthenticationError("OIDC state 已过期，请重新发起登录。")
 
     expected_provider = _normalize_external_identity_provider(
-        _require_workspace_oidc_settings().oidc_provider
+        _require_workspace_oidc_settings().auth_provider
     )
     if _normalize_external_identity_provider(provider) != expected_provider:
         raise AuthenticationError("OIDC state 与当前 provider 不匹配。")
@@ -1995,6 +2010,28 @@ def authenticate_workspace_user(
     )
 
 
+def authenticate_workspace_password_login(
+    db: Session,
+    *,
+    login_name: str,
+    password: str,
+    client_factory: Callable[[], httpx.Client] | None = None,
+) -> WorkspaceAccessContext:
+    auth_provider = _normalize_workspace_auth_provider(get_settings().auth_provider)
+    if auth_provider == "builtin":
+        return authenticate_workspace_user(db, email=login_name, password=password)
+
+    if auth_provider == "zitadel":
+        return authenticate_workspace_zitadel_password_login(
+            db,
+            login_name=login_name,
+            password=password,
+            client_factory=client_factory,
+        )
+
+    raise AuthenticationError(f"当前认证 provider 不受支持：{auth_provider}。")
+
+
 def authenticate_workspace_zitadel_password_login(
     db: Session,
     *,
@@ -2065,7 +2102,7 @@ def authenticate_workspace_zitadel_password_login(
     )
     resolved_identity = resolve_external_identity_binding(
         db,
-        provider=settings.oidc_provider,
+        provider=settings.auth_provider,
         subject=authenticated_user.subject,
         email=resolved_email,
         email_verified=(
@@ -2107,7 +2144,7 @@ def build_workspace_oidc_authorization_redirect(
     state_token = _encode_signed_payload(
         {
             "purpose": TOKEN_PURPOSE_OIDC_STATE,
-            "provider": _normalize_external_identity_provider(settings.oidc_provider),
+            "provider": _normalize_external_identity_provider(settings.auth_provider),
             "next": normalized_next_path,
             "nonce": nonce,
             "exp": int((_utc_now() + OIDC_STATE_TTL).timestamp()),
@@ -2194,7 +2231,7 @@ def authenticate_workspace_oidc_callback(
     )
     resolved_identity = resolve_external_identity_binding(
         db,
-        provider=settings.oidc_provider,
+        provider=settings.auth_provider,
         subject=str(identity_claims["sub"]),
         email=str(email).strip().lower() if isinstance(email, str) else None,
         email_verified=email_verified,

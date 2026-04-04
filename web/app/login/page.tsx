@@ -11,8 +11,8 @@ export default async function LoginPage() {
   }
 
   const authOptions = await getServerPublicAuthOptions();
-  const loginHeadline = getLoginHeadline(authOptions.recommended_method);
-  const loginSummary = getLoginSummary(authOptions.recommended_method);
+  const loginHeadline = getLoginHeadline(authOptions.provider, authOptions.recommended_method);
+  const loginSummary = getLoginSummary(authOptions.provider, authOptions.recommended_method);
 
   return (
     <main className="login-shell login-shell-dify">
@@ -23,7 +23,7 @@ export default async function LoginPage() {
             <span>Flows</span>
           </Link>
           <div className="login-stage-header-actions">
-            <span className="login-stage-chip">ZITADEL</span>
+            <span className="login-stage-chip">{getLoginProviderLabel(authOptions.provider)}</span>
             <span className="login-stage-chip subtle">Workspace</span>
           </div>
         </header>
@@ -44,24 +44,39 @@ export default async function LoginPage() {
   );
 }
 
-function getLoginHeadline(recommendedMethod: string) {
-  switch (recommendedMethod) {
-    case "oidc_redirect":
-      return "使用标准 OIDC 登录进入 7Flows Workspace";
-    case "zitadel_password":
-      return "使用 ZITADEL 账号密码进入 7Flows Workspace";
+function getLoginProviderLabel(provider: string) {
+  switch (provider) {
+    case "builtin":
+      return "BUILTIN";
+    case "zitadel":
+      return "ZITADEL";
     default:
-      return "当前环境还没有可用的 ZITADEL 登录入口";
+      return "AUTH";
   }
 }
 
-function getLoginSummary(recommendedMethod: string) {
+function getLoginHeadline(provider: string, recommendedMethod: string) {
+  switch (recommendedMethod) {
+    case "oidc_redirect":
+      return "使用标准 OIDC 登录进入 7Flows Workspace";
+    case "password":
+      return provider === "builtin"
+        ? "使用内置账号密码进入 7Flows Workspace"
+        : "使用统一账号密码进入 7Flows Workspace";
+    default:
+      return "当前环境还没有可用的统一登录入口";
+  }
+}
+
+function getLoginSummary(provider: string, recommendedMethod: string) {
   switch (recommendedMethod) {
     case "oidc_redirect":
       return "统一认证层已经具备完整 OIDC 配置，浏览器会先跳转到身份提供方，成功后再回到当前目标页面。";
-    case "zitadel_password":
-      return "浏览器只把账号密码提交到同源统一认证接口，由 backend 校验 ZITADEL 会话后换成现有 7Flows workspace session。";
+    case "password":
+      return provider === "builtin"
+        ? "本地开发默认启用 7Flows 内置认证 provider，种子账号或新建 workspace 成员都通过同一条统一认证接口换发 session。"
+        : "浏览器只把账号密码提交到同源统一认证接口，由 backend 校验外部身份 provider 会话后换成现有 7Flows workspace session。";
     default:
-      return "统一认证层已经接入，但当前环境既没有完整 OIDC 配置，也没有可用的 ZITADEL 账号密码登录凭据。";
+      return "统一认证层已经接入，但当前环境还没有暴露可用的认证方法。";
   }
 }

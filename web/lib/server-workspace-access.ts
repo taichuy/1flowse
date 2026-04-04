@@ -239,7 +239,7 @@ async function fetchPublicAuthOptions(): Promise<PublicAuthOptionsResponse> {
     return {
       provider: "unknown",
       recommended_method: "unavailable",
-      zitadel_password: {
+      password: {
         enabled: false,
         reason: "无法连接认证服务，请确认 API 服务可用。"
       },

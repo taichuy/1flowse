@@ -24,6 +24,7 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://postgres:sevenflows@localhost:35432/sevenflows"
     )
     redis_url: str = Field(default="redis://:sevenflows@localhost:36379/0")
+    auth_provider: str = "builtin"
     oidc_enabled: bool = True
     oidc_provider: str = "zitadel"
     oidc_issuer: str = ""

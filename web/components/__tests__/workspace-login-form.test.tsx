@@ -23,10 +23,23 @@ beforeEach(() => {
   searchParamValues.clear();
 });
 
+const builtinPasswordOptions = {
+  provider: "builtin",
+  recommended_method: "password" as const,
+  password: {
+    enabled: true,
+    reason: null
+  },
+  oidc_redirect: {
+    enabled: false,
+    reason: "当前认证 provider 不支持 OIDC 跳转登录。"
+  }
+};
+
 const zitadelPasswordOptions = {
   provider: "zitadel",
-  recommended_method: "zitadel_password" as const,
-  zitadel_password: {
+  recommended_method: "password" as const,
+  password: {
     enabled: true,
     reason: null
   },
@@ -39,7 +52,7 @@ const zitadelPasswordOptions = {
 const oidcRedirectOptions = {
   provider: "zitadel",
   recommended_method: "oidc_redirect" as const,
-  zitadel_password: {
+  password: {
     enabled: false,
     reason: "ZITADEL 账号密码登录配置缺失：service user token。"
   },
@@ -52,7 +65,7 @@ const oidcRedirectOptions = {
 const unavailableOptions = {
   provider: "zitadel",
   recommended_method: "unavailable" as const,
-  zitadel_password: {
+  password: {
     enabled: false,
     reason: "ZITADEL 账号密码登录配置缺失：service user token。"
   },
@@ -63,12 +76,24 @@ const unavailableOptions = {
 };
 
 describe("WorkspaceLoginForm", () => {
-  it("renders the zitadel password form when password login is the active method", () => {
+  it("renders the builtin password form when builtin auth is the active provider", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkspaceLoginForm, { authOptions: builtinPasswordOptions })
+    );
+
+    expect(html).toContain('data-component="workspace-login-builtin-password-form"');
+    expect(html).toContain('name="login_name"');
+    expect(html).toContain('name="password"');
+    expect(html).toContain("继续使用内置账号密码登录");
+    expect(html).toContain("当前环境默认启用 7Flows 内置认证 provider");
+  });
+
+  it("renders the zitadel password form when external password login is the active method", () => {
     const html = renderToStaticMarkup(
       createElement(WorkspaceLoginForm, { authOptions: zitadelPasswordOptions })
     );
 
-    expect(html).toContain('data-component="workspace-login-zitadel-password-form"');
+    expect(html).toContain('data-component="workspace-login-password-form"');
     expect(html).toContain('name="login_name"');
     expect(html).toContain('name="password"');
     expect(html).toContain("继续使用 ZITADEL 账号密码登录");
@@ -80,7 +105,7 @@ describe("WorkspaceLoginForm", () => {
     searchParamValues.set("next", "/workspace/settings/team");
 
     const html = renderToStaticMarkup(
-      createElement(WorkspaceLoginForm, { authOptions: zitadelPasswordOptions })
+      createElement(WorkspaceLoginForm, { authOptions: builtinPasswordOptions })
     );
 
     expect(html).toContain("进入成员管理");

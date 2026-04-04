@@ -10,12 +10,12 @@ from app.core.database import get_db
 from app.schemas.workspace_access import (
     AuthRefreshRequest,
     AuthSessionResponse,
+    PasswordLoginRequest,
     PublicAuthOptionsResponse,
     UserAccountItem,
     WorkspaceItem,
     WorkspaceLogoutResponse,
     WorkspaceMemberItem,
-    ZitadelPasswordLoginRequest,
 )
 from app.services.workspace_access import (
     AuthenticationError,
@@ -24,7 +24,7 @@ from app.services.workspace_access import (
     WorkspaceAccessContext,
     WorkspaceIssuedAuthTokens,
     authenticate_workspace_oidc_callback,
-    authenticate_workspace_zitadel_password_login,
+    authenticate_workspace_password_login,
     build_console_route_permission_matrix,
     build_workspace_oidc_authorization_redirect,
     build_workspace_public_auth_options,
@@ -90,7 +90,8 @@ def map_authentication_error(detail: str) -> tuple[int, str]:
             "缺少 issuer",
             "缺少 service user token",
             "OIDC 配置缺失",
-            "当前 OIDC provider 不支持",
+            "当前认证 provider 不支持",
+            "当前认证 provider 不受支持",
             "服务暂时不可用",
             "用户信息获取失败",
             "代理配置",
@@ -335,14 +336,14 @@ def get_authenticated_write_access_context(
         ) from exc
 
 
-@router.post("/zitadel/login", response_model=AuthSessionResponse)
-def login_with_zitadel_password(
-    payload: ZitadelPasswordLoginRequest,
+@router.post("/password/login", response_model=AuthSessionResponse)
+def login_with_password(
+    payload: PasswordLoginRequest,
     response: Response,
     db: Session = Depends(get_db),
 ) -> Response:
     try:
-        access_context = authenticate_workspace_zitadel_password_login(
+        access_context = authenticate_workspace_password_login(
             db,
             login_name=payload.login_name,
             password=payload.password,
