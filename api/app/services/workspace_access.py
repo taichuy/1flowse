@@ -1467,9 +1467,11 @@ def _require_workspace_oidc_settings():
 
 
 def _require_workspace_zitadel_password_login_settings():
-    settings = _require_workspace_oidc_settings()
+    settings = get_settings()
     if _normalize_external_identity_provider(settings.oidc_provider) != "zitadel":
         raise AuthenticationError("当前 OIDC provider 不支持 ZITADEL 账号密码登录。")
+    if not settings.oidc_issuer.strip():
+        raise AuthenticationError("ZITADEL 账号密码登录缺少 issuer 配置。")
     if not settings.zitadel_service_user_token.strip():
         raise AuthenticationError("ZITADEL 账号密码登录缺少 service user token 配置。")
     return settings

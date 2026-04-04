@@ -341,6 +341,25 @@ def test_zitadel_password_login_issues_existing_workspace_session_contract(
     assert bindings[0].subject == "zitadel-admin-user"
 
 
+def test_zitadel_password_login_does_not_require_full_oidc_client_config(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _install_zitadel_password_login_mocks(monkeypatch)
+    settings.oidc_enabled = False
+    settings.oidc_client_id = ""
+    settings.oidc_client_secret = ""
+    settings.oidc_redirect_uri = ""
+
+    response = client.post(
+        "/api/auth/zitadel/login",
+        json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_user"]["email"] == "admin@taichuy.com"
+
+
 def test_zitadel_password_login_requires_service_token(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -356,6 +375,23 @@ def test_zitadel_password_login_requires_service_token(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "ZITADEL 账号密码登录缺少 service user token 配置。"
+
+
+def test_zitadel_password_login_requires_issuer(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _build_oidc_settings()
+    settings.oidc_issuer = ""
+    monkeypatch.setattr("app.services.workspace_access.get_settings", lambda: settings)
+
+    response = client.post(
+        "/api/auth/zitadel/login",
+        json={"login_name": "admin@taichuy.com", "password": "zitadel-admin-pass"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "ZITADEL 账号密码登录缺少 issuer 配置。"
 
 
 def test_refresh_issues_new_access_and_csrf_tokens(client: TestClient) -> None:

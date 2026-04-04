@@ -327,10 +327,9 @@ def login_with_zitadel_password(
         if any(
             marker in detail
             for marker in (
+                "缺少 issuer",
                 "缺少 service user token",
                 "当前 OIDC provider 不支持",
-                "OIDC 登录当前未启用",
-                "OIDC 配置缺失",
                 "服务暂时不可用",
                 "用户信息获取失败",
             )
