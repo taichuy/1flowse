@@ -174,16 +174,25 @@ export function WorkspaceAppsWorkbench({
         footer={null}
         onCancel={handleCloseCreateModal}
         open={createModalOpen}
-        title="创建应用"
-        width={1120}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 32 }}>
+            <span style={{ fontSize: 18, fontWeight: 600 }}>创建应用</span>
+            <Button size="small" type="dashed" href={focusedCreateHref} target="_blank">
+              全屏打开
+            </Button>
+          </div>
+        }
+        width={1000}
+        styles={{
+          body: { paddingTop: 16, paddingBottom: 16 }
+        }}
       >
-        <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-          <Paragraph type="secondary">
-            继续复用当前工作台 bootstrap scope 与 starter 选择逻辑；当前可用 Starter {starterCount} 个，需要深链或分享筛选条件时，再切到全屏创建页。
-          </Paragraph>
-          <Button href={focusedCreateHref}>打开全屏创建页</Button>
-          {createModalOpen ? <WorkflowCreateWizard {...workflowCreateWizardProps} surface="workspace" /> : null}
-        </Space>
+        <div style={{ marginBottom: 24, padding: "12px 16px", backgroundColor: "#f9f9f9", borderRadius: 8, border: "1px solid #f0f0f0" }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            当前提供 {starterCount} 个预设 Starter。您可以在当前弹窗快速创建，或进入全屏模式以便获取分享链接。
+          </Text>
+        </div>
+        {createModalOpen ? <WorkflowCreateWizard {...workflowCreateWizardProps} surface="workspace" /> : null}
       </Modal>
 
       <Modal
