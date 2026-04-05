@@ -8,6 +8,7 @@ const SCRIPT_DIR = __dirname;
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const TMP_DIR = path.join(REPO_ROOT, 'tmp', 'dev-up');
 const LOG_DIR = path.join(REPO_ROOT, 'tmp', 'logs');
+const LOG_ARCHIVE_DIR = path.join(LOG_DIR, 'archive');
 const PID_DIR = path.join(TMP_DIR, 'pids');
 const MIDDLEWARE_DIR = path.join(REPO_ROOT, 'docker');
 const API_DIR = path.join(REPO_ROOT, 'api');
@@ -102,6 +103,17 @@ function displayPath(targetPath) {
   }
 
   return targetPath;
+}
+
+function createTimestampLabel(date = new Date()) {
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
 }
 
 function parseNoProxyEntries(envValue) {
@@ -946,22 +958,30 @@ function runMigrations() {
   });
 }
 
-function clearLogs() {
+function archiveLogs() {
   if (!fs.existsSync(LOG_DIR)) {
     return;
   }
 
   const files = fs.readdirSync(LOG_DIR);
-  let clearedCount = 0;
+  const logFiles = files.filter((file) => file.endsWith('.log'));
+  if (logFiles.length === 0) {
+    return;
+  }
+
+  const archiveDir = path.join(LOG_ARCHIVE_DIR, createTimestampLabel());
+  fs.mkdirSync(archiveDir, { recursive: true });
+
+  let archivedCount = 0;
   for (const file of files) {
     if (file.endsWith('.log')) {
-      fs.rmSync(path.join(LOG_DIR, file), { force: true });
-      clearedCount += 1;
+      fs.renameSync(path.join(LOG_DIR, file), path.join(archiveDir, file));
+      archivedCount += 1;
     }
   }
 
-  if (clearedCount > 0) {
-    log(`已清空 ${clearedCount} 个临时日志文件`);
+  if (archivedCount > 0) {
+    log(`已归档 ${archivedCount} 个旧日志文件到 ${displayPath(archiveDir)}`);
   }
 }
 
@@ -972,7 +992,7 @@ async function startAll() {
   stopBackgroundProcess('worker');
   stopBackgroundProcess('api');
 
-  clearLogs();
+  archiveLogs();
 
   requireCommand('uv');
   requireCommand('corepack');

@@ -48,6 +48,7 @@ node scripts/dev-up.js
 ```
 
 默认会复制缺失的本地环境文件、启动 `docker-compose.middleware.yaml`、执行 API migration，并在后台拉起 API / Worker / Scheduler / Web；日志写入 `tmp/logs/`，Web 默认地址为 `http://localhost:3100`。
+每次重新执行 `start` 时，旧的 `.log` 会自动归档到 `tmp/logs/archive/<timestamp>/`，避免排障证据被下一次重启直接覆盖。
 
 如果你想验证本地编译后的 Web 包，而不是 `next dev`，可以显式切到 build 模式：
 
