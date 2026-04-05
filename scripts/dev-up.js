@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require('fs');
+const net = require('net');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 
@@ -47,7 +48,7 @@ function usage() {
   --no-worker     不启动 Celery worker
   --no-beat       不启动 Celery beat
   --web-mode      Web 启动模式：\`dev\`（默认）或 \`build\`
-  --local-only    仅管理本地 API / Worker / Scheduler / Web，不启动或关闭 Docker
+  --local-only    仅管理本地 API / Worker / Scheduler / Web，不启动或关闭 Docker；要求当前配置的 Postgres / Redis 已可用
   -h, --help      查看帮助
 
 示例：
@@ -241,6 +242,48 @@ function parseEnvKeys(filePath) {
   return keys;
 }
 
+function stripOptionalQuotes(rawValue) {
+  const value = String(rawValue || '').trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
+}
+
+function parseEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+
+  const parsed = {};
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/u);
+  for (const line of lines) {
+    const normalizedLine = line.trim();
+    if (!normalizedLine || normalizedLine.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = normalizedLine.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = normalizedLine.slice(0, separatorIndex).trim();
+    const value = normalizedLine.slice(separatorIndex + 1);
+    if (!key) {
+      continue;
+    }
+
+    parsed[key] = stripOptionalQuotes(value);
+  }
+
+  return parsed;
+}
+
 function warnIfEnvExampleKeysAreMissing(examplePath, targetPath) {
   if (!fs.existsSync(examplePath) || !fs.existsSync(targetPath)) {
     return;
@@ -256,6 +299,187 @@ function warnIfEnvExampleKeysAreMissing(examplePath, targetPath) {
   log(
     `${displayPath(targetPath)} 缺少 ${missingKeys.length} 个配置项：${missingKeys.join(', ')}。请从 ${displayPath(examplePath)} 补齐或重建该文件。`
   );
+}
+
+function getApiRuntimeEnv() {
+  return {
+    ...parseEnvFile(path.join(API_DIR, '.env.example')),
+    ...parseEnvFile(path.join(API_DIR, '.env')),
+    ...process.env,
+  };
+}
+
+function inferDefaultPort(protocol) {
+  if (protocol.startsWith('postgres')) {
+    return 5432;
+  }
+  if (protocol.startsWith('redis')) {
+    return 6379;
+  }
+  if (protocol === 'http') {
+    return 80;
+  }
+  if (protocol === 'https') {
+    return 443;
+  }
+
+  return null;
+}
+
+function resolveNetworkTarget(name, envKey, rawUrl) {
+  if (!rawUrl) {
+    return {
+      name,
+      envKey,
+      rawUrl: '',
+      error: `${envKey} 未配置`,
+    };
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch (error) {
+    return {
+      name,
+      envKey,
+      rawUrl,
+      error: `${envKey} 不是合法 URL`,
+    };
+  }
+
+  const protocol = parsedUrl.protocol.replace(/:$/u, '');
+  if (protocol.startsWith('sqlite')) {
+    return null;
+  }
+
+  const host = parsedUrl.hostname;
+  const port = Number.parseInt(parsedUrl.port || '', 10) || inferDefaultPort(protocol);
+  if (!host || !port) {
+    return {
+      name,
+      envKey,
+      rawUrl,
+      error: `${envKey} 缺少可探测的 host/port`,
+    };
+  }
+
+  return {
+    name,
+    envKey,
+    rawUrl,
+    host,
+    port,
+  };
+}
+
+function probeTcpTarget(host, port, timeoutMs = 1000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const socket = net.createConnection({ host, port });
+
+    const finish = (result) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.on('connect', () => finish({ ok: true }));
+    socket.on('timeout', () => finish({ ok: false, reason: 'timeout' }));
+    socket.on('error', (error) => finish({ ok: false, reason: error && error.code ? error.code : String(error) }));
+  });
+}
+
+function formatNetworkTarget(target) {
+  if (target.error) {
+    return `${target.name}: ${target.error}`;
+  }
+
+  return `${target.name}: ${target.host}:${target.port}`;
+}
+
+async function collectCoreDependencyFailures() {
+  const apiEnv = getApiRuntimeEnv();
+  const targets = [
+    resolveNetworkTarget('postgres', 'SEVENFLOWS_DATABASE_URL', apiEnv.SEVENFLOWS_DATABASE_URL),
+    resolveNetworkTarget('redis', 'SEVENFLOWS_REDIS_URL', apiEnv.SEVENFLOWS_REDIS_URL),
+  ].filter(Boolean);
+
+  const failures = [];
+  for (const target of targets) {
+    if (target.error) {
+      failures.push({
+        ...target,
+        reason: target.error,
+      });
+      continue;
+    }
+
+    const result = await probeTcpTarget(target.host, target.port);
+    if (!result.ok) {
+      failures.push({
+        ...target,
+        reason: result.reason,
+      });
+    }
+  }
+
+  return failures;
+}
+
+function buildCoreDependencyFailureMessage(failures) {
+  const failureDetails = failures
+    .map((failure) => {
+      const location = failure.error ? failure.envKey : `${failure.host}:${failure.port}`;
+      const source = failure.rawUrl ? ` <- ${failure.envKey}=${failure.rawUrl}` : ` <- ${failure.envKey}`;
+      return `- ${failure.name}: ${location} (${failure.reason})${source}`;
+    })
+    .join('\n');
+
+  const suggestion = manageDockerMiddleware
+    ? '- 已请求启动 Docker 中间件，但 Postgres / Redis 仍未就绪。请先检查 `docker compose -f docker/docker-compose.middleware.yaml ps` 与对应容器日志。'
+    : '- `--local-only` 不会启动 Docker；请先让当前配置里的 Postgres / Redis 可达，或直接改用 `node scripts/dev-up.js`。';
+
+  return `核心依赖未就绪\n${failureDetails}\n${suggestion}`;
+}
+
+async function ensureCoreDependenciesReachable() {
+  const attempts = manageDockerMiddleware ? 15 : 2;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const failures = await collectCoreDependencyFailures();
+    if (failures.length === 0) {
+      if (attempt > 1) {
+        log(
+          `核心依赖已就绪：${[
+            resolveNetworkTarget('postgres', 'SEVENFLOWS_DATABASE_URL', getApiRuntimeEnv().SEVENFLOWS_DATABASE_URL),
+            resolveNetworkTarget('redis', 'SEVENFLOWS_REDIS_URL', getApiRuntimeEnv().SEVENFLOWS_REDIS_URL),
+          ]
+            .filter(Boolean)
+            .map(formatNetworkTarget)
+            .join(', ')}`
+        );
+      }
+      return;
+    }
+
+    if (attempt === attempts) {
+      throw new Error(buildCoreDependencyFailureMessage(failures));
+    }
+
+    if (manageDockerMiddleware) {
+      log(`等待核心依赖就绪（第 ${attempt}/${attempts} 次检查）`);
+      await sleep(1000);
+      continue;
+    }
+
+    await sleep(250);
+  }
 }
 
 function pidFileFor(serviceName) {
@@ -764,6 +988,7 @@ async function startAll() {
   } else {
     log('按本地模式跳过 Docker 中间件启动');
   }
+  await ensureCoreDependenciesReachable();
   runMigrations();
 
   startBackgroundProcess('api', API_DIR, 'uv', [
