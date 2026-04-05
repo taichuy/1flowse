@@ -308,6 +308,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
         starterCount={workflowCreateWizardProps.starters.length}
         statusFilters={statusFilters}
         visibleAppSummary={visibleAppSummary}
+        workflowCreateBootstrapRequest={workflowCreateBootstrapRequest}
         workflowCreateWizardProps={workflowCreateWizardProps}
         workspaceUtilityEntry={workspaceUtilityEntry}
         workspaceName={workspaceContext.workspace.name}

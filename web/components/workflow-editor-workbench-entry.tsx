@@ -2,7 +2,7 @@
 
 import { AuthoringBootstrapEntry } from "@/components/authoring-bootstrap-entry";
 import { AuthoringBootstrapEntryLoadingState } from "@/components/authoring-bootstrap-entry-loading-state";
-import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap";
+import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap.client";
 import { WorkflowEditorWorkbench } from "@/components/workflow-editor-workbench";
 import type {
   WorkflowEditorWorkbenchBootstrapData,

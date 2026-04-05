@@ -331,7 +331,7 @@ async function fetchWorkspaceAccessResponse(
   }
 }
 
-async function fetchServerWorkspaceAccessJson<T>(
+export async function fetchServerWorkspaceAccessJson<T>(
   path: string,
   init?: RequestInit
 ): Promise<T | null> {

@@ -98,7 +98,7 @@ export type WorkflowLibrarySnapshot = {
   tools: PluginToolRegistryItem[];
 };
 
-type WorkflowLibrarySnapshotResponse = {
+export type WorkflowLibrarySnapshotResponse = {
   nodes?: Array<Record<string, unknown>>;
   starters?: Array<Record<string, unknown>>;
   starter_source_lanes?: Array<Record<string, unknown>>;
@@ -169,7 +169,7 @@ export async function getWorkflowLibrarySnapshot({
   }
 }
 
-function normalizeWorkflowLibrarySnapshot(
+export function normalizeWorkflowLibrarySnapshot(
   input: WorkflowLibrarySnapshotResponse
 ): WorkflowLibrarySnapshot {
   const tools = Array.isArray(input.tools) ? input.tools.map(normalizeToolItem) : [];

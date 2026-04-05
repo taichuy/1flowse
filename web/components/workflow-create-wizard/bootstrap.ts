@@ -42,6 +42,11 @@ export function buildWorkflowCreateWizardBootstrapRequest(
 export async function loadWorkflowCreateWizardBootstrap(
   request: WorkflowCreateWizardBootstrapRequest
 ): Promise<WorkflowCreateWizardProps> {
+  if (typeof window === "undefined") {
+    const { loadServerWorkflowCreateWizardBootstrap } = await import("./server-bootstrap");
+    return loadServerWorkflowCreateWizardBootstrap(request);
+  }
+
   const [workflowLibrary, workflows, legacyAuthGovernanceSnapshot] = await Promise.all([
     getWorkflowLibrarySnapshot(request.libraryQuery),
     getWorkflows(),

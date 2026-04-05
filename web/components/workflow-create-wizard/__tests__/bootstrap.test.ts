@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildWorkflowCreateWizardBootstrapRequest,
@@ -22,6 +22,7 @@ vi.mock("@/lib/workflow-publish-client", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  Object.assign(globalThis, { window: {} });
 
   vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue({
     nodes: [{ type: "trigger" }],
@@ -51,6 +52,10 @@ beforeEach(() => {
       offline_inventory: []
     }
   } as Awaited<ReturnType<typeof getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot>>);
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(globalThis, "window");
 });
 
 describe("loadWorkflowCreateWizardBootstrap", () => {

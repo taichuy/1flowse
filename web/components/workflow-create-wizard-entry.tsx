@@ -4,8 +4,8 @@ import { useEffect, useState, type ComponentType } from "react";
 
 import { AuthoringBootstrapEntry } from "@/components/authoring-bootstrap-entry";
 import { AuthoringBootstrapEntryLoadingState } from "@/components/authoring-bootstrap-entry-loading-state";
+import { loadWorkflowCreateWizardBootstrap } from "@/components/workflow-create-wizard/bootstrap.client";
 import { WorkflowCreateFirstScreenShell } from "@/components/workflow-create-wizard/first-screen-shell";
-import { loadWorkflowCreateWizardBootstrap } from "@/components/workflow-create-wizard/bootstrap";
 import type {
   WorkflowCreateWizardEntryProps,
   WorkflowCreateWizardProps

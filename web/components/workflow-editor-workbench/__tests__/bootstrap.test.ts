@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap";
 import { getPluginRegistrySnapshot } from "@/lib/get-plugin-registry";
@@ -29,6 +29,7 @@ vi.mock("@/lib/get-system-overview", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  Object.assign(globalThis, { window: {} });
 
   vi.mocked(getWorkflows).mockResolvedValue([
     { id: "workflow-1" },
@@ -123,6 +124,10 @@ beforeEach(() => {
       }
     }
   } as unknown as Awaited<ReturnType<typeof getSystemOverview>>);
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(globalThis, "window");
 });
 
 describe("loadWorkflowEditorWorkbenchBootstrap", () => {

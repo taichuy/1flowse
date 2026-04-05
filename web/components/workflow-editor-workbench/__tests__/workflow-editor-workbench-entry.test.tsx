@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap";
+import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap.client";
 import { WorkflowEditorWorkbenchEntry } from "@/components/workflow-editor-workbench-entry";
 import type {
   WorkflowEditorWorkbenchBootstrapData,
@@ -31,7 +31,7 @@ vi.mock("@/components/workflow-editor-workbench", () => ({
     )
 }));
 
-vi.mock("@/components/workflow-editor-workbench/bootstrap", () => ({
+vi.mock("@/components/workflow-editor-workbench/bootstrap.client", () => ({
   loadWorkflowEditorWorkbenchBootstrap: vi.fn()
 }));
 

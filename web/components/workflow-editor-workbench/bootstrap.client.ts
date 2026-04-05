@@ -12,11 +12,6 @@ import type {
 export async function loadWorkflowEditorWorkbenchBootstrap(
   _request: WorkflowEditorWorkbenchBootstrapRequest
 ): Promise<WorkflowEditorWorkbenchBootstrapData> {
-  if (typeof window === "undefined") {
-    const { loadServerWorkflowEditorWorkbenchBootstrap } = await import("./server-bootstrap");
-    return loadServerWorkflowEditorWorkbenchBootstrap(_request);
-  }
-
   const [workflows, workflowLibrary, pluginRegistry, systemOverview, modelProviderRegistry] =
     await Promise.all([
       getWorkflows(),

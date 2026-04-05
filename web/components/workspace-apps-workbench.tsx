@@ -13,7 +13,7 @@ import {
   type WorkspaceAppCard,
   type WorkspaceAppsWorkbenchProps
 } from "@/components/workspace-apps-workbench/shared";
-import { WorkflowCreateWizard } from "@/components/workflow-create-wizard";
+import { WorkflowCreateWizardEntry } from "@/components/workflow-create-wizard-entry";
 import { updateWorkflow } from "@/lib/get-workflows";
 
 const { Paragraph, Text, Title } = Typography;
@@ -35,6 +35,7 @@ export function WorkspaceAppsWorkbench({
   focusedCreateHref,
   workspaceUtilityEntry,
   starterCount,
+  workflowCreateBootstrapRequest,
   workflowCreateWizardProps,
   filteredApps,
   searchState
@@ -192,7 +193,12 @@ export function WorkspaceAppsWorkbench({
             当前提供 {starterCount} 个预设 Starter。您可以在当前弹窗快速创建，或进入全屏模式以便获取分享链接。
           </Text>
         </div>
-        {createModalOpen ? <WorkflowCreateWizard {...workflowCreateWizardProps} surface="workspace" /> : null}
+        {createModalOpen ? (
+          <WorkflowCreateWizardEntry
+            bootstrapRequest={workflowCreateBootstrapRequest}
+            initialBootstrapData={workflowCreateWizardProps}
+          />
+        ) : null}
       </Modal>
 
       <Modal

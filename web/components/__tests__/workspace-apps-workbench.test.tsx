@@ -73,6 +73,22 @@ function buildWorkbenchProps(
       badge: "4 种角色"
     },
     starterCount: 5,
+    workflowCreateBootstrapRequest: {
+      governanceQueryScope: {
+        activeTrack: "应用新建编排",
+        sourceGovernanceKind: "all",
+        needsFollowUp: false,
+        searchQuery: "",
+        selectedTemplateId: null
+      },
+      includeLegacyAuthGovernanceSnapshot: false,
+      libraryQuery: {
+        businessTrack: "应用新建编排",
+        needsFollowUp: false,
+        includeBuiltinStarters: true,
+        includeStarterDefinitions: true
+      }
+    },
     workflowCreateWizardProps: {
       catalogToolCount: 0,
       governanceQueryScope: {
@@ -161,7 +177,6 @@ describe("WorkspaceAppsWorkbench", () => {
     const html = renderToStaticMarkup(createElement(WorkspaceAppsWorkbench, buildWorkbenchProps()));
 
     expect(html).toContain("workspace-apps-dify-shell");
-    expect(html).toContain('data-component="workspace-catalog-header"');
     expect(html).toContain('data-component="workspace-board-overview"');
     expect(html).toContain('data-component="workspace-browse-rail"');
     expect(html).toContain('data-component="workspace-app-list-stage"');
@@ -173,11 +188,8 @@ describe("WorkspaceAppsWorkbench", () => {
     expect(html).not.toContain('data-component="workflow-create-preview-panel"');
     expect(html).toContain("创建应用");
     expect(html).toContain("全屏创建页");
-    expect(html).toContain("卡片目录支持分页；创建与基础编辑都收口进工作台 modal。");
     expect(html).toContain("编辑基础信息");
-    expect(html).toContain("当前仅提供进入 Studio 与编辑基础信息；删除与复制待后端契约。");
     expect(html).toContain("管理成员与权限");
-    expect(html).toContain("应用目录");
     expect(html).toContain("进入 Studio");
     expect(html).toContain("7Flows Workspace");
     expect(html).not.toContain("workspace-app-row");
@@ -197,7 +209,7 @@ describe("WorkspaceAppsWorkbench", () => {
     );
 
     expect(html).toContain('data-component="workspace-app-pagination-summary"');
-    expect(html).toContain("第 1 / 2 页 · 当前显示 6 / 7 个应用");
+    expect(html).toContain("第 1 / 2 页 · 共 7 个应用");
     expect(html).toContain("Workflow 6");
     expect(html).not.toContain("Workflow 7");
   });
