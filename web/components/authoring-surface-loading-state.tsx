@@ -1,6 +1,4 @@
-import { Card, Skeleton, Space, Spin, Typography } from "antd";
-
-const { Paragraph, Text, Title } = Typography;
+import { Spin } from "antd";
 
 export type AuthoringSurfaceLoadingStateProps = {
   title: string;
@@ -14,34 +12,75 @@ export function AuthoringSurfaceLoadingState({
   detail
 }: AuthoringSurfaceLoadingStateProps) {
   return (
-    <Card
+    <section
       aria-busy="true"
       className="authoring-surface-loading-card"
       data-component="authoring-surface-loading-state"
       data-loading-ui="antd"
-      style={{ width: "100%", maxWidth: 720, margin: "0 auto" }}
-      styles={{ body: { padding: 32 } }}
-      variant="borderless"
+      style={{
+        width: "100%",
+        maxWidth: 720,
+        margin: "0 auto",
+        padding: 32,
+        background: "#fff",
+        border: "1px solid #f0f0f0"
+      }}
     >
-      <Space orientation="vertical" size={24} style={{ width: "100%" }}>
-        <Space align="start" size={16} style={{ width: "100%" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 24
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 16
+          }}
+        >
           <Spin size="large" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <Text type="secondary">加载中</Text>
-            <Title level={4} style={{ margin: "8px 0 0" }}>
+            <div
+              style={{
+                color: "rgba(0, 0, 0, 0.45)",
+                fontSize: 14,
+                lineHeight: "22px"
+              }}
+            >
+              加载中
+            </div>
+            <h2
+              style={{
+                margin: "8px 0 0",
+                fontSize: 24,
+                lineHeight: 1.3
+              }}
+            >
               {title}
-            </Title>
-            <Paragraph style={{ margin: "8px 0 0" }} type="secondary">
+            </h2>
+            <p
+              style={{
+                margin: "8px 0 0",
+                color: "rgba(0, 0, 0, 0.65)",
+                lineHeight: 1.7
+              }}
+            >
               {summary}
-            </Paragraph>
+            </p>
           </div>
-        </Space>
+        </div>
 
-        <Paragraph style={{ margin: 0 }} type="secondary">
+        <p
+          style={{
+            margin: 0,
+            color: "rgba(0, 0, 0, 0.65)",
+            lineHeight: 1.7
+          }}
+        >
           {detail}
-        </Paragraph>
-
-        <Skeleton active paragraph={{ rows: 3 }} title={{ width: "48%" }} />
+        </p>
 
         <div
           style={{
@@ -50,10 +89,32 @@ export function AuthoringSurfaceLoadingState({
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))"
           }}
         >
-          <Skeleton active paragraph={{ rows: 2 }} title={{ width: "52%" }} />
-          <Skeleton active paragraph={{ rows: 2 }} title={{ width: "44%" }} />
+          <div
+            style={{
+              padding: 16,
+              background: "#fafafa",
+              border: "1px solid #f0f0f0"
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: 8 }}>首屏策略</strong>
+            <span style={{ color: "rgba(0, 0, 0, 0.65)", lineHeight: 1.7 }}>
+              先交付作者壳层，再按需加载编辑器与次级面板。
+            </span>
+          </div>
+          <div
+            style={{
+              padding: 16,
+              background: "#fafafa",
+              border: "1px solid #f0f0f0"
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: 8 }}>当前阶段</strong>
+            <span style={{ color: "rgba(0, 0, 0, 0.65)", lineHeight: 1.7 }}>
+              正在拆离作者热路径里的重客户端工作台与 no-store 次级数据。
+            </span>
+          </div>
         </div>
-      </Space>
-    </Card>
+      </div>
+    </section>
   );
 }
