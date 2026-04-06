@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MenuFoldOutlined } from "@ant-design/icons";
-import { Button, Menu } from "antd";
+import { Menu } from "antd";
 import type { ItemType } from "antd/es/menu/interface";
 
 import {
@@ -29,7 +28,6 @@ type WorkflowStudioSidebarProps = {
   runsHref?: string;
   className?: string;
   dataComponent?: string;
-  onCollapse?: () => void;
 };
 
 function resolveWorkflowStudioSidebarHref(
@@ -85,8 +83,7 @@ export function WorkflowStudioSidebar({
   surfaceHrefs,
   runsHref = "/runs",
   className,
-  dataComponent = "workflow-studio-sidebar",
-  onCollapse
+  dataComponent = "workflow-studio-sidebar"
 }: WorkflowStudioSidebarProps) {
   const studioModeLabel = getWorkflowStudioSurfaceDefinition(activeStudioSurface).modeLabel;
   const contentClassName = className?.trim() ? className : undefined;
@@ -134,48 +131,20 @@ export function WorkflowStudioSidebar({
 
   return (
     <div className={contentClassName} data-component={dataComponent}>
-      {onCollapse ? (
-        <div className="workflow-editor-sidebar-studio-rail-head">
-          <div className="workflow-studio-rail-header">
-            <div className="workflow-studio-breadcrumb-row">
-              <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
-                编排中心
-              </Link>
-              <span className="workflow-studio-breadcrumb-current">{workflowName}</span>
-            </div>
-
-            <div className="workflow-studio-inline-metrics">
-              <span className="workflow-studio-inline-tag">v{workflowVersion}</span>
-              <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
-              <span className="workflow-studio-shell-mode">{studioModeLabel}</span>
-            </div>
-          </div>
-
-          <Button
-            aria-label="收起左侧栏"
-            className="workflow-editor-sidebar-collapse-button"
-            data-action="collapse-sidebar"
-            icon={<MenuFoldOutlined />}
-            onClick={onCollapse}
-            type="text"
-          />
+      <div className="workflow-studio-rail-header">
+        <div className="workflow-studio-breadcrumb-row">
+          <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
+            编排中心
+          </Link>
+          <span className="workflow-studio-breadcrumb-current">{workflowName}</span>
         </div>
-      ) : (
-        <div className="workflow-studio-rail-header">
-          <div className="workflow-studio-breadcrumb-row">
-            <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
-              编排中心
-            </Link>
-            <span className="workflow-studio-breadcrumb-current">{workflowName}</span>
-          </div>
 
-          <div className="workflow-studio-inline-metrics">
-            <span className="workflow-studio-inline-tag">v{workflowVersion}</span>
-            <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
-            <span className="workflow-studio-shell-mode">{studioModeLabel}</span>
-          </div>
+        <div className="workflow-studio-inline-metrics">
+          <span className="workflow-studio-inline-tag">v{workflowVersion}</span>
+          <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
+          <span className="workflow-studio-shell-mode">{studioModeLabel}</span>
         </div>
-      )}
+      </div>
 
       <Menu
         className="workflow-studio-sidebar-menu"

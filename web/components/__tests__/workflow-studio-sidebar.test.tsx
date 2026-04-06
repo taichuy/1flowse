@@ -57,7 +57,7 @@ describe("WorkflowStudioSidebar", () => {
     expect(html).toContain("workflow-studio-sidebar-link-trigger");
   });
 
-  it("shows the collapse affordance when used inside the editor sidebar", () => {
+  it("renders the shared sidebar header and menu without embedding a nested card shell", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowStudioSidebar, {
         workflowId: "workflow-1",
@@ -67,13 +67,12 @@ describe("WorkflowStudioSidebar", () => {
         workflowStageLabel: "draft only",
         activeStudioSurface: "editor",
         workspaceStarterLibraryHref: "/workspace-starters",
-        dataComponent: "workflow-editor-sidebar-studio-rail",
-        onCollapse: () => undefined
+        dataComponent: "workflow-editor-sidebar-studio-rail"
       })
     );
 
     expect(html).toContain('data-component="workflow-editor-sidebar-studio-rail"');
-    expect(html).toContain('data-action="collapse-sidebar"');
-    expect(html).toContain("workflow-editor-sidebar-collapse-button");
+    expect(html).toContain("编排中心");
+    expect(html).toContain("workflow-studio-sidebar-menu");
   });
 });
