@@ -718,9 +718,7 @@ a {
 }
 
 .workflow-studio-shell-editor {
-  display: flex;
-  flex: 1;
-  min-height: 0;
+  grid-template-columns: minmax(248px, 280px) minmax(0, 1fr);
 }
 
 .workflow-studio-shell-bar {
@@ -750,6 +748,7 @@ a {
 .workflow-studio-stage-editor {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
 }
 

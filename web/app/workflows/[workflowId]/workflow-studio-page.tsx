@@ -846,20 +846,18 @@ function WorkflowStudioShell({
           data-component="workflow-studio-shell"
           data-surface-layout={isCanvasEditorSurface ? "canvas-overlay" : "rail"}
         >
-          {isCanvasEditorSurface ? null : (
-            <WorkflowStudioSidebar
-              activeStudioSurface={activeStudioSurface}
-              className="workflow-studio-shell-bar workflow-studio-rail"
-              dataComponent="workflow-studio-rail"
-              surfaceHrefs={surfaceHrefs}
-              workflowId={workflowId}
-              workflowLibraryHref={workflowLibraryHref}
-              workflowName={workflowName}
-              workflowStageLabel={workflowStageLabel}
-              workflowVersion={workflowVersion}
-              workspaceStarterLibraryHref={workspaceStarterLibraryHref}
-            />
-          )}
+          <WorkflowStudioSidebar
+            activeStudioSurface={activeStudioSurface}
+            className="workflow-studio-shell-bar workflow-studio-rail"
+            dataComponent="workflow-studio-rail"
+            surfaceHrefs={surfaceHrefs}
+            workflowId={workflowId}
+            workflowLibraryHref={workflowLibraryHref}
+            workflowName={workflowName}
+            workflowStageLabel={workflowStageLabel}
+            workflowVersion={workflowVersion}
+            workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+          />
 
           <div className={stageClassName}>{children}</div>
         </section>

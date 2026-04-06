@@ -27,7 +27,6 @@ import {
   sortWorkflowNodeCatalogForAuthoring
 } from "@/lib/workflow-node-catalog";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
-import { WorkflowStudioSidebar } from "@/components/workflow-studio-sidebar";
 import type { WorkflowEditorDiagnosticsPanelProps } from "@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-diagnostics-panel";
 import type { WorkflowEditorRunPanelProps } from "@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-run-panel";
 import type {
@@ -283,19 +282,6 @@ function WorkflowEditorSidebarComponent({
 
   return (
     <aside className="editor-sidebar">
-      <WorkflowStudioSidebar
-        activeStudioSurface="editor"
-        className="workflow-editor-sidebar-studio-rail"
-        dataComponent="workflow-editor-sidebar-studio-rail"
-        onCollapse={onCollapse}
-        workflowId={workflowId}
-        workflowLibraryHref={workflowLibraryHref}
-        workflowName={workflowName}
-        workflowStageLabel={workflowStageLabel}
-        workflowVersion={workflowVersion}
-        workspaceStarterLibraryHref={workspaceStarterLibraryHref}
-      />
-
       <Tabs
         activeKey={activeTabKey}
         className="workflow-editor-sidebar-tabs"

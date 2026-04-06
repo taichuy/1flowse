@@ -220,7 +220,7 @@ describe("WorkflowEditorSidebar", () => {
     expect(html).not.toContain('data-component="workflow-editor-diagnostics-panel"');
   });
 
-  it("shows a collapse action on the shared studio rail section", () => {
+  it("renders the node rail without duplicating the workflow studio sidebar", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorSidebar, {
         workflowId: "workflow-1",
@@ -256,10 +256,10 @@ describe("WorkflowEditorSidebar", () => {
       })
     );
 
-    expect(html).toContain('data-component="workflow-editor-sidebar-studio-rail"');
-    expect(html).toContain('data-action="collapse-sidebar"');
-    expect(html).toContain("编排中心");
-    expect(html).toContain("画布编排");
+    expect(html).not.toContain('data-component="workflow-editor-sidebar-studio-rail"');
+    expect(html).toContain("节点目录");
+    expect(html).toContain("诊断");
+    expect(html).toContain("运行");
   });
 
   it("mounts diagnostics content when the diagnostics tab becomes the active entry", () => {

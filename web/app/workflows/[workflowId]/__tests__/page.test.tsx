@@ -810,7 +810,8 @@ describe("Workflow studio routes", () => {
     expect(html).toContain('data-workflow-id="workflow-1"');
     expect(html).toContain('data-bootstrap-workflow-id="workflow-1"');
     expect(html).toContain('data-bootstrap-surface="editor"');
-    expect(html).not.toContain('data-component="workflow-studio-rail"');
+    expect(html).toContain('data-component="workflow-studio-rail"');
+    expect(html).toContain("画布编排");
     expect(html).not.toContain('data-component="workflow-studio-editor-toolbar"');
     expect(html).toContain(
       'data-tools-href="/workspace/tools?return_href=%2Fworkflows%2Fworkflow-1%2Feditor&amp;workflow_id=workflow-1&amp;workflow_surface=editor"'
