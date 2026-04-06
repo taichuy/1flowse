@@ -37,6 +37,9 @@ import type { WorkspaceContextResponse } from "@/lib/workspace-access";
 Object.assign(globalThis, { React });
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: vi.fn()
+  }),
   redirect: (href: string) => {
     throw new Error(`redirect:${href}`);
   },

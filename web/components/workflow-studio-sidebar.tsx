@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MenuFoldOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { Button, Menu } from "antd";
+import type { ItemType } from "antd/es/menu/interface";
 
 import {
   buildWorkflowStudioSurfaceHref,
@@ -36,6 +40,40 @@ function resolveWorkflowStudioSidebarHref(
   return surfaceHrefs?.[surface] ?? buildWorkflowStudioSurfaceHref(workflowId, surface);
 }
 
+type WorkflowStudioSidebarMenuLinkProps = {
+  href: string;
+  label: string;
+  isActive?: boolean;
+  refreshOnClick?: boolean;
+};
+
+function WorkflowStudioSidebarMenuLink({
+  href,
+  label,
+  isActive = false,
+  refreshOnClick = false
+}: WorkflowStudioSidebarMenuLinkProps) {
+  const router = useRouter();
+
+  return (
+    <Link
+      className="workflow-studio-sidebar-link-trigger"
+      data-active={isActive ? "true" : "false"}
+      href={href}
+      onClick={(event) => {
+        if (!isActive || !refreshOnClick) {
+          return;
+        }
+
+        event.preventDefault();
+        router.refresh();
+      }}
+    >
+      {label}
+    </Link>
+  );
+}
+
 export function WorkflowStudioSidebar({
   workflowId,
   workflowName,
@@ -52,6 +90,47 @@ export function WorkflowStudioSidebar({
 }: WorkflowStudioSidebarProps) {
   const studioModeLabel = getWorkflowStudioSurfaceDefinition(activeStudioSurface).modeLabel;
   const contentClassName = className?.trim() ? className : undefined;
+  const primaryMenuItems: ItemType[] = PRIMARY_WORKFLOW_STUDIO_SURFACES.map((item) => {
+    const href = resolveWorkflowStudioSidebarHref(workflowId, item.key, surfaceHrefs);
+
+    return {
+      key: item.key,
+      label: (
+        <WorkflowStudioSidebarMenuLink
+          href={href}
+          isActive={activeStudioSurface === item.key}
+          label={item.label}
+          refreshOnClick
+        />
+      )
+    };
+  });
+  const secondaryMenuItems: ItemType[] = [
+    {
+      key: "publish",
+      label: (
+        <WorkflowStudioSidebarMenuLink
+          href={resolveWorkflowStudioSidebarHref(workflowId, "publish", surfaceHrefs)}
+          isActive={activeStudioSurface === "publish"}
+          label="发布治理"
+          refreshOnClick
+        />
+      )
+    },
+    {
+      key: "runs",
+      label: <WorkflowStudioSidebarMenuLink href={runsHref} label="运行诊断" />
+    },
+    {
+      key: "starters",
+      label: (
+        <WorkflowStudioSidebarMenuLink
+          href={workspaceStarterLibraryHref}
+          label="Starter 模板"
+        />
+      )
+    }
+  ];
 
   return (
     <div className={contentClassName} data-component={dataComponent}>
@@ -98,40 +177,21 @@ export function WorkflowStudioSidebar({
         </div>
       )}
 
-      <nav className="workflow-studio-surface-rail" aria-label="Workflow studio surfaces">
-        {PRIMARY_WORKFLOW_STUDIO_SURFACES.map((item) => (
-          <Link
-            className={`workflow-studio-rail-link ${
-              activeStudioSurface === item.key ? "active" : ""
-            }`.trim()}
-            href={resolveWorkflowStudioSidebarHref(workflowId, item.key, surfaceHrefs)}
-            key={item.key}
-          >
-            <strong>{item.label}</strong>
-            <span>{item.description}</span>
-          </Link>
-        ))}
-      </nav>
+      <Menu
+        className="workflow-studio-sidebar-menu"
+        items={primaryMenuItems}
+        mode="inline"
+        selectable
+        selectedKeys={PRIMARY_WORKFLOW_STUDIO_SURFACES.some((item) => item.key === activeStudioSurface) ? [activeStudioSurface] : []}
+      />
 
-      <div className="workflow-studio-rail-secondary">
-        <Link
-          className={`workflow-studio-rail-secondary-link ${
-            activeStudioSurface === "publish" ? "active" : ""
-          }`.trim()}
-          href={resolveWorkflowStudioSidebarHref(workflowId, "publish", surfaceHrefs)}
-        >
-          发布治理
-        </Link>
-        <Link className="workflow-studio-rail-secondary-link" href={runsHref}>
-          运行诊断
-        </Link>
-        <Link
-          className="workflow-studio-rail-secondary-link"
-          href={workspaceStarterLibraryHref}
-        >
-          Starter 模板
-        </Link>
-      </div>
+      <Menu
+        className="workflow-studio-sidebar-menu workflow-studio-sidebar-menu-secondary"
+        items={secondaryMenuItems}
+        mode="inline"
+        selectable
+        selectedKeys={activeStudioSurface === "publish" ? ["publish"] : []}
+      />
     </div>
   );
 }

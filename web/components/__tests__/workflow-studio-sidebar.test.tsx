@@ -7,6 +7,8 @@ import { WorkflowStudioSidebar } from "@/components/workflow-studio-sidebar";
 
 Object.assign(globalThis, { React });
 
+const refresh = vi.fn();
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -14,6 +16,12 @@ vi.mock("next/link", () => ({
     ...props
   }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
     createElement("a", { href: href ?? "#", ...props }, children)
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh
+  })
 }));
 
 describe("WorkflowStudioSidebar", () => {
@@ -45,7 +53,8 @@ describe("WorkflowStudioSidebar", () => {
     expect(html).toContain('href="/workflows/workflow-1/logs?handoff=1"');
     expect(html).toContain('href="/workflows/workflow-1/monitor?handoff=1"');
     expect(html).toContain('href="/workflows/workflow-1/publish?handoff=1"');
-    expect(html).toContain("workflow-studio-rail-secondary-link active");
+    expect(html).toContain("workflow-studio-sidebar-menu");
+    expect(html).toContain("workflow-studio-sidebar-link-trigger");
   });
 
   it("shows the collapse affordance when used inside the editor sidebar", () => {
