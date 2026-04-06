@@ -190,7 +190,9 @@ export function WorkflowCanvasQuickAddTrigger({
           });
         }}
       >
-        {triggerContent ?? <span aria-hidden="true">+</span>}
+        <span className="workflow-canvas-quick-add-trigger-content" aria-hidden="true">
+          {triggerContent ?? "+"}
+        </span>
       </button>
 
       {isOpen ? (

@@ -4806,6 +4806,7 @@ a {
   position: absolute;
   top: 50%;
   left: 50%;
+  z-index: 0;
   width: 15px;
   height: 15px;
   border: 1px solid rgba(31, 94, 213, 0.18);
@@ -4813,6 +4814,14 @@ a {
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 5px 11px rgba(15, 23, 42, 0.08);
   transform: translate(-50%, -50%);
+}
+
+.workflow-canvas-quick-add-trigger-content {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .workflow-canvas-node-quick-add-trigger.open,
