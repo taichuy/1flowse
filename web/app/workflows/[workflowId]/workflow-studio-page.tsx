@@ -7,6 +7,7 @@ import { WorkflowApiSurface } from "@/components/workflow-api-surface";
 import { WorkflowLogsSurface } from "@/components/workflow-logs-surface";
 import { WorkflowMonitorSurface } from "@/components/workflow-monitor-surface";
 import { WorkflowPublishPanel } from "@/components/workflow-publish-panel";
+import { WorkflowStudioSidebar } from "@/components/workflow-studio-sidebar";
 import { loadWorkflowEditorWorkbenchBootstrap } from "@/components/workflow-editor-workbench/bootstrap";
 import { WorkflowEditorWorkbenchEntry } from "@/components/workflow-editor-workbench-entry";
 import { WorkspaceShell } from "@/components/workspace-shell";
@@ -89,6 +90,7 @@ type WorkflowStudioSharedContext = {
 };
 
 type WorkflowStudioShellProps = {
+  workflowId: string;
   workspaceName: string;
   userName: string;
   userRole: WorkspaceMemberRole;
@@ -283,6 +285,7 @@ async function renderWorkflowEditorSurface(sharedContext: WorkflowStudioSharedCo
 
   return (
     <WorkflowStudioShell
+      workflowId={sharedContext.workflow.id}
       workspaceName={sharedContext.workspaceName}
       userName={sharedContext.userName}
       userRole={sharedContext.userRole}
@@ -371,6 +374,7 @@ async function renderWorkflowPublishSurface(sharedContext: WorkflowStudioSharedC
 
   return (
     <WorkflowStudioShell
+      workflowId={sharedContext.workflow.id}
       workspaceName={sharedContext.workspaceName}
       userName={sharedContext.userName}
       userRole={sharedContext.userRole}
@@ -433,6 +437,7 @@ async function renderWorkflowUtilitySurface(
 
     return (
       <WorkflowStudioShell
+        workflowId={sharedContext.workflow.id}
         workspaceName={sharedContext.workspaceName}
         userName={sharedContext.userName}
         userRole={sharedContext.userRole}
@@ -578,6 +583,7 @@ async function renderWorkflowUtilitySurface(
 
     return (
       <WorkflowStudioShell
+        workflowId={sharedContext.workflow.id}
         workspaceName={sharedContext.workspaceName}
         userName={sharedContext.userName}
         userRole={sharedContext.userRole}
@@ -721,6 +727,7 @@ async function renderWorkflowUtilitySurface(
 
     return (
       <WorkflowStudioShell
+        workflowId={sharedContext.workflow.id}
         workspaceName={sharedContext.workspaceName}
         userName={sharedContext.userName}
         userRole={sharedContext.userRole}
@@ -758,6 +765,7 @@ async function renderWorkflowUtilitySurface(
 
   return (
     <WorkflowStudioShell
+      workflowId={sharedContext.workflow.id}
       workspaceName={sharedContext.workspaceName}
       userName={sharedContext.userName}
       userRole={sharedContext.userRole}
@@ -794,6 +802,7 @@ async function renderWorkflowUtilitySurface(
 }
 
 function WorkflowStudioShell({
+  workflowId,
   workspaceName,
   userName,
   userRole,
@@ -808,9 +817,6 @@ function WorkflowStudioShell({
   children
 }: WorkflowStudioShellProps) {
   const isCanvasEditorSurface = activeStudioSurface === "editor";
-  const studioModeLabel = getWorkflowStudioSurfaceDefinition(activeStudioSurface).modeLabel;
-  const surfaceItems = getWorkflowStudioSurfaceDefinitions();
-  const primarySurfaceItems = surfaceItems.filter((item) => item.key !== "publish");
 
   const shellClassName = [
     "workflow-studio-shell",
@@ -824,42 +830,6 @@ function WorkflowStudioShell({
   ]
     .filter(Boolean)
     .join(" ");
-
-  const railHeader = (
-    <div className="workflow-studio-rail-header">
-      <div className="workflow-studio-breadcrumb-row">
-        <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
-          编排中心
-        </Link>
-        <span className="workflow-studio-breadcrumb-current">{workflowName}</span>
-      </div>
-
-      <div className="workflow-studio-inline-metrics">
-        <span className="workflow-studio-inline-tag">v{workflowVersion}</span>
-        <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
-        <span className="workflow-studio-shell-mode">{studioModeLabel}</span>
-      </div>
-    </div>
-  );
-
-  const secondaryLinks = (
-    <div className="workflow-studio-utility-links">
-      <Link
-        className={`workflow-studio-secondary-link ${
-          activeStudioSurface === "publish" ? "active" : ""
-        }`.trim()}
-        href={surfaceHrefs.publish}
-      >
-        发布治理
-      </Link>
-      <Link className="workflow-studio-secondary-link" href="/runs">
-        运行诊断
-      </Link>
-      <Link className="workflow-studio-secondary-link" href={workspaceStarterLibraryHref}>
-        Starter 模板
-      </Link>
-    </div>
-  );
 
   return (
     <WorkspaceShell
@@ -877,26 +847,18 @@ function WorkflowStudioShell({
           data-surface-layout={isCanvasEditorSurface ? "canvas-overlay" : "rail"}
         >
           {isCanvasEditorSurface ? null : (
-            <aside className="workflow-studio-shell-bar workflow-studio-rail" data-component="workflow-studio-rail">
-              {railHeader}
-
-              <nav className="workflow-studio-surface-rail" aria-label="Workflow studio surfaces">
-                {primarySurfaceItems.map((item) => (
-                  <Link
-                    className={`workflow-studio-rail-link ${
-                      activeStudioSurface === item.key ? "active" : ""
-                    }`.trim()}
-                    href={surfaceHrefs[item.key]}
-                    key={item.key}
-                  >
-                    <strong>{item.label}</strong>
-                    <span>{item.description}</span>
-                  </Link>
-                ))}
-              </nav>
-
-              <div className="workflow-studio-rail-secondary">{secondaryLinks}</div>
-            </aside>
+            <WorkflowStudioSidebar
+              activeStudioSurface={activeStudioSurface}
+              className="workflow-studio-shell-bar workflow-studio-rail"
+              dataComponent="workflow-studio-rail"
+              surfaceHrefs={surfaceHrefs}
+              workflowId={workflowId}
+              workflowLibraryHref={workflowLibraryHref}
+              workflowName={workflowName}
+              workflowStageLabel={workflowStageLabel}
+              workflowVersion={workflowVersion}
+              workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+            />
           )}
 
           <div className={stageClassName}>{children}</div>

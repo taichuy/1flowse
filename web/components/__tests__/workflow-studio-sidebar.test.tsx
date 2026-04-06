@@ -1,0 +1,70 @@
+import * as React from "react";
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+
+import { WorkflowStudioSidebar } from "@/components/workflow-studio-sidebar";
+
+Object.assign(globalThis, { React });
+
+vi.mock("next/link", () => ({
+  default: ({
+    children,
+    href,
+    ...props
+  }: { children: ReactNode; href?: string } & Record<string, unknown>) =>
+    createElement("a", { href: href ?? "#", ...props }, children)
+}));
+
+describe("WorkflowStudioSidebar", () => {
+  it("renders shared workflow studio links and respects provided surface hrefs", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowStudioSidebar, {
+        workflowId: "workflow-1",
+        workflowLibraryHref: "/workflows",
+        workflowName: "Blank Workflow",
+        workflowVersion: "0.1.0",
+        workflowStageLabel: "draft only",
+        activeStudioSurface: "publish",
+        workspaceStarterLibraryHref: "/workspace-starters?workflow=workflow-1",
+        surfaceHrefs: {
+          editor: "/workflows/workflow-1/editor?handoff=1",
+          publish: "/workflows/workflow-1/publish?handoff=1",
+          api: "/workflows/workflow-1/api?handoff=1",
+          logs: "/workflows/workflow-1/logs?handoff=1",
+          monitor: "/workflows/workflow-1/monitor?handoff=1"
+        }
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-studio-sidebar"');
+    expect(html).toContain("编排中心");
+    expect(html).toContain("Blank Workflow");
+    expect(html).toContain('href="/workflows/workflow-1/editor?handoff=1"');
+    expect(html).toContain('href="/workflows/workflow-1/api?handoff=1"');
+    expect(html).toContain('href="/workflows/workflow-1/logs?handoff=1"');
+    expect(html).toContain('href="/workflows/workflow-1/monitor?handoff=1"');
+    expect(html).toContain('href="/workflows/workflow-1/publish?handoff=1"');
+    expect(html).toContain("workflow-studio-rail-secondary-link active");
+  });
+
+  it("shows the collapse affordance when used inside the editor sidebar", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowStudioSidebar, {
+        workflowId: "workflow-1",
+        workflowLibraryHref: "/workflows",
+        workflowName: "Blank Workflow",
+        workflowVersion: "0.1.0",
+        workflowStageLabel: "draft only",
+        activeStudioSurface: "editor",
+        workspaceStarterLibraryHref: "/workspace-starters",
+        dataComponent: "workflow-editor-sidebar-studio-rail",
+        onCollapse: () => undefined
+      })
+    );
+
+    expect(html).toContain('data-component="workflow-editor-sidebar-studio-rail"');
+    expect(html).toContain('data-action="collapse-sidebar"');
+    expect(html).toContain("workflow-editor-sidebar-collapse-button");
+  });
+});

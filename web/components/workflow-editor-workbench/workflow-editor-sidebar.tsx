@@ -1,10 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import React, { memo, useEffect, useMemo, useState } from "react";
-import { MenuFoldOutlined } from "@ant-design/icons";
-import { Button, Input, Tabs } from "antd";
+import { Input, Tabs } from "antd";
 import type { RunSnapshotWithId } from "@/app/actions/run-snapshot";
 import type { WorkflowLibrarySourceLane } from "@/lib/get-workflow-library";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
@@ -18,11 +16,6 @@ import type { RunTrace } from "@/lib/get-run-trace";
 import { type WorkflowRunListItem } from "@/lib/get-workflow-runs";
 import type { WorkflowListItem } from "@/lib/get-workflows";
 import {
-  buildWorkflowStudioSurfaceHref,
-  getWorkflowStudioSurfaceDefinition,
-  getWorkflowStudioSurfaceDefinitions
-} from "@/lib/workbench-links";
-import {
   buildWorkflowDetailLinkSurfaceFromWorkspaceStarterViewState,
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
@@ -34,6 +27,7 @@ import {
   sortWorkflowNodeCatalogForAuthoring
 } from "@/lib/workflow-node-catalog";
 import { WorkflowChipLink } from "@/components/workflow-chip-link";
+import { WorkflowStudioSidebar } from "@/components/workflow-studio-sidebar";
 import type { WorkflowEditorDiagnosticsPanelProps } from "@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-diagnostics-panel";
 import type { WorkflowEditorRunPanelProps } from "@/components/workflow-editor-workbench/sidebar-panels/workflow-editor-run-panel";
 import type {
@@ -286,75 +280,21 @@ function WorkflowEditorSidebarComponent({
 
   const hasActivatedDiagnosticsPanel = activatedTabKeys.includes("2");
   const hasActivatedRunPanel = activatedTabKeys.includes("3");
-  const studioSurfaceItems = getWorkflowStudioSurfaceDefinitions().filter(
-    (item) => item.key !== "publish"
-  );
-  const studioModeLabel = getWorkflowStudioSurfaceDefinition("editor").modeLabel;
 
   return (
     <aside className="editor-sidebar">
-      <div
+      <WorkflowStudioSidebar
+        activeStudioSurface="editor"
         className="workflow-editor-sidebar-studio-rail"
-        data-component="workflow-editor-sidebar-studio-rail"
-      >
-        <div className="workflow-editor-sidebar-studio-rail-head">
-          <div className="workflow-studio-rail-header">
-            <div className="workflow-studio-breadcrumb-row">
-              <Link className="workflow-studio-breadcrumb-link" href={workflowLibraryHref}>
-                编排中心
-              </Link>
-              <span className="workflow-studio-breadcrumb-current">{workflowName}</span>
-            </div>
-
-            <div className="workflow-studio-inline-metrics">
-              <span className="workflow-studio-inline-tag">v{workflowVersion}</span>
-              <span className="workflow-studio-inline-tag">{workflowStageLabel}</span>
-              <span className="workflow-studio-shell-mode">{studioModeLabel}</span>
-            </div>
-          </div>
-
-          {onCollapse ? (
-            <Button
-              aria-label="收起左侧栏"
-              className="workflow-editor-sidebar-collapse-button"
-              data-action="collapse-sidebar"
-              icon={<MenuFoldOutlined />}
-              onClick={onCollapse}
-              type="text"
-            />
-          ) : null}
-        </div>
-
-        <nav className="workflow-studio-surface-rail" aria-label="Workflow studio surfaces">
-          {studioSurfaceItems.map((item) => (
-            <Link
-              className={`workflow-studio-rail-link ${
-                item.key === "editor" ? "active" : ""
-              }`.trim()}
-              href={buildWorkflowStudioSurfaceHref(workflowId, item.key)}
-              key={item.key}
-            >
-              <strong>{item.label}</strong>
-              <span>{item.description}</span>
-            </Link>
-          ))}
-        </nav>
-
-        <div className="workflow-studio-rail-secondary">
-          <Link
-            className="workflow-studio-rail-secondary-link"
-            href={buildWorkflowStudioSurfaceHref(workflowId, "publish")}
-          >
-            发布治理
-          </Link>
-          <Link className="workflow-studio-rail-secondary-link" href="/runs">
-            运行诊断
-          </Link>
-          <Link className="workflow-studio-rail-secondary-link" href={workspaceStarterLibraryHref}>
-            Starter 模板
-          </Link>
-        </div>
-      </div>
+        dataComponent="workflow-editor-sidebar-studio-rail"
+        onCollapse={onCollapse}
+        workflowId={workflowId}
+        workflowLibraryHref={workflowLibraryHref}
+        workflowName={workflowName}
+        workflowStageLabel={workflowStageLabel}
+        workflowVersion={workflowVersion}
+        workspaceStarterLibraryHref={workspaceStarterLibraryHref}
+      />
 
       <Tabs
         activeKey={activeTabKey}
