@@ -7,6 +7,7 @@ import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
 import { formatDurationMs } from "@/lib/runtime-presenters";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
+import { formatWorkflowNodeMeta } from "@/lib/workflow-node-display";
 import {
   WorkflowCanvasQuickAddTrigger,
   type WorkflowCanvasQuickAddOption
@@ -135,7 +136,7 @@ export function WorkflowCanvasNode({
             <span className="workflow-canvas-node-kind">{data.typeLabel ?? data.nodeType}</span>
           </div>
           <div className="workflow-canvas-node-type">
-            {formatNodeMeta(data.capabilityGroup, data.nodeType)}
+            {formatWorkflowNodeMeta(data.capabilityGroup, data.nodeType, data.typeLabel)}
           </div>
         </div>
       </div>
@@ -220,12 +221,4 @@ function resolveNodeGlyph(nodeType: string) {
     default:
       return "节";
   }
-}
-
-function formatNodeMeta(capabilityGroup: string | undefined, nodeType: string) {
-  const groupLabel = capabilityGroup
-    ? capabilityGroup.replace(/_/g, " ")
-    : "workflow";
-
-  return `${groupLabel} · ${nodeType}`;
 }

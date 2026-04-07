@@ -1,6 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
+import { getWorkflowNodeTypeDisplayLabel } from "@/lib/workflow-node-display";
 import {
   resolveDefaultExecutionClass,
   type WorkflowExecutionClass
@@ -22,6 +23,7 @@ export type WorkflowEditorAssistantContext = {
   nodeId: string;
   nodeLabel: string;
   nodeType: string;
+  nodeTypeLabel: string;
   executionClass: WorkflowExecutionClass;
   upstreamLabels: string[];
   downstreamLabels: string[];
@@ -62,10 +64,14 @@ export function buildWorkflowEditorAssistantContext({
     downstreamLabels
   });
   const promptSuggestions = buildPromptSuggestions(selectedNode.data.nodeType);
+  const nodeTypeLabel = getWorkflowNodeTypeDisplayLabel(
+    selectedNode.data.nodeType,
+    selectedNode.data.typeLabel
+  );
   const summary = `${selectedNode.data.label} 当前有 ${upstreamLabels.length} 个上游、${downstreamLabels.length} 个下游，默认执行级别为 ${formatExecutionClassLabel(executionClass)}。`;
   const contextPack = [
     `节点：${selectedNode.data.label}`,
-    `类型：${selectedNode.data.nodeType}`,
+    `类型：${nodeTypeLabel}`,
     `执行级别：${formatExecutionClassLabel(executionClass)}`,
     `上游：${upstreamLabels.length > 0 ? upstreamLabels.join(" / ") : "无"}`,
     `下游：${downstreamLabels.length > 0 ? downstreamLabels.join(" / ") : "无"}`,
@@ -88,6 +94,7 @@ export function buildWorkflowEditorAssistantContext({
     nodeId: selectedNode.id,
     nodeLabel: selectedNode.data.label,
     nodeType: selectedNode.data.nodeType,
+    nodeTypeLabel,
     executionClass,
     upstreamLabels,
     downstreamLabels,

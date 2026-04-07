@@ -54,7 +54,7 @@ export function WorkflowEditorAssistantPanel({
           </Text>
         </div>
         <div className="workflow-editor-assistant-chip-list">
-          <span className="workflow-editor-assistant-chip">{assistantContext.nodeType}</span>
+          <span className="workflow-editor-assistant-chip">{assistantContext.nodeTypeLabel}</span>
           <span className="workflow-editor-assistant-chip">{assistantContext.executionClass}</span>
           <span className="workflow-editor-assistant-chip">
             schema {assistantContext.hasInputSchema || assistantContext.hasOutputSchema ? "ready" : "todo"}

@@ -11,6 +11,8 @@ import {
   type SyntheticEvent
 } from "react";
 
+import { formatWorkflowNodeMeta } from "@/lib/workflow-node-display";
+
 export type WorkflowCanvasQuickAddOption = {
   type: string;
   label: string;
@@ -306,7 +308,7 @@ export function WorkflowCanvasQuickAddTrigger({
                           {item.label}
                         </span>
                         <span className="workflow-canvas-quick-add-option-meta">
-                          {formatNodeMeta(item.capabilityGroup, item.type)}
+                          {formatWorkflowNodeMeta(item.capabilityGroup, item.type, item.label)}
                         </span>
                         <span className="workflow-canvas-quick-add-option-copy">
                           {item.description}
@@ -326,14 +328,6 @@ export function WorkflowCanvasQuickAddTrigger({
       ) : null}
     </div>
   );
-}
-
-function formatNodeMeta(capabilityGroup: string | undefined, nodeType: string) {
-  const groupLabel = capabilityGroup
-    ? capabilityGroup.replace(/_/g, " ")
-    : "workflow";
-
-  return `${groupLabel} · ${nodeType}`;
 }
 
 function joinClassNames(...values: Array<string | null | undefined>) {

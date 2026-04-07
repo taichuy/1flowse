@@ -7,6 +7,7 @@ import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
+import { getWorkflowNodeTypeDisplayLabel } from "@/lib/workflow-node-display";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
 import { toRecord } from "@/components/workflow-node-config-form/shared";
 
@@ -84,7 +85,9 @@ export function WorkflowNodeIoSchemaForm({
       </div>
 
       <div className="tool-badge-row">
-        <span className="event-chip">{node.data.nodeType}</span>
+        <span className="event-chip">
+          {getWorkflowNodeTypeDisplayLabel(node.data.nodeType, node.data.typeLabel)}
+        </span>
         <span className="event-chip">input fields {inputSchemaFieldsCount}</span>
         <span className="event-chip">output fields {outputSchemaFieldsCount}</span>
       </div>

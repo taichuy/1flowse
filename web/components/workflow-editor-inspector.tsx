@@ -8,6 +8,7 @@ import {
   buildWorkflowEditorAssistantContext,
   type WorkflowEditorAssistantContext
 } from "@/lib/workflow-editor-assistant";
+import { getWorkflowNodeTypeDisplayLabel } from "@/lib/workflow-node-display";
 import type { WorkflowEditorAssistantPanelProps } from "@/components/workflow-editor-inspector-panels/workflow-editor-assistant-panel";
 import type { WorkflowEditorPublishPanelProps } from "@/components/workflow-editor-inspector-panels/workflow-editor-publish-panel";
 import { WorkflowEditorNodeRuntimePanel } from "@/components/workflow-editor-inspector-panels/workflow-editor-node-runtime-panel";
@@ -179,11 +180,20 @@ export function WorkflowEditorInspector({
         description: "右侧只跟随当前节点，把设置和运行时收在同一面板。",
         chips: assistantContext
           ? [
-              selectedNode.data.nodeType,
+              getWorkflowNodeTypeDisplayLabel(
+                selectedNode.data.nodeType,
+                selectedNode.data.typeLabel
+              ),
               `${assistantContext.upstreamLabels.length} 个上游`,
               `${assistantContext.downstreamLabels.length} 个下游`
             ]
-          : [selectedNode.data.nodeType, selectedNode.id]
+          : [
+              getWorkflowNodeTypeDisplayLabel(
+                selectedNode.data.nodeType,
+                selectedNode.data.typeLabel
+              ),
+              selectedNode.id
+            ]
       };
     }
 

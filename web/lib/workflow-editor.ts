@@ -8,6 +8,10 @@ import {
   getWorkflowNodeCatalogItem,
   getWorkflowNodeDefaultPosition
 } from "@/lib/workflow-node-catalog";
+import {
+  getWorkflowNodeDisplayLabel,
+  getWorkflowNodeTypeDisplayLabel
+} from "@/lib/workflow-node-display";
 
 export type WorkflowDefinition = WorkflowDetail["definition"];
 
@@ -290,10 +294,16 @@ export function buildWorkflowCanvasNodeData(
   input: Omit<WorkflowCanvasNodeData, "typeLabel" | "typeDescription" | "capabilityGroup">
 ): WorkflowCanvasNodeData {
   const catalogItem = getWorkflowNodeCatalogItem(nodeCatalog, input.nodeType);
+  const typeLabel = getWorkflowNodeTypeDisplayLabel(input.nodeType, catalogItem?.label);
 
   return {
     ...input,
-    typeLabel: catalogItem?.label ?? input.nodeType,
+    label: getWorkflowNodeDisplayLabel({
+      nodeType: input.nodeType,
+      label: input.label,
+      typeLabel
+    }),
+    typeLabel,
     typeDescription: catalogItem?.description ?? catalogItem?.supportSummary,
     capabilityGroup: catalogItem?.capabilityGroup
   };
