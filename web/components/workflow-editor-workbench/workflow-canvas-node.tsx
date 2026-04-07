@@ -93,6 +93,9 @@ export function WorkflowCanvasNode({
 }: WorkflowCanvasNodeComponentProps) {
   const canQuickAdd = Boolean(selected && onQuickAdd && data.nodeType !== "endNode");
   const canDelete = data.nodeType !== "startNode";
+  const hasIncomingHandle = data.nodeType !== "startNode";
+  const hasOutgoingHandle = data.nodeType !== "endNode";
+  const nodeDescription = resolveNodeDescription(data.config);
   const resolvedQuickAddOptions = useMemo(
     () => quickAddOptions.filter((item) => item.type !== "startNode"),
     [quickAddOptions]
@@ -109,7 +112,7 @@ export function WorkflowCanvasNode({
         } as CSSProperties
       }
     >
-      <Handle type="target" position={Position.Left} />
+      {hasIncomingHandle ? <Handle type="target" position={Position.Left} /> : null}
       {selected && canDelete ? (
         <div className="workflow-canvas-node-actions">
           <button
@@ -140,8 +143,8 @@ export function WorkflowCanvasNode({
           </div>
         </div>
       </div>
-      {data.typeDescription ? (
-        <div className="workflow-canvas-node-description">{data.typeDescription}</div>
+      {nodeDescription ? (
+        <div className="workflow-canvas-node-description">{nodeDescription}</div>
       ) : null}
       {canQuickAdd ? (
         <WorkflowCanvasQuickAddTrigger
@@ -178,9 +181,15 @@ export function WorkflowCanvasNode({
       {data.runErrorMessage ? (
         <div className="workflow-canvas-node-error">{data.runErrorMessage}</div>
       ) : null}
-      <Handle type="source" position={Position.Right} />
+      {hasOutgoingHandle ? <Handle type="source" position={Position.Right} /> : null}
     </div>
   );
+}
+
+function resolveNodeDescription(config: WorkflowCanvasNodeData["config"]) {
+  const ui = isRecord(config.ui) ? config.ui : null;
+  const description = typeof ui?.description === "string" ? ui.description.trim() : "";
+  return description || null;
 }
 
 function calculateDurationMs(
@@ -202,6 +211,10 @@ function calculateDurationMs(
 
 function toCssIdentifier(value: string) {
   return value.replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function resolveNodeGlyph(nodeType: string) {

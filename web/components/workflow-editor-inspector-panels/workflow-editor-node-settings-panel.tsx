@@ -262,14 +262,9 @@ function WorkflowEditorTriggerInputFieldsSection({
     >
       <div className="workflow-editor-trigger-fields-header">
         <div>
-          <Text className="workflow-editor-trigger-fields-eyebrow">Trigger settings</Text>
-          <Title level={5} style={{ margin: "4px 0 0" }}>
+          <Title level={5} style={{ margin: 0 }}>
             输入字段
           </Title>
-          <Text type="secondary">
-            这些字段会作为 workflow run 的 `input_payload` 进入入口节点，并在运行时以
-            `trigger_input.*` 读取。
-          </Text>
         </div>
         <Button
           type="default"
@@ -299,14 +294,9 @@ function WorkflowEditorTriggerInputFieldsSection({
       ) : null}
 
       <div className="workflow-editor-trigger-fields-list">
-        {fields.length === 0 ? (
-          <div className="workflow-editor-trigger-empty">
-            <Text type="secondary">
-              当前入口节点还没有显式输入字段。你可以保持空输入，或者新增几个结构化字段作为运行入口。
-            </Text>
-          </div>
-        ) : (
-          fields.map((field, index) => (
+        {fields.length === 0
+          ? null
+          : fields.map((field, index) => (
             <div
               key={field.id}
               className="workflow-editor-trigger-field-card"
@@ -378,8 +368,7 @@ function WorkflowEditorTriggerInputFieldsSection({
                 />
               ) : null}
             </div>
-          ))
-        )}
+          ))}
       </div>
 
       <div className="workflow-editor-trigger-fields-actions">

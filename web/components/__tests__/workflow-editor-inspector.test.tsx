@@ -210,6 +210,10 @@ describe("WorkflowEditorInspector", () => {
     expect(html).toContain("输入字段");
     expect(html).toContain("应用输入字段");
     expect(html).toContain("下一步");
+    expect(html).not.toContain("个上游");
+    expect(html).not.toContain("Trigger settings");
+    expect(html).not.toContain("这些字段会作为 workflow run");
+    expect(html).not.toContain("当前入口节点还没有显式输入字段");
     expect(html).not.toContain("workflow-editor-assistant-panel");
   });
 

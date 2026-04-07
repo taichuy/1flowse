@@ -190,14 +190,7 @@ export function WorkflowEditorInspector({
         title: selectedNode.data.label,
         description: "右侧只跟随当前节点，把设置和运行时收在同一面板。",
         chips: assistantContext
-          ? [
-              getWorkflowNodeTypeDisplayLabel(
-                selectedNode.data.nodeType,
-                selectedNode.data.typeLabel
-              ),
-              `${assistantContext.upstreamLabels.length} 个上游`,
-              `${assistantContext.downstreamLabels.length} 个下游`
-            ]
+          ? buildSelectedNodeHeaderChips(selectedNode, assistantContext)
           : [
               getWorkflowNodeTypeDisplayLabel(
                 selectedNode.data.nodeType,
@@ -505,6 +498,25 @@ export function WorkflowEditorInspector({
       </div>
     </div>
   );
+}
+
+function buildSelectedNodeHeaderChips(
+  selectedNode: NonNullable<WorkflowEditorInspectorProps["selectedNode"]>,
+  assistantContext: WorkflowEditorAssistantContext
+) {
+  const chips = [
+    getWorkflowNodeTypeDisplayLabel(selectedNode.data.nodeType, selectedNode.data.typeLabel)
+  ];
+
+  if (selectedNode.data.nodeType !== "startNode") {
+    chips.push(`${assistantContext.upstreamLabels.length} 个上游`);
+  }
+
+  if (selectedNode.data.nodeType !== "endNode") {
+    chips.push(`${assistantContext.downstreamLabels.length} 个下游`);
+  }
+
+  return chips;
 }
 
 function toRecord(value: unknown) {

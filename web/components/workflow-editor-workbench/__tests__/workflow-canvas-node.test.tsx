@@ -47,14 +47,33 @@ function buildNodeProps(selected: boolean): WorkflowCanvasNodeProps {
 }
 
 describe("WorkflowCanvasNode", () => {
-  it("renders the type description before selection so node size stays stable", () => {
+  it("does not render the catalog intro when the node has no custom description", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowCanvasNode, buildNodeProps(false))
     );
 
-    expect(html).toContain("让 agent 继续推理。");
+    expect(html).not.toContain("让 agent 继续推理。");
     expect(html).not.toContain("后添加节点");
     expect(html).not.toContain("workflow-canvas-node selected");
+  });
+
+  it("renders the user-defined description from node config", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCanvasNode, {
+        ...buildNodeProps(false),
+        data: {
+          ...buildNodeProps(false).data,
+          config: {
+            ui: {
+              description: "用户自定义说明"
+            }
+          }
+        }
+      })
+    );
+
+    expect(html).toContain("用户自定义说明");
+    expect(html).not.toContain("让 agent 继续推理。");
   });
 
   it("prefers the localized type label in node meta", () => {
@@ -74,12 +93,41 @@ describe("WorkflowCanvasNode", () => {
 
     expect(html).toContain("entry · 开始");
     expect(html).not.toContain("entry · startNode");
+    expect(html).not.toContain('data-type="target"');
+    expect(html).toContain('data-type="source"');
   });
 
-  it("keeps selection affordances without changing the description footprint", () => {
+  it("hides the outgoing handle for end nodes", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCanvasNode, {
+        ...buildNodeProps(false),
+        data: {
+          label: "结束",
+          nodeType: "endNode",
+          typeLabel: "结束",
+          typeDescription: "流程出口。",
+          capabilityGroup: "output",
+          config: {}
+        }
+      })
+    );
+
+    expect(html).toContain('data-type="target"');
+    expect(html).not.toContain('data-type="source"');
+  });
+
+  it("keeps selection affordances while preserving the custom description", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowCanvasNode, {
         ...buildNodeProps(true),
+        data: {
+          ...buildNodeProps(true).data,
+          config: {
+            ui: {
+              description: "输出处理前先校验输入。"
+            }
+          }
+        },
         onQuickAdd: () => undefined,
         quickAddOptions: [
           {
@@ -93,7 +141,7 @@ describe("WorkflowCanvasNode", () => {
     );
 
     expect(html).toContain("workflow-canvas-node selected");
-    expect(html).toContain("让 agent 继续推理。");
+    expect(html).toContain("输出处理前先校验输入。");
     expect(html).toContain("Agent 后添加节点");
     expect(html).toContain("workflow-canvas-node-quick-add-trigger nodrag nopan nowheel");
     expect(html).not.toContain("下一节点");
