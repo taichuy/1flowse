@@ -56,7 +56,7 @@ export function WorkflowNodeRuntimePolicyForm({
   const join = toRecord(runtimePolicy.join);
   const normalizedHighlightedField = normalizeRuntimePolicyFieldKey(highlightedFieldPath);
   const incomingNodes = listIncomingNodes(node.id, nodes, edges);
-  const joinSupported = node.data.nodeType !== "trigger" && incomingNodes.length > 0;
+  const joinSupported = node.data.nodeType !== "startNode" && incomingNodes.length > 0;
   const joinEnabled = joinSupported && Boolean(join);
   const requiredNodeIds = dedupeStrings(toStringArray(join?.requiredNodeIds)).filter((nodeId) =>
     incomingNodes.some((candidate) => candidate.id === nodeId)
@@ -360,9 +360,9 @@ export function WorkflowNodeRuntimePolicyForm({
               </>
             ) : null}
           </>
-        ) : node.data.nodeType === "trigger" ? (
+        ) : node.data.nodeType === "startNode" ? (
           <small className="section-copy">
-            Trigger 没有上游入边，不支持 `runtimePolicy.join`。
+            开始节点没有上游入边，不支持 `runtimePolicy.join`。
           </small>
         ) : (
           <small className="section-copy">

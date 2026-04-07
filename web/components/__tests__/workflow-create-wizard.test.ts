@@ -37,8 +37,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -59,7 +59,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -76,7 +76,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create workflow",
             tags: [],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -144,8 +144,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -166,7 +166,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -183,7 +183,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create workflow",
             tags: [],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -247,8 +247,8 @@ describe("WorkflowCreateWizard", () => {
         ],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -269,11 +269,11 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           },
           {
-            type: "output",
-            label: "Output",
+            type: "endNode",
+            label: "endNode",
             description: "Output node",
             ecosystem: "native",
             source: {
@@ -294,7 +294,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 1, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Output", config: {} }
+            defaults: { name: "endNode", config: {} }
           }
         ],
         tools: [],
@@ -312,10 +312,10 @@ describe("WorkflowCreateWizard", () => {
             tags: ["workspace starter"],
             definition: {
               nodes: [
-                { id: "trigger", type: "trigger", name: "Trigger", config: {} },
-                { id: "output", type: "output", name: "Output", config: {} }
+                { id: "startNode", type: "startNode", name: "startNode", config: {} },
+                { id: "endNode", type: "endNode", name: "endNode", config: {} }
               ],
-              edges: [{ id: "e1", sourceNodeId: "trigger", targetNodeId: "output" }],
+              edges: [{ id: "e1", sourceNodeId: "startNode", targetNodeId: "endNode" }],
               variables: [],
               publish: []
             },
@@ -385,8 +385,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -407,7 +407,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -424,7 +424,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create after the governance signal is clear.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -490,8 +490,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -512,7 +512,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -529,7 +529,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create directly when no upstream source is needed.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -578,8 +578,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -600,7 +600,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -617,7 +617,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create the draft after reviewing source governance.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -682,8 +682,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -704,7 +704,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -721,7 +721,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create the draft after reviewing source governance.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -797,8 +797,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -819,7 +819,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -836,7 +836,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create the draft after reviewing source governance.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -917,8 +917,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -939,7 +939,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -956,7 +956,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Create the draft after reviewing source governance.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -1043,8 +1043,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -1065,7 +1065,7 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           }
         ],
         tools: [],
@@ -1082,7 +1082,7 @@ describe("WorkflowCreateWizard", () => {
             recommendedNextStep: "Review the source workflow before creating the draft.",
             tags: ["workspace starter"],
             definition: {
-              nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+              nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
               edges: [],
               variables: [],
               publish: []
@@ -1137,8 +1137,8 @@ describe("WorkflowCreateWizard", () => {
         starterSourceLanes: [],
         nodeCatalog: [
           {
-            type: "trigger",
-            label: "Trigger",
+            type: "startNode",
+            label: "startNode",
             description: "Trigger node",
             ecosystem: "native",
             source: {
@@ -1159,10 +1159,10 @@ describe("WorkflowCreateWizard", () => {
             bindingRequired: false,
             bindingSourceLanes: [],
             palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-            defaults: { name: "Trigger", config: {} }
+            defaults: { name: "startNode", config: {} }
           },
           {
-            type: "tool",
+            type: "toolNode",
             label: "Tool",
             description: "Tool node",
             ecosystem: "native",
@@ -1202,10 +1202,10 @@ describe("WorkflowCreateWizard", () => {
             tags: ["workspace starter"],
             definition: {
               nodes: [
-                { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+                { id: "startNode", type: "startNode", name: "startNode", config: {} },
                 {
                   id: "tool-node",
-                  type: "tool",
+                  type: "toolNode",
                   name: "Catalog gap tool",
                   config: {
                     tool: {
@@ -1280,9 +1280,9 @@ function buildFeaturedNodeCatalogItem(
       summary: "Native nodes"
     },
     capabilityGroup:
-      type === "output"
+      type === "endNode"
         ? "output"
-        : type === "condition" || type === "loop"
+        : type === "conditionNode" || type === "loopNode"
           ? "logic"
           : "integration",
     businessTrack: "编排节点能力",
@@ -1310,14 +1310,14 @@ it("surfaces the common authoring nodes in create flow order", () => {
       workflows: [],
       starterSourceLanes: [],
       nodeCatalog: [
-        buildFeaturedNodeCatalogItem("trigger", "Trigger"),
-        buildFeaturedNodeCatalogItem("llm_agent", "LLM Agent"),
-        buildFeaturedNodeCatalogItem("tool", "Tool"),
-        buildFeaturedNodeCatalogItem("condition", "Condition"),
-        buildFeaturedNodeCatalogItem("loop", "Loop", "planned"),
-        buildFeaturedNodeCatalogItem("mcp_query", "MCP Query"),
-        buildFeaturedNodeCatalogItem("sandbox_code", "Sandbox Code"),
-        buildFeaturedNodeCatalogItem("output", "Output")
+        buildFeaturedNodeCatalogItem("startNode", "Trigger"),
+        buildFeaturedNodeCatalogItem("llmAgentNode", "LLM Agent"),
+        buildFeaturedNodeCatalogItem("toolNode", "Tool"),
+        buildFeaturedNodeCatalogItem("conditionNode", "Condition"),
+        buildFeaturedNodeCatalogItem("loopNode", "Loop", "planned"),
+        buildFeaturedNodeCatalogItem("mcpQueryNode", "MCP Query"),
+        buildFeaturedNodeCatalogItem("sandboxCodeNode", "Sandbox Code"),
+        buildFeaturedNodeCatalogItem("endNode", "Output")
       ],
       tools: [],
       starters: [
@@ -1333,7 +1333,7 @@ it("surfaces the common authoring nodes in create flow order", () => {
           recommendedNextStep: "Create workflow",
           tags: [],
           definition: {
-            nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+            nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
             edges: [],
             variables: [],
             publish: []

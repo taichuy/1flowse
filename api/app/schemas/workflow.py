@@ -21,16 +21,16 @@ from app.schemas.workflow_published_endpoint import (
 from app.schemas.workflow_runtime_policy import WorkflowNodeRuntimePolicy
 
 NodeType = Literal[
-    "trigger",
-    "llm_agent",
-    "reference",
-    "tool",
-    "sandbox_code",
-    "mcp_query",
-    "condition",
-    "router",
-    "loop",
-    "output",
+    "startNode",
+    "llmAgentNode",
+    "referenceNode",
+    "toolNode",
+    "sandboxCodeNode",
+    "mcpQueryNode",
+    "conditionNode",
+    "routerNode",
+    "loopNode",
+    "endNode",
 ]
 EdgeChannel = Literal["control", "data"]
 

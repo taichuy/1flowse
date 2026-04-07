@@ -32,7 +32,7 @@ def collect_invalid_workflow_skill_references(
     for node_index, node in enumerate(definition.get("nodes") or []):
         if not isinstance(node, dict):
             continue
-        if node.get("type") != "llm_agent":
+        if node.get("type") != "llmAgentNode":
             continue
         config = node.get("config") or {}
         if not isinstance(config, dict):

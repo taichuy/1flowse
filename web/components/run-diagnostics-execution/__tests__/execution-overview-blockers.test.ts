@@ -193,7 +193,7 @@ function buildNode(overrides: Partial<RunExecutionNodeItem>): RunExecutionNodeIt
     node_run_id: "node-run-focus",
     node_id: "focus_node",
     node_name: "Focus node",
-    node_type: "tool",
+    node_type: "toolNode",
     status: "waiting",
     phase: "execute",
     execution_class: "sandbox",

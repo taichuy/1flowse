@@ -13,7 +13,7 @@ describe("workflow definition sandbox governance", () => {
       nodes: [
         {
           id: "sandbox_builtin",
-          type: "sandbox_code",
+          type: "sandboxCodeNode",
           name: "Builtin Sandbox",
           config: {},
           runtimePolicy: {
@@ -29,7 +29,7 @@ describe("workflow definition sandbox governance", () => {
         },
         {
           id: "sandbox_ref",
-          type: "sandbox_code",
+          type: "sandboxCodeNode",
           name: "Dependency Ref Sandbox",
           config: {},
           runtimePolicy: {
@@ -86,7 +86,7 @@ describe("workflow definition sandbox governance", () => {
       nodes: [
         {
           id: "sandbox",
-          type: "sandbox_code",
+          type: "sandboxCodeNode",
           name: "Sandbox Code",
           config: {}
         }

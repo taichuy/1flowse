@@ -16,11 +16,11 @@ def test_count_workflow_nodes_returns_zero_for_invalid_definitions() -> None:
 def test_collect_workflow_definition_tool_ids_includes_tool_nodes_and_tool_policy() -> None:
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {
                     "tool": {
                         "toolId": "native.research",
@@ -30,7 +30,7 @@ def test_collect_workflow_definition_tool_ids_includes_tool_nodes_and_tool_polic
             },
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "toolPolicy": {
@@ -56,9 +56,9 @@ def test_summarize_workflow_definition_tool_governance_counts_governed_strong_an
     definition = {
         "nodes": [
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {
                     "tool": {
                         "toolId": "native.research",
@@ -68,7 +68,7 @@ def test_summarize_workflow_definition_tool_governance_counts_governed_strong_an
             },
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "toolPolicy": {

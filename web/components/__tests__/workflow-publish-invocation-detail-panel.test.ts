@@ -1017,7 +1017,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
       node_run_id: "node-run-focus",
       node_id: "tool_wait",
       node_name: "Tool wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "waiting",
       phase: "execute",
       retry_count: 0,
@@ -1133,7 +1133,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
       node_run_id: "node-run-focus",
       node_id: "tool_wait",
       node_name: "Tool wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "blocked",
       phase: "execute",
       retry_count: 0,
@@ -1261,7 +1261,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
       execution_focus_node_id: "tool_wait",
       execution_focus_node_run_id: "node-run-focus",
       execution_focus_node_name: "Tool wait",
-      execution_focus_node_type: "tool",
+      execution_focus_node_type: "toolNode",
       execution_focus_explanation: {
         primary_signal: "sandbox execution 仍被阻断。",
         follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
@@ -1323,7 +1323,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
       execution_focus_node_id: "tool_wait",
       execution_focus_node_run_id: "node-run-focus",
       execution_focus_node_name: "Tool wait",
-      execution_focus_node_type: "tool",
+      execution_focus_node_type: "toolNode",
       execution_focus_explanation: {
         primary_signal: "sandbox execution 仍被阻断。",
         follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
@@ -1346,7 +1346,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
       node_run_id: "node-run-focus",
       node_id: "tool_wait",
       node_name: "Tool wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "blocked",
       phase: "execute",
       retry_count: 0,
@@ -1440,7 +1440,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
             execution_focus_node_id: "sandbox_tool",
             execution_focus_node_run_id: "node-run-tool-wait",
             execution_focus_node_name: "Sandbox tool",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "当前 sampled run 因 sandbox backend 不可用而阻断。",
               follow_up: "先恢复 backend，再回来复核 sampled run。"
@@ -1538,7 +1538,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
             execution_focus_node_id: "sandbox_tool",
             execution_focus_node_run_id: "node-run-tool-wait",
             execution_focus_node_name: "Sandbox tool",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "当前 sampled run 因 sandbox backend 不可用而阻断。",
               follow_up: "先恢复 backend，再回来复核 sampled run。"
@@ -1614,7 +1614,7 @@ describe("WorkflowPublishInvocationDetailPanel", () => {
       node_run_id: "node-run-focus",
       node_id: "tool_wait",
       node_name: "Tool wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "blocked",
       phase: "execute",
       retry_count: 0,

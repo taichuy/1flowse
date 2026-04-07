@@ -15,18 +15,18 @@ import {
 
 export function nodeColorByType(type: string) {
   switch (type) {
-    case "trigger":
+    case "startNode":
       return "#216e4a";
-    case "output":
+    case "endNode":
       return "#d0632d";
-    case "tool":
+    case "toolNode":
       return "#2f6ca3";
-    case "sandbox_code":
+    case "sandboxCodeNode":
       return "#b45309";
-    case "condition":
-    case "router":
+    case "conditionNode":
+    case "routerNode":
       return "#8b5cf6";
-    case "mcp_query":
+    case "mcpQueryNode":
       return "#0f766e";
     default:
       return "#62574a";
@@ -91,10 +91,10 @@ export function WorkflowCanvasNode({
   onDeleteNode,
   quickAddOptions = []
 }: WorkflowCanvasNodeComponentProps) {
-  const canQuickAdd = Boolean(selected && onQuickAdd && data.nodeType !== "output");
-  const canDelete = data.nodeType !== "trigger";
+  const canQuickAdd = Boolean(selected && onQuickAdd && data.nodeType !== "endNode");
+  const canDelete = data.nodeType !== "startNode";
   const resolvedQuickAddOptions = useMemo(
-    () => quickAddOptions.filter((item) => item.type !== "trigger"),
+    () => quickAddOptions.filter((item) => item.type !== "startNode"),
     [quickAddOptions]
   );
 
@@ -206,17 +206,17 @@ function toCssIdentifier(value: string) {
 
 function resolveNodeGlyph(nodeType: string) {
   switch (nodeType) {
-    case "trigger":
+    case "startNode":
       return "入";
-    case "output":
+    case "endNode":
       return "出";
-    case "llm_agent":
+    case "llmAgentNode":
       return "AI";
-    case "tool":
+    case "toolNode":
       return "工";
-    case "sandbox_code":
+    case "sandboxCodeNode":
       return "码";
-    case "mcp_query":
+    case "mcpQueryNode":
       return "M";
     default:
       return "节";

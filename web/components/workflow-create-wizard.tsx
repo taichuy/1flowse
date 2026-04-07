@@ -130,7 +130,7 @@ export function WorkflowCreateWizard({
           boxShadow: isWorkspaceSurface ? "none" : "0 4px 12px rgba(0,0,0,0.08)"
         }}
         styles={{ body: { padding: isWorkspaceSurface ? 0 : 24 } }}
-        bordered={!isWorkspaceSurface}
+        variant={isWorkspaceSurface ? "borderless" : "outlined"}
       >
         {!isWorkspaceSurface && (
           <div style={{ marginBottom: 24, textAlign: "center" }}>
@@ -172,7 +172,7 @@ export function WorkflowCreateWizard({
           {message && (
             <Form.Item>
               <Alert
-                message={message}
+                title={message}
                 type={messageTone === "error" ? "error" : "info"}
                 showIcon
               />

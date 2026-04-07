@@ -54,7 +54,7 @@ export function WorkflowNodeConfigForm({
   onChange
 }: WorkflowNodeConfigFormProps) {
   switch (node.data.nodeType) {
-    case "llm_agent":
+    case "llmAgentNode":
       return (
         <LazyLlmAgentNodeConfigForm
           node={node}
@@ -70,7 +70,7 @@ export function WorkflowNodeConfigForm({
           onChange={onChange}
         />
       );
-    case "tool":
+    case "toolNode":
       return (
         <ToolNodeConfigForm
           node={node}
@@ -83,11 +83,11 @@ export function WorkflowNodeConfigForm({
           onChange={onChange}
         />
       );
-    case "mcp_query":
+    case "mcpQueryNode":
       return <McpQueryNodeConfigForm node={node} nodes={nodes} onChange={onChange} />;
-    case "reference":
+    case "referenceNode":
       return <ReferenceNodeConfigForm node={node} nodes={nodes} onChange={onChange} />;
-    case "sandbox_code":
+    case "sandboxCodeNode":
       return (
         <SandboxCodeNodeConfigForm
           node={node}
@@ -98,10 +98,10 @@ export function WorkflowNodeConfigForm({
           onChange={onChange}
         />
       );
-    case "condition":
-    case "router":
+    case "conditionNode":
+    case "routerNode":
       return <BranchNodeConfigForm node={node} onChange={onChange} />;
-    case "output":
+    case "endNode":
       return <OutputNodeConfigForm node={node} onChange={onChange} />;
     default:
       return null;

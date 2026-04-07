@@ -56,8 +56,8 @@ const bootstrapData: WorkflowCreateWizardProps = {
       tags: ["workspace"],
       definition: {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
-          { id: "llm", type: "llm_agent", name: "LLM Agent", config: {} }
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
+          { id: "llm", type: "llmAgentNode", name: "LLM Agent", config: {} }
         ],
         edges: [],
         variables: [],
@@ -76,14 +76,14 @@ const bootstrapData: WorkflowCreateWizardProps = {
       archived: false,
       sourceGovernance: null,
       nodeCount: 2,
-      nodeTypes: ["trigger", "llm_agent"]
+      nodeTypes: ["startNode", "llmAgentNode"]
     }
   ] as WorkflowCreateWizardProps["starters"],
   starterSourceLanes: [],
   nodeCatalog: [
     {
-      type: "trigger",
-      label: "Trigger",
+      type: "startNode",
+      label: "startNode",
       description: "Trigger node",
       ecosystem: "native",
       source: {
@@ -104,10 +104,10 @@ const bootstrapData: WorkflowCreateWizardProps = {
       bindingRequired: false,
       bindingSourceLanes: [],
       palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-      defaults: { name: "Trigger", config: {} }
+      defaults: { name: "startNode", config: {} }
     },
     {
-      type: "llm_agent",
+      type: "llmAgentNode",
       label: "LLM Agent",
       description: "LLM Agent node",
       ecosystem: "native",

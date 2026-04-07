@@ -163,10 +163,10 @@ def test_streaming_finalize_produces_realtime_deltas(sqlite_session: Session) ->
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "What is the answer to everything?",
@@ -179,11 +179,11 @@ def test_streaming_finalize_produces_realtime_deltas(sqlite_session: Session) ->
                         "assistant": {"enabled": False},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -241,10 +241,10 @@ def test_streaming_fallback_to_sync_on_error(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Hello",
@@ -257,11 +257,11 @@ def test_streaming_fallback_to_sync_on_error(sqlite_session: Session) -> None:
                         "mockPlan": {"toolCalls": []},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -296,10 +296,10 @@ def test_mock_config_bypasses_streaming(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Hello",
@@ -313,11 +313,11 @@ def test_mock_config_bypasses_streaming(sqlite_session: Session) -> None:
                         "mockFinalOutput": {"result": "mock-output"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -374,10 +374,10 @@ def test_streaming_finalize_with_tool_results(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Search and summarize",
@@ -394,11 +394,11 @@ def test_streaming_finalize_with_tool_results(sqlite_session: Session) -> None:
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -454,10 +454,10 @@ def test_streaming_http_error_degrades_gracefully(sqlite_session: Session) -> No
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Analyze this",
@@ -470,11 +470,11 @@ def test_streaming_http_error_degrades_gracefully(sqlite_session: Session) -> No
                         "mockPlan": {"toolCalls": []},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )

@@ -566,17 +566,17 @@ def test_system_overview_reports_impacted_workload_follow_up_contract(
 ) -> None:
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "isolated_code",
-                "type": "sandbox_code",
+                "type": "sandboxCodeNode",
                 "name": "Isolated Code",
                 "config": {},
                 "runtimePolicy": {"execution": {"class": "microvm"}},
             },
         ],
         "edges": [
-            {"id": "edge-1", "sourceNodeId": "trigger", "targetNodeId": "isolated_code"}
+            {"id": "edge-1", "sourceNodeId": "startNode", "targetNodeId": "isolated_code"}
         ],
     }
     sqlite_session.add(
@@ -962,10 +962,10 @@ def test_runtime_activity_surfaces_recent_run_workflow_tool_governance(
     sample_workflow.name = "Governance Workflow"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
+                "id": "toolNode",
+                "type": "toolNode",
                 "name": "Risk Search",
                 "config": {
                     "tool": {
@@ -976,7 +976,7 @@ def test_runtime_activity_surfaces_recent_run_workflow_tool_governance(
             },
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Planner",
                 "config": {
                     "toolPolicy": {
@@ -986,8 +986,8 @@ def test_runtime_activity_surfaces_recent_run_workflow_tool_governance(
             },
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "agent"},
         ],
     }
     sqlite_session.add(sample_workflow)

@@ -37,7 +37,7 @@ function buildNodeProps(selected: boolean): WorkflowCanvasNodeProps {
     yPos: 80,
     data: {
       label: "Agent",
-      nodeType: "llm_agent",
+      nodeType: "llmAgentNode",
       typeLabel: "LLM Agent",
       typeDescription: "让 agent 继续推理。",
       capabilityGroup: "agent",
@@ -57,6 +57,25 @@ describe("WorkflowCanvasNode", () => {
     expect(html).not.toContain("workflow-canvas-node selected");
   });
 
+  it("prefers the localized type label in node meta", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowCanvasNode, {
+        ...buildNodeProps(false),
+        data: {
+          label: "开始",
+          nodeType: "startNode",
+          typeLabel: "开始",
+          typeDescription: "流程入口。",
+          capabilityGroup: "entry",
+          config: {}
+        }
+      })
+    );
+
+    expect(html).toContain("entry · 开始");
+    expect(html).not.toContain("entry · startNode");
+  });
+
   it("keeps selection affordances without changing the description footprint", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowCanvasNode, {
@@ -64,7 +83,7 @@ describe("WorkflowCanvasNode", () => {
         onQuickAdd: () => undefined,
         quickAddOptions: [
           {
-            type: "output",
+            type: "endNode",
             label: "结果输出",
             description: "输出处理结果",
             capabilityGroup: "output"

@@ -66,7 +66,7 @@ function buildRunDetail(overrides: Partial<RunDetail> = {}): RunDetail {
         id: "node-run-1",
         node_id: "node-1",
         node_name: "Node 1",
-        node_type: "tool",
+        node_type: "toolNode",
         status: "failed",
         input_payload: {},
         error_message: "tool failed"

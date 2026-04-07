@@ -129,7 +129,7 @@ function buildEntry(): SensitiveAccessInboxEntry {
         node_run_id: "node-run-1",
         node_id: "tool-node",
         node_name: "Tool Node",
-        node_type: "tool",
+        node_type: "toolNode",
         waiting_reason: "waiting approval",
         scheduled_resume_delay_seconds: null,
         scheduled_resume_due_at: null,
@@ -787,7 +787,7 @@ describe("SensitiveAccessInboxEntryCard", () => {
       executionFocusNodeId: "tool-node",
       executionFocusNodeRunId: "node-run-1",
       executionFocusNodeName: "Tool Node",
-      executionFocusNodeType: "tool",
+      executionFocusNodeType: "toolNode",
       executionFocusToolCalls: [
         {
           id: "tool-call-1",

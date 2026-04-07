@@ -569,7 +569,7 @@ function formatAuthoringSourceCopy(
   authoringSourceNodeLabel: string | null,
   authoringSourceContext: WorkflowEditorSidebarAuthoringSourceContext | null
 ) {
-  const resolvedLabel = authoringSourceNodeLabel ?? "Trigger";
+  const resolvedLabel = authoringSourceNodeLabel ?? "开始";
 
   if (authoringSourceContext === "selected") {
     return `当前已选中 ${resolvedLabel}；这里的常用节点会直接插到它后方。`;
@@ -590,13 +590,13 @@ function formatPrimaryAuthoringNodeDescription(
   const resolvedLabel = authoringSourceNodeLabel ?? "当前上游";
 
   switch (nodeType) {
-    case "llm_agent":
+    case "llmAgentNode":
       return `${resolvedLabel} 后方优先接 LLM 主节点，继续模型编排主链。`;
-    case "reference":
+    case "referenceNode":
       return `${resolvedLabel} 后方新增 Reference 时，会自动补齐显式引用授权。`;
-    case "tool":
+    case "toolNode":
       return `${resolvedLabel} 后方直接接 Tool，保持工具编排主路径。`;
-    case "condition":
+    case "conditionNode":
       return `${resolvedLabel} 后方插入 Condition，快速切进分支控制。`;
     default:
       return fallbackDescription;

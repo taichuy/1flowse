@@ -21,8 +21,8 @@ function buildNode(
     position: { x: 0, y: 0 },
     type: "workflow",
     data: {
-      label: "Trigger",
-      nodeType: "trigger",
+      label: "startNode",
+      nodeType: "startNode",
       config: {},
       inputSchema: {
         type: "object",
@@ -62,7 +62,7 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
         workflowId: "workflow-demo",
         node: buildNode({
           label: "LLM Agent",
-          nodeType: "llm_agent",
+          nodeType: "llmAgentNode",
           inputSchema: {}
         })
       })

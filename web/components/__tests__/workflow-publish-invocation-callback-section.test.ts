@@ -57,7 +57,7 @@ describe("WorkflowPublishInvocationCallbackSection", () => {
           node_id: "callback_node",
           node_name: "Callback node",
           node_run_id: "node-run-callback-1",
-          node_type: "tool",
+          node_type: "toolNode",
           skill_reference_load_count: 0,
           skill_reference_loads: [],
           artifacts: [],

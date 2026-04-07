@@ -909,7 +909,7 @@ def _seed_sensitive_run_access(
             run_id=run_id,
             node_run_id=node_run_id,
             requester_type="workflow",
-            requester_id="tool",
+            requester_id="toolNode",
             resource_id=resource.id,
             action_type="read",
             purpose_text="seed publish export sensitivity",
@@ -1152,10 +1152,10 @@ def test_export_published_endpoint_invocations_keep_missing_tool_scope_in_legacy
     assert workflow_record is not None
     workflow_record.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
+                "id": "toolNode",
+                "type": "toolNode",
                 "name": "Catalog Gap Tool",
                 "config": {
                     "tool": {
@@ -1164,11 +1164,11 @@ def test_export_published_endpoint_invocations_keep_missing_tool_scope_in_legacy
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
         "publish": [
             {

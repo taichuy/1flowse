@@ -183,7 +183,7 @@ def _create_published_invocation_fixture(
         run_id=run.id,
         node_id="tool_wait",
         node_name="Tool Wait",
-        node_type="tool",
+        node_type="toolNode",
         status="waiting",
         phase="waiting_callback",
         retry_count=0,

@@ -72,7 +72,7 @@ function createExecutionView(): RunExecutionView {
         node_run_id: "node-run-1",
         node_id: "agent",
         node_name: "Agent",
-        node_type: "llm_agent",
+        node_type: "llmAgentNode",
         status: "waiting_callback",
         phase: "waiting_callback",
         execution_class: "inline",

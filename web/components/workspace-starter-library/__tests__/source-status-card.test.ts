@@ -23,10 +23,10 @@ describe("WorkspaceStarterSourceCard", () => {
       tags: ["workspace starter"],
       definition: {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
-        edges: [{ id: "e1", sourceNodeId: "trigger", targetNodeId: "output" }],
+        edges: [{ id: "e1", sourceNodeId: "startNode", targetNodeId: "endNode" }],
         variables: [],
         publish: []
       },
@@ -104,10 +104,10 @@ describe("WorkspaceStarterSourceCard", () => {
       tags: ["workspace starter"],
       definition: {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
-        edges: [{ id: "e1", sourceNodeId: "trigger", targetNodeId: "output" }],
+        edges: [{ id: "e1", sourceNodeId: "startNode", targetNodeId: "endNode" }],
         variables: [],
         publish: []
       },
@@ -172,10 +172,10 @@ describe("WorkspaceStarterSourceCard", () => {
       tags: ["workspace starter"],
       definition: {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
-        edges: [{ id: "e1", sourceNodeId: "trigger", targetNodeId: "output" }],
+        edges: [{ id: "e1", sourceNodeId: "startNode", targetNodeId: "endNode" }],
         variables: [],
         publish: []
       },
@@ -261,10 +261,10 @@ describe("WorkspaceStarterSourceCard", () => {
       tags: ["workspace starter"],
       definition: {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
-        edges: [{ id: "e1", sourceNodeId: "trigger", targetNodeId: "output" }],
+        edges: [{ id: "e1", sourceNodeId: "startNode", targetNodeId: "endNode" }],
         variables: [],
         publish: []
       },

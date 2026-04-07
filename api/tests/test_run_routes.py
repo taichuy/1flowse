@@ -57,11 +57,11 @@ class _FakeWorkflowLibraryService:
 def _bound_tool_definition(*, tool_id: str, ecosystem: str) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {
                     "tool": {
                         "toolId": tool_id,
@@ -69,11 +69,11 @@ def _bound_tool_definition(*, tool_id: str, ecosystem: str) -> dict:
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -176,8 +176,8 @@ def test_get_run_execution_view_includes_execution_policy(
     assert execution_view_response.status_code == 200
     execution_view = execution_view_response.json()
     nodes_by_id = {node["node_id"]: node for node in execution_view["nodes"]}
-    assert nodes_by_id["trigger"]["execution_class"] == "inline"
-    assert nodes_by_id["trigger"]["execution_source"] == "default"
+    assert nodes_by_id["startNode"]["execution_class"] == "inline"
+    assert nodes_by_id["startNode"]["execution_source"] == "default"
     assert nodes_by_id["mock_tool"]["execution_class"] == "inline"
     assert nodes_by_id["mock_tool"]["execution_source"] == "default"
 
@@ -440,7 +440,7 @@ def test_get_run_execution_view_includes_sandbox_backend_binding_summary(
     focus_node = run_detail_body["execution_focus_node"]
     assert focus_node["node_id"] == "mock_tool"
     assert focus_node["node_name"] == "Mock Tool"
-    assert focus_node["node_type"] == "tool"
+    assert focus_node["node_type"] == "toolNode"
     assert focus_node["status"] == "succeeded"
     assert focus_node["execution_class"] == "inline"
     assert focus_node["execution_source"] == "default"
@@ -477,16 +477,16 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
         definition={
             "nodes": [
                 {
-                    "id": "trigger",
-                    "type": "trigger",
-                    "name": "Trigger",
+                    "id": "startNode",
+                    "type": "startNode",
+                    "name": "startNode",
                     "config": {},
                     "runtimePolicy": {"execution": {"class": "subprocess", "profile": "strict"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -523,10 +523,10 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
     assert body["summary"]["execution_executor_ref_counts"] == {}
     assert body["blocking_node_run_id"] is None
     assert body["execution_focus_reason"] == "blocked_execution"
-    assert body["execution_focus_node"]["node_id"] == "trigger"
+    assert body["execution_focus_node"]["node_id"] == "startNode"
     assert body["execution_focus_explanation"] == {
         "primary_signal": (
-            "执行阻断：当前 trigger 节点尚未实现请求的 subprocess execution class。"
+            "执行阻断：当前 startNode 节点尚未实现请求的 subprocess execution class。"
         ),
         "follow_up": (
             "下一步：先把 execution class 调回 inline，"
@@ -534,7 +534,7 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
         ),
     }
 
-    node = next(item for item in body["nodes"] if item["node_id"] == "trigger")
+    node = next(item for item in body["nodes"] if item["node_id"] == "startNode")
     assert node["execution_class"] == "subprocess"
     assert node["effective_execution_class"] is None
     assert node["execution_executor_ref"] is None
@@ -550,11 +550,11 @@ def test_get_run_execution_view_blocks_unsupported_subprocess_for_generic_nodes(
     run_detail_body = _get_run_detail_json(client, run_id)
     assert run_detail_body["blocking_node_run_id"] is None
     assert run_detail_body["execution_focus_reason"] == "blocked_execution"
-    assert run_detail_body["execution_focus_node"]["node_id"] == "trigger"
-    assert run_detail_body["execution_focus_node"]["node_type"] == "trigger"
+    assert run_detail_body["execution_focus_node"]["node_id"] == "startNode"
+    assert run_detail_body["execution_focus_node"]["node_type"] == "startNode"
     assert run_detail_body["execution_focus_explanation"] == {
         "primary_signal": (
-            "执行阻断：当前 trigger 节点尚未实现请求的 subprocess execution class。"
+            "执行阻断：当前 startNode 节点尚未实现请求的 subprocess execution class。"
         ),
         "follow_up": (
             "下一步：先把 execution class 调回 inline，"
@@ -575,30 +575,30 @@ def test_get_run_execution_view_reports_condition_subprocess_execution(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "condition",
+                    "type": "conditionNode",
                     "name": "Branch",
                     "config": {"expression": "trigger_input.priority == 'high'"},
                     "runtimePolicy": {"execution": {"class": "subprocess", "profile": "strict"}},
                 },
                 {
                     "id": "true_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "True Path",
                     "config": {"mock_output": {"answer": "yes"}},
                 },
                 {
                     "id": "false_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "False Path",
                     "config": {"mock_output": {"answer": "no"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -611,8 +611,8 @@ def test_get_run_execution_view_reports_condition_subprocess_execution(
                     "targetNodeId": "false_path",
                     "condition": "false",
                 },
-                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -666,19 +666,19 @@ def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "condition",
+                    "type": "conditionNode",
                     "name": "Branch",
                     "config": {"selected": "true"},
                     "runtimePolicy": {"execution": {"class": "microvm", "profile": "strict"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
-                {"id": "e2", "sourceNodeId": "branch", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
+                {"id": "e2", "sourceNodeId": "branch", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -713,7 +713,7 @@ def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_
     assert body["summary"]["execution_effective_class_counts"] == {}
     assert body["summary"]["execution_executor_ref_counts"] == {}
     assert body["execution_focus_explanation"] == {
-        "primary_signal": "执行阻断：当前 condition 节点尚未实现请求的强隔离 execution class。",
+        "primary_signal": "执行阻断：当前 conditionNode 节点尚未实现请求的强隔离 execution class。",
         "follow_up": (
             "下一步：先把 execution class 调回当前实现支持范围，"
             "或补齐对应 execution adapter；在此之前继续保持 fail-closed。"
@@ -724,7 +724,7 @@ def test_get_run_execution_view_blocks_unsupported_strong_isolation_for_generic_
     assert node["execution_class"] == "microvm"
     assert node["effective_execution_class"] is None
     assert node["execution_focus_explanation"] == {
-        "primary_signal": "执行阻断：当前 condition 节点尚未实现请求的强隔离 execution class。",
+        "primary_signal": "执行阻断：当前 conditionNode 节点尚未实现请求的强隔离 execution class。",
         "follow_up": (
             "下一步：先把 execution class 调回当前实现支持范围，"
             "或补齐对应 execution adapter；在此之前继续保持 fail-closed。"
@@ -748,18 +748,18 @@ def test_get_run_execution_view_summarizes_unavailable_sandbox_execution(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {"language": "python", "code": 'result = {"answer": "blocked"}'},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -816,10 +816,10 @@ def test_get_run_execution_view_surfaces_selected_backend_for_tool_runner_gap(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "risk_tool",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Risk Tool",
                     "config": {
                         "mock_output": {"answer": "blocked"},
@@ -833,11 +833,11 @@ def test_get_run_execution_view_surfaces_selected_backend_for_tool_runner_gap(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "risk_tool"},
-                {"id": "e2", "sourceNodeId": "risk_tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "risk_tool"},
+                {"id": "e2", "sourceNodeId": "risk_tool", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1495,7 +1495,7 @@ def test_get_run_trace_supports_time_range_and_payload_key_search(
                 run_id=run.id,
                 node_run_id="node-output",
                 event_type="node.output.completed",
-                payload={"node_id": "output", "output": {"final": {"answer": "done"}}},
+                payload={"node_id": "endNode", "output": {"final": {"answer": "done"}}},
                 created_at=base_time + timedelta(minutes=3),
             ),
         ]
@@ -1684,30 +1684,30 @@ def test_execute_workflow_route_returns_handled_failure_branch(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "explode",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Explode",
                     "config": {"mock_error": "route boom"},
                 },
                 {
                     "id": "fallback",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Fallback",
                     "config": {"mock_output": {"answer": "route recovered"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "explode"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "explode"},
                 {
                     "id": "e2",
                     "sourceNodeId": "explode",
                     "targetNodeId": "fallback",
                     "condition": "failed",
                 },
-                {"id": "e3", "sourceNodeId": "fallback", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "fallback", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1725,10 +1725,10 @@ def test_execute_workflow_route_returns_handled_failure_branch(
     assert body["status"] == "succeeded"
     assert body["output_payload"] == {"fallback": {"answer": "route recovered"}}
     assert {node_run["node_id"]: node_run["status"] for node_run in detail_body["node_runs"]} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "explode": "failed",
         "fallback": "succeeded",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
 
 
@@ -1743,10 +1743,10 @@ def test_execute_workflow_route_exposes_retry_events(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "flaky_tool",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Flaky Tool",
                     "config": {
                         "mock_error_sequence": ["route temporary"],
@@ -1759,11 +1759,11 @@ def test_execute_workflow_route_exposes_retry_events(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "flaky_tool"},
-                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "flaky_tool"},
+                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1794,10 +1794,10 @@ def test_execute_workflow_route_supports_selector_driven_branching(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "router",
+                    "type": "routerNode",
                     "name": "Branch",
                     "config": {
                         "selector": {
@@ -1814,20 +1814,20 @@ def test_execute_workflow_route_supports_selector_driven_branching(
                 },
                 {
                     "id": "search_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Search Path",
                     "config": {"mock_output": {"answer": "search mode"}},
                 },
                 {
                     "id": "default_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Default Path",
                     "config": {"mock_output": {"answer": "default mode"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1835,8 +1835,8 @@ def test_execute_workflow_route_supports_selector_driven_branching(
                     "condition": "search",
                 },
                 {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
-                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1854,11 +1854,11 @@ def test_execute_workflow_route_supports_selector_driven_branching(
     assert body["status"] == "succeeded"
     assert body["output_payload"] == {"search_path": {"answer": "search mode"}}
     assert {node_run["node_id"]: node_run["status"] for node_run in detail_body["node_runs"]} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "branch": "succeeded",
         "search_path": "succeeded",
         "default_path": "skipped",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
 
 
@@ -1873,10 +1873,10 @@ def test_execute_workflow_route_supports_expression_driven_branching(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "router",
+                    "type": "routerNode",
                     "name": "Branch",
                     "config": {
                         "expression": "trigger_input.intent if trigger_input.intent else 'default'"
@@ -1884,20 +1884,20 @@ def test_execute_workflow_route_supports_expression_driven_branching(
                 },
                 {
                     "id": "search_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Search Path",
                     "config": {"mock_output": {"answer": "search mode"}},
                 },
                 {
                     "id": "default_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Default Path",
                     "config": {"mock_output": {"answer": "default mode"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1905,8 +1905,8 @@ def test_execute_workflow_route_supports_expression_driven_branching(
                     "condition": "search",
                 },
                 {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
-                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1941,29 +1941,29 @@ def test_execute_workflow_route_supports_edge_condition_expression(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "scorer",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Scorer",
                     "config": {"mock_output": {"approved": True, "score": 97}},
                 },
                 {
                     "id": "approve",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Approve",
                     "config": {"mock_output": {"answer": "approved route"}},
                 },
                 {
                     "id": "reject",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Reject",
                     "config": {"mock_output": {"answer": "rejected route"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "scorer"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "scorer"},
                 {
                     "id": "e2",
                     "sourceNodeId": "scorer",
@@ -1976,8 +1976,8 @@ def test_execute_workflow_route_supports_edge_condition_expression(
                     "targetNodeId": "reject",
                     "conditionExpression": "not source_output.approved",
                 },
-                {"id": "e4", "sourceNodeId": "approve", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "reject", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "approve", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "reject", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1995,11 +1995,11 @@ def test_execute_workflow_route_supports_edge_condition_expression(
     assert body["status"] == "succeeded"
     assert body["output_payload"] == {"approve": {"answer": "approved route"}}
     assert {node_run["node_id"]: node_run["status"] for node_run in detail_body["node_runs"]} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "scorer": "succeeded",
         "approve": "succeeded",
         "reject": "skipped",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
 
 
@@ -2014,34 +2014,34 @@ def test_execute_workflow_route_supports_join_all_policy(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": "outline"}},
                 },
                 {
                     "id": "researcher",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Researcher",
                     "config": {"mock_output": {"facts": ["a"]}},
                 },
                 {
                     "id": "joiner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Joiner",
                     "config": {"mock_output": {"answer": "route combined"}},
                     "runtimePolicy": {"join": {"mode": "all"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "startNode", "targetNodeId": "researcher"},
                 {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "joiner"},
                 {"id": "e4", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
-                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2076,31 +2076,31 @@ def test_execute_workflow_route_supports_edge_mapping_append_merge_strategy(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"topic": "plan"}},
                 },
                 {
                     "id": "researcher",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Researcher",
                     "config": {"mock_output": {"topic": "facts"}},
                 },
                 {
                     "id": "joiner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Joiner",
                     "config": {},
                     "runtimePolicy": {"join": {"mode": "all", "mergeStrategy": "append"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "startNode", "targetNodeId": "researcher"},
                 {
                     "id": "e3",
                     "sourceNodeId": "planner",
@@ -2113,7 +2113,7 @@ def test_execute_workflow_route_supports_edge_mapping_append_merge_strategy(
                     "targetNodeId": "joiner",
                     "mapping": [{"sourceField": "topic", "targetField": "inputs.topics"}],
                 },
-                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2146,16 +2146,16 @@ def test_execute_workflow_route_exposes_authorized_context_reads(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": "route plan"}},
                 },
                 {
                     "id": "reader",
-                    "type": "mcp_query",
+                    "type": "mcpQueryNode",
                     "name": "Reader",
                     "config": {
                         "contextAccess": {"readableNodeIds": ["planner"]},
@@ -2166,12 +2166,12 @@ def test_execute_workflow_route_exposes_authorized_context_reads(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
                 {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "reader"},
-                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2213,10 +2213,10 @@ def test_receive_run_callback_route_resumes_waiting_callback_run(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -2231,11 +2231,11 @@ def test_receive_run_callback_route_resumes_waiting_callback_run(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2329,10 +2329,10 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -2347,11 +2347,11 @@ def test_receive_run_callback_route_returns_expired_for_stale_ticket(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2503,10 +2503,10 @@ def test_receive_run_callback_route_clears_stale_scheduled_resume_after_run_left
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -2521,11 +2521,11 @@ def test_receive_run_callback_route_clears_stale_scheduled_resume_after_run_left
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )

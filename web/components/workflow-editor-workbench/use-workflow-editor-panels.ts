@@ -151,15 +151,15 @@ export function useWorkflowEditorPanels({
     selectedNodeId: graph.selectedNodeId,
     authoringSourceNodeId:
       graph.selectedNode?.id ??
-      graph.nodes.find((node) => node.data.nodeType === "trigger")?.id ??
+      graph.nodes.find((node) => node.data.nodeType === "startNode")?.id ??
       null,
     authoringSourceNodeLabel:
       graph.selectedNode?.data.label ??
-      graph.nodes.find((node) => node.data.nodeType === "trigger")?.data.label ??
+      graph.nodes.find((node) => node.data.nodeType === "startNode")?.data.label ??
       null,
     authoringSourceContext: graph.selectedNode
       ? "selected"
-      : graph.nodes.some((node) => node.data.nodeType === "trigger")
+      : graph.nodes.some((node) => node.data.nodeType === "startNode")
         ? "default_trigger"
         : null,
     callbackWaitingAutomation,
@@ -185,6 +185,7 @@ export function useWorkflowEditorPanels({
   const inspectorProps: UseWorkflowEditorPanelsResult["inspectorProps"] = {
     workflowId: workflow.id,
     currentHref: currentEditorHref,
+    nodeTitlePlacement: "floating-panel",
     selectedNode: graph.selectedNode,
     selectedEdge: graph.selectedEdge,
     nodes: graph.nodes,
@@ -199,6 +200,7 @@ export function useWorkflowEditorPanels({
     onNodeConfigTextChange: graph.setNodeConfigText,
     onApplyNodeConfigJson: graph.applyNodeConfigJson,
     onNodeNameChange: graph.handleNodeNameChange,
+    onNodeDescriptionChange: graph.handleNodeDescriptionChange,
     onNodeConfigChange: graph.handleSelectedNodeConfigChange,
     onNodeInputSchemaChange: graph.updateNodeInputSchema,
     onNodeOutputSchemaChange: graph.updateNodeOutputSchema,

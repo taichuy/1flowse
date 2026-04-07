@@ -213,11 +213,11 @@ function buildRuntimeHint({
     return `${formatExecutionClassLabel(executionClass)} 当前不可用，强隔离节点应继续 fail-closed，不要静默退回宿主执行。`;
   }
 
-  if (node.data.nodeType === "tool") {
+  if (node.data.nodeType === "toolNode") {
     return "Tool 节点要同时确认工具绑定、超时策略和下游结果消费方式。";
   }
 
-  if (node.data.nodeType === "llm_agent") {
+  if (node.data.nodeType === "llmAgentNode") {
     return "LLM/Agent 节点要优先确认模型输入、可用工具和输出结构，不要把临时说明堆进 prompt。";
   }
 
@@ -237,15 +237,15 @@ function buildTopologyHint({
   upstreamLabels: string[];
   downstreamLabels: string[];
 }) {
-  if (nodeType === "trigger" && downstreamLabels.length === 0) {
-    return "Trigger 还是孤立入口，建议先接一个 AI / Tool / Output 节点形成最小主链。";
+  if (nodeType === "startNode" && downstreamLabels.length === 0) {
+    return "开始节点还是孤立入口，建议先接一个 AI / Tool / 结束节点形成最小主链。";
   }
 
-  if (downstreamLabels.length === 0 && nodeType !== "output") {
+  if (downstreamLabels.length === 0 && nodeType !== "endNode") {
     return "当前还是末端中间节点，建议补一个下游消费者，避免结果停在画布中间。";
   }
 
-  if (upstreamLabels.length === 0 && nodeType !== "trigger") {
+  if (upstreamLabels.length === 0 && nodeType !== "startNode") {
     return "当前节点没有上游输入，先确认它是否应该作为入口节点。";
   }
 
@@ -256,7 +256,7 @@ function buildPromptSuggestions(nodeType: string) {
   const baseSuggestions = ["帮我检查这个节点怎么配", "这个节点的运行风险在哪里"];
   const nextNodePrompt = "如果继续编排，下一步应该接什么节点";
 
-  if (nodeType === "trigger") {
+  if (nodeType === "startNode") {
     return [nextNodePrompt, ...baseSuggestions];
   }
 
@@ -265,32 +265,32 @@ function buildPromptSuggestions(nodeType: string) {
 
 function buildNextNodeSuggestions(nodeType: string) {
   switch (nodeType) {
-    case "trigger":
+    case "startNode":
       return [
         "接一个 AI / Agent 节点，把入口参数先变成结构化计划或回答。",
         "如果需要查资料或调工具，先接 Tool 节点，再让 AI 节点消费工具结果。",
-        "如果只是验收入口是否通，可直接接 Output 做最小闭环。"
+        "如果只是验收入口是否通，可直接接结束节点做最小闭环。"
       ];
-    case "llm_agent":
+    case "llmAgentNode":
       return [
         "如果还需要外部知识或动作，接 Tool 节点补外部能力。",
-        "如果已经得到最终结果，直接接 Output 收口。",
+        "如果已经得到最终结果，直接接结束节点收口。",
         "如果要批处理或重试分流，再接 Loop / Condition 类节点。"
       ];
-    case "tool":
+    case "toolNode":
       return [
         "接一个 AI / Agent 节点消化工具结果并形成对人可读输出。",
-        "如果工具结果已经足够稳定，也可以直接接 Output。",
+        "如果工具结果已经足够稳定，也可以直接接结束节点。",
         "如果工具返回多分支结果，再接 Condition / Router 做分流。"
       ];
-    case "output":
+    case "endNode":
       return [
-        "Output 已是终点，优先回头检查上游字段是否都能稳定落到这里。",
+        "结束节点已是终点，优先回头检查上游字段是否都能稳定落到这里。",
         "如果还想补观测或治理，放在应用级发布/诊断侧，而不是继续往后接执行节点。"
       ];
     default:
       return [
-        "优先确认这个节点产出的字段由谁消费，再决定接 AI、Tool 还是 Output。",
+        "优先确认这个节点产出的字段由谁消费，再决定接 AI、Tool 还是结束节点。",
         "如果它承担副作用，优先给它一个明确下游，别让结果悬空。"
       ];
   }

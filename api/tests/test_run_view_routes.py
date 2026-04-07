@@ -43,7 +43,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
         run_id=run.id,
         node_id="agent_plan",
         node_name="Agent Plan",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         retry_count=1,
@@ -512,7 +512,7 @@ def test_get_run_execution_view_returns_grouped_runtime_facts(
     assert run_snapshot["execution_focus_node_id"] == "agent_plan"
     assert run_snapshot["execution_focus_node_run_id"] == "node-run-agent"
     assert run_snapshot["execution_focus_node_name"] == "Agent Plan"
-    assert run_snapshot["execution_focus_node_type"] == "llm_agent"
+    assert run_snapshot["execution_focus_node_type"] == "llmAgentNode"
     assert run_snapshot["execution_focus_explanation"] == {
         "primary_signal": "等待原因：Waiting for external search callback.",
         "follow_up": (
@@ -732,7 +732,7 @@ def test_run_detail_and_execution_view_surface_credential_governance_summary(
         run_id=run.id,
         node_id="tool_node",
         node_name="Tool Node",
-        node_type="tool",
+        node_type="toolNode",
         status="waiting_tool",
         phase="waiting_tool",
         waiting_reason="Waiting for credential approval.",
@@ -837,7 +837,7 @@ def test_get_run_detail_includes_execution_focus_skill_trace(
         run_id=run.id,
         node_id="agent_skill",
         node_name="Agent Skill",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="running",
         phase="running_main",
         input_payload={"execution": {"class": "inline"}},
@@ -980,7 +980,7 @@ def test_get_run_execution_view_includes_dependency_contract_fields(
         run_id=run.id,
         node_id="sandbox_eval",
         node_name="Sandbox Eval",
-        node_type="sandbox_code",
+        node_type="sandboxCodeNode",
         status="running",
         phase="executing",
         input_payload={
@@ -1093,7 +1093,7 @@ def test_get_run_execution_view_surfaces_skill_reference_loads(
         run_id=run.id,
         node_id="agent_skill",
         node_name="Agent Skill",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="running",
         phase="running_main",
         input_payload={"execution": {"class": "inline"}},
@@ -1268,7 +1268,7 @@ def test_get_run_evidence_view_returns_evidence_nodes_only(
         run_id=run.id,
         node_id="agent_review",
         node_name="Agent Review",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="succeeded",
         phase="emit_output",
         artifact_refs=["artifact://artifact-tool-result", "artifact://artifact-evidence-pack"],
@@ -1295,9 +1295,9 @@ def test_get_run_evidence_view_returns_evidence_nodes_only(
     plain_node = NodeRun(
         id="node-run-plain",
         run_id=run.id,
-        node_id="output",
-        node_name="Output",
-        node_type="output",
+        node_id="endNode",
+        node_name="endNode",
+        node_type="endNode",
         status="succeeded",
         phase="emit_output",
         output_payload={"answer": "done"},
@@ -1425,7 +1425,7 @@ def test_get_run_execution_view_fail_closes_stale_blocked_tool_execution_facts(
         run_id=run.id,
         node_id="tool_wait",
         node_name="Tool Wait",
-        node_type="tool",
+        node_type="toolNode",
         status="failed",
         phase="execute",
         waiting_reason=None,

@@ -24,8 +24,8 @@ export function WorkspaceCatalogHeader({
       <div>
         <Space align="center" size={12} wrap>
           <Title level={3} style={{ margin: 0 }}>应用</Title>
-          <Tag color="blue" bordered={false}>{workspaceName}</Tag>
-          <Tag color="gold" bordered={false}>{currentRoleLabel}</Tag>
+          <Tag color="blue" variant="filled">{workspaceName}</Tag>
+          <Tag color="gold" variant="filled">{currentRoleLabel}</Tag>
         </Space>
       </div>
 

@@ -70,7 +70,7 @@ function createExecutionNode(
     node_run_id: "node-run-1",
     node_id: "node-1",
     node_name: "Sandbox tool",
-    node_type: "tool",
+    node_type: "toolNode",
     status: "blocked",
     phase: "execute",
     execution_class: "sandbox",
@@ -352,7 +352,7 @@ describe("sandbox readiness presenters", () => {
 
     const insight = buildSandboxExecutionPolicyPreflightInsight(readiness, {
       executionClass: "sandbox",
-      nodeType: "tool",
+      nodeType: "toolNode",
       dependencyMode: "builtin",
       builtinPackageSet: "py-data-basic",
       backendExtensions: { mountPreset: "analytics" }

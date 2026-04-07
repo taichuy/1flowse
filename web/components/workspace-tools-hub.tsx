@@ -19,11 +19,11 @@ import { sortWorkflowNodeCatalogForAuthoring } from "@/lib/workflow-node-catalog
 const { Paragraph, Text, Title } = Typography;
 
 const SPOTLIGHT_NODE_TYPES = [
-  "llm_agent",
-  "reference",
-  "tool",
-  "mcp_query",
-  "sandbox_code"
+  "llmAgentNode",
+  "referenceNode",
+  "toolNode",
+  "mcpQueryNode",
+  "sandboxCodeNode"
 ] as const;
 
 type ToolSourceFilter = "native" | "dify";
@@ -38,7 +38,7 @@ type WorkspaceToolsDetailState =
       providerId: string;
     }
   | {
-      kind: "tool";
+      kind: "toolNode";
       toolId: string;
       toolSource: ToolSourceFilter;
     };
@@ -223,7 +223,7 @@ export function WorkspaceToolsHub({
       : null;
 
     return {
-      kind: "tool" as const,
+      kind: "toolNode" as const,
       id: tool.id,
       title: `${tool.name} 工具详情`,
       summary: tool.description || "当前目录项还没有补充描述。",
@@ -582,10 +582,10 @@ export function WorkspaceToolsHub({
                   <div className="workspace-tools-action-row">
                     <Button
                       data-component="workspace-tools-detail-trigger"
-                      data-detail-kind="tool"
+                      data-detail-kind="toolNode"
                       onClick={() =>
                         setDetailState({
-                          kind: "tool",
+                          kind: "toolNode",
                           toolId: tool.id,
                           toolSource
                         })

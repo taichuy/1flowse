@@ -10,7 +10,7 @@ import { CloseOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 
 type WorkflowEditorFloatingPanelProps = {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   style: CSSProperties;
   panelKind: string;
@@ -53,7 +53,7 @@ ref
         onPointerDown={onHeaderPointerDown}
       >
         <div className="workflow-editor-floating-panel-title-group">
-          <strong>{title}</strong>
+          {typeof title === "string" ? <strong>{title}</strong> : title}
         </div>
         <Button
           aria-label={closeLabel}

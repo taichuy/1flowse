@@ -68,5 +68,5 @@ export type WorkflowNodeRuntimePolicy = {
 };
 
 export function resolveDefaultExecutionClass(nodeType: string): WorkflowExecutionClass {
-  return nodeType === "sandbox_code" ? "sandbox" : "inline";
+  return nodeType === "sandboxCodeNode" ? "sandbox" : "inline";
 }

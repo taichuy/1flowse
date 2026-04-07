@@ -89,7 +89,7 @@ class ResolvedSandboxCodeDependencyContract:
 
 
 def default_execution_class_for_node_type(node_type: str) -> str:
-    if node_type == "sandbox_code":
+    if node_type == "sandboxCodeNode":
         return "sandbox"
     return "inline"
 

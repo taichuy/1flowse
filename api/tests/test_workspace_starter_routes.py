@@ -59,11 +59,11 @@ def _sandbox_backend_client(
 def _valid_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -71,13 +71,13 @@ def _valid_definition() -> dict:
 def _planned_loop_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-            {"id": "loop", "type": "loop", "name": "Loop", "config": {}},
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+            {"id": "loopNode", "type": "loopNode", "name": "loopNode", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "loop"},
-            {"id": "e2", "sourceNodeId": "loop", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "loopNode"},
+            {"id": "e2", "sourceNodeId": "loopNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -102,19 +102,19 @@ def _sandbox_dependency_definition(
 
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "sandbox",
-                "type": "sandbox_code",
-                "name": "Sandbox Code",
+                "type": "sandboxCodeNode",
+                "name": "sandboxCodeNode",
                 "config": {"language": "python", "code": "print('ok')"},
                 "runtimePolicy": {"execution": execution},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-            {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+            {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
         ],
     }
 
@@ -132,21 +132,21 @@ def _agent_tool_policy_definition(
 
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "prompt": "Plan with tools",
                     "toolPolicy": tool_policy,
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
 
@@ -157,18 +157,18 @@ def _bound_tool_definition(*, tool_id: str, ecosystem: str, adapter_id: str | No
         tool_binding["adapterId"] = adapter_id
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "tool_node",
-                "type": "tool",
-                "name": "Tool",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {"tool": tool_binding},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-            {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+            {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
         ],
     }
 
@@ -225,10 +225,10 @@ def _skill_bound_definition(
 ) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "prompt": "Use the bound skill",
@@ -236,11 +236,11 @@ def _skill_bound_definition(
                     **({"skillBinding": skill_binding} if skill_binding is not None else {}),
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
 
@@ -441,10 +441,10 @@ def test_workspace_starter_create_rejects_unscoped_agent_tool_execution_target(
             "tags": ["execution", "scope"],
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Plan with tools",
@@ -453,11 +453,11 @@ def test_workspace_starter_create_rejects_unscoped_agent_tool_execution_target(
                             },
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         },
@@ -575,11 +575,11 @@ def test_workspace_starter_create_allows_compat_tool_execution_when_backend_supp
             "tags": ["execution", "guard"],
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "tool_node",
-                        "type": "tool",
-                        "name": "Tool",
+                        "type": "toolNode",
+                        "name": "toolNode",
                         "config": {
                             "tool": {
                                 "toolId": "compat:dify-ready-runner:plugin:demo/search",
@@ -589,11 +589,11 @@ def test_workspace_starter_create_allows_compat_tool_execution_when_backend_supp
                         },
                         "runtimePolicy": {"execution": {"class": "microvm"}},
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                    {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                    {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
                 ],
             },
         },
@@ -654,11 +654,11 @@ def test_workspace_starter_create_rejects_tool_execution_dependency_contract(
             "tags": ["execution", "dependency"],
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "tool_node",
-                        "type": "tool",
-                        "name": "Tool",
+                        "type": "toolNode",
+                        "name": "toolNode",
                         "config": {
                             "tool": {
                                 "toolId": "compat:dify-ready-deps:plugin:demo/search",
@@ -674,11 +674,11 @@ def test_workspace_starter_create_rejects_tool_execution_dependency_contract(
                             }
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                    {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                    {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
                 ],
             },
         },
@@ -1017,18 +1017,18 @@ def test_workspace_starter_routes_surface_source_governance(
     sample_workflow.version = "0.2.0"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Renamed Mock Tool",
                 "config": {"mock_output": {"answer": "updated"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
-            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
+            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -1081,18 +1081,18 @@ def test_workspace_starter_list_filters_by_source_governance_and_follow_up(
     sample_workflow.version = "0.2.0"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Renamed Mock Tool",
                 "config": {"mock_output": {"answer": "updated"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
-            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
+            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -1214,18 +1214,18 @@ def test_workspace_starter_governance_summary_returns_breakdown_and_follow_up_qu
     sample_workflow.version = "0.2.0"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Summary Updated Tool",
                 "config": {"mock_output": {"answer": "updated"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
-            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
+            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -1435,11 +1435,11 @@ def test_workspace_starter_create_rejects_missing_catalog_tool_binding(
 ) -> None:
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {
                     "tool": {
                         "toolId": "native.missing",
@@ -1447,11 +1447,11 @@ def test_workspace_starter_create_rejects_missing_catalog_tool_binding(
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -1631,18 +1631,18 @@ def test_workspace_starter_refresh_updates_snapshot_and_records_history(
     sample_workflow.version = "0.1.1"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {"prompt": "Refresh me"},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -1747,25 +1747,25 @@ def test_workspace_starter_source_diff_reports_node_edge_and_name_drift(
     sample_workflow.version = "0.1.1"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Mock Tool",
                 "config": {"mock_output": {"answer": "updated"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             {
                 "id": "auditor",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Auditor",
                 "config": {"prompt": "Check output"},
             },
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
             {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "auditor"},
-            {"id": "e3", "sourceNodeId": "auditor", "targetNodeId": "output"},
+            {"id": "e3", "sourceNodeId": "auditor", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -1938,18 +1938,18 @@ def test_workspace_starter_rebase_syncs_source_derived_fields_and_records_histor
     sample_workflow.version = "0.1.2"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "planner",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Planner",
                 "config": {"prompt": "Plan next step"},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-            {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+            {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -2237,18 +2237,18 @@ def test_workspace_starter_bulk_refresh_and_rebase_skip_invalid_sources(
     sample_workflow.version = "0.1.3"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "planner",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Planner",
                 "config": {"prompt": "Plan in bulk"},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-            {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+            {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -2643,25 +2643,25 @@ def test_workspace_starter_bulk_preview_summarizes_refresh_and_rebase_candidates
     sample_workflow.version = "0.2.0"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Mock Tool",
                 "config": {"mock_output": {"answer": "done"}},
             },
             {
                 "id": "planner",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Planner",
                 "config": {"prompt": "Plan preview drift"},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
             {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "planner"},
-            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "output"},
+            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -2873,25 +2873,25 @@ def test_workspace_starter_bulk_refresh_reuses_preview_blockers_in_result_receip
     sample_workflow.version = "0.2.0"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Mock Tool",
                 "config": {"mock_output": {"answer": "done"}},
             },
             {
                 "id": "planner",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Planner",
                 "config": {"prompt": "Plan result drift"},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
             {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "planner"},
-            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "output"},
+            {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "endNode"},
         ],
     }
     sqlite_session.add(sample_workflow)
@@ -3035,18 +3035,18 @@ def test_workspace_starter_bulk_refresh_prioritizes_catalog_gap_follow_up(
 
     missing_tool_definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "catalog_gap_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Catalog gap tool",
                 "config": {"tool": {"toolId": "native.catalog-gap"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "catalog_gap_tool"},
-            {"id": "e2", "sourceNodeId": "catalog_gap_tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "catalog_gap_tool"},
+            {"id": "e2", "sourceNodeId": "catalog_gap_tool", "targetNodeId": "endNode"},
         ],
     }
     catalog_gap_record = sqlite_session.get(

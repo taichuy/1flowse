@@ -804,7 +804,7 @@ describe("WorkflowPublishInvocationEntryCard", () => {
             execution_focus_node_id: "tool_wait",
             execution_focus_node_run_id: "node-run-tool-wait",
             execution_focus_node_name: "Tool wait",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "strong isolation failed on historical run",
               follow_up: "compare with live readiness"
@@ -872,7 +872,7 @@ describe("WorkflowPublishInvocationEntryCard", () => {
             execution_focus_node_id: "tool_wait",
             execution_focus_node_run_id: "node-run-tool-wait",
             execution_focus_node_name: "Tool wait",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "strong isolation failed on historical run",
               follow_up: "compare with live readiness"

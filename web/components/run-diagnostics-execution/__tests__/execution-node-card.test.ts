@@ -178,7 +178,7 @@ function buildExecutionNode(): RunExecutionNodeItem {
     node_run_id: "node-run-callback",
     node_id: "callback_node",
     node_name: "Callback node",
-    node_type: "tool",
+    node_type: "toolNode",
     status: "waiting",
     phase: "execute",
     execution_class: "sandbox",

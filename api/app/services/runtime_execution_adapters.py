@@ -106,7 +106,7 @@ def build_node_execution_signal_payload(
         payload["requested_filesystem_policy"] = execution_policy.filesystem_policy
 
     if (
-        str(node.get("type") or "") == "sandbox_code"
+        str(node.get("type") or "") == "sandboxCodeNode"
         and execution_policy.execution_class in {"sandbox", "microvm"}
     ):
         dependency_contract = resolve_sandbox_code_dependency_contract(
@@ -293,7 +293,7 @@ class BranchSubprocessExecutionAdapter:
 
     def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
         node_type = str(request.node.get("type") or "unknown")
-        if node_type not in {"condition", "router"}:
+        if node_type not in {"conditionNode", "routerNode"}:
             raise WorkflowExecutionError(
                 "Host subprocess branch adapter only supports condition/router nodes."
             )
@@ -467,15 +467,15 @@ class RuntimeExecutionAdapterRegistry:
     ) -> NodeExecutionAvailability:
         node_type = str(node.get("type") or "unknown")
         if (
-            node_type in {"condition", "router"}
+            node_type in {"conditionNode", "routerNode"}
             and execution_policy.execution_class == "subprocess"
         ):
             return NodeExecutionAvailability(
                 available=True,
                 executor_ref=self._branch_subprocess_adapter.adapter_ref,
             )
-        if node_type != "sandbox_code":
-            if node_type == "tool" and is_strong_tool_execution_class(
+        if node_type != "sandboxCodeNode":
+            if node_type == "toolNode" and is_strong_tool_execution_class(
                 execution_policy.execution_class
             ):
                 tool_binding = dict((node.get("config") or {}).get("tool") or {})
@@ -523,7 +523,7 @@ class RuntimeExecutionAdapterRegistry:
                         else None
                     ),
                 )
-            if node_type == "tool":
+            if node_type == "toolNode":
                 return NodeExecutionAvailability(available=True)
 
             if execution_policy.execution_class != "inline":
@@ -602,7 +602,7 @@ class RuntimeExecutionAdapterRegistry:
 
     def execute(self, request: NodeExecutionRequest) -> NodeExecutionResult:
         node_type = str(request.node.get("type") or "unknown")
-        if request.node.get("type") == "sandbox_code":
+        if request.node.get("type") == "sandboxCodeNode":
             if request.execution_policy.execution_class == "subprocess":
                 return self._sandbox_code_adapter.execute(request)
             if request.execution_policy.execution_class in {"sandbox", "microvm"}:
@@ -613,11 +613,11 @@ class RuntimeExecutionAdapterRegistry:
                 "without a registered sandbox backend."
             )
 
-        if node_type == "tool":
+        if node_type == "toolNode":
             return self._inline_adapter.execute(request)
 
         if (
-            node_type in {"condition", "router"}
+            node_type in {"conditionNode", "routerNode"}
             and request.execution_policy.execution_class == "subprocess"
         ):
             return self._branch_subprocess_adapter.execute(request)

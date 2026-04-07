@@ -298,7 +298,7 @@ export function WorkspaceModelProviderSettings({
   const messageAlert = message ? (
     <Alert
       data-component="workspace-model-provider-message"
-      message={message}
+      title={message}
       showIcon
       type={getMessageAlertType(messageTone)}
     />

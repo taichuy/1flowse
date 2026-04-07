@@ -45,12 +45,12 @@ def validate_workflow_graph(
         raise ValueError("Workflow edge ids must be unique.")
 
     node_id_set = set(node_ids)
-    trigger_count = sum(node.type == "trigger" for node in document.nodes)
+    trigger_count = sum(node.type == "startNode" for node in document.nodes)
     if trigger_count != 1:
-        raise ValueError("Workflow definition must contain exactly one trigger node.")
+        raise ValueError("Workflow definition must contain exactly one startNode node.")
 
-    if not any(node.type == "output" for node in document.nodes):
-        raise ValueError("Workflow definition must contain at least one output node.")
+    if not any(node.type == "endNode" for node in document.nodes):
+        raise ValueError("Workflow definition must contain at least one endNode node.")
 
     _validate_node_context_access_and_queries(
         document,
@@ -93,7 +93,7 @@ def _validate_node_context_access_and_queries(
                     f"'{readable_node_id}'."
                 )
 
-        if node.type == "reference":
+        if node.type == "referenceNode":
             reference = node.config.get("reference") or {}
             source_node_id = str(reference.get("sourceNodeId") or "").strip()
             if source_node_id and source_node_id not in node_id_set:
@@ -108,7 +108,7 @@ def _validate_node_context_access_and_queries(
                 )
             continue
 
-        if node.type != "mcp_query":
+        if node.type != "mcpQueryNode":
             continue
 
         query = mcp_query_model.model_validate(node.config["query"])
@@ -191,8 +191,8 @@ def _validate_join_policies(
             continue
 
         incoming_sources = incoming_by_target.get(node.id, set())
-        if node.type == "trigger":
-            raise ValueError("Trigger nodes cannot define runtimePolicy.join.")
+        if node.type == "startNode":
+            raise ValueError("startNode nodes cannot define runtimePolicy.join.")
         if not incoming_sources:
             raise ValueError(
                 f"Node '{node.id}' defines runtimePolicy.join but has no incoming edges."
@@ -214,7 +214,7 @@ def _validate_outgoing_edge_conditions(
 ) -> None:
     for node in document.nodes:
         outgoing_edges = outgoing_by_source.get(node.id, [])
-        if node.type in {"condition", "router"}:
+        if node.type in {"conditionNode", "routerNode"}:
             _validate_branch_node_outgoing_conditions(
                 node,
                 outgoing_edges=outgoing_edges,
@@ -282,7 +282,7 @@ def _validate_branch_node_outgoing_conditions(
             )
         return
 
-    if expression is not None and node.type == "condition":
+    if expression is not None and node.type == "conditionNode":
         allowed_branch_conditions = {"true", "false"}
         invalid_branch_conditions = sorted(
             condition

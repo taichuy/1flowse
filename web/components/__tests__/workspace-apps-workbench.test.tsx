@@ -73,22 +73,6 @@ function buildWorkbenchProps(
       badge: "4 种角色"
     },
     starterCount: 5,
-    workflowCreateBootstrapRequest: {
-      governanceQueryScope: {
-        activeTrack: "应用新建编排",
-        sourceGovernanceKind: "all",
-        needsFollowUp: false,
-        searchQuery: "",
-        selectedTemplateId: null
-      },
-      includeLegacyAuthGovernanceSnapshot: false,
-      libraryQuery: {
-        businessTrack: "应用新建编排",
-        needsFollowUp: false,
-        includeBuiltinStarters: true,
-        includeStarterDefinitions: true
-      }
-    },
     workflowCreateWizardProps: {
       catalogToolCount: 0,
       governanceQueryScope: {
@@ -102,8 +86,8 @@ function buildWorkbenchProps(
       starterSourceLanes: [],
       nodeCatalog: [
         {
-          type: "trigger",
-          label: "Trigger",
+          type: "startNode",
+          label: "startNode",
           description: "Trigger node",
           ecosystem: "native",
           source: {
@@ -124,7 +108,7 @@ function buildWorkbenchProps(
           bindingRequired: false,
           bindingSourceLanes: [],
           palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-          defaults: { name: "Trigger", config: {} }
+          defaults: { name: "startNode", config: {} }
         }
       ],
       tools: [],
@@ -141,7 +125,7 @@ function buildWorkbenchProps(
           recommendedNextStep: "Create workflow",
           tags: [],
           definition: {
-            nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+            nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
             edges: [],
             variables: [],
             publish: []

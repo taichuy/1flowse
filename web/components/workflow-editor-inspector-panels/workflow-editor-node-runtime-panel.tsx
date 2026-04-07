@@ -50,7 +50,7 @@ export function WorkflowEditorNodeRuntimePanel({
       ),
     [node.data.inputSchema, supportedFields]
   );
-  const isTriggerNode = node.data.nodeType === "trigger";
+  const isTriggerNode = node.data.nodeType === "startNode";
 
   useEffect(() => {
     form.resetFields();

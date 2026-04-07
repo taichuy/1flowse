@@ -108,7 +108,7 @@ function buildRunDetail(overrides: Partial<RunDetail> = {}): RunDetail {
       node_run_id: "node-run-1",
       node_id: "tool_wait",
       node_name: "Tool Wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "blocked",
       callback_waiting_explanation: null,
       callback_waiting_lifecycle: null,
@@ -154,7 +154,7 @@ function buildRunDetail(overrides: Partial<RunDetail> = {}): RunDetail {
         id: "node-run-1",
         node_id: "tool_wait",
         node_name: "Tool Wait",
-        node_type: "tool",
+        node_type: "toolNode",
         status: "blocked",
         phase: "execute",
         retry_count: 0,
@@ -198,7 +198,7 @@ function buildRunSnapshot(): RunSnapshotWithId {
     executionFocusNodeId: "tool_wait",
     executionFocusNodeRunId: "node-run-1",
     executionFocusNodeName: "Tool Wait",
-    executionFocusNodeType: "tool",
+    executionFocusNodeType: "toolNode",
     executionFocusExplanation: {
       primary_signal: "当前节点因强隔离 backend 不可用而阻断。",
       follow_up: "先恢复兼容 backend，再重新调度该节点。"
@@ -332,9 +332,9 @@ describe("WorkflowRunOverlayPanel", () => {
           node_runs: [
             {
               id: "node-run-1",
-              node_id: "trigger",
-              node_name: "Trigger",
-              node_type: "trigger",
+              node_id: "startNode",
+              node_name: "startNode",
+              node_type: "startNode",
               status: "succeeded",
               phase: "execute",
               retry_count: 0,
@@ -358,7 +358,7 @@ describe("WorkflowRunOverlayPanel", () => {
               id: "node-run-2",
               node_id: "planner",
               node_name: "Planner",
-              node_type: "llm_agent",
+              node_type: "llmAgentNode",
               status: "running",
               phase: "execute",
               retry_count: 0,
@@ -389,7 +389,7 @@ describe("WorkflowRunOverlayPanel", () => {
           executionFocusNodeId: "planner",
           executionFocusNodeRunId: "node-run-2",
           executionFocusNodeName: "Planner",
-          executionFocusNodeType: "llm_agent",
+          executionFocusNodeType: "llmAgentNode",
           executionFocusExplanation: {
             primary_signal: "当前节点仍在生成最新回答。",
             follow_up: "继续观察输出摘要是否已经稳定。"
@@ -496,7 +496,7 @@ describe("WorkflowRunOverlayPanel", () => {
             executionFocusNodeId: "approval_gate",
             executionFocusNodeRunId: "node-run-1",
             executionFocusNodeName: "Approval Gate",
-            executionFocusNodeType: "tool",
+            executionFocusNodeType: "toolNode",
             callbackWaitingExplanation: {
               primary_signal: "当前 callback waiting 仍需要 operator 回到 inbox。",
               follow_up: "先打开 inbox slice，确认 callback ticket 处理进度。"

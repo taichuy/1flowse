@@ -410,7 +410,7 @@ export function buildSensitiveAccessExecutionFocusNodeFixture(
     node_run_id: "node-run-1",
     node_id: "node-1",
     node_name: "Approval Node",
-    node_type: "tool",
+    node_type: "toolNode",
     waiting_reason: null,
     scheduled_resume_delay_seconds: null,
     scheduled_resume_due_at: null,

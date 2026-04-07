@@ -48,7 +48,7 @@ export function summarizeWorkflowDefinitionSandboxGovernance(
   definition: WorkflowDefinition
 ): WorkflowDefinitionSandboxGovernance {
   const nodes = (definition.nodes ?? [])
-    .filter((node) => node.type === "sandbox_code")
+    .filter((node) => node.type === "sandboxCodeNode")
     .map((node) => buildSandboxGovernanceNode(node));
 
   if (nodes.length === 0) {
@@ -99,7 +99,7 @@ export function buildWorkflowDefinitionSandboxGovernanceTags(
     return [];
   }
 
-  const tags = ["sandbox_code"];
+  const tags = ["sandboxCodeNode"];
 
   for (const executionClass of governance.executionClasses) {
     tags.push(`execution:${executionClass}`);
@@ -192,7 +192,7 @@ function buildSandboxGovernanceNode(
   const execution = isRecord(runtimePolicy.execution) ? runtimePolicy.execution : null;
   const executionClass = isExecutionClass(execution?.class)
     ? execution.class
-    : resolveDefaultExecutionClass("sandbox_code");
+    : resolveDefaultExecutionClass("sandboxCodeNode");
   const dependencyMode = isExecutionDependencyMode(execution?.dependencyMode)
     ? execution.dependencyMode
     : undefined;

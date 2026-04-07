@@ -198,7 +198,7 @@ function buildGraphState(overrides: Record<string, unknown> = {}) {
         id: "node-1",
         data: {
           label: "LLM Agent",
-          nodeType: "llm_agent",
+          nodeType: "llmAgentNode",
         },
       },
     ],
@@ -214,6 +214,7 @@ function buildGraphState(overrides: Record<string, unknown> = {}) {
     selectedEdgeId: null,
     selectedNode: null,
     selectedEdge: null,
+    handleNodeNameChange: () => undefined,
     workflowName: "Demo workflow",
     workflowVersion: "0.1.0",
     canUndo: false,
@@ -343,7 +344,7 @@ describe("WorkflowEditorWorkbench", () => {
           id: "node-1",
           data: {
             label: "LLM Agent",
-            nodeType: "llm_agent"
+            nodeType: "llmAgentNode"
           }
         },
         canUndo: true,
@@ -415,7 +416,7 @@ describe("WorkflowEditorWorkbench", () => {
           id: "node-1",
           data: {
             label: "LLM Agent",
-            nodeType: "llm_agent"
+            nodeType: "llmAgentNode"
           }
         }
       })
@@ -429,5 +430,26 @@ describe("WorkflowEditorWorkbench", () => {
     expect(html).toContain('data-action="close-floating-inspector"');
     expect(html).toContain('data-component="workflow-editor-inspector"');
     expect(html).not.toContain('data-component="workflow-editor-inspector-rail"');
+  });
+
+  it("renders the selected node title inside the floating panel header", () => {
+    mocks.useWorkflowEditorGraph.mockReturnValue(
+      buildGraphState({
+        selectedNodeId: "node-1",
+        selectedNode: {
+          id: "node-1",
+          data: {
+            label: "LLM Agent",
+            nodeType: "llmAgentNode"
+          }
+        }
+      })
+    );
+
+    const html = renderWorkbench();
+
+    expect(html).toContain("workflow-editor-floating-panel-title-input");
+    expect(html).toContain('aria-label="节点名称"');
+    expect(html).toContain('value="LLM Agent"');
   });
 });

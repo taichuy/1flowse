@@ -37,7 +37,7 @@ def test_waiting_resume_monitor_schedules_due_waiting_callback_run(
         run_id=run.id,
         node_id="agent",
         node_name="Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         checkpoint_payload={
@@ -111,7 +111,7 @@ def test_waiting_resume_monitor_treats_legacy_scheduled_resume_as_due(
         run_id=run.id,
         node_id="agent",
         node_name="Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         checkpoint_payload={
@@ -163,7 +163,7 @@ def test_waiting_resume_monitor_skips_future_due_or_terminated_nodes(
         run_id=future_run.id,
         node_id="agent",
         node_name="Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         checkpoint_payload={
@@ -196,7 +196,7 @@ def test_waiting_resume_monitor_skips_future_due_or_terminated_nodes(
         run_id=terminated_run.id,
         node_id="agent",
         node_name="Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         checkpoint_payload={
@@ -253,7 +253,7 @@ def test_waiting_resume_monitor_skips_recently_requeued_resume(
         run_id=run.id,
         node_id="agent",
         node_name="Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         checkpoint_payload={
@@ -307,7 +307,7 @@ def test_waiting_resume_monitor_requeues_again_after_recent_window_expires(
         run_id=run.id,
         node_id="agent",
         node_name="Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         checkpoint_payload={

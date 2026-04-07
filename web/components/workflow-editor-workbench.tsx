@@ -11,6 +11,7 @@ import {
   type ComponentProps
 } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { Input } from "antd";
 
 import {
   getPaletteNodeCatalog,
@@ -333,7 +334,7 @@ export function WorkflowEditorWorkbench({
   const canvasQuickAddOptions = useMemo<WorkflowCanvasQuickAddOption[]>(
     () =>
       orderedEditorNodeLibrary
-        .filter((item) => item.type !== "trigger")
+        .filter((item) => item.type !== "startNode")
         .map((item) => ({
           type: item.type,
           label: item.label,
@@ -395,6 +396,23 @@ export function WorkflowEditorWorkbench({
   const inspectorSurfaceTitle = graph.selectedNode?.data.label
     ?? (typeof graph.selectedEdge?.label === "string" ? graph.selectedEdge.label : null)
     ?? (graph.selectedEdgeId ? `连线 ${graph.selectedEdgeId}` : "配置面板");
+  const inspectorSurfaceTitleNode = graph.selectedNode ? (
+    <div
+      className="workflow-editor-floating-panel-editable-title"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <Input
+        aria-label="节点名称"
+        className="workflow-editor-floating-panel-title-input"
+        placeholder="节点名称"
+        variant="borderless"
+        value={graph.selectedNode.data.label}
+        onChange={(event) => graph.handleNodeNameChange(event.target.value)}
+      />
+    </div>
+  ) : (
+    inspectorSurfaceTitle
+  );
   const effectiveIsInspectorCollapsed = !isFloatingInspectorVisible;
   const workspaceStyle = useMemo(
     () =>
@@ -593,7 +611,7 @@ export function WorkflowEditorWorkbench({
             <WorkflowEditorFloatingPanel
               ref={floatingWorkbenchRef}
               panelKind={selectedNodeId ? "node-config" : "edge-config"}
-              title={inspectorSurfaceTitle}
+              title={inspectorSurfaceTitleNode}
               closeLabel="关闭配置面板"
               closeAction="close-floating-inspector"
               dragging={isFloatingWorkbenchDragging}

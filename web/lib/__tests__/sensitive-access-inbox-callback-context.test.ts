@@ -66,7 +66,7 @@ function createRunSnapshot(
     executionFocusNodeId: "tool_wait",
     executionFocusNodeRunId: "node-run-1",
     executionFocusNodeName: "Tool Wait",
-    executionFocusNodeType: "tool",
+    executionFocusNodeType: "toolNode",
     executionFocusExplanation: {
       primary_signal: "等待原因：Waiting for callback approval",
       follow_up: "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"

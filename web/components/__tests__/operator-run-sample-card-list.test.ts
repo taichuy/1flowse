@@ -342,7 +342,7 @@ describe("OperatorRunSampleCardList", () => {
             callbackWaitingExplanation: null,
             callbackWaitingFocusNodeEvidence: null,
             sandboxReadinessNode: {
-              node_type: "tool",
+              node_type: "toolNode",
               execution_class: "sandbox",
               requested_execution_class: "sandbox",
               effective_execution_class: "sandbox",
@@ -372,7 +372,7 @@ describe("OperatorRunSampleCardList", () => {
             callbackWaitingFocusNodeEvidence: null,
             summary: "当前 sampled run 因 sandbox backend 不可用而阻断。",
             sandboxReadinessNode: {
-              node_type: "tool",
+              node_type: "toolNode",
               execution_class: "sandbox",
               requested_execution_class: "sandbox",
               effective_execution_class: "sandbox",
@@ -416,7 +416,7 @@ describe("OperatorRunSampleCardList", () => {
             callbackWaitingFocusNodeEvidence: null,
             summary: "当前 sampled run 因 sandbox backend 不可用而阻断。",
             sandboxReadinessNode: {
-              node_type: "tool",
+              node_type: "toolNode",
               execution_class: "sandbox",
               requested_execution_class: "sandbox",
               effective_execution_class: "sandbox",

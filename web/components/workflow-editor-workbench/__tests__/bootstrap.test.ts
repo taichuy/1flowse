@@ -36,7 +36,7 @@ beforeEach(() => {
     { id: "workflow-2" }
   ] as Awaited<ReturnType<typeof getWorkflows>>);
   vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue({
-    nodes: [{ type: "trigger" }],
+    nodes: [{ type: "startNode" }],
     starters: [],
     starterSourceLanes: [],
     nodeSourceLanes: [{ kind: "node" }],

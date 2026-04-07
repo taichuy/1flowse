@@ -12,7 +12,7 @@ describe("EvidenceNodeCard", () => {
           node_run_id: "node-run-1",
           node_id: "node-1",
           node_name: "Agent Review",
-          node_type: "llm_agent",
+          node_type: "llmAgentNode",
           status: "succeeded",
           phase: "emit_output",
           summary: "Assistant extracted the decision basis.",

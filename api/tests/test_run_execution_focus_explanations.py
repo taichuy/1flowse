@@ -7,9 +7,9 @@ from app.services.run_execution_focus_explanations import (
 def _build_execution_node(**overrides) -> RunExecutionNodeItem:
     payload = {
         "node_run_id": "nr-1",
-        "node_id": "tool",
+        "node_id": "toolNode",
         "node_name": "Tool",
-        "node_type": "tool",
+        "node_type": "toolNode",
         "status": "completed",
         "execution_class": "microvm",
         "execution_source": "workflow",
@@ -55,7 +55,7 @@ def test_build_run_execution_focus_explanation_maps_unsupported_strong_isolation
         _build_execution_node(
             node_id="branch",
             node_name="Branch",
-            node_type="condition",
+            node_type="conditionNode",
             execution_blocking_reason=(
                 "Node type 'condition' does not implement requested strong-isolation "
                 "execution class 'microvm'. Strong-isolation paths must fail closed "
@@ -78,9 +78,9 @@ def test_build_run_execution_focus_explanation_maps_unsupported_strong_isolation
 def test_build_run_execution_focus_explanation_maps_unsupported_subprocess_block() -> None:
     explanation = build_run_execution_focus_explanation(
         _build_execution_node(
-            node_id="trigger",
-            node_name="Trigger",
-            node_type="trigger",
+            node_id="startNode",
+            node_name="startNode",
+            node_type="startNode",
             execution_class="subprocess",
             execution_blocking_reason=(
                 "Node type 'trigger' does not implement requested execution class "

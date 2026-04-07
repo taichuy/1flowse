@@ -11,18 +11,18 @@ def _publishable_definition(
 ) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {"mock_output": {"answer": answer}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
         "publish": [
             {

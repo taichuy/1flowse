@@ -109,13 +109,13 @@ export type WorkflowCreateFirstScreenShellPresentation = WorkflowCreateWizardPre
 };
 
 const WORKFLOW_CREATE_FEATURED_NODE_TYPES = [
-  "llm_agent",
-  "tool",
-  "condition",
-  "loop",
-  "mcp_query",
-  "sandbox_code",
-  "output"
+  "llmAgentNode",
+  "toolNode",
+  "conditionNode",
+  "loopNode",
+  "mcpQueryNode",
+  "sandboxCodeNode",
+  "endNode"
 ] as const;
 
 type WorkspaceStarterSourceGovernanceSurfaceTemplate = Parameters<

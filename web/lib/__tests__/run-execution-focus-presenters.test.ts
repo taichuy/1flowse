@@ -25,7 +25,7 @@ function createExecutionNode(
     node_run_id: "node-run-1",
     node_id: "tool_wait",
     node_name: "Tool Wait",
-    node_type: "tool",
+    node_type: "toolNode",
     status: "waiting_callback",
     phase: "waiting_callback",
     execution_class: "inline",
@@ -313,7 +313,7 @@ describe("run execution focus presenters", () => {
 
   it("把节点未实现的强隔离执行解释成 node-type 阻断", () => {
     const node = createExecutionNode({
-      node_type: "condition",
+      node_type: "conditionNode",
       execution_blocking_reason:
         "Node type 'condition' does not implement requested strong-isolation execution class 'microvm'. Strong-isolation paths must fail closed until a compatible execution adapter is available."
     });
@@ -326,7 +326,7 @@ describe("run execution focus presenters", () => {
 
   it("把节点未实现的 subprocess 执行解释成显式 execution-class 阻断", () => {
     const node = createExecutionNode({
-      node_type: "trigger",
+      node_type: "startNode",
       execution_blocking_reason:
         "Node type 'trigger' does not implement requested execution class 'subprocess'. Explicit execution-class requests must stay blocked until a compatible execution adapter is available."
     });

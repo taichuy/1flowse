@@ -289,43 +289,43 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
 
     tool_binding = config.get("tool")
     if tool_binding is not None:
-        if node_type != "tool":
-            raise ValueError("Only tool nodes may define config.tool.")
+        if node_type != "toolNode":
+            raise ValueError("Only toolNode nodes may define config.tool.")
         WorkflowNodeToolBinding.model_validate(tool_binding)
 
     flat_tool_id = config.get("toolId")
     if flat_tool_id is not None:
-        if node_type != "tool":
-            raise ValueError("Only tool nodes may define config.toolId.")
+        if node_type != "toolNode":
+            raise ValueError("Only toolNode nodes may define config.toolId.")
         if not isinstance(flat_tool_id, str) or not flat_tool_id.strip():
             raise ValueError("config.toolId must be a non-empty string.")
         if tool_binding is not None:
-            raise ValueError("Tool nodes cannot define both config.tool and config.toolId.")
+            raise ValueError("toolNode nodes cannot define both config.tool and config.toolId.")
 
     query = config.get("query")
-    if node_type == "mcp_query":
+    if node_type == "mcpQueryNode":
         if query is None:
-            raise ValueError("MCP query nodes must define config.query.")
+            raise ValueError("mcpQueryNode nodes must define config.query.")
         WorkflowNodeMcpQuery.model_validate(query)
 
     reference = config.get("reference")
-    if node_type == "reference":
+    if node_type == "referenceNode":
         if reference is None:
-            raise ValueError("Reference nodes must define config.reference.")
+            raise ValueError("referenceNode nodes must define config.reference.")
         WorkflowNodeReferenceConfig.model_validate(reference)
     elif reference is not None:
-        raise ValueError("Only reference nodes may define config.reference.")
+        raise ValueError("Only referenceNode nodes may define config.reference.")
 
     selector = config.get("selector")
     if selector is not None:
-        if node_type not in {"condition", "router"}:
-            raise ValueError("Only condition/router nodes may define config.selector.")
+        if node_type not in {"conditionNode", "routerNode"}:
+            raise ValueError("Only conditionNode/routerNode nodes may define config.selector.")
         WorkflowNodeBranchSelector.model_validate(selector)
 
     expression = config.get("expression")
     if expression is not None:
-        if node_type not in {"condition", "router"}:
-            raise ValueError("Only condition/router nodes may define config.expression.")
+        if node_type not in {"conditionNode", "routerNode"}:
+            raise ValueError("Only conditionNode/routerNode nodes may define config.expression.")
         validate_safe_expression(
             expression,
             allowed_names=BRANCH_EXPRESSION_NAMES,
@@ -334,41 +334,41 @@ def validate_workflow_node_embedded_config(*, node_type: str, config: dict[str, 
 
     assistant = config.get("assistant")
     if assistant is not None:
-        if node_type != "llm_agent":
-            raise ValueError("Only llm_agent nodes may define config.assistant.")
+        if node_type != "llmAgentNode":
+            raise ValueError("Only llmAgentNode nodes may define config.assistant.")
         WorkflowNodeAssistantConfig.model_validate(assistant)
 
     model = config.get("model")
     if model is not None:
-        if node_type != "llm_agent":
-            raise ValueError("Only llm_agent nodes may define config.model.")
+        if node_type != "llmAgentNode":
+            raise ValueError("Only llmAgentNode nodes may define config.model.")
         WorkflowNodeModelConfig.model_validate(model)
 
     skill_ids = config.get("skillIds")
     if skill_ids is not None:
-        if node_type != "llm_agent":
-            raise ValueError("Only llm_agent nodes may define config.skillIds.")
+        if node_type != "llmAgentNode":
+            raise ValueError("Only llmAgentNode nodes may define config.skillIds.")
         WorkflowNodeSkillBinding.model_validate({"skillIds": skill_ids})
 
     skill_binding = config.get("skillBinding")
     if skill_binding is not None:
-        if node_type != "llm_agent":
-            raise ValueError("Only llm_agent nodes may define config.skillBinding.")
+        if node_type != "llmAgentNode":
+            raise ValueError("Only llmAgentNode nodes may define config.skillBinding.")
         if not skill_ids:
             raise ValueError("config.skillBinding requires non-empty config.skillIds.")
         WorkflowNodeSkillBindingPolicy.model_validate(skill_binding)
 
     tool_policy = config.get("toolPolicy")
     if tool_policy is not None:
-        if node_type != "llm_agent":
-            raise ValueError("Only llm_agent nodes may define config.toolPolicy.")
+        if node_type != "llmAgentNode":
+            raise ValueError("Only llmAgentNode nodes may define config.toolPolicy.")
         WorkflowNodeToolPolicy.model_validate(tool_policy)
 
     mock_plan = config.get("mockPlan")
     if mock_plan is not None:
-        if node_type != "llm_agent":
-            raise ValueError("Only llm_agent nodes may define config.mockPlan.")
+        if node_type != "llmAgentNode":
+            raise ValueError("Only llmAgentNode nodes may define config.mockPlan.")
         WorkflowNodeAgentMockPlan.model_validate(mock_plan)
 
-    if node_type == "sandbox_code":
+    if node_type == "sandboxCodeNode":
         WorkflowNodeSandboxConfig.model_validate(config)

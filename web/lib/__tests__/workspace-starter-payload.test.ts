@@ -12,14 +12,14 @@ describe("buildWorkspaceStarterPayload", () => {
       definition: {
         nodes: [
           {
-            id: "trigger",
-            type: "trigger",
-            name: "Trigger",
+            id: "startNode",
+            type: "startNode",
+            name: "startNode",
             config: {}
           },
           {
             id: "sandbox",
-            type: "sandbox_code",
+            type: "sandboxCodeNode",
             name: "Sandbox Code",
             config: {
               language: "python"
@@ -36,9 +36,9 @@ describe("buildWorkspaceStarterPayload", () => {
             }
           },
           {
-            id: "output",
-            type: "output",
-            name: "Output",
+            id: "endNode",
+            type: "endNode",
+            name: "endNode",
             config: {}
           }
         ],

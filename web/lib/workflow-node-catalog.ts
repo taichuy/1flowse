@@ -20,10 +20,10 @@ export type UnsupportedWorkflowNodeSummary = {
 };
 
 const PRIMARY_AUTHORING_NODE_TYPES = [
-  "llm_agent",
-  "reference",
-  "tool",
-  "condition"
+  "llmAgentNode",
+  "referenceNode",
+  "toolNode",
+  "conditionNode"
 ] as const;
 
 export function formatUnsupportedWorkflowNodes(

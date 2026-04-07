@@ -144,7 +144,7 @@ class RuntimeExecutionProgressSupportMixin:
         node_run.waiting_reason = None
         self._clear_callback_ticket(db, node_run, reason="node_completed")
         checkpoint_state.outputs[node_id] = node_output
-        if node["type"] == "output":
+        if node["type"] == "endNode":
             checkpoint_state.completed_output_nodes = list(
                 dict.fromkeys([*checkpoint_state.completed_output_nodes, node_id])
             )

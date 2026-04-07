@@ -97,7 +97,7 @@ function buildSelectedNode(): Node<WorkflowCanvasNodeData> {
     position: { x: 0, y: 0 },
     data: {
       label: "LLM Agent",
-      nodeType: "llm_agent",
+      nodeType: "llmAgentNode",
       config: {},
       inputSchema: {},
       outputSchema: {},
@@ -109,11 +109,12 @@ function buildSelectedNode(): Node<WorkflowCanvasNodeData> {
 
 function buildTriggerNode(): Node<WorkflowCanvasNodeData> {
   return {
-    id: "trigger",
+    id: "startNode",
     position: { x: 0, y: 0 },
     data: {
-      label: "Trigger",
-      nodeType: "trigger",
+      label: "开始",
+      nodeType: "startNode",
+      typeLabel: "开始",
       config: {},
       inputSchema: {
         type: "object",
@@ -146,6 +147,7 @@ function buildProps() {
     onNodeConfigTextChange: () => undefined,
     onApplyNodeConfigJson: () => undefined,
     onNodeNameChange: () => undefined,
+    onNodeDescriptionChange: () => undefined,
     onNodeConfigChange: () => undefined,
     onNodeInputSchemaChange: () => undefined,
     onNodeOutputSchemaChange: () => undefined,
@@ -178,9 +180,9 @@ describe("WorkflowEditorInspector", () => {
       })
     );
 
-    expect(html).toContain("NODE CONFIG");
     expect(html).toContain("LLM Agent");
-    expect(html).toContain("llm_agent");
+    expect(html).toContain("添加描述...");
+    expect(html).toContain("llmAgentNode");
     expect(html).toContain("设置");
     expect(html).toContain("运行时");
     expect(html).toContain("AI");
@@ -188,11 +190,12 @@ describe("WorkflowEditorInspector", () => {
     expect(html).toContain('data-component="node-io-schema-form"');
     expect(html).toContain('data-component="node-runtime-policy-form"');
     expect(html).toContain('data-component="workflow-editor-node-json-panel"');
+    expect(html).not.toContain('workflow-editor-inspector-section-title">节点名称');
     expect(html).not.toContain('data-component="workflow-editor-assistant-panel"');
     expect(html).not.toContain('data-component="workflow-editor-node-runtime-panel"');
   });
 
-  it("uses a dify-like settings/runtime structure for trigger nodes", () => {
+  it("uses a dify-like settings/runtime structure for start nodes", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorInspector, {
         ...buildProps(),
@@ -201,13 +204,26 @@ describe("WorkflowEditorInspector", () => {
       })
     );
 
-    expect(html).toContain("Trigger");
+    expect(html).toContain("开始");
     expect(html).toContain("设置");
     expect(html).toContain("运行时");
     expect(html).toContain("输入字段");
     expect(html).toContain("应用输入字段");
     expect(html).toContain("下一步");
     expect(html).not.toContain("workflow-editor-assistant-panel");
+  });
+
+  it("hides the duplicate node title input when the floating panel owns the title", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowEditorInspector, {
+        ...buildProps(),
+        nodeTitlePlacement: "floating-panel",
+        selectedNode: buildSelectedNode()
+      })
+    );
+
+    expect(html).not.toContain("workflow-editor-inspector-node-title-input");
+    expect(html).toContain("workflow-editor-inspector-node-description-input");
   });
 
   it("falls back to workflow-level tabs when nothing is selected", () => {

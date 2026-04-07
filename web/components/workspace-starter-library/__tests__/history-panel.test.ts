@@ -118,7 +118,7 @@ describe("WorkspaceStarterHistoryPanel", () => {
           recommended_next_step: "Return to create flow after reviewing metadata.",
           tags: ["workspace starter"],
           definition: {
-            nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+            nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
             edges: [],
             variables: [],
             publish: []
@@ -171,7 +171,7 @@ describe("WorkspaceStarterHistoryPanel", () => {
           recommended_next_step: "Return to create flow after restoring the missing tool.",
           tags: ["workspace starter"],
           definition: {
-            nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+            nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
             edges: [],
             variables: [],
             publish: []

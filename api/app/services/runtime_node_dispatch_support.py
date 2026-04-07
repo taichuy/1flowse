@@ -92,7 +92,7 @@ class RuntimeNodeDispatchSupportMixin:
         if "mock_error" in config:
             raise WorkflowExecutionError(str(config["mock_error"]))
 
-        if node.get("type") == "llm_agent" and get_settings().durable_agent_runtime_enabled:
+        if node.get("type") == "llmAgentNode" and get_settings().durable_agent_runtime_enabled:
             try:
                 resolved_credentials = self._resolve_node_credentials(
                     db,
@@ -123,11 +123,11 @@ class RuntimeNodeDispatchSupportMixin:
             )
 
         node_type = node.get("type")
-        if node_type == "trigger":
+        if node_type == "startNode":
             return NodeExecutionResult(output=node_input.get("trigger_input", {}))
-        if node_type == "output":
+        if node_type == "endNode":
             return NodeExecutionResult(output=node_input.get("accumulated", {}))
-        if node_type == "tool":
+        if node_type == "toolNode":
             if self._node_has_tool_binding(node):
                 return self._execute_tool_node(
                     db,
@@ -143,7 +143,7 @@ class RuntimeNodeDispatchSupportMixin:
                     "received": node_input,
                 }
             )
-        if node_type == "mcp_query":
+        if node_type == "mcpQueryNode":
             return self._execute_mcp_query_node_with_access_control(
                 db,
                 node=node,
@@ -152,11 +152,11 @@ class RuntimeNodeDispatchSupportMixin:
                 authorized_context=authorized_context,
                 outputs=outputs,
             )
-        if node_type == "reference":
+        if node_type == "referenceNode":
             return NodeExecutionResult(
                 output=self._execute_reference_node(node, authorized_context, outputs)
             )
-        if node_type in {"condition", "router"}:
+        if node_type in {"conditionNode", "routerNode"}:
             return NodeExecutionResult(output=self._execute_branch_node(node, node_input))
         return NodeExecutionResult(
             output={
@@ -338,7 +338,7 @@ class RuntimeNodeDispatchSupportMixin:
             run_id=run_id,
             node_run=node_run,
             requester_type="ai",
-            requester_id=str(node.get("id") or "llm_agent"),
+            requester_id=str(node.get("id") or "llmAgentNode"),
             purpose_text=(
                 "LLM agent node "
                 f"'{node.get('id') or 'unknown'}' requested model/runtime credentials."
@@ -454,7 +454,7 @@ class RuntimeNodeDispatchSupportMixin:
                 run_id=run_id,
                 node_run_id=node_run.id,
                 requester_type="workflow",
-                requester_id=str(node.get("id") or "mcp_query"),
+                requester_id=str(node.get("id") or "mcpQueryNode"),
                 resource_id=resource.id,
                 action_type="read",
                 purpose_text=(

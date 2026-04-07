@@ -3981,6 +3981,50 @@ a {
   gap: 4px;
 }
 
+.workflow-editor-inspector-node-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-editor-inspector-node-heading[data-title-placement="floating-panel"] {
+  gap: 0;
+}
+
+.workflow-editor-inspector-node-title-input {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #111827;
+}
+
+.workflow-editor-inspector-node-title-input:hover,
+.workflow-editor-inspector-node-title-input:focus {
+  background: transparent;
+}
+
+.workflow-editor-inspector-node-description-input {
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.workflow-editor-inspector-node-description-input:hover,
+.workflow-editor-inspector-node-description-input:focus {
+  background: transparent;
+}
+
+.workflow-editor-inspector-node-description-input::placeholder {
+  color: #9ca3af;
+}
+
 .workflow-editor-inspector-heading .ant-typography {
   margin: 0;
 }
@@ -4056,6 +4100,7 @@ a {
 .workflow-editor-floating-panel-title-group {
   display: grid;
   gap: 2px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -4064,6 +4109,26 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.9rem;
+}
+
+.workflow-editor-floating-panel-editable-title {
+  width: 100%;
+  min-width: 0;
+}
+
+.workflow-editor-floating-panel-title-input {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #111827;
+}
+
+.workflow-editor-floating-panel-title-input:hover,
+.workflow-editor-floating-panel-title-input:focus {
+  background: transparent;
 }
 
 .workflow-editor-floating-panel-close {

@@ -56,7 +56,7 @@ describe("LlmAgentNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {
               prompt: "Summarize this",
               model: {
@@ -99,7 +99,7 @@ describe("LlmAgentNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {
               model: {
                 provider: "deepseek",
@@ -132,7 +132,7 @@ describe("LlmAgentNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {
               model: {
                 providerConfigRef: "provider-openai-team",
@@ -171,7 +171,7 @@ describe("LlmAgentNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {
               assistant: {
                 enabled: false
@@ -203,7 +203,7 @@ describe("LlmAgentNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {
               assistant: {
                 enabled: false
@@ -235,7 +235,7 @@ describe("LlmAgentNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {
               assistant: {
                 enabled: false

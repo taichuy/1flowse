@@ -74,11 +74,11 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
-                    "id": "tool",
-                    "type": "tool",
-                    "name": "Tool",
+                    "id": "toolNode",
+                    "type": "toolNode",
+                    "name": "toolNode",
                     "config": {"mock_output": {"answer": "done"}},
                     "runtimePolicy": {
                         "execution": {
@@ -89,11 +89,11 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+                {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -107,9 +107,9 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
     )
 
     trigger_run = next(
-        node_run for node_run in artifacts.node_runs if node_run.node_id == "trigger"
+        node_run for node_run in artifacts.node_runs if node_run.node_id == "startNode"
     )
-    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "toolNode")
     assert trigger_run.input_payload["execution"] == {
         "class": "inline",
         "source": "default",
@@ -125,7 +125,7 @@ def test_runtime_service_records_effective_execution_policy(sqlite_session: Sess
     tool_started = next(
         event
         for event in artifacts.events
-        if event.event_type == "node.started" and event.payload.get("node", {}).get("id") == "tool"
+        if event.event_type == "node.started" and event.payload.get("node", {}).get("id") == "toolNode"
     )
     assert tool_started.payload["execution"] == tool_run.input_payload["execution"]
 
@@ -157,11 +157,11 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
-                    "id": "tool",
-                    "type": "tool",
-                    "name": "Tool",
+                    "id": "toolNode",
+                    "type": "toolNode",
+                    "name": "toolNode",
                     "config": {
                         "tool": {
                             "toolId": "native.risk-search",
@@ -176,11 +176,11 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+                {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -211,7 +211,7 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
 
     tool_run = sqlite_session.scalars(
         select(NodeRun)
-        .where(NodeRun.run_id == run.id, NodeRun.node_id == "tool")
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "toolNode")
         .order_by(NodeRun.started_at.desc())
     ).first()
     assert tool_run is not None
@@ -227,8 +227,8 @@ def test_runtime_service_blocks_tool_strong_isolation_until_tool_runner_exists(
     unavailable_event = next(
         event for event in events if event.event_type == "node.execution.unavailable"
     )
-    assert unavailable_event.payload["node_id"] == "tool"
-    assert unavailable_event.payload["node_type"] == "tool"
+    assert unavailable_event.payload["node_id"] == "toolNode"
+    assert unavailable_event.payload["node_type"] == "toolNode"
     assert unavailable_event.payload["requested_execution_class"] == "sandbox"
     assert "No sandbox backend is registered" in str(unavailable_event.payload["reason"])
 
@@ -244,9 +244,9 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
         definition={
             "nodes": [
                 {
-                    "id": "trigger",
-                    "type": "trigger",
-                    "name": "Trigger",
+                    "id": "startNode",
+                    "type": "startNode",
+                    "name": "startNode",
                     "config": {},
                     "runtimePolicy": {
                         "execution": {
@@ -255,10 +255,10 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -283,7 +283,7 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
 
     branch_run = sqlite_session.scalars(
         select(NodeRun)
-        .where(NodeRun.run_id == run.id, NodeRun.node_id == "trigger")
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "startNode")
         .order_by(NodeRun.started_at.desc())
     ).first()
     assert branch_run is not None
@@ -300,8 +300,8 @@ def test_runtime_service_blocks_generic_subprocess_execution_without_adapter(
     unavailable_event = next(
         event for event in events if event.event_type == "node.execution.unavailable"
     )
-    assert unavailable_event.payload["node_id"] == "trigger"
-    assert unavailable_event.payload["node_type"] == "trigger"
+    assert unavailable_event.payload["node_id"] == "startNode"
+    assert unavailable_event.payload["node_type"] == "startNode"
     assert unavailable_event.payload["requested_execution_class"] == "subprocess"
     assert "does not implement requested execution class 'subprocess'" in str(
         unavailable_event.payload["reason"]
@@ -318,10 +318,10 @@ def test_runtime_service_executes_condition_node_via_host_subprocess(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "condition",
+                    "type": "conditionNode",
                     "name": "Branch",
                     "config": {
                         "expression": "trigger_input.priority == 'high'",
@@ -335,20 +335,20 @@ def test_runtime_service_executes_condition_node_via_host_subprocess(
                 },
                 {
                     "id": "true_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "True Path",
                     "config": {"mock_output": {"answer": "expedite"}},
                 },
                 {
                     "id": "false_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "False Path",
                     "config": {"mock_output": {"answer": "queue"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -361,8 +361,8 @@ def test_runtime_service_executes_condition_node_via_host_subprocess(
                     "targetNodeId": "false_path",
                     "condition": "false",
                 },
-                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -387,7 +387,7 @@ def test_runtime_service_executes_condition_node_via_host_subprocess(
     assert len(branch_events) == 1
     assert branch_events[0].payload == {
         "node_id": "branch",
-        "node_type": "condition",
+        "node_type": "conditionNode",
         "requested_execution_class": "subprocess",
         "execution_source": "runtime_policy",
         "requested_execution_profile": "host-reviewed",
@@ -407,8 +407,8 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
             ecosystem="native",
             input_schema={
                 "type": "object",
-                "properties": {"trigger": {"type": "object"}},
-                "required": ["trigger"],
+                "properties": {"topic": {"type": "string"}},
+                "required": ["topic"],
                 "additionalProperties": False,
             },
             supported_execution_classes=("inline", "sandbox"),
@@ -422,11 +422,11 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
-                    "id": "tool",
-                    "type": "tool",
-                    "name": "Tool",
+                    "id": "toolNode",
+                    "type": "toolNode",
+                    "name": "toolNode",
                     "config": {
                         "tool": {
                             "toolId": "native.risk-search",
@@ -441,11 +441,11 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+                {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -467,7 +467,7 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
 
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {
-        "tool": {
+        "toolNode": {
             "documents": ["RUNNER"],
             "requested": "sandbox",
         }
@@ -497,7 +497,7 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         "blocked_reason": None,
     }
 
-    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "toolNode")
     assert tool_run.input_payload["execution"] == {
         "class": "sandbox",
         "source": "runtime_policy",
@@ -515,7 +515,7 @@ def test_runtime_service_executes_native_tool_via_sandbox_runner(
         if event.node_run_id == tool_run.id and event.event_type == "tool.execution.dispatched"
     )
     assert dispatched_event.payload == {
-        "node_id": "tool",
+        "node_id": "toolNode",
         "tool_id": "native.risk-search",
         "tool_name": "native.risk-search",
         "requested_execution_class": "sandbox",
@@ -547,8 +547,8 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
             ecosystem="native",
             input_schema={
                 "type": "object",
-                "properties": {"trigger": {"type": "object"}},
-                "required": ["trigger"],
+                "properties": {"topic": {"type": "string"}},
+                "required": ["topic"],
                 "additionalProperties": False,
             },
             supported_execution_classes=("inline", "sandbox"),
@@ -562,11 +562,11 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
-                    "id": "tool",
-                    "type": "tool",
-                    "name": "Tool",
+                    "id": "toolNode",
+                    "type": "toolNode",
+                    "name": "toolNode",
                     "config": {
                         "tool": {
                             "toolId": "native.risk-search",
@@ -581,11 +581,11 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+                {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -631,7 +631,7 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
         "sandbox-backend:sandbox-default:tool-runner"
     )
 
-    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "tool")
+    tool_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "toolNode")
     assert tool_run.output_payload == {
         "documents": ["RUNNER"],
         "requested": "sandbox",
@@ -653,7 +653,7 @@ def test_runtime_service_preserves_normalized_sandbox_tool_result_artifact(
         == "sandbox-backend:sandbox-default:tool-runner"
     )
     assert completed_event.payload == {
-        "node_id": "tool",
+        "node_id": "toolNode",
         "tool_id": "native.risk-search",
         "summary": "sandbox runner normalized result",
         "raw_ref": "artifact://tool-result-normalized",
@@ -671,10 +671,10 @@ def test_runtime_service_blocks_sandbox_code_without_registered_backend(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {
                         "language": "python",
@@ -685,11 +685,11 @@ def test_runtime_service_blocks_sandbox_code_without_registered_backend(
                         ),
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -728,7 +728,7 @@ def test_runtime_service_blocks_sandbox_code_without_registered_backend(
     )
     assert unavailable_event.payload == {
         "node_id": "sandbox",
-        "node_type": "sandbox_code",
+        "node_type": "sandboxCodeNode",
         "requested_execution_class": "sandbox",
         "execution_source": "default",
         "reason": sandbox_run.error_message,
@@ -745,10 +745,10 @@ def test_runtime_service_executes_sandbox_code_via_explicit_subprocess_mvp(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {
                         "language": "python",
@@ -760,11 +760,11 @@ def test_runtime_service_executes_sandbox_code_via_explicit_subprocess_mvp(
                     },
                     "runtimePolicy": {"execution": {"class": "subprocess"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -803,6 +803,32 @@ def test_runtime_service_executes_sandbox_code_via_explicit_subprocess_mvp(
         "effectiveExecutionClass": "subprocess",
         "executorRef": "host_subprocess_python",
     }
+
+
+def _extract_tool_topic(inputs: dict) -> str:
+    topic = inputs.get("topic")
+    if isinstance(topic, str) and topic:
+        return topic
+
+    trigger_input = inputs.get("trigger_input")
+    if isinstance(trigger_input, dict):
+        nested_topic = trigger_input.get("topic")
+        if isinstance(nested_topic, str) and nested_topic:
+            return nested_topic
+
+    start_node = inputs.get("startNode")
+    if isinstance(start_node, dict):
+        nested_topic = start_node.get("topic")
+        if isinstance(nested_topic, str) and nested_topic:
+            return nested_topic
+
+    for value in inputs.values():
+        if isinstance(value, dict):
+            nested_topic = value.get("topic")
+            if isinstance(nested_topic, str) and nested_topic:
+                return nested_topic
+
+    raise KeyError("topic")
 
 
 class _SandboxBackendClientStub(SandboxBackendClient):
@@ -881,7 +907,7 @@ class _SandboxBackendClientStub(SandboxBackendClient):
             result={
                 "status": "success",
                 "output": {
-                    "documents": [request.inputs["trigger"]["topic"].upper()],
+                    "documents": [_extract_tool_topic(request.inputs).upper()],
                     "requested": request.execution_class,
                 },
                 "logs": ["sandbox tool runner invoked"],
@@ -902,7 +928,7 @@ class _SandboxBackendClientNormalizedToolResultStub(_SandboxBackendClientStub):
             result={
                 "status": "success",
                 "structured": {
-                    "documents": [request.inputs["trigger"]["topic"].upper()],
+                    "documents": [_extract_tool_topic(request.inputs).upper()],
                     "requested": request.execution_class,
                 },
                 "contentType": "json",
@@ -926,10 +952,10 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {
                         "language": "python",
@@ -947,11 +973,11 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -986,7 +1012,7 @@ def test_runtime_service_executes_sandbox_code_via_registered_backend(
     )
     assert dispatched_event.payload == {
         "node_id": "sandbox",
-        "node_type": "sandbox_code",
+        "node_type": "sandboxCodeNode",
         "requested_execution_class": "sandbox",
         "execution_source": "runtime_policy",
         "requested_execution_profile": "python-safe",
@@ -1028,10 +1054,10 @@ def test_runtime_service_sandbox_code_uses_runtime_policy_dependency_contract(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {
                         "language": "python",
@@ -1048,11 +1074,11 @@ def test_runtime_service_sandbox_code_uses_runtime_policy_dependency_contract(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1106,10 +1132,10 @@ def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {
                         "language": "python",
@@ -1123,11 +1149,11 @@ def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1178,7 +1204,7 @@ def test_runtime_service_fail_closes_sandbox_code_on_dependency_mode_mismatch(
     assert unavailable_event is not None
     assert unavailable_event.payload == {
         "node_id": "sandbox",
-        "node_type": "sandbox_code",
+        "node_type": "sandboxCodeNode",
         "requested_execution_class": "sandbox",
         "execution_source": "runtime_policy",
         "requested_dependency_mode": "dependency_ref",
@@ -1219,10 +1245,10 @@ def test_runtime_service_fail_closes_sandbox_code_on_backend_extensions_mismatch
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "sandbox",
-                    "type": "sandbox_code",
+                    "type": "sandboxCodeNode",
                     "name": "Sandbox",
                     "config": {
                         "language": "python",
@@ -1238,11 +1264,11 @@ def test_runtime_service_fail_closes_sandbox_code_on_backend_extensions_mismatch
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+                {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1279,11 +1305,11 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
-                    "id": "tool",
-                    "type": "tool",
-                    "name": "Tool",
+                    "id": "toolNode",
+                    "type": "toolNode",
+                    "name": "toolNode",
                     "config": {
                         "tool": {"toolId": "native.inline-test"},
                         "inputs": {"mode": "fallback"},
@@ -1295,11 +1321,11 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-                {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+                {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1344,7 +1370,7 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
 
     tool_run = sqlite_session.scalars(
         select(NodeRun)
-        .where(NodeRun.run_id == run.id, NodeRun.node_id == "tool")
+        .where(NodeRun.run_id == run.id, NodeRun.node_id == "toolNode")
         .order_by(NodeRun.started_at.desc())
     ).first()
     assert tool_run is not None
@@ -1359,8 +1385,8 @@ def test_runtime_service_fail_closes_explicit_native_tool_isolation_request(
         event for event in events if event.event_type == "node.execution.unavailable"
     )
     assert unavailable_event.payload == {
-        "node_id": "tool",
-        "node_type": "tool",
+        "node_id": "toolNode",
+        "node_type": "toolNode",
         "requested_execution_class": "microvm",
         "execution_source": "runtime_policy",
         "requested_execution_profile": "strict",
@@ -1379,29 +1405,29 @@ def test_runtime_service_only_executes_selected_condition_branch(sqlite_session:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "condition",
+                    "type": "conditionNode",
                     "name": "Branch",
                     "config": {"selected": "true"},
                 },
                 {
                     "id": "true_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "True Path",
                     "config": {"mock_output": {"answer": "yes"}},
                 },
                 {
                     "id": "false_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "False Path",
                     "config": {"mock_output": {"answer": "no"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1414,8 +1440,8 @@ def test_runtime_service_only_executes_selected_condition_branch(sqlite_session:
                     "targetNodeId": "false_path",
                     "condition": "false",
                 },
-                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1427,11 +1453,11 @@ def test_runtime_service_only_executes_selected_condition_branch(sqlite_session:
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"true_path": {"answer": "yes"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "branch": "succeeded",
         "true_path": "succeeded",
         "false_path": "skipped",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     assert "node.skipped" in [event.event_type for event in artifacts.events]
 
@@ -1446,10 +1472,10 @@ def test_runtime_service_selects_condition_branch_from_trigger_input(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "condition",
+                    "type": "conditionNode",
                     "name": "Branch",
                     "config": {
                         "selector": {
@@ -1466,20 +1492,20 @@ def test_runtime_service_selects_condition_branch_from_trigger_input(
                 },
                 {
                     "id": "urgent_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Urgent Path",
                     "config": {"mock_output": {"answer": "rush"}},
                 },
                 {
                     "id": "normal_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Normal Path",
                     "config": {"mock_output": {"answer": "later"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1487,8 +1513,8 @@ def test_runtime_service_selects_condition_branch_from_trigger_input(
                     "condition": "urgent",
                 },
                 {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "normal_path"},
-                {"id": "e4", "sourceNodeId": "urgent_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "normal_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "urgent_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "normal_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1500,11 +1526,11 @@ def test_runtime_service_selects_condition_branch_from_trigger_input(
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"urgent_path": {"answer": "rush"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "branch": "succeeded",
         "urgent_path": "succeeded",
         "normal_path": "skipped",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
     assert branch_run.output_payload["selected"] == "urgent"
@@ -1521,10 +1547,10 @@ def test_runtime_service_uses_default_branch_when_selector_rules_do_not_match(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "router",
+                    "type": "routerNode",
                     "name": "Branch",
                     "config": {
                         "selector": {
@@ -1541,20 +1567,20 @@ def test_runtime_service_uses_default_branch_when_selector_rules_do_not_match(
                 },
                 {
                     "id": "research_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Research Path",
                     "config": {"mock_output": {"answer": "search docs"}},
                 },
                 {
                     "id": "default_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Default Path",
                     "config": {"mock_output": {"answer": "chat"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1562,8 +1588,8 @@ def test_runtime_service_uses_default_branch_when_selector_rules_do_not_match(
                     "condition": "research",
                 },
                 {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
-                {"id": "e4", "sourceNodeId": "research_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "research_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1575,11 +1601,11 @@ def test_runtime_service_uses_default_branch_when_selector_rules_do_not_match(
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"default_path": {"answer": "chat"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "branch": "succeeded",
         "research_path": "skipped",
         "default_path": "succeeded",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
     assert branch_run.output_payload["selected"] == "default"
@@ -1596,10 +1622,10 @@ def test_runtime_service_selects_condition_branch_from_expression(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "condition",
+                    "type": "conditionNode",
                     "name": "Branch",
                     "config": {
                         "expression": "trigger_input.priority == 'high' and "
@@ -1608,20 +1634,20 @@ def test_runtime_service_selects_condition_branch_from_expression(
                 },
                 {
                     "id": "true_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "True Path",
                     "config": {"mock_output": {"answer": "expedite"}},
                 },
                 {
                     "id": "false_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "False Path",
                     "config": {"mock_output": {"answer": "queue"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1634,8 +1660,8 @@ def test_runtime_service_selects_condition_branch_from_expression(
                     "targetNodeId": "false_path",
                     "condition": "false",
                 },
-                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1647,11 +1673,11 @@ def test_runtime_service_selects_condition_branch_from_expression(
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"true_path": {"answer": "expedite"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "branch": "succeeded",
         "true_path": "succeeded",
         "false_path": "skipped",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     branch_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "branch")
     assert branch_run.output_payload["selected"] == "true"
@@ -1668,10 +1694,10 @@ def test_runtime_service_routes_router_expression_to_matching_branch(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "router",
+                    "type": "routerNode",
                     "name": "Branch",
                     "config": {
                         "expression": "trigger_input.intent if trigger_input.intent else 'default'"
@@ -1679,20 +1705,20 @@ def test_runtime_service_routes_router_expression_to_matching_branch(
                 },
                 {
                     "id": "search_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Search Path",
                     "config": {"mock_output": {"answer": "search mode"}},
                 },
                 {
                     "id": "chat_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Chat Path",
                     "config": {"mock_output": {"answer": "chat mode"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -1700,8 +1726,8 @@ def test_runtime_service_routes_router_expression_to_matching_branch(
                     "condition": "search",
                 },
                 {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "chat_path"},
-                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "chat_path", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "chat_path", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1727,29 +1753,29 @@ def test_runtime_service_gates_regular_edges_with_condition_expression(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "scorer",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Scorer",
                     "config": {"mock_output": {"score": 92, "approved": True}},
                 },
                 {
                     "id": "approve",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Approve",
                     "config": {"mock_output": {"answer": "approved"}},
                 },
                 {
                     "id": "reject",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Reject",
                     "config": {"mock_output": {"answer": "rejected"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "scorer"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "scorer"},
                 {
                     "id": "e2",
                     "sourceNodeId": "scorer",
@@ -1762,8 +1788,8 @@ def test_runtime_service_gates_regular_edges_with_condition_expression(
                     "targetNodeId": "reject",
                     "conditionExpression": "not source_output.approved",
                 },
-                {"id": "e4", "sourceNodeId": "approve", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "reject", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "approve", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "reject", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1775,11 +1801,11 @@ def test_runtime_service_gates_regular_edges_with_condition_expression(
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"approve": {"answer": "approved"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "scorer": "succeeded",
         "approve": "succeeded",
         "reject": "skipped",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
 
 
@@ -1793,23 +1819,23 @@ def test_runtime_service_applies_edge_mapping_to_target_input(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": {"title": "Draft"}, "priority": "7"}},
                 },
                 {
                     "id": "formatter",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Formatter",
                     "config": {"mode": "summary"},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
                 {
                     "id": "e2",
                     "sourceNodeId": "planner",
@@ -1829,7 +1855,7 @@ def test_runtime_service_applies_edge_mapping_to_target_input(
                         },
                     ],
                 },
-                {"id": "e3", "sourceNodeId": "formatter", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "formatter", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1862,33 +1888,33 @@ def test_runtime_service_appends_conflicting_mapped_values_when_merge_strategy_i
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"topic": "plan"}},
                 },
                 {
                     "id": "researcher",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Researcher",
                     "config": {"mock_output": {"topic": "facts"}},
                 },
                 {
                     "id": "joiner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Joiner",
                     "config": {},
                     "runtimePolicy": {
                         "join": {"mode": "all", "mergeStrategy": "append"}
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "startNode", "targetNodeId": "researcher"},
                 {
                     "id": "e3",
                     "sourceNodeId": "planner",
@@ -1901,7 +1927,7 @@ def test_runtime_service_appends_conflicting_mapped_values_when_merge_strategy_i
                     "targetNodeId": "joiner",
                     "mapping": [{"sourceField": "topic", "targetField": "inputs.topics"}],
                 },
-                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1926,31 +1952,31 @@ def test_runtime_service_rejects_conflicting_mapped_values_without_merge_strateg
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"topic": "plan"}},
                 },
                 {
                     "id": "researcher",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Researcher",
                     "config": {"mock_output": {"topic": "facts"}},
                 },
                 {
                     "id": "joiner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Joiner",
                     "config": {},
                     "runtimePolicy": {"join": {"mode": "all"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "startNode", "targetNodeId": "researcher"},
                 {
                     "id": "e3",
                     "sourceNodeId": "planner",
@@ -1963,7 +1989,7 @@ def test_runtime_service_rejects_conflicting_mapped_values_without_merge_strateg
                     "targetNodeId": "joiner",
                     "mapping": [{"sourceField": "topic", "targetField": "inputs.topic"}],
                 },
-                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1984,34 +2010,34 @@ def test_runtime_service_executes_join_all_after_all_required_sources_arrive(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": "outline"}},
                 },
                 {
                     "id": "researcher",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Researcher",
                     "config": {"mock_output": {"facts": ["a", "b"]}},
                 },
                 {
                     "id": "joiner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Joiner",
                     "config": {"mock_output": {"answer": "combined"}},
                     "runtimePolicy": {"join": {"mode": "all"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-                {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+                {"id": "e2", "sourceNodeId": "startNode", "targetNodeId": "researcher"},
                 {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "joiner"},
                 {"id": "e4", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
-                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+                {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2044,36 +2070,36 @@ def test_runtime_service_blocks_when_join_all_missing_required_source_and_fail_p
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "branch",
-                    "type": "router",
+                    "type": "routerNode",
                     "name": "Branch",
                     "config": {"selected": "planner"},
                 },
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": "outline"}},
                 },
                 {
                     "id": "researcher",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Researcher",
                     "config": {"mock_output": {"facts": ["a", "b"]}},
                 },
                 {
                     "id": "joiner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Joiner",
                     "config": {"mock_output": {"answer": "combined"}},
                     "runtimePolicy": {"join": {"mode": "all", "onUnmet": "fail"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
                 {
                     "id": "e2",
                     "sourceNodeId": "branch",
@@ -2088,7 +2114,7 @@ def test_runtime_service_blocks_when_join_all_missing_required_source_and_fail_p
                 },
                 {"id": "e4", "sourceNodeId": "planner", "targetNodeId": "joiner"},
                 {"id": "e5", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
-                {"id": "e6", "sourceNodeId": "joiner", "targetNodeId": "output"},
+                {"id": "e6", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2120,29 +2146,29 @@ def test_runtime_service_can_continue_through_failure_branch(sqlite_session: Ses
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "explode",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Explode",
                     "config": {"mock_error": "boom"},
                 },
                 {
                     "id": "success_path",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Success Path",
                     "config": {"mock_output": {"answer": "unexpected"}},
                 },
                 {
                     "id": "fallback",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Fallback",
                     "config": {"mock_output": {"answer": "recovered"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "explode"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "explode"},
                 {"id": "e2", "sourceNodeId": "explode", "targetNodeId": "success_path"},
                 {
                     "id": "e3",
@@ -2150,8 +2176,8 @@ def test_runtime_service_can_continue_through_failure_branch(sqlite_session: Ses
                     "targetNodeId": "fallback",
                     "condition": "failed",
                 },
-                {"id": "e4", "sourceNodeId": "success_path", "targetNodeId": "output"},
-                {"id": "e5", "sourceNodeId": "fallback", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "success_path", "targetNodeId": "endNode"},
+                {"id": "e5", "sourceNodeId": "fallback", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2163,11 +2189,11 @@ def test_runtime_service_can_continue_through_failure_branch(sqlite_session: Ses
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"fallback": {"answer": "recovered"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "explode": "failed",
         "success_path": "skipped",
         "fallback": "succeeded",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     assert [event.event_type for event in artifacts.events].count("node.failed") == 1
     assert artifacts.run.error_message is None
@@ -2181,10 +2207,10 @@ def test_runtime_service_retries_node_before_succeeding(sqlite_session: Session)
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "flaky_tool",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Flaky Tool",
                     "config": {
                         "mock_error_sequence": ["temporary outage"],
@@ -2197,11 +2223,11 @@ def test_runtime_service_retries_node_before_succeeding(sqlite_session: Session)
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "flaky_tool"},
-                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "flaky_tool"},
+                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2213,9 +2239,9 @@ def test_runtime_service_retries_node_before_succeeding(sqlite_session: Session)
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"flaky_tool": {"answer": "recovered"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "flaky_tool": "succeeded",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     flaky_tool_run = next(
         node_run for node_run in artifacts.node_runs if node_run.node_id == "flaky_tool"
@@ -2235,10 +2261,10 @@ def test_runtime_service_routes_to_failure_branch_after_retries_exhausted(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "explode",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Explode",
                     "config": {"mock_error": "boom"},
                     "runtimePolicy": {
@@ -2250,21 +2276,21 @@ def test_runtime_service_routes_to_failure_branch_after_retries_exhausted(
                 },
                 {
                     "id": "fallback",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Fallback",
                     "config": {"mock_output": {"answer": "recovered after retries"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "explode"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "explode"},
                 {
                     "id": "e2",
                     "sourceNodeId": "explode",
                     "targetNodeId": "fallback",
                     "condition": "failed",
                 },
-                {"id": "e3", "sourceNodeId": "fallback", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "fallback", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2280,10 +2306,10 @@ def test_runtime_service_routes_to_failure_branch_after_retries_exhausted(
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {"fallback": {"answer": "recovered after retries"}}
     assert {node_run.node_id: node_run.status for node_run in artifacts.node_runs} == {
-        "trigger": "succeeded",
+        "startNode": "succeeded",
         "explode": "failed",
         "fallback": "succeeded",
-        "output": "succeeded",
+        "endNode": "succeeded",
     }
     assert [event.event_type for event in artifacts.events].count("node.retrying") == 2
     assert [event.event_type for event in artifacts.events].count("node.failed") == 1
@@ -2299,22 +2325,22 @@ def test_runtime_service_injects_authorized_context_and_executes_mcp_query(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": "collect facts"}},
                 },
                 {
                     "id": "search",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Search",
                     "config": {"mock_output": {"docs": ["a", "b"]}},
                 },
                 {
                     "id": "reader",
-                    "type": "mcp_query",
+                    "type": "mcpQueryNode",
                     "name": "Reader",
                     "config": {
                         "contextAccess": {
@@ -2330,13 +2356,13 @@ def test_runtime_service_injects_authorized_context_and_executes_mcp_query(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
                 {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "search"},
                 {"id": "e3", "sourceNodeId": "search", "targetNodeId": "reader"},
-                {"id": "e4", "sourceNodeId": "reader", "targetNodeId": "output"},
+                {"id": "e4", "sourceNodeId": "reader", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2379,16 +2405,16 @@ def test_runtime_service_rejects_unauthorized_mcp_query_source(sqlite_session: S
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"plan": "collect facts"}},
                 },
                 {
                     "id": "reader",
-                    "type": "mcp_query",
+                    "type": "mcpQueryNode",
                     "name": "Reader",
                     "config": {
                         "contextAccess": {
@@ -2401,12 +2427,12 @@ def test_runtime_service_rejects_unauthorized_mcp_query_source(sqlite_session: S
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
                 {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "reader"},
-                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2424,7 +2450,7 @@ def test_runtime_service_rejects_loop_nodes(sqlite_session: Session) -> None:
         version="0.1.0",
         status="draft",
         definition={
-            "nodes": [{"id": "loop", "type": "loop", "name": "Loop", "config": {}}],
+            "nodes": [{"id": "loopNode", "type": "loopNode", "name": "loopNode", "config": {}}],
             "edges": [],
         },
     )

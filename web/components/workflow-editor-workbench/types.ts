@@ -123,6 +123,7 @@ export type WorkflowEditorInspectorTabKey =
 export type WorkflowEditorInspectorProps = {
   workflowId: string;
   currentHref?: string | null;
+  nodeTitlePlacement?: "inspector" | "floating-panel";
   selectedNode: Node<WorkflowCanvasNodeData> | null;
   selectedEdge: Edge<WorkflowCanvasEdgeData> | null;
   nodes: Array<Node<WorkflowCanvasNodeData>>;
@@ -137,6 +138,7 @@ export type WorkflowEditorInspectorProps = {
   onNodeConfigTextChange: (value: string) => void;
   onApplyNodeConfigJson: () => void;
   onNodeNameChange: (value: string) => void;
+  onNodeDescriptionChange: (value: string) => void;
   onNodeConfigChange: (nextConfig: Record<string, unknown>) => void;
   onNodeInputSchemaChange: (nextSchema: Record<string, unknown> | undefined) => void;
   onNodeOutputSchemaChange: (nextSchema: Record<string, unknown> | undefined) => void;

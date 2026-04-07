@@ -51,7 +51,7 @@ def test_build_operator_run_follow_up_summary_counts_all_affected_runs(
             workflow_version=sample_workflow.version,
             compiled_blueprint_id=None,
             status="succeeded",
-            current_node_id="output",
+            current_node_id="endNode",
             input_payload={},
             checkpoint_payload={},
             created_at=datetime.now(UTC),
@@ -76,7 +76,7 @@ def test_build_operator_run_follow_up_summary_counts_all_affected_runs(
                 run_id="run-follow-up-waiting",
                 node_id="mock_tool",
                 node_name="Mock Tool",
-                node_type="tool",
+                node_type="toolNode",
                 status="waiting",
                 phase="waiting",
                 input_payload={},
@@ -90,7 +90,7 @@ def test_build_operator_run_follow_up_summary_counts_all_affected_runs(
                 run_id="run-follow-up-running",
                 node_id="mock_tool",
                 node_name="Mock Tool",
-                node_type="tool",
+                node_type="toolNode",
                 status="running",
                 phase="executing",
                 input_payload={},
@@ -101,9 +101,9 @@ def test_build_operator_run_follow_up_summary_counts_all_affected_runs(
             NodeRun(
                 id="node-run-follow-up-succeeded",
                 run_id="run-follow-up-succeeded",
-                node_id="output",
-                node_name="Output",
-                node_type="output",
+                node_id="endNode",
+                node_name="endNode",
+                node_type="endNode",
                 status="succeeded",
                 phase="completed",
                 input_payload={},
@@ -117,7 +117,7 @@ def test_build_operator_run_follow_up_summary_counts_all_affected_runs(
                 run_id="run-follow-up-failed",
                 node_id="mock_tool",
                 node_name="Mock Tool",
-                node_type="tool",
+                node_type="toolNode",
                 status="failed",
                 phase="failed",
                 input_payload={},
@@ -198,7 +198,7 @@ def test_resolve_operator_run_snapshot_from_follow_up_matches_run_id_before_firs
                     snapshot=OperatorRunSnapshot(
                         workflow_id="wf-primary",
                         status="succeeded",
-                        current_node_id="output",
+                        current_node_id="endNode",
                     ),
                 ),
             ],
@@ -258,7 +258,7 @@ def test_load_operator_run_snapshot_surfaces_execution_fallback_focus(
         run_id=run.id,
         node_id="mock_tool",
         node_name="Mock Tool",
-        node_type="tool",
+        node_type="toolNode",
         status="succeeded",
         phase="completed",
         input_payload={},
@@ -340,7 +340,7 @@ def test_load_operator_run_snapshot_surfaces_focus_evidence_samples(
         run_id=run.id,
         node_id="mock_tool",
         node_name="Mock Tool",
-        node_type="tool",
+        node_type="toolNode",
         status="succeeded",
         phase="completed",
         input_payload={},
@@ -471,7 +471,7 @@ def test_load_operator_run_snapshot_surfaces_focus_evidence_samples(
 
     assert snapshot is not None
     assert snapshot.execution_focus_node_name == "Mock Tool"
-    assert snapshot.execution_focus_node_type == "tool"
+    assert snapshot.execution_focus_node_type == "toolNode"
     assert snapshot.execution_focus_artifact_count == 1
     assert snapshot.execution_focus_artifact_ref_count == 1
     assert snapshot.execution_focus_tool_call_count == 1
@@ -633,7 +633,7 @@ def test_load_operator_run_snapshot_prefers_callback_waiting_explanation(
         run_id=run.id,
         node_id="mock_tool",
         node_name="Mock Tool",
-        node_type="tool",
+        node_type="toolNode",
         status="waiting",
         phase="waiting",
         input_payload={},

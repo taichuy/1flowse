@@ -60,7 +60,7 @@ def collect_invalid_workflow_tool_execution_references(
         if not isinstance(config, dict):
             continue
 
-        if node_type == "tool":
+        if node_type == "toolNode":
             issues.extend(
                 _collect_tool_node_execution_issues(
                     node=node,
@@ -74,7 +74,7 @@ def collect_invalid_workflow_tool_execution_references(
             )
             continue
 
-        if node_type == "llm_agent":
+        if node_type == "llmAgentNode":
             issues.extend(
                 _collect_agent_execution_issues(
                     node_index=node_index,
@@ -87,7 +87,7 @@ def collect_invalid_workflow_tool_execution_references(
             )
             continue
 
-        if node_type == "sandbox_code":
+        if node_type == "sandboxCodeNode":
             issues.extend(
                 _collect_sandbox_code_execution_issues(
                     node=node,
@@ -126,7 +126,7 @@ def collect_invalid_workflow_node_execution_references(
             continue
 
         node_type = str(node.get("type") or "")
-        if node_type in {"tool", "sandbox_code"}:
+        if node_type in {"toolNode", "sandboxCodeNode"}:
             continue
 
         runtime_policy = node.get("runtimePolicy")
@@ -142,7 +142,7 @@ def collect_invalid_workflow_node_execution_references(
         path = f"nodes.{node_index}.runtimePolicy.execution"
 
         if requested_execution_class == "subprocess":
-            if node_type in {"condition", "router"}:
+            if node_type in {"conditionNode", "routerNode"}:
                 continue
             issues.append(
                 WorkflowToolExecutionValidationIssue(

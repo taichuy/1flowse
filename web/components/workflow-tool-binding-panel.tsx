@@ -307,7 +307,7 @@ function getToolNodeBindings(
   }
 
   return selectedWorkflow.definition.nodes
-    .filter((node) => node.type === "tool")
+    .filter((node) => node.type === "toolNode")
     .map((node) => {
       const toolConfig =
         typeof node.config?.tool === "object" && node.config.tool !== null

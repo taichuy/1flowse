@@ -9,7 +9,7 @@ describe("workflow tool reference validation", () => {
         nodes: [
           {
             id: "tool-node-1",
-            type: "tool",
+            type: "toolNode",
             name: "Search tool",
             config: {
               tool: {
@@ -48,7 +48,7 @@ describe("workflow tool reference validation", () => {
         nodes: [
           {
             id: "agent-node-1",
-            type: "llm_agent",
+            type: "llmAgentNode",
             name: "Planner",
             config: {
               toolPolicy: {

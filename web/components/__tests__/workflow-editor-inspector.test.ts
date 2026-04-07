@@ -72,6 +72,7 @@ describe("WorkflowEditorInspector", () => {
         onNodeConfigTextChange: () => undefined,
         onApplyNodeConfigJson: () => undefined,
         onNodeNameChange: () => undefined,
+        onNodeDescriptionChange: () => undefined,
         onNodeConfigChange: () => undefined,
         onNodeInputSchemaChange: () => undefined,
         onNodeOutputSchemaChange: () => undefined,
@@ -132,6 +133,7 @@ describe("WorkflowEditorInspector", () => {
         onNodeConfigTextChange: () => undefined,
         onApplyNodeConfigJson: () => undefined,
         onNodeNameChange: () => undefined,
+        onNodeDescriptionChange: () => undefined,
         onNodeConfigChange: () => undefined,
         onNodeInputSchemaChange: () => undefined,
         onNodeOutputSchemaChange: () => undefined,
@@ -191,7 +193,7 @@ describe("WorkflowEditorInspector", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Search",
-            nodeType: "tool",
+            nodeType: "toolNode",
             config: {
               tool: {
                 toolId: "missing-tool",
@@ -209,7 +211,7 @@ describe("WorkflowEditorInspector", () => {
             position: { x: 0, y: 0 },
             data: {
               label: "Search",
-              nodeType: "tool",
+              nodeType: "toolNode",
               config: {
                 tool: {
                   toolId: "missing-tool",
@@ -229,6 +231,7 @@ describe("WorkflowEditorInspector", () => {
         onNodeConfigTextChange: () => undefined,
         onApplyNodeConfigJson: () => undefined,
         onNodeNameChange: () => undefined,
+        onNodeDescriptionChange: () => undefined,
         onNodeConfigChange: () => undefined,
         onNodeInputSchemaChange: () => undefined,
         onNodeOutputSchemaChange: () => undefined,

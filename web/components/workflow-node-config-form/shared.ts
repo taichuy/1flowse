@@ -290,7 +290,7 @@ export function readSelectorRules(value: unknown, nodeType: string) {
 
 export function createDefaultBranchRule(nodeType: string, index = 1): BranchRule {
   return {
-    key: nodeType === "condition" && index === 1 ? "true" : `branch_${index}`,
+    key: nodeType === "conditionNode" && index === 1 ? "true" : `branch_${index}`,
     path: "trigger_input.value",
     operator: "eq",
     value: ""

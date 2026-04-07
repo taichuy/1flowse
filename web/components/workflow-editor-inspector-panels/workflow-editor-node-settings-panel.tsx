@@ -52,7 +52,6 @@ type WorkflowEditorNodeSettingsPanelProps = {
   nodeConfigText: string;
   onNodeConfigTextChange: (value: string) => void;
   onApplyNodeConfigJson: () => void;
-  onNodeNameChange: (value: string) => void;
   onNodeConfigChange: (nextConfig: Record<string, unknown>) => void;
   onNodeInputSchemaChange: (nextSchema: Record<string, unknown> | undefined) => void;
   onNodeOutputSchemaChange: (nextSchema: Record<string, unknown> | undefined) => void;
@@ -96,14 +95,13 @@ export function WorkflowEditorNodeSettingsPanel({
   nodeConfigText,
   onNodeConfigTextChange,
   onApplyNodeConfigJson,
-  onNodeNameChange,
   onNodeConfigChange,
   onNodeInputSchemaChange,
   onNodeOutputSchemaChange,
   onNodeRuntimePolicyUpdate,
   onDeleteSelectedNode
 }: WorkflowEditorNodeSettingsPanelProps) {
-  const isTriggerNode = node.data.nodeType === "trigger";
+  const isTriggerNode = node.data.nodeType === "startNode";
   const downstreamNodes = useMemo(
     () =>
       dedupeStrings(
@@ -123,14 +121,6 @@ export function WorkflowEditorNodeSettingsPanel({
       className="workflow-editor-node-settings-panel"
       data-component="workflow-editor-node-settings-panel"
     >
-      <div className="workflow-editor-inspector-section">
-        <div className="workflow-editor-inspector-section-title">节点名称</div>
-        <Input
-          value={node.data.label}
-          onChange={(event) => onNodeNameChange(event.target.value)}
-        />
-      </div>
-
       {isTriggerNode ? (
         <WorkflowEditorTriggerInputFieldsSection
           node={node}

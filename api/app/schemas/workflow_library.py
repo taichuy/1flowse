@@ -18,16 +18,16 @@ WorkflowLibrarySourceStatus = Literal["available", "planned"]
 WorkflowLibrarySourceGovernance = Literal["repo", "workspace", "adapter"]
 WorkflowNodeSupportStatus = Literal["available", "planned"]
 WorkflowNodeType = Literal[
-    "trigger",
-    "llm_agent",
-    "reference",
-    "tool",
-    "sandbox_code",
-    "mcp_query",
-    "condition",
-    "router",
-    "loop",
-    "output",
+    "startNode",
+    "llmAgentNode",
+    "referenceNode",
+    "toolNode",
+    "sandboxCodeNode",
+    "mcpQueryNode",
+    "conditionNode",
+    "routerNode",
+    "loopNode",
+    "endNode",
 ]
 WorkflowNodeCapabilityGroup = Literal[
     "entry",

@@ -169,10 +169,10 @@ def test_tool_node_resolves_credential_refs(
         workflow_id="wf-cred-tool",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Tool With Creds",
                     "config": {
                         "tool": {
@@ -183,11 +183,11 @@ def test_tool_node_resolves_credential_refs(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -218,10 +218,10 @@ def test_tool_node_with_plain_credentials_passes_through(
         workflow_id="wf-plain-cred",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Tool Plain Creds",
                     "config": {
                         "tool": {
@@ -232,11 +232,11 @@ def test_tool_node_with_plain_credentials_passes_through(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -265,10 +265,10 @@ def test_tool_node_with_invalid_credential_ref_fails(
         workflow_id="wf-bad-cred",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Tool Bad Cred",
                     "config": {
                         "tool": {
@@ -279,11 +279,11 @@ def test_tool_node_with_invalid_credential_ref_fails(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -322,10 +322,10 @@ def test_tool_node_with_revoked_credential_fails(
         workflow_id="wf-revoked-cred",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Tool Revoked",
                     "config": {
                         "tool": {
@@ -336,11 +336,11 @@ def test_tool_node_with_revoked_credential_fails(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -367,10 +367,10 @@ def test_tool_node_with_empty_credential_ref_fails(
         workflow_id="wf-empty-cred",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Tool Empty Cred",
                     "config": {
                         "tool": {
@@ -381,11 +381,11 @@ def test_tool_node_with_empty_credential_ref_fails(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -425,10 +425,10 @@ def test_llm_agent_node_resolves_model_credential(
         workflow_id="wf-cred-llm",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "model": {
@@ -445,11 +445,11 @@ def test_llm_agent_node_resolves_model_credential(
                         "mockFinalOutput": {"result": "summary"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -487,10 +487,10 @@ def test_llm_agent_with_config_credentials_dict(
         workflow_id="wf-cred-dict",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "credentials": {
@@ -506,11 +506,11 @@ def test_llm_agent_with_config_credentials_dict(
                         "mockFinalOutput": {"result": "done"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -549,10 +549,10 @@ def test_tool_node_with_mixed_credentials(
         workflow_id="wf-mixed-cred",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Tool Mixed Creds",
                     "config": {
                         "tool": {
@@ -564,11 +564,11 @@ def test_tool_node_with_mixed_credentials(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -613,10 +613,10 @@ def test_tool_node_sensitive_credential_waits_for_approval_and_resumes(
         workflow_id="wf-sensitive-cred-tool",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Sensitive Tool",
                     "config": {
                         "tool": {
@@ -627,11 +627,11 @@ def test_tool_node_sensitive_credential_waits_for_approval_and_resumes(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -703,10 +703,10 @@ def test_tool_node_sensitive_l2_credential_uses_masked_handle_and_still_invokes(
         workflow_id="wf-masked-cred-tool",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Moderate Tool",
                     "config": {
                         "tool": {
@@ -717,11 +717,11 @@ def test_tool_node_sensitive_l2_credential_uses_masked_handle_and_still_invokes(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -763,10 +763,10 @@ def test_llm_agent_sensitive_l2_credential_uses_masked_handle_and_still_calls_pr
         workflow_id="wf-masked-cred-llm",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "model": {
@@ -778,11 +778,11 @@ def test_llm_agent_sensitive_l2_credential_uses_masked_handle_and_still_calls_pr
                         "mockFinalOutput": {"result": "summary"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -813,10 +813,10 @@ def test_tool_node_waiting_result_suspends_and_can_resume(
         workflow_id="wf-tool-node-waiting",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Waiting Tool",
                     "config": {
                         "tool": {
@@ -824,11 +824,11 @@ def test_tool_node_waiting_result_suspends_and_can_resume(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -871,16 +871,16 @@ def test_mcp_query_masks_sensitive_context_for_non_human_requesters(
         workflow_id="wf-sensitive-context-masked",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"secret": "alpha", "docs": ["a", "b"]}},
                 },
                 {
                     "id": "reader",
-                    "type": "mcp_query",
+                    "type": "mcpQueryNode",
                     "name": "Reader",
                     "config": {
                         "contextAccess": {"readableNodeIds": ["planner"]},
@@ -891,12 +891,12 @@ def test_mcp_query_masks_sensitive_context_for_non_human_requesters(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
                 {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "reader"},
-                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -947,16 +947,16 @@ def test_mcp_query_sensitive_context_waits_for_approval_and_resumes(
         workflow_id="wf-sensitive-context-approval",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "planner",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Planner",
                     "config": {"mock_output": {"secret": "alpha", "docs": ["a", "b"]}},
                 },
                 {
                     "id": "reader",
-                    "type": "mcp_query",
+                    "type": "mcpQueryNode",
                     "name": "Reader",
                     "config": {
                         "contextAccess": {"readableNodeIds": ["planner"]},
@@ -967,12 +967,12 @@ def test_mcp_query_sensitive_context_waits_for_approval_and_resumes(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
                 {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "reader"},
-                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "output"},
+                {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "endNode"},
             ],
         },
     )

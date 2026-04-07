@@ -62,10 +62,10 @@ def test_llm_agent_without_assistant_keeps_legacy_like_output(sqlite_session: Se
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Say hello",
@@ -73,11 +73,11 @@ def test_llm_agent_without_assistant_keeps_legacy_like_output(sqlite_session: Se
                         "mock_output": {"answer": "legacy-compatible"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -105,10 +105,10 @@ def test_llm_agent_with_assistant_distills_tool_results_into_evidence(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": True, "trigger": "always"},
@@ -124,11 +124,11 @@ def test_llm_agent_with_assistant_distills_tool_results_into_evidence(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -178,10 +178,10 @@ def test_llm_agent_tool_policy_execution_fail_closes_explicit_native_isolation(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -203,11 +203,11 @@ def test_llm_agent_tool_policy_execution_fail_closes_explicit_native_isolation(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -293,10 +293,10 @@ def test_llm_agent_tool_call_execution_override_fail_closes_native_isolation(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -325,11 +325,11 @@ def test_llm_agent_tool_call_execution_override_fail_closes_native_isolation(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -415,10 +415,10 @@ def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_comp
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -449,11 +449,11 @@ def test_llm_agent_tool_call_execution_override_fail_closes_for_unsupported_comp
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -570,10 +570,10 @@ def test_llm_agent_waiting_tool_can_resume(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -588,11 +588,11 @@ def test_llm_agent_waiting_tool_can_resume(sqlite_session: Session) -> None:
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -664,10 +664,10 @@ def test_runtime_service_schedules_retry_resume_with_backoff(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "flaky_tool",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Flaky Tool",
                     "config": {
                         "mock_error_sequence": ["temporary outage"],
@@ -680,11 +680,11 @@ def test_runtime_service_schedules_retry_resume_with_backoff(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "flaky_tool"},
-                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "flaky_tool"},
+                {"id": "e2", "sourceNodeId": "flaky_tool", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -740,10 +740,10 @@ def test_llm_agent_waiting_callback_can_schedule_resume(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -758,11 +758,11 @@ def test_llm_agent_waiting_callback_can_schedule_resume(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -845,10 +845,10 @@ def test_llm_agent_waiting_callback_can_resume_from_callback_ticket(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -863,11 +863,11 @@ def test_llm_agent_waiting_callback_can_resume_from_callback_ticket(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -962,10 +962,10 @@ def test_expired_callback_ticket_is_rejected_and_schedules_waiting_run_resume(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -980,11 +980,11 @@ def test_expired_callback_ticket_is_rejected_and_schedules_waiting_run_resume(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )

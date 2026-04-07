@@ -218,12 +218,12 @@ export function buildSandboxExecutionReadinessInsight(
     };
   }
 
-  if (node.node_type === "tool" && !readinessEntry.supports_tool_execution) {
+  if (node.node_type === "toolNode" && !readinessEntry.supports_tool_execution) {
     const detail = [
       readinessEntry.backend_ids.length > 0
         ? `当前 ${targetExecutionClass} ready via ${readinessEntry.backend_ids.join(", ")}。`
         : null,
-      "但这组 backend 还没有声明 sandbox-backed tool execution capability；tool 路径继续请求强隔离时仍应保持 fail-closed。",
+      "但这组 backend 还没有声明 sandbox-backed tool execution capability；toolNode 路径继续请求强隔离时仍应保持 fail-closed。",
       backendMismatch
         ? `历史 run 记录的 backend 是 ${historicalBackendId}，当前 ready backend 已变成 ${readinessEntry.backend_ids.join(", ")}。`
         : null
@@ -399,11 +399,11 @@ export function buildSandboxExecutionPolicyPreflightInsight(
   }
 
   if (
-    options.nodeType === "tool" &&
+    options.nodeType === "toolNode" &&
     !(readinessEntry.supports_tool_execution || readiness.supports_tool_execution)
   ) {
     capabilityIssues.push(
-      `当前 ${executionClass} 虽然 ready，但还没有 sandbox-backed tool execution capability；tool 节点仍应继续 fail-closed。`
+      `当前 ${executionClass} 虽然 ready，但还没有 sandbox-backed tool execution capability；toolNode 节点仍应继续 fail-closed。`
     );
   }
 

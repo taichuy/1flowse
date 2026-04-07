@@ -757,7 +757,7 @@ describe("SensitiveAccessBlockedCard", () => {
         executionFocusNodeId: "sandbox_call",
         executionFocusNodeRunId: "node-run-3",
         executionFocusNodeName: "Sandbox Call",
-        executionFocusNodeType: "tool",
+        executionFocusNodeType: "toolNode",
         executionFocusExplanation: {
           primary_signal: "当前 focus 节点因强隔离 backend 不可用而阻断。",
           follow_up: "先恢复兼容 backend，再重新调度该节点。"

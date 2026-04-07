@@ -1302,7 +1302,7 @@ describe("WorkflowPublishActivityInsights", () => {
       execution_focus_node_id: "tool_wait",
       execution_focus_node_run_id: "node-run-selected-focus",
       execution_focus_node_name: "Tool wait",
-      execution_focus_node_type: "tool",
+      execution_focus_node_type: "toolNode",
       execution_focus_explanation: {
         primary_signal: "sandbox execution 仍被阻断。",
         follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"
@@ -1362,7 +1362,7 @@ describe("WorkflowPublishActivityInsights", () => {
       node_run_id: "node-run-selected-focus",
       node_id: "tool_wait",
       node_name: "Tool wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "blocked",
       phase: "execute",
       retry_count: 0,
@@ -1501,7 +1501,7 @@ describe("WorkflowPublishActivityInsights", () => {
       execution_focus_node_id: "tool_wait",
       execution_focus_node_run_id: "node-run-selected-focus",
       execution_focus_node_name: "Tool wait",
-      execution_focus_node_type: "tool",
+      execution_focus_node_type: "toolNode",
       execution_focus_explanation: {
         primary_signal: "sandbox execution 仍被阻断。",
         follow_up: "优先打开 run，继续检查 execution focus node 的 fallback / blocking reason。"

@@ -682,12 +682,12 @@ beforeEach(() => {
       nodes: [
         {
           id: "node-1",
-          type: "trigger",
+          type: "startNode",
           name: "Start"
         },
         {
           id: "node-2",
-          type: "llm_agent",
+          type: "llmAgentNode",
           name: "LLM Agent"
         }
       ],

@@ -180,7 +180,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T09:30:00Z",
         node_count: 4,
-        node_types: ["trigger", "output"],
+        node_types: ["startNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: ["tool.alpha"],
@@ -197,7 +197,7 @@ describe("WorkspacePage", () => {
         status: "published",
         updated_at: "2026-03-28T10:30:00Z",
         node_count: 3,
-        node_types: ["trigger", "output"],
+        node_types: ["startNode", "endNode"],
         publish_count: 1,
         tool_governance: {
           referenced_tool_ids: [],
@@ -315,7 +315,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T09:30:00Z",
         node_count: 4,
-        node_types: ["trigger", "output"],
+        node_types: ["startNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: ["tool.alpha"],
@@ -332,7 +332,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T10:00:00Z",
         node_count: 4,
-        node_types: ["trigger", "tool", "output"],
+        node_types: ["startNode", "toolNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: [],
@@ -400,7 +400,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T09:30:00Z",
         node_count: 3,
-        node_types: ["trigger", "output"],
+        node_types: ["startNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: [],
@@ -417,7 +417,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T10:30:00Z",
         node_count: 4,
-        node_types: ["llm_agent", "output"],
+        node_types: ["llmAgentNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: [],
@@ -474,7 +474,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T09:30:00Z",
         node_count: 3,
-        node_types: ["trigger", "output"],
+        node_types: ["startNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: [],
@@ -491,7 +491,7 @@ describe("WorkspacePage", () => {
         status: "draft",
         updated_at: "2026-03-28T10:30:00Z",
         node_count: 3,
-        node_types: ["trigger", "output"],
+        node_types: ["startNode", "endNode"],
         publish_count: 0,
         tool_governance: {
           referenced_tool_ids: [],

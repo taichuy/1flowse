@@ -32,15 +32,15 @@ function buildNode(
 
 describe("workflow-editor-assistant", () => {
   it("builds selected node context from adjacent edges", () => {
-    const trigger = buildNode("trigger-1", "Trigger", "trigger");
-    const agent = buildNode("agent-1", "Agent", "llm_agent", {
+    const trigger = buildNode("trigger-1", "Trigger", "startNode");
+    const agent = buildNode("agent-1", "Agent", "llmAgentNode", {
       runtimePolicy: {
         execution: {
           class: "sandbox"
         }
       }
     });
-    const output = buildNode("output-1", "Output", "output");
+    const output = buildNode("output-1", "Output", "endNode");
     const edges = [
       {
         id: "edge-1",
@@ -100,7 +100,7 @@ describe("workflow-editor-assistant", () => {
   });
 
   it("returns targeted replies for config, next-node and risk prompts", () => {
-    const selectedNode = buildNode("tool-1", "Search", "tool", {
+    const selectedNode = buildNode("tool-1", "Search", "toolNode", {
       inputSchema: null,
       outputSchema: null
     });

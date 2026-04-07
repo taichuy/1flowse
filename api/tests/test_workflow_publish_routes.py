@@ -586,10 +586,10 @@ def test_list_legacy_auth_governance_snapshot_across_workflows(
 ) -> None:
     missing_tool_definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
+                "id": "toolNode",
+                "type": "toolNode",
                 "name": "Catalog Gap Tool",
                 "config": {
                     "tool": {
@@ -598,11 +598,11 @@ def test_list_legacy_auth_governance_snapshot_across_workflows(
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
         "publish": [
             {
@@ -1797,7 +1797,7 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         run_id=run.id,
         node_id="tool_wait",
         node_name="Tool Wait",
-        node_type="tool",
+        node_type="toolNode",
         status="waiting",
         phase="waiting_callback",
         retry_count=0,
@@ -1847,7 +1847,7 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         run_id=run.id,
         node_id="tool_other",
         node_name="Other Tool",
-        node_type="tool",
+        node_type="toolNode",
         status="succeeded",
         phase="completed",
         retry_count=0,
@@ -2213,7 +2213,7 @@ def test_get_published_invocation_detail_drills_into_run_callback_and_cache(
         "execution_focus_node_id": "tool_wait",
         "execution_focus_node_run_id": node_run.id,
         "execution_focus_node_name": "Tool Wait",
-        "execution_focus_node_type": "tool",
+        "execution_focus_node_type": "toolNode",
         "execution_focus_explanation": {
             "primary_signal": "等待原因：callback pending",
             "follow_up": (

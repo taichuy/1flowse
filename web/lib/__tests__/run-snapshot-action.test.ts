@@ -248,7 +248,7 @@ describe("fetchRunSnapshot", () => {
             node_id: "tool-a",
             node_run_id: "node-run-1",
             node_name: "Tool A",
-            node_type: "tool",
+            node_type: "toolNode",
             callback_waiting_explanation: {
               primary_signal: "当前 callback waiting 仍卡在 1 条待处理审批。",
               follow_up: "下一步：先处理审批，再观察 waiting 节点是否恢复。"
@@ -351,7 +351,7 @@ describe("fetchRunSnapshot", () => {
       executionFocusNodeId: "tool-a",
       executionFocusNodeRunId: "node-run-1",
       executionFocusNodeName: "Tool A",
-      executionFocusNodeType: "tool",
+      executionFocusNodeType: "toolNode",
       executionFocusExplanation: {
         primary_signal: "执行阻断：当前节点仍在等待审批。",
         follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
@@ -472,7 +472,7 @@ describe("fetchRunSnapshot", () => {
             node_id: "tool-a",
             node_run_id: "node-run-legacy",
             node_name: "Tool A",
-            node_type: "tool",
+            node_type: "toolNode",
             callback_waiting_explanation: {
               primary_signal: "当前仍有 1 条 callback ticket 等待外部回调。",
               follow_up: "下一步：先等待外部 callback 到达，再观察自动 resume。"
@@ -519,7 +519,7 @@ describe("fetchRunSnapshot", () => {
       executionFocusNodeId: "tool-a",
       executionFocusNodeRunId: "node-run-legacy",
       executionFocusNodeName: "Tool A",
-      executionFocusNodeType: "tool",
+      executionFocusNodeType: "toolNode",
       executionFocusExplanation: {
         primary_signal: "执行阻断：当前节点仍在等待审批。",
         follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
@@ -593,7 +593,7 @@ describe("fetchRunSnapshot", () => {
             execution_focus_node_id: "tool-a",
             execution_focus_node_run_id: "node-run-1",
             execution_focus_node_name: "Tool A",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "执行阻断：当前节点仍在等待审批。",
               follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
@@ -652,7 +652,7 @@ describe("fetchRunSnapshot", () => {
       executionFocusNodeId: "tool-a",
       executionFocusNodeRunId: "node-run-1",
       executionFocusNodeName: "Tool A",
-      executionFocusNodeType: "tool",
+      executionFocusNodeType: "toolNode",
       executionFocusExplanation: {
         primary_signal: "执行阻断：当前节点仍在等待审批。",
         follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
@@ -731,7 +731,7 @@ describe("fetchRunSnapshot", () => {
             execution_focus_node_id: "tool-a",
             execution_focus_node_run_id: "node-run-1",
             execution_focus_node_name: "Tool A",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "执行阻断：当前节点仍在等待审批。",
               follow_up: "下一步：优先回看审批时间线，而不是只看 waiting reason。"
@@ -776,7 +776,7 @@ describe("fetchRunSnapshot", () => {
       executionFocusNodeId: "tool-a",
       executionFocusNodeRunId: "node-run-1",
       executionFocusNodeName: "Tool A",
-      executionFocusNodeType: "tool"
+      executionFocusNodeType: "toolNode"
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -794,7 +794,7 @@ describe("fetchRunSnapshot", () => {
             node_id: "approval_gate",
             node_run_id: "node-run-ctx",
             node_name: "Approval Gate",
-            node_type: "tool",
+            node_type: "toolNode",
             callback_waiting_explanation: {
               primary_signal: "当前 run 已有 canonical callback waiting snapshot。",
               follow_up: "仍需把 operator 带回 inbox slice。"
@@ -911,7 +911,7 @@ describe("fetchRunSnapshot", () => {
             node_id: "approval_gate",
             node_run_id: "node-run-batch",
             node_name: "Approval Gate",
-            node_type: "tool",
+            node_type: "toolNode",
             callback_waiting_explanation: {
               primary_signal: "当前 run 仍在 waiting callback。",
               follow_up: "需要继续保留 inbox context。"

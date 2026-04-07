@@ -51,12 +51,12 @@ export function createStarterWorkflowDefinition(
   return {
     nodes: [
       buildCatalogNodeDefinition(nodeCatalog, {
-        id: createEntityId("trigger"),
-        type: "trigger"
+        id: createEntityId("startNode"),
+        type: "startNode"
       }),
       buildCatalogNodeDefinition(nodeCatalog, {
-        id: createEntityId("output"),
-        type: "output"
+        id: createEntityId("endNode"),
+        type: "endNode"
       })
     ],
     edges: [],
@@ -183,7 +183,7 @@ function buildDefaultNodeName(
   type: string,
   existingNodesCount: number
 ) {
-  const baseName = getWorkflowNodeCatalogItem(nodeCatalog, type)?.label ?? type;
+  const baseName = getWorkflowNodeCatalogItem(nodeCatalog, type)?.defaults.name ?? type;
   return `${baseName} ${Math.max(1, existingNodesCount)}`;
 }
 
@@ -460,7 +460,7 @@ function applyInsertedNodeConfigDefaults(
   config: Record<string, unknown>,
   sourceNode: Node<WorkflowCanvasNodeData> | null
 ) {
-  if (type !== "reference" || !sourceNode) {
+  if (type !== "referenceNode" || !sourceNode) {
     return config;
   }
 

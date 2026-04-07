@@ -429,7 +429,7 @@ def _index_sandbox_nodes(value: object) -> dict[str, dict[str, Any]]:
 
     indexed: dict[str, dict[str, Any]] = {}
     for item in value:
-        if not isinstance(item, dict) or item.get("type") != "sandbox_code":
+        if not isinstance(item, dict) or item.get("type") != "sandboxCodeNode":
             continue
         item_id = _normalize_text(item.get("id"))
         if item_id is None:

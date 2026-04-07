@@ -1,7 +1,4 @@
-import type {
-  WorkflowCreateWizardBootstrapRequest,
-  WorkflowCreateWizardProps
-} from "@/components/workflow-create-wizard/types";
+import type { WorkflowCreateWizardProps } from "@/components/workflow-create-wizard/types";
 import type { WorkspaceAppSearchFormState } from "@/lib/workspace-app-query-state";
 
 export type WorkspaceModeTab = {
@@ -77,7 +74,6 @@ export type WorkspaceAppsWorkbenchProps = {
   focusedCreateHref: string;
   workspaceUtilityEntry: WorkspaceQuickCreateEntry | null;
   starterCount: number;
-  workflowCreateBootstrapRequest: WorkflowCreateWizardBootstrapRequest;
   workflowCreateWizardProps: WorkflowCreateWizardProps;
   filteredApps: WorkspaceAppCard[];
   searchState: WorkspaceAppSearchFormState;

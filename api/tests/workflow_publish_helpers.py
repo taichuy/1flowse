@@ -38,18 +38,18 @@ def publishable_definition(
 
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {"mock_output": {"answer": answer}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
         "publish": [endpoint],
     }
@@ -79,10 +79,10 @@ def waiting_agent_publishable_definition(
 
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "assistant": {"enabled": False},
@@ -97,11 +97,11 @@ def waiting_agent_publishable_definition(
                     },
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
         "publish": [
             endpoint

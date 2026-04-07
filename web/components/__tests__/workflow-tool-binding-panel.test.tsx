@@ -59,7 +59,7 @@ function buildWorkflowDetail(
       nodes: [
         {
           id: "node-tool-1",
-          type: "tool",
+          type: "toolNode",
           name: "Search tool",
           config: {
             toolId: "native.catalog-gap"
@@ -67,7 +67,7 @@ function buildWorkflowDetail(
         },
         {
           id: "node-agent-1",
-          type: "llm_agent",
+          type: "llmAgentNode",
           name: "Assistant"
         }
       ],
@@ -109,7 +109,7 @@ describe("WorkflowToolBindingPanel", () => {
         nodes: [
           {
             id: "node-agent-1",
-            type: "llm_agent",
+            type: "llmAgentNode",
             name: "Assistant"
           }
         ],

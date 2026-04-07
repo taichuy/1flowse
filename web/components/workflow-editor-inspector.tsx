@@ -66,6 +66,7 @@ function renderLoadingTabPanel(dataComponent: string, title: string, description
 export function WorkflowEditorInspector({
   workflowId,
   currentHref = null,
+  nodeTitlePlacement = "inspector",
   selectedNode,
   selectedEdge,
   nodes,
@@ -80,6 +81,7 @@ export function WorkflowEditorInspector({
   onNodeConfigTextChange,
   onApplyNodeConfigJson,
   onNodeNameChange,
+  onNodeDescriptionChange,
   onNodeConfigChange,
   onNodeInputSchemaChange,
   onNodeOutputSchemaChange,
@@ -110,6 +112,15 @@ export function WorkflowEditorInspector({
   onRuntimeRunError,
   onOpenRunOverlay
 }: WorkflowEditorInspectorProps) {
+  const selectedNodeDescription = useMemo(() => {
+    if (!selectedNode) {
+      return "";
+    }
+
+    const ui = toRecord(selectedNode.data.config.ui);
+    return typeof ui?.description === "string" ? ui.description : "";
+  }, [selectedNode]);
+
   const assistantContext = useMemo<WorkflowEditorAssistantContext | null>(() => {
     if (!selectedNode) {
       return null;
@@ -124,7 +135,7 @@ export function WorkflowEditorInspector({
   }, [edges, nodes, sandboxReadiness, selectedNode]);
 
   const supportsAssistantTab = Boolean(
-    selectedNode && selectedNode.data.nodeType !== "trigger" && assistantContext
+    selectedNode && selectedNode.data.nodeType !== "startNode" && assistantContext
   );
 
   const preferredTabKey = useMemo<WorkflowEditorInspectorTabKey>(() => {
@@ -318,7 +329,6 @@ export function WorkflowEditorInspector({
               nodeConfigText={nodeConfigText}
               onNodeConfigTextChange={onNodeConfigTextChange}
               onApplyNodeConfigJson={onApplyNodeConfigJson}
-              onNodeNameChange={onNodeNameChange}
               onNodeConfigChange={onNodeConfigChange}
               onNodeInputSchemaChange={onNodeInputSchemaChange}
               onNodeOutputSchemaChange={onNodeOutputSchemaChange}
@@ -441,13 +451,40 @@ export function WorkflowEditorInspector({
   return (
     <div className="workflow-editor-inspector-shell">
       <div className="workflow-editor-inspector-header">
-        <div className="workflow-editor-inspector-heading">
-          <span className="workflow-editor-inspector-eyebrow">{inspectorHeader.eyebrow}</span>
-          <Title level={5} style={{ margin: 0 }}>
-            {inspectorHeader.title}
-          </Title>
-          <Text type="secondary">{inspectorHeader.description}</Text>
-        </div>
+        {selectedNode ? (
+          <div
+            className="workflow-editor-inspector-node-heading"
+            data-title-placement={nodeTitlePlacement}
+          >
+            {nodeTitlePlacement === "inspector" ? (
+              <Input
+                aria-label="节点名称"
+                className="workflow-editor-inspector-node-title-input"
+                placeholder="节点名称"
+                variant="borderless"
+                value={selectedNode.data.label}
+                onChange={(event) => onNodeNameChange(event.target.value)}
+              />
+            ) : null}
+            <Input.TextArea
+              aria-label="节点描述"
+              autoSize={{ minRows: 1, maxRows: 3 }}
+              className="workflow-editor-inspector-node-description-input"
+              placeholder="添加描述..."
+              variant="borderless"
+              value={selectedNodeDescription}
+              onChange={(event) => onNodeDescriptionChange(event.target.value)}
+            />
+          </div>
+        ) : (
+          <div className="workflow-editor-inspector-heading">
+            <span className="workflow-editor-inspector-eyebrow">{inspectorHeader.eyebrow}</span>
+            <Title level={5} style={{ margin: 0 }}>
+              {inspectorHeader.title}
+            </Title>
+            <Text type="secondary">{inspectorHeader.description}</Text>
+          </div>
+        )}
 
         <div className="workflow-editor-inspector-chip-row" key={inspectorHeaderModeKey}>
           {inspectorHeader.chips.map((chip) => (
@@ -468,4 +505,10 @@ export function WorkflowEditorInspector({
       </div>
     </div>
   );
+}
+
+function toRecord(value: unknown) {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }

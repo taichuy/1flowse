@@ -81,14 +81,14 @@ describe("WorkflowNodeRuntimePolicyForm", () => {
             id: "planner",
             data: {
               label: "Planner",
-              nodeType: "llm_agent"
+              nodeType: "llmAgentNode"
             }
           },
           {
             id: "fetcher",
             data: {
               label: "Fetcher",
-              nodeType: "tool"
+              nodeType: "toolNode"
             }
           }
         ] as never,

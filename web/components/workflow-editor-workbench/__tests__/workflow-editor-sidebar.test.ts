@@ -158,9 +158,9 @@ function buildNodeCatalogItem(
       summary: "Built-in nodes"
     },
     capabilityGroup:
-      type === "output"
+      type === "endNode"
         ? "output"
-        : type === "condition" || type === "loop"
+        : type === "conditionNode" || type === "loopNode"
           ? "logic"
           : "integration",
     businessTrack: "编排节点能力",
@@ -928,14 +928,14 @@ describe("WorkflowEditorSidebar", () => {
         nodeSourceLanes: [],
         toolSourceLanes: [],
         editorNodeLibrary: [
-          buildNodeCatalogItem("llm_agent", "LLM Agent"),
-          buildNodeCatalogItem("tool", "Tool"),
-          buildNodeCatalogItem("condition", "Condition"),
-          buildNodeCatalogItem("mcp_query", "MCP Query"),
-          buildNodeCatalogItem("sandbox_code", "Sandbox Code"),
-          buildNodeCatalogItem("output", "Output")
+          buildNodeCatalogItem("llmAgentNode", "LLM Agent"),
+          buildNodeCatalogItem("toolNode", "Tool"),
+          buildNodeCatalogItem("conditionNode", "Condition"),
+          buildNodeCatalogItem("mcpQueryNode", "MCP Query"),
+          buildNodeCatalogItem("sandboxCodeNode", "Sandbox Code"),
+          buildNodeCatalogItem("endNode", "Output")
         ],
-        plannedNodeLibrary: [buildNodeCatalogItem("loop", "Loop", "planned")],
+        plannedNodeLibrary: [buildNodeCatalogItem("loopNode", "Loop", "planned")],
         unsupportedNodes: [],
         message: null,
         messageTone: "idle",
@@ -977,11 +977,11 @@ describe("WorkflowEditorSidebar", () => {
         nodeSourceLanes: [],
         toolSourceLanes: [],
         editorNodeLibrary: [
-          buildNodeCatalogItem("condition", "Condition"),
-          buildNodeCatalogItem("tool", "Tool"),
-          buildNodeCatalogItem("llm_agent", "LLM Agent"),
-          buildNodeCatalogItem("reference", "Reference"),
-          buildNodeCatalogItem("output", "Output")
+          buildNodeCatalogItem("conditionNode", "Condition"),
+          buildNodeCatalogItem("toolNode", "Tool"),
+          buildNodeCatalogItem("llmAgentNode", "LLM Agent"),
+          buildNodeCatalogItem("referenceNode", "Reference"),
+          buildNodeCatalogItem("endNode", "Output")
         ],
         plannedNodeLibrary: [],
         unsupportedNodes: [],
@@ -1028,11 +1028,11 @@ describe("WorkflowEditorSidebar", () => {
         nodeSourceLanes: [],
         toolSourceLanes: [],
         editorNodeLibrary: [
-          buildNodeCatalogItem("tool", "Tool"),
-          buildNodeCatalogItem("reference", "Reference"),
-          buildNodeCatalogItem("llm_agent", "LLM Agent"),
-          buildNodeCatalogItem("condition", "Condition"),
-          buildNodeCatalogItem("output", "Output")
+          buildNodeCatalogItem("toolNode", "Tool"),
+          buildNodeCatalogItem("referenceNode", "Reference"),
+          buildNodeCatalogItem("llmAgentNode", "LLM Agent"),
+          buildNodeCatalogItem("conditionNode", "Condition"),
+          buildNodeCatalogItem("endNode", "Output")
         ],
         plannedNodeLibrary: [],
         unsupportedNodes: [],
@@ -1050,8 +1050,8 @@ describe("WorkflowEditorSidebar", () => {
         trace: null,
         traceError: null,
         selectedNodeId: null,
-        authoringSourceNodeId: "trigger",
-        authoringSourceNodeLabel: "Trigger",
+        authoringSourceNodeId: "startNode",
+        authoringSourceNodeLabel: "startNode",
         authoringSourceContext: "default_trigger",
         sandboxReadiness: buildSandboxReadiness(),
         isLoadingRunOverlay: false,

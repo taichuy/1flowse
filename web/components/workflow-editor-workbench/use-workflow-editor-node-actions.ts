@@ -121,6 +121,30 @@ export function useWorkflowEditorNodeActions({
     updateSelectedNode({ label: value });
   };
 
+  const handleNodeDescriptionChange = (value: string) => {
+    if (!selectedNode) {
+      return;
+    }
+
+    const nextConfig = { ...selectedNode.data.config };
+    const nextUi = isRecord(nextConfig.ui) ? { ...nextConfig.ui } : {};
+    const normalizedValue = value.trim();
+
+    if (normalizedValue) {
+      nextUi.description = value;
+    } else {
+      delete nextUi.description;
+    }
+
+    if (Object.keys(nextUi).length > 0) {
+      nextConfig.ui = nextUi;
+    } else {
+      delete nextConfig.ui;
+    }
+
+    updateSelectedNode({ config: nextConfig });
+  };
+
   const handleSelectedNodeConfigChange = (nextConfig: Record<string, unknown>) => {
     updateSelectedNode({ config: nextConfig });
   };
@@ -203,17 +227,17 @@ export function useWorkflowEditorNodeActions({
       return;
     }
 
-    if (targetNode.data.nodeType === "trigger") {
-      setMessage("最小编辑器暂不允许删除唯一 trigger 节点。");
+    if (targetNode.data.nodeType === "startNode") {
+      setMessage("最小编辑器暂不允许删除唯一开始节点。");
       setMessageTone("error");
       return;
     }
 
     if (
-      targetNode.data.nodeType === "output" &&
-      nodes.filter((node) => node.data.nodeType === "output").length <= 1
+      targetNode.data.nodeType === "endNode" &&
+      nodes.filter((node) => node.data.nodeType === "endNode").length <= 1
     ) {
-      setMessage("至少保留一个 output 节点，避免保存后被后端校验拒绝。");
+      setMessage("至少保留一个结束节点，避免保存后被后端校验拒绝。");
       setMessageTone("error");
       return;
     }
@@ -243,6 +267,7 @@ export function useWorkflowEditorNodeActions({
     focusNode,
     handleAddNode,
     handleNodeNameChange,
+    handleNodeDescriptionChange,
     handleSelectedNodeConfigChange,
     applyNodeConfigJson,
     updateNodeInputSchema,

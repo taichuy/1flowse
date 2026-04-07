@@ -85,18 +85,18 @@ def test_tool_gateway_sensitive_tool_node_waits_for_approval_and_resumes(
         workflow_id="wf-sensitive-tool-node",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "tool_node",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Sensitive Tool",
                     "config": {"tool": {"toolId": "test-tool"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool_node"},
-                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "tool_node"},
+                {"id": "e2", "sourceNodeId": "tool_node", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -144,7 +144,7 @@ def test_tool_gateway_sensitive_tool_node_waits_for_approval_and_resumes(
     assert approval_tickets[0].status == "pending"
     assert len(access_requests) == 1
     assert access_requests[0].action_type == "invoke"
-    assert access_requests[0].requester_type == "tool"
+    assert access_requests[0].requester_type == "toolNode"
     assert access_requests[0].requester_id == "test-tool"
     assert captured_calls == []
     assert first_pass.tool_calls == []
@@ -186,10 +186,10 @@ def test_tool_gateway_sensitive_agent_tool_waits_for_approval_and_resumes(
         workflow_id="wf-sensitive-agent-tool",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -204,11 +204,11 @@ def test_tool_gateway_sensitive_agent_tool_waits_for_approval_and_resumes(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )

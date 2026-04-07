@@ -3,20 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Alert, Button, Card, Form, Input, Modal, Space, Typography } from "antd";
+import { Alert, Card, Form, Input, Modal, Space, Typography } from "antd";
 
+import { WorkspaceCreateAppModal } from "@/components/workspace-apps-workbench/workspace-create-app-modal";
 import { WorkspaceAppListStage } from "@/components/workspace-apps-workbench/workspace-app-list-stage";
 import { WorkspaceBrowseRail } from "@/components/workspace-apps-workbench/workspace-browse-rail";
 import { WorkspaceCatalogHeader } from "@/components/workspace-apps-workbench/workspace-catalog-header";
 import {
-  getWorkspaceScopeSummary,
   type WorkspaceAppCard,
   type WorkspaceAppsWorkbenchProps
 } from "@/components/workspace-apps-workbench/shared";
-import { WorkflowCreateWizardEntry } from "@/components/workflow-create-wizard-entry";
 import { updateWorkflow } from "@/lib/get-workflows";
 
-const { Paragraph, Text, Title } = Typography;
+const { Text, Title } = Typography;
 
 const WORKSPACE_APP_PAGE_SIZE = 6;
 
@@ -26,7 +25,6 @@ export function WorkspaceAppsWorkbench({
   currentUserDisplayName,
   requestedKeyword,
   activeModeLabel,
-  activeModeDescription,
   visibleAppSummary,
   modeTabs,
   scopePills,
@@ -34,8 +32,6 @@ export function WorkspaceAppsWorkbench({
   workspaceSignals,
   focusedCreateHref,
   workspaceUtilityEntry,
-  starterCount,
-  workflowCreateBootstrapRequest,
   workflowCreateWizardProps,
   filteredApps,
   searchState
@@ -47,16 +43,6 @@ export function WorkspaceAppsWorkbench({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [editForm] = Form.useForm<{ name: string }>();
-  const currentScopeSummary = getWorkspaceScopeSummary({
-    activeModeDescription,
-    activeModeLabel,
-    requestedKeyword
-  });
-  const catalogDescription = requestedKeyword
-    ? `当前按“${requestedKeyword}”筛选，命中后直接进入 Studio。`
-    : activeModeLabel
-      ? `当前聚焦 ${activeModeLabel}。`
-      : "创建、筛选后直接进入 Studio。";
   const totalPages = Math.max(1, Math.ceil(filteredApps.length / WORKSPACE_APP_PAGE_SIZE));
   const paginatedApps = useMemo(() => {
     const startIndex = (currentPage - 1) * WORKSPACE_APP_PAGE_SIZE;
@@ -171,35 +157,13 @@ export function WorkspaceAppsWorkbench({
         </section>
       </main>
 
-      <Modal
-        footer={null}
+      <WorkspaceCreateAppModal
+        activeModeLabel={activeModeLabel}
+        focusedCreateHref={focusedCreateHref}
         onCancel={handleCloseCreateModal}
         open={createModalOpen}
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 32 }}>
-            <span style={{ fontSize: 18, fontWeight: 600 }}>创建应用</span>
-            <Button size="small" type="dashed" href={focusedCreateHref} target="_blank">
-              全屏打开
-            </Button>
-          </div>
-        }
-        width={1000}
-        styles={{
-          body: { paddingTop: 16, paddingBottom: 16 }
-        }}
-      >
-        <div style={{ marginBottom: 24, padding: "12px 16px", backgroundColor: "#f9f9f9", borderRadius: 8, border: "1px solid #f0f0f0" }}>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            当前提供 {starterCount} 个预设 Starter。您可以在当前弹窗快速创建，或进入全屏模式以便获取分享链接。
-          </Text>
-        </div>
-        {createModalOpen ? (
-          <WorkflowCreateWizardEntry
-            bootstrapRequest={workflowCreateBootstrapRequest}
-            initialBootstrapData={workflowCreateWizardProps}
-          />
-        ) : null}
-      </Modal>
+        workflowCreateWizardProps={workflowCreateWizardProps}
+      />
 
       <Modal
         confirmLoading={isSavingEdit}
@@ -225,7 +189,7 @@ export function WorkspaceAppsWorkbench({
                 {editingApp.mode.label} · {editingApp.nodeCount} 个节点
               </Title>
             ) : null}
-            {editErrorMessage ? <Alert message={editErrorMessage} type="error" /> : null}
+            {editErrorMessage ? <Alert title={editErrorMessage} type="error" /> : null}
           </Space>
         </Form>
       </Modal>

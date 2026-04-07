@@ -32,7 +32,7 @@ class RuntimeBranchSupportMixin:
                 edge=edge,
             )
 
-        if source_node.get("type") in {"condition", "router"}:
+        if source_node.get("type") in {"conditionNode", "routerNode"}:
             selected = self._normalize_branch_value(source_output.get("selected"))
             has_branch_conditions = any(
                 self._normalize_branch_value(candidate.get("condition")) is not None
@@ -120,7 +120,7 @@ class RuntimeBranchSupportMixin:
         except SafeExpressionError as exc:
             raise WorkflowExecutionError(str(exc)) from exc
 
-        if node.get("type") == "condition":
+        if node.get("type") == "conditionNode":
             selected = "true" if bool(expression_value) else "false"
             return selected, expression_value, False
 

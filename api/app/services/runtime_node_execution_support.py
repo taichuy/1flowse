@@ -127,7 +127,7 @@ class RuntimeNodeExecutionSupportMixin:
         completed_output_nodes: set[str],
     ) -> dict:
         for node in reversed(nodes):
-            if node.type == "output" and node.id in completed_output_nodes:
+            if node.type == "endNode" and node.id in completed_output_nodes:
                 return outputs.get(node.id, {})
         return outputs.get(nodes[-1].id, {})
 

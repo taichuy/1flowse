@@ -25,14 +25,14 @@ describe("summarizeWorkspaceStarterSourceStatus", () => {
       definition: {
         nodes: [
           {
-            id: "trigger",
-            type: "trigger",
-            name: "Trigger",
+            id: "startNode",
+            type: "startNode",
+            name: "startNode",
             config: {}
           },
           {
             id: "sandbox",
-            type: "sandbox_code",
+            type: "sandboxCodeNode",
             name: "Sandbox Code",
             config: {
               language: "python"
@@ -67,14 +67,14 @@ describe("summarizeWorkspaceStarterSourceStatus", () => {
       definition: {
         nodes: [
           {
-            id: "trigger",
-            type: "trigger",
-            name: "Trigger",
+            id: "startNode",
+            type: "startNode",
+            name: "startNode",
             config: {}
           },
           {
             id: "sandbox",
-            type: "sandbox_code",
+            type: "sandboxCodeNode",
             name: "Sandbox Code",
             config: {
               language: "python"

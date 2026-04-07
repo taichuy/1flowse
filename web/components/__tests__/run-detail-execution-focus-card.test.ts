@@ -150,7 +150,7 @@ function buildRunDetail(): RunDetail {
       node_run_id: "node-run-1",
       node_id: "tool_wait",
       node_name: "Tool Wait",
-      node_type: "tool",
+      node_type: "toolNode",
       status: "waiting",
       callback_waiting_explanation: null,
       callback_waiting_lifecycle: null,
@@ -234,7 +234,7 @@ function buildRunDetail(): RunDetail {
         id: "node-run-1",
         node_id: "tool_wait",
         node_name: "Tool Wait",
-        node_type: "tool",
+        node_type: "toolNode",
         status: "waiting",
         phase: "execute",
         retry_count: 0,
@@ -468,7 +468,7 @@ describe("RunDetailExecutionFocusCard", () => {
             execution_focus_node_id: "tool_wait",
             execution_focus_node_run_id: "node-run-1",
             execution_focus_node_name: "Tool Wait",
-            execution_focus_node_type: "tool",
+            execution_focus_node_type: "toolNode",
             execution_focus_explanation: {
               primary_signal: "当前 waiting 节点仍在等待审批放行。",
               follow_up: "先处理审批票据，再回来继续看 callback waiting。"

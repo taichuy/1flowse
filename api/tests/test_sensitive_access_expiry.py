@@ -50,7 +50,7 @@ def _create_waiting_scope(
         run_id=run.id,
         node_id="mock_tool",
         node_name="Mock Tool",
-        node_type="tool",
+        node_type="toolNode",
         status="waiting_callback",
         phase="waiting_callback",
         input_payload={},

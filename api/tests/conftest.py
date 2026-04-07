@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 
 import pytest
 from cryptography.fernet import Fernet
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,6 +13,7 @@ from app.main import app
 from app.models.plugin import PluginAdapterRecord, PluginToolRecord  # noqa: F401
 from app.models.workflow import Workflow, WorkflowVersion
 from app.services.compiled_blueprints import CompiledBlueprintService
+from tests.compat_test_client import CompatTestClient, CompatTestClient as TestClient
 from tests.workspace_auth_helpers import issue_workspace_console_auth
 
 _TEST_CREDENTIAL_KEY = Fernet.generate_key().decode("utf-8")
@@ -38,12 +38,12 @@ def sqlite_session() -> Generator[Session, None, None]:
 
 
 @pytest.fixture
-def client(sqlite_session: Session) -> Generator[TestClient, None, None]:
+def client(sqlite_session: Session) -> Generator[CompatTestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
         yield sqlite_session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
+    with CompatTestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -112,18 +112,18 @@ def sample_workflow(sqlite_session: Session) -> Workflow:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "mock_tool",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Mock Tool",
                     "config": {"mock_output": {"answer": "done"}},
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
-                {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
+                {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "endNode"},
             ],
         },
         created_at=datetime.now(UTC),

@@ -137,7 +137,7 @@ function buildEntry(): SensitiveAccessTimelineEntry {
             executionFocusNodeId: "stale-node",
             executionFocusNodeRunId: "node-run-stale",
             executionFocusNodeName: "Stale Node",
-            executionFocusNodeType: "tool"
+            executionFocusNodeType: "toolNode"
           }
         },
         {
@@ -149,7 +149,7 @@ function buildEntry(): SensitiveAccessTimelineEntry {
             executionFocusNodeId: "current-node",
             executionFocusNodeRunId: "node-run-current",
             executionFocusNodeName: "Current Node",
-            executionFocusNodeType: "tool"
+            executionFocusNodeType: "toolNode"
           }
         }
       ]

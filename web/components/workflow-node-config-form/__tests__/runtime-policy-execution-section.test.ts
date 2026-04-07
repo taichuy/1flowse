@@ -53,7 +53,7 @@ describe("WorkflowNodeRuntimePolicyExecutionSection", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowNodeRuntimePolicyExecutionSection, {
         nodeId: "node-1",
-        nodeType: "sandbox_code",
+        nodeType: "sandboxCodeNode",
         runtimePolicy: {
           execution: {
             class: "sandbox",
@@ -101,7 +101,7 @@ describe("WorkflowNodeRuntimePolicyExecutionSection", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowNodeRuntimePolicyExecutionSection, {
         nodeId: "node-1",
-        nodeType: "sandbox_code",
+        nodeType: "sandboxCodeNode",
         runtimePolicy: {
           execution: {
             class: "sandbox"

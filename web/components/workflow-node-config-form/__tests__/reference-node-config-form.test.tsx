@@ -14,7 +14,7 @@ describe("ReferenceNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Reference",
-            nodeType: "reference",
+            nodeType: "referenceNode",
             config: {
               contextAccess: {
                 readableNodeIds: ["agent-1"]
@@ -33,7 +33,7 @@ describe("ReferenceNodeConfigForm", () => {
             position: { x: 0, y: 0 },
             data: {
               label: "Agent",
-              nodeType: "llm_agent",
+              nodeType: "llmAgentNode",
               config: {}
             }
           }
@@ -60,7 +60,7 @@ describe("ReferenceNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Reference",
-            nodeType: "reference",
+            nodeType: "referenceNode",
             config: {}
           }
         } as never,
@@ -71,7 +71,7 @@ describe("ReferenceNodeConfigForm", () => {
             position: { x: 0, y: 0 },
             data: {
               label: "Agent 2",
-              nodeType: "llm_agent",
+              nodeType: "llmAgentNode",
               config: {}
             }
           }

@@ -1979,10 +1979,10 @@ def test_runtime_service_executes_registered_native_tool(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "search",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Search",
                     "config": {
                         "tool": {
@@ -1990,11 +1990,11 @@ def test_runtime_service_executes_registered_native_tool(
                         }
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "search"},
-                {"id": "e2", "sourceNodeId": "search", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "search"},
+                {"id": "e2", "sourceNodeId": "search", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -2016,7 +2016,7 @@ def test_runtime_service_executes_registered_native_tool(
     assert artifacts.run.status == "succeeded"
     assert artifacts.run.output_payload == {
         "search": {
-            "received": {"trigger": {"topic": "plugin"}},
+            "received": {"topic": {"topic": "plugin"}},
             "summary": "search:plugin",
         }
     }

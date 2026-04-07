@@ -109,13 +109,13 @@ export function WorkflowChipLink({
         padding: '4px 6px 6px 14px', gap: '4px' 
       }}>
         {strongIsolationToolCount > 0 && (
-          <Tag bordered={false} color="purple" style={{ margin: 0 }}>strong iso</Tag>
+          <Tag color="purple" variant="filled" style={{ margin: 0 }}>strong iso</Tag>
         )}
         {hasMissingToolIssues && (
-          <Tag bordered={false} icon={<WarningOutlined />} color="error" style={{ margin: 0 }}>catalog gap</Tag>
+          <Tag icon={<WarningOutlined />} color="error" variant="filled" style={{ margin: 0 }}>catalog gap</Tag>
         )}
         {legacyPublishAuthBacklogCount > 0 && (
-          <Tag bordered={false} color="warning" style={{ margin: 0 }}>{legacyPublishAuthBacklogCount} auth</Tag>
+          <Tag color="warning" variant="filled" style={{ margin: 0 }}>{legacyPublishAuthBacklogCount} auth</Tag>
         )}
       </div>
     </div>

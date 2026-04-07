@@ -50,7 +50,7 @@ export function buildWorkflowToolExecutionValidationIssues(
       return;
     }
 
-    if (node?.type === "tool") {
+    if (node?.type === "toolNode") {
       issues.push(
         ...buildToolNodeExecutionIssues({
           node,
@@ -67,7 +67,7 @@ export function buildWorkflowToolExecutionValidationIssues(
       return;
     }
 
-    if (node?.type === "sandbox_code") {
+    if (node?.type === "sandboxCodeNode") {
       issues.push(
         ...buildSandboxCodeExecutionIssues({
           node,
@@ -84,7 +84,7 @@ export function buildWorkflowToolExecutionValidationIssues(
       return;
     }
 
-    if (node?.type === "llm_agent") {
+    if (node?.type === "llmAgentNode") {
       issues.push(
         ...buildAgentExecutionIssues({
           nodeId,
@@ -114,7 +114,7 @@ export function buildWorkflowNodeExecutionValidationIssues(
 
   definition.nodes.forEach((node, nodeIndex) => {
     const nodeType = normalizeString(node?.type) ?? "unknown";
-    if (nodeType === "tool" || nodeType === "sandbox_code") {
+    if (nodeType === "toolNode" || nodeType === "sandboxCodeNode") {
       return;
     }
 
@@ -132,7 +132,7 @@ export function buildWorkflowNodeExecutionValidationIssues(
     const path = `nodes.${nodeIndex}.runtimePolicy.execution`;
 
     if (requestedExecutionClass === "subprocess") {
-      if (nodeType === "condition" || nodeType === "router") {
+      if (nodeType === "conditionNode" || nodeType === "routerNode") {
         return;
       }
 
@@ -190,7 +190,7 @@ function buildSandboxCodeExecutionIssues({
 }): WorkflowToolExecutionValidationIssue[] {
   const execution = toRecord(toRecord(node?.runtimePolicy)?.execution);
   const requestedExecutionClass =
-    extractExplicitExecutionClass(execution) ?? resolveDefaultExecutionClass("sandbox_code");
+    extractExplicitExecutionClass(execution) ?? resolveDefaultExecutionClass("sandboxCodeNode");
   const context = `Sandbox code 节点 ${nodeName} (${nodeId})`;
   const executionPath = `nodes.${nodeIndex}.runtimePolicy.execution`;
   const issues: WorkflowToolExecutionValidationIssue[] = [];

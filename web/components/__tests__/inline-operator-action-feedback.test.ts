@@ -836,7 +836,7 @@ describe("InlineOperatorActionFeedback", () => {
           executionFocusNodeId: "sandbox_tool",
           executionFocusNodeRunId: "node-run-1",
           executionFocusNodeName: "Sandbox Tool",
-          executionFocusNodeType: "tool",
+          executionFocusNodeType: "toolNode",
           executionFocusToolCalls: [
             {
               id: "tool-call-1",
@@ -903,7 +903,7 @@ describe("InlineOperatorActionFeedback", () => {
           executionFocusNodeId: "sandbox_tool",
           executionFocusNodeRunId: "node-run-1",
           executionFocusNodeName: "Sandbox Tool",
-          executionFocusNodeType: "tool",
+          executionFocusNodeType: "toolNode",
           executionFocusExplanation: {
             primary_signal: "当前节点因 sandbox backend 不可用而阻断。",
             follow_up: "先恢复 backend，再重试该节点。"

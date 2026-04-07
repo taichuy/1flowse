@@ -55,7 +55,7 @@ def build_response() -> PublishedEndpointInvocationListResponse:
         execution_focus_node_id="tool_wait",
         execution_focus_node_run_id="node-run-1",
         execution_focus_node_name="Tool Wait",
-        execution_focus_node_type="tool",
+        execution_focus_node_type="toolNode",
         execution_focus_tool_call_count=1,
         execution_focus_tool_calls=[
             OperatorRunFocusToolCallItem(

@@ -25,7 +25,7 @@ describe("WorkflowNodeIoSchemaForm", () => {
         node: {
           id: "node-1",
           data: {
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             inputSchema: { type: "object", properties: {} },
             outputSchema: { type: "object", properties: {} }
           }

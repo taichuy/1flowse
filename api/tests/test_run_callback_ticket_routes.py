@@ -26,10 +26,10 @@ def _create_waiting_callback_run(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "assistant": {"enabled": False},
@@ -44,11 +44,11 @@ def _create_waiting_callback_run(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -653,7 +653,7 @@ def test_cleanup_service_skips_resume_for_expired_ticket_outside_current_waiting
         run_id=run_id,
         node_id="stale_agent",
         node_name="Stale Agent",
-        node_type="llm_agent",
+        node_type="llmAgentNode",
         status="waiting_callback",
         phase="waiting_callback",
         waiting_reason="stale callback pending",

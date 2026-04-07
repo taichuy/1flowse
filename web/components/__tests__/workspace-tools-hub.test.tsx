@@ -44,11 +44,11 @@ import type {
 Object.assign(globalThis, { React });
 
 const nodeCatalog: WorkflowNodeCatalogItem[] = [
-  buildNode("llm_agent", "LLM Agent", "agent"),
-  buildNode("reference", "Reference", "integration"),
-  buildNode("tool", "Tool", "integration"),
-  buildNode("mcp_query", "MCP Query", "integration"),
-  buildNode("sandbox_code", "Sandbox Code", "logic")
+  buildNode("llmAgentNode", "LLM Agent", "agent"),
+  buildNode("referenceNode", "Reference", "integration"),
+  buildNode("toolNode", "Tool", "integration"),
+  buildNode("mcpQueryNode", "MCP Query", "integration"),
+  buildNode("sandboxCodeNode", "Sandbox Code", "logic")
 ];
 
 const providerCatalog: NativeModelProviderCatalogItem[] = [
@@ -234,14 +234,14 @@ describe("WorkspaceToolsHub", () => {
         pluginGovernanceHref: "/workspace-starters",
         initialDetailState: {
           kind: "node",
-          nodeType: "tool"
+          nodeType: "toolNode"
         }
       })
     );
 
     expect(html).toContain('data-component="workspace-tools-detail-modal"');
     expect(html).toContain('data-detail-kind="node"');
-    expect(html).toContain('data-detail-id="tool"');
+    expect(html).toContain('data-detail-id="toolNode"');
     expect(html).toContain("Tool 节点详情");
     expect(html).toContain("回到编辑器添加节点");
     expect(html).toContain('data-tool-source="native"');
@@ -271,7 +271,7 @@ describe("WorkspaceToolsHub", () => {
         pluginGovernanceHref: "/workspace-starters",
         initialToolSource: "dify",
         initialDetailState: {
-          kind: "tool",
+          kind: "toolNode",
           toolId: "compat:dify:plugin:demo/search",
           toolSource: "dify"
         }
@@ -279,7 +279,7 @@ describe("WorkspaceToolsHub", () => {
     );
 
     expect(html).toContain('data-tool-source="dify"');
-    expect(html).toContain('data-detail-kind="tool"');
+    expect(html).toContain('data-detail-kind="toolNode"');
     expect(html).toContain('data-detail-id="compat:dify:plugin:demo/search"');
     expect(html).toContain("Dify Search");
     expect(html).toContain("Dify Search 工具详情");
@@ -354,7 +354,7 @@ function buildNode(
     tags: [label],
     supportStatus: "available" as const,
     supportSummary: `${label} support summary`,
-    bindingRequired: type === "tool",
+    bindingRequired: type === "toolNode",
     bindingSourceLanes: [],
     palette: {
       enabled: true,

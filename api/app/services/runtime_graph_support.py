@@ -201,7 +201,7 @@ class RuntimeGraphSupportMixin(
     ) -> JoinDecision:
         incoming_ids = tuple(sorted({str(node_id) for node_id in incoming if str(node_id).strip()}))
         activated_source_ids = tuple(sorted(str(node_id) for node_id in activated_sources))
-        if node.get("type") == "trigger":
+        if node.get("type") == "startNode":
             return JoinDecision(
                 should_execute=True,
                 mode="any",

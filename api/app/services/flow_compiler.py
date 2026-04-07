@@ -88,10 +88,10 @@ class FlowCompiler:
             if str(variable.get("name", "")).strip()
         }
         trigger_node_id = next(
-            node_id for node_id, node in node_lookup.items() if node.type == "trigger"
+            node_id for node_id, node in node_lookup.items() if node.type == "startNode"
         )
         output_node_ids = tuple(
-            node_id for node_id, node in node_lookup.items() if node.type == "output"
+            node_id for node_id, node in node_lookup.items() if node.type == "endNode"
         )
 
         return CompiledWorkflowBlueprint(

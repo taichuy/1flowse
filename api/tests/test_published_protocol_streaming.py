@@ -30,7 +30,7 @@ def _build_run_payload(text: str) -> dict:
             {
                 "event_type": "node.output.completed",
                 "payload": {
-                    "node_id": "output",
+                    "node_id": "endNode",
                     "output": {"answer": text},
                 },
             },
@@ -221,17 +221,17 @@ def _build_run_payload_with_real_deltas(text: str) -> dict:
             {
                 "event_type": "node.started",
                 "node_run_id": "nr_output",
-                "payload": {"id": "output", "type": "output", "name": "Output"},
+                "payload": {"id": "endNode", "type": "endNode", "name": "endNode"},
             },
             {
                 "event_type": "node.output.delta",
                 "node_run_id": "nr_output",
-                "payload": {"node_id": "output", "delta": text},
+                "payload": {"node_id": "endNode", "delta": text},
             },
             {
                 "event_type": "node.output.completed",
                 "node_run_id": "nr_output",
-                "payload": {"node_id": "output", "output": {"answer": text}},
+                "payload": {"node_id": "endNode", "output": {"answer": text}},
             },
             {
                 "event_type": "run.output.delta",

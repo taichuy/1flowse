@@ -205,10 +205,10 @@ def test_finalize_via_llm_when_no_mock(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "What is the answer to everything?",
@@ -221,11 +221,11 @@ def test_finalize_via_llm_when_no_mock(sqlite_session: Session) -> None:
                         "assistant": {"enabled": False},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -271,10 +271,10 @@ def test_mock_config_takes_priority_over_llm(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Hello",
@@ -287,11 +287,11 @@ def test_mock_config_takes_priority_over_llm(sqlite_session: Session) -> None:
                         "mockFinalOutput": {"result": "mock-output"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -320,10 +320,10 @@ def test_no_model_config_falls_back_gracefully(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Say hello",
@@ -331,11 +331,11 @@ def test_no_model_config_falls_back_gracefully(sqlite_session: Session) -> None:
                         "mock_output": {"answer": "fallback"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -383,10 +383,10 @@ def test_llm_agent_injects_bound_skill_docs_into_llm_context(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Draft a response using the bound skill.",
@@ -398,11 +398,11 @@ def test_llm_agent_injects_bound_skill_docs_into_llm_context(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -469,10 +469,10 @@ def test_llm_agent_resolves_workspace_provider_config_ref(sqlite_session: Sessio
             status="draft",
             definition={
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Say hello.",
@@ -485,11 +485,11 @@ def test_llm_agent_resolves_workspace_provider_config_ref(sqlite_session: Sessio
                             },
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         )
@@ -545,10 +545,10 @@ def test_llm_agent_resolves_workspace_provider_config_protocol_for_openai_respon
             status="draft",
             definition={
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Say hello.",
@@ -558,11 +558,11 @@ def test_llm_agent_resolves_workspace_provider_config_protocol_for_openai_respon
                             },
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         )
@@ -589,28 +589,28 @@ def test_reference_node_reads_authorized_upstream_json(sqlite_session: Session) 
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "source",
-                    "type": "tool",
+                    "type": "toolNode",
                     "name": "Source",
                     "config": {"mock_output": {"answer": "from-source"}},
                 },
                 {
-                    "id": "reference",
-                    "type": "reference",
-                    "name": "Reference",
+                    "id": "referenceNode",
+                    "type": "referenceNode",
+                    "name": "referenceNode",
                     "config": {
                         "contextAccess": {"readableNodeIds": ["source"]},
-                        "reference": {"sourceNodeId": "source", "artifactType": "json"},
+                        "referenceNode": {"sourceNodeId": "source", "artifactType": "json"},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "source"},
-                {"id": "e2", "sourceNodeId": "source", "targetNodeId": "reference"},
-                {"id": "e3", "sourceNodeId": "reference", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "source"},
+                {"id": "e2", "sourceNodeId": "source", "targetNodeId": "referenceNode"},
+                {"id": "e3", "sourceNodeId": "referenceNode", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -676,10 +676,10 @@ def test_llm_agent_skill_binding_limits_injection_to_selected_phase(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Draft a response using the bound skill.",
@@ -702,11 +702,11 @@ def test_llm_agent_skill_binding_limits_injection_to_selected_phase(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -817,10 +817,10 @@ def test_llm_agent_lazy_fetches_matching_skill_reference_body_at_runtime(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "goal": "Keep the answer inside the available budget guardrails.",
@@ -841,11 +841,11 @@ def test_llm_agent_lazy_fetches_matching_skill_reference_body_at_runtime(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -937,10 +937,10 @@ def test_llm_agent_can_explicitly_request_skill_reference_before_planning(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "goal": "Draft a concise operator response.",
@@ -958,11 +958,11 @@ def test_llm_agent_can_explicitly_request_skill_reference_before_planning(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1111,10 +1111,10 @@ def test_llm_agent_assistant_phase_can_explicitly_request_skill_reference(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "goal": "Summarize findings for the operator.",
@@ -1139,11 +1139,11 @@ def test_llm_agent_assistant_phase_can_explicitly_request_skill_reference(
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1273,10 +1273,10 @@ def test_llm_agent_finalize_phase_can_explicitly_request_skill_reference(
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "goal": "Draft a concise operator response.",
@@ -1296,11 +1296,11 @@ def test_llm_agent_finalize_phase_can_explicitly_request_skill_reference(
                         "mockPlan": {"toolCalls": []},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1425,10 +1425,10 @@ def test_llm_finalize_with_tool_results(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Search and summarize",
@@ -1445,11 +1445,11 @@ def test_llm_finalize_with_tool_results(sqlite_session: Session) -> None:
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1508,10 +1508,10 @@ def test_llm_distill_evidence_with_valid_model(sqlite_session: Session) -> None:
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Analyze search results",
@@ -1529,11 +1529,11 @@ def test_llm_distill_evidence_with_valid_model(sqlite_session: Session) -> None:
                         },
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1585,10 +1585,10 @@ def test_llm_finalize_error_degrades_gracefully(sqlite_session: Session) -> None
         status="draft",
         definition={
             "nodes": [
-                {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                 {
                     "id": "agent",
-                    "type": "llm_agent",
+                    "type": "llmAgentNode",
                     "name": "Agent",
                     "config": {
                         "prompt": "Analyze this",
@@ -1601,11 +1601,11 @@ def test_llm_finalize_error_degrades_gracefully(sqlite_session: Session) -> None
                         "mockPlan": {"toolCalls": []},
                     },
                 },
-                {"id": "output", "type": "output", "name": "Output", "config": {}},
+                {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
             ],
             "edges": [
-                {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
             ],
         },
     )
@@ -1642,10 +1642,10 @@ def test_openai_compatible_runtime_resolves_credential_ref_and_custom_base_url(
             status="draft",
             definition={
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Answer via proxy",
@@ -1658,11 +1658,11 @@ def test_openai_compatible_runtime_resolves_credential_ref_and_custom_base_url(
                             "assistant": {"enabled": False},
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         )
@@ -1702,10 +1702,10 @@ def test_anthropic_runtime_uses_messages_endpoint_with_credential_ref_and_base_u
             status="draft",
             definition={
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Answer via anthropic proxy",
@@ -1718,11 +1718,11 @@ def test_anthropic_runtime_uses_messages_endpoint_with_credential_ref_and_base_u
                             "assistant": {"enabled": False},
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         )

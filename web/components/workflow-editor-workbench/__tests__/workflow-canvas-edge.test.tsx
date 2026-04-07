@@ -28,8 +28,8 @@ vi.mock("@xyflow/react", () => ({
 function buildEdgeProps(channel: "control" | "data") {
   return {
     id: "edge-1",
-    source: "trigger",
-    target: "output",
+    source: "startNode",
+    target: "endNode",
     type: "smoothstep",
     selected: false,
     sourceX: 120,
@@ -51,7 +51,7 @@ describe("WorkflowCanvasEdge", () => {
         ...buildEdgeProps("control"),
         quickAddOptions: [
           {
-            type: "llm_agent",
+            type: "llmAgentNode",
             label: "LLM Agent",
             description: "让 agent 继续推理。",
             capabilityGroup: "agent"

@@ -25,7 +25,7 @@ beforeEach(() => {
   Object.assign(globalThis, { window: {} });
 
   vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue({
-    nodes: [{ type: "trigger" }],
+    nodes: [{ type: "startNode" }],
     starters: [{ id: "starter-1" }],
     starterSourceLanes: [{ kind: "starter" }],
     nodeSourceLanes: [{ kind: "node" }],
@@ -149,5 +149,46 @@ describe("loadWorkflowCreateWizardBootstrap", () => {
       vi.mocked(getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot)
     ).toHaveBeenCalledTimes(1);
     expect(result.legacyAuthGovernanceSnapshot).not.toBeNull();
+  });
+
+  it("injects Blank Flow when chatflow default starter is requested but the library returns none", async () => {
+    vi.mocked(getWorkflowLibrarySnapshot).mockResolvedValue({
+      nodes: [],
+      starters: [],
+      starterSourceLanes: [],
+      nodeSourceLanes: [],
+      toolSourceLanes: [],
+      tools: []
+    } as Awaited<ReturnType<typeof getWorkflowLibrarySnapshot>>);
+
+    const result = await loadWorkflowCreateWizardBootstrap({
+      governanceQueryScope: {
+        activeTrack: "应用新建编排",
+        sourceGovernanceKind: "all",
+        needsFollowUp: false,
+        searchQuery: "",
+        selectedTemplateId: "blank"
+      },
+      includeLegacyAuthGovernanceSnapshot: false,
+      libraryQuery: {
+        businessTrack: "应用新建编排",
+        needsFollowUp: false,
+        includeBuiltinStarters: true,
+        includeStarterDefinitions: true
+      }
+    });
+
+    expect(result.starters).toHaveLength(1);
+    expect(result.starters[0]).toMatchObject({
+      id: "blank",
+      name: "Blank Flow",
+      defaultWorkflowName: "Blank Workflow",
+      businessTrack: "应用新建编排"
+    });
+    expect(result.starterSourceLanes[0]).toMatchObject({
+      kind: "starter",
+      scope: "builtin",
+      count: 1
+    });
   });
 });

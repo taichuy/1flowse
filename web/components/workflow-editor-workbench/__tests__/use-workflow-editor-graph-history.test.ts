@@ -15,7 +15,7 @@ function buildDefinition(): WorkflowDefinition {
     nodes: [
       {
         id: "trigger_1",
-        type: "trigger",
+        type: "startNode",
         name: "开始",
         config: {
           ui: {
@@ -28,7 +28,7 @@ function buildDefinition(): WorkflowDefinition {
       },
       {
         id: "output_1",
-        type: "output",
+        type: "endNode",
         name: "结束",
         config: {
           ui: {
@@ -90,7 +90,7 @@ describe("workflow editor graph history helpers", () => {
         ...(initialDefinition.nodes ?? []),
         {
           id: "llm_1",
-          type: "llm_agent",
+          type: "llmAgentNode",
           name: "总结",
           config: {
             ui: {

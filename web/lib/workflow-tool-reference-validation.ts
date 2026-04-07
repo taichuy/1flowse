@@ -30,12 +30,12 @@ export function buildWorkflowToolReferenceValidationIssues(
       return;
     }
 
-    if (node?.type === "tool") {
+    if (node?.type === "toolNode") {
       issues.push(...buildToolNodeIssues({ nodeId, nodeName, nodeIndex, config, toolIndex }));
       return;
     }
 
-    if (node?.type === "llm_agent") {
+    if (node?.type === "llmAgentNode") {
       issues.push(...buildAgentToolPolicyIssues({ nodeId, nodeName, nodeIndex, config, toolIndex }));
     }
   });

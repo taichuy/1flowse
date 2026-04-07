@@ -112,7 +112,7 @@ def _normalize_llm_provider_config_references(
         return
 
     for index, node in enumerate(nodes):
-        if not isinstance(node, dict) or node.get("type") != "llm_agent":
+        if not isinstance(node, dict) or node.get("type") != "llmAgentNode":
             continue
         config = node.get("config")
         if not isinstance(config, dict):

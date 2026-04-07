@@ -82,7 +82,7 @@ def _select_branch_from_expression(
     except SafeExpressionError as exc:
         raise WorkflowExecutionError(str(exc)) from exc
 
-    if node.get("type") == "condition":
+    if node.get("type") == "conditionNode":
         selected = "true" if bool(expression_value) else "false"
         return selected, expression_value, False
 

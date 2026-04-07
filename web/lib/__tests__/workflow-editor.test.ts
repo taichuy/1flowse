@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowNodeCatalogItem } from "../get-workflow-library";
 import { sortWorkflowNodeCatalogForAuthoring } from "../workflow-node-catalog";
 import {
+  buildWorkflowCanvasNodeData,
   buildWorkflowInsertedNodePosition,
   insertNodeIntoCanvasGraph,
   removeNodeFromCanvasGraph,
@@ -11,8 +12,8 @@ import {
 
 const nodeCatalog: WorkflowNodeCatalogItem[] = [
   {
-    type: "trigger",
-    label: "Trigger",
+    type: "startNode",
+    label: "开始",
     description: "流程入口",
     ecosystem: "7flows",
     source: {
@@ -38,12 +39,12 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
       defaultPosition: { x: 120, y: 120 }
     },
     defaults: {
-      name: "Trigger",
+      name: "startNode",
       config: {}
     }
   },
   {
-    type: "llm_agent",
+    type: "llmAgentNode",
     label: "LLM Agent",
     description: "让 agent 继续推理。",
     ecosystem: "7flows",
@@ -75,7 +76,7 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
     }
   },
   {
-    type: "reference",
+    type: "referenceNode",
     label: "Reference",
     description: "显式引用上游结构化结果。",
     ecosystem: "7flows",
@@ -111,8 +112,8 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
     }
   },
   {
-    type: "output",
-    label: "Output",
+    type: "endNode",
+    label: "结束",
     description: "输出结果。",
     ecosystem: "7flows",
     source: {
@@ -138,7 +139,7 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
       defaultPosition: { x: 640, y: 120 }
     },
     defaults: {
-      name: "Output",
+      name: "endNode",
       config: {}
     }
   }
@@ -146,22 +147,22 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
 
 const baseNodes = [
   {
-    id: "trigger",
+    id: "startNode",
     type: "workflowNode",
     position: { x: 120, y: 120 },
     data: {
-      label: "Trigger",
-      nodeType: "trigger",
+      label: "开始",
+      nodeType: "startNode",
       config: {}
     } satisfies WorkflowCanvasNodeData
   },
   {
-    id: "output",
+    id: "endNode",
     type: "workflowNode",
     position: { x: 400, y: 120 },
     data: {
-      label: "Output",
-      nodeType: "output",
+      label: "结束",
+      nodeType: "endNode",
       config: {}
     } satisfies WorkflowCanvasNodeData
   }
@@ -169,8 +170,8 @@ const baseNodes = [
 
 const baseEdge = {
   id: "edge-trigger-output",
-  source: "trigger",
-  target: "output",
+  source: "startNode",
+  target: "endNode",
   type: "smoothstep",
   animated: false,
   data: {
@@ -179,6 +180,30 @@ const baseEdge = {
 };
 
 describe("workflow-editor quick add helpers", () => {
+  it("localizes built-in start and end node display names", () => {
+    expect(
+      buildWorkflowCanvasNodeData(nodeCatalog, {
+        label: "startNode",
+        nodeType: "startNode",
+        config: {}
+      })
+    ).toMatchObject({
+      label: "开始",
+      typeLabel: "开始"
+    });
+
+    expect(
+      buildWorkflowCanvasNodeData(nodeCatalog, {
+        label: "endNode 2",
+        nodeType: "endNode",
+        config: {}
+      })
+    ).toMatchObject({
+      label: "结束 2",
+      typeLabel: "结束"
+    });
+  });
+
   it("builds a stable next-node insert position", () => {
     expect(buildWorkflowInsertedNodePosition({ x: 120, y: 120 }, 0)).toEqual({
       x: 480,
@@ -199,14 +224,14 @@ describe("workflow-editor quick add helpers", () => {
       nodeCatalog,
       nodes: baseNodes,
       edges: [],
-      type: "llm_agent",
-      sourceNodeId: "trigger"
+      type: "llmAgentNode",
+      sourceNodeId: "startNode"
     });
 
-    expect(result.sourceNode?.id).toBe("trigger");
+    expect(result.sourceNode?.id).toBe("startNode");
     expect(result.nodes).toHaveLength(3);
     expect(result.edges).toHaveLength(1);
-    expect(result.edges[0]?.source).toBe("trigger");
+    expect(result.edges[0]?.source).toBe("startNode");
     expect(result.edges[0]?.target).toBe(result.nextNode.id);
     expect(result.nextNode.position).toEqual({ x: 480, y: 120 });
     expect(result.nextNode.data.typeLabel).toBe("LLM Agent");
@@ -231,27 +256,27 @@ describe("workflow-editor quick add helpers", () => {
           selected: true
         }
       ],
-      type: "llm_agent",
-      sourceNodeId: "trigger"
+      type: "llmAgentNode",
+      sourceNodeId: "startNode"
     });
 
     expect(result.insertionMode).toBe("inline");
-    expect(result.sourceNode?.id).toBe("trigger");
-    expect(result.displacedTargetNode?.id).toBe("output");
+    expect(result.sourceNode?.id).toBe("startNode");
+    expect(result.displacedTargetNode?.id).toBe("endNode");
     expect(result.nodes).toHaveLength(3);
     expect(result.edges).toHaveLength(2);
-    expect(result.edges[0]?.source).toBe("trigger");
+    expect(result.edges[0]?.source).toBe("startNode");
     expect(result.edges[0]?.target).toBe(result.nextNode.id);
     expect(result.edges[1]?.source).toBe(result.nextNode.id);
-    expect(result.edges[1]?.target).toBe("output");
+    expect(result.edges[1]?.target).toBe("endNode");
     expect(result.nextNode.position).toEqual({ x: 400, y: 120 });
-    expect(result.nodes.find((node) => node.id === "output")?.position).toEqual({
+    expect(result.nodes.find((node) => node.id === "endNode")?.position).toEqual({
       x: 760,
       y: 120
     });
     expect(result.nextNode.selected).toBe(true);
-    expect(result.nodes.find((node) => node.id === "trigger")?.selected).toBe(false);
-    expect(result.nodes.find((node) => node.id === "output")?.selected).not.toBe(true);
+    expect(result.nodes.find((node) => node.id === "startNode")?.selected).toBe(false);
+    expect(result.nodes.find((node) => node.id === "endNode")?.selected).not.toBe(true);
     expect(result.edges.some((edge) => edge.selected)).toBe(false);
   });
 
@@ -266,7 +291,7 @@ describe("workflow-editor quick add helpers", () => {
           position: { x: 400, y: 300 },
           data: {
             label: "Output Secondary",
-            nodeType: "output",
+            nodeType: "endNode",
             config: {}
           } satisfies WorkflowCanvasNodeData
         }
@@ -275,7 +300,7 @@ describe("workflow-editor quick add helpers", () => {
         baseEdge,
         {
           id: "edge-trigger-output-secondary",
-          source: "trigger",
+          source: "startNode",
           target: "output-secondary",
           type: "smoothstep",
           animated: false,
@@ -284,13 +309,13 @@ describe("workflow-editor quick add helpers", () => {
           }
         }
       ],
-      type: "llm_agent",
-      sourceNodeId: "trigger"
+      type: "llmAgentNode",
+      sourceNodeId: "startNode"
     });
 
     expect(result.insertionMode).toBe("branch");
     expect(result.edges).toHaveLength(3);
-    expect(result.edges[2]?.source).toBe("trigger");
+    expect(result.edges[2]?.source).toBe("startNode");
     expect(result.edges[2]?.target).toBe(result.nextNode.id);
   });
 
@@ -305,7 +330,7 @@ describe("workflow-editor quick add helpers", () => {
           position: { x: 400, y: 300 },
           data: {
             label: "Output Secondary",
-            nodeType: "output",
+            nodeType: "endNode",
             config: {}
           } satisfies WorkflowCanvasNodeData
         }
@@ -314,7 +339,7 @@ describe("workflow-editor quick add helpers", () => {
         baseEdge,
         {
           id: "edge-trigger-output-secondary",
-          source: "trigger",
+          source: "startNode",
           target: "output-secondary",
           type: "smoothstep",
           animated: false,
@@ -323,16 +348,16 @@ describe("workflow-editor quick add helpers", () => {
           }
         }
       ],
-      type: "llm_agent",
-      sourceNodeId: "trigger",
+      type: "llmAgentNode",
+      sourceNodeId: "startNode",
       sourceEdgeId: "edge-trigger-output-secondary"
     });
 
     expect(result.insertionMode).toBe("inline");
-    expect(result.sourceNode?.id).toBe("trigger");
+    expect(result.sourceNode?.id).toBe("startNode");
     expect(result.displacedTargetNode?.id).toBe("output-secondary");
     expect(result.nextNode.position).toEqual({ x: 400, y: 300 });
-    expect(result.nodes.find((node) => node.id === "output")?.position).toEqual({
+    expect(result.nodes.find((node) => node.id === "endNode")?.position).toEqual({
       x: 400,
       y: 120
     });
@@ -352,18 +377,18 @@ describe("workflow-editor quick add helpers", () => {
       nodeCatalog,
       nodes: baseNodes,
       edges: [],
-      type: "reference",
-      sourceNodeId: "trigger"
+      type: "referenceNode",
+      sourceNodeId: "startNode"
     });
 
-    expect(result.sourceNode?.id).toBe("trigger");
+    expect(result.sourceNode?.id).toBe("startNode");
     expect(result.nextNode.data.typeLabel).toBe("Reference");
     expect(result.nextNode.data.config).toMatchObject({
       contextAccess: {
-        readableNodeIds: ["trigger"]
+        readableNodeIds: ["startNode"]
       },
       reference: {
-        sourceNodeId: "trigger",
+        sourceNodeId: "startNode",
         artifactType: "json"
       }
     });
@@ -377,7 +402,7 @@ describe("workflow-editor quick add helpers", () => {
         nodeCatalog[0],
         nodeCatalog[1]
       ]).map((item) => item.type)
-    ).toEqual(["llm_agent", "reference", "trigger", "output"]);
+    ).toEqual(["llmAgentNode", "referenceNode", "startNode", "endNode"]);
 
     expect(
       sortWorkflowNodeCatalogForAuthoring([
@@ -385,7 +410,7 @@ describe("workflow-editor quick add helpers", () => {
         nodeCatalog[2],
         {
           ...nodeCatalog[2],
-          type: "tool",
+          type: "toolNode",
           label: "Tool",
           palette: {
             ...nodeCatalog[2].palette,
@@ -394,7 +419,7 @@ describe("workflow-editor quick add helpers", () => {
         },
         {
           ...nodeCatalog[2],
-          type: "condition",
+          type: "conditionNode",
           label: "Condition",
           palette: {
             ...nodeCatalog[2].palette,
@@ -403,7 +428,7 @@ describe("workflow-editor quick add helpers", () => {
         },
         nodeCatalog[1]
       ]).map((item) => item.type)
-    ).toEqual(["llm_agent", "reference", "tool", "condition", "output"]);
+    ).toEqual(["llmAgentNode", "referenceNode", "toolNode", "conditionNode", "endNode"]);
   });
 
   it("reconnects and closes the gap when removing an inline node", () => {
@@ -417,7 +442,7 @@ describe("workflow-editor quick add helpers", () => {
           position: { x: 400, y: 120 },
           data: {
             label: "LLM Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {}
           } satisfies WorkflowCanvasNodeData
         },
@@ -436,22 +461,22 @@ describe("workflow-editor quick add helpers", () => {
           ...baseEdge,
           id: "edge-agent-output",
           source: "agent",
-          target: "output"
+          target: "endNode"
         }
       ]
     });
 
     expect(result.deletionMode).toBe("inline");
-    expect(result.upstreamNode?.id).toBe("trigger");
-    expect(result.downstreamNode?.id).toBe("output");
+    expect(result.upstreamNode?.id).toBe("startNode");
+    expect(result.downstreamNode?.id).toBe("endNode");
     expect(result.nodes).toHaveLength(2);
-    expect(result.nodes.find((node) => node.id === "output")?.position).toEqual({
+    expect(result.nodes.find((node) => node.id === "endNode")?.position).toEqual({
       x: 320,
       y: 120
     });
     expect(result.edges).toHaveLength(1);
-    expect(result.edges[0]?.source).toBe("trigger");
-    expect(result.edges[0]?.target).toBe("output");
+    expect(result.edges[0]?.source).toBe("startNode");
+    expect(result.edges[0]?.target).toBe("endNode");
   });
 
   it("keeps delete detached when the removed node sits on conditional edges", () => {
@@ -465,7 +490,7 @@ describe("workflow-editor quick add helpers", () => {
           position: { x: 400, y: 120 },
           data: {
             label: "LLM Agent",
-            nodeType: "llm_agent",
+            nodeType: "llmAgentNode",
             config: {}
           } satisfies WorkflowCanvasNodeData
         },
@@ -484,7 +509,7 @@ describe("workflow-editor quick add helpers", () => {
           ...baseEdge,
           id: "edge-agent-output",
           source: "agent",
-          target: "output",
+          target: "endNode",
           data: {
             channel: "control",
             condition: "succeeded"
@@ -495,7 +520,7 @@ describe("workflow-editor quick add helpers", () => {
 
     expect(result.deletionMode).toBe("detached");
     expect(result.edges).toHaveLength(0);
-    expect(result.nodes.find((node) => node.id === "output")?.position).toEqual({
+    expect(result.nodes.find((node) => node.id === "endNode")?.position).toEqual({
       x: 680,
       y: 120
     });

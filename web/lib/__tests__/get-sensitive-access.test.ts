@@ -82,7 +82,7 @@ describe("getSensitiveAccessInboxSnapshot", () => {
               execution_focus_node_id: "tool_wait",
               execution_focus_node_run_id: "node-run-1",
               execution_focus_node_name: "Tool Wait",
-              execution_focus_node_type: "tool",
+              execution_focus_node_type: "toolNode",
               execution_focus_explanation: {
                 primary_signal: "等待原因：Waiting for callback approval",
                 follow_up: "下一步：优先处理这条 sensitive access 审批票据，再观察 waiting 节点是否恢复。"
@@ -129,7 +129,7 @@ describe("getSensitiveAccessInboxSnapshot", () => {
                     execution_focus_node_id: "tool_wait",
                     execution_focus_node_run_id: "node-run-1",
                     execution_focus_node_name: "Tool Wait",
-                    execution_focus_node_type: "tool",
+                    execution_focus_node_type: "toolNode",
                     execution_focus_explanation: {
                       primary_signal: "等待原因：Waiting for callback approval",
                       follow_up:
@@ -430,7 +430,7 @@ describe("getSensitiveAccessInboxSnapshot", () => {
                     execution_focus_node_id: "stale-node",
                     execution_focus_node_run_id: "node-run-stale",
                     execution_focus_node_name: "Stale Node",
-                    execution_focus_node_type: "tool",
+                    execution_focus_node_type: "toolNode",
                     execution_focus_explanation: {
                       primary_signal: "stale execution focus",
                       follow_up: "stale follow-up"
@@ -447,7 +447,7 @@ describe("getSensitiveAccessInboxSnapshot", () => {
                     execution_focus_node_id: "current-node",
                     execution_focus_node_run_id: "node-run-current",
                     execution_focus_node_name: "Current Node",
-                    execution_focus_node_type: "tool",
+                    execution_focus_node_type: "toolNode",
                     execution_focus_explanation: {
                       primary_signal: "current execution focus",
                       follow_up: "current follow-up"

@@ -132,7 +132,7 @@ function buildExecutionView(): RunExecutionView {
         node_run_id: "node-run-1",
         node_id: "node-1",
         node_name: "Node 1",
-        node_type: "tool",
+        node_type: "toolNode",
         phase: "execute",
         status: "waiting",
         started_at: "2026-03-21T00:00:00Z",

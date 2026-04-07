@@ -101,7 +101,7 @@ export function LlmAgentToolPolicyForm({
     sandboxReadiness && (selectedExecutionClass === "sandbox" || selectedExecutionClass === "microvm")
       ? buildSandboxExecutionPolicyPreflightInsight(sandboxReadiness, {
           executionClass: selectedExecutionClass,
-          nodeType: "tool",
+          nodeType: "toolNode",
           profile: typeof execution.profile === "string" ? execution.profile : null,
           dependencyMode:
             typeof execution.dependencyMode === "string" ? execution.dependencyMode : null,

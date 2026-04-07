@@ -49,7 +49,7 @@ describe("SandboxCodeNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Sandbox",
-            nodeType: "sandbox_code",
+            nodeType: "sandboxCodeNode",
             config: {
               language: "python",
               code: "result = {'ok': True}",
@@ -94,7 +94,7 @@ describe("SandboxCodeNodeConfigForm", () => {
           position: { x: 0, y: 0 },
           data: {
             label: "Sandbox",
-            nodeType: "sandbox_code",
+            nodeType: "sandboxCodeNode",
             config: {
               language: "python",
               code: ""

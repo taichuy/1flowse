@@ -16,8 +16,8 @@ const governanceQueryScope: WorkspaceStarterGovernanceQueryScope = {
 
 const nodeCatalog: WorkflowNodeCatalogItem[] = [
   {
-    type: "trigger",
-    label: "Trigger",
+    type: "startNode",
+    label: "startNode",
     description: "Trigger node",
     ecosystem: "native",
     source: {
@@ -38,10 +38,10 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
     bindingRequired: false,
     bindingSourceLanes: [],
     palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-    defaults: { name: "Trigger", config: {} }
+    defaults: { name: "startNode", config: {} }
   },
   {
-    type: "tool",
+    type: "toolNode",
     label: "Tool",
     description: "Tool node",
     ecosystem: "native",
@@ -113,8 +113,8 @@ const selectedStarter: WorkflowStarterTemplate = {
   tags: [],
   definition: {
     nodes: [
-      { id: "trigger", type: "trigger", name: "", config: {} },
-      { id: "tool", type: "tool", name: "", config: {} }
+      { id: "startNode", type: "startNode", name: "", config: {} },
+      { id: "toolNode", type: "toolNode", name: "", config: {} }
     ],
     edges: [],
     variables: [],

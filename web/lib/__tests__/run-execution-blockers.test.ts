@@ -11,7 +11,7 @@ function createExecutionNode(
     node_run_id: "node-run-1",
     node_id: "tool_wait",
     node_name: "Tool Wait",
-    node_type: "tool",
+    node_type: "toolNode",
     status: "running",
     phase: "tool_execute",
     execution_class: "inline",

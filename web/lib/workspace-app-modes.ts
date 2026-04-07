@@ -74,15 +74,15 @@ export function isWorkspaceAppModeId(value: string): value is WorkspaceAppModeId
 export function inferWorkspaceAppMode(definition: WorkspaceDefinitionLike): WorkspaceAppModeMeta["id"] {
   const nodeTypes = new Set(collectNodeTypes(definition));
 
-  if (nodeTypes.has("sandbox_code")) {
+  if (nodeTypes.has("sandboxCodeNode")) {
     return "sandbox";
   }
 
-  if (nodeTypes.has("tool")) {
+  if (nodeTypes.has("toolNode")) {
     return "tool_agent";
   }
 
-  if (nodeTypes.has("llm_agent")) {
+  if (nodeTypes.has("llmAgentNode")) {
     return "agent";
   }
 

@@ -214,7 +214,7 @@ function buildExecutionView(): RunExecutionView {
       execution_focus_node_id: "sandbox_code_1",
       execution_focus_node_run_id: "node-run-1",
       execution_focus_node_name: "Sandbox Code",
-      execution_focus_node_type: "sandbox_code",
+      execution_focus_node_type: "sandboxCodeNode",
       execution_focus_explanation: {
         primary_signal: "当前 execution focus 停在 sandbox_code。",
         follow_up: "确认 callback 是否已经重新入队。"

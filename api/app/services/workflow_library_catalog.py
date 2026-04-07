@@ -77,19 +77,19 @@ def build_node_catalog_items(
     tool_binding_lanes = clone_source_lanes(tool_source_lanes or [])
     return [
         WorkflowNodeCatalogItem(
-            type="trigger",
-            label="Trigger",
-            description="工作流入口节点，负责接收用户请求、表单输入或 API 调用。",
+            type="startNode",
+            label="开始",
+            description="工作流开始节点，负责接收用户请求、表单输入或 API 调用。",
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
             capability_group="entry",
             business_track="应用新建编排",
             tags=["入口", "native", "workflow"],
             palette=_build_palette(enabled=False, order=0, x=80, y=200),
-            defaults=_build_defaults(name="Trigger"),
+            defaults=_build_defaults(name="startNode"),
         ),
         WorkflowNodeCatalogItem(
-            type="llm_agent",
+            type="llmAgentNode",
             label="LLM Agent",
             description="先绑定团队模型供应商，再补 prompt、工具与上下文授权的核心 Agent 节点。",
             ecosystem="native",
@@ -99,7 +99,7 @@ def build_node_catalog_items(
             tags=["agent", "llm", "native"],
             palette=_build_palette(enabled=True, order=10, x=340, y=120),
             defaults=_build_defaults(
-                name="LLM Agent",
+                name="llmAgentNode",
                 config={
                     "assistant": {
                         "enabled": False,
@@ -112,7 +112,7 @@ def build_node_catalog_items(
             ),
         ),
         WorkflowNodeCatalogItem(
-            type="reference",
+            type="referenceNode",
             label="Reference",
             description=(
                 "把上游节点的结构化结果显式授权给后续步骤，"
@@ -125,7 +125,7 @@ def build_node_catalog_items(
             tags=["reference", "authorized-context", "native"],
             palette=_build_palette(enabled=True, order=15, x=340, y=200),
             defaults=_build_defaults(
-                name="Reference",
+                name="referenceNode",
                 config={
                     "reference": {
                         "artifactType": "json",
@@ -139,7 +139,7 @@ def build_node_catalog_items(
             ),
         ),
         WorkflowNodeCatalogItem(
-            type="tool",
+            type="toolNode",
             label="Tool",
             description="绑定 native 或 compat tool catalog 的工具能力入口。",
             ecosystem="native",
@@ -148,12 +148,12 @@ def build_node_catalog_items(
             business_track="Dify 插件兼容",
             tags=["tool", "catalog", "compat-ready"],
             palette=_build_palette(enabled=True, order=20, x=340, y=280),
-            defaults=_build_defaults(name="Tool"),
+            defaults=_build_defaults(name="toolNode"),
             binding_required=True,
             binding_source_lanes=tool_binding_lanes,
         ),
         WorkflowNodeCatalogItem(
-            type="sandbox_code",
+            type="sandboxCodeNode",
             label="Sandbox Code",
             description=(
                 "高风险代码执行节点，当前已接入 runtime / persistence 主链，"
@@ -166,7 +166,7 @@ def build_node_catalog_items(
             tags=["sandbox", "code", "runtime-ready"],
             palette=_build_palette(enabled=True, order=25, x=500, y=420),
             defaults=_build_defaults(
-                name="Sandbox Code",
+                name="sandboxCodeNode",
                 config={
                     "language": "python",
                     "code": "result = {'ok': True}",
@@ -180,7 +180,7 @@ def build_node_catalog_items(
             ),
         ),
         WorkflowNodeCatalogItem(
-            type="mcp_query",
+            type="mcpQueryNode",
             label="MCP Query",
             description="按授权读取上游上下文，为 Agent 或工具提供受控查询入口。",
             ecosystem="native",
@@ -190,12 +190,12 @@ def build_node_catalog_items(
             tags=["mcp", "context", "authorized"],
             palette=_build_palette(enabled=True, order=30, x=620, y=120),
             defaults=_build_defaults(
-                name="MCP Query",
+                name="mcpQueryNode",
                 config={"query": {"type": "authorized_context"}},
             ),
         ),
         WorkflowNodeCatalogItem(
-            type="condition",
+            type="conditionNode",
             label="Condition",
             description="基于 selector 或安全表达式进行条件分支。",
             ecosystem="native",
@@ -204,10 +204,10 @@ def build_node_catalog_items(
             business_track="编排节点能力",
             tags=["branch", "logic", "safe-expression"],
             palette=_build_palette(enabled=True, order=40, x=620, y=280),
-            defaults=_build_defaults(name="Condition"),
+            defaults=_build_defaults(name="conditionNode"),
         ),
         WorkflowNodeCatalogItem(
-            type="router",
+            type="routerNode",
             label="Router",
             description="根据意图或规则把请求路由到不同分支和节点链路。",
             ecosystem="native",
@@ -216,10 +216,10 @@ def build_node_catalog_items(
             business_track="编排节点能力",
             tags=["router", "branch", "decision"],
             palette=_build_palette(enabled=True, order=50, x=620, y=420),
-            defaults=_build_defaults(name="Router"),
+            defaults=_build_defaults(name="routerNode"),
         ),
         WorkflowNodeCatalogItem(
-            type="loop",
+            type="loopNode",
             label="Loop",
             description="显式表达循环语义的节点类型，避免通过隐式回边或调度技巧偷渡循环。",
             ecosystem="native",
@@ -228,7 +228,7 @@ def build_node_catalog_items(
             business_track="编排节点能力",
             tags=["loop", "control-flow", "planned"],
             palette=_build_palette(enabled=False, order=55, x=760, y=420),
-            defaults=_build_defaults(name="Loop"),
+            defaults=_build_defaults(name="loopNode"),
             support_status="planned",
             support_summary=(
                 "显式 loop 节点语义已收敛，但 MVP executor 仍未支持；当前只在 catalog 中保留"
@@ -236,8 +236,8 @@ def build_node_catalog_items(
             ),
         ),
         WorkflowNodeCatalogItem(
-            type="output",
-            label="Output",
+            type="endNode",
+            label="结束",
             description="聚合并整形最终结果，为后续发布映射和响应输出做准备。",
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
@@ -245,7 +245,7 @@ def build_node_catalog_items(
             business_track="API 调用开放",
             tags=["output", "response", "publish-ready"],
             palette=_build_palette(enabled=True, order=60, x=900, y=200),
-            defaults=_build_defaults(name="Output", config={"format": "json"}),
+            defaults=_build_defaults(name="endNode", config={"format": "json"}),
         ),
     ]
 
@@ -316,17 +316,17 @@ def build_builtin_starters(
             catalog_by_type,
             id="blank",
             name="Blank Flow",
-            description="保留最小 trigger -> output 骨架，适合从零开始搭应用入口。",
+            description="保留最小 startNode -> endNode 骨架，适合从零开始搭应用入口。",
             business_track="应用新建编排",
             default_workflow_name="Blank Workflow",
             workflow_focus="先生成一个真实可保存、可运行、可继续扩展的最小 workflow 草稿。",
             recommended_next_step="进入画布后优先补应用命名、首个业务节点和基础输出格式。",
             tags=["最小骨架", "可立即运行", "适合打草稿"],
             nodes=[
-                {"id": "trigger", "type": "trigger", "position": {"x": 140, "y": 220}},
-                {"id": "output", "type": "output", "position": {"x": 520, "y": 220}},
+                {"id": "startNode", "type": "startNode", "position": {"x": 140, "y": 220}},
+                {"id": "endNode", "type": "endNode", "position": {"x": 520, "y": 220}},
             ],
-            edges=[create_edge("edge_trigger_output", "trigger", "output")],
+            edges=[create_edge("edge_startNode_endNode", "startNode", "endNode")],
         ),
         _build_builtin_starter_item(
             catalog_by_type,
@@ -336,16 +336,16 @@ def build_builtin_starters(
             business_track="编排节点能力",
             default_workflow_name="Agent Workflow",
             workflow_focus="把高频 Agent 节点先放上画布，再按具体场景继续补模型、工具与 schema。",
-            recommended_next_step="优先配置 Agent prompt、允许的工具目录和最终 output schema。",
+            recommended_next_step="优先配置 Agent prompt、允许的工具目录和最终 endNode schema。",
             tags=["agent", "提示词草稿", "常用起点"],
             nodes=[
-                {"id": "trigger", "type": "trigger", "position": {"x": 100, "y": 220}},
-                {"id": "agent", "type": "llm_agent", "position": {"x": 420, "y": 220}},
-                {"id": "output", "type": "output", "position": {"x": 760, "y": 220}},
+                {"id": "startNode", "type": "startNode", "position": {"x": 100, "y": 220}},
+                {"id": "llmAgentNode", "type": "llmAgentNode", "position": {"x": 420, "y": 220}},
+                {"id": "endNode", "type": "endNode", "position": {"x": 760, "y": 220}},
             ],
             edges=[
-                create_edge("edge_trigger_agent", "trigger", "agent"),
-                create_edge("edge_agent_output", "agent", "output"),
+                create_edge("edge_startNode_llmAgentNode", "startNode", "llmAgentNode"),
+                create_edge("edge_llmAgentNode_endNode", "llmAgentNode", "endNode"),
             ],
         ),
         _build_builtin_starter_item(
@@ -368,17 +368,17 @@ def build_builtin_starters(
             ),
             tags=["sandbox_code", "代码执行", "runtime-ready"],
             nodes=[
-                {"id": "trigger", "type": "trigger", "position": {"x": 80, "y": 220}},
+                {"id": "startNode", "type": "startNode", "position": {"x": 80, "y": 220}},
                 {
-                    "id": "sandbox",
-                    "type": "sandbox_code",
+                    "id": "sandboxCodeNode",
+                    "type": "sandboxCodeNode",
                     "position": {"x": 420, "y": 220},
                 },
-                {"id": "output", "type": "output", "position": {"x": 780, "y": 220}},
+                {"id": "endNode", "type": "endNode", "position": {"x": 780, "y": 220}},
             ],
             edges=[
-                create_edge("edge_trigger_sandbox", "trigger", "sandbox"),
-                create_edge("edge_sandbox_output", "sandbox", "output"),
+                create_edge("edge_startNode_sandboxCodeNode", "startNode", "sandboxCodeNode"),
+                create_edge("edge_sandboxCodeNode_endNode", "sandboxCodeNode", "endNode"),
             ],
         ),
         _build_builtin_starter_item(
@@ -392,36 +392,36 @@ def build_builtin_starters(
             recommended_next_step="先选 tool binding，再补 Agent 的 toolPolicy、超时与输出格式。",
             tags=["tool", "agent", "compat-ready"],
             nodes=[
-                {"id": "trigger", "type": "trigger", "position": {"x": 80, "y": 220}},
-                {"id": "agent", "type": "llm_agent", "position": {"x": 360, "y": 220}},
+                {"id": "startNode", "type": "startNode", "position": {"x": 80, "y": 220}},
+                {"id": "llmAgentNode", "type": "llmAgentNode", "position": {"x": 360, "y": 220}},
                 {
-                    "id": "tool",
-                    "type": "tool",
+                    "id": "toolNode",
+                    "type": "toolNode",
                     "position": {"x": 360, "y": 420},
                     "config": {"binding": {"toolId": None}},
                 },
-                {"id": "output", "type": "output", "position": {"x": 720, "y": 220}},
+                {"id": "endNode", "type": "endNode", "position": {"x": 720, "y": 220}},
             ],
             edges=[
-                create_edge("edge_trigger_agent", "trigger", "agent"),
-                create_edge("edge_agent_output", "agent", "output"),
+                create_edge("edge_startNode_llmAgentNode", "startNode", "llmAgentNode"),
+                create_edge("edge_llmAgentNode_endNode", "llmAgentNode", "endNode"),
             ],
         ),
         _build_builtin_starter_item(
             catalog_by_type,
             id="response",
             name="Response Draft",
-            description="围绕 output 响应整形预留一个最小 API-ready 草稿，方便后续接发布配置。",
+            description="围绕 endNode 响应整形预留一个最小 API-ready 草稿，方便后续接发布配置。",
             business_track="API 调用开放",
             default_workflow_name="Response Workflow",
             workflow_focus="先把响应结构、输出格式和发布前的最终结果整形组织在 workflow 内部。",
-            recommended_next_step="继续在编辑器里补 output schema、发布配置和协议映射策略。",
+            recommended_next_step="继续在编辑器里补 endNode schema、发布配置和协议映射策略。",
             tags=["响应整形", "发布准备", "output 优先"],
             nodes=[
-                {"id": "trigger", "type": "trigger", "position": {"x": 120, "y": 220}},
-                {"id": "output", "type": "output", "position": {"x": 520, "y": 220}},
+                {"id": "startNode", "type": "startNode", "position": {"x": 120, "y": 220}},
+                {"id": "endNode", "type": "endNode", "position": {"x": 520, "y": 220}},
             ],
-            edges=[create_edge("edge_trigger_output", "trigger", "output")],
+            edges=[create_edge("edge_startNode_endNode", "startNode", "endNode")],
         ),
     ]
 

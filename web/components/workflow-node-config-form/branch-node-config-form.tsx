@@ -58,7 +58,7 @@ export function BranchNodeConfigForm({
       delete nextConfig.selected;
       nextConfig.expression =
         expression ||
-        (node.data.nodeType === "condition"
+        (node.data.nodeType === "conditionNode"
           ? "trigger_input.approved"
           : "trigger_input.intent");
       if (defaultBranch && defaultBranch !== "default") {
@@ -129,7 +129,7 @@ export function BranchNodeConfigForm({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Structured config</p>
-          <h3>{node.data.nodeType === "condition" ? "Condition branches" : "Router branches"}</h3>
+          <h3>{node.data.nodeType === "conditionNode" ? "Condition branches" : "Router branches"}</h3>
         </div>
       </div>
 
@@ -295,7 +295,7 @@ export function BranchNodeConfigForm({
           </label>
 
           <small className="section-copy">
-            {node.data.nodeType === "condition"
+            {node.data.nodeType === "conditionNode"
               ? "condition 节点的 expression 模式建议把出边 condition 约束在 true / false。"
               : "router 节点的 expression 结果会映射到同名出边 condition。"}
           </small>

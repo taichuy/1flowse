@@ -10,26 +10,26 @@ describe("inferWorkflowBusinessTrack", () => {
     expect(
       inferWorkflowBusinessTrack({
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
           {
             id: "sandbox",
-            type: "sandbox_code",
+            type: "sandboxCodeNode",
             name: "Sandbox Code",
             config: { language: "python", code: "result = {'ok': True}" }
           },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
         edges: [
           {
             id: "edge_trigger_sandbox",
-            sourceNodeId: "trigger",
+            sourceNodeId: "startNode",
             targetNodeId: "sandbox",
             channel: "control"
           },
           {
             id: "edge_sandbox_output",
             sourceNodeId: "sandbox",
-            targetNodeId: "output",
+            targetNodeId: "endNode",
             channel: "control"
           }
         ],
@@ -42,7 +42,7 @@ describe("inferWorkflowBusinessTrack", () => {
   it("can classify lightweight workflow summaries without full definitions", () => {
     expect(
       inferWorkflowBusinessTrack({
-        nodeTypes: ["trigger", "output"],
+        nodeTypes: ["startNode", "endNode"],
         publishCount: 1
       })
     ).toBe("API 调用开放");
@@ -63,7 +63,7 @@ describe("inferWorkflowBusinessTrack", () => {
           recommendedNextStep: "Review governance before creating.",
           tags: ["workspace"],
           definition: {
-            nodes: [{ id: "trigger", type: "trigger", name: "Trigger", config: {} }],
+            nodes: [{ id: "startNode", type: "startNode", name: "startNode", config: {} }],
             edges: [],
             variables: [],
             publish: []
@@ -109,8 +109,8 @@ describe("inferWorkflowBusinessTrack", () => {
       ],
       [
         {
-          type: "trigger",
-          label: "Trigger",
+          type: "startNode",
+          label: "startNode",
           description: "Trigger node",
           ecosystem: "native",
           source: {
@@ -131,7 +131,7 @@ describe("inferWorkflowBusinessTrack", () => {
           bindingRequired: false,
           bindingSourceLanes: [],
           palette: { enabled: true, order: 0, defaultPosition: { x: 0, y: 0 } },
-          defaults: { name: "Trigger", config: {} }
+          defaults: { name: "startNode", config: {} }
         }
       ],
       []

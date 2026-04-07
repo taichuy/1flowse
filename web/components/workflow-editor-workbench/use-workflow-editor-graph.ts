@@ -373,6 +373,7 @@ export function useWorkflowEditorGraph({
     focusNode: nodeActions.focusNode,
     handleAddNode: nodeActions.handleAddNode,
     handleNodeNameChange: nodeActions.handleNodeNameChange,
+    handleNodeDescriptionChange: nodeActions.handleNodeDescriptionChange,
     handleSelectedNodeConfigChange: nodeActions.handleSelectedNodeConfigChange,
     applyNodeConfigJson: nodeActions.applyNodeConfigJson,
     updateNodeInputSchema: nodeActions.updateNodeInputSchema,

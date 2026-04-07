@@ -6,6 +6,7 @@ import {
   type WorkspaceStarterGovernanceQueryScope
 } from "@/lib/workspace-starter-governance-query";
 
+import { ensureWorkflowCreateFallbackStarters } from "./fallback-starters";
 import type {
   WorkflowCreateWizardBootstrapRequest,
   WorkflowCreateWizardProps
@@ -54,15 +55,19 @@ export async function loadWorkflowCreateWizardBootstrap(
       ? getWorkflowPublishedEndpointLegacyAuthGovernanceSnapshot()
       : Promise.resolve(null)
   ]);
+  const resolvedWorkflowLibrary = ensureWorkflowCreateFallbackStarters({
+    governanceQueryScope: request.governanceQueryScope,
+    workflowLibrary
+  });
 
   return {
-    catalogToolCount: workflowLibrary.tools.length,
+    catalogToolCount: resolvedWorkflowLibrary.tools.length,
     governanceQueryScope: request.governanceQueryScope,
     legacyAuthGovernanceSnapshot,
     workflows,
-    starters: workflowLibrary.starters,
-    starterSourceLanes: workflowLibrary.starterSourceLanes,
-    nodeCatalog: workflowLibrary.nodes,
-    tools: workflowLibrary.tools
+    starters: resolvedWorkflowLibrary.starters,
+    starterSourceLanes: resolvedWorkflowLibrary.starterSourceLanes,
+    nodeCatalog: resolvedWorkflowLibrary.nodes,
+    tools: resolvedWorkflowLibrary.tools
   };
 }

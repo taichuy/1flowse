@@ -185,7 +185,7 @@ class RuntimeService(
             )
 
         blueprint = self._compiled_blueprints.load_blueprint(blueprint_record)
-        if any(node.type == "loop" for node in blueprint.ordered_nodes):
+        if any(node.type == "loopNode" for node in blueprint.ordered_nodes):
             raise WorkflowExecutionError("Loop nodes are not supported by the MVP executor yet.")
 
         run = Run(

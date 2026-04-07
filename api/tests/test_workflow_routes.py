@@ -89,19 +89,19 @@ class _FakeWorkflowLibraryService:
 def _valid_definition(answer: str = "done", runtime_policy: dict | None = None) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {"mock_output": {"answer": answer}},
                 "runtimePolicy": runtime_policy,
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -109,13 +109,13 @@ def _valid_definition(answer: str = "done", runtime_policy: dict | None = None) 
 def _planned_loop_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-            {"id": "loop", "type": "loop", "name": "Loop", "config": {}},
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+            {"id": "loopNode", "type": "loopNode", "name": "loopNode", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "loop"},
-            {"id": "e2", "sourceNodeId": "loop", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "loopNode"},
+            {"id": "e2", "sourceNodeId": "loopNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -136,19 +136,19 @@ def _bound_tool_definition(
 
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
-                "name": "Tool",
+                "id": "toolNode",
+                "type": "toolNode",
+                "name": "toolNode",
                 "config": {"tool": binding},
                 "runtimePolicy": runtime_policy,
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
     }
 
@@ -156,30 +156,30 @@ def _bound_tool_definition(
 def _condition_definition(*, runtime_policy: dict | None = None) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "branch",
-                "type": "condition",
+                "type": "conditionNode",
                 "name": "Branch",
                 "config": {"selected": "true"},
                 "runtimePolicy": runtime_policy,
             },
             {
                 "id": "true_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "True Path",
                 "config": {"mock_output": {"answer": "yes"}},
             },
             {
                 "id": "false_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "False Path",
                 "config": {"mock_output": {"answer": "no"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
             {
                 "id": "e2",
                 "sourceNodeId": "branch",
@@ -192,8 +192,8 @@ def _condition_definition(*, runtime_policy: dict | None = None) -> dict:
                 "targetNodeId": "false_path",
                 "condition": "false",
             },
-            {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "output"},
-            {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "output"},
+            {"id": "e4", "sourceNodeId": "true_path", "targetNodeId": "endNode"},
+            {"id": "e5", "sourceNodeId": "false_path", "targetNodeId": "endNode"},
         ],
     }
 
@@ -205,10 +205,10 @@ def _skill_bound_agent_definition(
 ) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "prompt": "Use the bound skill",
@@ -216,11 +216,11 @@ def _skill_bound_agent_definition(
                     **({"skillBinding": skill_binding} if skill_binding is not None else {}),
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
 
@@ -361,10 +361,10 @@ def _sandbox_code_definition(
 ) -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "sandbox",
-                "type": "sandbox_code",
+                "type": "sandboxCodeNode",
                 "name": "Sandbox",
                 "config": {
                     "language": "python",
@@ -373,11 +373,11 @@ def _sandbox_code_definition(
                 },
                 "runtimePolicy": runtime_policy,
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "sandbox"},
-            {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "sandbox"},
+            {"id": "e2", "sourceNodeId": "sandbox", "targetNodeId": "endNode"},
         ],
     }
 
@@ -385,16 +385,16 @@ def _sandbox_code_definition(
 def _valid_mcp_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "planner",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Planner",
                 "config": {"mock_output": {"plan": "collect facts"}},
             },
             {
                 "id": "reader",
-                "type": "mcp_query",
+                "type": "mcpQueryNode",
                 "name": "Reader",
                 "config": {
                     "contextAccess": {
@@ -407,12 +407,12 @@ def _valid_mcp_definition() -> dict:
                     },
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
             {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "reader"},
-            {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "output"},
+            {"id": "e3", "sourceNodeId": "reader", "targetNodeId": "endNode"},
         ],
     }
 
@@ -420,10 +420,10 @@ def _valid_mcp_definition() -> dict:
 def _valid_selector_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "branch",
-                "type": "condition",
+                "type": "conditionNode",
                 "name": "Branch",
                 "config": {
                     "selector": {
@@ -440,20 +440,20 @@ def _valid_selector_definition() -> dict:
             },
             {
                 "id": "urgent_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Urgent Path",
                 "config": {"mock_output": {"answer": "rush"}},
             },
             {
                 "id": "default_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Default Path",
                 "config": {"mock_output": {"answer": "later"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
             {
                 "id": "e2",
                 "sourceNodeId": "branch",
@@ -461,8 +461,8 @@ def _valid_selector_definition() -> dict:
                 "condition": "urgent",
             },
             {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
-            {"id": "e4", "sourceNodeId": "urgent_path", "targetNodeId": "output"},
-            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+            {"id": "e4", "sourceNodeId": "urgent_path", "targetNodeId": "endNode"},
+            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "endNode"},
         ],
     }
 
@@ -470,10 +470,10 @@ def _valid_selector_definition() -> dict:
 def _valid_expression_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "branch",
-                "type": "router",
+                "type": "routerNode",
                 "name": "Branch",
                 "config": {
                     "expression": "trigger_input.intent if trigger_input.intent else 'default'"
@@ -481,20 +481,20 @@ def _valid_expression_definition() -> dict:
             },
             {
                 "id": "search_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Search Path",
                 "config": {"mock_output": {"answer": "search"}},
             },
             {
                 "id": "default_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Default Path",
                 "config": {"mock_output": {"answer": "default"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
             {
                 "id": "e2",
                 "sourceNodeId": "branch",
@@ -502,8 +502,8 @@ def _valid_expression_definition() -> dict:
                 "condition": "search",
             },
             {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
-            {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
-            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+            {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "endNode"},
+            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "endNode"},
         ],
     }
 
@@ -511,30 +511,30 @@ def _valid_expression_definition() -> dict:
 def _valid_edge_expression_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "scorer",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Scorer",
                 "config": {"mock_output": {"approved": True, "score": 95}},
             },
             {
                 "id": "approve",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Approve",
                 "config": {"mock_output": {"answer": "approved"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "scorer"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "scorer"},
             {
                 "id": "e2",
                 "sourceNodeId": "scorer",
                 "targetNodeId": "approve",
                 "conditionExpression": "source_output.approved and source_output.score >= 90",
             },
-            {"id": "e3", "sourceNodeId": "approve", "targetNodeId": "output"},
+            {"id": "e3", "sourceNodeId": "approve", "targetNodeId": "endNode"},
         ],
     }
 
@@ -542,34 +542,34 @@ def _valid_edge_expression_definition() -> dict:
 def _valid_join_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "planner",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Planner",
                 "config": {"mock_output": {"plan": "outline"}},
             },
             {
                 "id": "researcher",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Researcher",
                 "config": {"mock_output": {"facts": ["a"]}},
             },
             {
                 "id": "joiner",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Joiner",
                 "config": {"mock_output": {"answer": "combined"}},
                 "runtimePolicy": {"join": {"mode": "all", "onUnmet": "fail"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
-            {"id": "e2", "sourceNodeId": "trigger", "targetNodeId": "researcher"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
+            {"id": "e2", "sourceNodeId": "startNode", "targetNodeId": "researcher"},
             {"id": "e3", "sourceNodeId": "planner", "targetNodeId": "joiner"},
             {"id": "e4", "sourceNodeId": "researcher", "targetNodeId": "joiner"},
-            {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "output"},
+            {"id": "e5", "sourceNodeId": "joiner", "targetNodeId": "endNode"},
         ],
     }
 
@@ -577,24 +577,24 @@ def _valid_join_definition() -> dict:
 def _valid_mapping_definition() -> dict:
     return {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "planner",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Planner",
                 "config": {"mock_output": {"plan": {"title": "Draft"}, "priority": "7"}},
             },
             {
                 "id": "formatter",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Formatter",
                 "config": {},
                 "runtimePolicy": {"join": {"mergeStrategy": "append"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
             {
                 "id": "e2",
                 "sourceNodeId": "planner",
@@ -608,7 +608,7 @@ def _valid_mapping_definition() -> dict:
                     },
                 ],
             },
-            {"id": "e3", "sourceNodeId": "formatter", "targetNodeId": "output"},
+            {"id": "e3", "sourceNodeId": "formatter", "targetNodeId": "endNode"},
         ],
     }
 
@@ -789,7 +789,7 @@ def test_create_workflow_rejects_invalid_definition(
         json={
             "name": "Broken Workflow",
             "definition": {
-                "nodes": [{"id": "tool", "type": "tool", "name": "Tool", "config": {}}],
+                "nodes": [{"id": "toolNode", "type": "toolNode", "name": "toolNode", "config": {}}],
                 "edges": [],
             },
         },
@@ -797,7 +797,7 @@ def test_create_workflow_rejects_invalid_definition(
     )
 
     assert response.status_code == 422
-    assert "trigger node" in _workflow_detail_message(response)
+    assert "startNode node" in _workflow_detail_message(response)
 
 
 def test_create_workflow_rejects_unavailable_persisted_nodes(
@@ -829,14 +829,14 @@ def test_create_workflow_rejects_cycles_during_blueprint_compilation(
             "name": "Cycle Workflow",
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-                    {"id": "middle", "type": "tool", "name": "Middle", "config": {}},
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+                    {"id": "middle", "type": "toolNode", "name": "Middle", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "middle"},
-                    {"id": "e2", "sourceNodeId": "middle", "targetNodeId": "output"},
-                    {"id": "e3", "sourceNodeId": "output", "targetNodeId": "middle"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "middle"},
+                    {"id": "e2", "sourceNodeId": "middle", "targetNodeId": "endNode"},
+                    {"id": "e3", "sourceNodeId": "endNode", "targetNodeId": "middle"},
                 ],
             },
         },
@@ -974,14 +974,14 @@ def test_list_workflow_runs_returns_aggregated_summary(
                 run_id="run-1",
                 node_id="mock_tool",
                 node_name="Mock Tool",
-                node_type="tool",
+                node_type="toolNode",
             ),
             NodeRun(
                 id="node-run-2",
                 run_id="run-1",
-                node_id="output",
-                node_name="Output",
-                node_type="output",
+                node_id="endNode",
+                node_name="endNode",
+                node_type="endNode",
             ),
             RunEvent(
                 run_id="run-1",
@@ -1413,10 +1413,10 @@ def test_create_workflow_rejects_unscoped_agent_tool_execution_target(client: Te
             "name": "Unscoped Agent Tool Execution Workflow",
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Plan with tools",
@@ -1425,11 +1425,11 @@ def test_create_workflow_rejects_unscoped_agent_tool_execution_target(client: Te
                             },
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         },
@@ -1937,10 +1937,10 @@ def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unava
             "name": "Agent Default Microvm Workflow",
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "prompt": "Plan with tools",
@@ -1949,11 +1949,11 @@ def test_create_workflow_rejects_allowed_tool_default_microvm_when_backend_unava
                             },
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
         },
@@ -1994,16 +1994,16 @@ def test_create_workflow_rejects_unauthorized_mcp_query_source(client: TestClien
         2,
         {
             "id": "search",
-            "type": "tool",
+            "type": "toolNode",
             "name": "Search",
             "config": {"mock_output": {"docs": ["x"]}},
         },
     )
     definition["edges"] = [
-        {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "planner"},
+        {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "planner"},
         {"id": "e2", "sourceNodeId": "planner", "targetNodeId": "search"},
         {"id": "e3", "sourceNodeId": "search", "targetNodeId": "reader"},
-        {"id": "e4", "sourceNodeId": "reader", "targetNodeId": "output"},
+        {"id": "e4", "sourceNodeId": "reader", "targetNodeId": "endNode"},
     ]
     reader_node = next(node for node in definition["nodes"] if node["id"] == "reader")
     reader_node["config"]["query"]["sourceNodeIds"] = ["planner", "search"]
@@ -2107,7 +2107,7 @@ def test_create_workflow_rejects_selector_on_non_branch_node(client: TestClient)
     )
 
     assert response.status_code == 422
-    assert "Only condition/router nodes may define config.selector" in (
+    assert "Only conditionNode/routerNode nodes may define config.selector" in (
         _workflow_detail_message(response)
     )
 
@@ -2122,7 +2122,7 @@ def test_create_workflow_rejects_expression_on_non_branch_node(client: TestClien
     )
 
     assert response.status_code == 422
-    assert "Only condition/router nodes may define config.expression" in (
+    assert "Only conditionNode/routerNode nodes may define config.expression" in (
         _workflow_detail_message(response)
     )
 
@@ -2238,10 +2238,10 @@ def test_create_workflow_rejects_missing_catalog_tool_binding(client: TestClient
 def test_create_workflow_rejects_missing_tool_policy_reference(client: TestClient) -> None:
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "toolPolicy": {
@@ -2249,11 +2249,11 @@ def test_create_workflow_rejects_missing_tool_policy_reference(client: TestClien
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
 
@@ -2404,10 +2404,10 @@ def test_preflight_accepts_provider_config_ref_without_inline_llm_fields(
 
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "prompt": "Use provider registry.",
@@ -2417,11 +2417,11 @@ def test_preflight_accepts_provider_config_ref_without_inline_llm_fields(
                     },
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
 
@@ -2477,10 +2477,10 @@ def test_validate_workflow_definition_preflight_normalizes_provider_config_ref_t
 
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "prompt": "Use provider registry.",
@@ -2492,11 +2492,11 @@ def test_validate_workflow_definition_preflight_normalizes_provider_config_ref_t
                     },
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+            {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
 
@@ -2591,28 +2591,28 @@ def test_validate_workflow_definition_preflight_accepts_reference_node_with_expl
         json={
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
                         "id": "agent",
-                        "type": "tool",
+                        "type": "toolNode",
                         "name": "Agent",
                         "config": {"mock_output": {"answer": "ok"}},
                     },
                     {
-                        "id": "reference",
-                        "type": "reference",
-                        "name": "Reference",
+                        "id": "referenceNode",
+                        "type": "referenceNode",
+                        "name": "referenceNode",
                         "config": {
                             "contextAccess": {"readableNodeIds": ["agent"]},
                             "reference": {"sourceNodeId": "agent", "artifactType": "json"},
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "agent"},
-                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "reference"},
-                    {"id": "e3", "sourceNodeId": "reference", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                    {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "referenceNode"},
+                    {"id": "e3", "sourceNodeId": "referenceNode", "targetNodeId": "endNode"},
                 ],
             }
         },
@@ -2621,7 +2621,7 @@ def test_validate_workflow_definition_preflight_accepts_reference_node_with_expl
     assert response.status_code == 200
     body = response.json()
     assert body["issues"] == []
-    assert body["definition"]["nodes"][2]["type"] == "reference"
+    assert body["definition"]["nodes"][2]["type"] == "referenceNode"
     assert body["definition"]["nodes"][2]["config"]["reference"]["sourceNodeId"] == "agent"
 
 
@@ -2891,7 +2891,7 @@ def test_get_workflow_detail_endpoint_keeps_definition_for_editor_requests(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["definition"]["nodes"][0]["type"] == "trigger"
+    assert body["definition"]["nodes"][0]["type"] == "startNode"
     assert len(body["versions"]) == 1
 
 
@@ -2960,10 +2960,10 @@ def test_list_workflows_can_filter_missing_tool_definition_issues(
 ) -> None:
     missing_tool_definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
+                "id": "toolNode",
+                "type": "toolNode",
                 "name": "Risk Search",
                 "config": {
                     "tool": {
@@ -2974,7 +2974,7 @@ def test_list_workflows_can_filter_missing_tool_definition_issues(
             },
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "toolPolicy": {
@@ -2985,20 +2985,20 @@ def test_list_workflows_can_filter_missing_tool_definition_issues(
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
-            {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "agent"},
+            {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
     clean_definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
+                "id": "toolNode",
+                "type": "toolNode",
                 "name": "Risk Search",
                 "config": {
                     "tool": {
@@ -3007,11 +3007,11 @@ def test_list_workflows_can_filter_missing_tool_definition_issues(
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "endNode"},
         ],
     }
     missing_workflow = Workflow(
@@ -3197,29 +3197,29 @@ def test_create_workflow_rejects_mcp_query_artifact_types_without_authorization(
 def test_create_workflow_rejects_invalid_branch_edge_conditions(client: TestClient) -> None:
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "branch",
-                "type": "condition",
+                "type": "conditionNode",
                 "name": "Branch",
                 "config": {"expression": "trigger_input.priority == 'high'"},
             },
             {
                 "id": "search_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Search Path",
                 "config": {"mock_output": {"answer": "search"}},
             },
             {
                 "id": "default_path",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Default Path",
                 "config": {"mock_output": {"answer": "default"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "branch"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "branch"},
             {
                 "id": "e2",
                 "sourceNodeId": "branch",
@@ -3227,8 +3227,8 @@ def test_create_workflow_rejects_invalid_branch_edge_conditions(client: TestClie
                 "condition": "search",
             },
             {"id": "e3", "sourceNodeId": "branch", "targetNodeId": "default_path"},
-            {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "output"},
-            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "output"},
+            {"id": "e4", "sourceNodeId": "search_path", "targetNodeId": "endNode"},
+            {"id": "e5", "sourceNodeId": "default_path", "targetNodeId": "endNode"},
         ],
     }
 
@@ -3243,7 +3243,7 @@ def test_create_workflow_rejects_invalid_branch_edge_conditions(client: TestClie
 
 def test_create_workflow_rejects_branch_duplicate_fallback_edges(client: TestClient) -> None:
     definition = _valid_selector_definition()
-    definition["edges"].append({"id": "e6", "sourceNodeId": "branch", "targetNodeId": "output"})
+    definition["edges"].append({"id": "e6", "sourceNodeId": "branch", "targetNodeId": "endNode"})
 
     response = client.post(
         "/api/workflows",
@@ -3274,10 +3274,10 @@ def test_workflow_routes_expose_tool_governance_summary(
 ) -> None:
     definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
-                "id": "tool",
-                "type": "tool",
+                "id": "toolNode",
+                "type": "toolNode",
                 "name": "Risk Search",
                 "config": {
                     "tool": {
@@ -3288,7 +3288,7 @@ def test_workflow_routes_expose_tool_governance_summary(
             },
             {
                 "id": "agent",
-                "type": "llm_agent",
+                "type": "llmAgentNode",
                 "name": "Agent",
                 "config": {
                     "toolPolicy": {
@@ -3299,12 +3299,12 @@ def test_workflow_routes_expose_tool_governance_summary(
                     }
                 },
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-            {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
-            {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+            {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "agent"},
+            {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "endNode"},
         ],
     }
     workflow = Workflow(
@@ -3355,7 +3355,7 @@ def test_workflow_routes_expose_tool_governance_summary(
     assert list_body[0]["id"] == workflow.id
     assert list_body[0]["updated_at"] == workflow.updated_at.isoformat().replace("+00:00", "Z")
     assert list_body[0]["node_count"] == 4
-    assert list_body[0]["node_types"] == ["trigger", "tool", "llm_agent", "output"]
+    assert list_body[0]["node_types"] == ["startNode", "toolNode", "llmAgentNode", "endNode"]
     assert list_body[0]["publish_count"] == 0
     assert list_body[0]["tool_governance"] == {
         "referenced_tool_ids": ["native.risk-search", "native.catalog-gap"],

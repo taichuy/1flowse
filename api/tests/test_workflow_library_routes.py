@@ -25,14 +25,14 @@ def _create_workspace_starter(client, *, name: str, business_track: str) -> dict
             "tags": [name.lower(), "workspace"],
             "definition": {
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
                     {
                         "id": "edge_trigger_output",
-                        "sourceNodeId": "trigger",
-                        "targetNodeId": "output",
+                        "sourceNodeId": "startNode",
+                        "targetNodeId": "endNode",
                     }
                 ],
             },
@@ -87,8 +87,8 @@ def test_workflow_library_snapshot_includes_shared_catalog_contract(
     assert response.status_code == 200
     body = response.json()
     assert len(body["nodes"]) == 10
-    tool_node = next(item for item in body["nodes"] if item["type"] == "tool")
-    loop_node = next(item for item in body["nodes"] if item["type"] == "loop")
+    tool_node = next(item for item in body["nodes"] if item["type"] == "toolNode")
+    loop_node = next(item for item in body["nodes"] if item["type"] == "loopNode")
     assert {item["id"] for item in body["starters"]} >= {
         "blank",
         "agent",
@@ -129,7 +129,7 @@ def test_workflow_library_snapshot_includes_shared_catalog_contract(
     blank_starter = next(item for item in body["starters"] if item["id"] == "blank")
     assert blank_starter["definition"] is None
     assert blank_starter["node_count"] == 2
-    assert blank_starter["node_types"] == ["trigger", "output"]
+    assert blank_starter["node_types"] == ["startNode", "endNode"]
 
 
 def test_workflow_library_snapshot_can_include_starter_definitions_explicitly(
@@ -140,7 +140,7 @@ def test_workflow_library_snapshot_can_include_starter_definitions_explicitly(
     assert response.status_code == 200
     body = response.json()
     blank_starter = next(item for item in body["starters"] if item["id"] == "blank")
-    assert blank_starter["definition"]["nodes"][0]["type"] == "trigger"
+    assert blank_starter["definition"]["nodes"][0]["type"] == "startNode"
 
 
 def test_workflow_library_snapshot_filters_adapter_tools_by_workspace(
@@ -210,8 +210,8 @@ def test_workflow_library_snapshot_filters_adapter_tools_by_workspace(
 
     alpha_body = alpha_response.json()
     beta_body = beta_response.json()
-    alpha_tool_node = next(item for item in alpha_body["nodes"] if item["type"] == "tool")
-    beta_tool_node = next(item for item in beta_body["nodes"] if item["type"] == "tool")
+    alpha_tool_node = next(item for item in alpha_body["nodes"] if item["type"] == "toolNode")
+    beta_tool_node = next(item for item in beta_body["nodes"] if item["type"] == "toolNode")
 
     assert {tool["id"] for tool in alpha_body["tools"]} == {
         "compat:dify:plugin:demo/search",
@@ -254,18 +254,18 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_source_governance(
     sample_workflow.version = "0.2.0"
     sample_workflow.definition = {
         "nodes": [
-            {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+            {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
             {
                 "id": "mock_tool",
-                "type": "tool",
+                "type": "toolNode",
                 "name": "Renamed Mock Tool",
                 "config": {"mock_output": {"answer": "updated"}},
             },
-            {"id": "output", "type": "output", "name": "Output", "config": {}},
+            {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
         ],
         "edges": [
-            {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "mock_tool"},
-            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "output"},
+            {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "mock_tool"},
+            {"id": "e2", "sourceNodeId": "mock_tool", "targetNodeId": "endNode"},
         ],
     }
     sample_workflow.updated_at = datetime.now(UTC)
@@ -283,11 +283,11 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_source_governance(
             tags=["orphan", "workspace starter"],
             definition={
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "output"}
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "endNode"}
                 ],
             },
             created_from_workflow_id="wf-missing",
@@ -359,10 +359,10 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_tool_governance(
             tags=["tool", "workspace starter"],
             definition={
                 "nodes": [
-                    {"id": "trigger", "type": "trigger", "name": "Trigger", "config": {}},
+                    {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
                     {
-                        "id": "tool",
-                        "type": "tool",
+                        "id": "toolNode",
+                        "type": "toolNode",
                         "name": "Risk Search",
                         "config": {
                             "tool": {
@@ -373,7 +373,7 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_tool_governance(
                     },
                     {
                         "id": "agent",
-                        "type": "llm_agent",
+                        "type": "llmAgentNode",
                         "name": "Agent",
                         "config": {
                             "toolPolicy": {
@@ -384,12 +384,12 @@ def test_workflow_library_snapshot_surfaces_workspace_starter_tool_governance(
                             }
                         },
                     },
-                    {"id": "output", "type": "output", "name": "Output", "config": {}},
+                    {"id": "endNode", "type": "endNode", "name": "endNode", "config": {}},
                 ],
                 "edges": [
-                    {"id": "e1", "sourceNodeId": "trigger", "targetNodeId": "tool"},
-                    {"id": "e2", "sourceNodeId": "tool", "targetNodeId": "agent"},
-                    {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "output"},
+                    {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "toolNode"},
+                    {"id": "e2", "sourceNodeId": "toolNode", "targetNodeId": "agent"},
+                    {"id": "e3", "sourceNodeId": "agent", "targetNodeId": "endNode"},
                 ],
             },
             created_at=datetime.now(UTC),

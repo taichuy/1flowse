@@ -243,7 +243,7 @@ def collect_invalid_workflow_tool_references(
         if not isinstance(config, dict):
             continue
 
-        if node_type == "tool":
+        if node_type == "toolNode":
             issues.extend(
                 _collect_tool_node_binding_issues(
                     node_label=node_label,
@@ -254,7 +254,7 @@ def collect_invalid_workflow_tool_references(
             )
             continue
 
-        if node_type == "llm_agent":
+        if node_type == "llmAgentNode":
             issues.extend(
                 _collect_agent_tool_policy_issues(
                     node_label=node_label,

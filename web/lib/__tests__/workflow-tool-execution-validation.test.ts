@@ -18,10 +18,10 @@ function createDefinition(overrides?: {
 }): WorkflowDefinition {
   return {
     nodes: [
-      { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+      { id: "startNode", type: "startNode", name: "startNode", config: {} },
       {
         id: "sandbox",
-        type: "sandbox_code",
+        type: "sandboxCodeNode",
         name: "Sandbox",
         config: {
           language: "python",
@@ -30,11 +30,11 @@ function createDefinition(overrides?: {
         },
         ...(overrides?.runtimePolicy ? { runtimePolicy: overrides.runtimePolicy } : {})
       },
-      { id: "output", type: "output", name: "Output", config: {} }
+      { id: "endNode", type: "endNode", name: "endNode", config: {} }
     ],
     edges: [
-      { id: "e1", sourceNodeId: "trigger", targetNodeId: "sandbox" },
-      { id: "e2", sourceNodeId: "sandbox", targetNodeId: "output" }
+      { id: "e1", sourceNodeId: "startNode", targetNodeId: "sandbox" },
+      { id: "e2", sourceNodeId: "sandbox", targetNodeId: "endNode" }
     ],
     variables: [],
     publish: []
@@ -47,7 +47,7 @@ function createGenericNodeDefinition(
 ): WorkflowDefinition {
   return {
     nodes: [
-      { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+      { id: "startNode", type: "startNode", name: "startNode", config: {} },
       {
         id: "middle",
         type: nodeType,
@@ -55,11 +55,11 @@ function createGenericNodeDefinition(
         config: {},
         ...(runtimePolicy ? { runtimePolicy } : {})
       },
-      { id: "output", type: "output", name: "Output", config: {} }
+      { id: "endNode", type: "endNode", name: "endNode", config: {} }
     ],
     edges: [
-      { id: "e1", sourceNodeId: "trigger", targetNodeId: "middle" },
-      { id: "e2", sourceNodeId: "middle", targetNodeId: "output" }
+      { id: "e1", sourceNodeId: "startNode", targetNodeId: "middle" },
+      { id: "e2", sourceNodeId: "middle", targetNodeId: "endNode" }
     ],
     variables: [],
     publish: []
@@ -152,7 +152,7 @@ function createSandboxBackends(
 describe("workflow tool execution validation", () => {
   it("允许 condition 节点显式声明 subprocess execution class", () => {
     const issues = buildWorkflowNodeExecutionValidationIssues(
-      createGenericNodeDefinition("condition", {
+      createGenericNodeDefinition("conditionNode", {
         execution: {
           class: "subprocess"
         }
@@ -164,7 +164,7 @@ describe("workflow tool execution validation", () => {
 
   it("允许 router 节点显式声明 subprocess execution class", () => {
     const issues = buildWorkflowNodeExecutionValidationIssues(
-      createGenericNodeDefinition("router", {
+      createGenericNodeDefinition("routerNode", {
         execution: {
           class: "subprocess"
         }
@@ -176,7 +176,7 @@ describe("workflow tool execution validation", () => {
 
   it("继续对未实现 subprocess adapter 的节点做 fail-closed", () => {
     const issues = buildWorkflowNodeExecutionValidationIssues(
-      createGenericNodeDefinition("llm_agent", {
+      createGenericNodeDefinition("llmAgentNode", {
         execution: {
           class: "subprocess"
         }
@@ -187,12 +187,12 @@ describe("workflow tool execution validation", () => {
     expect(issues[0]?.path).toBe("nodes.1.runtimePolicy.execution");
     expect(issues[0]?.message).toContain("节点 Middle (middle)");
     expect(issues[0]?.message).toContain("execution class 'subprocess'");
-    expect(issues[0]?.message).toContain("llm_agent");
+    expect(issues[0]?.message).toContain("llmAgentNode");
   });
 
   it("对非 tool/sandbox 节点的强隔离 execution class 做 fail-closed", () => {
     const issues = buildWorkflowNodeExecutionValidationIssues(
-      createGenericNodeDefinition("output", {
+      createGenericNodeDefinition("endNode", {
         execution: {
           class: "microvm"
         }
@@ -202,7 +202,7 @@ describe("workflow tool execution validation", () => {
     expect(issues).toHaveLength(1);
     expect(issues[0]?.message).toContain("强隔离 execution class 'microvm'");
     expect(issues[0]?.message).toContain("fail-closed");
-    expect(issues[0]?.message).toContain("output");
+    expect(issues[0]?.message).toContain("endNode");
   });
 
   it("忽略 tool 与 sandbox_code 节点的 node execution 本地校验", () => {
@@ -210,7 +210,7 @@ describe("workflow tool execution validation", () => {
       nodes: [
         {
           id: "tool-node",
-          type: "tool",
+          type: "toolNode",
           name: "Tool",
           config: {},
           runtimePolicy: {
@@ -221,7 +221,7 @@ describe("workflow tool execution validation", () => {
         },
         {
           id: "sandbox",
-          type: "sandbox_code",
+          type: "sandboxCodeNode",
           name: "Sandbox",
           config: {},
           runtimePolicy: {
@@ -381,10 +381,10 @@ describe("workflow tool execution validation", () => {
     const issues = buildWorkflowToolExecutionValidationIssues(
       {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
           {
             id: "agent",
-            type: "llm_agent",
+            type: "llmAgentNode",
             name: "Agent",
             config: {
               prompt: "Plan with tools",
@@ -393,11 +393,11 @@ describe("workflow tool execution validation", () => {
               }
             }
           },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
         edges: [
-          { id: "e1", sourceNodeId: "trigger", targetNodeId: "agent" },
-          { id: "e2", sourceNodeId: "agent", targetNodeId: "output" }
+          { id: "e1", sourceNodeId: "startNode", targetNodeId: "agent" },
+          { id: "e2", sourceNodeId: "agent", targetNodeId: "endNode" }
         ],
         variables: [],
         publish: []
@@ -477,10 +477,10 @@ describe("workflow tool execution validation", () => {
     const issues = buildWorkflowToolExecutionValidationIssues(
       {
         nodes: [
-          { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+          { id: "startNode", type: "startNode", name: "startNode", config: {} },
           {
             id: "agent",
-            type: "llm_agent",
+            type: "llmAgentNode",
             name: "Agent",
             config: {
               prompt: "Plan with tools",
@@ -489,11 +489,11 @@ describe("workflow tool execution validation", () => {
               }
             }
           },
-          { id: "output", type: "output", name: "Output", config: {} }
+          { id: "endNode", type: "endNode", name: "endNode", config: {} }
         ],
         edges: [
-          { id: "e1", sourceNodeId: "trigger", targetNodeId: "agent" },
-          { id: "e2", sourceNodeId: "agent", targetNodeId: "output" }
+          { id: "e1", sourceNodeId: "startNode", targetNodeId: "agent" },
+          { id: "e2", sourceNodeId: "agent", targetNodeId: "endNode" }
         ],
         variables: [],
         publish: []
@@ -733,10 +733,10 @@ describe("workflow tool execution validation", () => {
   it("对 llm_agent 的 dependencyRef capability drift 生成字段级 issue 与导航", () => {
     const definition: WorkflowDefinition = {
       nodes: [
-        { id: "trigger", type: "trigger", name: "Trigger", config: {} },
+        { id: "startNode", type: "startNode", name: "startNode", config: {} },
         {
           id: "agent",
-          type: "llm_agent",
+          type: "llmAgentNode",
           name: "Agent",
           config: {
             prompt: "Plan with tools",
@@ -750,11 +750,11 @@ describe("workflow tool execution validation", () => {
             }
           }
         },
-        { id: "output", type: "output", name: "Output", config: {} }
+        { id: "endNode", type: "endNode", name: "endNode", config: {} }
       ],
       edges: [
-        { id: "e1", sourceNodeId: "trigger", targetNodeId: "agent" },
-        { id: "e2", sourceNodeId: "agent", targetNodeId: "output" }
+        { id: "e1", sourceNodeId: "startNode", targetNodeId: "agent" },
+        { id: "e2", sourceNodeId: "agent", targetNodeId: "endNode" }
       ],
       variables: [],
       publish: []

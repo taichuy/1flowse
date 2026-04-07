@@ -106,7 +106,7 @@ export function inferWorkflowBusinessTrack(
       : Array.isArray(definition.publish)
         ? definition.publish.length
         : 0;
-  const outputNodes = (definition.nodes ?? []).filter((node) => node.type === "output");
+  const outputNodes = (definition.nodes ?? []).filter((node) => node.type === "endNode");
 
   if (
     publishCount > 0 ||
@@ -115,16 +115,16 @@ export function inferWorkflowBusinessTrack(
     return "API 调用开放";
   }
 
-  if (nodeTypes.has("tool")) {
+  if (nodeTypes.has("toolNode")) {
     return "Dify 插件兼容";
   }
 
   if (
-    nodeTypes.has("llm_agent") ||
-    nodeTypes.has("sandbox_code") ||
-    nodeTypes.has("mcp_query") ||
-    nodeTypes.has("condition") ||
-    nodeTypes.has("router")
+    nodeTypes.has("llmAgentNode") ||
+    nodeTypes.has("sandboxCodeNode") ||
+    nodeTypes.has("mcpQueryNode") ||
+    nodeTypes.has("conditionNode") ||
+    nodeTypes.has("routerNode")
   ) {
     return "编排节点能力";
   }
