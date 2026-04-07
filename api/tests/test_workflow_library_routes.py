@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 import pytest
 
 from app.models.plugin import PluginAdapterRecord, PluginToolRecord
+from app.models.workflow import Workflow
 from app.models.workspace_starter import WorkspaceStarterTemplateRecord
 from app.services.plugin_runtime import PluginRegistry, PluginToolDefinition
+from app.services.workflow_definition_repairs import repair_workflow_definition_payload
 
 pytestmark = pytest.mark.usefixtures(
     "workspace_console_auth", "default_console_route_headers"
@@ -477,3 +479,119 @@ def test_workflow_library_snapshot_reuses_workspace_starter_governance_filters(
     assert builtin_lane["count"] == 0
     assert [starter["id"] for starter in body["starters"]] == [governed_starter["id"]]
     assert body["starters"][0]["source_governance"]["kind"] == "drifted"
+
+
+def test_workflow_library_snapshot_recovers_after_repairing_legacy_start_end_nodes(
+    client,
+    sqlite_session,
+) -> None:
+    legacy_definition = {
+        "nodes": [
+            {
+                "id": "trigger",
+                "type": "trigger",
+                "name": "Trigger",
+                "config": {"ui": {"position": {"x": 140, "y": 220}}},
+            },
+            {
+                "id": "output",
+                "type": "output",
+                "name": "Output",
+                "config": {
+                    "format": "json",
+                    "ui": {"position": {"x": 520, "y": 220}},
+                },
+            },
+        ],
+        "edges": [
+            {
+                "id": "edge_trigger_output",
+                "sourceNodeId": "trigger",
+                "targetNodeId": "output",
+                "channel": "control",
+            }
+        ],
+        "variables": [],
+        "publish": [],
+    }
+    workflow = Workflow(
+        id="wf-legacy-blank",
+        name="Blank Workflow",
+        version="0.1.0",
+        status="draft",
+        definition=legacy_definition,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    starter = WorkspaceStarterTemplateRecord(
+        id="starter-legacy-blank",
+        workspace_id="default",
+        name="Blank Workflow Template",
+        description="Legacy blank starter that still uses trigger/output.",
+        business_track="应用新建编排",
+        default_workflow_name=workflow.name,
+        workflow_focus="Repair legacy starter payloads to latest-only naming.",
+        recommended_next_step="Refresh workflow library after repairing persisted facts.",
+        tags=["legacy", "blank"],
+        definition=legacy_definition,
+        created_from_workflow_id=workflow.id,
+        created_from_workflow_version=workflow.version,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.add(starter)
+    sqlite_session.commit()
+
+    workflow_repair = repair_workflow_definition_payload(workflow.definition)
+    starter_repair = repair_workflow_definition_payload(starter.definition)
+    assert workflow_repair.changed is True
+    assert starter_repair.changed is True
+
+    workflow.definition = workflow_repair.payload
+    starter.definition = starter_repair.payload
+    sqlite_session.add(workflow)
+    sqlite_session.add(starter)
+    sqlite_session.commit()
+
+    response = client.get(
+        "/api/workflow-library"
+        "?include_builtin_starters=false"
+        "&include_starter_definitions=true"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["starters"]] == ["starter-legacy-blank"]
+    starter_item = body["starters"][0]
+    assert starter_item["definition"] == {
+        "nodes": [
+            {
+                "id": "startNode",
+                "type": "startNode",
+                "name": "startNode",
+                "config": {"ui": {"position": {"x": 140, "y": 220}}},
+            },
+            {
+                "id": "endNode",
+                "type": "endNode",
+                "name": "endNode",
+                "config": {
+                    "format": "json",
+                    "ui": {"position": {"x": 520, "y": 220}},
+                },
+            },
+        ],
+        "edges": [
+            {
+                "id": "edge_startNode_endNode",
+                "sourceNodeId": "startNode",
+                "targetNodeId": "endNode",
+                "channel": "control",
+            }
+        ],
+        "variables": [],
+        "publish": [],
+    }
+    assert starter_item["node_types"] == ["startNode", "endNode"]
+    assert starter_item["source_governance"]["kind"] == "synced"
