@@ -2371,25 +2371,28 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .workflow-studio-shell {
-    flex-direction: column;
-  }
-
   .workflow-studio-shell-sider {
     flex: none !important;
-    width: 100% !important;
-    max-width: none !important;
+    width: min(196px, 42vw) !important;
+    max-width: min(196px, 42vw) !important;
     min-width: 0 !important;
-    border-right: none;
-    border-bottom: 1px solid #e7ecf4;
+    border-right: 1px solid #e7ecf4;
+    border-bottom: none;
+  }
+
+  .workflow-studio-shell-sider.ant-layout-sider-collapsed {
+    width: 24px !important;
+    max-width: 24px !important;
+    min-width: 24px !important;
   }
 
   .workflow-studio-shell-sider-trigger {
-    top: 12px;
-    right: 12px;
-    transform: none;
+    top: 20px;
+    right: 0;
+    transform: translateX(50%);
     border: 1px solid #e7ecf4;
-    border-radius: 10px;
+    border-left: none;
+    border-radius: 0 10px 10px 0;
   }
 
   .workflow-studio-shell-heading,

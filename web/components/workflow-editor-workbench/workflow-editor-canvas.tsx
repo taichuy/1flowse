@@ -25,7 +25,9 @@ import {
   AppstoreOutlined,
   EditOutlined,
   NodeIndexOutlined,
-  RobotOutlined
+  PlayCircleOutlined,
+  RobotOutlined,
+  SaveOutlined
 } from "@ant-design/icons";
 
 import type {
@@ -48,12 +50,17 @@ export type WorkflowEditorCanvasProps = {
   canOpenInspector: boolean;
   canUndo: boolean;
   canRedo: boolean;
-  inspectorActionLabel?: string;
   onNodeClick: (nodeId: string) => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onToggleInspector: () => void;
   onOpenAssistant: () => void;
+  persistBlockerSummary?: string | null;
+  isSaving?: boolean;
+  isSavingStarter?: boolean;
+  onSave?: () => void;
+  onSaveAsWorkspaceStarter?: () => void;
+  onOpenRunLauncher?: () => void;
   onUndo: () => void;
   onRedo: () => void;
 };
@@ -74,12 +81,17 @@ export function WorkflowEditorCanvas({
   canOpenInspector,
   canUndo,
   canRedo,
-  inspectorActionLabel = "配置面板",
   onNodeClick,
   isSidebarOpen = false,
   onToggleSidebar,
   onToggleInspector,
   onOpenAssistant,
+  persistBlockerSummary = null,
+  isSaving = false,
+  isSavingStarter = false,
+  onSave,
+  onSaveAsWorkspaceStarter,
+  onOpenRunLauncher,
   onUndo,
   onRedo
 }: WorkflowEditorCanvasProps) {
@@ -151,17 +163,16 @@ export function WorkflowEditorCanvas({
                     节点目录
                   </Button>
                 ) : null}
-                {canOpenInspector ? (
-                  <Button
-                    type={isInspectorOpen ? "primary" : "default"}
-                    icon={<EditOutlined />}
-                    className="workflow-editor-action-strip-button"
-                    data-action="inspector"
-                    onClick={onToggleInspector}
-                  >
-                    {inspectorActionLabel}
-                  </Button>
-                ) : null}
+                <Button
+                  type={isInspectorOpen ? "primary" : "default"}
+                  icon={<EditOutlined />}
+                  disabled={!canOpenInspector}
+                  className="workflow-editor-action-strip-button"
+                  data-action="inspector"
+                  onClick={onToggleInspector}
+                >
+                  属性栏
+                </Button>
                 {hasNodeAssistant ? (
                   <Button
                     icon={<RobotOutlined />}
@@ -193,6 +204,43 @@ export function WorkflowEditorCanvas({
                 >
                   {isMiniMapVisible ? "隐藏地图" : "显示地图"}
                 </Button>
+                {onSaveAsWorkspaceStarter ? (
+                  <Button
+                    icon={<SaveOutlined />}
+                    className="workflow-editor-action-strip-button"
+                    data-action="save-as-workspace-starter"
+                    loading={isSavingStarter}
+                    onClick={onSaveAsWorkspaceStarter}
+                  >
+                    存为模板
+                  </Button>
+                ) : null}
+                {onSave ? (
+                  <Tooltip title={persistBlockerSummary ?? "保存当前 workflow 草稿"}>
+                    <Button
+                      type="primary"
+                      icon={<SaveOutlined />}
+                      className="workflow-editor-action-strip-button"
+                      data-action="save-workflow"
+                      loading={isSaving}
+                      disabled={Boolean(persistBlockerSummary)}
+                      onClick={onSave}
+                    >
+                      保存
+                    </Button>
+                  </Tooltip>
+                ) : null}
+                {onOpenRunLauncher ? (
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    className="workflow-editor-action-strip-button workflow-editor-run-button"
+                    data-action="run-workflow"
+                    onClick={onOpenRunLauncher}
+                  >
+                    运行
+                  </Button>
+                ) : null}
               </Space>
             </Panel>
             <Background gap={24} size={1} />

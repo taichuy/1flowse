@@ -68,10 +68,6 @@ vi.mock("@/lib/workflow-node-catalog", () => ({
   sortWorkflowNodeCatalogForAuthoring: <T,>(items: T[]) => items,
 }));
 
-vi.mock("@/components/workflow-editor-workbench/workflow-editor-hero", () => ({
-  WorkflowEditorHero: () => createElement("div", { "data-component": "workflow-editor-hero" }, "hero"),
-}));
-
 vi.mock("@/components/workflow-editor-inspector", () => ({
   WorkflowEditorInspector: () => createElement("div", { "data-component": "workflow-editor-inspector" }, "inspector"),
 }));
@@ -361,10 +357,16 @@ describe("WorkflowEditorWorkbench", () => {
     expect(html).toContain('data-action="assistant"');
     expect(html).toContain('data-action="fit-view"');
     expect(html).toContain('data-action="minimap"');
+    expect(html).toContain('data-action="save-as-workspace-starter"');
+    expect(html).toContain('data-action="save-workflow"');
+    expect(html).toContain('data-action="run-workflow"');
     expect(html).toContain("撤 销");
     expect(html).toContain("重 做");
-    expect(html).toContain("节点配置");
+    expect(html).toContain("属性栏");
     expect(html).toContain("AI 辅助");
+    expect(html).toContain("存为模板");
+    expect(html).toContain("保存");
+    expect(html).toContain("运行");
     expect((html.match(/data-command-enabled="true"/g) ?? []).length).toBe(2);
     expect(html).toContain('data-layout="canvas-overlay"');
     expect(html).toContain('data-component="workflow-editor-canvas-stage"');
@@ -372,6 +374,7 @@ describe("WorkflowEditorWorkbench", () => {
     expect(html).toContain('data-panel-kind="node-config"');
     expect(html).toContain('data-component="workflow-editor-floating-panel-header"');
     expect(html).not.toContain("NODE WORKBENCH");
+    expect(html).not.toContain('data-component="workflow-editor-hero"');
     expect(html).not.toContain('data-component="workflow-editor-sidebar-rail"');
     expect(html).not.toContain('data-action="node-library"');
     expect(html).not.toContain("drawer-shell");
@@ -383,9 +386,12 @@ describe("WorkflowEditorWorkbench", () => {
     expect(html).toContain('data-component="workflow-editor-action-strip"');
     expect(html).toContain('data-action="undo"');
     expect(html).toContain('data-action="redo"');
+    expect(html).toContain('data-action="inspector"');
+    expect(html).toContain('data-action="save-as-workspace-starter"');
+    expect(html).toContain('data-action="save-workflow"');
+    expect(html).toContain('data-action="run-workflow"');
     expect((html.match(/data-command-enabled="false"/g) ?? []).length).toBe(2);
-    expect(html).not.toContain('data-action="inspector"');
-    expect(html).not.toContain("应用配置");
+    expect(html).toContain("属性栏");
     expect(html).not.toContain("AI 辅助");
     expect(html).not.toContain('data-component="workflow-editor-inspector-rail"');
     expect(html).not.toContain('data-component="workflow-editor-sidebar-rail"');

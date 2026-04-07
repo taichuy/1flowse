@@ -19,7 +19,6 @@ import {
   sortWorkflowNodeCatalogForAuthoring
 } from "@/lib/workflow-node-catalog";
 
-import { WorkflowEditorHero } from "@/components/workflow-editor-workbench/workflow-editor-hero";
 import { useWorkflowEditorShellState } from "@/components/workflow-editor-workbench/use-workflow-editor-shell-state";
 import { useWorkflowEditorPanels } from "@/components/workflow-editor-workbench/use-workflow-editor-panels";
 import {
@@ -388,11 +387,6 @@ export function WorkflowEditorWorkbench({
   const isFloatingInspectorVisible = Boolean(
     hasInspectorTarget && isFloatingInspectorOpen
   );
-  const inspectorActionLabel = selectedNodeId
-    ? "节点配置"
-    : graph.selectedEdgeId
-      ? "连线配置"
-      : "配置面板";
   const inspectorSurfaceTitle = graph.selectedNode?.data.label
     ?? (typeof graph.selectedEdge?.label === "string" ? graph.selectedEdge.label : null)
     ?? (graph.selectedEdgeId ? `连线 ${graph.selectedEdgeId}` : "配置面板");
@@ -413,7 +407,6 @@ export function WorkflowEditorWorkbench({
   ) : (
     inspectorSurfaceTitle
   );
-  const effectiveIsInspectorCollapsed = !isFloatingInspectorVisible;
   const workspaceStyle = useMemo(
     () =>
       ({
@@ -567,13 +560,6 @@ export function WorkflowEditorWorkbench({
 
   return (
     <main className="editor-shell" data-component="workflow-editor-workbench">
-      <WorkflowEditorHero
-        {...panels.heroProps}
-        canToggleInspector={hasInspectorTarget}
-        isInspectorCollapsed={effectiveIsInspectorCollapsed}
-        onToggleInspector={handleToggleInspectorSurface}
-      />
-
       <section
         className="editor-workspace"
         data-layout="canvas-overlay"
@@ -599,10 +585,15 @@ export function WorkflowEditorWorkbench({
             canOpenInspector={hasInspectorTarget}
             canUndo={graph.canUndo}
             canRedo={graph.canRedo}
-            inspectorActionLabel={inspectorActionLabel}
             onToggleInspector={handleToggleInspectorSurface}
             onNodeClick={handleCanvasOpenConfig}
             onOpenAssistant={shell.openNodeAssistant}
+            persistBlockerSummary={panels.heroProps.persistBlockerSummary}
+            isSaving={panels.heroProps.isSaving}
+            isSavingStarter={panels.heroProps.isSavingStarter}
+            onSave={panels.heroProps.onSave}
+            onSaveAsWorkspaceStarter={panels.heroProps.onSaveAsWorkspaceStarter}
+            onOpenRunLauncher={panels.heroProps.onOpenRunLauncher}
             onUndo={graph.undo}
             onRedo={graph.redo}
           />
