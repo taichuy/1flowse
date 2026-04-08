@@ -50,10 +50,24 @@ vi.mock("@xyflow/react", () => ({
       },
       children
     ),
-  Panel: ({ children, className, position }: { children: React.ReactNode; className?: string; position?: string }) =>
+  Panel: ({
+    children,
+    className,
+    position,
+    ...props
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    position?: string;
+  } & Record<string, unknown>) =>
     createElement(
       "div",
-      { className, "data-component": "react-flow-panel", "data-position": position ?? "unknown" },
+      {
+        className,
+        "data-component": "react-flow-panel",
+        "data-position": position ?? "unknown",
+        ...props
+      },
       children
     ),
   useViewport: () => ({ zoom: 1 }),
@@ -97,6 +111,8 @@ describe("WorkflowEditorCanvas", () => {
     expect(html).toContain('data-action="inspector"');
     expect(html).not.toContain("workflow-editor-nav-strip");
     expect(html).not.toContain("xyflow Studio");
+    expect(html).toContain('data-component="workflow-editor-zoom-indicator-panel"');
+    expect(html).toContain('data-position="bottom-left"');
     expect(html).toContain("100%");
   });
 });

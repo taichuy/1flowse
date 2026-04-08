@@ -96,6 +96,7 @@ vi.mock("@xyflow/react", () => ({
       { className, "data-component": "react-flow-panel", "data-position": position ?? "unknown" },
       children
     ),
+  useViewport: () => ({ zoom: 1 }),
   Background: () => createElement("div", { "data-component": "react-flow-background" }),
   MiniMap: () => createElement("div", { "data-component": "react-flow-minimap" }),
   Controls: () => createElement("div", { "data-component": "react-flow-controls" })
