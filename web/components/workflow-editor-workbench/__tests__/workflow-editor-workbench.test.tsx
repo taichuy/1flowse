@@ -177,11 +177,12 @@ function buildShellState(overrides: Record<string, unknown> = {}) {
     isInspectorCollapsed: false,
     setIsInspectorCollapsed: () => undefined,
     assistantRequestSerial: 0,
-    runtimeRequestSerial: 0,
+    runtimeRequest: null,
     toggleSidebar: () => undefined,
     toggleInspector: () => undefined,
     openNodeAssistant: () => undefined,
     openNodeRuntime: () => undefined,
+    clearRuntimeRequest: () => undefined,
     getInspectorFocusState: () => ({
       highlightedNodeSection: null,
       highlightedNodeFieldPath: null,

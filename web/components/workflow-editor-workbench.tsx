@@ -358,21 +358,21 @@ export function WorkflowEditorWorkbench({
     },
     [focusNode]
   );
-  const handleOpenNodeRuntime = useCallback(() => {
-    if (!graph.selectedNodeId) {
+  const handleOpenNodeRuntime = useCallback((nodeId: string) => {
+    if (!nodeId) {
       return;
     }
 
     setIsFloatingInspectorOpen(true);
-    shell.openNodeRuntime();
-  }, [graph.selectedNodeId, shell]);
+    shell.openNodeRuntime(nodeId);
+  }, [shell]);
   const canvasNodeTypes = useMemo(
     () => ({
       workflowNode: (props: ComponentProps<typeof WorkflowCanvasNode>) => (
         <WorkflowCanvasNode
           {...props}
           quickAddOptions={canvasQuickAddOptions}
-          onOpenRuntime={() => handleOpenNodeRuntime()}
+          onOpenRuntime={handleOpenNodeRuntime}
           onDeleteNode={(nodeId) => handleCanvasDeleteNode(nodeId)}
           onQuickAdd={(sourceNodeId, type) =>
             handleCanvasQuickAdd(type, { sourceNodeId })
@@ -627,7 +627,7 @@ export function WorkflowEditorWorkbench({
               title={inspectorSurfaceTitleNode}
               closeLabel="关闭配置面板"
               closeAction="close-floating-inspector"
-              onTrialRun={selectedNodeId ? handleOpenNodeRuntime : undefined}
+              onTrialRun={selectedNodeId ? () => handleOpenNodeRuntime(selectedNodeId) : undefined}
               dragging={isFloatingWorkbenchDragging}
               style={
                 floatingWorkbenchPosition

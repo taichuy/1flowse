@@ -36,6 +36,7 @@ import type {
 import type { WorkspaceStarterGovernanceQueryScope } from "@/lib/workspace-starter-governance-query";
 
 import type { WorkflowPersistBlocker } from "./persist-blockers";
+import type { WorkflowEditorRuntimeRequest } from "./runtime-request";
 import type { WorkflowEditorMessageKind, WorkflowEditorMessageTone } from "./shared";
 
 type WorkflowEditorShellState = ReturnType<
@@ -179,10 +180,11 @@ export type WorkflowEditorInspectorProps = {
   persistBlockers: WorkflowPersistBlocker[];
   persistBlockerRecommendedNextStep?: OperatorRecommendedNextStep | null;
   assistantRequestSerial?: number;
-  runtimeRequestSerial?: number;
+  runtimeRequest?: WorkflowEditorRuntimeRequest | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
   onRuntimeRunSuccess?: (payload?: WorkflowEditorRuntimeRunSuccessPayload) => void;
   onRuntimeRunError?: (message: string) => void;
+  onRuntimeRequestHandled?: () => void;
   onOpenRunOverlay?: () => void;
 };
 

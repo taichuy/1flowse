@@ -36,6 +36,10 @@ import {
   toRecord
 } from "@/components/workflow-node-config-form/shared";
 import type { WorkflowEditorRuntimeRunSuccessPayload } from "@/components/workflow-editor-workbench/types";
+import {
+  doesWorkflowEditorRuntimeRequestTargetNode,
+  type WorkflowEditorRuntimeRequest
+} from "@/components/workflow-editor-workbench/runtime-request";
 
 const { Text, Title } = Typography;
 const START_NODE_TRIAL_RUN_CACHE_KEY_PREFIX = "sevenflows.editor.start-node-trial-run";
@@ -52,9 +56,10 @@ export type WorkflowEditorNodeRuntimePanelProps = {
   highlightedNodeFieldPath?: string | null;
   focusedValidationItem?: WorkflowValidationNavigatorItem | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
-  runtimeRequestSerial?: number;
+  runtimeRequest?: WorkflowEditorRuntimeRequest | null;
   onRunSuccess?: (payload?: WorkflowEditorRuntimeRunSuccessPayload) => void;
   onRunError?: (message: string) => void;
+  onRuntimeRequestHandled?: () => void;
   onOpenRunOverlay?: () => void;
 };
 
@@ -69,13 +74,14 @@ export function WorkflowEditorNodeRuntimePanel({
   highlightedNodeFieldPath = null,
   focusedValidationItem = null,
   sandboxReadiness = null,
-  runtimeRequestSerial = 0,
+  runtimeRequest = null,
   onRunSuccess,
   onRunError,
+  onRuntimeRequestHandled,
   onOpenRunOverlay
 }: WorkflowEditorNodeRuntimePanelProps) {
   const [form] = Form.useForm();
-  const lastHandledRuntimeRequestSerialRef = useRef(0);
+  const lastHandledRuntimeRequestIdRef = useRef(0);
   const hydratedCachedStartNodeRunIdRef = useRef<string | null>(null);
   const lastStartNodeRuntimeResetKeyRef = useRef<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{
@@ -84,6 +90,7 @@ export function WorkflowEditorNodeRuntimePanel({
   } | null>(null);
   const [lastTriggeredRunId, setLastTriggeredRunId] = useState<string | null>(null);
   const [cachedStartNodePayload, setCachedStartNodePayload] = useState<Record<string, unknown> | null>(null);
+  const [hydratedStartNodeRuntimeResetKey, setHydratedStartNodeRuntimeResetKey] = useState<string | null>(null);
   const [isTrialRunModalOpen, setIsTrialRunModalOpen] = useState(false);
   const [activeTrialRunId, setActiveTrialRunId] = useState<string | null>(null);
   const [trialRunDetail, setTrialRunDetail] = useState<RunDetail | null>(null);
@@ -102,6 +109,10 @@ export function WorkflowEditorNodeRuntimePanel({
   const unsupportedFieldNames = useMemo(
     () => getUnsupportedToolFieldNames(toRecord(resolvedInputSchema) ?? {}, supportedFields),
     [resolvedInputSchema, supportedFields]
+  );
+  const requiredFieldNames = useMemo(
+    () => supportedFields.filter((field) => field.required).map((field) => field.name),
+    [supportedFields]
   );
   const supportedFieldSignature = useMemo(
     () =>
@@ -132,6 +143,10 @@ export function WorkflowEditorNodeRuntimePanel({
     [currentNodeRun?.output_payload]
   );
   const isStartNode = node.data.nodeType === "startNode";
+  const runtimeRequestTargetsCurrentNode = doesWorkflowEditorRuntimeRequestTargetNode(
+    runtimeRequest,
+    node.id
+  );
   const selectedTrialRun = useMemo(() => {
     if (activeTrialRunId && run?.id === activeTrialRunId) {
       return run;
@@ -177,14 +192,15 @@ export function WorkflowEditorNodeRuntimePanel({
       startNodeRuntimeSummaryNodeRun?.status
     ]
   );
+  const startNodeRuntimeResetKey = `${workflowId}:${node.id}:${isStartNode ? "start" : "node"}:${supportedFieldSignature}`;
 
   useEffect(() => {
-    const resetStateKey = `${workflowId}:${node.id}:${isStartNode ? "start" : "node"}:${supportedFieldSignature}`;
-    if (lastStartNodeRuntimeResetKeyRef.current === resetStateKey) {
+    if (lastStartNodeRuntimeResetKeyRef.current === startNodeRuntimeResetKey) {
       return;
     }
 
-    lastStartNodeRuntimeResetKeyRef.current = resetStateKey;
+    lastStartNodeRuntimeResetKeyRef.current = startNodeRuntimeResetKey;
+    setHydratedStartNodeRuntimeResetKey(null);
 
     const defaultValues = Object.fromEntries(
       supportedFields
@@ -206,7 +222,8 @@ export function WorkflowEditorNodeRuntimePanel({
     setIsStartNodeTrialRunSubmitting(false);
     setIsTrialRunDetailLoading(false);
     setTrialRunDetailMessage(null);
-  }, [form, isStartNode, node.id, supportedFieldSignature, workflowId]);
+    setHydratedStartNodeRuntimeResetKey(startNodeRuntimeResetKey);
+  }, [form, isStartNode, node.id, startNodeRuntimeResetKey, supportedFields, supportedFieldSignature, workflowId]);
 
   useEffect(() => {
     if (!activeTrialRunId || run?.id !== activeTrialRunId) {
@@ -301,7 +318,9 @@ export function WorkflowEditorNodeRuntimePanel({
     });
   }, [isStartNode, node.id, onRunError, onRunSuccess, workflowId]);
 
-  const handleStartNodeTrialRun = useCallback(async (payload: Record<string, unknown>) => {
+  const handleStartNodeTrialRun = useCallback(async (
+    payload: Record<string, unknown>
+  ) => {
     persistStartNodeTrialRunCache(workflowId, node.id, payload);
     setCachedStartNodePayload(payload);
     form.setFieldsValue(payload);
@@ -320,30 +339,52 @@ export function WorkflowEditorNodeRuntimePanel({
   }, [handleStartNodeTrialRun, isStartNode, submitTrialRun, supportedFields]);
 
   useEffect(() => {
-    if (!isStartNode || runtimeRequestSerial <= 0) {
+    if (!runtimeRequestTargetsCurrentNode || !runtimeRequest) {
       return;
     }
 
-    if (runtimeRequestSerial === lastHandledRuntimeRequestSerialRef.current) {
+    if (isStartNode && hydratedStartNodeRuntimeResetKey !== startNodeRuntimeResetKey) {
       return;
     }
 
-    lastHandledRuntimeRequestSerialRef.current = runtimeRequestSerial;
+    if (runtimeRequest.requestId === lastHandledRuntimeRequestIdRef.current) {
+      return;
+    }
+
+    lastHandledRuntimeRequestIdRef.current = runtimeRequest.requestId;
+    onRuntimeRequestHandled?.();
+
+    if (!isStartNode) {
+      return;
+    }
 
     const launchMode = resolveStartNodeTrialRunLaunchMode({
       cachedPayload: cachedStartNodePayload,
+      requiredFieldNames,
       supportedFieldsCount: supportedFields.length
     });
 
     if (launchMode === "run") {
       const payload = cachedStartNodePayload ?? {};
+      setIsTrialRunModalOpen(false);
       void handleStartNodeTrialRun(payload);
       return;
     }
 
     setStatusMessage(null);
     setIsTrialRunModalOpen(true);
-  }, [cachedStartNodePayload, handleStartNodeTrialRun, isStartNode, runtimeRequestSerial, supportedFields.length]);
+  }, [
+    cachedStartNodePayload,
+    handleStartNodeTrialRun,
+    hydratedStartNodeRuntimeResetKey,
+    isStartNode,
+    onRuntimeRequestHandled,
+    requiredFieldNames,
+    runtimeRequest,
+    runtimeRequestTargetsCurrentNode,
+    startNodeRuntimeResetKey,
+    supportedFields.length
+  ]);
 
   const renderTrialRunForm = ({ includeInlineActions }: { includeInlineActions: boolean }) => (
     <>
@@ -837,16 +878,39 @@ function wait(durationMs: number) {
 
 export function resolveStartNodeTrialRunLaunchMode({
   cachedPayload,
+  requiredFieldNames,
   supportedFieldsCount
 }: {
   cachedPayload: Record<string, unknown> | null;
+  requiredFieldNames: string[];
   supportedFieldsCount: number;
 }) {
   if (supportedFieldsCount === 0) {
     return "run" as const;
   }
 
-  return cachedPayload ? ("run" as const) : ("form" as const);
+  if (requiredFieldNames.every((fieldName) => hasSatisfiedRuntimeField(cachedPayload, fieldName))) {
+    return "run" as const;
+  }
+
+  return "form" as const;
+}
+
+function hasSatisfiedRuntimeField(
+  payload: Record<string, unknown> | null,
+  fieldName: string
+) {
+  const value = payload?.[fieldName];
+
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return value !== undefined && value !== null;
 }
 
 function buildStartNodeTrialRunCacheKey(workflowId: string, nodeId: string) {

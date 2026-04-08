@@ -6,6 +6,7 @@ import type { WorkflowDefinitionPreflightIssue } from "@/lib/get-workflows";
 import type { WorkspaceStarterTemplateItem } from "@/lib/get-workspace-starters";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 
+import type { WorkflowEditorRuntimeRequest } from "./runtime-request";
 import type { WorkflowEditorMessageKind, WorkflowEditorMessageTone } from "./shared";
 
 const SIDEBAR_PREFERENCE_STORAGE_KEY = "sevenflows.editor.sidebarCollapsed";
@@ -38,6 +39,8 @@ export type WorkflowEditorInspectorFocusState = {
   highlightedVariableIndex: number | null;
   highlightedVariableFieldPath: string | null;
 };
+
+export type { WorkflowEditorRuntimeRequest } from "./runtime-request";
 
 type UseWorkflowEditorShellStateOptions = {
   persistedDefinitionSignature: string;
@@ -137,7 +140,9 @@ export function useWorkflowEditorShellState({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(DEFAULT_PANEL_COLLAPSED);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(DEFAULT_PANEL_COLLAPSED);
   const [assistantRequestSerial, setAssistantRequestSerial] = useState(0);
-  const [runtimeRequestSerial, setRuntimeRequestSerial] = useState(0);
+  const [runtimeRequest, setRuntimeRequest] = useState<WorkflowEditorRuntimeRequest | null>(
+    null
+  );
   const [hasLoadedPanelPreferences, setHasLoadedPanelPreferences] = useState(false);
 
   useEffect(() => {
@@ -221,10 +226,17 @@ export function useWorkflowEditorShellState({
     setAssistantRequestSerial((current) => current + 1);
   }, []);
 
-  const openNodeRuntime = useCallback(() => {
+  const openNodeRuntime = useCallback((nodeId: string) => {
     setIsSidebarCollapsed(true);
     setIsInspectorCollapsed(false);
-    setRuntimeRequestSerial((current) => current + 1);
+    setRuntimeRequest((current) => ({
+      nodeId,
+      requestId: (current?.requestId ?? 0) + 1
+    }));
+  }, []);
+
+  const clearRuntimeRequest = useCallback(() => {
+    setRuntimeRequest(null);
   }, []);
 
   const getInspectorFocusState = useCallback(
@@ -252,11 +264,12 @@ export function useWorkflowEditorShellState({
     isInspectorCollapsed,
     setIsInspectorCollapsed,
     assistantRequestSerial,
-    runtimeRequestSerial,
+    runtimeRequest,
     toggleSidebar,
     toggleInspector,
     openNodeAssistant,
     openNodeRuntime,
+    clearRuntimeRequest,
     getInspectorFocusState
   };
 }

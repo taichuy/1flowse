@@ -228,7 +228,7 @@ export function useWorkflowEditorPanels({
     persistBlockers: validation.persistBlockers,
     persistBlockerRecommendedNextStep,
     assistantRequestSerial: shell.assistantRequestSerial,
-    runtimeRequestSerial: shell.runtimeRequestSerial,
+    runtimeRequest: shell.runtimeRequest,
     sandboxReadiness,
     onRuntimeRunSuccess: (payload) => {
       const runId = payload?.runId ?? null;
@@ -254,6 +254,7 @@ export function useWorkflowEditorPanels({
       shell.setMessage(message);
       shell.setMessageTone("error");
     },
+    onRuntimeRequestHandled: shell.clearRuntimeRequest,
     onOpenRunOverlay: onActivateRunOverlay
   };
 

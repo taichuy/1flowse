@@ -14,6 +14,7 @@ import type { WorkflowEditorAssistantPanelProps } from "@/components/workflow-ed
 import type { WorkflowEditorPublishPanelProps } from "@/components/workflow-editor-inspector-panels/workflow-editor-publish-panel";
 import { WorkflowEditorNodeRuntimePanel } from "@/components/workflow-editor-inspector-panels/workflow-editor-node-runtime-panel";
 import { WorkflowEditorNodeSettingsPanel } from "@/components/workflow-editor-inspector-panels/workflow-editor-node-settings-panel";
+import { doesWorkflowEditorRuntimeRequestTargetNode } from "@/components/workflow-editor-workbench/runtime-request";
 import type {
   WorkflowEditorInspectorProps,
   WorkflowEditorInspectorTabKey
@@ -109,10 +110,11 @@ export function WorkflowEditorInspector({
   persistBlockers,
   persistBlockerRecommendedNextStep = null,
   assistantRequestSerial = 0,
-  runtimeRequestSerial = 0,
+  runtimeRequest = null,
   sandboxReadiness = null,
   onRuntimeRunSuccess,
   onRuntimeRunError,
+  onRuntimeRequestHandled,
   onOpenRunOverlay
 }: WorkflowEditorInspectorProps) {
   const selectedNodeDescription = useMemo(() => {
@@ -198,12 +200,12 @@ export function WorkflowEditorInspector({
   }, [activeTabKey, supportsAssistantTab]);
 
   useEffect(() => {
-    if (!selectedNodeId || runtimeRequestSerial === 0) {
+    if (!doesWorkflowEditorRuntimeRequestTargetNode(runtimeRequest, selectedNodeId)) {
       return;
     }
 
     setActiveTabKey("node-runtime");
-  }, [runtimeRequestSerial, selectedNodeId]);
+  }, [runtimeRequest, selectedNodeId]);
 
   const inspectorHeader = useMemo(() => {
     if (selectedNode) {
@@ -373,9 +375,10 @@ export function WorkflowEditorInspector({
               highlightedNodeFieldPath={highlightedNodeFieldPath}
               focusedValidationItem={focusedValidationItem}
               sandboxReadiness={sandboxReadiness}
-              runtimeRequestSerial={runtimeRequestSerial}
+              runtimeRequest={runtimeRequest}
               onRunSuccess={onRuntimeRunSuccess}
               onRunError={onRuntimeRunError}
+              onRuntimeRequestHandled={onRuntimeRequestHandled}
               onOpenRunOverlay={onOpenRunOverlay}
             />
           ) : (

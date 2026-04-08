@@ -230,10 +230,19 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
     expect(html).toContain("当前节点没有结构化输入字段");
   });
 
-  it("prefers direct start-node trial runs only when cache exists or no fields are required", () => {
+  it("runs immediately once cached required fields are complete", () => {
     expect(
       resolveStartNodeTrialRunLaunchMode({
         cachedPayload: null,
+        requiredFieldNames: ["query"],
+        supportedFieldsCount: 2
+      })
+    ).toBe("form");
+
+    expect(
+      resolveStartNodeTrialRunLaunchMode({
+        cachedPayload: {},
+        requiredFieldNames: ["query"],
         supportedFieldsCount: 2
       })
     ).toBe("form");
@@ -241,6 +250,7 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
     expect(
       resolveStartNodeTrialRunLaunchMode({
         cachedPayload: { query: "hello" },
+        requiredFieldNames: ["query"],
         supportedFieldsCount: 2
       })
     ).toBe("run");
@@ -248,6 +258,15 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
     expect(
       resolveStartNodeTrialRunLaunchMode({
         cachedPayload: null,
+        requiredFieldNames: [],
+        supportedFieldsCount: 2
+      })
+    ).toBe("run");
+
+    expect(
+      resolveStartNodeTrialRunLaunchMode({
+        cachedPayload: null,
+        requiredFieldNames: [],
         supportedFieldsCount: 0
       })
     ).toBe("run");

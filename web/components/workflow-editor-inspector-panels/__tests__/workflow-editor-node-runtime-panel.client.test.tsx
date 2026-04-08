@@ -62,10 +62,11 @@ afterEach(() => {
 });
 
 function buildNode(
-  overrides: Partial<WorkflowCanvasNodeData>
+  overrides: Partial<WorkflowCanvasNodeData>,
+  nodeId = "node-1"
 ): Node<WorkflowCanvasNodeData> {
   return {
-    id: "node-1",
+    id: nodeId,
     position: { x: 0, y: 0 },
     type: "workflow",
     data: {
@@ -85,6 +86,13 @@ function buildNode(
       ...overrides
     }
   } as Node<WorkflowCanvasNodeData>;
+}
+
+function buildRuntimeRequest(nodeId = "node-1", requestId = 1) {
+  return {
+    nodeId,
+    requestId
+  };
 }
 
 function buildRunDetail(): RunDetail {
@@ -118,7 +126,61 @@ function buildRunDetail(): RunDetail {
 }
 
 describe("WorkflowEditorNodeRuntimePanel client render", () => {
-  it("opens the start-node input modal when runtime request serial increments after mount", () => {
+  it("runs immediately when cached required fields are complete for the requested node", async () => {
+    window.localStorage.setItem(
+      "sevenflows.editor.start-node-trial-run:workflow-demo:node-1",
+      JSON.stringify({ query: "缓存值" })
+    );
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        createElement(
+          React.StrictMode,
+          null,
+          createElement(WorkflowEditorNodeRuntimePanel, {
+            workflowId: "workflow-demo",
+            node: buildNode({}),
+            runtimeRequest: buildRuntimeRequest()
+          })
+        )
+      );
+    });
+
+    expect(triggerWorkflowNodeTrialRunMock).toHaveBeenCalledWith(
+      "workflow-demo",
+      "node-1",
+      { query: "缓存值" }
+    );
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.getAttribute("style") ?? "").toContain("display: none");
+  });
+
+  it("ignores runtime requests targeting another node", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        createElement(WorkflowEditorNodeRuntimePanel, {
+          workflowId: "workflow-demo",
+          node: buildNode({}, "node-1"),
+          runtimeRequest: buildRuntimeRequest("node-2")
+        })
+      );
+    });
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.getAttribute("style") ?? "").toContain("display: none");
+    expect(triggerWorkflowNodeTrialRunMock).not.toHaveBeenCalled();
+  });
+
+  it("opens the start-node input modal when a targeted runtime request arrives after mount", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -131,7 +193,7 @@ describe("WorkflowEditorNodeRuntimePanel client render", () => {
           createElement(WorkflowEditorNodeRuntimePanel, {
             workflowId: "workflow-demo",
             node: buildNode({}),
-            runtimeRequestSerial: 0
+            runtimeRequest: null
           })
         )
       );
@@ -148,7 +210,7 @@ describe("WorkflowEditorNodeRuntimePanel client render", () => {
           createElement(WorkflowEditorNodeRuntimePanel, {
             workflowId: "workflow-demo",
             node: buildNode({}),
-            runtimeRequestSerial: 1
+            runtimeRequest: buildRuntimeRequest()
           })
         )
       );
@@ -170,7 +232,7 @@ describe("WorkflowEditorNodeRuntimePanel client render", () => {
         createElement(WorkflowEditorNodeRuntimePanel, {
           workflowId: "workflow-demo",
           node: buildNode({}),
-          runtimeRequestSerial: 1
+          runtimeRequest: buildRuntimeRequest()
         })
       );
     });
@@ -183,11 +245,48 @@ describe("WorkflowEditorNodeRuntimePanel client render", () => {
           workflowId: "workflow-demo",
           node: buildNode({ runStatus: "succeeded" }),
           run: buildRunDetail(),
-          runtimeRequestSerial: 1
+          runtimeRequest: buildRuntimeRequest()
         })
       );
     });
 
     expect(document.body.textContent).toContain("开始试运行");
+  });
+
+  it("consumes a targeted runtime request only once", async () => {
+    const handleRuntimeRequest = vi.fn();
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(
+        createElement(WorkflowEditorNodeRuntimePanel, {
+          workflowId: "workflow-demo",
+          node: buildNode({}),
+          runtimeRequest: buildRuntimeRequest(),
+          onRuntimeRequestHandled: handleRuntimeRequest
+        })
+      );
+    });
+
+    expect(handleRuntimeRequest).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("开始试运行");
+
+    await act(async () => {
+      root?.render(
+        createElement(WorkflowEditorNodeRuntimePanel, {
+          workflowId: "workflow-demo",
+          node: buildNode({ runStatus: "succeeded" }),
+          run: buildRunDetail(),
+          runtimeRequest: buildRuntimeRequest(),
+          onRuntimeRequestHandled: handleRuntimeRequest
+        })
+      );
+    });
+
+    expect(handleRuntimeRequest).toHaveBeenCalledTimes(1);
+    expect(triggerWorkflowNodeTrialRunMock).not.toHaveBeenCalled();
   });
 });
