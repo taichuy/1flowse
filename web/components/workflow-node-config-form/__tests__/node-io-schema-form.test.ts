@@ -42,4 +42,32 @@ describe("WorkflowNodeIoSchemaForm", () => {
     expect(html).toContain("节点 input schema 不是合法 contract object");
     expect(html).toContain("validation-focus-ring");
   });
+
+  it("renders collapsible input/output sections for the compact start-node variant", () => {
+    const html = renderToStaticMarkup(
+      createElement(WorkflowNodeIoSchemaForm, {
+        node: {
+          id: "node-1",
+          data: {
+            nodeType: "startNode",
+            inputSchema: { type: "object", properties: {} },
+            outputSchema: { type: "object", properties: {} }
+          }
+        } as never,
+        presentation: "collapsible",
+        onInputSchemaChange: () => undefined,
+        onOutputSchemaChange: () => undefined
+      })
+    );
+
+    expect(html).toContain("输入");
+    expect(html).toContain("输出");
+    expect(html).toContain("复制输入");
+    expect(html).toContain("复制输出");
+    expect((html.match(/2 个字段/g) ?? []).length).toBe(2);
+    expect(html).not.toContain("输出 0 个字段");
+    expect(html).not.toContain("Node contract");
+    expect(html).not.toContain("Input schema JSON");
+    expect(html).not.toContain("Output schema JSON");
+  });
 });

@@ -373,6 +373,7 @@ export function WorkflowEditorInspector({
               highlightedNodeFieldPath={highlightedNodeFieldPath}
               focusedValidationItem={focusedValidationItem}
               sandboxReadiness={sandboxReadiness}
+              runtimeRequestSerial={runtimeRequestSerial}
               onRunSuccess={onRuntimeRunSuccess}
               onRunError={onRuntimeRunError}
               onOpenRunOverlay={onOpenRunOverlay}

@@ -294,6 +294,10 @@ export function useWorkflowEditorGraph({
   const handleSelectionChange = (selection: OnSelectionChangeParams) => {
     const nextNode = selection.nodes[0];
     const nextEdge = selection.edges[0];
+    console.info("[workflow-selection-change]", {
+      nextNodeId: nextNode?.id ?? null,
+      nextEdgeId: nextEdge?.id ?? null
+    });
     setSelectedNodeId(nextNode?.id ?? null);
     setSelectedEdgeId(nextEdge?.id ?? null);
   };

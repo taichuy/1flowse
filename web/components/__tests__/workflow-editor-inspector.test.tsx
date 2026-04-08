@@ -243,8 +243,8 @@ describe("WorkflowEditorInspector", () => {
 
     expect(html).toContain('data-component="workflow-editor-node-runtime-panel"');
     expect(html).toContain('data-component="workflow-editor-node-runtime-contract"');
-    expect(html).toContain("高级系统设置");
     expect(html).toContain('data-component="node-io-schema-form"');
+    expect(html).not.toContain("高级系统设置");
     expect(html).not.toContain("原始 JSON");
   });
 

@@ -120,6 +120,11 @@ export type WorkflowEditorInspectorTabKey =
   | "workflow-variables"
   | "workflow-publish";
 
+export type WorkflowEditorRuntimeRunSuccessPayload = {
+  runId?: string | null;
+  revealRunOverlay?: boolean;
+};
+
 export type WorkflowEditorInspectorProps = {
   workflowId: string;
   currentHref?: string | null;
@@ -176,7 +181,7 @@ export type WorkflowEditorInspectorProps = {
   assistantRequestSerial?: number;
   runtimeRequestSerial?: number;
   sandboxReadiness?: SandboxReadinessCheck | null;
-  onRuntimeRunSuccess?: (runId?: string | null) => void;
+  onRuntimeRunSuccess?: (payload?: WorkflowEditorRuntimeRunSuccessPayload) => void;
   onRuntimeRunError?: (message: string) => void;
   onOpenRunOverlay?: () => void;
 };

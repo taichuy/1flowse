@@ -6,7 +6,6 @@ import { PlayCircleOutlined } from "@ant-design/icons";
 
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
-import { formatDurationMs } from "@/lib/runtime-presenters";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import { formatWorkflowNodeMeta } from "@/lib/workflow-node-display";
 import {
@@ -175,29 +174,6 @@ export function WorkflowCanvasNode({
           menuClassName="workflow-canvas-node-quick-menu"
           onQuickAdd={(type) => onQuickAdd?.(id, type)}
         />
-      ) : null}
-      {data.runStatus ? (
-        <div className="workflow-canvas-node-runtime">
-          <span className={`health-pill ${data.runStatus}`}>{data.runStatus}</span>
-          <div className="workflow-canvas-node-runtime-meta">
-            {data.runLastEventType ? (
-              <span className="workflow-canvas-node-meta">{data.runLastEventType}</span>
-            ) : null}
-            {typeof data.runDurationMs === "number" ? (
-              <span className="workflow-canvas-node-meta">
-                {formatDurationMs(data.runDurationMs)}
-              </span>
-            ) : null}
-            {typeof data.runEventCount === "number" && data.runEventCount > 0 ? (
-              <span className="workflow-canvas-node-meta">
-                {data.runEventCount} events
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-      {data.runErrorMessage ? (
-        <div className="workflow-canvas-node-error">{data.runErrorMessage}</div>
       ) : null}
       {hasOutgoingHandle ? <Handle type="source" position={Position.Right} /> : null}
     </div>

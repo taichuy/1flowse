@@ -1,11 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Button, Collapse } from "antd";
 import type { Node } from "@xyflow/react";
 
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
-import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
+import {
+  resolveWorkflowNodeInputSchema,
+  resolveWorkflowNodeOutputSchema,
+  type WorkflowCanvasNodeData
+} from "@/lib/workflow-editor";
 import { validateContractSchema } from "@/lib/workflow-contract-schema-validation";
 import { getWorkflowNodeTypeDisplayLabel } from "@/lib/workflow-node-display";
 import { WorkflowValidationRemediationCard } from "@/components/workflow-validation-remediation-card";
@@ -20,6 +25,7 @@ export type WorkflowNodeIoSchemaFormProps = {
   highlightedFieldPath?: string | null;
   focusedValidationItem?: WorkflowValidationNavigatorItem | null;
   sandboxReadiness?: SandboxReadinessCheck | null;
+  presentation?: "default" | "collapsible";
 };
 
 const EMPTY_OBJECT_SCHEMA = JSON.stringify(
@@ -40,25 +46,64 @@ export function WorkflowNodeIoSchemaForm({
   highlighted = false,
   highlightedFieldPath = null,
   focusedValidationItem = null,
-  sandboxReadiness = null
+  sandboxReadiness = null,
+  presentation = "default"
 }: WorkflowNodeIoSchemaFormProps) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
-  const [inputSchemaText, setInputSchemaText] = useState(stringifySchema(node.data.inputSchema));
-  const [outputSchemaText, setOutputSchemaText] = useState(stringifySchema(node.data.outputSchema));
+  const normalizedHighlightedField = normalizeSchemaFieldKey(highlightedFieldPath);
+  const isCollapsiblePresentation = presentation === "collapsible";
+  const resolvedInputSchema = useMemo(
+    () => resolveWorkflowNodeInputSchema(node.data.nodeType, node.data.inputSchema),
+    [node.data.inputSchema, node.data.nodeType]
+  );
+  const resolvedOutputSchema = useMemo(
+    () =>
+      resolveWorkflowNodeOutputSchema(
+        node.data.nodeType,
+        resolvedInputSchema,
+        node.data.outputSchema
+      ),
+    [node.data.nodeType, node.data.outputSchema, resolvedInputSchema]
+  );
+  const resolvedInputSchemaText = useMemo(
+    () => stringifySchema(resolvedInputSchema),
+    [resolvedInputSchema]
+  );
+  const resolvedOutputSchemaText = useMemo(
+    () => stringifySchema(resolvedOutputSchema),
+    [resolvedOutputSchema]
+  );
+  const [inputSchemaText, setInputSchemaText] = useState(() => resolvedInputSchemaText);
+  const [outputSchemaText, setOutputSchemaText] = useState(() => resolvedOutputSchemaText);
   const [inputErrorMessage, setInputErrorMessage] = useState<string | null>(null);
   const [outputErrorMessage, setOutputErrorMessage] = useState<string | null>(null);
-  const normalizedHighlightedField = normalizeSchemaFieldKey(highlightedFieldPath);
+  const [copiedField, setCopiedField] = useState<"input" | "output" | null>(null);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(() =>
+    resolveExpandedSchemaKeys(normalizedHighlightedField, isCollapsiblePresentation)
+  );
 
   useEffect(() => {
-    setInputSchemaText(stringifySchema(node.data.inputSchema));
-    setOutputSchemaText(stringifySchema(node.data.outputSchema));
+    setInputSchemaText(resolvedInputSchemaText);
+    setOutputSchemaText(resolvedOutputSchemaText);
     setInputErrorMessage(null);
     setOutputErrorMessage(null);
-  }, [node.id, node.data.inputSchema, node.data.outputSchema]);
+    setCopiedField(null);
+    setExpandedKeys(resolveExpandedSchemaKeys(normalizedHighlightedField, isCollapsiblePresentation));
+  }, [
+    node.id,
+    resolvedInputSchemaText,
+    resolvedOutputSchemaText,
+    normalizedHighlightedField,
+    isCollapsiblePresentation
+  ]);
 
   useEffect(() => {
     if (!normalizedHighlightedField) {
       return;
+    }
+
+    if (isCollapsiblePresentation) {
+      setExpandedKeys([normalizedHighlightedField]);
     }
 
     const target = sectionRef.current?.querySelector<HTMLElement>(
@@ -67,52 +112,23 @@ export function WorkflowNodeIoSchemaForm({
 
     target?.scrollIntoView({ block: "center", behavior: "smooth" });
     target?.focus();
-  }, [normalizedHighlightedField]);
+  }, [normalizedHighlightedField, isCollapsiblePresentation]);
 
-  const inputSchemaFieldsCount = countSchemaFields(node.data.inputSchema);
-  const outputSchemaFieldsCount = countSchemaFields(node.data.outputSchema);
+  const inputSchemaFieldsCount = countSchemaFields(resolvedInputSchema);
+  const outputSchemaFieldsCount = countSchemaFields(resolvedOutputSchema);
 
-  return (
+  const inputSchemaEditor = (
     <div
-      className={`binding-form ${highlighted ? "validation-focus-ring" : ""}`.trim()}
-      ref={sectionRef}
+      className={`binding-field ${normalizedHighlightedField === "inputSchema" ? "validation-focus-ring" : ""}`.trim()}
+      data-validation-field="inputSchema"
     >
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Node contract</p>
-          <h3>Input / output schema</h3>
-        </div>
-      </div>
-
-      <div className="tool-badge-row">
-        <span className="event-chip">
-          {getWorkflowNodeTypeDisplayLabel(node.data.nodeType, node.data.typeLabel)}
-        </span>
-        <span className="event-chip">input fields {inputSchemaFieldsCount}</span>
-        <span className="event-chip">output fields {outputSchemaFieldsCount}</span>
-      </div>
-
-      {focusedValidationItem && normalizedHighlightedField ? (
-        <WorkflowValidationRemediationCard
-          currentHref={currentHref}
-          item={focusedValidationItem}
-          sandboxReadiness={sandboxReadiness}
-        />
-      ) : null}
-
-      <label
-        className={`binding-field ${normalizedHighlightedField === "inputSchema" ? "validation-focus-ring" : ""}`.trim()}
-        data-validation-field="inputSchema"
-      >
-        <span className="binding-label">Input schema JSON</span>
-        <textarea
-          className="editor-json-area"
-          value={inputSchemaText}
-          onChange={(event) => setInputSchemaText(event.target.value)}
-          placeholder="为空表示沿用节点默认输入约束"
-        />
-      </label>
-
+      {isCollapsiblePresentation ? null : <span className="binding-label">Input schema JSON</span>}
+      <textarea
+        className="editor-json-area"
+        value={inputSchemaText}
+        onChange={(event) => setInputSchemaText(event.target.value)}
+        placeholder="为空表示沿用节点默认输入约束"
+      />
       <div className="tool-badge-row">
         <button
           className="sync-button"
@@ -126,7 +142,7 @@ export function WorkflowNodeIoSchemaForm({
             })
           }
         >
-          应用 input schema
+          {isCollapsiblePresentation ? "应用输入" : "应用 input schema"}
         </button>
         <button
           className="sync-button"
@@ -147,23 +163,25 @@ export function WorkflowNodeIoSchemaForm({
             onInputSchemaChange(undefined);
           }}
         >
-          清空 input schema
+          {isCollapsiblePresentation ? "清空输入" : "清空 input schema"}
         </button>
       </div>
+      {inputErrorMessage ? <p className="empty-state compact">{inputErrorMessage}</p> : null}
+    </div>
+  );
 
-      <label
-        className={`binding-field ${normalizedHighlightedField === "outputSchema" ? "validation-focus-ring" : ""}`.trim()}
-        data-validation-field="outputSchema"
-      >
-        <span className="binding-label">Output schema JSON</span>
-        <textarea
-          className="editor-json-area"
-          value={outputSchemaText}
-          onChange={(event) => setOutputSchemaText(event.target.value)}
-          placeholder="为空表示节点输出仍由运行时和下游 mapping 自行约束"
-        />
-      </label>
-
+  const outputSchemaEditor = (
+    <div
+      className={`binding-field ${normalizedHighlightedField === "outputSchema" ? "validation-focus-ring" : ""}`.trim()}
+      data-validation-field="outputSchema"
+    >
+      {isCollapsiblePresentation ? null : <span className="binding-label">Output schema JSON</span>}
+      <textarea
+        className="editor-json-area"
+        value={outputSchemaText}
+        onChange={(event) => setOutputSchemaText(event.target.value)}
+        placeholder="为空表示节点输出仍由运行时和下游 mapping 自行约束"
+      />
       <div className="tool-badge-row">
         <button
           className="sync-button"
@@ -177,7 +195,7 @@ export function WorkflowNodeIoSchemaForm({
             })
           }
         >
-          应用 output schema
+          {isCollapsiblePresentation ? "应用输出" : "应用 output schema"}
         </button>
         <button
           className="sync-button"
@@ -198,17 +216,109 @@ export function WorkflowNodeIoSchemaForm({
             onOutputSchemaChange(undefined);
           }}
         >
-          清空 output schema
+          {isCollapsiblePresentation ? "清空输出" : "清空 output schema"}
         </button>
       </div>
-
-      <p className="section-copy">
-        这层先把节点契约从通用 config JSON 中分离出来，并复用与后端保存链路一致的最小
-        contract 校验；后续再继续演进成更细粒度的 schema builder。
-      </p>
-
-      {inputErrorMessage ? <p className="empty-state compact">{inputErrorMessage}</p> : null}
       {outputErrorMessage ? <p className="empty-state compact">{outputErrorMessage}</p> : null}
+    </div>
+  );
+
+  return (
+    <div
+      className={`binding-form ${highlighted ? "validation-focus-ring" : ""}`.trim()}
+      ref={sectionRef}
+    >
+      {isCollapsiblePresentation ? null : (
+        <>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Node contract</p>
+              <h3>Input / output schema</h3>
+            </div>
+          </div>
+
+          <div className="tool-badge-row">
+            <span className="event-chip">
+              {getWorkflowNodeTypeDisplayLabel(node.data.nodeType, node.data.typeLabel)}
+            </span>
+            <span className="event-chip">input fields {inputSchemaFieldsCount}</span>
+            <span className="event-chip">output fields {outputSchemaFieldsCount}</span>
+          </div>
+        </>
+      )}
+
+      {focusedValidationItem && normalizedHighlightedField ? (
+        <WorkflowValidationRemediationCard
+          currentHref={currentHref}
+          item={focusedValidationItem}
+          sandboxReadiness={sandboxReadiness}
+        />
+      ) : null}
+
+      {isCollapsiblePresentation ? (
+        <Collapse
+          activeKey={expandedKeys}
+          onChange={(keys) =>
+            setExpandedKeys(Array.isArray(keys) ? keys.map(String) : [String(keys)])
+          }
+          className="workflow-editor-node-io-collapse"
+          items={[
+            {
+              key: "inputSchema",
+              label: buildSchemaCollapseLabel("输入", inputSchemaFieldsCount),
+              extra: (
+                <Button
+                  type="text"
+                  size="small"
+                  className="workflow-editor-node-io-copy-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleCopySchema({
+                      value: inputSchemaText,
+                      field: "input",
+                      setCopiedField
+                    });
+                  }}
+                >
+                  {copiedField === "input" ? "已复制输入" : "复制输入"}
+                </Button>
+              ),
+              children: inputSchemaEditor
+            },
+            {
+              key: "outputSchema",
+              label: buildSchemaCollapseLabel("输出", outputSchemaFieldsCount),
+              extra: (
+                <Button
+                  type="text"
+                  size="small"
+                  className="workflow-editor-node-io-copy-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleCopySchema({
+                      value: outputSchemaText,
+                      field: "output",
+                      setCopiedField
+                    });
+                  }}
+                >
+                  {copiedField === "output" ? "已复制输出" : "复制输出"}
+                </Button>
+              ),
+              children: outputSchemaEditor
+            }
+          ]}
+        />
+      ) : (
+        <>
+          {inputSchemaEditor}
+          {outputSchemaEditor}
+          <p className="section-copy">
+            这层先把节点契约从通用 config JSON 中分离出来，并复用与后端保存链路一致的最小
+            contract 校验；后续再继续演进成更细粒度的 schema builder。
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -228,6 +338,23 @@ function handleApplySchema(options: {
       error instanceof Error ? error.message : "Schema 不是合法 JSON 对象。"
     );
   }
+}
+
+async function handleCopySchema({
+  value,
+  field,
+  setCopiedField
+}: {
+  value: string;
+  field: "input" | "output";
+  setCopiedField: (value: "input" | "output" | null) => void;
+}) {
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(value.trim() || EMPTY_OBJECT_SCHEMA);
+  setCopiedField(field);
 }
 
 function parseSchemaText(value: string, errorPrefix: string) {
@@ -269,4 +396,24 @@ function normalizeSchemaFieldKey(fieldPath?: string | null) {
   }
 
   return null;
+}
+
+function resolveExpandedSchemaKeys(
+  highlightedField: "inputSchema" | "outputSchema" | null,
+  isCollapsiblePresentation: boolean
+) {
+  if (!isCollapsiblePresentation || !highlightedField) {
+    return [];
+  }
+
+  return [highlightedField];
+}
+
+function buildSchemaCollapseLabel(title: string, fieldCount: number) {
+  return (
+    <span className="workflow-editor-node-io-collapse-label">
+      <span>{title}</span>
+      <span className="workflow-editor-node-io-collapse-count">{fieldCount} 个字段</span>
+    </span>
+  );
 }

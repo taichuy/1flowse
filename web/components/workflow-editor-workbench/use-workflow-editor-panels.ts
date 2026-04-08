@@ -230,11 +230,14 @@ export function useWorkflowEditorPanels({
     assistantRequestSerial: shell.assistantRequestSerial,
     runtimeRequestSerial: shell.runtimeRequestSerial,
     sandboxReadiness,
-    onRuntimeRunSuccess: (runId) => {
+    onRuntimeRunSuccess: (payload) => {
+      const runId = payload?.runId ?? null;
+      const revealRunOverlay = payload?.revealRunOverlay ?? true;
+
       shell.setMessage("节点试运行已写入运行缓存");
       shell.setMessageTone("success");
 
-      if (shell.isSidebarCollapsed) {
+      if (revealRunOverlay && shell.isSidebarCollapsed) {
         shell.toggleSidebar();
       }
 
@@ -243,7 +246,9 @@ export function useWorkflowEditorPanels({
         void runOverlay.refreshRecentRuns();
       }
 
-      onActivateRunOverlay();
+      if (revealRunOverlay) {
+        onActivateRunOverlay();
+      }
     },
     onRuntimeRunError: (message) => {
       shell.setMessage(message);

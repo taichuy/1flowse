@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { WorkflowNodeCatalogItem } from "../get-workflow-library";
 import { sortWorkflowNodeCatalogForAuthoring } from "../workflow-node-catalog";
 import {
+  applyWorkflowCanvasSelectionState,
   buildWorkflowCanvasNodeData,
   buildWorkflowInsertedNodePosition,
   insertNodeIntoCanvasGraph,
@@ -199,6 +200,7 @@ describe("workflow-editor quick add helpers", () => {
       },
       required: ["query"]
     });
+    expect(startNode.outputSchema).toStrictEqual(startNode.inputSchema);
 
     expect(
       buildWorkflowCanvasNodeData(nodeCatalog, {
@@ -225,6 +227,33 @@ describe("workflow-editor quick add helpers", () => {
       x: 480,
       y: -36
     });
+  });
+
+  it("applies controlled canvas selection without losing node focus", () => {
+    const selection = applyWorkflowCanvasSelectionState({
+      nodes: [
+        {
+          ...baseNodes[0],
+          selected: false
+        },
+        {
+          ...baseNodes[1],
+          selected: true
+        }
+      ],
+      edges: [
+        {
+          ...baseEdge,
+          selected: true
+        }
+      ],
+      selectedNodeId: "startNode",
+      selectedEdgeId: null
+    });
+
+    expect(selection.nodes.find((node) => node.id === "startNode")?.selected).toBe(true);
+    expect(selection.nodes.find((node) => node.id === "endNode")?.selected).toBe(false);
+    expect(selection.edges[0]?.selected).toBe(false);
   });
 
   it("inserts a node after the selected node and auto-connects it", () => {

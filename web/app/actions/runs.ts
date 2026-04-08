@@ -1,5 +1,7 @@
 "use server";
 
+import { cookies } from "next/headers";
+
 import {
   buildActionCallbackBlockerDeltaSummary,
   fetchScopedCallbackBlockerSnapshot
@@ -19,6 +21,12 @@ import {
 } from "./run-snapshot";
 import type { SensitiveResourceItem } from "@/lib/get-sensitive-access";
 import type { OperatorInlineActionResultState } from "@/lib/operator-inline-action-feedback";
+import {
+  ACCESS_TOKEN_COOKIE_NAME,
+  buildCookieHeader,
+  CSRF_TOKEN_COOKIE_NAME,
+  CSRF_TOKEN_HEADER_NAME
+} from "@/lib/workspace-access";
 
 export type ResumeRunState = OperatorInlineActionResultState & {
   status: "idle" | "success" | "error";
@@ -28,6 +36,31 @@ export type ResumeRunState = OperatorInlineActionResultState & {
 
 const INITIAL_REASON = "operator_manual_resume_attempt";
 const INITIAL_SOURCE = "operator_callback_resume";
+
+async function buildWorkspaceActionHeaders(init?: HeadersInit) {
+  const cookieStore = await cookies();
+  const headers = new Headers(init ?? {});
+  const cookieHeader = buildCookieHeader(
+    cookieStore.getAll().map((item) => ({
+      name: item.name,
+      value: item.value
+    }))
+  );
+  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE_NAME)?.value ?? "";
+  const csrfToken = cookieStore.get(CSRF_TOKEN_COOKIE_NAME)?.value ?? "";
+
+  if (cookieHeader && !headers.has("Cookie")) {
+    headers.set("Cookie", cookieHeader);
+  }
+  if (accessToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+  if (csrfToken && !headers.has(CSRF_TOKEN_HEADER_NAME)) {
+    headers.set(CSRF_TOKEN_HEADER_NAME, csrfToken);
+  }
+
+  return headers;
+}
 
 export async function resumeRun(
   _: ResumeRunState,
@@ -52,9 +85,9 @@ export async function resumeRun(
     });
     const response = await fetch(`${getApiBaseUrl()}/api/runs/${runId}/resume`, {
       method: "POST",
-      headers: {
+      headers: await buildWorkspaceActionHeaders({
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify({
         source: INITIAL_SOURCE,
         reason
@@ -164,9 +197,9 @@ export async function triggerWorkflowRun(
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/workflows/${workflowId}/runs`, {
       method: "POST",
-      headers: {
+      headers: await buildWorkspaceActionHeaders({
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify({
         input_payload: inputPayload,
         source: "operator_manual_trigger"
@@ -216,9 +249,9 @@ export async function triggerWorkflowNodeTrialRun(
       `${getApiBaseUrl()}/api/workflows/${workflowId}/nodes/${nodeId}/trial-runs`,
       {
         method: "POST",
-        headers: {
+        headers: await buildWorkspaceActionHeaders({
           "Content-Type": "application/json"
-        },
+        }),
         body: JSON.stringify({
           input_payload: inputPayload,
           source: "operator_node_trial_run"
@@ -240,7 +273,6 @@ export async function triggerWorkflowNodeTrialRun(
 
     if (runId) {
       revalidateOperatorFollowUpPaths({
-        workflowIds: [workflowId],
         runIds: [runId]
       });
     }

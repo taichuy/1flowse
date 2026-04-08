@@ -344,6 +344,10 @@ export function WorkflowEditorWorkbench({
   );
   const focusNode = graph.focusNode;
   const selectedNodeId = graph.selectedNodeId;
+  const displayedSelectedNode = useMemo(
+    () => displayedNodes.find((node) => node.id === selectedNodeId) ?? graph.selectedNode,
+    [displayedNodes, graph.selectedNode, selectedNodeId]
+  );
   const handleCanvasQuickAdd = graph.handleAddNode;
   const handleCanvasDeleteNode = graph.handleDeleteNode;
   const handleCanvasOpenConfig = useCallback(
@@ -425,6 +429,14 @@ export function WorkflowEditorWorkbench({
       }) as CSSProperties,
     []
   );
+
+  useEffect(() => {
+    console.info("[workflow-inspector-key]", {
+      selectedInspectorKey,
+      selectedNodeId: graph.selectedNodeId,
+      selectedEdgeId: graph.selectedEdgeId
+    });
+  }, [graph.selectedEdgeId, graph.selectedNodeId, selectedInspectorKey]);
 
   useEffect(() => {
     if (!selectedInspectorKey) {
@@ -635,7 +647,11 @@ export function WorkflowEditorWorkbench({
                 className="workflow-editor-node-config-workbench-body"
                 data-component="workflow-editor-node-config-workbench-body"
               >
-                <WorkflowEditorInspector {...panels.inspectorProps} />
+                <WorkflowEditorInspector
+                  {...panels.inspectorProps}
+                  selectedNode={displayedSelectedNode ?? panels.inspectorProps.selectedNode}
+                  nodes={displayedNodes}
+                />
               </div>
             </WorkflowEditorFloatingPanel>
           ) : null}

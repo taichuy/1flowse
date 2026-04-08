@@ -12,6 +12,24 @@ import {
 } from "@/lib/callback-blocker-follow-up";
 import { getSystemOverview } from "@/lib/get-system-overview";
 
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({
+    getAll: () => [
+      { name: "sevenflows_access_token", value: "access-token-demo" },
+      { name: "sevenflows_csrf_token", value: "csrf-token-demo" }
+    ],
+    get: (name: string) => {
+      if (name === "sevenflows_access_token") {
+        return { value: "access-token-demo" };
+      }
+      if (name === "sevenflows_csrf_token") {
+        return { value: "csrf-token-demo" };
+      }
+      return undefined;
+    }
+  }))
+}));
+
 vi.mock("@/lib/api-base-url", () => ({
   getApiBaseUrl: () => "http://api.test"
 }));

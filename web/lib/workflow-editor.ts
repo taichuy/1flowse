@@ -40,6 +40,29 @@ export type WorkflowCanvasEdgeData = {
   mapping?: Array<Record<string, unknown>>;
 };
 
+export function applyWorkflowCanvasSelectionState({
+  nodes,
+  edges,
+  selectedNodeId = null,
+  selectedEdgeId = null
+}: {
+  nodes: Array<Node<WorkflowCanvasNodeData>>;
+  edges: Array<Edge<WorkflowCanvasEdgeData>>;
+  selectedNodeId?: string | null;
+  selectedEdgeId?: string | null;
+}) {
+  return {
+    nodes: nodes.map((node) => {
+      const isSelected = node.id === selectedNodeId;
+      return node.selected === isSelected ? node : { ...node, selected: isSelected };
+    }),
+    edges: edges.map((edge) => {
+      const isSelected = edge.id === selectedEdgeId;
+      return edge.selected === isSelected ? edge : { ...edge, selected: isSelected };
+    })
+  };
+}
+
 const DEFAULT_START_NODE_INPUT_SCHEMA = {
   type: "object",
   properties: {
@@ -316,10 +339,16 @@ export function buildWorkflowCanvasNodeData(
   const catalogItem = getWorkflowNodeCatalogItem(nodeCatalog, input.nodeType);
   const typeLabel = getWorkflowNodeTypeDisplayLabel(input.nodeType, catalogItem?.label);
   const inputSchema = resolveWorkflowNodeInputSchema(input.nodeType, input.inputSchema);
+  const outputSchema = resolveWorkflowNodeOutputSchema(
+    input.nodeType,
+    inputSchema,
+    input.outputSchema
+  );
 
   return {
     ...input,
     inputSchema,
+    outputSchema,
     label: getWorkflowNodeDisplayLabel({
       nodeType: input.nodeType,
       label: input.label,
@@ -366,6 +395,20 @@ export function resolveWorkflowNodeInputSchema(
     properties: nextProperties,
     required: [...nextRequired]
   };
+}
+
+export function resolveWorkflowNodeOutputSchema(
+  nodeType: string,
+  inputSchema: Record<string, unknown> | null | undefined,
+  outputSchema: Record<string, unknown> | null | undefined
+) {
+  const normalized = toOptionalRecord(outputSchema);
+
+  if (nodeType !== "startNode") {
+    return normalized;
+  }
+
+  return structuredClone(resolveWorkflowNodeInputSchema(nodeType, inputSchema) ?? {});
 }
 
 export function buildWorkflowInsertedNodePosition(

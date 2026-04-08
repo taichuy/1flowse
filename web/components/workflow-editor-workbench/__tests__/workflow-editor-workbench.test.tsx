@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   useWorkflowEditorValidation: vi.fn(),
   useWorkflowEditorPersistence: vi.fn(),
   useWorkflowEditorPanels: vi.fn(),
+  applyRunOverlayToNodes: vi.fn(<T,>(nodes: T[]) => nodes),
 }));
 
 vi.mock("next/link", () => ({
@@ -40,6 +41,8 @@ vi.mock("next/dynamic", async () => {
       return () => null;
     },
   };
+
+
 });
 
 vi.mock("@xyflow/react", () => ({
@@ -69,7 +72,15 @@ vi.mock("@/lib/workflow-node-catalog", () => ({
 }));
 
 vi.mock("@/components/workflow-editor-inspector", () => ({
-  WorkflowEditorInspector: () => createElement("div", { "data-component": "workflow-editor-inspector" }, "inspector"),
+  WorkflowEditorInspector: ({ selectedNode }: { selectedNode?: { data?: { runStatus?: string | null } } | null }) =>
+    createElement(
+      "div",
+      {
+        "data-component": "workflow-editor-inspector",
+        "data-run-status": selectedNode?.data?.runStatus ?? "none"
+      },
+      "inspector"
+    ),
 }));
 
 vi.mock("@/components/workflow-editor-workbench/persist-blockers", () => ({
@@ -78,7 +89,7 @@ vi.mock("@/components/workflow-editor-workbench/persist-blockers", () => ({
 
 vi.mock("@/components/workflow-editor-workbench/workflow-canvas-node", () => ({
   WorkflowCanvasNode: () => createElement("div", { "data-component": "workflow-canvas-node" }, "node"),
-  applyRunOverlayToNodes: <T,>(nodes: T[]) => nodes,
+  applyRunOverlayToNodes: mocks.applyRunOverlayToNodes,
   nodeColorByType: () => "#1f5ed5"
 }));
 
@@ -301,6 +312,8 @@ function renderWorkbench() {
 }
 
 beforeEach(() => {
+  mocks.applyRunOverlayToNodes.mockReset();
+  mocks.applyRunOverlayToNodes.mockImplementation(<T,>(nodes: T[]) => nodes);
   mocks.useWorkflowEditorShellState.mockReturnValue(buildShellState());
   mocks.useWorkflowEditorGraph.mockReturnValue(buildGraphState());
   mocks.useWorkflowEditorRuntimeData.mockReturnValue({
@@ -326,6 +339,8 @@ beforeEach(() => {
     handleSaveAsWorkspaceStarter: () => undefined,
   });
   mocks.useWorkflowEditorPanels.mockReturnValue(buildPanels());
+
+
 });
 
 describe("WorkflowEditorWorkbench", () => {
@@ -462,4 +477,85 @@ describe("WorkflowEditorWorkbench", () => {
     expect(html).toContain('aria-label="节点名称"');
     expect(html).toContain('value="LLM Agent"');
   });
+
+
+  it("passes the overlay-updated selected node into the inspector", () => {
+    mocks.useWorkflowEditorGraph.mockReturnValue(
+      buildGraphState({
+        selectedNodeId: "node-1",
+        selectedNode: {
+          id: "node-1",
+          data: {
+            label: "开始",
+            nodeType: "startNode"
+          }
+        },
+        nodes: [
+          {
+            id: "node-1",
+            data: {
+              label: "开始",
+              nodeType: "startNode"
+            }
+          }
+        ]
+      })
+    );
+    mocks.applyRunOverlayToNodes.mockReturnValue([
+      {
+        id: "node-1",
+        data: {
+          label: "开始",
+          nodeType: "startNode",
+          runStatus: "succeeded"
+        }
+      }
+    ]);
+
+    const html = renderWorkbench();
+
+    expect(html).toContain('data-run-status="succeeded"');
+  });
+
+  it("keeps the floating inspector open when the selected node receives runtime overlay data", () => {
+    mocks.useWorkflowEditorGraph.mockReturnValue(
+      buildGraphState({
+        selectedNodeId: "node-1",
+        selectedNode: {
+          id: "node-1",
+          data: {
+            label: "开始",
+            nodeType: "startNode"
+          }
+        },
+        nodes: [
+          {
+            id: "node-1",
+            data: {
+              label: "开始",
+              nodeType: "startNode"
+            }
+          }
+        ]
+      })
+    );
+    mocks.applyRunOverlayToNodes.mockReturnValue([
+      {
+        id: "node-1",
+        data: {
+          label: "开始",
+          nodeType: "startNode",
+          runStatus: "succeeded"
+        }
+      }
+    ]);
+
+    const html = renderWorkbench();
+
+    expect(html).toContain('data-component="workflow-editor-floating-panel"');
+    expect(html).toContain('data-panel-kind="node-config"');
+    expect(html).toContain('data-run-status="succeeded"');
+  });
+
+
 });

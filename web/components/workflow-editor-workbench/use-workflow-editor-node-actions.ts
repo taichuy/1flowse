@@ -5,6 +5,7 @@ import type { Edge, Node } from "@xyflow/react";
 
 import type { WorkflowNodeCatalogItem } from "@/lib/get-workflow-library";
 import {
+  applyWorkflowCanvasSelectionState,
   insertNodeIntoCanvasGraph,
   removeNodeFromCanvasGraph,
   type WorkflowCanvasEdgeData,
@@ -56,6 +57,22 @@ export function useWorkflowEditorNodeActions({
       return;
     }
 
+    setNodes((currentNodes) =>
+      applyWorkflowCanvasSelectionState({
+        nodes: currentNodes,
+        edges: [],
+        selectedNodeId: nodeId,
+        selectedEdgeId: null
+      }).nodes
+    );
+    setEdges((currentEdges) =>
+      applyWorkflowCanvasSelectionState({
+        nodes: [],
+        edges: currentEdges,
+        selectedNodeId: null,
+        selectedEdgeId: null
+      }).edges
+    );
     setSelectedNodeId(nodeId);
     setSelectedEdgeId(null);
   };
@@ -206,6 +223,19 @@ export function useWorkflowEditorNodeActions({
   };
 
   const updateNodeInputSchema = (nextSchema: Record<string, unknown> | undefined) => {
+    if (selectedNode?.data.nodeType === "startNode") {
+      updateSelectedNode(
+        {
+          inputSchema: nextSchema,
+          outputSchema: nextSchema
+        },
+        {
+          successMessage: nextSchema ? "inputSchema 已应用。" : "已清空 inputSchema。"
+        }
+      );
+      return;
+    }
+
     updateNodeSchema("inputSchema", nextSchema, {
       successMessage: nextSchema ? "inputSchema 已应用。" : "已清空 inputSchema。"
     });
