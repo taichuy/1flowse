@@ -5046,14 +5046,14 @@ a {
 }
 
 .editor-canvas .react-flow__controls {
-  bottom: 42px;
+  bottom: 30px;
   left: 18px;
 }
 
 .editor-canvas .workflow-editor-zoom-indicator-panel {
-  left: 18px;
-  bottom: 18px;
-  width: 48px;
+  left: 12px;
+  bottom: 4px;
+  width: 60px;
   margin: 0;
   border: 0;
   background: transparent;
