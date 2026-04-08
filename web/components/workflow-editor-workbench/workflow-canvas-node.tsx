@@ -1,17 +1,14 @@
 "use client";
 
-import { useMemo, type CSSProperties } from "react";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { PlayCircleOutlined } from "@ant-design/icons";
+import { useMemo } from "react";
+import { type Node, type NodeProps } from "@xyflow/react";
 
 import type { RunDetail } from "@/lib/get-run-detail";
 import type { RunTrace } from "@/lib/get-run-trace";
 import type { WorkflowCanvasNodeData } from "@/lib/workflow-editor";
 import { formatWorkflowNodeMeta } from "@/lib/workflow-node-display";
-import {
-  WorkflowCanvasQuickAddTrigger,
-  type WorkflowCanvasQuickAddOption
-} from "@/components/workflow-editor-workbench/workflow-canvas-quick-add";
+import { WorkflowNodeCardShell } from "@/components/workflow-editor-workbench/workflow-node-card-shell";
+import type { WorkflowCanvasQuickAddOption } from "@/components/workflow-editor-workbench/workflow-canvas-quick-add";
 
 export function nodeColorByType(type: string) {
   switch (type) {
@@ -104,79 +101,26 @@ export function WorkflowCanvasNode({
   );
 
   return (
-    <div
-      className={`workflow-canvas-node ${selected ? "selected" : ""} ${
-        data.runStatus ? `runtime-${toCssIdentifier(data.runStatus)}` : ""
-      }`}
-      style={
-        {
-          "--node-accent": nodeColorByType(data.nodeType)
-        } as CSSProperties
-      }
-    >
-      {hasIncomingHandle ? <Handle type="target" position={Position.Left} /> : null}
-      {selected && (onOpenRuntime || canDelete) ? (
-        <div className="workflow-canvas-node-actions">
-          {onOpenRuntime ? (
-            <button
-              className="workflow-canvas-node-action-button"
-              type="button"
-              aria-label={`试运行 ${data.label}`}
-              data-action="open-node-runtime-from-node"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onOpenRuntime(id);
-              }}
-            >
-              <PlayCircleOutlined />
-            </button>
-          ) : null}
-          <button
-            className="workflow-canvas-node-action-button danger"
-            type="button"
-            aria-label={`删除 ${data.label}`}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onDeleteNode?.(id);
-            }}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
-      <div className="workflow-canvas-node-head">
-        <div className="workflow-canvas-node-icon" aria-hidden="true">
-          {resolveNodeGlyph(data.nodeType)}
-        </div>
-        <div className="workflow-canvas-node-head-copy">
-          <div className="workflow-canvas-node-title-row">
-            <div className="workflow-canvas-node-label">{data.label}</div>
-            <span className="workflow-canvas-node-kind">{data.typeLabel ?? data.nodeType}</span>
-          </div>
-          <div className="workflow-canvas-node-type">
-            {formatWorkflowNodeMeta(data.capabilityGroup, data.nodeType, data.typeLabel)}
-          </div>
-        </div>
-      </div>
-      {nodeDescription ? (
-        <div className="workflow-canvas-node-description">{nodeDescription}</div>
-      ) : null}
-      {canQuickAdd ? (
-        <WorkflowCanvasQuickAddTrigger
-          quickAddOptions={resolvedQuickAddOptions}
-          triggerAriaLabel={`${data.label} 后添加节点`}
-          menuTitle="添加下一个节点"
-          menuDescription="直接插入当前节点后方，并自动续上主链。"
-          containerClassName="workflow-canvas-node-quick-add"
-          triggerClassName="workflow-canvas-node-quick-add-trigger"
-          menuClassName="workflow-canvas-node-quick-menu"
-          onQuickAdd={(type) => onQuickAdd?.(id, type)}
-        />
-      ) : null}
-      {hasOutgoingHandle ? <Handle type="source" position={Position.Right} /> : null}
-    </div>
+    <WorkflowNodeCardShell
+      id={id}
+      selected={selected}
+      label={data.label}
+      typeLabel={data.typeLabel ?? data.nodeType}
+      meta={formatWorkflowNodeMeta(data.capabilityGroup, data.nodeType, data.typeLabel)}
+      glyph={resolveNodeGlyph(data.nodeType)}
+      accentColor={nodeColorByType(data.nodeType)}
+      description={nodeDescription}
+      runtimeClassName={data.runStatus ? `runtime-${toCssIdentifier(data.runStatus)}` : ""}
+      hasIncomingHandle={hasIncomingHandle}
+      hasOutgoingHandle={hasOutgoingHandle}
+      canDelete={canDelete}
+      canQuickAdd={canQuickAdd}
+      canOpenRuntime={Boolean(onOpenRuntime)}
+      quickAddOptions={resolvedQuickAddOptions}
+      onQuickAdd={onQuickAdd}
+      onDeleteNode={onDeleteNode}
+      onOpenRuntime={onOpenRuntime}
+    />
   );
 }
 
