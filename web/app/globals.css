@@ -5048,6 +5048,20 @@ a {
 .editor-canvas .react-flow__controls {
   bottom: 18px;
   left: 18px;
+  overflow: hidden;
+}
+
+.editor-canvas .workflow-editor-zoom-indicator {
+  min-width: 46px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.96);
+  color: rgba(15, 23, 42, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  user-select: none;
 }
 
 .editor-canvas .react-flow__minimap {

@@ -9,6 +9,7 @@ import {
   Panel,
   ReactFlow,
   ReactFlowProvider,
+  useViewport,
   type Edge,
   type EdgeTypes,
   type Node,
@@ -66,6 +67,25 @@ export type WorkflowEditorCanvasProps = {
 };
 
 const FIT_VIEW_OPTIONS = { padding: 0.2, duration: 240 };
+
+function formatCanvasZoomPercent(zoom: number) {
+  return `${Math.round((Number.isFinite(zoom) ? zoom : 1) * 100)}%`;
+}
+
+function WorkflowCanvasZoomIndicator() {
+  const { zoom } = useViewport();
+  const zoomPercent = formatCanvasZoomPercent(zoom);
+
+  return (
+    <div
+      className="workflow-editor-zoom-indicator"
+      data-component="workflow-editor-zoom-indicator"
+      aria-label={`当前画布缩放 ${zoomPercent}`}
+    >
+      {zoomPercent}
+    </div>
+  );
+}
 
 export function WorkflowEditorCanvas({
   nodes,
@@ -255,7 +275,9 @@ export function WorkflowEditorCanvas({
                 nodeColor={(node) => nodeColorByType((node.data as WorkflowCanvasNodeData).nodeType)}
               />
             ) : null}
-            <Controls />
+            <Controls>
+              <WorkflowCanvasZoomIndicator />
+            </Controls>
           </ReactFlow>
         </div>
       </section>
