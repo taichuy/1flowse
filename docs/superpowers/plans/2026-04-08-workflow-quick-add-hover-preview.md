@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 workflow editor 画布 quick-add 菜单改成紧凑名称列表加侧边 hover preview，降低默认高度并保留现有插入节点能力。
+**Goal:** 把 workflow editor 画布 quick-add 菜单改成紧凑单列名称列表，并在 hover / focus 时于右侧浮出独立预览卡，降低默认视觉占用并保留现有插入节点能力。
 
-**Architecture:** 继续沿用现有 `WorkflowCanvasQuickAddTrigger` 作为节点和边上的统一 quick-add 入口，只在组件内部增加当前 preview item 状态和双栏渲染，不向 graph / shell 泄漏新状态。测试侧新增一份 client DOM 用例锁住默认预览、hover / focus 切换、搜索回退和点击插入关闭菜单，再用 CSS 把单列长列表收口成双栏布局和独立滚动区域。
+**Architecture:** 继续沿用现有 `WorkflowCanvasQuickAddTrigger` 作为节点和边上的统一 quick-add 入口，只在组件内部增加当前 preview item 状态和独立悬浮预览卡，不向 graph / shell 泄漏新状态。测试侧新增一份 client DOM 用例锁住“默认无预览、hover / focus 才显示、搜索过滤后预览失效即隐藏、点击插入关闭菜单”的行为，再用 CSS 把大面板收回窄单列菜单。
 
 **Tech Stack:** React 19 client component、Next.js app router、Vitest、React DOM test utils、全局 CSS
 
@@ -13,11 +13,11 @@
 ## File Structure
 
 - Modify: `web/components/workflow-editor-workbench/workflow-canvas-quick-add.tsx`
-  - quick-add 组件本体，增加 preview item 状态、预览回退逻辑和双栏菜单 DOM。
+  - quick-add 组件本体，增加 preview item 状态、预览失效隐藏逻辑和独立悬浮预览 DOM。
 - Create: `web/components/workflow-editor-workbench/__tests__/workflow-canvas-quick-add.client.test.tsx`
   - 使用真实 DOM 验证 quick-add 的 hover / focus / search / click 行为。
 - Modify: `web/app/globals.css`
-  - 把 quick-add 从单列卡片改成双栏布局，压缩左侧列表项高度，补预览区和响应式样式。
+  - 把 quick-add 收回窄单列菜单，补右侧独立预览卡和响应式样式。
 
 ### Task 1: Lock Quick-Add Hover Preview Behavior with a Client Test
 

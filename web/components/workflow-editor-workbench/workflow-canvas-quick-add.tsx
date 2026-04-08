@@ -181,24 +181,20 @@ export function WorkflowCanvasQuickAddTrigger({
   );
 
   useEffect(() => {
-    if (flattenedActiveItems.length === 0) {
-      if (previewType !== null) {
-        setPreviewType(null);
-      }
+    if (previewType === null) {
       return;
     }
 
-    if (previewType && flattenedActiveItems.some((item) => item.type === previewType)) {
+    if (flattenedActiveItems.some((item) => item.type === previewType)) {
       return;
     }
 
-    setPreviewType(flattenedActiveItems[0]?.type ?? null);
+    setPreviewType(null);
   }, [flattenedActiveItems, previewType]);
 
   const previewItem = useMemo(
     () =>
       flattenedActiveItems.find((item) => item.type === previewType)
-      ?? flattenedActiveItems[0]
       ?? null,
     [flattenedActiveItems, previewType]
   );
@@ -312,70 +308,68 @@ export function WorkflowCanvasQuickAddTrigger({
           </div>
 
           {activeSections.length > 0 ? (
-            <div className="workflow-canvas-quick-add-body">
-              <div className="workflow-canvas-quick-add-menu-list">
-                {activeSections.map((section) => (
-                  <section className="workflow-canvas-quick-add-section" key={section.key}>
-                    <div className="workflow-canvas-quick-add-section-label">{section.label}</div>
-                    <div className="workflow-canvas-quick-add-section-list">
-                      {section.items.map((item) => {
-                        const isPreviewing = item.type === previewItem?.type;
+            <div className="workflow-canvas-quick-add-menu-list">
+              {activeSections.map((section) => (
+                <section className="workflow-canvas-quick-add-section" key={section.key}>
+                  <div className="workflow-canvas-quick-add-section-label">{section.label}</div>
+                  <div className="workflow-canvas-quick-add-section-list">
+                    {section.items.map((item) => {
+                      const isPreviewing = item.type === previewItem?.type;
 
-                        return (
-                          <button
-                            className={joinClassNames(
-                              "workflow-canvas-quick-add-option",
-                              isPreviewing ? "previewing" : null,
-                              CANVAS_INTERACTION_GUARD_CLASS_NAME
-                            )}
-                            key={item.type}
-                            type="button"
-                            role="menuitem"
-                            aria-label={`插入 ${item.label}`}
-                            onPointerDown={stopCanvasInteraction}
-                            onPointerEnter={() => setPreviewType(item.type)}
-                            onFocus={() => setPreviewType(item.type)}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onQuickAdd(item.type);
-                              closeMenu();
-                            }}
-                          >
-                            <span className="workflow-canvas-quick-add-option-label">
-                              {item.label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
-              </div>
-
-              {previewItem ? (
-                <aside className="workflow-canvas-quick-add-preview" aria-live="polite">
-                  <div className="workflow-canvas-quick-add-preview-label">
-                    {previewItem.label}
+                      return (
+                        <button
+                          className={joinClassNames(
+                            "workflow-canvas-quick-add-option",
+                            isPreviewing ? "previewing" : null,
+                            CANVAS_INTERACTION_GUARD_CLASS_NAME
+                          )}
+                          key={item.type}
+                          type="button"
+                          role="menuitem"
+                          aria-label={`插入 ${item.label}`}
+                          onPointerDown={stopCanvasInteraction}
+                          onPointerEnter={() => setPreviewType(item.type)}
+                          onFocus={() => setPreviewType(item.type)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onQuickAdd(item.type);
+                            closeMenu();
+                          }}
+                        >
+                          <span className="workflow-canvas-quick-add-option-label">
+                            {item.label}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="workflow-canvas-quick-add-preview-meta">
-                    {formatWorkflowNodeMeta(
-                      previewItem.capabilityGroup,
-                      previewItem.type,
-                      previewItem.label
-                    )}
-                  </div>
-                  <p className="workflow-canvas-quick-add-preview-copy">
-                    {previewItem.description || "当前节点还没有补充描述。"}
-                  </p>
-                </aside>
-              ) : null}
+                </section>
+              ))}
             </div>
           ) : (
             <div className="workflow-canvas-quick-add-empty">
               没有匹配的可插入节点。
             </div>
           )}
+
+          {previewItem ? (
+            <aside className="workflow-canvas-quick-add-preview" aria-live="polite">
+              <div className="workflow-canvas-quick-add-preview-label">
+                {previewItem.label}
+              </div>
+              <div className="workflow-canvas-quick-add-preview-meta">
+                {formatWorkflowNodeMeta(
+                  previewItem.capabilityGroup,
+                  previewItem.type,
+                  previewItem.label
+                )}
+              </div>
+              <p className="workflow-canvas-quick-add-preview-copy">
+                {previewItem.description || "当前节点还没有补充描述。"}
+              </p>
+            </aside>
+          ) : null}
         </div>
       ) : null}
     </div>

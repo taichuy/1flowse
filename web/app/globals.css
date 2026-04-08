@@ -5266,8 +5266,8 @@ a {
 .workflow-canvas-quick-add-menu {
   position: absolute;
   z-index: 12;
-  width: min(560px, calc(100vw - 48px));
-  max-height: min(520px, calc(100vh - 72px));
+  width: min(320px, calc(100vw - 48px));
+  max-height: min(560px, calc(100vh - 64px));
   padding: 12px;
   border: 1px solid rgba(31, 94, 213, 0.12);
   border-radius: 20px;
@@ -5276,7 +5276,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;
+  overflow: visible;
   overscroll-behavior: contain;
 }
 
@@ -5428,14 +5428,6 @@ a {
   flex: 0 0 auto;
 }
 
-.workflow-canvas-quick-add-body {
-  display: grid;
-  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
-  gap: 12px;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
 .workflow-canvas-quick-add-search-input {
   width: 100%;
   height: 38px;
@@ -5456,6 +5448,7 @@ a {
 .workflow-canvas-quick-add-menu-list {
   display: grid;
   gap: 10px;
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
@@ -5512,14 +5505,21 @@ a {
 }
 
 .workflow-canvas-quick-add-preview {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 12px);
+  z-index: 1;
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 0;
+  width: min(280px, calc(100vw - 380px));
+  min-height: 140px;
+  max-height: min(320px, calc(100vh - 96px));
   padding: 14px;
   border: 1px solid #d8e0ec;
   border-radius: 16px;
   background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.16);
   overflow-y: auto;
 }
 
@@ -5555,8 +5555,13 @@ a {
     width: min(360px, calc(100vw - 32px));
   }
 
-  .workflow-canvas-quick-add-body {
-    grid-template-columns: 1fr;
+  .workflow-canvas-quick-add-preview {
+    position: static;
+    width: auto;
+    min-height: 0;
+    max-height: none;
+    margin-top: 12px;
+    box-shadow: none;
   }
 }
 

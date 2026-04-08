@@ -94,13 +94,10 @@ function setSearchValue(value: string) {
 }
 
 describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
-  it("shows the first filtered item in a preview panel by default and switches preview on hover", () => {
+  it("keeps the menu as a simple list and only shows the preview card on hover", () => {
     openQuickAdd();
 
-    const preview = getPreview();
-    expect(preview).not.toBeNull();
-    expect(preview?.textContent).toContain("LLM Agent");
-    expect(preview?.textContent).toContain("让 agent 继续推理。");
+    expect(getPreview()).toBeNull();
 
     const conditionButton = container?.querySelector('button[aria-label="插入 Condition"]');
     expect(conditionButton).toBeInstanceOf(HTMLButtonElement);
@@ -110,11 +107,13 @@ describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
       conditionButton?.dispatchEvent(new PointerEventCtor("pointerover", { bubbles: true }));
     });
 
-    expect(getPreview()?.textContent).toContain("Condition");
-    expect(getPreview()?.textContent).toContain("按条件分支继续主链。");
+    const preview = getPreview();
+    expect(preview).not.toBeNull();
+    expect(preview?.textContent).toContain("Condition");
+    expect(preview?.textContent).toContain("按条件分支继续主链。");
   });
 
-  it("updates preview on focus, falls back to the first matching search result, and closes after insert", () => {
+  it("shows the preview card on focus, filters the simple list, and closes after insert", () => {
     const { onQuickAdd } = openQuickAdd();
     const tabs = container?.querySelectorAll('button[role="tab"]');
     expect(tabs).toHaveLength(2);
@@ -123,13 +122,9 @@ describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
       (tabs?.[1] as HTMLButtonElement).click();
     });
 
-    expect(getPreview()?.textContent).toContain("Tool");
-    expect(getPreview()?.textContent).toContain("调用工具目录中的能力。");
+    expect(getPreview()).toBeNull();
 
     setSearchValue("cond");
-
-    expect(getPreview()?.textContent).toContain("Condition");
-    expect(getPreview()?.textContent).toContain("按条件分支继续主链。");
 
     const conditionButton = container?.querySelector('button[aria-label="插入 Condition"]');
     expect(conditionButton).toBeInstanceOf(HTMLButtonElement);
@@ -137,6 +132,12 @@ describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
     act(() => {
       (conditionButton as HTMLButtonElement).focus();
       conditionButton?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    });
+
+    expect(getPreview()?.textContent).toContain("Condition");
+    expect(getPreview()?.textContent).toContain("按条件分支继续主链。");
+
+    act(() => {
       (conditionButton as HTMLButtonElement).click();
     });
 
