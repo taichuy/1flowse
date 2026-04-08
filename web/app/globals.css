@@ -5051,14 +5051,17 @@ a {
 }
 
 .editor-canvas .workflow-editor-zoom-indicator-panel {
-  left: 12px;
-  bottom: 4px;
-  width: 60px;
+  left: 72px;
+  bottom: 30px;
+  width: auto;
+  min-height: 40px;
   margin: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
   pointer-events: none;
+  display: flex;
+  align-items: center;
 }
 
 .editor-canvas .workflow-editor-zoom-indicator {
