@@ -111,8 +111,7 @@ describe("WorkflowEditorCanvas", () => {
     expect(html).toContain('data-action="inspector"');
     expect(html).not.toContain("workflow-editor-nav-strip");
     expect(html).not.toContain("xyflow Studio");
-    expect(html).toContain('data-component="workflow-editor-zoom-indicator-panel"');
-    expect(html).toContain('data-position="bottom-left"');
+    expect(html).toContain('data-component="workflow-editor-zoom-indicator-anchor"');
     expect(html).toContain("100%");
   });
 });

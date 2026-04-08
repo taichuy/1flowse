@@ -5048,24 +5048,21 @@ a {
 .editor-canvas .react-flow__controls {
   bottom: 30px;
   left: 18px;
+  overflow: visible;
 }
 
-.editor-canvas .workflow-editor-zoom-indicator-panel {
-  left: 128px;
-  bottom: 30px;
-  width: auto;
+.editor-canvas .workflow-editor-zoom-indicator-anchor {
+  position: absolute;
+  left: calc(100% + 12px);
+  bottom: 0;
   min-height: 40px;
-  margin: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  pointer-events: none;
   display: flex;
   align-items: center;
+  pointer-events: none;
 }
 
 .editor-canvas .workflow-editor-zoom-indicator {
-  width: 100%;
+  width: auto;
   color: rgba(15, 23, 42, 0.72);
   font-size: 12px;
   font-weight: 600;

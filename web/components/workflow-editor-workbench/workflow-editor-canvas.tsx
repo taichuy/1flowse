@@ -275,14 +275,14 @@ export function WorkflowEditorCanvas({
                 nodeColor={(node) => nodeColorByType((node.data as WorkflowCanvasNodeData).nodeType)}
               />
             ) : null}
-            <Controls />
-            <Panel
-              className="workflow-editor-zoom-indicator-panel"
-              data-component="workflow-editor-zoom-indicator-panel"
-              position="bottom-left"
-            >
-              <WorkflowCanvasZoomIndicator />
-            </Panel>
+            <Controls>
+              <div
+                className="workflow-editor-zoom-indicator-anchor"
+                data-component="workflow-editor-zoom-indicator-anchor"
+              >
+                <WorkflowCanvasZoomIndicator />
+              </div>
+            </Controls>
           </ReactFlow>
         </div>
       </section>
