@@ -5,12 +5,10 @@ import type { Edge, Node } from "@xyflow/react";
 import {
   Alert,
   Button,
-  Collapse,
   Form,
   Input,
   Modal,
   Select,
-  Space,
   Switch,
   Typography
 } from "antd";
@@ -37,6 +35,8 @@ import {
   resolveWorkflowNodeInputSchema
 } from "@/lib/workflow-editor";
 import { WorkflowEditorJsonPanel } from "@/components/workflow-editor-inspector-panels/workflow-editor-json-panel";
+import { WorkflowNodeSettingsTemplate } from "@/components/workflow-editor-inspector-panels/workflow-node-settings-template";
+import { resolveWorkflowNodeTemplateDefinition } from "@/components/workflow-editor-inspector-panels/workflow-node-template-definition";
 import { WorkflowNodeConfigForm } from "@/components/workflow-node-config-form";
 import { WorkflowNodeIoSchemaForm } from "@/components/workflow-node-config-form/node-io-schema-form";
 import { WorkflowNodeRuntimePolicyForm } from "@/components/workflow-node-config-form/runtime-policy-form";
@@ -141,111 +141,97 @@ export function WorkflowEditorNodeSettingsPanel({
     setExpandedSectionKeys(highlightedAdvancedKeys);
   }, [highlightedAdvancedKeys, node.id]);
 
-  return (
-    <Space
-      orientation="vertical"
-      size={20}
-      style={{ width: "100%" }}
-      className="workflow-editor-node-settings-panel"
-      data-component="workflow-editor-node-settings-panel"
-    >
-      {isTriggerNode ? (
-        <WorkflowEditorTriggerInputFieldsSection
+  const definition = resolveWorkflowNodeTemplateDefinition(node);
+  const featureSection =
+    definition.settingsMode === "trigger" ? (
+      <WorkflowEditorTriggerInputFieldsSection
+        node={node}
+        downstreamNodes={downstreamNodes}
+        onNodeInputSchemaChange={onNodeInputSchemaChange}
+      />
+    ) : (
+      <div
+        className="workflow-editor-node-settings-primary"
+        data-component="workflow-editor-node-settings-primary"
+      >
+        <WorkflowNodeConfigForm
           node={node}
-          downstreamNodes={downstreamNodes}
-          onNodeInputSchemaChange={onNodeInputSchemaChange}
-        />
-      ) : (
-        <div
-          className="workflow-editor-node-settings-primary"
-          data-component="workflow-editor-node-settings-primary"
-        >
-          <WorkflowNodeConfigForm
-            node={node}
-            nodes={nodes}
-            tools={tools}
-            adapters={adapters}
-            credentials={credentials}
-            modelProviderCatalog={modelProviderCatalog}
-            modelProviderConfigs={modelProviderConfigs}
-            modelProviderRegistryStatus={modelProviderRegistryStatus}
-            currentHref={currentHref}
-            sandboxReadiness={sandboxReadiness}
-            highlightedFieldPath={highlightedNodeSection === "config" ? highlightedNodeFieldPath : null}
-            focusedValidationItem={
-              highlightedNodeSection === "config" ? focusedValidationItem : null
-            }
-            onChange={onNodeConfigChange}
-          />
-        </div>
-      )}
-
-      {!isTriggerNode ? (
-        <Collapse
-          activeKey={expandedSectionKeys}
-          onChange={(keys) =>
-            setExpandedSectionKeys(Array.isArray(keys) ? keys.map(String) : [String(keys)])
+          nodes={nodes}
+          tools={tools}
+          adapters={adapters}
+          credentials={credentials}
+          modelProviderCatalog={modelProviderCatalog}
+          modelProviderConfigs={modelProviderConfigs}
+          modelProviderRegistryStatus={modelProviderRegistryStatus}
+          currentHref={currentHref}
+          sandboxReadiness={sandboxReadiness}
+          highlightedFieldPath={
+            highlightedNodeSection === "config" ? highlightedNodeFieldPath : null
           }
-          className="workflow-editor-node-settings-advanced"
-          items={[
-            {
-              key: "advanced",
-              label: "高级设置",
-              children: (
-                <Space
-                  orientation="vertical"
-                  size={20}
-                  style={{ width: "100%" }}
-                  className="workflow-editor-node-settings-advanced-content"
-                >
-                  <WorkflowNodeIoSchemaForm
-                    node={node}
-                    currentHref={currentHref}
-                    onInputSchemaChange={onNodeInputSchemaChange}
-                    onOutputSchemaChange={onNodeOutputSchemaChange}
-                    highlighted={highlightedNodeSection === "contract"}
-                    highlightedFieldPath={
-                      highlightedNodeSection === "contract" ? highlightedNodeFieldPath : null
-                    }
-                    focusedValidationItem={
-                      highlightedNodeSection === "contract" ? focusedValidationItem : null
-                    }
-                    sandboxReadiness={sandboxReadiness}
-                  />
-                  <WorkflowNodeRuntimePolicyForm
-                    node={node}
-                    nodes={nodes}
-                    edges={edges}
-                    currentHref={currentHref}
-                    onChange={onNodeRuntimePolicyUpdate}
-                    highlighted={highlightedNodeSection === "runtime"}
-                    highlightedFieldPath={
-                      highlightedNodeSection === "runtime" ? highlightedNodeFieldPath : null
-                    }
-                    focusedValidationItem={
-                      highlightedNodeSection === "runtime" ? focusedValidationItem : null
-                    }
-                    sandboxReadiness={sandboxReadiness}
-                  />
-                </Space>
-              )
-            },
-            {
-              key: "json",
-              label: "原始 JSON",
-              children: (
-                <WorkflowEditorJsonPanel
-                  nodeConfigText={nodeConfigText}
-                  onNodeConfigTextChange={onNodeConfigTextChange}
-                  onApplyNodeConfigJson={onApplyNodeConfigJson}
-                  onDeleteSelectedNode={onDeleteSelectedNode}
-                />
-              )
-            }
-          ]}
+          focusedValidationItem={
+            highlightedNodeSection === "config" ? focusedValidationItem : null
+          }
+          onChange={onNodeConfigChange}
         />
-      ) : null}
-    </Space>
+      </div>
+    );
+
+  return (
+    <div data-component="workflow-editor-node-settings-panel">
+      <WorkflowNodeSettingsTemplate
+        featureSection={featureSection}
+        contractSection={
+          !isTriggerNode ? (
+            <WorkflowNodeIoSchemaForm
+              node={node}
+              currentHref={currentHref}
+              onInputSchemaChange={onNodeInputSchemaChange}
+              onOutputSchemaChange={onNodeOutputSchemaChange}
+              highlighted={highlightedNodeSection === "contract"}
+              highlightedFieldPath={
+                highlightedNodeSection === "contract" ? highlightedNodeFieldPath : null
+              }
+              focusedValidationItem={
+                highlightedNodeSection === "contract" ? focusedValidationItem : null
+              }
+              sandboxReadiness={sandboxReadiness}
+            />
+          ) : null
+        }
+        runtimePolicySection={
+          !isTriggerNode ? (
+            <WorkflowNodeRuntimePolicyForm
+              node={node}
+              nodes={nodes}
+              edges={edges}
+              currentHref={currentHref}
+              onChange={onNodeRuntimePolicyUpdate}
+              highlighted={highlightedNodeSection === "runtime"}
+              highlightedFieldPath={
+                highlightedNodeSection === "runtime" ? highlightedNodeFieldPath : null
+              }
+              focusedValidationItem={
+                highlightedNodeSection === "runtime" ? focusedValidationItem : null
+              }
+              sandboxReadiness={sandboxReadiness}
+            />
+          ) : null
+        }
+        rawJsonSection={
+          !isTriggerNode ? (
+            <WorkflowEditorJsonPanel
+              nodeConfigText={nodeConfigText}
+              onNodeConfigTextChange={onNodeConfigTextChange}
+              onApplyNodeConfigJson={onApplyNodeConfigJson}
+              onDeleteSelectedNode={onDeleteSelectedNode}
+            />
+          ) : null
+        }
+        showAdvanced={!isTriggerNode}
+        expandedSectionKeys={expandedSectionKeys}
+        onExpandedSectionKeysChange={setExpandedSectionKeys}
+      />
+    </div>
   );
 }
 

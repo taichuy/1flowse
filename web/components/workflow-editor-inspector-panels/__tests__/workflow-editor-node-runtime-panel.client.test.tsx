@@ -198,6 +198,7 @@ describe("WorkflowEditorNodeRuntimePanel client render", () => {
       "node-1",
       { query: "缓存值" }
     );
+    expect(document.body.innerHTML).toContain('data-component="workflow-node-runtime-template"');
 
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.getAttribute("style") ?? "").toContain("display: none");

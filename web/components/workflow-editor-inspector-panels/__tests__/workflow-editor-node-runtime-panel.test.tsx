@@ -117,6 +117,10 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
       })
     );
 
+    expect(html).toContain('data-component="workflow-node-runtime-template"');
+    expect(html).toContain('data-component="workflow-node-runtime-summary"');
+    expect(html).toContain('data-component="workflow-node-runtime-input-section"');
+    expect(html).toContain('data-component="workflow-node-runtime-output-section"');
     expect(html).toContain("当前节点运行态");
     expect(html).not.toContain('data-component="workflow-editor-start-node-runtime-strip"');
   });
@@ -135,6 +139,7 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
       })
     );
 
+    expect(html).toContain('data-component="workflow-node-runtime-template"');
     expect(html).toContain('data-component="workflow-editor-start-node-runtime-strip"');
     expect(html).toContain("运行时间");
     expect(html).toContain("事件");
@@ -205,6 +210,7 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
       })
     );
 
+    expect(html).toContain('data-component="workflow-node-runtime-template"');
     expect(html).toContain("输入");
     expect(html).toContain("输出");
     expect(html).toContain("复制输入");
