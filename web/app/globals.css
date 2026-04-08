@@ -5474,6 +5474,7 @@ a {
 }
 
 .workflow-canvas-quick-add-option {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: 42px;
@@ -5508,7 +5509,7 @@ a {
   position: absolute;
   top: 0;
   left: calc(100% + 12px);
-  z-index: 1;
+  z-index: 2;
   display: grid;
   align-content: start;
   gap: 8px;
@@ -5521,6 +5522,7 @@ a {
   background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
   box-shadow: 0 22px 52px rgba(15, 23, 42, 0.16);
   overflow-y: auto;
+  pointer-events: none;
 }
 
 .workflow-canvas-quick-add-preview-label {
@@ -5556,11 +5558,12 @@ a {
   }
 
   .workflow-canvas-quick-add-preview {
-    position: static;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
     width: auto;
     min-height: 0;
     max-height: none;
-    margin-top: 12px;
     box-shadow: none;
   }
 }

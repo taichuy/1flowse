@@ -94,7 +94,7 @@ function setSearchValue(value: string) {
 }
 
 describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
-  it("keeps the menu as a simple list and only shows the preview card on hover", () => {
+  it("keeps the menu as a simple list and anchors the preview card to the hovered option", () => {
     openQuickAdd();
 
     expect(getPreview()).toBeNull();
@@ -109,11 +109,12 @@ describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
 
     const preview = getPreview();
     expect(preview).not.toBeNull();
+    expect(conditionButton?.contains(preview as Node)).toBe(true);
     expect(preview?.textContent).toContain("Condition");
     expect(preview?.textContent).toContain("按条件分支继续主链。");
   });
 
-  it("shows the preview card on focus, filters the simple list, and closes after insert", () => {
+  it("anchors the preview card to the focused option, filters the simple list, and closes after insert", () => {
     const { onQuickAdd } = openQuickAdd();
     const tabs = container?.querySelectorAll('button[role="tab"]');
     expect(tabs).toHaveLength(2);
@@ -134,8 +135,11 @@ describe("WorkflowCanvasQuickAddTrigger client interactions", () => {
       conditionButton?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
     });
 
-    expect(getPreview()?.textContent).toContain("Condition");
-    expect(getPreview()?.textContent).toContain("按条件分支继续主链。");
+    const preview = getPreview();
+    expect(preview).not.toBeNull();
+    expect(conditionButton?.contains(preview as Node)).toBe(true);
+    expect(preview?.textContent).toContain("Condition");
+    expect(preview?.textContent).toContain("按条件分支继续主链。");
 
     act(() => {
       (conditionButton as HTMLButtonElement).click();

@@ -340,6 +340,26 @@ export function WorkflowCanvasQuickAddTrigger({
                           <span className="workflow-canvas-quick-add-option-label">
                             {item.label}
                           </span>
+                          {isPreviewing ? (
+                            <span
+                              className="workflow-canvas-quick-add-preview"
+                              aria-live="polite"
+                            >
+                              <span className="workflow-canvas-quick-add-preview-label">
+                                {item.label}
+                              </span>
+                              <span className="workflow-canvas-quick-add-preview-meta">
+                                {formatWorkflowNodeMeta(
+                                  item.capabilityGroup,
+                                  item.type,
+                                  item.label
+                                )}
+                              </span>
+                              <span className="workflow-canvas-quick-add-preview-copy">
+                                {item.description || "当前节点还没有补充描述。"}
+                              </span>
+                            </span>
+                          ) : null}
                         </button>
                       );
                     })}
@@ -352,24 +372,6 @@ export function WorkflowCanvasQuickAddTrigger({
               没有匹配的可插入节点。
             </div>
           )}
-
-          {previewItem ? (
-            <aside className="workflow-canvas-quick-add-preview" aria-live="polite">
-              <div className="workflow-canvas-quick-add-preview-label">
-                {previewItem.label}
-              </div>
-              <div className="workflow-canvas-quick-add-preview-meta">
-                {formatWorkflowNodeMeta(
-                  previewItem.capabilityGroup,
-                  previewItem.type,
-                  previewItem.label
-                )}
-              </div>
-              <p className="workflow-canvas-quick-add-preview-copy">
-                {previewItem.description || "当前节点还没有补充描述。"}
-              </p>
-            </aside>
-          ) : null}
         </div>
       ) : null}
     </div>
