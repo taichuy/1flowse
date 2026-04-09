@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe("OutputNodeConfigForm client render", () => {
-  it("appends clicked tokens into the reply template", () => {
+  it("writes replyDocument, replyReferences, and replyTemplate together", () => {
     const handleChange = vi.fn();
 
     container = document.createElement("div");
@@ -33,14 +33,14 @@ describe("OutputNodeConfigForm client render", () => {
       root?.render(
         createElement(OutputNodeConfigForm, {
           node: {
-            id: "end-1",
+            id: "endNode_ab12cd34",
             type: "workflowNode",
             position: { x: 0, y: 0 },
             data: {
               label: "直接回复",
               nodeType: "endNode",
-              config: {}
-            }
+              config: { replyTemplate: "/" },
+            },
           } as never,
           nodes: [
             {
@@ -50,26 +50,37 @@ describe("OutputNodeConfigForm client render", () => {
               data: {
                 label: "LLM",
                 nodeType: "llmAgentNode",
-                config: {}
-              }
-            }
+                config: {},
+              },
+            },
           ] as never,
-          onChange: handleChange
-        })
+          onChange: handleChange,
+        }),
       );
     });
 
-    const tokenButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("{{#text#}}")
-    ) as HTMLButtonElement | undefined;
-    expect(tokenButton).toBeTruthy();
+    const insertButton = Array.from(document.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("LLM.text"),
+    ) as HTMLButtonElement;
 
     act(() => {
-      tokenButton?.click();
+      insertButton.click();
     });
 
     expect(handleChange).toHaveBeenLastCalledWith({
-      replyTemplate: "{{#text#}}"
+      replyDocument: {
+        version: 1,
+        segments: [{ type: "variable", refId: "ref_1" }],
+      },
+      replyReferences: [
+        {
+          refId: "ref_1",
+          alias: "text",
+          ownerNodeId: "endNode_ab12cd34",
+          selector: ["accumulated", "agent", "text"],
+        },
+      ],
+      replyTemplate: "{{#endNode_ab12cd34.text#}}",
     });
   });
 });
