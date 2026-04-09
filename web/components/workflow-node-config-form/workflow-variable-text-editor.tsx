@@ -67,7 +67,9 @@ function matchesVariableQuery(item: WorkflowVariableReferenceItem, query: string
     return true;
   }
 
-  return `${item.label} ${item.previewPath}`.toLowerCase().includes(normalizedQuery);
+  return `${item.inlineLabel ?? item.label} ${item.label} ${item.previewPath}`
+    .toLowerCase()
+    .includes(normalizedQuery);
 }
 
 export function WorkflowVariableTextEditor({

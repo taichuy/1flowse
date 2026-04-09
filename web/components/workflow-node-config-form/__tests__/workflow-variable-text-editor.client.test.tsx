@@ -83,17 +83,17 @@ describe("WorkflowVariableTextEditor", () => {
           variables: [
             {
               key: "upstream",
-              label: "上游节点",
+              label: "用户输入",
               items: [
                 {
                   key: "llm-text",
-                  label: "test",
-                  selector: ["accumulated", "llm", "text"],
+                  label: "trigger_input.query",
+                  selector: ["trigger_input", "query"],
                   token: "{{#endNode_ab12cd34.text#}}",
-                  previewPath: "LLM.test",
+                  previewPath: "trigger_input.query",
                   machineName: "endNode_ab12cd34.text",
                   valueTypeLabel: "String",
-                  inlineLabel: "[LLM] test",
+                  inlineLabel: "[用户输入] test",
                 },
                 {
                   key: "llm-answer",
@@ -123,7 +123,8 @@ describe("WorkflowVariableTextEditor", () => {
     expect(
       document.querySelector('[data-component="workflow-variable-reference-popover"]'),
     ).toBeTruthy();
-    expect(document.body.textContent).toContain("test");
+    expect(document.body.textContent).toContain("/te");
+    expect(document.body.textContent).toContain("[用户输入] test");
     expect(document.body.textContent).not.toContain("answer");
     expect(document.body.textContent).not.toContain("复制机器别名");
     expect(document.querySelector('[data-element="workflow-variable-picker-search"]')).toBeNull();
@@ -141,9 +142,9 @@ describe("WorkflowVariableTextEditor", () => {
       references: [
         {
           refId: "ref_1",
-          alias: "text",
+          alias: "query",
           ownerNodeId: "endNode_ab12cd34",
-          selector: ["accumulated", "llm", "text"],
+          selector: ["trigger_input", "query"],
         },
       ],
     });

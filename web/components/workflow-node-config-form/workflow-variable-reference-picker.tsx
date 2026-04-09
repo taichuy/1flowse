@@ -63,7 +63,9 @@ export function WorkflowVariableReferencePicker({
             return true;
           }
 
-          return `${item.label} ${item.previewPath}`.toLowerCase().includes(normalizedQuery);
+          return `${item.inlineLabel ?? item.label} ${item.label} ${item.previewPath}`
+            .toLowerCase()
+            .includes(normalizedQuery);
         }),
       }))
       .filter((group) => group.items.length > 0);
@@ -124,7 +126,7 @@ export function WorkflowVariableReferencePicker({
                     onClick={() => onInsert(item.selector)}
                   >
                     <span className="workflow-variable-reference-popover-item-main">
-                      <span>{item.label}</span>
+                      <span>{item.inlineLabel ?? item.label}</span>
                       <small>{item.previewPath}</small>
                     </span>
                     <span className="workflow-variable-reference-popover-item-type">

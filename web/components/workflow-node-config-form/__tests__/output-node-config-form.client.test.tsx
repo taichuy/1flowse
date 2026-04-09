@@ -93,9 +93,10 @@ describe("OutputNodeConfigForm client render", () => {
     expect(document.body.textContent).toContain("上游节点");
     expect(document.body.textContent).toContain("String");
     expect(document.body.textContent).toContain("用户输入");
+    expect(document.body.textContent).toContain("[LLM] text");
 
     const insertButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("LLM.text"),
+      button.textContent?.includes("[LLM] text"),
     ) as HTMLButtonElement;
 
     act(() => {
