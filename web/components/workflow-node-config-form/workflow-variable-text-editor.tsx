@@ -85,6 +85,16 @@ function dropUnusedReferences({
   return references.filter((reference) => usedRefIds.has(reference.refId));
 }
 
+function findActivePickerSlotIndex(slotTexts: string[]) {
+  for (let index = slotTexts.length - 1; index >= 0; index -= 1) {
+    if (slotTexts[index]?.endsWith("/")) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
 export function WorkflowVariableTextEditor({
   ownerNodeId,
   ownerLabel,
@@ -99,10 +109,7 @@ export function WorkflowVariableTextEditor({
     () => new Map(references.map((reference) => [reference.refId, reference])),
     [references],
   );
-  const activePickerSlotIndex = useMemo(
-    () => slotTexts.findLastIndex((slotText) => slotText.endsWith("/")),
-    [slotTexts],
-  );
+  const activePickerSlotIndex = useMemo(() => findActivePickerSlotIndex(slotTexts), [slotTexts]);
 
   const commitSlots = (nextState: WorkflowVariableSlotsState, nextReferences = references) => {
     onChange({

@@ -1,12 +1,14 @@
 # Workflow Variable Text Editor Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax (`- [ ]` / `- [x]`) for tracking.
 
 **Goal:** 为 `endNode` 的直接回复配置落地第一版结构化变量文本编辑器：支持 `/` 触发变量选择器、节点内 alias、结构化 `replyDocument + replyReferences`、以及与旧 `replyTemplate` 的兼容。
 
 **Architecture:** 先把 `endNode` 的变量文本模型从纯字符串拆成“document + references + template 派生”三层，再实现一个仅服务文本变量场景的 `WorkflowVariableTextEditor`，最后把 `OutputNodeConfigForm` 接到这套新模型，并在后端增加结构化渲染与 schema 校验。前端编排显示走 `[当前节点标题] alias`，复制与兼容 token 走 `ownerNodeId.alias`，runtime 仍通过 `selector` 取值。
 
 **Tech Stack:** React 19、Next.js App Router、TypeScript、Vitest、Python 3.12、Pydantic、Pytest
+
+**Status (2026-04-09 14:33):** 计划对应实现已经落在当前分支并同步到 `origin/taichuy_dev`，主要功能提交为 `bba5f797`、`8a7d7442`、`5074b1f0`。本轮复核重新跑通了定向前端 `vitest`、后端 `pytest`、`web lint` 与 `git diff --check`。附加 `web tsc --noEmit --incremental false` 仍保留两条仓库既有失败：`components/__tests__/workflow-create-wizard.test.ts(44,5)` 的 `WorkflowBusinessTrack` 类型不匹配，以及 `components/__tests__/workflow-studio-layout-shell.test.tsx(57,9)` 缺少 `children`；本计划相关的 `workflow-variable-text-editor.tsx` 类型错误已在复核时修补并消失。
 
 ---
 
@@ -43,7 +45,7 @@
 - Create: `web/components/workflow-node-config-form/workflow-variable-text-document.ts`
 - Create: `web/components/workflow-node-config-form/__tests__/workflow-variable-text-document.test.ts`
 
-- [ ] **Step 1: Write the failing document-model test**
+- [x] **Step 1: Write the failing document-model test**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -108,7 +110,7 @@ describe("workflow-variable-text-document", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -118,7 +120,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: FAIL with `Cannot find module "@/components/workflow-node-config-form/workflow-variable-text-document"` or missing export errors.
 
-- [ ] **Step 3: Implement the document/reference helper**
+- [x] **Step 3: Implement the document/reference helper**
 
 ```ts
 // web/components/workflow-node-config-form/workflow-variable-text-document.ts
@@ -258,7 +260,7 @@ export function serializeReplyDocumentToTemplate({
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run:
 
@@ -268,7 +270,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: PASS with `2 passed`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /home/taichu/git/7flows
@@ -283,7 +285,7 @@ git commit -m "feat(workflow): add reply document model"
 - Create: `web/components/workflow-node-config-form/workflow-variable-text-editor.tsx`
 - Create: `web/components/workflow-node-config-form/__tests__/workflow-variable-text-editor.client.test.tsx`
 
-- [ ] **Step 1: Write the failing editor interaction test**
+- [x] **Step 1: Write the failing editor interaction test**
 
 ```tsx
 // @vitest-environment jsdom
@@ -419,7 +421,7 @@ describe("WorkflowVariableTextEditor", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -429,7 +431,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: FAIL with missing component/module errors.
 
-- [ ] **Step 3: Implement the picker and editor**
+- [x] **Step 3: Implement the picker and editor**
 
 ```tsx
 // web/components/workflow-node-config-form/workflow-variable-reference-picker.tsx
@@ -601,7 +603,7 @@ export function WorkflowVariableTextEditor({
 }
 ```
 
-- [ ] **Step 4: Run the editor test to verify it passes**
+- [x] **Step 4: Run the editor test to verify it passes**
 
 Run:
 
@@ -611,7 +613,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: PASS with both test files green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /home/taichu/git/7flows
@@ -626,7 +628,7 @@ git commit -m "feat(workflow): add variable text editor"
 - Modify: `web/components/workflow-node-config-form/__tests__/output-node-config-form.test.tsx`
 - Modify: `web/components/workflow-node-config-form/__tests__/output-node-config-form.client.test.tsx`
 
-- [ ] **Step 1: Rewrite the output-form tests to expect structured config writes**
+- [x] **Step 1: Rewrite the output-form tests to expect structured config writes**
 
 ```tsx
 // web/components/workflow-node-config-form/__tests__/output-node-config-form.client.test.tsx
@@ -762,7 +764,7 @@ describe("OutputNodeConfigForm", () => {
 });
 ```
 
-- [ ] **Step 2: Run the output-form tests to verify they fail**
+- [x] **Step 2: Run the output-form tests to verify they fail**
 
 Run:
 
@@ -772,7 +774,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: FAIL because `OutputNodeConfigForm` still writes only `replyTemplate`.
 
-- [ ] **Step 3: Integrate `WorkflowVariableTextEditor` into the output form**
+- [x] **Step 3: Integrate `WorkflowVariableTextEditor` into the output form**
 
 ```tsx
 // web/components/workflow-node-config-form/output-node-config-form.tsx
@@ -893,7 +895,7 @@ export function OutputNodeConfigForm({
 }
 ```
 
-- [ ] **Step 4: Run the output-form tests to verify they pass**
+- [x] **Step 4: Run the output-form tests to verify they pass**
 
 Run:
 
@@ -903,7 +905,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: PASS with all four test files green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /home/taichu/git/7flows
@@ -919,7 +921,7 @@ git commit -m "feat(workflow): integrate variable text editor"
 - Modify: `api/tests/test_runtime_service_agent_runtime.py`
 - Modify: `api/tests/test_workflow_routes.py`
 
-- [ ] **Step 1: Add the failing backend tests**
+- [x] **Step 1: Add the failing backend tests**
 
 ```py
 # api/tests/test_runtime_service_agent_runtime.py
@@ -1007,7 +1009,7 @@ def test_create_workflow_accepts_end_node_reply_document(client: TestClient) -> 
     assert body["definition"]["nodes"][2]["config"]["replyReferences"][0]["ownerNodeId"] == "endNode_ab12cd34"
 ```
 
-- [ ] **Step 2: Run the backend tests to verify they fail**
+- [x] **Step 2: Run the backend tests to verify they fail**
 
 Run:
 
@@ -1017,7 +1019,7 @@ cd /home/taichu/git/7flows && api/.venv/bin/pytest api/tests/test_runtime_servic
 
 Expected: FAIL because `replyDocument` / `replyReferences` are not validated or rendered.
 
-- [ ] **Step 3: Implement backend validation and rendering**
+- [x] **Step 3: Implement backend validation and rendering**
 
 ```py
 # api/app/schemas/workflow_node_validation.py
@@ -1122,7 +1124,7 @@ class WorkflowNodeReplyDocument(BaseModel):
         return "".join(parts).strip()
 ```
 
-- [ ] **Step 4: Run the backend tests to verify they pass**
+- [x] **Step 4: Run the backend tests to verify they pass**
 
 Run:
 
@@ -1132,7 +1134,7 @@ cd /home/taichu/git/7flows && api/.venv/bin/pytest api/tests/test_runtime_servic
 
 Expected: PASS with the new structured reply tests green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /home/taichu/git/7flows
@@ -1148,7 +1150,7 @@ git commit -m "feat(workflow): support structured reply documents"
 - Verify: `api/app/services/runtime_node_dispatch_support.py`
 - Verify: `api/app/schemas/workflow_node_validation.py`
 
-- [ ] **Step 1: Run the full targeted frontend verification**
+- [x] **Step 1: Run the full targeted frontend verification**
 
 Run:
 
@@ -1158,7 +1160,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web exec vitest run components
 
 Expected: PASS with all four test files green.
 
-- [ ] **Step 2: Run the targeted backend verification**
+- [x] **Step 2: Run the targeted backend verification**
 
 Run:
 
@@ -1168,7 +1170,7 @@ cd /home/taichu/git/7flows && api/.venv/bin/pytest api/tests/test_runtime_servic
 
 Expected: PASS with structured reply and compatibility tests green.
 
-- [ ] **Step 3: Run lint and diff checks**
+- [x] **Step 3: Run lint and diff checks**
 
 Run:
 
@@ -1178,7 +1180,7 @@ cd /home/taichu/git/7flows && corepack pnpm --dir web lint && git diff --check
 
 Expected: `✔ No ESLint warnings or errors` and no `git diff --check` output.
 
-- [ ] **Step 4: Run type-check and record existing unrelated failures if they persist**
+- [x] **Step 4: Run type-check and record existing unrelated failures if they persist**
 
 Run:
 
@@ -1193,7 +1195,7 @@ components/__tests__/workflow-create-wizard.test.ts(44,5)
 components/__tests__/workflow-studio-layout-shell.test.tsx(57,9)
 ```
 
-- [ ] **Step 5: Push the branch**
+- [x] **Step 5: Push the branch**
 
 ```bash
 cd /home/taichu/git/7flows
