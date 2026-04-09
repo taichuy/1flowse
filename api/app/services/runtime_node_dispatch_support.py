@@ -29,7 +29,9 @@ from app.services.tool_execution_events import build_tool_execution_events
 
 _log = logging.getLogger(__name__)
 _model_provider_registry = ModelProviderRegistryService()
-_END_NODE_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
+_END_NODE_TEMPLATE_PATTERN = re.compile(
+    r"\{\{\s*(?:#\s*([^{}#]+?)\s*#|([^{}]+?))\s*\}\}"
+)
 
 
 class RuntimeNodeDispatchSupportMixin:
@@ -192,7 +194,7 @@ class RuntimeNodeDispatchSupportMixin:
 
     def _render_end_node_template(self, template: str, node_input: dict) -> str:
         def replace_token(match: re.Match[str]) -> str:
-            path = match.group(1).strip()
+            path = (match.group(1) or match.group(2) or "").strip()
             if not path:
                 return ""
 

@@ -12,6 +12,10 @@ type OutputNodeConfigFormProps = {
   onChange: (nextConfig: Record<string, unknown>) => void;
 };
 
+function formatReplyToken(path: string) {
+  return `{{#${path}#}}`;
+}
+
 export function OutputNodeConfigForm({
   node,
   nodes,
@@ -38,9 +42,9 @@ export function OutputNodeConfigForm({
   };
 
   const commonTokens = [
-    "{{ text }}",
-    "{{ trigger_input.query }}",
-    "{{ accumulated.answer }}",
+    formatReplyToken("text"),
+    formatReplyToken("trigger_input.query"),
+    formatReplyToken("accumulated.answer"),
   ];
 
   return (
@@ -58,12 +62,12 @@ export function OutputNodeConfigForm({
           className="editor-json-area"
           value={replyTemplate}
           onChange={(event) => updateField("replyTemplate", event.target.value || undefined)}
-          placeholder={"例如：\n{{ text }}\n\n或者：\n你好，{{ accumulated.agent.answer }}"}
+          placeholder={"例如：\n{{#text#}}\n\n或者：\n你好，{{#accumulated.agent.answer#}}"}
         />
         <small className="section-copy">
-          支持 `{"{{ path }}"}` 模板语法。优先推荐把上游字段 mapping 到当前节点后直接写
-          `{"{{ text }}"}`；如果直接引用已有节点输出，可用
-          `{"{{ accumulated.agent.answer }}"}`、`{"{{ trigger_input.query }}"}` 这类路径。
+          支持 `{"{{#path#}}"}` 模板语法。优先推荐把上游字段 mapping 到当前节点后直接写
+          `{"{{#text#}}"}`；如果直接引用已有节点输出，可用
+          `{"{{#accumulated.agent.answer#}}"}`、`{"{{#trigger_input.query#}}"}` 这类路径。
         </small>
       </label>
 
@@ -100,16 +104,16 @@ export function OutputNodeConfigForm({
                   <button
                     type="button"
                     className="sync-button"
-                    onClick={() => insertReplyToken(`{{ ${basePath} }}`)}
+                    onClick={() => insertReplyToken(formatReplyToken(basePath))}
                   >
                     {candidate.data.label} · {candidate.id}
                   </button>
                   <button
                     type="button"
                     className="sync-button"
-                    onClick={() => insertReplyToken(`{{ ${basePath}.answer }}`)}
+                    onClick={() => insertReplyToken(formatReplyToken(`${basePath}.answer`))}
                   >
-                    {`{{ ${basePath}.answer }}`}
+                    {formatReplyToken(`${basePath}.answer`)}
                   </button>
                 </React.Fragment>
               );

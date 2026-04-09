@@ -16,7 +16,7 @@ describe("OutputNodeConfigForm", () => {
             label: "直接回复",
             nodeType: "endNode",
             config: {
-              replyTemplate: "你好，{{ accumulated.agent.answer }}",
+              replyTemplate: "你好，{{#accumulated.agent.answer#}}",
               responseKey: "answer"
             }
           }
@@ -39,8 +39,8 @@ describe("OutputNodeConfigForm", () => {
 
     expect(html).toContain("Direct reply");
     expect(html).toContain("回复模板");
-    expect(html).toContain("{{ text }}");
-    expect(html).toContain("{{ accumulated.agent.answer }}");
+    expect(html).toContain("{{#text#}}");
+    expect(html).toContain("{{#accumulated.agent.answer#}}");
     expect(html).toContain("LLM · agent");
     expect(html).toContain("回复字段名");
     expect(html).toContain("插入变量");

@@ -120,7 +120,7 @@ def test_end_node_renders_direct_reply_template_from_accumulated_output(
                     "type": "endNode",
                     "name": "endNode",
                     "config": {
-                        "replyTemplate": "最终回复：{{ accumulated.agent.answer }}",
+                        "replyTemplate": "最终回复：{{#accumulated.agent.answer#}}",
                     },
                 },
             ],
@@ -165,7 +165,7 @@ def test_end_node_renders_direct_reply_template_from_mapped_field(
                     "type": "endNode",
                     "name": "endNode",
                     "config": {
-                        "replyTemplate": "最终回复：{{ text }}",
+                        "replyTemplate": "最终回复：{{#text#}}",
                         "responseKey": "reply",
                     },
                 },
@@ -195,6 +195,51 @@ def test_end_node_renders_direct_reply_template_from_mapped_field(
     assert end_run.input_payload["text"] == "mapped-compatible"
     assert end_run.output_payload == {"reply": "最终回复：mapped-compatible"}
     assert artifacts.run.output_payload == {"reply": "最终回复：mapped-compatible"}
+
+
+def test_end_node_keeps_legacy_direct_reply_template_syntax_compatible(
+    sqlite_session: Session,
+) -> None:
+    workflow = Workflow(
+        id="wf-end-node-direct-reply-legacy-template",
+        name="End Node Direct Reply Legacy Template Workflow",
+        version="0.1.0",
+        status="draft",
+        definition={
+            "nodes": [
+                {"id": "startNode", "type": "startNode", "name": "startNode", "config": {}},
+                {
+                    "id": "agent",
+                    "type": "llmAgentNode",
+                    "name": "Agent",
+                    "config": {
+                        "assistant": {"enabled": False},
+                        "mock_output": {"answer": "legacy-compatible"},
+                    },
+                },
+                {
+                    "id": "endNode",
+                    "type": "endNode",
+                    "name": "endNode",
+                    "config": {
+                        "replyTemplate": "旧语法：{{ accumulated.agent.answer }}",
+                    },
+                },
+            ],
+            "edges": [
+                {"id": "e1", "sourceNodeId": "startNode", "targetNodeId": "agent"},
+                {"id": "e2", "sourceNodeId": "agent", "targetNodeId": "endNode"},
+            ],
+        },
+    )
+    sqlite_session.add(workflow)
+    sqlite_session.commit()
+
+    artifacts = RuntimeService().execute_workflow(sqlite_session, workflow, {"topic": "agent"})
+
+    end_run = next(node_run for node_run in artifacts.node_runs if node_run.node_id == "endNode")
+    assert end_run.output_payload == {"answer": "旧语法：legacy-compatible"}
+    assert artifacts.run.output_payload == {"answer": "旧语法：legacy-compatible"}
 
 
 def test_llm_agent_with_assistant_distills_tool_results_into_evidence(

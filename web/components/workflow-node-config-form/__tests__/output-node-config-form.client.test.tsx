@@ -60,7 +60,7 @@ describe("OutputNodeConfigForm client render", () => {
     });
 
     const tokenButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("{{ text }}")
+      button.textContent?.includes("{{#text#}}")
     ) as HTMLButtonElement | undefined;
     expect(tokenButton).toBeTruthy();
 
@@ -69,7 +69,7 @@ describe("OutputNodeConfigForm client render", () => {
     });
 
     expect(handleChange).toHaveBeenLastCalledWith({
-      replyTemplate: "{{ text }}"
+      replyTemplate: "{{#text#}}"
     });
   });
 });
