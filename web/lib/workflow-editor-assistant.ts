@@ -238,7 +238,7 @@ function buildTopologyHint({
   downstreamLabels: string[];
 }) {
   if (nodeType === "startNode" && downstreamLabels.length === 0) {
-    return "开始节点还是孤立入口，建议先接一个 AI / Tool / 结束节点形成最小主链。";
+    return "开始节点还是孤立入口，建议先接一个 AI / Tool / 直接回复节点形成最小主链。";
   }
 
   if (downstreamLabels.length === 0 && nodeType !== "endNode") {
@@ -269,28 +269,28 @@ function buildNextNodeSuggestions(nodeType: string) {
       return [
         "接一个 AI / Agent 节点，把入口参数先变成结构化计划或回答。",
         "如果需要查资料或调工具，先接 Tool 节点，再让 AI 节点消费工具结果。",
-        "如果只是验收入口是否通，可直接接结束节点做最小闭环。"
+        "如果只是验收入口是否通，可直接接一个直接回复节点做最小闭环。"
       ];
     case "llmAgentNode":
       return [
         "如果还需要外部知识或动作，接 Tool 节点补外部能力。",
-        "如果已经得到最终结果，直接接结束节点收口。",
+        "如果已经得到最终结果，直接接到直接回复节点收口。",
         "如果要批处理或重试分流，再接 Loop / Condition 类节点。"
       ];
     case "toolNode":
       return [
         "接一个 AI / Agent 节点消化工具结果并形成对人可读输出。",
-        "如果工具结果已经足够稳定，也可以直接接结束节点。",
+        "如果工具结果已经足够稳定，也可以直接接到直接回复节点。",
         "如果工具返回多分支结果，再接 Condition / Router 做分流。"
       ];
     case "endNode":
       return [
-        "结束节点已是终点，优先回头检查上游字段是否都能稳定落到这里。",
+        "直接回复节点已是终点，优先回头检查上游字段是否都能稳定落到这里。",
         "如果还想补观测或治理，放在应用级发布/诊断侧，而不是继续往后接执行节点。"
       ];
     default:
       return [
-        "优先确认这个节点产出的字段由谁消费，再决定接 AI、Tool 还是结束节点。",
+        "优先确认这个节点产出的字段由谁消费，再决定接 AI、Tool 还是直接回复节点。",
         "如果它承担副作用，优先给它一个明确下游，别让结果悬空。"
       ];
   }

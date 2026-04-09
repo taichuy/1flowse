@@ -237,8 +237,8 @@ def build_node_catalog_items(
         ),
         WorkflowNodeCatalogItem(
             type="endNode",
-            label="结束",
-            description="聚合并整形最终结果，为后续发布映射和响应输出做准备。",
+            label="直接回复",
+            description="接住上游结果并直接组织最终回复，作为 workflow 主链的最终输出。",
             ecosystem="native",
             source=NATIVE_NODE_SOURCE,
             capability_group="output",

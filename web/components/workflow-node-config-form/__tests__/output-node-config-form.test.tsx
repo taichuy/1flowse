@@ -13,7 +13,7 @@ describe("OutputNodeConfigForm", () => {
           type: "workflowNode",
           position: { x: 0, y: 0 },
           data: {
-            label: "结束",
+            label: "直接回复",
             nodeType: "endNode",
             config: {
               replyTemplate: "你好，{{ accumulated.agent.answer }}",
@@ -43,5 +43,6 @@ describe("OutputNodeConfigForm", () => {
     expect(html).toContain("{{ accumulated.agent.answer }}");
     expect(html).toContain("LLM · agent");
     expect(html).toContain("回复字段名");
+    expect(html).toContain("插入变量");
   });
 });

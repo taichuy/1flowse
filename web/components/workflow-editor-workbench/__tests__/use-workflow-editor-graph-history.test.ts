@@ -31,7 +31,7 @@ function buildDefinition(): WorkflowDefinition {
       {
         id: "output_1",
         type: "endNode",
-        name: "结束",
+        name: "直接回复",
         config: {
           ui: {
             position: {

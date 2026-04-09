@@ -19,6 +19,7 @@ export function OutputNodeConfigForm({
 }: OutputNodeConfigFormProps) {
   const config = cloneRecord(node.data.config);
   const candidateNodes = nodes.filter((item) => item.id !== node.id);
+  const replyTemplate = typeof config.replyTemplate === "string" ? config.replyTemplate : "";
 
   const updateField = (field: string, value: unknown) => {
     const nextConfig = cloneRecord(config);
@@ -29,6 +30,18 @@ export function OutputNodeConfigForm({
     }
     onChange(nextConfig);
   };
+
+  const insertReplyToken = (token: string) => {
+    const normalizedTemplate = replyTemplate.trimEnd();
+    const nextTemplate = normalizedTemplate ? `${normalizedTemplate}\n${token}` : token;
+    updateField("replyTemplate", nextTemplate);
+  };
+
+  const commonTokens = [
+    "{{ text }}",
+    "{{ trigger_input.query }}",
+    "{{ accumulated.answer }}",
+  ];
 
   return (
     <div className="binding-form">
@@ -43,7 +56,7 @@ export function OutputNodeConfigForm({
         <span className="binding-label">回复模板</span>
         <textarea
           className="editor-json-area"
-          value={typeof config.replyTemplate === "string" ? config.replyTemplate : ""}
+          value={replyTemplate}
           onChange={(event) => updateField("replyTemplate", event.target.value || undefined)}
           placeholder={"例如：\n{{ text }}\n\n或者：\n你好，{{ accumulated.agent.answer }}"}
         />
@@ -65,14 +78,42 @@ export function OutputNodeConfigForm({
       </label>
 
       <div className="binding-field compact-stack">
-        <span className="binding-label">可引用节点</span>
+        <span className="binding-label">插入变量</span>
+        <div className="tool-badge-row">
+          {commonTokens.map((token) => (
+            <button
+              key={token}
+              type="button"
+              className="sync-button"
+              onClick={() => insertReplyToken(token)}
+            >
+              {token}
+            </button>
+          ))}
+        </div>
         <div className="tool-badge-row">
           {candidateNodes.length > 0 ? (
-            candidateNodes.map((candidate) => (
-              <span key={candidate.id} className="event-chip">
-                {candidate.data.label} · {candidate.id}
-              </span>
-            ))
+            candidateNodes.map((candidate) => {
+              const basePath = `accumulated.${candidate.id}`;
+              return (
+                <React.Fragment key={candidate.id}>
+                  <button
+                    type="button"
+                    className="sync-button"
+                    onClick={() => insertReplyToken(`{{ ${basePath} }}`)}
+                  >
+                    {candidate.data.label} · {candidate.id}
+                  </button>
+                  <button
+                    type="button"
+                    className="sync-button"
+                    onClick={() => insertReplyToken(`{{ ${basePath}.answer }}`)}
+                  >
+                    {`{{ ${basePath}.answer }}`}
+                  </button>
+                </React.Fragment>
+              );
+            })
           ) : (
             <small className="section-copy">当前还没有可供回复模板引用的其他节点。</small>
           )}

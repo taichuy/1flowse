@@ -1,6 +1,6 @@
 const BUILTIN_WORKFLOW_NODE_LABELS: Record<string, string> = {
   startNode: "开始",
-  endNode: "结束"
+  endNode: "直接回复"
 };
 
 export function getWorkflowNodeTypeDisplayLabel(

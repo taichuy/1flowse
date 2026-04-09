@@ -94,9 +94,9 @@ describe("WorkflowCanvasNode", () => {
         id: "node-2",
         selected: false,
         data: {
-          label: "结束",
+          label: "直接回复",
           nodeType: "endNode",
-          typeLabel: "结束",
+          typeLabel: "直接回复",
           capabilityGroup: "output",
           config: {
             replyTemplate: "你好，{{ accumulated.agent.answer }}"

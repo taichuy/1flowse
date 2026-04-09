@@ -114,8 +114,8 @@ const nodeCatalog: WorkflowNodeCatalogItem[] = [
   },
   {
     type: "endNode",
-    label: "结束",
-    description: "输出结果。",
+    label: "直接回复",
+    description: "直接组织最终回复。",
     ecosystem: "7flows",
     source: {
       kind: "node",
@@ -162,7 +162,7 @@ const baseNodes = [
     type: "workflowNode",
     position: { x: 400, y: 120 },
     data: {
-      label: "结束",
+      label: "直接回复",
       nodeType: "endNode",
       config: {}
     } satisfies WorkflowCanvasNodeData
@@ -209,8 +209,8 @@ describe("workflow-editor quick add helpers", () => {
         config: {}
       })
     ).toMatchObject({
-      label: "结束 2",
-      typeLabel: "结束"
+      label: "直接回复 2",
+      typeLabel: "直接回复"
     });
   });
 

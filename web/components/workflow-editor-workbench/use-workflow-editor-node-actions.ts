@@ -267,7 +267,7 @@ export function useWorkflowEditorNodeActions({
       targetNode.data.nodeType === "endNode" &&
       nodes.filter((node) => node.data.nodeType === "endNode").length <= 1
     ) {
-      setMessage("至少保留一个结束节点，避免保存后被后端校验拒绝。");
+      setMessage("至少保留一个直接回复节点，避免保存后被后端校验拒绝。");
       setMessageTone("error");
       return;
     }

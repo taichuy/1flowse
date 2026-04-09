@@ -10,7 +10,7 @@ describe("workflow-node-display", () => {
   it("localizes built-in start and end node type labels", () => {
     expect(getWorkflowNodeTypeDisplayLabel("startNode")).toBe("开始");
     expect(getWorkflowNodeTypeDisplayLabel("startNode", "startNode")).toBe("开始");
-    expect(getWorkflowNodeTypeDisplayLabel("endNode", "endNode")).toBe("结束");
+    expect(getWorkflowNodeTypeDisplayLabel("endNode", "endNode")).toBe("直接回复");
     expect(getWorkflowNodeTypeDisplayLabel("llmAgentNode", "LLM Agent")).toBe(
       "LLM Agent"
     );
@@ -29,7 +29,7 @@ describe("workflow-node-display", () => {
         nodeType: "endNode",
         label: "endNode 2"
       })
-    ).toBe("结束 2");
+    ).toBe("直接回复 2");
 
     expect(
       getWorkflowNodeDisplayLabel({
@@ -44,7 +44,7 @@ describe("workflow-node-display", () => {
       "entry · 开始"
     );
     expect(formatWorkflowNodeMeta(undefined, "endNode", "endNode")).toBe(
-      "workflow · 结束"
+      "workflow · 直接回复"
     );
   });
 });
