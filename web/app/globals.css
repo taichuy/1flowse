@@ -4233,6 +4233,14 @@ a {
   min-height: 0;
 }
 
+.workflow-editor-node-panel-shell,
+.workflow-editor-node-settings-panel-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .workflow-editor-inspector-tabs .ant-tabs-nav {
   flex: 0 0 auto;
 }

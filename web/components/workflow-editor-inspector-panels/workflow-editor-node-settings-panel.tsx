@@ -177,7 +177,10 @@ export function WorkflowEditorNodeSettingsPanel({
     );
 
   return (
-    <div data-component="workflow-editor-node-settings-panel">
+    <div
+      className="workflow-editor-node-settings-panel-shell"
+      data-component="workflow-editor-node-settings-panel"
+    >
       <WorkflowNodeSettingsTemplate
         featureSection={featureSection}
         contractSection={

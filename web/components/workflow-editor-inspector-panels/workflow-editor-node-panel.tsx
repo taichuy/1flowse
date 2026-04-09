@@ -54,6 +54,7 @@ export function WorkflowEditorNodePanel({
 
   return (
     <div
+      className="workflow-editor-node-panel-shell"
       data-component="workflow-editor-node-panel"
       data-node-type={definition.nodeType}
     >

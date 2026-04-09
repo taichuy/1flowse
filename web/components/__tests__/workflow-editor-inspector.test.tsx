@@ -214,6 +214,8 @@ describe("WorkflowEditorInspector", () => {
     expect(html).toContain("LLM Agent");
     expect(html).toContain("添加描述...");
     expect(html).toContain("llmAgentNode");
+    expect(html).toContain('class="workflow-editor-node-panel-shell"');
+    expect(html).toContain('class="workflow-editor-node-settings-panel-shell"');
     expect(html).toContain("设置");
     expect(html).toContain("运行时");
     expect(html).toContain("AI");
