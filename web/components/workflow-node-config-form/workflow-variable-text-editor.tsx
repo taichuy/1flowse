@@ -1,98 +1,33 @@
 "use client";
 
-import React from "react";
-import { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildReplyVariableReference,
-  formatWorkflowVariableMachineName,
-  resolveReplyVariableAlias,
   type WorkflowVariableReference,
   type WorkflowVariableReferenceGroup,
   type WorkflowVariableTextDocument,
 } from "@/components/workflow-node-config-form/workflow-variable-text-document";
 import { WorkflowVariableReferencePicker } from "@/components/workflow-node-config-form/workflow-variable-reference-picker";
+import {
+  buildReplyDocumentFromProjection,
+  buildWorkflowVariableProjection,
+  insertSentinelIntoProjection,
+  removeTokenAfterCursor,
+  removeTokenBeforeCursor,
+} from "@/components/workflow-node-config-form/workflow-variable-text-projection";
 
-type WorkflowVariableTextEditorProps = {
-  ownerNodeId: string;
-  ownerLabel: string;
-  value: WorkflowVariableTextDocument;
-  references: WorkflowVariableReference[];
-  variables: WorkflowVariableReferenceGroup[];
-  placeholder?: string;
-  onChange: (next: {
-    document: WorkflowVariableTextDocument;
-    references: WorkflowVariableReference[];
-  }) => void;
-};
-
-type WorkflowVariableSlotsState = {
-  slotTexts: string[];
-  variableRefIds: string[];
-};
-
-function toSlots(document: WorkflowVariableTextDocument): WorkflowVariableSlotsState {
-  const slotTexts = [""];
-  const variableRefIds: string[] = [];
-
-  document.segments.forEach((segment) => {
-    if (segment.type === "text") {
-      slotTexts[slotTexts.length - 1] += segment.text;
-      return;
-    }
-
-    variableRefIds.push(segment.refId);
-    slotTexts.push("");
-  });
-
-  return { slotTexts, variableRefIds };
-}
-
-function toDocument({
-  slotTexts,
-  variableRefIds,
-}: WorkflowVariableSlotsState): WorkflowVariableTextDocument {
-  const segments: WorkflowVariableTextDocument["segments"] = [];
-
-  slotTexts.forEach((slotText, index) => {
-    if (slotText) {
-      segments.push({ type: "text", text: slotText });
-    }
-
-    if (index < variableRefIds.length) {
-      segments.push({ type: "variable", refId: variableRefIds[index] });
-    }
-  });
-
-  return {
-    version: 1,
-    segments: segments.length > 0 ? segments : [{ type: "text", text: "" }],
-  };
-}
+type PickerMode = "slash" | "toolbar" | null;
 
 function selectorsMatch(left: string[], right: string[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function dropUnusedReferences({
-  references,
-  variableRefIds,
-}: {
-  references: WorkflowVariableReference[];
-  variableRefIds: string[];
-}) {
-  const usedRefIds = new Set(variableRefIds);
-  return references.filter((reference) => usedRefIds.has(reference.refId));
-}
-
-function findActivePickerSlotIndex(slotTexts: string[]) {
-  for (let index = slotTexts.length - 1; index >= 0; index -= 1) {
-    if (slotTexts[index]?.endsWith("/")) {
-      return index;
-    }
-  }
-
-  return -1;
+function findReferenceBySelector(
+  references: WorkflowVariableReference[],
+  selector: string[],
+) {
+  return references.find((reference) => selectorsMatch(reference.selector, selector));
 }
 
 export function WorkflowVariableTextEditor({
@@ -103,157 +38,205 @@ export function WorkflowVariableTextEditor({
   variables,
   placeholder = "输入正文，输入 / 插入变量",
   onChange,
-}: WorkflowVariableTextEditorProps) {
-  const { slotTexts, variableRefIds } = useMemo(() => toSlots(value), [value]);
-  const referenceMap = useMemo(
-    () => new Map(references.map((reference) => [reference.refId, reference])),
-    [references],
+}: {
+  ownerNodeId: string;
+  ownerLabel: string;
+  value: WorkflowVariableTextDocument;
+  references: WorkflowVariableReference[];
+  variables: WorkflowVariableReferenceGroup[];
+  placeholder?: string;
+  onChange: (next: {
+    document: WorkflowVariableTextDocument;
+    references: WorkflowVariableReference[];
+  }) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
+  const [pickerTop, setPickerTop] = useState(56);
+  const projection = useMemo(
+    () => buildWorkflowVariableProjection({ ownerLabel, document: value, references }),
+    [ownerLabel, references, value],
   );
-  const activePickerSlotIndex = useMemo(() => findActivePickerSlotIndex(slotTexts), [slotTexts]);
+  const tokenLabelMap = useMemo(
+    () => new Map(projection.tokens.map((token) => [token.refId, token.label])),
+    [projection.tokens],
+  );
 
-  const commitSlots = (nextState: WorkflowVariableSlotsState, nextReferences = references) => {
+  const syncTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 56)}px`;
+    setPickerTop(Math.min(textarea.scrollHeight + 14, 280));
+  };
+
+  useEffect(() => {
+    syncTextareaHeight();
+  }, [projection.text]);
+
+  useEffect(() => {
+    if (pickerMode === null && projection.text.endsWith("/")) {
+      setPickerMode("slash");
+    }
+  }, [pickerMode, projection.text]);
+
+  const commitProjection = (nextText: string, nextOrderedRefIds: string[], nextReferences = references) => {
+    const usedRefIds = new Set(nextOrderedRefIds);
     onChange({
-      document: toDocument(nextState),
-      references: dropUnusedReferences({
-        references: nextReferences,
-        variableRefIds: nextState.variableRefIds,
+      document: buildReplyDocumentFromProjection({
+        text: nextText,
+        orderedRefIds: nextOrderedRefIds,
       }),
+      references: nextReferences.filter((reference) => usedRefIds.has(reference.refId)),
     });
+  };
+
+  const resolveCurrentCursor = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return projection.text.length;
+    }
+
+    if (pickerMode === "slash" && projection.text.endsWith("/")) {
+      return projection.text.length;
+    }
+
+    return textarea.selectionStart ?? projection.text.length;
+  };
+
+  const handleInsert = (selector: string[]) => {
+    const existingReference = findReferenceBySelector(references, selector);
+    const nextReference =
+      existingReference ??
+      buildReplyVariableReference({
+        ownerNodeId,
+        aliasBase: selector[selector.length - 1] || "value",
+        selector,
+        existingAliases: references.map((reference) => reference.alias),
+      });
+    const inserted = insertSentinelIntoProjection({
+      text: projection.text,
+      cursor: resolveCurrentCursor(),
+      orderedRefIds: projection.orderedRefIds,
+      refId: nextReference.refId,
+      removeLeadingSlash: pickerMode === "slash",
+    });
+
+    commitProjection(
+      inserted.text,
+      inserted.orderedRefIds,
+      existingReference ? references : [...references, nextReference],
+    );
+    setPickerMode(null);
   };
 
   return (
     <div
-      className="binding-field compact-stack workflow-variable-text-editor"
+      className="workflow-variable-text-editor-shell"
       data-component="workflow-variable-text-editor"
     >
-      <div className="editor-json-area workflow-variable-text-editor-surface">
-        {slotTexts.map((slotText, slotIndex) => (
-          <div className="workflow-variable-text-editor-row" key={`slot-${slotIndex}`}>
-            <textarea
-              className="workflow-variable-text-slot"
-              value={slotText}
-              onInput={(event) => {
-                const nextSlotTexts = slotTexts.slice();
-                nextSlotTexts[slotIndex] = (event.target as HTMLTextAreaElement).value;
-                commitSlots({ slotTexts: nextSlotTexts, variableRefIds });
-              }}
-              placeholder={slotIndex === 0 ? placeholder : ""}
-            />
-            {slotIndex < variableRefIds.length ? (
-              (() => {
-                const refId = variableRefIds[slotIndex];
-                const reference = referenceMap.get(refId);
-
-                if (!reference) {
-                  return null;
-                }
-
-                return (
-                  <div
-                    className="workflow-variable-token-chip"
-                    data-component="workflow-variable-token-chip"
-                  >
-                    <button type="button" className="sync-button">
-                      [{ownerLabel}] {reference.alias}
-                    </button>
-                    <input
-                      className="trace-text-input"
-                      value={reference.alias}
-                      onInput={(event) => {
-                        const nextAlias = resolveReplyVariableAlias({
-                          aliasBase: (event.target as HTMLInputElement).value || "value",
-                          existingAliases: references
-                            .filter((item) => item.refId !== refId)
-                            .map((item) => item.alias),
-                        });
-
-                        onChange({
-                          document: value,
-                          references: references.map((item) =>
-                            item.refId === refId ? { ...item, alias: nextAlias } : item,
-                          ),
-                        });
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="sync-button secondary-button"
-                      onClick={() => {
-                        const nextVariableRefIds = variableRefIds.slice();
-                        const nextSlotTexts = slotTexts.slice();
-
-                        nextVariableRefIds.splice(slotIndex, 1);
-                        nextSlotTexts[slotIndex] = `${nextSlotTexts[slotIndex]}${nextSlotTexts[slotIndex + 1]}`;
-                        nextSlotTexts.splice(slotIndex + 1, 1);
-
-                        commitSlots({
-                          slotTexts: nextSlotTexts,
-                          variableRefIds: nextVariableRefIds,
-                        });
-                      }}
-                    >
-                      删除变量
-                    </button>
-                  </div>
-                );
-              })()
-            ) : null}
-          </div>
-        ))}
+      <div
+        className="workflow-variable-text-editor-toolbar"
+        data-component="workflow-variable-text-editor-toolbar"
+      >
+        <button
+          type="button"
+          className="sync-button secondary-button"
+          data-action="open-variable-picker"
+          onClick={() => setPickerMode("toolbar")}
+        >
+          变量
+        </button>
       </div>
 
-      {activePickerSlotIndex >= 0 ? (
-        <WorkflowVariableReferencePicker
-          groups={variables}
-          onInsert={(selector) => {
-            const existingReference = references.find((reference) =>
-              selectorsMatch(reference.selector, selector),
-            );
-            const nextReference =
-              existingReference ??
-              buildReplyVariableReference({
-                ownerNodeId,
-                aliasBase: selector.at(-1) || "value",
-                selector,
-                existingAliases: references.map((item) => item.alias),
-              });
-            const nextSlotTexts = slotTexts.slice();
-            const nextVariableRefIds = variableRefIds.slice();
-
-            nextSlotTexts[activePickerSlotIndex] = nextSlotTexts[activePickerSlotIndex].replace(
-              /\/$/,
-              "",
-            );
-            nextVariableRefIds.splice(activePickerSlotIndex, 0, nextReference.refId);
-            nextSlotTexts.splice(activePickerSlotIndex + 1, 0, "");
-
-            commitSlots(
-              {
-                slotTexts: nextSlotTexts,
-                variableRefIds: nextVariableRefIds,
-              },
-              existingReference ? references : [...references, nextReference],
-            );
-          }}
-          onCopyMachineName={(machineName) => {
-            void navigator.clipboard?.writeText(machineName);
-          }}
-        />
-      ) : (
-        <small className="section-copy">
-          输入 `/` 打开变量选择器，插入的变量会以当前节点内 alias 形式管理。
-        </small>
-      )}
-
-      {references.length > 0 ? (
-        <div className="tool-badge-row">
-          {references.map((reference) => (
-            <span className="event-chip" key={reference.refId}>
-              {formatWorkflowVariableMachineName(reference)}
-            </span>
-          ))}
+      <div className="workflow-variable-text-editor-composer">
+        <div className="workflow-variable-text-editor-overlay" aria-hidden="true">
+          {projection.text.length === 0 && projection.tokens.length === 0 ? (
+            <span className="workflow-variable-text-editor-placeholder">{placeholder}</span>
+          ) : (
+            value.segments.map((segment, index) =>
+              segment.type === "text" ? (
+                <span key={`text-${index}`}>{segment.text}</span>
+              ) : (
+                <span
+                  key={`${segment.refId}-${index}`}
+                  className="workflow-variable-inline-token"
+                  data-component="workflow-variable-inline-token"
+                >
+                  {tokenLabelMap.get(segment.refId) ?? segment.refId}
+                </span>
+              ),
+            )
+          )}
         </div>
-      ) : null}
+
+        <textarea
+          ref={textareaRef}
+          className="workflow-variable-text-editor-input"
+          value={projection.text}
+          onInput={(event) => {
+            const textarea = event.currentTarget;
+            const nextText = textarea.value;
+            commitProjection(nextText, projection.orderedRefIds);
+
+            const cursor = textarea.selectionStart ?? nextText.length;
+            if (cursor > 0 && nextText[cursor - 1] === "/") {
+              setPickerMode("slash");
+            } else if (pickerMode === "slash") {
+              setPickerMode(null);
+            }
+          }}
+          onClick={syncTextareaHeight}
+          onKeyUp={syncTextareaHeight}
+          onSelect={syncTextareaHeight}
+          onKeyDown={(event) => {
+            const textarea = event.currentTarget;
+
+            if (event.key === "Backspace") {
+              const removed = removeTokenBeforeCursor({
+                text: projection.text,
+                cursor: textarea.selectionStart ?? 0,
+                orderedRefIds: projection.orderedRefIds,
+              });
+
+              if (removed.text !== projection.text) {
+                event.preventDefault();
+                commitProjection(removed.text, removed.orderedRefIds);
+                setPickerMode(null);
+              }
+            }
+
+            if (event.key === "Delete") {
+              const removed = removeTokenAfterCursor({
+                text: projection.text,
+                cursor: textarea.selectionStart ?? 0,
+                orderedRefIds: projection.orderedRefIds,
+              });
+
+              if (removed.text !== projection.text) {
+                event.preventDefault();
+                commitProjection(removed.text, removed.orderedRefIds);
+                setPickerMode(null);
+              }
+            }
+
+            if (event.key === "Escape") {
+              setPickerMode(null);
+            }
+          }}
+          placeholder={placeholder}
+          rows={1}
+        />
+
+        {pickerMode !== null ? (
+          <div className="workflow-variable-reference-popover-anchor" style={{ top: `${pickerTop}px` }}>
+            <WorkflowVariableReferencePicker groups={variables} onInsert={handleInsert} />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
