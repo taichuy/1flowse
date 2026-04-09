@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Input } from "antd";
 
 import {
   buildReplyVariableReference,
@@ -89,7 +90,7 @@ export function WorkflowVariableTextEditor({
     references: WorkflowVariableReference[];
   }) => void;
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const inputHostRef = useRef<HTMLDivElement | null>(null);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [pickerTop, setPickerTop] = useState(56);
   const [cursor, setCursor] = useState(value.segments.length > 0 ? projectionLength(value) : 0);
@@ -132,19 +133,35 @@ export function WorkflowVariableTextEditor({
     setCursor((currentCursor) => Math.min(currentCursor, projection.text.length));
   }, [projection.text.length]);
 
+  const getTextareaElement = () =>
+    inputHostRef.current?.querySelector<HTMLTextAreaElement>(
+      "textarea.workflow-variable-text-editor-input",
+    ) ??
+    inputHostRef.current?.querySelector<HTMLTextAreaElement>("textarea.ant-input") ??
+    null;
+
   const syncTextareaHeight = () => {
-    const textarea = textareaRef.current;
+    const textarea = getTextareaElement();
     if (!textarea) {
       return;
     }
 
     textarea.style.height = "0px";
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 56)}px`;
-    setPickerTop(Math.min(textarea.scrollHeight + 14, 280));
+    const nextHeight = Math.max(textarea.scrollHeight || 0, 56);
+    textarea.style.height = `${nextHeight}px`;
+    setPickerTop(Math.min(nextHeight + 14, 280));
   };
 
   useEffect(() => {
-    syncTextareaHeight();
+    const textarea = getTextareaElement();
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    const nextHeight = Math.max(textarea.scrollHeight || 0, 56);
+    textarea.style.height = `${nextHeight}px`;
+    setPickerTop(Math.min(nextHeight + 14, 280));
   }, [projection.text]);
 
   useEffect(() => {
@@ -167,7 +184,7 @@ export function WorkflowVariableTextEditor({
   };
 
   const resolveCurrentCursor = () => {
-    const textarea = textareaRef.current;
+    const textarea = getTextareaElement();
     if (!textarea) {
       return cursor;
     }
@@ -253,74 +270,76 @@ export function WorkflowVariableTextEditor({
           )}
         </div>
 
-        <textarea
-          ref={textareaRef}
-          className="workflow-variable-text-editor-input"
-          value={projection.text}
-          onInput={(event) => {
-            const textarea = event.currentTarget;
-            const nextText = textarea.value;
-            const nextCursor = textarea.selectionStart ?? nextText.length;
-            setCursor(nextCursor);
-            commitProjection(nextText, projection.orderedRefIds);
-          }}
-          onClick={(event) => {
-            syncTextareaHeight();
-            setCursor(event.currentTarget.selectionStart ?? 0);
-          }}
-          onKeyUp={(event) => {
-            syncTextareaHeight();
-            setCursor(event.currentTarget.selectionStart ?? 0);
-          }}
-          onSelect={(event) => {
-            syncTextareaHeight();
-            setCursor(event.currentTarget.selectionStart ?? 0);
-          }}
-          onKeyDown={(event) => {
-            const textarea = event.currentTarget;
-            const nextCursor = textarea.selectionStart ?? 0;
-            setCursor(nextCursor);
+        <div ref={inputHostRef} className="workflow-variable-text-editor-input-host">
+          <Input.TextArea
+            className="workflow-variable-text-editor-input"
+            rows={1}
+            value={projection.text}
+            variant="borderless"
+            onChange={(event) => {
+              const textarea = event.currentTarget;
+              const nextText = textarea.value;
+              const nextCursor = textarea.selectionStart ?? nextText.length;
+              setCursor(nextCursor);
+              commitProjection(nextText, projection.orderedRefIds);
+            }}
+            onClick={(event) => {
+              syncTextareaHeight();
+              setCursor(event.currentTarget.selectionStart ?? 0);
+            }}
+            onKeyUp={(event) => {
+              syncTextareaHeight();
+              setCursor(event.currentTarget.selectionStart ?? 0);
+            }}
+            onSelect={(event) => {
+              syncTextareaHeight();
+              setCursor(event.currentTarget.selectionStart ?? 0);
+            }}
+            onKeyDown={(event) => {
+              const textarea = event.currentTarget;
+              const nextCursor = textarea.selectionStart ?? 0;
+              setCursor(nextCursor);
 
-            if (event.key === "Enter" && pickerMode === "slash" && firstVisibleItem) {
-              event.preventDefault();
-              handleInsert(firstVisibleItem.selector, nextCursor);
-              return;
-            }
-
-            if (event.key === "Backspace") {
-              const removed = removeTokenBeforeCursor({
-                text: projection.text,
-                cursor: nextCursor,
-                orderedRefIds: projection.orderedRefIds,
-              });
-
-              if (removed.text !== projection.text) {
+              if (event.key === "Enter" && pickerMode === "slash" && firstVisibleItem) {
                 event.preventDefault();
-                commitProjection(removed.text, removed.orderedRefIds);
+                handleInsert(firstVisibleItem.selector, nextCursor);
+                return;
+              }
+
+              if (event.key === "Backspace") {
+                const removed = removeTokenBeforeCursor({
+                  text: projection.text,
+                  cursor: nextCursor,
+                  orderedRefIds: projection.orderedRefIds,
+                });
+
+                if (removed.text !== projection.text) {
+                  event.preventDefault();
+                  commitProjection(removed.text, removed.orderedRefIds);
+                  setPickerMode(null);
+                }
+              }
+
+              if (event.key === "Delete") {
+                const removed = removeTokenAfterCursor({
+                  text: projection.text,
+                  cursor: nextCursor,
+                  orderedRefIds: projection.orderedRefIds,
+                });
+
+                if (removed.text !== projection.text) {
+                  event.preventDefault();
+                  commitProjection(removed.text, removed.orderedRefIds);
+                  setPickerMode(null);
+                }
+              }
+
+              if (event.key === "Escape") {
                 setPickerMode(null);
               }
-            }
-
-            if (event.key === "Delete") {
-              const removed = removeTokenAfterCursor({
-                text: projection.text,
-                cursor: nextCursor,
-                orderedRefIds: projection.orderedRefIds,
-              });
-
-              if (removed.text !== projection.text) {
-                event.preventDefault();
-                commitProjection(removed.text, removed.orderedRefIds);
-                setPickerMode(null);
-              }
-            }
-
-            if (event.key === "Escape") {
-              setPickerMode(null);
-            }
-          }}
-          rows={1}
-        />
+            }}
+          />
+        </div>
 
         {pickerMode !== null ? (
           <div className="workflow-variable-reference-popover-anchor" style={{ top: `${pickerTop}px` }}>

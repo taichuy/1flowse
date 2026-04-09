@@ -6166,22 +6166,29 @@ a {
   color: var(--muted);
 }
 
-.workflow-variable-text-editor-input {
+.workflow-variable-text-editor-input-host {
   position: relative;
   z-index: 1;
+}
+
+.workflow-variable-text-editor-input.ant-input {
   width: 100%;
   min-height: 56px;
   resize: none;
-  border: none;
   background: transparent;
   color: transparent;
   caret-color: #111827;
+  padding: 0;
+  border: none;
+  box-shadow: none;
   font: inherit;
   line-height: 1.6;
 }
 
-.workflow-variable-text-editor-input:focus {
+.workflow-variable-text-editor-input.ant-input:focus,
+.workflow-variable-text-editor-input.ant-input:focus-within {
   outline: none;
+  box-shadow: none;
 }
 
 .workflow-variable-inline-token {

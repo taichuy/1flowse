@@ -12,6 +12,19 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, {
+  ResizeObserver: class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+});
+
+function getEditorTextarea() {
+  return document.querySelector(
+    'textarea.workflow-variable-text-editor-input',
+  ) as HTMLTextAreaElement;
+}
 
 afterEach(() => {
   act(() => root?.unmount());
@@ -21,7 +34,7 @@ afterEach(() => {
 });
 
 describe("WorkflowVariableTextEditor", () => {
-  it("renders the placeholder only in the overlay instead of the native textarea placeholder", () => {
+  it("uses an ant textarea base while keeping the placeholder only in the overlay", () => {
     const handleChange = vi.fn();
 
     container = document.createElement("div");
@@ -45,7 +58,9 @@ describe("WorkflowVariableTextEditor", () => {
     });
 
     expect(document.body.textContent).toContain("输入正文，输入 / 插入变量");
-    expect((document.querySelector("textarea") as HTMLTextAreaElement).getAttribute("placeholder")).toBeNull();
+    const textarea = getEditorTextarea();
+    expect(textarea.getAttribute("placeholder")).toBeNull();
+    expect(textarea.className).toContain("ant-input");
   });
 
   it("keeps focus in the textarea for slash filtering and inserts the first match on enter", () => {
@@ -105,7 +120,7 @@ describe("WorkflowVariableTextEditor", () => {
     expect(document.body.textContent).not.toContain("复制机器别名");
     expect(document.querySelector('[data-element="workflow-variable-picker-search"]')).toBeNull();
 
-    const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+    const textarea = getEditorTextarea();
     act(() => {
       textarea.focus();
       textarea.setSelectionRange(3, 3);
@@ -167,7 +182,7 @@ describe("WorkflowVariableTextEditor", () => {
       );
     });
 
-    const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+    const textarea = getEditorTextarea();
     act(() => {
       textarea.focus();
       textarea.setSelectionRange(6, 6);
@@ -265,7 +280,7 @@ describe("WorkflowVariableTextEditor", () => {
       document.querySelector('[data-component="workflow-variable-reference-picker"]'),
     ).toBeFalsy();
 
-    const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+    const textarea = getEditorTextarea();
     expect(textarea.value).toContain(WORKFLOW_VARIABLE_SENTINEL);
 
     act(() => {

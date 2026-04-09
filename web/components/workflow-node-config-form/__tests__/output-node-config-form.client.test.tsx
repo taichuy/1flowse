@@ -11,6 +11,19 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, {
+  ResizeObserver: class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+});
+
+function getEditorTextarea() {
+  return document.querySelector(
+    'textarea.workflow-variable-text-editor-input',
+  ) as HTMLTextAreaElement;
+}
 
 afterEach(() => {
   act(() => root?.unmount());
@@ -63,7 +76,7 @@ describe("OutputNodeConfigForm client render", () => {
       );
     });
 
-    const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+    const textarea = getEditorTextarea();
     act(() => {
       textarea.focus();
       textarea.setSelectionRange(6, 6);
