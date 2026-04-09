@@ -14,6 +14,22 @@ export type WorkflowVariableReference = {
   selector: string[];
 };
 
+export type WorkflowVariableReferenceItem = {
+  key: string;
+  label: string;
+  selector: string[];
+  token: string;
+  previewPath: string;
+  machineName: string;
+  children?: WorkflowVariableReferenceItem[];
+};
+
+export type WorkflowVariableReferenceGroup = {
+  key: string;
+  label: string;
+  items: WorkflowVariableReferenceItem[];
+};
+
 const REPLY_TOKEN_PATTERN = /\{\{\s*(?:#\s*([^{}#]+?)\s*#|([^{}]+?))\s*\}\}/g;
 
 function normalizeAliasBase(aliasBase: string) {
@@ -22,6 +38,25 @@ function normalizeAliasBase(aliasBase: string) {
 
 function buildReplyReferenceId(index: number) {
   return `ref_${index}`;
+}
+
+export function resolveReplyVariableAlias({
+  aliasBase,
+  existingAliases,
+}: {
+  aliasBase: string;
+  existingAliases: string[];
+}) {
+  const normalizedBase = normalizeAliasBase(aliasBase);
+  let alias = normalizedBase;
+  let suffix = 2;
+
+  while (existingAliases.includes(alias)) {
+    alias = `${normalizedBase}_${suffix}`;
+    suffix += 1;
+  }
+
+  return alias;
 }
 
 export function buildReplyVariableReference({
@@ -37,18 +72,9 @@ export function buildReplyVariableReference({
   existingAliases: string[];
   refId?: string;
 }): WorkflowVariableReference {
-  const normalizedBase = normalizeAliasBase(aliasBase);
-  let alias = normalizedBase;
-  let suffix = 2;
-
-  while (existingAliases.includes(alias)) {
-    alias = `${normalizedBase}_${suffix}`;
-    suffix += 1;
-  }
-
   return {
     refId: refId ?? buildReplyReferenceId(existingAliases.length + 1),
-    alias,
+    alias: resolveReplyVariableAlias({ aliasBase, existingAliases }),
     ownerNodeId,
     selector,
   };
@@ -85,6 +111,7 @@ export function parseReplyTemplateToDocument({
     const rawMatch = match[0];
     const rawPath = (match[1] || match[2] || "").trim();
     const selector = rawPath.split(".").filter(Boolean);
+    const machineAliasPrefix = `${ownerNodeId}.`;
 
     if (match.index > cursor) {
       segments.push({
@@ -94,6 +121,12 @@ export function parseReplyTemplateToDocument({
     }
 
     if (selector.length === 0) {
+      segments.push({ type: "text", text: rawMatch });
+      cursor = match.index + rawMatch.length;
+      continue;
+    }
+
+    if (rawPath.startsWith(machineAliasPrefix)) {
       segments.push({ type: "text", text: rawMatch });
       cursor = match.index + rawMatch.length;
       continue;
