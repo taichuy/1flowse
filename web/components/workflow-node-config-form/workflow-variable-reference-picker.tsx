@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   WorkflowVariableReferenceGroup,
@@ -27,11 +27,18 @@ function flattenReferenceItems(
 export function WorkflowVariableReferencePicker({
   groups,
   onInsert,
+  onDismiss,
 }: {
   groups: WorkflowVariableReferenceGroup[];
   onInsert: (selector: string[]) => void;
+  onDismiss?: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   const visibleGroups = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -59,9 +66,18 @@ export function WorkflowVariableReferencePicker({
       <label className="workflow-variable-reference-popover-search">
         <span>搜索变量</span>
         <input
+          ref={searchInputRef}
+          data-element="workflow-variable-picker-search"
           className="trace-text-input"
           value={query}
           onInput={(event) => setQuery((event.target as HTMLInputElement).value)}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onDismiss?.();
+            }
+          }}
           placeholder="搜索变量"
         />
       </label>

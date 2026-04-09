@@ -21,6 +21,33 @@ afterEach(() => {
 });
 
 describe("WorkflowVariableTextEditor", () => {
+  it("renders the placeholder only in the overlay instead of the native textarea placeholder", () => {
+    const handleChange = vi.fn();
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        createElement(WorkflowVariableTextEditor, {
+          ownerNodeId: "endNode_ab12cd34",
+          ownerLabel: "直接回复",
+          value: {
+            version: 1,
+            segments: [{ type: "text", text: "" }],
+          },
+          references: [],
+          variables: [],
+          onChange: handleChange,
+        }),
+      );
+    });
+
+    expect(document.body.textContent).toContain("输入正文，输入 / 插入变量");
+    expect((document.querySelector("textarea") as HTMLTextAreaElement).getAttribute("placeholder")).toBeNull();
+  });
+
   it("opens a compact popup on slash and inserts the variable in place", () => {
     const handleChange = vi.fn();
 
@@ -65,6 +92,9 @@ describe("WorkflowVariableTextEditor", () => {
     ).toBeTruthy();
     expect(document.body.textContent).toContain("搜索变量");
     expect(document.body.textContent).not.toContain("复制机器别名");
+    expect(document.activeElement).toBe(
+      document.querySelector('[data-element="workflow-variable-picker-search"]'),
+    );
 
     const insertButton = Array.from(document.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("text"),
@@ -199,13 +229,30 @@ describe("WorkflowVariableTextEditor", () => {
               selector: ["accumulated", "llm", "text"],
             },
           ],
-          variables: [],
+          variables: [
+            {
+              key: "upstream",
+              label: "上游节点",
+              items: [
+                {
+                  key: "llm-text",
+                  label: "LLM.text",
+                  selector: ["accumulated", "llm", "text"],
+                  token: "{{#endNode_ab12cd34.text#}}",
+                  previewPath: "LLM.text",
+                  machineName: "endNode_ab12cd34.text",
+                  valueTypeLabel: "String",
+                  inlineLabel: "[LLM] text",
+                } as never,
+              ],
+            },
+          ],
           onChange: handleChange,
         }),
       );
     });
 
-    expect(document.body.textContent).toContain("[直接回复] text");
+    expect(document.body.textContent).toContain("[LLM] text");
     expect(
       document.querySelector('[data-component="workflow-variable-reference-picker"]'),
     ).toBeFalsy();

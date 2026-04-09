@@ -107,12 +107,14 @@ function buildLeafItem({
   selector,
   ownerNodeId,
   valueTypeLabel,
+  inlineLabel,
 }: {
   key: string;
   label: string;
   selector: string[];
   ownerNodeId: string;
   valueTypeLabel: string;
+  inlineLabel: string;
 }): WorkflowVariableReferenceItem {
   const aliasBase = selector.at(-1) || "value";
   const machineName = `${ownerNodeId}.${aliasBase}`;
@@ -125,6 +127,7 @@ function buildLeafItem({
     machineName,
     token: `{{#${machineName}#}}`,
     valueTypeLabel,
+    inlineLabel,
   };
 }
 
@@ -147,6 +150,7 @@ function buildReplyVariableGroups({
         selector: [fieldName],
         ownerNodeId,
         valueTypeLabel: schema ? formatSchemaTypeLabel(schema) : inferFallbackTypeLabel(fieldName),
+        inlineLabel: `[${node.data.label}] ${fieldName}`,
       });
     },
   );
@@ -162,6 +166,7 @@ function buildReplyVariableGroups({
         selector: ["trigger_input", fieldName],
         ownerNodeId,
         valueTypeLabel: schema ? formatSchemaTypeLabel(schema) : inferFallbackTypeLabel(fieldName),
+        inlineLabel: `[用户输入] ${fieldName}`,
       });
     },
   );
@@ -187,6 +192,7 @@ function buildReplyVariableGroups({
             selector: ["accumulated", candidate.id, fieldName],
             ownerNodeId,
             valueTypeLabel: schema ? formatSchemaTypeLabel(schema) : inferFallbackTypeLabel(fieldName),
+            inlineLabel: `[${candidate.data.label}] ${fieldName}`,
           });
         }),
       } satisfies WorkflowVariableReferenceItem;

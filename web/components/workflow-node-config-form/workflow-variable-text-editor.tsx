@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildReplyVariableReference,
+  type WorkflowVariableReferenceItem,
   type WorkflowVariableReference,
   type WorkflowVariableReferenceGroup,
   type WorkflowVariableTextDocument,
@@ -28,6 +29,16 @@ function findReferenceBySelector(
   selector: string[],
 ) {
   return references.find((reference) => selectorsMatch(reference.selector, selector));
+}
+
+function flattenVariableItems(items: WorkflowVariableReferenceItem[]): WorkflowVariableReferenceItem[] {
+  return items.flatMap((item) => {
+    if (item.children && item.children.length > 0) {
+      return flattenVariableItems(item.children);
+    }
+
+    return [item];
+  });
 }
 
 export function WorkflowVariableTextEditor({
@@ -57,9 +68,22 @@ export function WorkflowVariableTextEditor({
     () => buildWorkflowVariableProjection({ ownerLabel, document: value, references }),
     [ownerLabel, references, value],
   );
+  const selectorLabelMap = useMemo(() => {
+    const leafItems = variables.flatMap((group) => flattenVariableItems(group.items));
+    return new Map(
+      leafItems.map((item) => [item.selector.join("\x1f"), item.inlineLabel ?? item.label]),
+    );
+  }, [variables]);
   const tokenLabelMap = useMemo(
-    () => new Map(projection.tokens.map((token) => [token.refId, token.label])),
-    [projection.tokens],
+    () =>
+      new Map(
+        projection.tokens.map((token) => {
+          const reference = references.find((item) => item.refId === token.refId);
+          const selectorKey = reference ? reference.selector.join("\x1f") : null;
+          return [token.refId, (selectorKey && selectorLabelMap.get(selectorKey)) ?? token.label];
+        }),
+      ),
+    [projection.tokens, references, selectorLabelMap],
   );
 
   const syncTextareaHeight = () => {
@@ -227,13 +251,16 @@ export function WorkflowVariableTextEditor({
               setPickerMode(null);
             }
           }}
-          placeholder={placeholder}
           rows={1}
         />
 
         {pickerMode !== null ? (
           <div className="workflow-variable-reference-popover-anchor" style={{ top: `${pickerTop}px` }}>
-            <WorkflowVariableReferencePicker groups={variables} onInsert={handleInsert} />
+            <WorkflowVariableReferencePicker
+              groups={variables}
+              onInsert={handleInsert}
+              onDismiss={() => setPickerMode(null)}
+            />
           </div>
         ) : null}
       </div>
