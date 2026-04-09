@@ -95,7 +95,6 @@ export function WorkflowCanvasNode({
   const hasIncomingHandle = data.nodeType !== "startNode";
   const hasOutgoingHandle = data.nodeType !== "endNode";
   const nodeDescription = resolveNodeDescription(data.config);
-  const directReplyPreview = resolveDirectReplyPreview(data.nodeType, data.config);
   const resolvedQuickAddOptions = useMemo(
     () => quickAddOptions.filter((item) => item.type !== "startNode"),
     [quickAddOptions]
@@ -111,17 +110,6 @@ export function WorkflowCanvasNode({
       glyph={resolveNodeGlyph(data.nodeType)}
       accentColor={nodeColorByType(data.nodeType)}
       description={nodeDescription}
-      bodyContent={
-        directReplyPreview ? (
-          <div
-            className="workflow-canvas-node-direct-reply-preview"
-            data-component="workflow-canvas-node-direct-reply-preview"
-          >
-            <div className="workflow-canvas-node-direct-reply-label">回复</div>
-            <div className="workflow-canvas-node-direct-reply-value">{directReplyPreview}</div>
-          </div>
-        ) : null
-      }
       runtimeClassName={data.runStatus ? `runtime-${toCssIdentifier(data.runStatus)}` : ""}
       hasIncomingHandle={hasIncomingHandle}
       hasOutgoingHandle={hasOutgoingHandle}
@@ -140,27 +128,6 @@ function resolveNodeDescription(config: WorkflowCanvasNodeData["config"]) {
   const ui = isRecord(config.ui) ? config.ui : null;
   const description = typeof ui?.description === "string" ? ui.description.trim() : "";
   return description || null;
-}
-
-function resolveDirectReplyPreview(
-  nodeType: string,
-  config: WorkflowCanvasNodeData["config"]
-) {
-  if (nodeType !== "endNode") {
-    return null;
-  }
-
-  const replyTemplate = typeof config.replyTemplate === "string" ? config.replyTemplate.trim() : "";
-  if (!replyTemplate) {
-    return null;
-  }
-
-  const compactReply = replyTemplate.replace(/\s+/g, " ").trim();
-  if (!compactReply) {
-    return null;
-  }
-
-  return compactReply.length <= 80 ? compactReply : `${compactReply.slice(0, 77)}...`;
 }
 
 function calculateDurationMs(
