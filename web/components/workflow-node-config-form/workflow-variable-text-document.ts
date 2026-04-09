@@ -21,6 +21,7 @@ export type WorkflowVariableReferenceItem = {
   token: string;
   previewPath: string;
   machineName: string;
+  valueTypeLabel?: string;
   children?: WorkflowVariableReferenceItem[];
 };
 
