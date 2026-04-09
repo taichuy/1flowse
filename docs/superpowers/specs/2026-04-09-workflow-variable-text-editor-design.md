@@ -16,7 +16,7 @@
 
 - 提供一个通用的文本变量编辑器组件 `WorkflowVariableTextEditor`。
 - 在编辑器里输入 `/` 时，弹出接近 Dify 的变量选择器。
-- 变量选择器支持搜索、分层展开、路径预览、复制节点内 alias、点击插入。
+- 变量选择器支持搜索、分层展开、路径预览、复制机器别名、点击插入。
 - `endNode` 的直接回复配置不再以纯字符串作为主事实，而是以结构化 document 作为主事实。
 - 建立一套可复用的 alias 机制，但 alias 作用域限制在当前节点内。
 - 支持 alias 改名后的当前节点内全联动。
@@ -36,7 +36,7 @@
 
 1. `WorkflowVariableTextEditor`
    - 通用文本变量组件。
-   - 负责文本编辑、`/` 触发、变量面板、插入变量 segment、复制 alias。
+   - 负责文本编辑、`/` 触发、变量面板、插入变量 segment、复制机器别名。
    - 不带任何 `endNode` 业务语义。
 
 2. `endNode reply document`
@@ -65,6 +65,7 @@ type WorkflowVariableTextDocument = {
 type WorkflowVariableReference = {
   refId: string;
   alias: string;
+  ownerNodeId: string;
   selector: string[];
 };
 ```
@@ -81,7 +82,7 @@ config.responseKey?: string
 ### 4.2 事实源与派生关系
 
 - `replyDocument + replyReferences` 一起构成前端编辑主事实源。
-- `replyTemplate` 是从 `replyDocument + replyReferences` 派生出来的字符串，固定输出为 `{{#当前节点id.alias#}}`。
+- `replyTemplate` 是从 `replyDocument + replyReferences` 派生出来的字符串，固定输出为 `{{#ownerNodeId.alias#}}`。
 - `responseKey` 维持现状。
 
 ### 4.3 兼容策略
@@ -98,14 +99,15 @@ config.responseKey?: string
 
 1. 以 `replyDocument + replyReferences` 为源。
 2. 同步派生并写回 `replyTemplate`。
-3. 生成的 `replyTemplate` 一律规范化为 `{{#当前节点id.alias#}}` 风格。
+3. 生成的 `replyTemplate` 一律规范化为 `{{#ownerNodeId.alias#}}` 风格。
 
 ### 4.4 alias 规则
 
 - alias 的作用域限制在当前节点内，不做 workflow 级共享 alias。
-- alias 默认显示为 `当前节点id.alias`。
-- 复制动作默认复制 `当前节点id.alias`。
-- 用户可编辑的是 `alias` 后缀，不允许去掉当前节点 id 前缀。
+- 用户看到的显示名是 `[当前节点标题] alias`。
+- 机器别名固定为 `ownerNodeId.alias`。
+- 复制动作默认复制机器别名 `ownerNodeId.alias`。
+- 用户可编辑的是 `alias` 后缀，不允许直接编辑 `ownerNodeId`。
 - 新插入变量时，默认 alias 使用当前节点可消费变量名：
   - 若是当前节点已有映射字段，优先用映射字段名。
   - 否则退回 selector 末段。
@@ -113,9 +115,21 @@ config.responseKey?: string
 
 示例：
 
-- 当前节点 id 为 `endNode_ab12cd34`
+- 节点标题为 `直接回复`
+- 节点 id 为 `endNode_ab12cd34`
 - 当前节点变量名为 `text`
-- 默认显示 alias 为 `endNode_ab12cd34.text`
+- 用户显示名为 `[直接回复] text`
+- 机器别名为 `endNode_ab12cd34.text`
+
+### 4.5 显示名与机器名
+
+- 显示名只用于编排界面展示，不参与 runtime 解析。
+- 机器别名只用于复制、兼容 token 派生与解析桥接。
+- runtime 真正取值仍然依赖 `selector`。
+- 因此变量引用存在三层：
+  - `refId`：当前节点内稳定联动键
+  - `ownerNodeId.alias`：机器别名
+  - `selector`：真实取值路径
 
 ## 5. 通用组件边界
 
@@ -126,7 +140,7 @@ config.responseKey?: string
 - 渲染结构化 document。
 - 管理光标、选择范围和 segment 编辑状态。
 - 处理 `/` 触发变量选择器。
-- 接收可引用变量树，支持搜索、分层展开、路径预览、复制 alias、点击插入。
+- 接收可引用变量树，支持搜索、分层展开、路径预览、复制机器别名、点击插入。
 - 管理变量引用注册表中的 alias 编辑与联动。
 - 输出更新后的 document 与 references。
 
@@ -173,7 +187,7 @@ type WorkflowVariableReferenceGroup = {
 };
 ```
 
-`token` 固定使用 `{{#当前节点id.alias#}}`。
+`token` 固定使用 `{{#ownerNodeId.alias#}}`。
 
 `previewPath` 用来展示真实 selector 路径，便于排障与核对来源。
 
@@ -182,7 +196,7 @@ type WorkflowVariableReferenceGroup = {
 ### 6.1 编辑器行为
 
 - 文本内容以 text segment 渲染。
-- 变量内容以独立 token/chip 渲染，并显示节点内 alias。
+- 变量内容以独立 token/chip 渲染，并显示 `[当前节点标题] alias`。
 - 用户在文本中输入 `/` 时，打开变量选择器。
 - 用户点击某个变量项后，在当前光标位置插入 variable segment。
 - 用户点击变量 chip 可删除。
@@ -196,7 +210,7 @@ type WorkflowVariableReferenceGroup = {
 - 支持分组显示。
 - 支持树形展开。
 - 每个叶子变量显示完整路径预览。
-- 每个叶子变量都能“复制 alias”。
+- 每个叶子变量都能“复制机器别名”。
 - 点击变量名会把 selector 插入 document。
 - 插入时自动创建或复用一个 `refId` 绑定。
 
@@ -232,7 +246,7 @@ runtime 继续保持兼容：
 1. 如果 `config.replyDocument + config.replyReferences` 存在，则优先把结构化模型渲染成最终字符串。
 2. 否则回退到 `config.replyTemplate`。
 3. `replyTemplate` 解析继续兼容三种输入：
-   - alias token：`{{#当前节点id.alias#}}`
+   - alias token：`{{#ownerNodeId.alias#}}`
    - selector token：`{{#accumulated.agent.answer#}}`
    - 旧语法：`{{ accumulated.agent.answer }}`
 
@@ -254,10 +268,11 @@ runtime 继续保持兼容：
 前端至少补这些测试：
 
 - `replyTemplate` 新旧语法都能 parse 成 `replyDocument + replyReferences`
-- `replyDocument + replyReferences` 能稳定派生成 `{{#当前节点id.alias#}}`
+- `replyDocument + replyReferences` 能稳定派生成 `{{#ownerNodeId.alias#}}`
 - 输入 `/` 会打开变量选择器
-- 搜索、展开、插入、复制 alias 行为正常
-- alias 自动生成遵循 `当前节点id.alias`
+- 搜索、展开、插入、复制机器别名行为正常
+- alias 自动生成后，机器别名遵循 `ownerNodeId.alias`
+- 编排显示名稳定展示为 `[当前节点标题] alias`
 - alias 改名后当前节点内所有相同引用一起更新
 - `OutputNodeConfigForm` 保存时会同时写回 `replyDocument + replyReferences + replyTemplate`
 
