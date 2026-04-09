@@ -5276,6 +5276,33 @@ a {
   word-break: break-word;
 }
 
+.workflow-canvas-node-body {
+  margin-top: 10px;
+}
+
+.workflow-canvas-node-direct-reply-preview {
+  border: 1px solid rgba(208, 99, 45, 0.16);
+  border-radius: 12px;
+  background: rgba(208, 99, 45, 0.06);
+  padding: 8px 10px;
+}
+
+.workflow-canvas-node-direct-reply-label {
+  color: #9a3412;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.workflow-canvas-node-direct-reply-value {
+  margin-top: 4px;
+  color: #526079;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .workflow-canvas-node-quick-add {
   position: absolute;
   top: 50%;

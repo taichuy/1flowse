@@ -88,7 +88,7 @@ describe("WorkflowCanvasNode", () => {
     expect(html).not.toContain("boom");
   });
 
-  it("shows direct-reply preview text for end nodes", () => {
+  it("renders direct-reply content inside the end-node body slot", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowCanvasNode, {
         id: "node-2",
@@ -115,7 +115,10 @@ describe("WorkflowCanvasNode", () => {
       } as never)
     );
 
+    expect(html).toContain('data-component="workflow-canvas-node-direct-reply-preview"');
+    expect(html).toContain("回复");
     expect(html).toContain("你好，{{ accumulated.agent.answer }}");
+    expect(html).not.toContain("workflow-canvas-node-description");
   });
 
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { PlayCircleOutlined } from "@ant-design/icons";
 import { Handle, Position } from "@xyflow/react";
 
@@ -18,6 +18,7 @@ export type WorkflowNodeCardShellProps = {
   glyph: string;
   accentColor: string;
   description?: string | null;
+  bodyContent?: ReactNode;
   runtimeClassName?: string;
   hasIncomingHandle: boolean;
   hasOutgoingHandle: boolean;
@@ -39,6 +40,7 @@ export function WorkflowNodeCardShell({
   glyph,
   accentColor,
   description,
+  bodyContent,
   runtimeClassName,
   hasIncomingHandle,
   hasOutgoingHandle,
@@ -108,6 +110,9 @@ export function WorkflowNodeCardShell({
       </div>
       {description ? (
         <div className="workflow-canvas-node-description">{description}</div>
+      ) : null}
+      {bodyContent ? (
+        <div className="workflow-canvas-node-body">{bodyContent}</div>
       ) : null}
       {canQuickAdd ? (
         <WorkflowCanvasQuickAddTrigger
