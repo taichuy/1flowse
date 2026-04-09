@@ -429,6 +429,148 @@ describe("WorkflowVariableTextEditor", () => {
     });
   });
 
+  it("switches a toolbar-open picker back to slash filtering when typing slash in the editor", () => {
+    const handleChange = vi.fn();
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        createElement(WorkflowVariableTextEditor, {
+          ownerNodeId: "endNode_ab12cd34",
+          ownerLabel: "直接回复",
+          value: {
+            version: 1,
+            segments: [{ type: "text", text: "" }],
+          },
+          references: [],
+          variables: [
+            {
+              key: "upstream",
+              label: "用户输入",
+              items: [
+                {
+                  key: "input-test",
+                  label: "trigger_input.test",
+                  selector: ["trigger_input", "test"],
+                  token: "{{#endNode_ab12cd34.test#}}",
+                  previewPath: "trigger_input.test",
+                  machineName: "endNode_ab12cd34.test",
+                  valueTypeLabel: "String",
+                  inlineLabel: "[用户输入] test",
+                },
+                {
+                  key: "input-query",
+                  label: "trigger_input.query",
+                  selector: ["trigger_input", "query"],
+                  token: "{{#endNode_ab12cd34.query#}}",
+                  previewPath: "trigger_input.query",
+                  machineName: "endNode_ab12cd34.query",
+                  valueTypeLabel: "String",
+                  inlineLabel: "[用户输入] query",
+                },
+              ],
+            },
+          ],
+          onChange: handleChange,
+        }),
+      );
+    });
+
+    const toolbarButton = document.querySelector(
+      '[data-action="open-variable-picker"]',
+    ) as HTMLButtonElement;
+    act(() => {
+      toolbarButton.click();
+    });
+
+    expect(document.querySelector('[data-element="workflow-variable-picker-search"]')).toBeTruthy();
+
+    const textarea = getEditorTextarea();
+    act(() => {
+      textarea.focus();
+      textarea.value = "/test";
+      textarea.setSelectionRange(5, 5);
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(document.querySelector('[data-element="workflow-variable-picker-search"]')).toBeNull();
+    expect(document.body.textContent).toContain("[用户输入] test");
+    expect(document.body.textContent).not.toContain("[用户输入] query");
+  });
+
+  it("filters toolbar search results by the user-facing inline label", () => {
+    const handleChange = vi.fn();
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        createElement(WorkflowVariableTextEditor, {
+          ownerNodeId: "endNode_ab12cd34",
+          ownerLabel: "直接回复",
+          value: {
+            version: 1,
+            segments: [{ type: "text", text: "" }],
+          },
+          references: [],
+          variables: [
+            {
+              key: "upstream",
+              label: "用户输入",
+              items: [
+                {
+                  key: "input-test",
+                  label: "trigger_input.test",
+                  selector: ["trigger_input", "test"],
+                  token: "{{#endNode_ab12cd34.test#}}",
+                  previewPath: "trigger_input.test",
+                  machineName: "endNode_ab12cd34.test",
+                  valueTypeLabel: "String",
+                  inlineLabel: "[用户输入] test",
+                },
+                {
+                  key: "input-query",
+                  label: "trigger_input.query",
+                  selector: ["trigger_input", "query"],
+                  token: "{{#endNode_ab12cd34.query#}}",
+                  previewPath: "trigger_input.query",
+                  machineName: "endNode_ab12cd34.query",
+                  valueTypeLabel: "String",
+                  inlineLabel: "[用户输入] query",
+                },
+              ],
+            },
+          ],
+          onChange: handleChange,
+        }),
+      );
+    });
+
+    const toolbarButton = document.querySelector(
+      '[data-action="open-variable-picker"]',
+    ) as HTMLButtonElement;
+    act(() => {
+      toolbarButton.click();
+    });
+
+    const searchInput = document.querySelector(
+      '[data-element="workflow-variable-picker-search"]',
+    ) as HTMLInputElement;
+
+    act(() => {
+      searchInput.value = "test";
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain("[用户输入] test");
+    expect(document.body.textContent).not.toContain("[用户输入] query");
+  });
+
   it("renders inline tokens and removes them atomically on backspace", () => {
     const handleChange = vi.fn();
 

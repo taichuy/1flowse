@@ -290,10 +290,13 @@ export function WorkflowVariableTextEditor({
   const handleTextInput = (textarea: HTMLTextAreaElement) => {
     const nextText = textarea.value;
     const nextCursor = textarea.selectionStart ?? nextText.length;
+    const nextSlashContext = readSlashQueryContext(nextText, nextCursor);
     setDraftText(nextText);
     setCursor(nextCursor);
-    if (pickerMode !== "toolbar") {
-      setPickerMode(readSlashQueryContext(nextText, nextCursor) ? "slash" : null);
+    if (nextSlashContext) {
+      setPickerMode("slash");
+    } else if (pickerMode === "slash") {
+      setPickerMode(null);
     }
     commitProjection(nextText, draftOrderedRefIds);
   };
