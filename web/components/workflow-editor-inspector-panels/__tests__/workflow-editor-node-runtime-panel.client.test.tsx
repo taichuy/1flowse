@@ -146,15 +146,28 @@ describe("WorkflowEditorNodeRuntimePanel client render", () => {
           node: buildNode({
             label: "LLM Agent",
             nodeType: "llmAgentNode",
-            inputSchema: {}
+            inputSchema: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  title: "Query"
+                }
+              }
+            }
           }),
+          runtimeRequest: buildRuntimeRequest(),
           onRunSuccess: handleRunSuccess
         })
       );
     });
 
-    const submitButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("试运行当前节点")
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.getAttribute("style") ?? "").not.toContain("display: none");
+    expect(document.body.textContent).toContain("Query");
+
+    const submitButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("开始试运行")
     ) as HTMLButtonElement | undefined;
     expect(submitButton).toBeTruthy();
 

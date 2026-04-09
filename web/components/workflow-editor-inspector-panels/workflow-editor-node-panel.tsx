@@ -85,7 +85,7 @@ export function WorkflowEditorNodePanel({
               renderDeferredTabPanel(
                 "workflow-editor-node-runtime-panel-deferred",
                 "运行时",
-                "只有切到运行时标签时，才挂载节点当前的 runtime 摘要与 trigger 输入表单。"
+                "只有切到运行时标签时，才挂载节点当前的 runtime 摘要、契约区和单节点调试面板。"
               )
             )
           },

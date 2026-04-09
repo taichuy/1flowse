@@ -25,8 +25,8 @@ export function resolveWorkflowNodeTemplateDefinition(
 
   return {
     nodeType: node.data.nodeType,
-    hasUpstreamSummary: true,
-    showsContractInRuntime: false,
+    hasUpstreamSummary: false,
+    showsContractInRuntime: true,
     settingsMode: "generic",
     runtimeMode: "generic"
   };

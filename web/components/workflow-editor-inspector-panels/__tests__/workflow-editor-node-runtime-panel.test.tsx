@@ -69,7 +69,7 @@ function buildRunDetail(): RunDetail {
 }
 
 describe("WorkflowEditorNodeRuntimePanel", () => {
-  it("renders node trial inputs from the current node input schema", () => {
+  it("keeps single-node trial inputs out of the runtime tab surface", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorNodeRuntimePanel, {
         workflowId: "workflow-demo",
@@ -95,17 +95,20 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
             },
             required: ["query"]
           }
-        })
+        }),
+        onNodeInputSchemaChange: () => undefined,
+        onNodeOutputSchemaChange: () => undefined
       })
     );
 
-    expect(html).toContain("试运行输入");
-    expect(html).toContain("Query");
-    expect(html).toContain("Files");
-    expect(html).toContain("试运行当前节点");
+    expect(html).toContain('data-component="workflow-node-runtime-template"');
+    expect(html).toContain("输入");
+    expect(html).toContain("输出");
+    expect(html).not.toContain("试运行输入");
+    expect(html).not.toContain("试运行当前节点");
   });
 
-  it("keeps the generic runtime summary for non-start nodes", () => {
+  it("uses the same compact runtime strip for non-start nodes", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorNodeRuntimePanel, {
         workflowId: "workflow-demo",
@@ -113,16 +116,19 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
           label: "LLM Agent",
           nodeType: "llmAgentNode",
           inputSchema: {}
-        })
+        }),
+        onNodeInputSchemaChange: () => undefined,
+        onNodeOutputSchemaChange: () => undefined
       })
     );
 
     expect(html).toContain('data-component="workflow-node-runtime-template"');
-    expect(html).toContain('data-component="workflow-node-runtime-summary"');
-    expect(html).toContain('data-component="workflow-node-runtime-input-section"');
-    expect(html).toContain('data-component="workflow-node-runtime-output-section"');
-    expect(html).toContain("当前节点运行态");
-    expect(html).not.toContain('data-component="workflow-editor-start-node-runtime-strip"');
+    expect(html).toContain('data-component="workflow-editor-start-node-runtime-strip"');
+    expect(html).toContain("未运行");
+    expect(html).toContain("运行时间");
+    expect(html).toContain("事件");
+    expect(html).not.toContain("当前节点运行态");
+    expect(html).not.toContain("Node run");
   });
 
   it("renders a compact runtime strip for start nodes", () => {
@@ -180,7 +186,7 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
     expect(html).not.toContain("file-1");
   });
 
-  it("renders runtime result json from the selected node run", () => {
+  it("shows the shared input/output schema surface for non-start nodes", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorNodeRuntimePanel, {
         workflowId: "workflow-demo",
@@ -189,18 +195,22 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
           nodeType: "llmAgentNode",
           inputSchema: {}
         }),
-        run: buildRunDetail()
+        run: buildRunDetail(),
+        onNodeInputSchemaChange: () => undefined,
+        onNodeOutputSchemaChange: () => undefined
       })
     );
 
-    expect(html).toContain("运行后结果");
-    expect(html).toContain("当前 run：run-demo-1");
-    expect(html).toContain("Input JSON");
-    expect(html).toContain("Output JSON");
-    expect(html).toContain("file-1");
+    expect(html).toContain("输入");
+    expect(html).toContain("输出");
+    expect(html).toContain("复制输入");
+    expect(html).toContain("复制输出");
+    expect(html).not.toContain("运行后结果");
+    expect(html).not.toContain("Input JSON");
+    expect(html).not.toContain("Output JSON");
   });
 
-  it("renders start-node schema editors inside the runtime tab", () => {
+  it("renders the shared schema editors inside the runtime tab for start nodes", () => {
     const html = renderToStaticMarkup(
       createElement(WorkflowEditorNodeRuntimePanel, {
         workflowId: "workflow-demo",
@@ -227,13 +237,16 @@ describe("WorkflowEditorNodeRuntimePanel", () => {
           label: "LLM Agent",
           nodeType: "llmAgentNode",
           inputSchema: {}
-        })
+        }),
+        onNodeInputSchemaChange: () => undefined,
+        onNodeOutputSchemaChange: () => undefined
       })
     );
 
-    expect(html).toContain("试运行输入");
-    expect(html).toContain("不自动补齐原工作流上游节点的真实 context");
-    expect(html).toContain("当前节点没有结构化输入字段");
+    expect(html).toContain("输入");
+    expect(html).toContain("输出");
+    expect(html).not.toContain("试运行输入");
+    expect(html).not.toContain("当前节点没有结构化输入字段");
   });
 
   it("runs immediately once cached required fields are complete", () => {

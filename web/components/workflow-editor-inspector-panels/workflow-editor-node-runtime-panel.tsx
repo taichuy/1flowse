@@ -18,11 +18,7 @@ import {
 import { triggerWorkflowNodeTrialRun } from "@/app/actions/runs";
 import type { SandboxReadinessCheck } from "@/lib/get-system-overview";
 import { getRunDetail, type RunDetail } from "@/lib/get-run-detail";
-import {
-  cleanNodePayload,
-  formatDurationMs,
-  formatJsonPayload
-} from "@/lib/runtime-presenters";
+import { formatDurationMs } from "@/lib/runtime-presenters";
 import type { WorkflowValidationNavigatorItem } from "@/lib/workflow-validation-navigation";
 import {
   resolveWorkflowNodeInputSchema,
@@ -41,7 +37,7 @@ import {
   type WorkflowEditorRuntimeRequest
 } from "@/components/workflow-editor-workbench/runtime-request";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const START_NODE_TRIAL_RUN_CACHE_KEY_PREFIX = "sevenflows.editor.start-node-trial-run";
 const START_NODE_TRIAL_RUN_RESULT_CACHE_KEY_PREFIX = "sevenflows.editor.start-node-trial-run-result";
 
@@ -77,8 +73,7 @@ export function WorkflowEditorNodeRuntimePanel({
   runtimeRequest = null,
   onRunSuccess,
   onRunError,
-  onRuntimeRequestHandled,
-  onOpenRunOverlay
+  onRuntimeRequestHandled
 }: WorkflowEditorNodeRuntimePanelProps) {
   const [form] = Form.useForm();
   const lastHandledRuntimeRequestIdRef = useRef(0);
@@ -133,14 +128,6 @@ export function WorkflowEditorNodeRuntimePanel({
   const currentNodeRun = useMemo(
     () => run?.node_runs.find((item) => item.node_id === node.id) ?? null,
     [node.id, run]
-  );
-  const currentNodeInputJson = useMemo(
-    () => formatJsonPayload(cleanNodePayload(currentNodeRun?.input_payload) ?? null),
-    [currentNodeRun?.input_payload]
-  );
-  const currentNodeOutputJson = useMemo(
-    () => formatJsonPayload(cleanNodePayload(currentNodeRun?.output_payload) ?? null),
-    [currentNodeRun?.output_payload]
   );
   const isStartNode = node.data.nodeType === "startNode";
   const runtimeRequestTargetsCurrentNode = doesWorkflowEditorRuntimeRequestTargetNode(
@@ -207,8 +194,8 @@ export function WorkflowEditorNodeRuntimePanel({
         .filter((field) => field.defaultValue !== undefined)
         .map((field) => [field.name, field.defaultValue])
     );
-    const nextCachedPayload = isStartNode ? readStartNodeTrialRunCache(workflowId, node.id) : null;
-    const nextCachedRunId = isStartNode ? readStartNodeTrialRunResultRunId(workflowId, node.id) : null;
+    const nextCachedPayload = readStartNodeTrialRunCache(workflowId, node.id);
+    const nextCachedRunId = readStartNodeTrialRunResultRunId(workflowId, node.id);
 
     form.resetFields();
     form.setFieldsValue(nextCachedPayload ? { ...defaultValues, ...nextCachedPayload } : defaultValues);
@@ -236,7 +223,7 @@ export function WorkflowEditorNodeRuntimePanel({
   }, [activeTrialRunId, run]);
 
   useEffect(() => {
-    if (!isStartNode || !activeTrialRunId) {
+    if (!activeTrialRunId) {
       return;
     }
 
@@ -256,42 +243,39 @@ export function WorkflowEditorNodeRuntimePanel({
       onLoadingChange: setIsTrialRunDetailLoading,
       onMessageChange: setTrialRunDetailMessage
     });
-  }, [activeTrialRunId, isStartNode, node.id, run?.id, trialRunDetail?.id]);
+  }, [activeTrialRunId, node.id, run?.id, trialRunDetail?.id]);
 
   const submitTrialRun = useCallback((
     payload: Record<string, unknown>,
     options: { revealRunOverlay: boolean }
   ) => {
     startTransition(async () => {
-      if (isStartNode) {
-        setActiveTrialRunId(null);
-        setTrialRunDetail(null);
-        setTrialRunDetailMessage(null);
-        setIsStartNodeTrialRunSubmitting(true);
-        setIsTrialRunDetailLoading(false);
-      }
+      setActiveTrialRunId(null);
+      setTrialRunDetail(null);
+      setTrialRunDetailMessage(null);
+      setIsStartNodeTrialRunSubmitting(true);
+      setIsTrialRunDetailLoading(false);
 
       const result = await triggerWorkflowNodeTrialRun(workflowId, node.id, payload);
 
       if (result.status === "success") {
-        if (isStartNode) {
-          setIsStartNodeTrialRunSubmitting(false);
-          persistStartNodeTrialRunResultRunId(workflowId, node.id, result.runId ?? null);
-          setLastTriggeredRunId(result.runId ?? null);
-          setActiveTrialRunId(result.runId ?? null);
-          setTrialRunDetail(null);
-          setTrialRunDetailMessage(
-            result.runId ? null : "试运行已提交，但这次结果暂时没有可回看的 run 标识。"
-          );
-          if (result.runId) {
-            void loadTrialRunDetail({
-              runId: result.runId,
-              nodeId: node.id,
-              onDetail: setTrialRunDetail,
-              onLoadingChange: setIsTrialRunDetailLoading,
-              onMessageChange: setTrialRunDetailMessage
-            });
-          }
+        setIsStartNodeTrialRunSubmitting(false);
+        setIsTrialRunModalOpen(false);
+        persistStartNodeTrialRunResultRunId(workflowId, node.id, result.runId ?? null);
+        setLastTriggeredRunId(result.runId ?? null);
+        setActiveTrialRunId(result.runId ?? null);
+        setTrialRunDetail(null);
+        setTrialRunDetailMessage(
+          result.runId ? null : "试运行已提交，但这次结果暂时没有可回看的 run 标识。"
+        );
+        if (result.runId) {
+          void loadTrialRunDetail({
+            runId: result.runId,
+            nodeId: node.id,
+            onDetail: setTrialRunDetail,
+            onLoadingChange: setIsTrialRunDetailLoading,
+            onMessageChange: setTrialRunDetailMessage
+          });
         }
 
         setStatusMessage({
@@ -307,16 +291,14 @@ export function WorkflowEditorNodeRuntimePanel({
         return;
       }
 
-      if (isStartNode) {
-        setIsStartNodeTrialRunSubmitting(false);
-      }
+      setIsStartNodeTrialRunSubmitting(false);
       setStatusMessage({
         type: "error",
         text: result.message
       });
       onRunError?.(result.message);
     });
-  }, [isStartNode, node.id, onRunError, onRunSuccess, workflowId]);
+  }, [node.id, onRunError, onRunSuccess, workflowId]);
 
   const handleStartNodeTrialRun = useCallback(async (
     payload: Record<string, unknown>
@@ -330,20 +312,15 @@ export function WorkflowEditorNodeRuntimePanel({
   const handleFormSubmit = useCallback((values: Record<string, unknown>) => {
     const payload = buildRuntimePayload(values, supportedFields);
 
-    if (isStartNode) {
-      void handleStartNodeTrialRun(payload);
-      return;
-    }
-
-    submitTrialRun(payload, { revealRunOverlay: false });
-  }, [handleStartNodeTrialRun, isStartNode, submitTrialRun, supportedFields]);
+    void handleStartNodeTrialRun(payload);
+  }, [handleStartNodeTrialRun, supportedFields]);
 
   useEffect(() => {
     if (!runtimeRequestTargetsCurrentNode || !runtimeRequest) {
       return;
     }
 
-    if (isStartNode && hydratedStartNodeRuntimeResetKey !== startNodeRuntimeResetKey) {
+    if (hydratedStartNodeRuntimeResetKey !== startNodeRuntimeResetKey) {
       return;
     }
 
@@ -354,15 +331,13 @@ export function WorkflowEditorNodeRuntimePanel({
     lastHandledRuntimeRequestIdRef.current = runtimeRequest.requestId;
     onRuntimeRequestHandled?.();
 
-    if (!isStartNode) {
-      return;
-    }
-
-    const launchMode = resolveStartNodeTrialRunLaunchMode({
-      cachedPayload: cachedStartNodePayload,
-      requiredFieldNames,
-      supportedFieldsCount: supportedFields.length
-    });
+    const launchMode = isStartNode
+      ? resolveStartNodeTrialRunLaunchMode({
+          cachedPayload: cachedStartNodePayload,
+          requiredFieldNames,
+          supportedFieldsCount: supportedFields.length
+        })
+      : "form";
 
     if (launchMode === "run") {
       const payload = cachedStartNodePayload ?? {};
@@ -531,153 +506,65 @@ export function WorkflowEditorNodeRuntimePanel({
     </>
   );
 
-  const renderGenericRuntimeResults = () => (
-    <div className="workflow-editor-runtime-form-card" data-component="workflow-editor-node-runtime-results">
-      <div className="workflow-editor-inspector-section">
-        <div className="workflow-editor-inspector-section-title">运行后结果</div>
-        <Text type="secondary">
-          这里展示当前选中 run 里该节点最近一次 node run 的 input / output JSON。
-        </Text>
-      </div>
-
-      {!run ? (
-        <Text type="secondary">
-          完成一次试运行后，这里会显示该节点最近一次 node run 的输入输出 JSON。
-        </Text>
-      ) : !currentNodeRun ? (
-        <Alert
-          type="info"
-          showIcon
-          title="当前 run 还没有命中这个节点"
-          description="先执行一次试运行，或从运行面板切到包含该节点的 run。"
-        />
-      ) : (
-        <Form layout="vertical">
-          <Text type="secondary">当前 run：{run.id}</Text>
-          <Form.Item label="Input JSON">
-            <Input.TextArea readOnly autoSize={{ minRows: 4, maxRows: 12 }} value={currentNodeInputJson} />
-          </Form.Item>
-          <Form.Item label="Output JSON">
-            <Input.TextArea readOnly autoSize={{ minRows: 4, maxRows: 12 }} value={currentNodeOutputJson} />
-          </Form.Item>
-        </Form>
-      )}
-    </div>
-  );
-
-  const modalFooter = !isStartNode
-    ? null
-    : [
-        <Button
-          key="cancel"
-          onClick={() => {
-            setIsTrialRunModalOpen(false);
-            setIsStartNodeTrialRunSubmitting(false);
-          }}
-        >
-          取消
-        </Button>,
-        <Button key="reset" onClick={() => form.resetFields()}>
-          重置
-        </Button>,
-        <Button
-          key="submit"
-          type="primary"
-          loading={isPending}
-          onClick={() => {
-            if (supportedFields.length === 0) {
-              void handleStartNodeTrialRun({});
-              return;
-            }
-            form.submit();
-          }}
-        >
-          开始试运行
-        </Button>
-      ];
+  const modalFooter = [
+    <Button
+      key="cancel"
+      onClick={() => {
+        setIsTrialRunModalOpen(false);
+        setIsStartNodeTrialRunSubmitting(false);
+      }}
+    >
+      取消
+    </Button>,
+    <Button key="reset" onClick={() => form.resetFields()}>
+      重置
+    </Button>,
+    <Button
+      key="submit"
+      type="primary"
+      loading={isPending}
+      onClick={() => {
+        if (supportedFields.length === 0) {
+          void handleStartNodeTrialRun({});
+          return;
+        }
+        form.submit();
+      }}
+    >
+      开始试运行
+    </Button>
+  ];
 
   const summarySection = (
-    <div
-      className={`workflow-editor-runtime-summary-card${
-        isStartNode ? " workflow-editor-runtime-summary-card-compact" : ""
-      }`}
-    >
-      {isStartNode ? (
-        <div
-          className={`workflow-editor-runtime-summary-strip workflow-editor-runtime-summary-strip-${startNodeRuntimeSurface.tone}`}
-          data-component="workflow-editor-start-node-runtime-strip"
-        >
-          <div className="workflow-editor-runtime-summary-strip-main">
-            <span className={`health-pill ${startNodeRuntimeSurface.tone}`}>
-              {startNodeRuntimeSurface.statusLabel}
+    <div className="workflow-editor-runtime-summary-card workflow-editor-runtime-summary-card-compact">
+      <div
+        className={`workflow-editor-runtime-summary-strip workflow-editor-runtime-summary-strip-${startNodeRuntimeSurface.tone}`}
+        data-component="workflow-editor-start-node-runtime-strip"
+      >
+        <div className="workflow-editor-runtime-summary-strip-main">
+          <span className={`health-pill ${startNodeRuntimeSurface.tone}`}>
+            {startNodeRuntimeSurface.statusLabel}
+          </span>
+          <div className="workflow-editor-runtime-summary-strip-meta">
+            {startNodeRuntimeResultRunId ? (
+              <span className="workflow-canvas-node-meta">
+                {formatCompactRunId(startNodeRuntimeResultRunId)}
+              </span>
+            ) : null}
+            {startNodeRuntimeSurface.lastEventType ? (
+              <span className="workflow-canvas-node-meta">
+                {startNodeRuntimeSurface.lastEventType}
+              </span>
+            ) : null}
+            <span className="workflow-canvas-node-meta">
+              运行时间 {formatCompactRuntimeDuration(startNodeRuntimeSurface.durationMs)}
             </span>
-            <div className="workflow-editor-runtime-summary-strip-meta">
-              {startNodeRuntimeResultRunId ? (
-                <span className="workflow-canvas-node-meta">
-                  {formatCompactRunId(startNodeRuntimeResultRunId)}
-                </span>
-              ) : null}
-              {startNodeRuntimeSurface.lastEventType ? (
-                <span className="workflow-canvas-node-meta">
-                  {startNodeRuntimeSurface.lastEventType}
-                </span>
-              ) : null}
-              <span className="workflow-canvas-node-meta">
-                运行时间 {formatCompactRuntimeDuration(startNodeRuntimeSurface.durationMs)}
-              </span>
-              <span className="workflow-canvas-node-meta">
-                事件 {formatCompactRuntimeEventCount(startNodeRuntimeSurface.eventCount)}
-              </span>
-            </div>
+            <span className="workflow-canvas-node-meta">
+              事件 {formatCompactRuntimeEventCount(startNodeRuntimeSurface.eventCount)}
+            </span>
           </div>
         </div>
-      ) : (
-        <>
-          <div>
-            <Text className="workflow-editor-trigger-fields-eyebrow">Runtime</Text>
-            <Title level={5} style={{ margin: "4px 0 0" }}>
-              当前节点运行态
-            </Title>
-            <Text type="secondary">
-              这里承接节点最近一次运行反馈。试运行会把当前节点包装成最小 7Flows IR 执行，并把结果写入
-              `runs / node_runs / run_events`。
-            </Text>
-          </div>
-
-          <div className="workflow-editor-runtime-summary-grid">
-            <div className="workflow-editor-runtime-summary-item">
-              <span>状态</span>
-              <strong>{node.data.runStatus ?? "尚无 node run"}</strong>
-            </div>
-            <div className="workflow-editor-runtime-summary-item">
-              <span>Node run</span>
-              <strong>{node.data.runNodeId ?? "n/a"}</strong>
-            </div>
-            <div className="workflow-editor-runtime-summary-item">
-              <span>耗时</span>
-              <strong>{formatDurationMs(node.data.runDurationMs)}</strong>
-            </div>
-            <div className="workflow-editor-runtime-summary-item">
-              <span>事件</span>
-              <strong>
-                {typeof node.data.runEventCount === "number" ? node.data.runEventCount : "n/a"}
-              </strong>
-            </div>
-          </div>
-
-          {node.data.runLastEventType ? (
-            <Text type="secondary">最近事件：{node.data.runLastEventType}</Text>
-          ) : null}
-          {onOpenRunOverlay ? (
-            <div className="workflow-editor-trigger-fields-actions">
-              <Button onClick={onOpenRunOverlay}>打开运行面板</Button>
-              {lastTriggeredRunId ? (
-                <Text type="secondary">最近试运行的 run: {lastTriggeredRunId}</Text>
-              ) : null}
-            </div>
-          ) : null}
-        </>
-      )}
+      </div>
 
       {startNodeRuntimeSurface.errorMessage ? (
         <Alert
@@ -689,61 +576,37 @@ export function WorkflowEditorNodeRuntimePanel({
       ) : null}
     </div>
   );
-  const inputSection = isStartNode ? null : (
-    <div className="workflow-editor-runtime-form-card">
-      <div className="workflow-editor-inspector-section">
-        <div className="workflow-editor-inspector-section-title">上游输入摘要</div>
-        <Text type="secondary">
-          当前节点通常会接收上游节点传入的上下文；单节点试运行时，这里只保留输入语义说明，不自动补齐真实上游 context。
-        </Text>
+  const inputSection = null;
+  const trialRunSection = startNodeRuntimeSurface.showLoadingPanel ? (
+    <div
+      className="workflow-editor-runtime-form-card"
+      data-component="workflow-editor-start-node-runtime-loading"
+    >
+      <div className="workflow-editor-runtime-modal-loading">
+        <Spin size="small" />
+        <Text type="secondary">{startNodeRuntimeSurface.loadingMessage}</Text>
       </div>
     </div>
-  );
-  const trialRunSection = isStartNode
-    ? startNodeRuntimeSurface.showLoadingPanel ? (
-        <div
-          className="workflow-editor-runtime-form-card"
-          data-component="workflow-editor-start-node-runtime-loading"
-        >
-          <div className="workflow-editor-runtime-modal-loading">
-            <Spin size="small" />
-            <Text type="secondary">{startNodeRuntimeSurface.loadingMessage}</Text>
-          </div>
-        </div>
-      ) : null
-    : (
-      <div className="workflow-editor-runtime-form-card">
-        <div className="workflow-editor-inspector-section">
-          <div className="workflow-editor-inspector-section-title">试运行输入</div>
-          <Text type="secondary">
-            这里只提供本次试运行的直接输入，不自动补齐原工作流上游节点的真实 context。
-            要查看完整链路，请继续从整条 workflow 的运行入口发起执行。
-          </Text>
-        </div>
+  ) : null;
+  const outputSection =
+    statusMessage?.type === "error" || (trialRunDetailMessage && !startNodeRuntimeSurface.showLoadingPanel) ? (
+      <>
+        {statusMessage?.type === "error" ? (
+          <Alert
+            type="error"
+            showIcon
+            title="试运行失败"
+            description={statusMessage.text}
+          />
+        ) : null}
 
-        {renderTrialRunForm({ includeInlineActions: true })}
-      </div>
-    );
-  const outputSection = isStartNode ? (
-    <>
-      {statusMessage?.type === "error" ? (
-        <Alert
-          type="error"
-          showIcon
-          title="试运行失败"
-          description={statusMessage.text}
-        />
-      ) : null}
-
-      {trialRunDetailMessage && !startNodeRuntimeSurface.showLoadingPanel ? (
-        <Alert type="info" showIcon description={trialRunDetailMessage} />
-      ) : null}
-    </>
-  ) : (
-    renderGenericRuntimeResults()
-  );
+        {trialRunDetailMessage && !startNodeRuntimeSurface.showLoadingPanel ? (
+          <Alert type="info" showIcon description={trialRunDetailMessage} />
+        ) : null}
+      </>
+    ) : null;
   const contractSection =
-    isStartNode && onNodeInputSchemaChange && onNodeOutputSchemaChange ? (
+    onNodeInputSchemaChange && onNodeOutputSchemaChange ? (
       <div
         className="workflow-editor-runtime-form-card"
         data-component="workflow-editor-node-runtime-contract"
@@ -778,21 +641,27 @@ export function WorkflowEditorNodeRuntimePanel({
         />
       </div>
 
-      {isStartNode ? (
-        <Modal
-          open={isTrialRunModalOpen}
-          title="试运行"
-          forceRender={typeof window !== "undefined"}
-          footer={modalFooter}
-          onCancel={() => {
-            setIsTrialRunModalOpen(false);
-            setIsStartNodeTrialRunSubmitting(false);
-          }}
-          destroyOnHidden={false}
-        >
-          {renderTrialRunForm({ includeInlineActions: false })}
-        </Modal>
-      ) : null}
+      <Modal
+        open={isTrialRunModalOpen}
+        title="试运行"
+        forceRender={typeof window !== "undefined"}
+        footer={modalFooter}
+        onCancel={() => {
+          setIsTrialRunModalOpen(false);
+          setIsStartNodeTrialRunSubmitting(false);
+        }}
+        destroyOnHidden={false}
+      >
+        {!isStartNode ? (
+          <div className="workflow-editor-inspector-section">
+            <Text type="secondary">
+              这里只提供当前节点的直接输入，不自动补齐真实上游 context。要看完整链路，请从整条 workflow
+              的运行入口发起执行。
+            </Text>
+          </div>
+        ) : null}
+        {renderTrialRunForm({ includeInlineActions: false })}
+      </Modal>
     </>
   );
 }
