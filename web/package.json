@@ -1,5 +1,5 @@
 {
-  "name": "1flowse",
+  "name": "1flowse-web",
   "private": true,
   "packageManager": "pnpm@10.0.0",
   "engines": {
@@ -7,9 +7,7 @@
   },
   "scripts": {
     "dev": "turbo run dev --parallel --filter=@1flowse/web",
-    "dev:web": "pnpm --filter @1flowse/web dev",
-    "dev:api": "cargo run -p api-server",
-    "dev:runner": "cargo run -p plugin-runner",
+    "dev:app": "pnpm --filter @1flowse/web dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
