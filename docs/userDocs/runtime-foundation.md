@@ -1,9 +1,14 @@
+# 运行历史摘要
+
 - 2026-04-10 11:56:01 Asia/Shanghai：P1 主轴是工作流优先、发布优先，不做聊天优先；阶段顺序为架构约束 -> 模块知识库 -> 任务优先级 -> 需求。
-- 2026-04-10 11:56:01 Asia/Shanghai：P1 空间只保留 Team Workspace，Tenant 与个人空间后置；优先交付 ChatFlow、运行时调度、标准发布。
-- 2026-04-10 11:56:01 Asia/Shanghai：当前部署基线是前后端分离；前端 React+pnpm，后端单 Rust；中间件 PostgreSQL、Redis、RustFS。
+- 2026-04-10 11:56:01 Asia/Shanghai：P1 空间只保留 Team Workspace，Tenant 与个人空间后置；优先交付 ChatFlow、运行时、发布。
+- 2026-04-10 11:56:01 Asia/Shanghai：部署是前后端分离；前端 React+pnpm，后端单 Rust；中间件 PostgreSQL、Redis、RustFS。
 - 2026-04-10 12:16:57 Asia/Shanghai：插件主路线是声明式能力插件，支持清单注册、渐进开放、安装后热生效。
 - 2026-04-10 12:21:30 Asia/Shanghai：插件来源分 official_whitelist、community、unknown；可信源可直接下载安装。
 - 2026-04-10 12:36:10 Asia/Shanghai：community/unknown 外部执行插件允许安装，但启用前必须由 Team Owner/Admin 二次确认，且不得静默启用。
 - 2026-04-10 13:01:34 Asia/Shanghai：P1 官方仓允许 Rust 代码插件；标准发布物为 Wasm；统一由独立 plugin-runner 执行，采用共享 runner 拓扑；开发态远程调试注册，安装态正式激活。
-- 2026-04-10 13:58:13 Asia/Shanghai：讨论方式改为先整理功能清单，再按模块逐项讨论；当前拆为 8 个模块，各模块目录需维护进度与完成情况。
-- 2026-04-10 14:01:07 Asia/Shanghai：P1 登录先做邮箱+密码；第三方登录不进 P1，后续再按插件扩展评估。
+- 2026-04-10 13:58:13 Asia/Shanghai：讨论方式改为先整理功能清单，再按模块逐项讨论；当前拆为 8 个模块，根 README 统一记录总览状态。
+- 2026-04-10 14:01:07 Asia/Shanghai：P1 登录先做邮箱+密码，不做第三方登录，也不强制邮箱验证；第三方登录后续再评估插件化扩展。
+- 2026-04-10 14:13:21 Asia/Shanghai：P1 先固定单团队空间；注册后默认创建团队并内置 admin；只有 admin 管团队，成员仅 admin 邀请加入。
+
+# 下一步计划
