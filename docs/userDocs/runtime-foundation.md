@@ -6,8 +6,10 @@
 - 2026-04-10 21:13-21:24 CST：部署与前端边界确认。P1 先按 `单机/单区域 + Docker Compose`；前端控制台优先，仅覆盖登录后后台、工作台、`agentFlow` 编辑器、调试页、发布文档页；不做匿名公开站，也不做多人实时协同。
 - 2026-04-10 21:34-22:03 CST：技术栈基线确认。通信采用 `REST + SSE`；鉴权参考 `Dify Cookie Token(access/refresh/csrf)`；对象存储用 `RustFS`；仓库采用 `单仓 Monorepo`；前端暂定 `React + Vite + TanStack Router + Ant Design + CSS Modules/CSS Variables + TanStack Query + Zustand + xyflow + Lexical + Monaco`；不使用 `Tailwind`；插件主线参考 `Dify` 三段式，但 P1 不做自定义前端插件。
 - 2026-04-10 22:30-23:03 CST：补做 `Ant Design / Mantine / xyflow` 源码对比。结论：`Mantine` 的 `CSS Modules + Styles API` 更贴合编辑器微调；`Ant Design` 的后台能力面更强；`xyflow` 画布内节点/连线主要由业务自定义 DOM 与 CSS 控制，组件库影响集中在画布外壳与面板。当前建议维持“画布外 `Ant Design`，画布内自定义 UI + `CSS Modules/CSS Variables` + `xyflow`”，暂不直接切主库到 `Mantine`。
+- 2026-04-10 23:14 CST：补充前端统一性偏好。用户希望节点、工具栏、侧栏、弹窗尽量使用同一套视觉语言与交互语法；同时因主流 GPT 工具不擅长前端细节，方案应尽量减少纯手搓 UI 负担，避免走“全部原生零基建”路线。
 
 # 下一步计划
 
 - 等待用户确认是否把前端组件策略正式收敛为“`Ant Design` 仅用于画布外，画布内禁止重组件依赖”。
+- 继续确认“统一”停留在视觉层，还是连底层交互组件也要统一抽象。
 - 若确认，再同步更新 P1 前端技术栈决策和架构文档中的组件边界描述。
