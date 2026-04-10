@@ -4,7 +4,7 @@
 
 **Goal:** Build the first executable backend slice of the `08` plugin framework: Rust workspace scaffold, plugin manifest/schema validation, lifecycle policy, local runner RPC contract, and team/app scope registry primitives.
 
-**Architecture:** Start with a Rust workspace and isolate plugin concerns in `crates/plugin-framework`. Keep this first slice limited to domain models, validation, policy, and contract types so later control-plane API and runtime-worker integration can depend on stable plugin semantics without refactoring the core model.
+**Architecture:** Start with a Rust workspace and isolate plugin concerns in `crates/plugin-framework`. Keep this first slice limited to domain models, validation, policy, and contract types so later control-plane API and single-process runtime integration inside the monolith can depend on stable plugin semantics without refactoring the core model.
 
 **Tech Stack:** Rust workspace, `serde`, `serde_json`, `thiserror`, `schemars`, `tokio`, `cargo test`
 
@@ -26,8 +26,6 @@
 - `rust-toolchain.toml`
 - `apps/api-server/Cargo.toml`
 - `apps/api-server/src/main.rs`
-- `apps/runtime-worker/Cargo.toml`
-- `apps/runtime-worker/src/main.rs`
 - `crates/plugin-framework/Cargo.toml`
 - `crates/plugin-framework/src/lib.rs`
 - `crates/plugin-framework/src/error.rs`
@@ -46,7 +44,7 @@
 - None
 
 **Notes**
-- `apps/api-server` 和 `apps/runtime-worker` 只建立最小可编译入口，不在本计划中加入真实业务逻辑。
+- `apps/api-server` 只建立最小可编译入口，不在本计划中加入真实业务逻辑。
 - `crates/plugin-framework` 是本计划唯一需要有真实实现的 crate。
 
 ### Task 1: Scaffold Rust Workspace And Plugin Crate
@@ -56,8 +54,6 @@
 - Create: `rust-toolchain.toml`
 - Create: `apps/api-server/Cargo.toml`
 - Create: `apps/api-server/src/main.rs`
-- Create: `apps/runtime-worker/Cargo.toml`
-- Create: `apps/runtime-worker/src/main.rs`
 - Create: `crates/plugin-framework/Cargo.toml`
 - Create: `crates/plugin-framework/src/lib.rs`
 - Create: `crates/plugin-framework/src/error.rs`
@@ -95,7 +91,6 @@ Create `Cargo.toml`:
 [workspace]
 members = [
   "apps/api-server",
-  "apps/runtime-worker",
   "crates/plugin-framework",
 ]
 resolver = "2"
@@ -140,28 +135,6 @@ Create `apps/api-server/src/main.rs`:
 ```rust
 fn main() {
     println!("api-server bootstrap");
-}
-```
-
-Create `apps/runtime-worker/Cargo.toml`:
-
-```toml
-[package]
-name = "runtime-worker"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-tokio.workspace = true
-plugin-framework = { path = "../../crates/plugin-framework" }
-```
-
-Create `apps/runtime-worker/src/main.rs`:
-
-```rust
-fn main() {
-    println!("runtime-worker bootstrap");
 }
 ```
 
@@ -286,7 +259,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Cargo.toml rust-toolchain.toml apps/api-server apps/runtime-worker crates/plugin-framework
+git add Cargo.toml rust-toolchain.toml apps/api-server crates/plugin-framework
 git commit -m "feat: scaffold plugin framework workspace"
 ```
 
@@ -1068,7 +1041,7 @@ After this plan lands, write and execute these follow-up plans in order:
    - Team/app assignment API
    - Risk confirmation and audit trail
 2. `2026-04-10-plugin-framework-runtime-integration.md`
-   - `runtime-worker` consumption of provider/node/data-source plugins
+   - 单体后端内运行时对 provider/node/data-source 插件的消费链路
    - `publish-gateway` consumption of publish adapter plugins
    - `plugin-runner` process bootstrap and local RPC client
 
