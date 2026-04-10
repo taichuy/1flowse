@@ -47,8 +47,8 @@ const agentFlowRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([homeRoute, agentFlowRoute]);
 
-export const router = createRouter({
-  routeTree
+const router = createRouter({
+    routeTree
 });
 
 declare module '@tanstack/react-router' {

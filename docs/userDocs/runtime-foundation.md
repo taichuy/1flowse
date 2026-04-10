@@ -1,16 +1,10 @@
 # 运行历史摘要
 
-- 2026-04-10 11:56-18:57 CST：P1 主线已收敛为工作流、运行时、发布优先；确认 `agentFlow`、应用级 `root` + 空间角色并集鉴权、`Publish` 才生效、运行时状态机主表 + 事件日志、发布网关薄代理、状态与记忆显式读写。
-- 2026-04-10 20:03-21:24 CST：确认插件双轨、共享 `plugin-runner`、Docker Compose 单机部署、前端只覆盖登录后控制台/编辑器/调试/API 文档，不做匿名站和多人实时协同。
-- 2026-04-10 21:34-23:14 CST：前端技术栈锁定为 `React + Vite + TanStack Router + Ant Design + CSS Modules/CSS Variables + TanStack Query + Zustand + xyflow + Lexical + Monaco`；不使用 `Tailwind`；画布外继续 `Ant`，画布内不纯原生散写，改为薄 `Editor UI` 自封装。
-- 2026-04-10 23:31-23:55 CST：后端正式收敛为 `Rust 模块化单体 api-server + 独立 plugin-runner`；P1 不拆 `runtime-worker`；控制台鉴权正式采用 `服务端 Session + HttpOnly Cookie + CSRF`；`api-server -> plugin-runner` 定义为内部 `RPC` 契约，P1 初版可承载在内网 HTTP；代码插件官方支持语言先锁 `Rust`。
-- 2026-04-11 00:01-00:14 CST：已把上述统一口径回写到 `product-design` 与 `p1-architecture`，并清理“进程内插件”等旧表述。
-- 2026-04-11 00:27-00:30 CST：复核 `docs/superpowers` 后确认无新的结构性冲突；补充插件宿主通信安全口径为“内部 `RPC` + 可承载内网 HTTP + 固定服务密钥保护（如 `X-Api-Key`）”；新增统一摘要文档 `docs/superpowers/specs/1flowse/2026-04-11-p1-tech-stack-communication-baseline.md`。
-- 2026-04-11 06:33-06:36 CST：用户确认“前后端最小可跑骨架 + 项目专用 skill”按正式架构占位方案执行：前端采用 `pnpm workspace + Turbo + apps/web + 全部 packages/*`，后端采用 `api-server + plugin-runner + 全部 crates/*`，版本锁定为 `Node 22 / pnpm 10 / Rust stable`，质量基线为前端 `Vitest/RTL + ESLint + Prettier`、后端 `fmt + clippy + test`，并要求 `api-server` 初始化即提供 OpenAPI 文档链接供人工校验。
-- 2026-04-11 06:55 CST：已生成实施计划 `docs/superpowers/plans/2026-04-11-fullstack-bootstrap.md`，覆盖前端 monorepo、Rust workspace、OpenAPI、`plugin-runner` health、仓库内 `.agent` skill 与最终验证；下一步等待选择执行方式。
+- 2026-04-10 11:56-23:55 CST：P1 主线收敛为工作流、运行时、发布优先；前端锁定 `React + Vite + TanStack Router + Ant Design + TanStack Query + Zustand`，后端锁定 `Rust 模块化单体 api-server + 独立 plugin-runner`，控制台鉴权口径为 `Session + HttpOnly Cookie + CSRF`，插件宿主通信为内部 `RPC/HTTP + 固定服务密钥`。
+- 2026-04-11 00:01-06:55 CST：统一口径已回写到设计文档，并产出 `fullstack-bootstrap` 设计稿与实施计划。
+- 2026-04-11 06:33-07:51 CST：已完成首轮全栈骨架初始化。前端根目录收敛到 `web/`，后端根目录收敛到 `api/`；`web/app + web/packages/*` 可跑，`api/apps/api-server + api/apps/plugin-runner + api/crates/*` 可编译；`api-server` 已暴露 `/health`、`/api/console/health`、`/openapi.json`、`/docs`，`plugin-runner` 已暴露 `/health`；仓库内项目 skill 已落地到 `.agent/skills/1flowse-fullstack-bootstrap/`；已通过 `cd web && pnpm lint/test/build` 与 `cd api && cargo fmt --all --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test`，并已实际验证 `3000/3001` 以及前端 `5174`（默认 `5173` 在本机被外部进程占用）。
 
 # 下一步计划
 
-- 以后讨论技术栈、部署、插件边界时，优先引用新的“P1 技术栈与通信口径基线”文档。
-- 先请用户审阅本次 `fullstack-bootstrap` 设计稿；确认后再写实现计划并进入初始化实现与 skill 落地。
-- 下一步让用户在 `Subagent-Driven` 与 `Inline Execution` 两种执行方式中二选一，然后开始真正初始化代码。
+- 在 `web/app` 继续接入真实控制台与编辑器壳，而不是占位页面。
+- 在 `api/crates/*` 内逐步填充鉴权、运行时、发布链路的真实业务实现。

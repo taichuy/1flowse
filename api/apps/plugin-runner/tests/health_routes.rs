@@ -9,7 +9,12 @@ use tower::ServiceExt;
 #[tokio::test]
 async fn runner_health_route_returns_ok_payload() {
     let response = app()
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
