@@ -7,8 +7,10 @@
 - 2026-04-11 00:01-00:14 CST：已把上述统一口径回写到 `product-design` 与 `p1-architecture`，并清理“进程内插件”等旧表述。
 - 2026-04-11 00:27-00:30 CST：复核 `docs/superpowers` 后确认无新的结构性冲突；补充插件宿主通信安全口径为“内部 `RPC` + 可承载内网 HTTP + 固定服务密钥保护（如 `X-Api-Key`）”；新增统一摘要文档 `docs/superpowers/specs/1flowse/2026-04-11-p1-tech-stack-communication-baseline.md`。
 - 2026-04-11 06:33-06:36 CST：用户确认“前后端最小可跑骨架 + 项目专用 skill”按正式架构占位方案执行：前端采用 `pnpm workspace + Turbo + apps/web + 全部 packages/*`，后端采用 `api-server + plugin-runner + 全部 crates/*`，版本锁定为 `Node 22 / pnpm 10 / Rust stable`，质量基线为前端 `Vitest/RTL + ESLint + Prettier`、后端 `fmt + clippy + test`，并要求 `api-server` 初始化即提供 OpenAPI 文档链接供人工校验。
+- 2026-04-11 06:55 CST：已生成实施计划 `docs/superpowers/plans/2026-04-11-fullstack-bootstrap.md`，覆盖前端 monorepo、Rust workspace、OpenAPI、`plugin-runner` health、仓库内 `.agent` skill 与最终验证；下一步等待选择执行方式。
 
 # 下一步计划
 
 - 以后讨论技术栈、部署、插件边界时，优先引用新的“P1 技术栈与通信口径基线”文档。
 - 先请用户审阅本次 `fullstack-bootstrap` 设计稿；确认后再写实现计划并进入初始化实现与 skill 落地。
+- 下一步让用户在 `Subagent-Driven` 与 `Inline Execution` 两种执行方式中二选一，然后开始真正初始化代码。
