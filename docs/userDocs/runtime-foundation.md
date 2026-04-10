@@ -10,8 +10,9 @@
 - 2026-04-10 23:31 CST：后端部署基线修正。P1 暂不启用独立 `runtime-worker`，统一收敛为“单体 Rust 模块化后端 + 进程内运行时调度”；运行时继续保留逻辑分层，但不单独部署。
 - 2026-04-10 23:47 CST：复核“后端分层、插件运行边界、部署结构”与现有文档。确认大方向兼容：`单体 Rust api-server + 独立 plugin-runner + REST/SSE + PostgreSQL/Redis/RustFS + Docker Compose`。当前待统一的冲突集中在：控制台鉴权仍有“`Dify Cookie Token` vs `服务端 Session`”残留；正式架构稿尚未把 `plugin-runner` 写入总体部署与 workspace；插件运行通道存在“固定本机 RPC”与“内网 HTTP/固定密钥”两种表述；代码插件语言边界存在“`Rust + Wasm`”与“仅要求 `runner_wasm` 包产物”两种口径。
 - 2026-04-10 23:55 CST：统一上述冲突口径。控制台鉴权正式采用 `服务端 Session + HttpOnly Cookie + CSRF`，`Dify Cookie Token` 仅保留为安全参考；后端对外仍是一个主入口 `api-server`，但后端体系内部包含独立 `plugin-runner` Rust 进程；`api-server -> plugin-runner` 正式定义为“内部 RPC 契约”，初版传输可承载在内网 HTTP；P1 代码插件运行模式保持 `runner_wasm`，官方支持语言先锁 `Rust`。
+- 2026-04-11 00:01 CST：已将上述统一口径回写到 `docs/superpowers/specs/1flowse/2026-04-10-product-design.md`。本次补齐了控制台安全基线、插件双运行路径、`plugin-runner` 的内部后端进程定位、`api-server -> plugin-runner` 的 RPC/HTTP 分层表述，以及 P1 不做前端代码插件与多语言 Wasm 生态的边界。
 
 # 下一步计划
 
 - 先统一控制台鉴权、`plugin-runner` 通信方式、代码插件语言边界三项口径，再回写正式技术架构稿。
-- 下一步把正式架构稿中的总体部署、workspace 结构与插件运行边界全部按统一口径回写。
+- 下一步继续把正式架构稿中的总体部署、workspace 结构与插件运行边界全部按统一口径回写，确保 `product-design`、模块 README 与架构稿不再互相打架。
