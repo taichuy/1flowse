@@ -10,6 +10,7 @@
 - 2026-04-10 21:16 CST：技术选型讨论新增前端交付边界。`Publish/API` 文档页不需要匿名公开；展示组织参考 `../dify`，但仍属于登录后控制台能力。前端主战场聚焦 `chatflow/agentFlow` 编辑与调试，不额外扩展公开站形态。
 - 2026-04-10 21:24 CST：技术选型讨论新增编辑协同边界。P1 不支持多人实时协同编辑，先采用单人草稿编辑 + 显式 `Publish` 生效模型；线上与外部交付均以发布版本为准。
 - 2026-04-10 21:34-21:45 CST：技术栈关键项已收敛。前后端通信采用 `REST + SSE`，控制台鉴权采用参考 `Dify` 的 `Cookie Token(access/refresh/csrf)`，对象存储沿用 Docker 内 `RustFS`，仓库采用 `单仓 Monorepo`。前端最终选 `React + Vite + TanStack Router + Ant Design + CSS Modules/CSS Variables + TanStack Query + Zustand + xyflow + Lexical + Monaco`；不使用 `Tailwind`，交互参考 `Dify`，但不沿用其 `Next.js + Tailwind + 自建 base 组件` 路线。
+- 2026-04-10 22:03 CST：补充对照 `Dify` 安全与插件主线。其控制台鉴权在 2025-10 改为 `HTTP-only cookies + csrf + refresh token`，插件采用 `api-server -> plugin daemon -> 本地子进程/调试 TCP/serverless` 三段式。后续需收敛我方最终会话策略，并把插件规划明确为“P1 不做自定义前端插件，只做多语言 UI 契约 + 独立代码插件运行与注册链路预留”。
 
 # 下一步计划
 
