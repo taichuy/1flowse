@@ -1,0 +1,29 @@
+[package]
+name = "api-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+utoipa.workspace = true
+utoipa-swagger-ui.workspace = true
+uuid.workspace = true
+domain = { path = "../../crates/domain" }
+control-plane = { path = "../../crates/control-plane" }
+runtime-core = { path = "../../crates/runtime-core" }
+publish-gateway = { path = "../../crates/publish-gateway" }
+access-control = { path = "../../crates/access-control" }
+plugin-framework = { path = "../../crates/plugin-framework" }
+storage-pg = { path = "../../crates/storage-pg" }
+storage-redis = { path = "../../crates/storage-redis" }
+storage-object = { path = "../../crates/storage-object" }
+observability = { path = "../../crates/observability" }
