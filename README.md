@@ -46,6 +46,14 @@ pnpm dev
 
 前端默认监听 `0.0.0.0:3100`，可通过本机或局域网地址访问。
 
+### Mock UI Sandbox
+
+```bash
+node scripts/node/mock-ui-sync.js
+```
+
+该命令会先清空 `tmp/mock-ui/`，再把 `web/` 重建到这里，并把 mock 副本的前端默认端口改成 `3210`。
+
 ### Backend
 
 ```bash
