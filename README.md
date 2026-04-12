@@ -44,7 +44,7 @@ pnpm install
 pnpm dev
 ```
 
-前端默认地址固定为 `http://127.0.0.1:3100`。
+前端默认监听 `0.0.0.0:3100`，可通过本机或局域网地址访问。
 
 ### Backend
 
@@ -56,8 +56,8 @@ cargo run -p plugin-runner
 
 后端默认地址：
 
-- `api-server`: `http://127.0.0.1:7800`
-- `plugin-runner`: `http://127.0.0.1:7801`
+- `api-server`: `0.0.0.0:7800`
+- `plugin-runner`: `0.0.0.0:7801`
 
 ### Middleware
 
@@ -87,9 +87,9 @@ cargo test
 
 ## Local URLs
 
-- Web: `http://127.0.0.1:3100`
-- API Health: `http://127.0.0.1:7800/health`
-- Console Health: `http://127.0.0.1:7800/api/console/health`
-- OpenAPI JSON: `http://127.0.0.1:7800/openapi.json`
-- API Docs: `http://127.0.0.1:7800/docs`
-- Plugin Runner Health: `http://127.0.0.1:7801/health`
+- Web: `http://127.0.0.1:3100` 或 `http://<本机IP>:3100`
+- API Health: `http://127.0.0.1:7800/health` 或 `http://<本机IP>:7800/health`
+- Console Health: `http://127.0.0.1:7800/api/console/health` 或 `http://<本机IP>:7800/api/console/health`
+- OpenAPI JSON: `http://127.0.0.1:7800/openapi.json` 或 `http://<本机IP>:7800/openapi.json`
+- API Docs: `http://127.0.0.1:7800/docs` 或 `http://<本机IP>:7800/docs`
+- Plugin Runner Health: `http://127.0.0.1:7801/health` 或 `http://<本机IP>:7801/health`

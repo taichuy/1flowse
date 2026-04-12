@@ -53,6 +53,10 @@ test('getServiceDefinitions uses repo default ports without command overrides', 
   assert.equal(services.web.port, 3100);
   assert.equal(services['api-server'].port, 7800);
   assert.equal(services['plugin-runner'].port, 7801);
+  assert.equal(services.web.bindHost, '0.0.0.0');
+  assert.equal(services.web.probeHost, '127.0.0.1');
+  assert.equal(services['api-server'].bindHost, '0.0.0.0');
+  assert.equal(services['api-server'].probeHost, '127.0.0.1');
   assert.deepEqual(services.web.args, ['--filter', '@1flowse/web', 'dev']);
   assert.deepEqual(services['api-server'].args, ['run', '-p', 'api-server']);
   assert.deepEqual(services['plugin-runner'].args, ['run', '-p', 'plugin-runner']);

@@ -13,7 +13,8 @@ test('frontend API defaults point to the new backend port', () => {
   const apiClientSource = fs.readFileSync(apiClientPath, 'utf8');
   const envExampleSource = fs.readFileSync(envExamplePath, 'utf8');
 
-  assert.match(homePageSource, /http:\/\/127\.0\.0\.1:7800/u);
-  assert.match(apiClientSource, /http:\/\/127\.0\.0\.1:7800/u);
-  assert.match(envExampleSource, /VITE_API_BASE_URL=http:\/\/127\.0\.0\.1:7800/u);
+  assert.match(homePageSource, /getDefaultApiBaseUrl/u);
+  assert.match(apiClientSource, /locationLike\?\.hostname/u);
+  assert.match(apiClientSource, /:7800/u);
+  assert.match(envExampleSource, /current browser hostname/u);
 });

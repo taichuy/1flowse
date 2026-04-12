@@ -4,8 +4,23 @@ export interface HealthResponse {
   version: string;
 }
 
+export interface ApiBaseUrlLocation {
+  protocol?: string;
+  hostname?: string;
+}
+
+export function getDefaultApiBaseUrl(
+  locationLike: ApiBaseUrlLocation | undefined =
+    typeof window !== 'undefined' ? window.location : undefined
+): string {
+  const protocol = locationLike?.protocol === 'https:' ? 'https:' : 'http:';
+  const hostname = locationLike?.hostname || '127.0.0.1';
+
+  return `${protocol}//${hostname}:7800`;
+}
+
 export async function fetchApiHealth(
-  baseUrl = 'http://127.0.0.1:7800'
+  baseUrl = getDefaultApiBaseUrl()
 ): Promise<HealthResponse> {
   const response = await fetch(`${baseUrl}/health`);
 

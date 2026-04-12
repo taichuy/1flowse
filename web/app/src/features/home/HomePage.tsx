@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, Space, Typography } from 'antd';
 
-import { fetchApiHealth } from '@1flowse/api-client';
+import { fetchApiHealth, getDefaultApiBaseUrl } from '@1flowse/api-client';
 
 import { useAppStore } from '../../state/app-store';
 
 export function HomePage() {
-  const apiBaseUrl =
-    import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:7800';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl(window.location);
   const visitCount = useAppStore((state) => state.visitCount);
   const increment = useAppStore((state) => state.increment);
   const healthQuery = useQuery({

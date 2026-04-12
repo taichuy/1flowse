@@ -5,7 +5,7 @@ use serde::Serialize;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-pub const DEFAULT_PLUGIN_RUNNER_ADDR: &str = "127.0.0.1:7801";
+pub const DEFAULT_PLUGIN_RUNNER_ADDR: &str = "0.0.0.0:7801";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthResponse {
@@ -50,7 +50,7 @@ mod tests {
     fn parse_bind_addr_uses_runner_default_port() {
         let addr = parse_bind_addr(None, DEFAULT_PLUGIN_RUNNER_ADDR);
 
-        assert_eq!(addr.to_string(), "127.0.0.1:7801");
+        assert_eq!(addr.to_string(), "0.0.0.0:7801");
     }
 
     #[test]

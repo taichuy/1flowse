@@ -140,7 +140,8 @@ function getServiceDefinitions(repoRoot) {
       cwd: path.join(repoRoot, 'web'),
       command: 'pnpm',
       args: ['--filter', '@1flowse/web', 'dev'],
-      host: '127.0.0.1',
+      bindHost: '0.0.0.0',
+      probeHost: '127.0.0.1',
       port: 3100,
       logFile: path.join(paths.logDir, 'web.log'),
       pidFile: path.join(paths.pidDir, 'web.json'),
@@ -151,7 +152,8 @@ function getServiceDefinitions(repoRoot) {
       cwd: path.join(repoRoot, 'api'),
       command: 'cargo',
       args: ['run', '-p', 'api-server'],
-      host: '127.0.0.1',
+      bindHost: '0.0.0.0',
+      probeHost: '127.0.0.1',
       port: 7800,
       logFile: path.join(paths.logDir, 'api-server.log'),
       pidFile: path.join(paths.pidDir, 'api-server.json'),
@@ -162,7 +164,8 @@ function getServiceDefinitions(repoRoot) {
       cwd: path.join(repoRoot, 'api'),
       command: 'cargo',
       args: ['run', '-p', 'plugin-runner'],
-      host: '127.0.0.1',
+      bindHost: '0.0.0.0',
+      probeHost: '127.0.0.1',
       port: 7801,
       logFile: path.join(paths.logDir, 'plugin-runner.log'),
       pidFile: path.join(paths.pidDir, 'plugin-runner.json'),
@@ -325,6 +328,14 @@ function readPidRecord(pidFile) {
   }
 }
 
+function getProbeHost(service) {
+  return service.probeHost || service.host;
+}
+
+function getBindHost(service) {
+  return service.bindHost || service.host;
+}
+
 function writePidRecord(service, pid) {
   fs.writeFileSync(
     service.pidFile,
@@ -449,7 +460,7 @@ async function waitForProcessExit(pid, timeoutMs = 5000) {
 
 async function startService(service) {
   const pidRecord = readPidRecord(service.pidFile);
-  if (pidRecord && isProcessAlive(pidRecord.pid) && (await isPortOpen(service.host, service.port))) {
+  if (pidRecord && isProcessAlive(pidRecord.pid) && (await isPortOpen(getProbeHost(service), service.port))) {
     log(`${service.label} 已在运行，跳过启动`);
     return;
   }
@@ -471,13 +482,13 @@ async function startService(service) {
   child.unref();
   writePidRecord(service, child.pid);
 
-  const ready = await waitForPort(service.host, service.port);
+  const ready = await waitForPort(getProbeHost(service), service.port);
   if (!ready) {
     await stopService(service);
     throw new Error(`${service.label} 启动超时，请查看日志：${service.logFile}`);
   }
 
-  log(`${service.label} 已启动，地址 http://${service.host}:${service.port}`);
+  log(`${service.label} 已启动，监听 ${getBindHost(service)}:${service.port}`);
 }
 
 async function stopService(service) {
@@ -507,11 +518,11 @@ async function stopService(service) {
 async function statusService(service) {
   const pidRecord = readPidRecord(service.pidFile);
   const alive = pidRecord ? isProcessAlive(pidRecord.pid) : false;
-  const portOpen = await isPortOpen(service.host, service.port);
+  const portOpen = await isPortOpen(getProbeHost(service), service.port);
   const status = alive && portOpen ? 'running' : alive ? 'starting' : portOpen ? 'orphaned' : 'stopped';
 
   log(
-    `${service.label}: ${status} | port=${service.port} | pid=${pidRecord ? pidRecord.pid : 'none'} | log=${path.relative(
+    `${service.label}: ${status} | listen=${getBindHost(service)}:${service.port} | probe=${getProbeHost(service)}:${service.port} | pid=${pidRecord ? pidRecord.pid : 'none'} | log=${path.relative(
       getRepoRoot(),
       service.logFile
     )}`

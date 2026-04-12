@@ -7,7 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
 
-pub const DEFAULT_API_SERVER_ADDR: &str = "127.0.0.1:7800";
+pub const DEFAULT_API_SERVER_ADDR: &str = "0.0.0.0:7800";
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct HealthResponse {
@@ -72,13 +72,13 @@ mod tests {
     fn parse_bind_addr_uses_new_default_api_port() {
         let addr = parse_bind_addr(None, DEFAULT_API_SERVER_ADDR);
 
-        assert_eq!(addr.to_string(), "127.0.0.1:7800");
+        assert_eq!(addr.to_string(), "0.0.0.0:7800");
     }
 
     #[test]
     fn parse_bind_addr_falls_back_when_value_is_invalid() {
         let addr = parse_bind_addr(Some("not-an-addr"), DEFAULT_API_SERVER_ADDR);
 
-        assert_eq!(addr.to_string(), "127.0.0.1:7800");
+        assert_eq!(addr.to_string(), "0.0.0.0:7800");
     }
 }
