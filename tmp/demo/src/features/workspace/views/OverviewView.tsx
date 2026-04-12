@@ -19,20 +19,35 @@ export function OverviewView() {
   const navigate = useNavigate();
   const openRun = useWorkspaceStore((state) => state.openRun);
   const setRunFilter = useWorkspaceStore((state) => state.setRunFilter);
+  const waitingRun = getRun('run_2048');
+
+  const openOverviewRun = (runId: string) => {
+    const run = getRun(runId);
+
+    if (!run) {
+      return;
+    }
+
+    setRunFilter(run.status);
+    openRun(run.id);
+    void navigate({ to: '/logs' });
+  };
 
   return (
     <section className="view-stack">
       <Card className="hero-card" variant="borderless">
         <div className="hero-layout">
-          <div>
+          <div className="hero-main">
             <p className="section-label">应用概览</p>
-            <h2>{workspaceMeta.name} workspace demo</h2>
+            <div className="hero-title-row">
+              <h2>{workspaceMeta.name}</h2>
+              <span className="hero-kicker">Workspace demo</span>
+            </div>
             <p className="hero-copy">
-              当前 published contract 已在跑 live traffic；Classifier、Approval gate
-              与 Reply composer 还有 3 个 draft changes，embedded runtime 仍停留在
-              shell only 阶段。
+              Published 仍在跑 live traffic；3 个 draft node changes 待发；embedded
+              runtime 还停留在 shell only。
             </p>
-            <div className="action-row">
+            <div className="action-row overview-actions">
               <Button
                 type="primary"
                 onClick={() => {
@@ -41,18 +56,51 @@ export function OverviewView() {
               >
                 进入编排
               </Button>
+              <Button
+                onClick={() => {
+                  void navigate({ to: '/api' });
+                }}
+              >
+                查看 API 契约
+              </Button>
+              {waitingRun ? (
+                <Button
+                  onClick={() => {
+                    openOverviewRun(waitingRun.id);
+                  }}
+                >
+                  继续处理等待态
+                </Button>
+              ) : null}
             </div>
           </div>
 
           <div className="hero-side">
-            <StatusBadge
-              status="published"
-              label={`Published ${workspaceMeta.publishedVersion}`}
-            />
-            <StatusBadge status="healthy" label="Runtime healthy" />
-            <p className="sidebar-copy">
-              概览页只保留当前状态、最近运行摘要和下一跳；完整契约、日志细节与节点编辑都回到各自任务域。
-            </p>
+            <div className="hero-status-row">
+              <StatusBadge
+                status="published"
+                label={`Published ${workspaceMeta.publishedVersion}`}
+              />
+              <StatusBadge status="healthy" label="Runtime healthy" />
+            </div>
+
+            <div className="hero-side-grid">
+              <article className="signal-card">
+                <p className="section-label">Published surface</p>
+                <strong>OpenAI compatible</strong>
+                <p>正式入口仍只暴露一个兼容模式。</p>
+              </article>
+              <article className="signal-card">
+                <p className="section-label">Needs attention</p>
+                <strong>1 waiting + 1 failed</strong>
+                <p>等待态和失败样本都要继续保留。</p>
+              </article>
+              <article className="signal-card">
+                <p className="section-label">Host context</p>
+                <strong>{embedRuntimeSnapshot.teamId}</strong>
+                <p>{embedRuntimeSnapshot.applicationId} 还没接 live runtime。</p>
+              </article>
+            </div>
           </div>
         </div>
       </Card>
@@ -84,9 +132,7 @@ export function OverviewView() {
                   </div>
                   <Button
                     onClick={() => {
-                      setRunFilter(run.status);
-                      openRun(run.id);
-                      void navigate({ to: '/logs' });
+                      openOverviewRun(run.id);
                     }}
                   >
                     {item.actionLabel}

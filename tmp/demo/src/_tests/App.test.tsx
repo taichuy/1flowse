@@ -15,8 +15,12 @@ describe('workspace demo', () => {
     render(<App />);
 
     expect(
-      await screen.findByRole('heading', { name: /Revenue Copilot workspace demo/i })
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Revenue Copilot'
+      })
     ).toBeInTheDocument();
+    expect(await screen.findByText('Workspace demo')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '进入编排' })
     ).toBeInTheDocument();
@@ -33,5 +37,15 @@ describe('workspace demo', () => {
     expect(await screen.findByRole('heading', { name: '调用日志' })).toBeInTheDocument();
     expect(await screen.findByText(/为什么停在这里/i)).toBeInTheDocument();
     expect(await screen.findByText(/Checkpoint persisted/i)).toBeInTheDocument();
+  });
+
+  it('jumps from overview hero to the published API contract', async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看 API 契约' }));
+
+    expect(
+      await screen.findByText(/兼容模式只改变 envelope/i)
+    ).toBeInTheDocument();
   });
 });

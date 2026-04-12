@@ -277,7 +277,8 @@ code {
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .switch-link.is-active {
@@ -299,6 +300,8 @@ code {
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+  width: fit-content;
+  justify-self: start;
 }
 
 .status-badge {
@@ -365,10 +368,71 @@ code {
   align-items: flex-start;
 }
 
+.hero-main {
+  display: grid;
+  gap: 14px;
+}
+
+.hero-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 217, 146, 0.22);
+  background: rgba(0, 217, 146, 0.08);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .hero-side {
   display: grid;
   gap: 10px;
-  min-width: 260px;
+  min-width: 0;
+  max-width: 320px;
+}
+
+.hero-status-row,
+.hero-side-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.hero-side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.signal-card {
+  display: grid;
+  gap: 6px;
+  min-height: 110px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.signal-card strong {
+  font-size: 14px;
+}
+
+.signal-card p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.overview-actions {
+  align-items: flex-start;
 }
 
 .summary-grid {
@@ -595,7 +659,20 @@ code {
   }
 
   .mobile-domain-nav {
-    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 2px 0 10px;
+    overflow: visible;
+    background: linear-gradient(180deg, rgba(5, 5, 7, 0.96), rgba(5, 5, 7, 0.78));
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-domain-nav .switch-link:last-child {
+    grid-column: span 2;
   }
 
   .workspace-sidebar {
@@ -620,6 +697,14 @@ code {
   .summary-grid {
     grid-template-columns: 1fr;
   }
+
+  .hero-side {
+    max-width: none;
+  }
+
+  .hero-side-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -642,5 +727,9 @@ code {
 
   .mobile-node-list {
     display: grid;
+  }
+
+  .overview-actions > * {
+    flex: 1 1 100%;
   }
 }

@@ -1,5 +1,45 @@
 # Demo Iteration Log
 
+## 2026-04-13 03:13
+
+### 本轮批判
+
+- 移动端顶部任务域切换还是横向胶囊，`监控报表` 在首屏被截断，用户一眼看不全五个任务域。
+- overview hero 里的 `Published / Runtime healthy` 被 grid 拉成整条色块，看起来像进度条，不像状态标签。
+- 概览首屏只有“进入编排”一个动作，已发布契约和等待态 run 都需要继续往下滚才能处理，首屏操作性偏弱。
+
+### 本轮执行
+
+- 在 `overview` hero 增加两个次级跳转：
+  - `查看 API 契约`
+  - `继续处理等待态`
+- 保持“进入编排”仍是唯一主动作，但把关键下一跳也前置到首屏。
+- 把 hero 标题压缩成 `Revenue Copilot` + `Workspace demo` 标签，收短首屏文案。
+- 把 hero 右侧改成紧凑 badge + signal cards，去掉会在移动端被拉满宽度的状态条式布局。
+- 将移动端任务域切换改为 sticky 两列网格，确保五个任务域入口都能在首屏看见。
+- 同步缩短 `summary stats` 文案，减少概览卡片高度。
+- 新增诊断记录：
+  - `tmp/demo/notes/2026-04-13-0313-mobile-first-tightening.md`
+
+### 测试与验证
+
+- `npm test`：通过，`3` 个测试全部通过。
+- `npm run build`：通过，产物为：
+  - `dist/assets/index-CSS6-m2t.css` `12.98 kB`
+  - `dist/assets/react-Bxqk-rQc.js` `106.54 kB`
+  - `dist/assets/index-DV0OpEea.js` `437.69 kB`
+  - `dist/assets/antd-FPCx2csc.js` `466.01 kB`
+- `vite preview --host 127.0.0.1 --port 3200 --strictPort`：沿用已启动预览继续验证。
+- Playwright 截图成功：
+  - `tmp/demo/mobile-after.png`
+  - `tmp/demo/desktop-after.png`
+
+### 本轮结论
+
+- 移动端首屏终于从“能滚动切页”变成了“直接可切页”，这轮最核心的问题已经解决。
+- overview 首屏现在更像一个真正的 workspace 入口，而不是只有一个 CTA 的介绍块。
+- 桌面端 hero 仍有明显空白区，说明下一轮不该继续加 badge，而要把这块换成更有业务语义的 feed 或 canvas 摘要。
+
 ## 2026-04-13 02:12
 
 ### 本轮批判

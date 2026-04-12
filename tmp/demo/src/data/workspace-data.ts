@@ -129,7 +129,7 @@ export const workspaceMeta = {
   code: 'revenue-copilot',
   name: 'Revenue Copilot',
   description:
-    '把当前仓库已有路由、目标工作区语义与 embedded runtime 线索揉成一套可以继续演进的 demo。',
+    '基于当前仓库路由、契约与 embedded runtime 线索整理的可运行 workspace demo。',
   owner: 'Iris Chen',
   publishedVersion: 'v0.8.14',
   updatedAt: '2026-04-13 01:05'
@@ -216,22 +216,22 @@ export const summaryStats: SummaryStat[] = [
   {
     label: 'Published contract',
     value: '1',
-    note: '当前 live traffic 仍只开放 OpenAI 兼容入口。'
+    note: 'live traffic 仍只开放 OpenAI 兼容入口。'
   },
   {
     label: 'Draft node changes',
     value: '3',
-    note: 'Classifier、Approval gate、Reply composer 都还处在待发布状态。'
+    note: '3 个节点变更待下次发布。'
   },
   {
     label: 'Runs needing attention',
     value: '2',
-    note: '一条等待态，一条失败样本，都需要被保留而不是掩盖。'
+    note: '等待态与失败样本仍需处理。'
   },
   {
     label: 'Embedded artifacts',
     value: '2',
-    note: 'mount 元数据已经能在 demo 内看见，但还未接到正式 runtime。'
+    note: 'manifests 已 staged，runtime 仍未接入。'
   }
 ];
 
