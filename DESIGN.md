@@ -1,548 +1,780 @@
-# Part 1 · 视觉执行规则
+# 1Flowse UI 设计规范
 
-## 1. 总体方向
+## 1. 视觉主题与氛围
 
-1Flowse 前端采用**工具型控制台风格**：高对比、低装饰、状态语义清晰。可直接对照的参照系是 Linear、Vercel dashboard、Ant Design Pro
+1Flowse 采用深色工程控制台风格：近黑画布、碳黑表面、暖灰边框、亮翡翠绿作为最高信号强调色。整体目标不是做品牌落地页，而是做一个对 AI 与工程实现都稳定、清晰、可执行的产品 UI 规范。
 
-**默认规则（以下方向无需解释，直接执行）：**
+**默认规则：**
 
-- 底色白 + 近黑文字（高对比）
-- 主色明确，状态色语义唯一，其余元素中性
-- 圆角锐利（4-8px），不用 16px+ 大圆角
-- 阴影克制分两档，不堆叠
-- 字体工具型排版（层级分明，无 hero 风格）
+- 页面基底使用近黑色，内容表面使用深炭色，依靠边框而不是大面积颜色分层。
+- 轻翡翠绿是唯一高信号强调色，用于主 CTA、当前激活态、运行中节点和关键焦点。
+- `Shell Layer` 与 `Editor UI Layer` 必须共享同一套 token、状态语义和密度逻辑，不允许发展成两套产品。
+- Shell 区域优先复用 `Ant Design`；画布区域基于 `xyflow`，配合薄的 `Editor UI` 自封装组件，不直接把 `Ant Design` 大量铺进节点主体。
+- 圆角控制在 `4px / 6px / 8px` 三档，阴影克制，发光只用于最高信号时刻。
+- 排版服务于信息密度和操作清晰度，不使用营销页式 hero、夸张留白或装饰性标题。
 
-**以下任何偏离均需明确理由，否则恢复默认：**
-
-- 大面积深底 + 白字仪表板风格
-- 16px+ 大圆角
-- 彩色装饰（与状态语义无关的颜色使用）
-- 营销式大标题 / hero 排版
+**偏离以上方向必须有明确理由，否则恢复默认。**
 
 ---
 
-## 2. 色彩系统
+## 2. 调色板与角色
 
-### 2.1 主色
-
-```
-primary: #146ef5
-```
-
-用于：主 CTA 按钮背景、active 导航项颜色、focus ring、`running` 状态（唯一使用主色的语义场景）。
-
-### 2.2 状态色（唯一语义映射，不允许复用于其他视觉目的）
+### 2.1 主强调色
 
 ```css
---status-running:  #146ef5;   /* 系统正在执行 */
---status-waiting:  #ff9500;   /* 等待 / 排队中 */
---status-failed:   #ee1d36;   /* 执行失败 / 错误 */
---status-success:  #00d722;   /* 执行成功 / 健康 */
---status-draft:    #ababab;   /* 未发布草稿 */
---status-selected: #3b89ff;   /* 用户选中态高亮 — 不与 running 混用 */
+--color-primary:        #00d992;
+--color-primary-strong: #00ffaa;
+--color-primary-muted:  #2fd6a1;
+--color-primary-hover:  #00c182;
 ```
 
-**补充规则：**
-- 这 6 个颜色不允许用于非状态语义目的（装饰、分类标签、品牌区分等）
-- 节点类型标签（Trigger / LLM / Tool / State）用中性 badge，不用任何状态色
-- `selected` 态只用 outline + 浅底，不用彩色背景块填充
+用途：
 
-### 2.3 中性色
+- 主 CTA 按钮
+- 当前激活导航
+- 焦点 ring
+- 运行中的节点 / 连线高亮
+- 关键状态增强
+
+禁止：
+
+- 把主强调色当作大面积背景主色
+- 把主强调色用于与状态无关的装饰填充
+
+### 2.2 状态色
 
 ```css
---text-primary:   #1a1a1a;   /* 正文、标题 */
---text-secondary: #595959;   /* 次级文字、导航项默认 */
---text-tertiary:  #8c8c8c;   /* 辅助说明、field label、caption */
---text-disabled:  #bfbfbf;   /* 禁用态 */
-
---bg-page:        #f5f5f5;   /* 页面底色 */
---bg-surface:     #ffffff;   /* 卡片、面板底色 */
---bg-hover:       #f7f9ff;   /* 行 hover 背景 */
---bg-selected:    #f0f5ff;   /* 选中行背景 */
-
---border-default: #e8e8e8;   /* 常规边框 */
---border-strong:  #d8d8d8;   /* 输入框、强分隔 */
---border-focus:   #146ef5;   /* 焦点 / 选中边框 */
+--status-running:   #00d992;  /* 系统正在执行，最高信号 */
+--status-waiting:   #ffba00;  /* 等待 / 排队 / 外部回调中 */
+--status-failed:    #fb565b;  /* 失败 / 阻塞 / 需要排查 */
+--status-success:   #19b36b;  /* 成功 / 健康 / 已完成 */
+--status-draft:     #6b7280;  /* 未发布 / 草稿 */
+--status-selected:  #3b82f6;  /* 用户选中态，仅用于选中反馈 */
 ```
+
+**硬规则：**
+
+- 以上 6 个颜色只表达状态语义，不用于分类标签、品牌装饰或无语义点缀。
+- `running` 与 `success` 不是同一语义：`running` 更亮、更通电；`success` 更稳、更收敛。
+- `selected` 不是系统运行状态，不能与 `running`、`failed`、`success` 混用。
+- `draft / published` 属于发布语义，不等于运行态。`published` 允许在发布上下文中借用主强调色做 outline badge，但不能替代日志、运行行、节点卡片里的真实运行状态。
+
+### 2.3 表面、文字与边框
+
+```css
+--bg-page:           #050507;
+--bg-surface:        #101010;
+--bg-elevated:       #151515;
+--bg-hover:          rgba(255,255,255,0.04);
+--bg-selected:       rgba(59,130,246,0.12);
+--bg-code:           #0d0d10;
+
+--text-primary:      #f2f2f2;
+--text-secondary:    #b8b3b0;
+--text-tertiary:     #8b949e;
+--text-disabled:     #5f666d;
+
+--border-default:    #3d3a39;
+--border-strong:     #4b4745;
+--border-focus:      #00d992;
+--border-selected:   #3b82f6;
+```
+
+补充规则：
+
+- 页面背景与内容表面至少保持一层明显层差。
+- 表面抬升优先通过 `border + shadow` 完成，不通过彩色底块完成。
+- 文本只允许使用以上灰阶体系，避免引入额外无语义彩色文字。
 
 ---
 
-## 3. 排版系统
+## 3. 字体排版规则
 
-**字体栈**（系统默认，不强制引入外部字体）：
-```
-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-```
+### 3.1 字体系列
 
-**固定层级表（Codex 只使用以下 8 个层级，不自创字号）：**
+- 标题：`system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+- 正文 / UI：`"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+- 代码：`"SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
 
-| 角色 | 字号 | 字重 | 颜色 | 附加属性 | 用途 |
+说明：
+
+- 如果项目未显式加载 `Inter`，允许直接退回系统字体，不要求为了视觉规范额外引入字体依赖。
+- 代码字体在 Shell 和 Editor 中保持一致，不允许节点内外出现两套等宽字体逻辑。
+
+### 3.2 固定层级
+
+| 角色 | 字号 | 字重 | 行高 | 颜色 | 用途 |
 |---|---|---|---|---|---|
-| `page-title` | 20px | 600 | `--text-primary` | — | 页面大标题，一页只出现一次 |
-| `section-title` | 14px | 600 | `--text-primary` | — | 区块标题、抽屉标题 |
-| `label-uppercase` | 12px | 600 | `--text-secondary` | uppercase / letter-spacing: 0.5px | 卡片区块小标签 |
-| `body` | 14px | 400 | `--text-primary` | — | 默认正文、列表主字段 |
-| `body-secondary` | 14px | 400 | `--text-secondary` | — | 次级正文、列表次要字段 |
-| `caption` | 12px | 400 | `--text-tertiary` | — | 辅助说明、时间戳、hint |
-| `code` | 13px | 400 | `--text-primary` | font-family: monospace; background: #f5f5f5; padding: 1px 4px; radius: 3px | 代码、API 路径 |
-| `value-large` | 24px | 600 | `--text-primary` | — | 仪表盘大数字（仅监控报表等场景使用） |
+| `page-title` | 20px | 600 | 1.2 | `--text-primary` | 页面标题 |
+| `dialog-title` | 16px | 600 | 1.25 | `--text-primary` | Drawer / Modal / 大卡片标题 |
+| `section-title` | 14px | 600 | 1.35 | `--text-primary` | 区块标题、Inspector 标题 |
+| `label-uppercase` | 12px | 600 | 1.4 | `--text-secondary` | 分组标签、卡片小标题，需 uppercase |
+| `body` | 14px | 400 | 1.55 | `--text-primary` | 默认正文、列表主字段 |
+| `body-secondary` | 14px | 400 | 1.55 | `--text-secondary` | 次级正文 |
+| `caption` | 12px | 400 | 1.45 | `--text-tertiary` | 时间戳、说明、hint |
+| `code` | 13px | 400 | 1.4 | `--text-primary` | 代码、API 路径、运行片段 |
+| `value-large` | 24px | 600 | 1.1 | `--text-primary` | 指标卡大数字 |
+
+### 3.3 排版原则
+
+- 标题密度应偏紧凑，避免宽松营销式行高。
+- 一个页面只允许一个 `page-title`。
+- `label-uppercase` 只用于分组标签，不用于大标题。
+- 代码片段是工程信息的一部分，不是装饰元素；代码块背景始终使用 `--bg-code`。
 
 ---
 
-## 4. 间距系统
+## 4. 组件样式
 
-**基础单位：4px**
+### 4.1 Shell Layer 实现基线
 
-| 名称 | 值 | 典型用途 |
-|---|---|---|
-| `space-xs` | 4px | Badge 内边距、紧凑元素间 |
-| `space-sm` | 8px | 同组元素间距 |
-| `space-md` | 12px | 行内分组 |
-| `space-base` | 16px | 卡片内容区内边距 |
-| `space-lg` | 20px | 卡片 header 内边距 |
-| `space-xl` | 24px | 区块间距 |
-| `space-2xl` | 32px | 页面 section 间距 |
+`Shell Layer` 默认以 `Ant Design` 为基线实现。这里定义的是视觉 token、语义、尺寸与状态，不要求画布外全部手写 DOM。实现时遵守：
 
----
+- 画布外优先使用现有 `antd` 组件及其主题能力。
+- 重表单、列表、抽屉、Descriptions、Tabs 等优先复用 `antd`。
+- 如果 `antd` 默认样式与本规范不符，应通过 theme token、类名覆写或薄封装校正，而不是引入第二套主组件库。
 
-## 5. 圆角与边框
-
-### 三档圆角（不允许使用其他值）
-
-| 档位 | 值 | 适用场景 |
-|---|---|---|
-| `radius-sm` | 4px | Badge、Tag、Input、小图标按钮 |
-| `radius-md` | 6px | 按钮、Chip、NodeCard |
-| `radius-lg` | 8px | 卡片、面板容器、Drawer 内区域、Modal |
-
-### 边框规则
-
-- 常规边框：`1px solid var(--border-default)` (`#e8e8e8`)
-- 强调边框：`1px solid var(--border-strong)` (`#d8d8d8`)
-- 禁止使用 2px+ 边框作为装饰
-
----
-
-## 6. 阴影
-
-**两档，不允许超出范围：**
-
-| 档位 | 值 | 用途 |
-|---|---|---|
-| `shadow-card` | `0 1px 4px rgba(0,0,0,0.08)` | 卡片悬浮、hover 增强 |
-| `shadow-float` | `0 4px 16px rgba(0,0,0,0.12)` | Drawer、下拉菜单、浮层面板 |
-
----
-
-## 7. Shell Layer 组件 Recipe
-
-### 7.1 按钮 (Button)
+### 4.2 按钮 (Button)
 
 | 变体 | 背景 | 文字 | 边框 | 高度 | 内边距 | 圆角 |
 |---|---|---|---|---|---|---|
-| primary | `#146ef5` | `#fff` | 无 | 32px | `0 16px` | 6px |
-| secondary | transparent | `#1a1a1a` | `1px solid #d8d8d8` | 32px | `0 16px` | 6px |
-| ghost / link | transparent | `#146ef5` | 无 | auto | `0 8px` | 6px |
-| danger | `#ee1d36` | `#fff` | 无 | 32px | `0 16px` | 6px |
+| primary | `#00d992` | `#050507` | 无 | 32px | `0 16px` | 6px |
+| secondary | transparent | `#f2f2f2` | `1px solid #3d3a39` | 32px | `0 16px` | 6px |
+| ghost / link | transparent | `#2fd6a1` | 无 | auto | `0 8px` | 6px |
+| danger | `#fb565b` | `#ffffff` | 无 | 32px | `0 16px` | 6px |
 
 **交互状态：**
 
 | 状态 | primary | secondary |
 |---|---|---|
-| hover | 背景 `#1060d4` | 边框 `#aaa`，背景 `#f7f9ff` |
-| active（按下） | `transform: scale(0.98)` | 同左 |
-| focus | `outline: 2px solid #146ef5; outline-offset: 2px` | 同左 |
-| disabled | 透明度 0.4，`cursor: not-allowed` | 同左 |
+| hover | 背景 `#00c182`，可加轻微翡翠 glow | 背景 `rgba(255,255,255,0.04)`，边框 `#5a5552` |
+| active | `transform: scale(0.98)` | 同左 |
+| focus | `outline: 2px solid rgba(0,217,146,0.55); outline-offset: 2px` | 同左 |
+| disabled | `opacity: 0.4; cursor: not-allowed` | 同左 |
 
 **禁止：**
-- no-op 按钮保留 primary / secondary 视觉样式
-- 纯装饰性 CTA（仅为让页面看起来丰富）
 
-无结果时**必须降级为**：`<span class="caption">`、`<a href="#">`（链接语义）、`<span class="nav-label">`
+- no-op 入口保留 `primary / secondary` 视觉样式
+- 仅为了“页面看起来丰富”而放主按钮
+- 用按钮承载纯说明性文字
 
-### 7.2 卡片 (Card)
+无真实结果时必须降级为：
 
-```
-背景：   #ffffff
-边框：   1px solid #e8e8e8
-圆角：   8px
-阴影：   0 1px 4px rgba(0,0,0,0.08)
+- `<a>`（导航 / 链接语义）
+- `<span class="caption">`
+- `<span class="nav-label">`
+
+### 4.3 卡片 (Card)
+
+```text
+背景：    #101010
+边框：    1px solid #3d3a39
+圆角：    8px
+阴影：    0 8px 24px rgba(0,0,0,0.28)
 
 Card Header：
-  高度：     48px
-  内边距：   0 20px
-  分隔线：   border-bottom: 1px solid #f0f0f0
-  标签文字： label-uppercase 规格（12px/600/uppercase）
+  高度：    48px
+  内边距：  0 20px
+  分隔线：  border-bottom: 1px solid rgba(255,255,255,0.05)
 
 Card Body：
-  内边距：   16px 20px
+  内边距：  16px 20px
 
-Card Footer（可选）：
-  内边距：   12px 20px
-  分隔线：   border-top: 1px solid #f0f0f0
-  内容：     次级操作链接或状态说明
+Card Footer：
+  内边距：  12px 20px
+  分隔线：  border-top: 1px solid rgba(255,255,255,0.05)
 ```
 
-### 7.3 导航 / 侧边栏 (Sidebar Nav)
+补充规则：
 
+- 只有在 `running / selected / featured` 这类高信号场景下，才允许卡片边框升级为 `2px` 或增加局部 glow。
+- 常规卡片不使用彩色标题底或大面积色块头部。
+
+### 4.4 输入框与表单
+
+Shell 表单默认复用 `Ant Design`，视觉应校正为：
+
+```text
+高度：      32px
+背景：      #101010
+文字：      #f2f2f2
+边框：      1px solid #4b4745
+圆角：      6px
+hover：     边框 #5a5552
+focus：     边框 #00d992 + 轻微 ring
+disabled：  背景 rgba(255,255,255,0.03)，文字 #5f666d
 ```
+
+禁止：
+
+- 让表单区域出现第二套完全不同的浅色 UI 语言
+- 为画布内部节点直接塞入大段 `antd` 表单 DOM
+
+### 4.5 导航 / 侧边栏 (Sidebar Nav)
+
+```text
 宽度：      220px（桌面）
-背景：      #ffffff
-右边框：    1px solid #e8e8e8
+背景：      #0c0c0e
+右边框：    1px solid #3d3a39
 
 导航项：
-  元素类型：  <a>（不用 <button>）
-  高度：      40px
-  内边距：    0 16px
-  字号/字重：  14px / 400
-  默认颜色：   #595959
+  元素类型： <a>
+  高度：     40px
+  内边距：   0 16px
+  字号：     14px / 400
+  默认颜色： #b8b3b0
 
-  hover 态：   背景 #f7f9ff
-  active 态：  背景 #f0f5ff，颜色 #146ef5，font-weight 500
-              左侧 3px 实色指示条：background #146ef5
+  hover：    背景 rgba(255,255,255,0.03)
+  active：   背景 rgba(0,217,146,0.08)
+            颜色 #00d992
+            font-weight 500
+            左侧 3px 实色指示条：#00d992
+```
 
 导航分组标签：
-  字号/字重：  11px / 600 / uppercase
-  颜色：       #8c8c8c
-  内边距：     12px 16px 4px
-```
 
-### 7.4 抽屉 (Drawer)
+- `11px / 600 / uppercase`
+- 颜色：`#8b949e`
+- 内边距：`12px 16px 4px`
 
-```
+### 4.6 抽屉 (Drawer)
+
+```text
 宽度：      360px（桌面）/ 100vw（移动端）
-位置：      fixed right: 0，覆盖主内容层
-背景：      #ffffff
-阴影：      0 4px 16px rgba(0,0,0,0.12)
-左侧圆角：  8px（顶/底左角）
+位置：      fixed right: 0
+背景：      #101010
+左边框：    1px solid #3d3a39
+阴影：      0 20px 60px rgba(0,0,0,0.52)
+左侧圆角：  8px（桌面）
 
 Drawer Header：
   高度：     56px
   内边距：   0 20px
-  标题：     16px / 600 / #1a1a1a
-  关闭按钮：  右侧，24×24px icon 按钮
+  标题：     dialog-title
+  关闭按钮： 24x24px icon button
 
 Drawer Body：
   内边距：   20px
   overflow-y: auto
 ```
 
-**模态契约（必须全部满足，缺一不可）：**
+**模态契约：**
 
-1. 关闭态：带 `hidden` attribute（等同 `display: none`，退出可见树和交互树）
-2. 打开态：`role="dialog"` + `aria-modal="true"` + `aria-labelledby` 指向标题元素 id
-3. 打开时：初始焦点移入 drawer（首选 Close 按钮或标题）
-4. 打开期间：Tab 只在 drawer 内部循环
-5. Escape 键：关闭 drawer
-6. 关闭后：焦点回到触发该 drawer 打开的元素
+1. 关闭态带 `hidden` attribute。
+2. 打开态必须具备 `role="dialog"`、`aria-modal="true"`、`aria-labelledby`。
+3. 打开时初始焦点移入 Drawer。
+4. 打开期间 Tab 只在 Drawer 内循环。
+5. `Escape` 关闭。
+6. 关闭后焦点回到触发源。
 
-### 7.5 Inspector 面板
+### 4.7 Inspector 面板
 
-```
-宽度：      280px（编排页右侧固定）
-背景：      #ffffff
-左边框：    1px solid #e8e8e8
+```text
+宽度：      280px
+背景：      #101010
+左边框：    1px solid #3d3a39
 
 Inspector Header：
   高度：     48px
   内边距：   0 16px
-  标题：     14px / 600 / #1a1a1a
+  标题：     section-title
 
 Section Header：
   高度：     32px
-  字号：     12px / 600 / uppercase / letter-spacing: 0.5px
-  颜色：     #8c8c8c
+  字号：     12px / 600 / uppercase
+  颜色：     #8b949e
   内边距：   0 16px
 
 Field Row：
   高度：     28px（单行值）
-  label：   12px / 400 / #8c8c8c
-  value：   14px / 400 / #1a1a1a
+  label：    12px / 400 / #8b949e
+  value：    14px / 400 / #f2f2f2
 ```
 
 **Inspector 规则：**
-- 非模态，不阻断画布操作
-- 选中节点 → inspector 内容更新为该节点
-- 取消选中 → inspector 收起或显示默认占位说明
-- 不使用 Drawer 的容器结构或动画方式
 
-### 7.6 Badge / Status Indicator
+- 非模态，不阻断画布操作。
+- 选中节点后原地更新内容，不使用 Drawer 的容器逻辑和进出动画。
+- 取消选中后收起或回到默认占位态。
+
+### 4.8 Badge / Status Indicator
 
 **状态点（dot）：**
-```
-尺寸：   6×6px，圆形
-颜色：   按状态色映射表（见 § 2.2）
+
+```text
+尺寸：   6x6px
+形状：   圆形
 用途：   列表行左侧状态指示
+颜色：   严格引用状态变量
 ```
 
-**状态 Badge（pill）：**
+**状态 Badge：**
 
-| 状态 | 背景 | 文字颜色 |
+| 状态 | 背景 | 文字 |
 |---|---|---|
-| running | `rgba(20,110,245,0.1)` | `#146ef5` |
-| waiting | `rgba(255,149,0,0.1)` | `#cc7700` |
-| failed | `rgba(238,29,54,0.1)` | `#ee1d36` |
-| success / healthy | `rgba(0,215,34,0.1)` | `#009918` |
-| draft | `rgba(171,171,171,0.15)` | `#666666` |
-| published | `rgba(20,110,245,0.1)` | `#146ef5` |
+| running | `rgba(0,217,146,0.14)` | `#2fd6a1` |
+| waiting | `rgba(255,186,0,0.14)` | `#ffcf5c` |
+| failed | `rgba(251,86,91,0.14)` | `#ff9ca0` |
+| success / healthy | `rgba(25,179,107,0.14)` | `#5cd49a` |
+| draft | `rgba(107,114,128,0.18)` | `#c2c8d0` |
+| published | `rgba(0,217,146,0.08)` | `#2fd6a1` |
 
-```
-Badge 规格：高度 18px，内边距 0 6px，字号 12px/400，圆角 4px
+```text
+规格：高度 18px，内边距 0 6px，字号 12px / 400，圆角 4px
 ```
 
-**类型标签 badge（kind badge）：** 固定中性样式，不区分种类颜色
+**类型标签 Badge：**
 
-```
-背景：   #f0f0f0
-文字：   #595959 / 12px / 400
+```text
+背景：   rgba(255,255,255,0.05)
+文字：   #b8b3b0
 圆角：   4px
+字号：   12px / 400
 ```
+
+类型标签始终使用中性样式，不区分种类颜色。
 
 ---
 
-## 8. Editor UI Layer 子规范
+## 5. 布局原则
 
-Editor UI 比 Shell Layer **更高密度、更少装饰**，但共享同一套 token。不允许引入与 Shell 完全不同的视觉语言。
+### 5.1 间距系统
 
-**Shell vs Editor 密度对比：**
+基础单位：`4px`
+
+| 名称 | 值 | 典型用途 |
+|---|---|---|
+| `space-xs` | 4px | 紧凑元素间距、badge 内边距 |
+| `space-sm` | 8px | 同组控件间距 |
+| `space-md` | 12px | 行内分组、字段间距 |
+| `space-base` | 16px | 卡片内容区内边距 |
+| `space-lg` | 20px | 卡片 header、Drawer 内边距 |
+| `space-xl` | 24px | 区块间距 |
+| `space-2xl` | 32px | 页面 section 间距 |
+| `space-3xl` | 40px | 大块分隔、空状态缓冲 |
+
+### 5.2 容器与网格
+
+- 非画布页面内容宽度建议控制在 `1200px - 1280px`。
+- 典型工作区结构：
+  - 左侧导航 `220px`
+  - 中央主内容自适应
+  - 编排页右侧 `Inspector 280px`
+- 一个页面只回答一个任务域问题；主块负责回答核心问题，辅助块只补充上下文。
+- 标准页优先纵向分块；编排页优先横向结构。
+
+### 5.3 圆角与边框
+
+只允许三档圆角：
+
+| 档位 | 值 | 适用场景 |
+|---|---|---|
+| `radius-sm` | 4px | badge、tag、输入框、小图标按钮 |
+| `radius-md` | 6px | 按钮、chip、NodeCard |
+| `radius-lg` | 8px | 卡片、面板容器、Drawer 内区域 |
+
+边框规则：
+
+- 常规边框：`1px solid var(--border-default)`
+- 强调边框：`1px solid var(--border-strong)`
+- 选中 / 状态边框：允许 `2px`
+- 禁止把 `2px+` 边框当纯装饰边框大面积滥用
+
+### 5.4 留白哲学
+
+- 页面级留白用于区分任务块，不用于制造品牌感。
+- Shell 内容比营销站更紧凑，Editor 比 Shell 更紧凑。
+- 卡片之间的分离优先靠边框和结构线，而不是巨量空白。
+
+---
+
+## 6. 深度与高程
+
+### 6.1 阴影分层
+
+| 档位 | 值 | 用途 |
+|---|---|---|
+| `shadow-card` | `0 8px 24px rgba(0,0,0,0.28)` | 标准卡片、面板轻抬升 |
+| `shadow-float` | `0 20px 60px rgba(0,0,0,0.52), inset 0 0 0 1px rgba(148,163,184,0.08)` | Drawer、弹出面板、浮层 |
+
+### 6.2 高程哲学
+
+| 层级 | 处理方式 | 用途 |
+|---|---|---|
+| Level 0 | 仅背景，无边框 | 页面底层 |
+| Level 1 | `1px border` + 无或极轻阴影 | 常规容器 |
+| Level 2 | 更强边框 / hover 反馈 | hover 卡片、激活导航 |
+| Level 3 | `2px` 状态边框 + 局部 glow | 运行中节点、失败节点、选中对象 |
+| Level 4 | `shadow-float` | Drawer、菜单、Popover |
+
+原则：
+
+- 深度优先通过边框、色差和局部 glow 体现，不依赖重阴影。
+- 翡翠 glow 只用于高信号元素：运行中节点、关键 CTA、活动连线、少量品牌锚点。
+- 禁止对整个页面背景、整块面板大面积加发光或彩色雾化。
+
+---
+
+## 7. 应做与不应做
+
+### 7.1 应做
+
+- 使用 `#050507` + `#101010` 的双色深色系统。
+- 用亮翡翠绿表达“已通电 / 正在运行 / 当前激活”。
+- 保持 `4 / 6 / 8px` 圆角纪律，不扩散出第四档。
+- 让状态色只表达状态，不表达类型。
+- 画布外优先复用 `Ant Design`，画布内优先使用 `xyflow + Editor UI` 自封装。
+- 让标题、状态、操作关系先清楚，再考虑视觉抛光。
+- 让代码、路径、运行日志等工程信息使用统一等宽字体和深色代码底。
+
+### 7.2 不应做
+
+- 不要把浅色表面重新引回主工作区。
+- 不要把翡翠绿当作普通装饰色到处铺底。
+- 不要使用 `16px+` 大圆角、玻璃态、营销页渐变背景。
+- 不要让同一类对象出现不同详情容器。
+- 不要把 `selected` 当成运行状态。
+- 不要在未实现入口上保留主按钮样式。
+- 不要在默认产品 UI 中出现 prompt-like、instruction-like、内部流程文案。
+- 不要在节点主体里直接堆大段 `Ant Design` 表单和布局 DOM。
+
+---
+
+## 8. 响应式行为
+
+### 8.1 断点
+
+| 断点 | 范围 | 说明 |
+|---|---|---|
+| desktop-wide | `>= 1280px` | 标准工作台 / 编排主体验 |
+| desktop-narrow | `1024px - 1279px` | 收紧间距，减少双栏并列数量 |
+| tablet | `768px - 1023px` | 侧栏和辅助信息逐步折叠 |
+| mobile | `<= 767px` | 主内容单列，画布降级 |
+
+### 8.2 390px 首屏要求
+
+首屏折叠线以上必须可见：
+
+1. 当前页标题
+2. 应用状态 badge
+3. 当前任务域的最小可行动作（不超过 2 个）
+
+禁止首屏被以下内容占满：
+
+- 完整 sidebar
+- 大段说明文案
+- 统计卡片堆叠超过 3 行
+
+### 8.3 折叠策略
+
+- 移动端 `sidebar` 使用 `order: 2`，主内容 `order: 1`。
+- Drawer 全宽：`width: 100%; max-width: 100vw`。
+- 主卡片单列堆叠。
+- 导航触达不依赖 hover，路径不超过两次点击。
+
+### 8.4 小屏编排降级
+
+`max-width: 768px` 下：
+
+- 隐藏桌面画布容器。
+- 展示编排摘要块：节点数、最近修改时间、当前 flow 状态。
+- 固定提示文案：`画布编排请在桌面端操作`。
+
+禁止：
+
+- 仅靠缩小字体把桌面画布硬塞进手机宽度
+- 保留必须横向滚动才能使用的半成品画布
+
+### 8.5 触摸目标
+
+- 所有主要点击目标最小 `44x44px`
+- 图标按钮不能只依赖视觉尺寸小于 `32px`
+
+---
+
+## 9. Editor UI Layer 子规范
+
+`Editor UI Layer` 是 1Flowse 的项目特性，不是普通主题换肤。它建立在 `xyflow` 之上，负责节点、连线、端口、工具栏、局部菜单和 Inspector 周边体验；它必须比 Shell 更高密度、更少装饰，但仍然属于同一产品系统。
+
+### 9.1 实现边界
+
+- 画布基于 `xyflow` 构建，用于节点、连线、viewport、handle 与交互编排。
+- Editor UI 只使用现有的 `CSS Modules + CSS Variables`。
+- 不引入新的主样式框架，不引入新的主组件库。
+- 不把 `Ant Design` 直接大量铺进 `NodeCard` 主体。
+- 输入框、选择器、弹窗等复杂交互允许在自有封装内部适度复用 `Ant Design`。
+
+### 9.2 第一批最小组件
+
+- `EditorSurface`
+- `EditorToolbar`
+- `EditorIconButton`
+- `EditorPanelSection`
+- `EditorBadge`
+- `NodeCard`
+- `NodePort`
+- `InlineField`
+- `EditorMenu`
+- `EditorPopover`
+
+### 9.3 Shell 与 Editor 密度对比
 
 | 维度 | Shell Layer | Editor UI Layer |
 |---|---|---|
-| 卡片内边距 | 16-20px | 8-12px |
-| 列表行高 | 40px | 28-32px |
-| 正文字号 | 14px | 可用 13px（节点内紧凑场景） |
-| 装饰线 / 背景色 | 低 | 更低，只留必要结构线 |
-| 状态表达强度 | 标准 | 更强（节点状态必须清晰可辨） |
+| 卡片内边距 | 16px - 20px | 8px - 12px |
+| 列表 / 行高 | 40px | 28px - 32px |
+| 默认字号 | 14px | 13px - 14px |
+| 装饰强度 | 低 | 更低，只留结构线与状态线 |
+| 状态表达 | 标准 | 更强，必须一眼可辨 |
 
-**NodeCard 规格：**
+### 9.4 NodeCard 规格
 
-```
-最小尺寸：  160×56px
-背景：      #ffffff
-边框：      1px solid #e8e8e8（默认）
-            2px solid var(--status-running) （运行中）
-            2px solid var(--status-failed)  （失败）
+```text
+最小尺寸：  160x56px
+背景：      #101010
+边框：      1px solid #3d3a39（默认）
+hover：     边框提升到 #4b4745
 圆角：      6px
 内边距：    8px 12px
 
-选中态：
-  outline: 2px solid #146ef5
-  box-shadow: 0 0 0 3px rgba(20,110,245,0.15)
+running：
+  2px solid var(--status-running)
+  box-shadow: 0 0 0 1px rgba(0,217,146,0.22), 0 0 16px rgba(0,217,146,0.18)
 
-类型 badge（左上角）： kind badge 规格（中性，见 § 7.6）
-状态 badge（右上角）： status badge 规格（见 § 7.6）
+failed：
+  2px solid var(--status-failed)
+
+selected：
+  outline: 2px solid var(--status-selected)
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.22)
 ```
 
-**Editor 状态共享规则：**
-- Shell 列表状态点、NodeCard 状态 badge、Inspector 状态字段 → 三处颜色必须引用同一 CSS 变量，不允许各自硬编码
+补充规则：
+
+- 左上角类型 badge 只用中性样式。
+- 右上角状态 badge 严格引用状态变量。
+- 节点内部字段优先紧凑排布，不出现 Shell 级大表单布局。
+
+### 9.5 NodePort 与连线
+
+```text
+NodePort：
+  尺寸：      10x10px
+  背景：      #050507
+  边框：      2px solid #4b4745
+  hover：     边框切到 var(--status-running)
+  connectable：可加轻微翡翠 glow
+  invalid：   使用 var(--status-failed)
+
+Edge：
+  默认描边：  #4b4745
+  选中描边：  var(--status-selected)
+  运行态：    允许使用 var(--status-running) + 轻微动画
+```
+
+### 9.6 Editor 共享规则
+
+- Shell 列表状态点、NodeCard 状态 badge、Inspector 状态字段必须引用同一 CSS 变量。
+- `selected` 只用 outline 和外圈 glow，不用整块彩色底。
+- 画布背景网格、辅助线、连接高亮都要服从同一深色 token 体系，不允许出现浅色默认主题残留。
 
 ---
 
-# Part 2 · 工作区边界与交互规则
+## 10. 工作区边界与交互规则
 
-## 1. 壳层与编排层关系
+这些规则保留在 `DESIGN.md` 中，是因为它们直接决定 UI 的结构、视觉分工和交互一致性，不属于可随意替换的业务实现细节。
 
-### 1.1 同一产品系统，两种表达层
+### 10.1 同一产品系统，两种表达层
 
-- `Shell Layer`：面向控制台壳层（概览、导航、列表、表单、日志、API 文档）
-- `Editor UI Layer`：面向画布（节点、连线、端口、工具栏、Inspector）
-- **两层共享同一 token 系统，不允许各自发展成不同视觉语言**
+- `Shell Layer`：概览、导航、列表、表单、日志、API、监控。
+- `Editor UI Layer`：节点、连线、工具栏、端口、Inspector、局部菜单。
+- 两层共享同一套 token、排版、圆角、边框逻辑和状态语义。
+- 默认实现基线：
+  - 画布外：`Ant Design`
+  - 画布内：`xyflow + Editor UI` 自封装
 
-### 1.2 必须共享的基线
+### 10.2 应用概览页边界
 
-- 文字层级、圆角尺度、边框逻辑、阴影层级保持一致
-- 运行状态语义必须在壳层和编排层之间相互对应
-- `selected` 不是运行状态，不得占用语义色
-
----
-
-## 2. 应用工作区边界
-
-### 2.1 应用概览页（根路由）
-
-**允许出现的内容（仅此，不扩展）：**
+**允许出现的内容：**
 
 | 内容 | 形式 |
 |---|---|
-| 应用名称、图标、简介、标签 | 文字 + 图标 + kind badge（中性） |
-| 当前发布状态 | `draft` / `published` 状态 badge |
+| 应用名称、图标、简介、标签 | 文字 + 图标 + 中性 kind badge |
+| 当前发布状态 | `draft / published` badge |
 | 最近运行摘要 | 最多 3 行，行点击打开 Drawer |
-| 单一主入口 | `进入编排`（唯一 primary 按钮） |
-| 应用操作区 | 复制、删除、设置（放头部，非正文区） |
+| 单一主入口 | `进入编排` |
+| 应用操作区 | 复制、删除、设置 |
 
-**禁止出现（无论任何理由）：**
+**禁止出现：**
+
 - 完整 Editor Canvas
 - 完整发布配置表单
 - API 文档正文
 - 调用日志完整列表
-- 设计说明 / 注释文案 / 规则解释文字
+- 规则解释、内部说明、注释文案
 
-### 2.2 应用内四个任务域（顺序固定）
+### 10.3 应用内任务域
 
-```
-1. 编排       → 如何编辑 flow、查看节点、准备发布
-2. 应用 API   → 调用方如何接入当前发布契约
-3. 调用日志   → 最近运行发生了什么，哪一条需要排查
-4. 监控报表   → runtime / state / plugin 是否健康
-```
+应用内四个任务域顺序固定：
 
-- 任何单页只回答**一个**任务域的问题
-- `应用概览` 不作为导航项，它是应用根路由的默认落点
+1. `编排`
+2. `应用 API`
+3. `调用日志`
+4. `监控报表`
 
-### 2.3 页面组合 Recipe 最小集
+规则：
 
-以下 5 个页面只允许按对应 recipe 组合；**主块负责回答页面核心问题，辅助块只补充上下文，不得反客为主**。
+- 任一单页只回答一个任务域的问题。
+- `应用概览` 是根路由默认落点，不作为侧栏独立导航项。
+
+### 10.4 页面组合 Recipe 最小集
 
 | 页面 | 主块 | 辅助块 |
 |---|---|---|
-| `overview` | 应用头信息 + 发布状态 + 最近运行摘要 + 单一主入口 `进入编排` | 应用操作区、标签、最近活动时间 |
+| `overview` | 应用头信息 + 发布状态 + 最近运行摘要 + 单一主入口 | 应用操作区、标签、最近活动时间 |
 | `orchestration` | 画布 stage + Inspector + 当前 flow 状态 / 发布准备条 | 节点列表、版本信息、移动端摘要块 |
 | `api` | 当前发布契约摘要 + 接入方式 / 认证说明 + 请求 / 响应结构 | 版本信息、示例片段、变更提示 |
-| `logs` | 筛选区 + 运行列表 + Run Drawer | 时间范围、聚合计数、导出入口（仅在有真实结果时） |
+| `logs` | 筛选区 + 运行列表 + Run Drawer | 时间范围、聚合计数、导出入口 |
 | `monitoring` | 健康摘要 + 关键指标卡 / 图 + 异常热点列表 | 时间范围切换、阈值说明、刷新时间 |
 
----
+主块负责回答页面核心问题，辅助块不得反客为主。
 
-## 3. L1 详情规则
+### 10.5 L1 详情规则
 
-工作区只允许两种 L1 详情模型，**禁止新增第三种**：
+工作区只允许两种 L1 详情模型：
 
 | 模型 | 触发上下文 | 触发动作 | 特征 |
 |---|---|---|---|
-| **Drawer** | Shell 列表行（run row、日志行） | 点击行 | 模态，带焦点约束，关闭后焦点回退 |
-| **Inspector** | Canvas 对象（节点、连线） | 点击节点 | 非模态，原地更新，保留画布上下文 |
+| `Drawer` | Shell 列表行、日志行、run row | 点击行 | 模态，带焦点约束，关闭后焦点回退 |
+| `Inspector` | Canvas 对象（节点、连线） | 点击节点 / 连线 | 非模态，原地更新，保留画布上下文 |
 
-**分界依据是"用户当前所在的交互层"，不是"内容是什么"：**
-- Shell 层 → Drawer
-- Canvas 层 → Inspector
+分界依据是用户当前所在交互层，而不是内容类型：
 
-**禁止：**
+- Shell 层 -> Drawer
+- Canvas 层 -> Inspector
+
+禁止：
+
 - 同类对象有时 Drawer、有时 Modal、有时跳页
-- 节点详情用 Drawer 容器
+- 节点详情用 Drawer
 - 日志行详情塞进 Inspector
-- 新增第三种 L1 模型（需要明确设计评审批准）
+- 新增第三种 L1 模型
 
----
+### 10.6 状态语义映射
 
-## 4. 状态语义映射
-
-状态色**只表达系统运行真相**，不表达类型，不表达用户选中态：
-
-| 语义 | CSS 变量 | 行为规则 |
+| 语义 | CSS 变量 | 规则 |
 |---|---|---|
-| `running` | `--status-running` | 系统正在执行；唯一使用主色的语义场景 |
-| `waiting` | `--status-waiting` | 等待外部输入 / 排队中 |
-| `failed` | `--status-failed` | 阻塞、失败、需要排查 |
-| `success` / `healthy` | `--status-success` | 执行成功 / 正常运行 |
-| `draft` | `--status-draft` | 尚未发布的变更 |
+| `running` | `--status-running` | 系统正在执行，唯一最高信号 |
+| `waiting` | `--status-waiting` | 等待外部输入 / 队列 / callback |
+| `failed` | `--status-failed` | 失败、阻塞、需排查 |
+| `success` / `healthy` | `--status-success` | 成功或健康 |
+| `draft` | `--status-draft` | 尚未发布 |
 | `selected` | `--status-selected` | 用户当前选中态 |
 
-**补充规则：**
-- `selected` 只用 outline（`2px solid var(--status-selected)` + `box-shadow: 0 0 0 3px rgba(59,137,255,0.2)`），不用彩色背景填充
-- 同一状态在 run list 状态点、NodeCard badge、Inspector 状态字段三处颜色一致，引用同一变量
-- 类型标签不使用任何状态色
+补充规则：
 
----
+- `selected` 只用 outline：`2px solid var(--status-selected)` + 外圈 glow。
+- 类型标签不使用任何状态色。
+- 同一状态在 run list、NodeCard、Inspector 三处表达必须一致。
+- `published` 只在发布上下文中出现，不进入运行态列表或节点运行态系统。
 
-## 5. 交互伪装禁令
+### 10.7 交互伪装禁令
 
-### 5.1 允许的真实按钮
+按钮必须产生当前上下文可验证的结果，例如：
 
-按钮（`<button>`）必须产生当前上下文可验证的结果：
 - 视图切换
 - 打开 / 关闭 Drawer
 - 切换节点聚焦
 - 进入编排
-- 发布 / 保存（有真实后端行为时）
-
-### 5.2 禁止的 no-op 按钮
+- 发布 / 保存
 
 以下情况禁止使用按钮样式：
-- 只是说明性的标题
-- 只是示意性的工具条
-- 还没有实现结果的入口
-- 只是为了"让页面看起来丰富"
 
-**必须降级为：**
-- `<a href="#">`（导航 / 链接语义）
-- `<span class="caption">` / 静态文本
+- 只是说明性标题
+- 只是示意性工具条
+- 还没有实现结果的入口
+- 只是为了让页面看起来更丰富
+
+必须降级为：
+
+- `<a>`
+- `<span class="caption">`
 - `<span class="badge">`
 
-### 5.3 导航语义
+导航项使用 `<a>`，不使用 `<button>`。
 
-- 导航项使用 `<a>` 元素，不使用 `<button>`
-- Demo 未实现的入口加 `data-demo="pending"` 属性，视觉完整但不保留 primary 样式
+### 10.8 UI 文案禁令
 
-### 5.4 UI 文案禁令
+默认产品 UI 文案只允许表达：
 
-默认产品 UI 文案**禁止出现**任何 prompt-like、command-like、internal-instruction-like 表达。
-
-UI 文案**只允许表达**：
 - 用户任务
 - 业务对象
 - 系统状态
 - 可执行结果
 
-默认产品 UI 文案**禁止直接出现**：
+默认产品 UI 中禁止直接出现：
+
 - 提示词、命令、system / developer instruction
 - 内部角色名、工具名、评审流转词
-- 面向 AI 或开发者的操作提示
 - 规则解释、实现备注、占位式指挥句
 
-**禁止示例：**
-- `按以下规则执行`
-- `请先阅读 spec 再继续`
-- `如果你是 Codex，请使用默认 recipe`
-- `等待 planner / QA 批准后操作`
+### 10.9 移动端降级规则
 
-如内容是给 AI、开发者或评审者看的，必须留在设计文档、注释、日志或开发工具视图，不得进入默认产品 UI。
+- 首屏必须可见：状态 badge、当前页标题、当前域最小行动作。
+- `max-width: 768px` 下隐藏桌面画布，显示编排摘要块。
+- Drawer 全宽。
+- 主卡片单列。
+- 触摸目标最小 `44x44px`。
 
----
+### 10.10 执行优先级
 
-## 6. 移动端降级规则
+前端改动涉及工作区时，按以下顺序判断：
 
-### 6.1 390px 首屏要求
+1. 任务域边界是否正确
+2. L1 详情模型是否正确分配
+3. 状态语义是否一致
+4. 最后才是 token 和视觉抛光
 
-首屏折叠线以上**必须可见**：
-1. 应用状态 badge
-2. 当前页标题
-3. 主入口 / 当前域最小可行动作（≤ 2 个）
-
-实现方式：`sidebar` 在移动端使用 CSS `order: 2`（排到主内容之后），主内容 `order: 1`。
-
-**禁止首屏被以下内容占用：**
-- 完整 sidebar / 导航区
-- 统计卡片堆叠超过 3 行
-- 设计说明文案 / 注释
-
-### 6.2 小屏编排降级
-
-`max-width: 768px` 断点下：
-
-- **隐藏** Canvas 容器（`display: none`）
-- **显示** 编排摘要块：节点数 + 最近修改时间 + 提示文案
-- 提示文案：`画布编排请在桌面端操作`（caption 规格，非弹窗）
-
-**禁止：**
-- 保留必须横向拖动才能查看的半成品画布
-- 仅缩小字体 / 压缩间距把桌面版硬塞进 390px
-
-### 6.3 其他移动端规则
-
-- Drawer 全宽（`width: 100%; max-width: 100vw`）
-- 主卡片单列堆叠（`width: 100%`）
-- 触摸目标最小 `44×44px`
-- 导航触达不依赖 hover，路径不超过 2 次点击
+前 3 步未收敛前，禁止把主要时间花在视觉润色上。
 
 ---
 
-## 7. 执行优先级顺序
+## 11. 智能体提示指南
 
-前端改动涉及工作区时，**按以下顺序判断，不允许跳步**：
+### 11.1 实现基线
 
-1. **任务域边界**：确认改动属于哪个任务域，是否越界
-2. **L1 详情规则**：确认 Drawer / Inspector 是否正确分配
-3. **状态语义**：确认状态色、status badge 是否一致引用变量
-4. **Token / 视觉**：最后才调整颜色、圆角、阴影等 token
+- 默认前端基线：`React + Vite + Ant Design + CSS Modules + CSS Variables + Zustand + xyflow`
+- 不引入 `Tailwind CSS`
+- 不引入新的主样式框架
+- 不引入新的主组件库
 
-**前 3 步未收敛时，禁止把时间花在抛光视觉上。**
+### 11.2 实现优先级
+
+当 AI 或工程实现者要改前端时，先回答这 5 个问题：
+
+1. 当前改动属于哪个任务域？
+2. 当前区域属于 `Shell Layer` 还是 `Editor UI Layer`？
+3. 详情应进入 `Drawer` 还是 `Inspector`？
+4. 当前颜色表达的是运行态、发布态，还是选中态？
+5. 是否应该优先复用现有 `Ant Design` 或 `Editor UI` 组件，而不是新增自由样式？
+
+### 11.3 快速颜色参考
+
+| 角色 | 值 |
+|---|---|
+| 页面背景 | `#050507` |
+| 内容表面 | `#101010` |
+| 主强调色 | `#00d992` |
+| 运行中 | `#00d992` |
+| 等待中 | `#ffba00` |
+| 失败 | `#fb565b` |
+| 成功 | `#19b36b` |
+| 选中 | `#3b82f6` |
+| 默认边框 | `#3d3a39` |
+| 主文本 | `#f2f2f2` |
+
+### 11.4 默认落地策略
+
+- 画布外优先用 `Ant Design`，再按本规范校正 token 和层级。
+- 画布内优先用 `xyflow + Editor UI` 封装，不直接把 Shell 组件生搬进节点主体。
+- 如设计灵感与本规范冲突，以任务域边界、L1 模型和状态语义为准，而不是以外部参考图为准。

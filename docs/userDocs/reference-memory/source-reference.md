@@ -7,6 +7,11 @@
 - `../xyflow`
   - 可作为流程编排、节点画布、交互组织方式的源码参考。
 
+## 项目内参考文档
+
+- `docs/superpowers/specs/1flowse/2026-04-10-p1-architecture.md`
+  - 可作为前端技术边界参考，特别是 `Ant Design + xyflow + Editor UI` 的分层约束。
+
 ## 使用说明
 
 - 这里只记录“参考什么”，不记录结论本身。
