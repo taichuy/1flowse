@@ -5,7 +5,7 @@ export interface HealthResponse {
 }
 
 export async function fetchApiHealth(
-  baseUrl = 'http://127.0.0.1:3000'
+  baseUrl = 'http://127.0.0.1:7800'
 ): Promise<HealthResponse> {
   const response = await fetch(`${baseUrl}/health`);
 

@@ -2,11 +2,11 @@
 
 ## 本项目接口查看
 
-- `http://127.0.0.1:3000/openapi.json`
+- `http://127.0.0.1:7800/openapi.json`
   - 本项目 OpenAPI JSON。
-- `http://127.0.0.1:3000/docs`
+- `http://127.0.0.1:7800/docs`
   - 本项目 API 文档查看入口。
-- `http://127.0.0.1:3000/api/console/health`
+- `http://127.0.0.1:7800/api/console/health`
   - 控制面健康检查入口。
 
 ## 使用说明

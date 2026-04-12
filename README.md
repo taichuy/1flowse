@@ -10,6 +10,32 @@
 
 ## Bootstrap Quick Start
 
+### Unified Dev Script
+
+```bash
+node scripts/node/dev-up.js
+```
+
+常用命令：
+
+```bash
+node scripts/node/dev-up.js
+node scripts/node/dev-up.js --skip-docker
+node scripts/node/dev-up.js restart --frontend-only
+node scripts/node/dev-up.js restart --backend-only
+node scripts/node/dev-up.js status
+node scripts/node/dev-up.js stop
+```
+
+说明：
+
+- 默认全量管理前端、`api-server`、`plugin-runner`，并在全量动作下管理 `docker/docker-compose.middleware.yaml`
+- `--skip-docker` 只跳过 Docker 中间件，不影响前后端本地进程
+- `--frontend-only` 只管理前端
+- `--backend-only` 只管理 `api-server` 与 `plugin-runner`
+- 日志写入 `tmp/logs/`
+- pid 记录写入 `tmp/dev-up/pids/`
+
 ### Frontend
 
 ```bash
@@ -18,12 +44,7 @@ pnpm install
 pnpm dev
 ```
 
-如果本机 `5173` 已被占用，可临时改用：
-
-```bash
-cd web
-pnpm dev -- --port 5174
-```
+前端默认地址固定为 `http://127.0.0.1:3100`。
 
 ### Backend
 
@@ -32,6 +53,11 @@ cd api
 cargo run -p api-server
 cargo run -p plugin-runner
 ```
+
+后端默认地址：
+
+- `api-server`: `http://127.0.0.1:7800`
+- `plugin-runner`: `http://127.0.0.1:7801`
 
 ### Middleware
 
@@ -61,11 +87,9 @@ cargo test
 
 ## Local URLs
 
-- Web: `http://127.0.0.1:5173`
-- API Health: `http://127.0.0.1:3000/health`
-- Console Health: `http://127.0.0.1:3000/api/console/health`
-- OpenAPI JSON: `http://127.0.0.1:3000/openapi.json`
-- API Docs: `http://127.0.0.1:3000/docs`
-- Plugin Runner Health: `http://127.0.0.1:3001/health`
-
-本机如遇 `5173` 端口冲突，可改用 `http://127.0.0.1:5174` 进行前端联调。
+- Web: `http://127.0.0.1:3100`
+- API Health: `http://127.0.0.1:7800/health`
+- Console Health: `http://127.0.0.1:7800/api/console/health`
+- OpenAPI JSON: `http://127.0.0.1:7800/openapi.json`
+- API Docs: `http://127.0.0.1:7800/docs`
+- Plugin Runner Health: `http://127.0.0.1:7801/health`

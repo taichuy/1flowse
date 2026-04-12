@@ -2,6 +2,14 @@
 
 ## 常见脚本与命令入口
 
+- `node scripts/node/dev-up.js`
+  - 统一启动前端、后端与默认中间件入口。
+- `node scripts/node/dev-up.js --skip-docker`
+  - 跳过 Docker 中间件，仅启动本地前后端进程。
+- `node scripts/node/dev-up.js restart --frontend-only`
+  - 仅重启前端。
+- `node scripts/node/dev-up.js restart --backend-only`
+  - 仅重启后端。
 - `cd web && pnpm dev`
   - 前端本地开发入口。
 - `cd web && pnpm lint && pnpm test && pnpm build`

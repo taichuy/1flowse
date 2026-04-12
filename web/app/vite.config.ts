@@ -5,6 +5,11 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    host: '127.0.0.1',
+    port: 3100,
+    strictPort: true
+  },
   resolve: {
     alias: {
       '@1flowse/shared-types': fileURLToPath(
