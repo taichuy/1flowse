@@ -1,5 +1,6 @@
 ---
 memory_type: feedback
+feedback_category: interaction
 topic: 用户明确说明后无需重复确认
 summary: 当用户明确要求继续或无需再询问时，同一串联任务应连续执行，不要在中间步骤重复确认；高风险操作仍按权限流程处理。
 keywords:
@@ -37,10 +38,6 @@ scope:
 
 - 用户已经明确给出处理顺序。
 - 同一问题链路下需要连续执行多个修复或验证步骤。
-
-## 分类
-
-- 个人偏好
 
 ## 备注
 

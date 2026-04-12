@@ -2,7 +2,7 @@
 
 `docs/userDocs` 是开发者私有记忆目录，用来记录 AI 与开发者之间的约定、协作边界和可复用决策。
 
-进入用户交互后，优先阅读本文件；如果记忆仍为空，再与用户沟通初始化。
+进入用户交互后，优先阅读本文件；如果记忆仍为空，与用户沟通初始化。
 
 所有日期统一使用绝对时间格式：`yyyy-mm-dd hh`。
 
@@ -35,8 +35,9 @@
 
 1. 每一条都包含：规则、原因、适用场景。
 2. 既记录纠正，也记录肯定，避免 agent 越来越保守。
-3. 明确区分个人偏好和团队协作偏好。
-4. 使用 `YAML front matter` 作为摘要层，`decision_policy` 默认使用 `direct_reference`。
+3. 按`interaction/` 和 `repository/` 两类分目录维护。
+4. 在 `YAML front matter` 中必须显式写 `feedback_category`，用于说明是哪一类纠正。
+5. 使用 `YAML front matter` 作为摘要层，`decision_policy` 默认使用 `direct_reference`。
 
 ### 项目记忆
 
@@ -88,7 +89,11 @@
 - `docs/userDocs/user-memory.md`
   - 用户记忆主文件，固定入口。
 - `docs/userDocs/feedback-memory/`
-  - 反馈记忆目录，存放可复用的反馈规则和模板。
+  - 反馈记忆根目录，存放模板与分类子目录。
+- `docs/userDocs/feedback-memory/interaction/`
+  - 用户沟通、执行流程、记忆检索等交互类纠正。
+- `docs/userDocs/feedback-memory/repository/`
+  - 仓库结构、目录管理、脚本放置、版本控制等工程类纠正。
 - `docs/userDocs/project-memory/`
   - 项目记忆目录，存放阶段事实、短期共识和模板。
 - `docs/userDocs/reference-memory/`
@@ -101,7 +106,4 @@
 ## 目录外排除项
 
 以下内容即使仍然保留在仓库中，也不再作为 `docs/userDocs` 记忆检索输入：
-
-1. `docs/userDocs/draft/`
-2. `docs/userDocs/todolist/`
-3. `docs/userDocs/` 根目录下不属于 `AGENTS.md`、`user-memory.md` 和四类记忆目录的其他文件
+1. `docs/userDocs/` 根目录下不属于 `AGENTS.md`、`user-memory.md` 和四类记忆目录的其他文件

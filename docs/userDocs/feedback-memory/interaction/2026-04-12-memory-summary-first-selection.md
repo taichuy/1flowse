@@ -1,5 +1,6 @@
 ---
 memory_type: feedback
+feedback_category: interaction
 topic: 记忆检索应优先摘要并严格控制有效记忆数量
 summary: 记忆检索先看摘要层，最多扫描 200 个文件，只选择与当前任务最相关的最多 5 条有效记忆；工具失败经验单独进入 tool-memory。
 keywords:
@@ -48,10 +49,6 @@ scope:
 - AI 需要从 `docs/userDocs` 中读取记忆参与当前任务决策。
 - AI 正在筛选本轮最相关的历史反馈、项目事实、引用入口或工具失败案例。
 - 当前操作涉及 `docker`、`pnpm`、`cargo` 等工具并出现已知失败特征时。
-
-## 分类
-
-- 团队协作偏好
 
 ## 备注
 

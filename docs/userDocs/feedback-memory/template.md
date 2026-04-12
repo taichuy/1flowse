@@ -1,5 +1,6 @@
 ---
 memory_type: feedback
+feedback_category: <interaction | repository>
 topic: <反馈主题>
 summary: <一句话说明这条反馈规则告诉 AI 什么>
 keywords:
@@ -28,8 +29,9 @@ scope:
 
 ## 适用场景
 
-## 分类
-
-- 个人偏好 / 团队协作偏好
-
 ## 备注
+
+## 摘要字段要求
+
+- `feedback_category: interaction`：用户沟通、执行流程、记忆检索等交互类纠正。
+- `feedback_category: repository`：仓库结构、目录管理、脚本放置、版本控制等工程类纠正。

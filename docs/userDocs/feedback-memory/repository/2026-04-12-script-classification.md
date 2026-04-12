@@ -1,5 +1,6 @@
 ---
 memory_type: feedback
+feedback_category: repository
 topic: 脚本必须放在对应分类目录
 summary: 新增或调整脚本入口时，必须放到对应分类目录，不要把具体脚本散落在根 scripts 目录。
 keywords:
@@ -38,10 +39,6 @@ scope:
 
 - 新增或调整本仓库脚本入口时。
 - 需要在 `scripts/node`、`scripts/shell` 等分类目录下放置脚本时。
-
-## 分类
-
-- 团队协作偏好
 
 ## 备注
 
