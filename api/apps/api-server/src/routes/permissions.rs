@@ -1,0 +1,50 @@
+use std::sync::Arc;
+
+use access_control::ensure_permission;
+use axum::{extract::State, http::HeaderMap, Json};
+use control_plane::errors::ControlPlaneError;
+use serde::Serialize;
+use utoipa::ToSchema;
+
+use crate::{
+    app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
+};
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PermissionResponse {
+    pub code: String,
+    pub resource: String,
+    pub action: String,
+    pub scope: String,
+    pub name: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/permissions",
+    responses((status = 200, body = [PermissionResponse]), (status = 403, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_permissions(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<PermissionResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_permission(&context.actor, "role_permission.view.all")
+        .map_err(ControlPlaneError::PermissionDenied)?;
+
+    let permissions = state
+        .store
+        .list_permissions()
+        .await?
+        .into_iter()
+        .map(|permission| PermissionResponse {
+            code: permission.code,
+            resource: permission.resource,
+            action: permission.action,
+            scope: permission.scope,
+            name: permission.name,
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(permissions))
+}

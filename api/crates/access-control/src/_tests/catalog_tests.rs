@@ -18,7 +18,10 @@ fn builtin_roles_lock_root_but_keep_admin_and_manager_editable() {
 
     let root = templates.iter().find(|role| role.code == "root").unwrap();
     let admin = templates.iter().find(|role| role.code == "admin").unwrap();
-    let manager = templates.iter().find(|role| role.code == "manager").unwrap();
+    let manager = templates
+        .iter()
+        .find(|role| role.code == "manager")
+        .unwrap();
 
     assert!(!root.is_editable);
     assert!(admin.is_editable);

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use domain::{
-    ActorContext, AuditLogRecord, AuthenticatorRecord, PermissionDefinition, SessionRecord,
-    TeamRecord, UserRecord,
+    ActorContext, AuditLogRecord, AuthenticatorRecord, PermissionDefinition, RoleTemplate,
+    SessionRecord, TeamRecord, UserRecord,
 };
 use uuid::Uuid;
 
@@ -15,7 +15,8 @@ pub trait SessionStore: Send + Sync {
 
 #[async_trait]
 pub trait BootstrapRepository: Send + Sync {
-    async fn upsert_authenticator(&self, authenticator: &AuthenticatorRecord) -> anyhow::Result<()>;
+    async fn upsert_authenticator(&self, authenticator: &AuthenticatorRecord)
+        -> anyhow::Result<()>;
     async fn upsert_permission_catalog(
         &self,
         permissions: &[PermissionDefinition],
@@ -36,7 +37,10 @@ pub trait BootstrapRepository: Send + Sync {
 #[async_trait]
 pub trait AuthRepository: Send + Sync {
     async fn find_authenticator(&self, name: &str) -> anyhow::Result<Option<AuthenticatorRecord>>;
-    async fn find_user_for_password_login(&self, identifier: &str) -> anyhow::Result<Option<UserRecord>>;
+    async fn find_user_for_password_login(
+        &self,
+        identifier: &str,
+    ) -> anyhow::Result<Option<UserRecord>>;
     async fn find_user_by_id(&self, user_id: Uuid) -> anyhow::Result<Option<UserRecord>>;
     async fn load_actor_context(
         &self,
@@ -52,5 +56,92 @@ pub trait AuthRepository: Send + Sync {
     ) -> anyhow::Result<i64>;
     async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> anyhow::Result<i64>;
     async fn list_permissions(&self) -> anyhow::Result<Vec<PermissionDefinition>>;
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+pub trait TeamRepository: Send + Sync {
+    async fn get_team(&self, team_id: Uuid) -> anyhow::Result<Option<TeamRecord>>;
+    async fn update_team(
+        &self,
+        actor_user_id: Uuid,
+        team_id: Uuid,
+        name: &str,
+        logo_url: Option<&str>,
+        introduction: &str,
+    ) -> anyhow::Result<TeamRecord>;
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateMemberInput {
+    pub actor_user_id: Uuid,
+    pub account: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub password_hash: String,
+    pub name: String,
+    pub nickname: String,
+    pub introduction: String,
+    pub email_login_enabled: bool,
+    pub phone_login_enabled: bool,
+}
+
+#[async_trait]
+pub trait MemberRepository: Send + Sync {
+    async fn load_actor_context_for_user(
+        &self,
+        actor_user_id: Uuid,
+    ) -> anyhow::Result<ActorContext>;
+    async fn create_member_with_default_role(
+        &self,
+        input: &CreateMemberInput,
+    ) -> anyhow::Result<UserRecord>;
+    async fn disable_member(&self, actor_user_id: Uuid, target_user_id: Uuid)
+        -> anyhow::Result<()>;
+    async fn reset_member_password(
+        &self,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+        password_hash: &str,
+    ) -> anyhow::Result<()>;
+    async fn replace_member_roles(
+        &self,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+        role_codes: &[String],
+    ) -> anyhow::Result<()>;
+    async fn list_members(&self) -> anyhow::Result<Vec<UserRecord>>;
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+pub trait RoleRepository: Send + Sync {
+    async fn load_actor_context_for_user(
+        &self,
+        actor_user_id: Uuid,
+    ) -> anyhow::Result<ActorContext>;
+    async fn list_roles(&self) -> anyhow::Result<Vec<RoleTemplate>>;
+    async fn create_team_role(
+        &self,
+        actor_user_id: Uuid,
+        code: &str,
+        name: &str,
+        introduction: &str,
+    ) -> anyhow::Result<()>;
+    async fn update_team_role(
+        &self,
+        actor_user_id: Uuid,
+        role_code: &str,
+        name: &str,
+        introduction: &str,
+    ) -> anyhow::Result<()>;
+    async fn delete_team_role(&self, actor_user_id: Uuid, role_code: &str) -> anyhow::Result<()>;
+    async fn replace_role_permissions(
+        &self,
+        actor_user_id: Uuid,
+        role_code: &str,
+        permission_codes: &[String],
+    ) -> anyhow::Result<()>;
+    async fn list_role_permissions(&self, role_code: &str) -> anyhow::Result<Vec<String>>;
     async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
 }

@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+argon2.workspace = true
 async-trait.workspace = true
 access-control = { path = "../access-control" }
 domain = { path = "../domain" }
@@ -14,3 +15,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

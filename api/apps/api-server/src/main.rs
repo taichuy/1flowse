@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use api_server::{app, init_tracing, parse_bind_addr, DEFAULT_API_SERVER_ADDR};
+use api_server::{app_from_env, init_tracing, parse_bind_addr, DEFAULT_API_SERVER_ADDR};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -13,5 +13,6 @@ async fn main() {
     );
 
     let listener = TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app()).await.unwrap();
+    let app = app_from_env().await.expect("failed to build api app");
+    axum::serve(listener, app).await.unwrap();
 }

@@ -63,16 +63,19 @@ async fn bootstrap_repository_upserts_password_local_and_root_user() {
         .unwrap();
 
     assert_eq!(root.account, "root");
-    assert!(
+    assert!(store
+        .list_permissions()
+        .await
+        .unwrap()
+        .iter()
+        .any(|permission| permission.code == "team.configure.all"));
+    assert_eq!(
         store
-            .list_permissions()
+            .find_authenticator("password-local")
             .await
             .unwrap()
-            .iter()
-            .any(|permission| permission.code == "team.configure.all")
-    );
-    assert_eq!(
-        store.find_authenticator("password-local").await.unwrap().unwrap().name,
+            .unwrap()
+            .name,
         "password-local"
     );
 }

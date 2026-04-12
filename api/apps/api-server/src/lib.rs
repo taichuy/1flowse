@@ -1,11 +1,36 @@
-use std::net::SocketAddr;
+extern crate self as api_server;
 
-use axum::{routing::get, Json, Router};
+pub mod app_state;
+pub mod config;
+pub mod error_response;
+pub mod middleware;
+pub mod routes;
+
+use std::{net::SocketAddr, sync::Arc};
+
+use anyhow::Result;
+use argon2::{
+    password_hash::{PasswordHasher, SaltString},
+    Argon2,
+};
+use axum::{
+    routing::{get, patch, post, put},
+    Json, Router,
+};
+use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
+use rand_core::OsRng;
 use serde::Serialize;
+use storage_pg::{connect, run_migrations, PgControlPlaneStore};
+use storage_redis::RedisSessionStore;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
+
+use crate::{
+    app_state::{ApiState, SessionStoreHandle},
+    config::ApiConfig,
+};
 
 pub const DEFAULT_API_SERVER_ADDR: &str = "0.0.0.0:7800";
 
@@ -36,8 +61,45 @@ async fn console_health() -> Json<HealthResponse> {
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(health, console_health),
-    components(schemas(HealthResponse)),
+    paths(
+        health,
+        console_health,
+        routes::auth::login,
+        routes::me::get_me,
+        routes::team::get_team,
+        routes::team::patch_team,
+        routes::members::list_members,
+        routes::members::create_member,
+        routes::members::disable_member,
+        routes::members::reset_member,
+        routes::members::replace_member_roles,
+        routes::roles::list_roles,
+        routes::roles::create_role,
+        routes::roles::update_role,
+        routes::roles::delete_role,
+        routes::roles::get_role_permissions,
+        routes::roles::replace_role_permissions,
+        routes::permissions::list_permissions,
+    ),
+    components(schemas(
+        HealthResponse,
+        routes::auth::LoginBody,
+        routes::auth::LoginResponse,
+        routes::me::MeResponse,
+        routes::members::CreateMemberBody,
+        routes::members::MemberResponse,
+        routes::members::ReplaceMemberRolesBody,
+        routes::members::ResetMemberPasswordBody,
+        routes::permissions::PermissionResponse,
+        routes::roles::CreateRoleBody,
+        routes::roles::ReplaceRolePermissionsBody,
+        routes::roles::RolePermissionsResponse,
+        routes::roles::RoleResponse,
+        routes::roles::UpdateRoleBody,
+        routes::team::PatchTeamBody,
+        routes::team::TeamResponse,
+        error_response::ErrorBody,
+    )),
     info(title = "1Flowse API", version = "0.1.0")
 )]
 pub struct ApiDoc;
@@ -48,13 +110,99 @@ pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> SocketAdd
         .unwrap_or_else(|| default_addr.parse().unwrap())
 }
 
-pub fn app() -> Router {
+fn base_router() -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/api/console/health", get(console_health))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
+}
+
+pub fn app() -> Router {
+    base_router()
+}
+
+pub fn app_with_state(state: Arc<ApiState>) -> Router {
+    let console_router = Router::new()
+        .route("/api/console/auth/login", post(routes::auth::login))
+        .route("/api/console/me", get(routes::me::get_me))
+        .route(
+            "/api/console/team",
+            get(routes::team::get_team).patch(routes::team::patch_team),
+        )
+        .route(
+            "/api/console/members",
+            get(routes::members::list_members).post(routes::members::create_member),
+        )
+        .route(
+            "/api/console/members/:id/disable",
+            post(routes::members::disable_member),
+        )
+        .route(
+            "/api/console/members/:id/reset-password",
+            post(routes::members::reset_member),
+        )
+        .route(
+            "/api/console/members/:id/roles",
+            put(routes::members::replace_member_roles),
+        )
+        .route(
+            "/api/console/roles",
+            get(routes::roles::list_roles).post(routes::roles::create_role),
+        )
+        .route(
+            "/api/console/roles/:id",
+            patch(routes::roles::update_role).delete(routes::roles::delete_role),
+        )
+        .route(
+            "/api/console/roles/:id/permissions",
+            get(routes::roles::get_role_permissions).put(routes::roles::replace_role_permissions),
+        )
+        .route(
+            "/api/console/permissions",
+            get(routes::permissions::list_permissions),
+        )
+        .with_state(state);
+
+    base_router().merge(console_router)
+}
+
+pub async fn app_from_env() -> Result<Router> {
+    let config = ApiConfig::from_env()?;
+    app_from_config(&config).await
+}
+
+pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
+    let pool = connect(&config.database_url).await?;
+    run_migrations(&pool).await?;
+
+    let store = PgControlPlaneStore::new(pool);
+    let session_store = RedisSessionStore::new(&config.redis_url).await?;
+    let salt = SaltString::generate(&mut OsRng);
+    let root_password_hash = Argon2::default()
+        .hash_password(config.bootstrap_root_password.as_bytes(), &salt)
+        .map_err(|err| anyhow::anyhow!("failed to hash bootstrap root password: {err}"))?
+        .to_string();
+
+    BootstrapService::new(store.clone())
+        .run(&BootstrapConfig {
+            team_name: config.bootstrap_team_name.clone(),
+            root_account: config.bootstrap_root_account.clone(),
+            root_email: config.bootstrap_root_email.clone(),
+            root_password_hash,
+            root_name: config.bootstrap_root_name.clone(),
+            root_nickname: config.bootstrap_root_nickname.clone(),
+        })
+        .await?;
+
+    Ok(app_with_state(Arc::new(ApiState {
+        store,
+        session_store: SessionStoreHandle::Redis(session_store),
+        cookie_name: config.cookie_name.clone(),
+        session_ttl_days: config.session_ttl_days,
+        bootstrap_team_name: config.bootstrap_team_name.clone(),
+    })))
 }
 
 pub fn init_tracing() {
@@ -82,3 +230,6 @@ mod tests {
         assert_eq!(addr.to_string(), "0.0.0.0:7800");
     }
 }
+
+#[cfg(test)]
+mod _tests;
