@@ -1,20 +1,22 @@
 ---
 name: frontend-development
-description: Use when building or changing frontend pages, flows, interactions, visual structure, or component boundaries and need to keep UI logic, state, and reuse from turning brittle
+description: Use when building or changing 1Flowse frontend pages, workspace flows, interactions, visual structure, or component boundaries and need to preserve the project's page recipes, interaction contracts, and UI consistency
 ---
 
 # Frontend Development
 
 ## Overview
 
-前端最容易失控的原因，不是组件太少，而是把展示、状态、协议、路由、交互规则揉进同一个实现单元。本 Skill 用来在开发前端时控制边界、复用和交互一致性，减少“越写越难改”的页面。
+1Flowse 前端不是自由拼页，而是基于单一规则源的产品系统：`Ant Design` 壳层 + 薄 `Editor UI` + 固定工作区语法。本 Skill 用来在实现时守住页面边界、L1 详情模型、状态语义和组件职责，减少“写着写着变成另一套产品”的漂移。
 
 ## When to Use
 
-- 新增或修改页面、页面级流程、交互流
+- 新增或修改 `overview / orchestration / api / logs / monitoring` 页面
+- 改动壳层列表、抽屉、编排画布、Inspector、节点组件
+- 调整页面级流程、交互流、视觉方案
 - 评估是否拆文件、拆组件、拆 hooks
-- 页面状态开始散落，改动开始互相牵连
-- 同类区域出现不同交互规则
+- 页面状态开始散落，或同一文件同时承载展示、状态、协议、路由变化
+- 同类对象出现不同点击结果、不同状态表达或不同移动端降级
 - 需要判断该直接做、复用现有实现，还是先问人
 
 **不要用于**
@@ -24,19 +26,24 @@ description: Use when building or changing frontend pages, flows, interactions, 
 
 ## The Iron Law
 
-用户可见的交互契约要稳定；展示、状态、协议、路由四类变化原因不要塞进同一个实现单元。
+在 1Flowse 中，先守 `DESIGN.md` 的任务域边界、L1 模型和状态语义，再决定组件拆分和视觉抛光。
 
 ## Quick Reference
 
-- 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先问人
-- 开发者先作为第一体验用户走一遍，再判断实现是否顺手
-- 同类对象行为不一致：先停手，检查是不是结构问题
+- 单一事实源：`docs/userDocs/draft/DESIGN.md`
+- 灵感库如 `awesome-design-md` 只能局部借鉴，不得覆盖项目规则
+- Shell Layer 优先复用 `Ant Design`；Editor UI 只做薄封装，不另起一套视觉语言
+- 先判任务域边界，再判 L1 模型，再判状态语义，最后才是 token 和样式
 - 信息架构、层级、入口、导航问题：**REQUIRED COMPANION SKILL:** Use `frontend-logic-design`
+- 新页面、新流程、交互流、视觉方案、页面内 AI 协作层：先问人
 - 单点使用且变化原因单一：先别抽象
 - 先复用现有组件和成熟依赖，再考虑新封装
 
 ## Implementation
 
+- Single source of truth: `docs/userDocs/draft/DESIGN.md`
+- Visual baseline and layer rules: `references/visual-baseline.md`
+- Workspace recipes and interaction rules: `references/workspace-rules.md`
 - Ask-first gate: `references/communication-gate.md`
 - Before/during/after review: `references/review-checklist.md`
 - Anti-decay patterns: `references/anti-patterns.md`
@@ -45,7 +52,9 @@ description: Use when building or changing frontend pages, flows, interactions, 
 ## Common Mistakes
 
 - 为了“统一”过早抽组件或 hooks
-- 页面根组件堆满状态、请求和弹窗逻辑
+- 把外部灵感稿直接当成当前项目规范
+- 页面根组件堆满状态、请求、弹窗和协议转换逻辑
 - 把协议拼装、数据转换、渲染混写
-- 新需求顺手造出新的交互语法
+- 在 Shell / Canvas 间混用 `Drawer` 和 `Inspector`
+- 把状态色拿去表达类型、装饰或品牌
 - 把真正的信息架构问题误当成样式问题
