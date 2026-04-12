@@ -282,6 +282,17 @@ function ensureMiddlewareEnv(repoRoot) {
   }
 }
 
+function ensureRustfsVolumePermissions(repoRoot) {
+  const rustfsRootDir = path.join(repoRoot, 'docker', 'volumes', 'rustfs');
+  const rustfsDataDir = path.join(rustfsRootDir, 'data');
+  const rustfsLogsDir = path.join(rustfsRootDir, 'logs');
+
+  for (const targetDir of [rustfsRootDir, rustfsDataDir, rustfsLogsDir]) {
+    fs.mkdirSync(targetDir, { recursive: true, mode: 0o777 });
+    fs.chmodSync(targetDir, 0o777);
+  }
+}
+
 function runMiddlewareCompose(repoRoot, args, options = {}) {
   const composeCommand = resolveComposeCommand();
   const result = runCommand(
@@ -560,6 +571,8 @@ async function manageDocker(repoRoot, action) {
     return;
   }
 
+  ensureRustfsVolumePermissions(repoRoot);
+
   if (action === 'restart') {
     runMiddlewareCompose(repoRoot, ['down']);
   }
@@ -598,5 +611,6 @@ module.exports = {
   shouldManageDocker,
   selectServiceKeys,
   getServiceDefinitions,
+  ensureRustfsVolumePermissions,
   main,
 };

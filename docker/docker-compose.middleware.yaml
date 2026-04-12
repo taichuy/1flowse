@@ -54,7 +54,7 @@ services:
       - "${RUSTFS_CONSOLE_PORT:-39001}:9001"
     volumes:
       - ./volumes/rustfs/data:/data
-      - ./volumes/rustfs/logs:/app/logs
+      - ./volumes/rustfs/logs:/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health && curl -fsS http://localhost:9001/health"]
       interval: 30s

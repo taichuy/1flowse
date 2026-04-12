@@ -7,3 +7,4 @@ pnpm-debug.log*
 docs/userDocs/history/
 docs/superpowers
 uploads
+docker/volumes/

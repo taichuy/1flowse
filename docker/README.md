@@ -7,6 +7,8 @@ Copy-Item .\middleware.env.example .\middleware.env
 docker compose -f .\docker-compose.middleware.yaml up -d
 ```
 
+RustFS 依赖宿主机绑定目录 `docker/volumes/rustfs/{data,logs}` 可写。使用仓库统一入口 `node scripts/node/dev-up.js` 启动时会自动修正这些目录权限；如果手动执行 compose，请先确保这两个目录对容器进程可写。
+
 默认映射端口：
 
 - PostgreSQL: `35432`
