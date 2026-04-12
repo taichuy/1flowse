@@ -7,13 +7,13 @@ use serde_json::json;
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn auth_routes_set_cookie_and_return_csrf() {
+async fn public_auth_sign_in_sets_cookie_and_returns_wrapped_payload() {
     let app = test_app().await;
     let response = app
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/console/auth/login")
+                .uri("/api/public/auth/providers/password-local/sign-in")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -32,5 +32,6 @@ async fn auth_routes_set_cookie_and_return_csrf() {
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(payload["csrf_token"].is_string());
+    assert!(payload["data"]["csrf_token"].is_string());
+    assert!(payload["meta"].is_null());
 }

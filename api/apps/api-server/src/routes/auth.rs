@@ -1,12 +1,23 @@
 use std::sync::Arc;
 
-use axum::{extract::State, Json};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use control_plane::auth::{AuthKernel, LoginCommand, SessionIssuer};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{app_state::ApiState, error_response::ApiError};
+use crate::{app_state::ApiState, error_response::ApiError, response::ApiSuccess};
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AuthProviderResponse {
+    pub name: String,
+    pub auth_type: String,
+    pub title: String,
+}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct LoginBody {
@@ -21,16 +32,43 @@ pub struct LoginResponse {
     pub effective_display_role: String,
 }
 
+pub fn router() -> Router<Arc<ApiState>> {
+    Router::new()
+        .route("/providers", get(list_providers))
+        .route("/providers/password-local/sign-in", post(sign_in))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/public/auth/providers",
+    responses((status = 200, body = [AuthProviderResponse]), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn list_providers(
+    State(state): State<Arc<ApiState>>,
+) -> Result<Json<ApiSuccess<Vec<AuthProviderResponse>>>, ApiError> {
+    let provider = state
+        .store
+        .find_authenticator("password-local")
+        .await?
+        .map(|authenticator| AuthProviderResponse {
+            name: authenticator.name,
+            auth_type: authenticator.auth_type,
+            title: authenticator.title,
+        });
+
+    Ok(Json(ApiSuccess::new(provider.into_iter().collect())))
+}
+
 #[utoipa::path(
     post,
-    path = "/api/console/auth/login",
+    path = "/api/public/auth/providers/password-local/sign-in",
     request_body = LoginBody,
     responses((status = 200, body = LoginResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
-pub async fn login(
+pub async fn sign_in(
     State(state): State<Arc<ApiState>>,
     Json(body): Json<LoginBody>,
-) -> Result<(CookieJar, Json<LoginResponse>), ApiError> {
+) -> Result<(CookieJar, Json<ApiSuccess<LoginResponse>>), ApiError> {
     let team = state.store.upsert_team(&state.bootstrap_team_name).await?;
     let kernel = AuthKernel::new(
         state.store.clone(),
@@ -56,9 +94,9 @@ pub async fn login(
 
     Ok((
         jar,
-        Json(LoginResponse {
+        Json(ApiSuccess::new(LoginResponse {
             csrf_token: result.session.csrf_token,
             effective_display_role: result.actor.effective_display_role,
-        }),
+        })),
     ))
 }

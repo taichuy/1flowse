@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use axum::{extract::State, http::HeaderMap, Json};
+use axum::{extract::State, http::HeaderMap, routing::get, Json, Router};
 use control_plane::profile::ProfileService;
 use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::{
     app_state::ApiState, error_response::ApiError, middleware::require_session::require_session,
+    response::ApiSuccess,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -20,6 +21,10 @@ pub struct MeResponse {
     pub permissions: Vec<String>,
 }
 
+pub fn router() -> Router<Arc<ApiState>> {
+    Router::new().route("/me", get(get_me))
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/me",
@@ -28,7 +33,7 @@ pub struct MeResponse {
 pub async fn get_me(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<MeResponse>, ApiError> {
+) -> Result<Json<ApiSuccess<MeResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let profile = ProfileService::new(state.store.clone())
         .get_me(context.user.id, context.session.team_id)
@@ -36,7 +41,7 @@ pub async fn get_me(
     let mut permissions = profile.actor.permissions.into_iter().collect::<Vec<_>>();
     permissions.sort();
 
-    Ok(Json(MeResponse {
+    Ok(Json(ApiSuccess::new(MeResponse {
         id: profile.user.id.to_string(),
         account: profile.user.account,
         email: profile.user.email,
@@ -44,5 +49,5 @@ pub async fn get_me(
         name: profile.user.name,
         effective_display_role: profile.actor.effective_display_role,
         permissions,
-    }))
+    })))
 }

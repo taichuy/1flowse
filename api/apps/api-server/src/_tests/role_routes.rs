@@ -81,7 +81,7 @@ async fn role_routes_create_replace_permissions_and_protect_root() {
         .await
         .unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(payload["role_code"].as_str(), Some("qa"));
+    assert_eq!(payload["data"]["role_code"].as_str(), Some("qa"));
 
     let protect_root_response = app
         .clone()

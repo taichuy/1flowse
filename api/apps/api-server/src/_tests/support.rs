@@ -88,7 +88,7 @@ pub async fn login_and_capture_cookie(
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/console/auth/login")
+                .uri("/api/public/auth/providers/password-local/sign-in")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
@@ -112,5 +112,8 @@ pub async fn login_and_capture_cookie(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    (cookie, payload["csrf_token"].as_str().unwrap().to_string())
+    (
+        cookie,
+        payload["data"]["csrf_token"].as_str().unwrap().to_string(),
+    )
 }

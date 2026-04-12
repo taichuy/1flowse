@@ -3,7 +3,9 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    routing::{get, patch},
     Json,
+    Router,
 };
 use control_plane::role::{
     CreateRoleCommand, DeleteRoleCommand, ReplaceRolePermissionsCommand, RoleService,
@@ -16,6 +18,7 @@ use crate::{
     app_state::ApiState,
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
+    response::ApiSuccess,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -66,6 +69,16 @@ fn to_role_response(role: domain::RoleTemplate) -> RoleResponse {
     }
 }
 
+pub fn router() -> Router<Arc<ApiState>> {
+    Router::new()
+        .route("/roles", get(list_roles).post(create_role))
+        .route("/roles/:id", patch(update_role).delete(delete_role))
+        .route(
+            "/roles/:id/permissions",
+            get(get_role_permissions).put(replace_role_permissions),
+        )
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/roles",
@@ -74,15 +87,15 @@ fn to_role_response(role: domain::RoleTemplate) -> RoleResponse {
 pub async fn list_roles(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<Vec<RoleResponse>>, ApiError> {
+) -> Result<Json<ApiSuccess<Vec<RoleResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let roles = RoleService::new(state.store.clone())
         .list_roles(context.user.id)
         .await?;
 
-    Ok(Json(
+    Ok(Json(ApiSuccess::new(
         roles.into_iter().map(to_role_response).collect::<Vec<_>>(),
-    ))
+    )))
 }
 
 #[utoipa::path(
@@ -95,7 +108,7 @@ pub async fn create_role(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Json(body): Json<CreateRoleBody>,
-) -> Result<(StatusCode, Json<RoleResponse>), ApiError> {
+) -> Result<(StatusCode, Json<ApiSuccess<RoleResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
@@ -110,14 +123,14 @@ pub async fn create_role(
 
     Ok((
         StatusCode::CREATED,
-        Json(RoleResponse {
+        Json(ApiSuccess::new(RoleResponse {
             code: body.code,
             name: body.name,
             scope_kind: "team".to_string(),
             is_builtin: false,
             is_editable: true,
             permission_codes: Vec::new(),
-        }),
+        })),
     ))
 }
 
@@ -183,16 +196,16 @@ pub async fn get_role_permissions(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Path(role_code): Path<String>,
-) -> Result<Json<RolePermissionsResponse>, ApiError> {
+) -> Result<Json<ApiSuccess<RolePermissionsResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let permission_codes = RoleService::new(state.store.clone())
         .get_role_permissions(context.user.id, &role_code)
         .await?;
 
-    Ok(Json(RolePermissionsResponse {
+    Ok(Json(ApiSuccess::new(RolePermissionsResponse {
         role_code,
         permission_codes,
-    }))
+    })))
 }
 
 #[utoipa::path(

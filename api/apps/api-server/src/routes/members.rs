@@ -7,7 +7,9 @@ use argon2::{
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    routing::{get, post, put},
     Json,
+    Router,
 };
 use control_plane::member::{
     CreateMemberCommand, DisableMemberCommand, MemberService, ReplaceMemberRolesCommand,
@@ -22,6 +24,7 @@ use crate::{
     app_state::ApiState,
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
+    response::ApiSuccess,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -115,6 +118,14 @@ fn to_member_response(user: domain::UserRecord) -> MemberResponse {
     }
 }
 
+pub fn router() -> Router<Arc<ApiState>> {
+    Router::new()
+        .route("/members", get(list_members).post(create_member))
+        .route("/members/:id/disable", post(disable_member))
+        .route("/members/:id/reset-password", post(reset_member))
+        .route("/members/:id/roles", put(replace_member_roles))
+}
+
 #[utoipa::path(
     get,
     path = "/api/console/members",
@@ -123,18 +134,18 @@ fn to_member_response(user: domain::UserRecord) -> MemberResponse {
 pub async fn list_members(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<Vec<MemberResponse>>, ApiError> {
+) -> Result<Json<ApiSuccess<Vec<MemberResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let members = MemberService::new(state.store.clone())
         .list_members(context.user.id)
         .await?;
 
-    Ok(Json(
+    Ok(Json(ApiSuccess::new(
         members
             .into_iter()
             .map(to_member_response)
             .collect::<Vec<_>>(),
-    ))
+    )))
 }
 
 #[utoipa::path(
@@ -147,7 +158,7 @@ pub async fn create_member(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
     Json(body): Json<CreateMemberBody>,
-) -> Result<(StatusCode, Json<MemberResponse>), ApiError> {
+) -> Result<(StatusCode, Json<ApiSuccess<MemberResponse>>), ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
@@ -166,7 +177,10 @@ pub async fn create_member(
         })
         .await?;
 
-    Ok((StatusCode::CREATED, Json(to_member_response(user))))
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiSuccess::new(to_member_response(user))),
+    ))
 }
 
 #[utoipa::path(

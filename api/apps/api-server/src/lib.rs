@@ -4,6 +4,7 @@ pub mod app_state;
 pub mod config;
 pub mod error_response;
 pub mod middleware;
+pub mod response;
 pub mod routes;
 
 use std::{net::SocketAddr, sync::Arc};
@@ -14,7 +15,7 @@ use argon2::{
     Argon2,
 };
 use axum::{
-    routing::{get, patch, post, put},
+    routing::get,
     Json, Router,
 };
 use control_plane::bootstrap::{BootstrapConfig, BootstrapService};
@@ -64,8 +65,10 @@ async fn console_health() -> Json<HealthResponse> {
     paths(
         health,
         console_health,
-        routes::auth::login,
+        routes::auth::list_providers,
+        routes::auth::sign_in,
         routes::me::get_me,
+        routes::session::get_session,
         routes::team::get_team,
         routes::team::patch_team,
         routes::members::list_members,
@@ -84,6 +87,7 @@ async fn console_health() -> Json<HealthResponse> {
     components(schemas(
         HealthResponse,
         routes::auth::LoginBody,
+        routes::auth::AuthProviderResponse,
         routes::auth::LoginResponse,
         routes::me::MeResponse,
         routes::members::CreateMemberBody,
@@ -96,6 +100,7 @@ async fn console_health() -> Json<HealthResponse> {
         routes::roles::RolePermissionsResponse,
         routes::roles::RoleResponse,
         routes::roles::UpdateRoleBody,
+        routes::session::SessionResponse,
         routes::team::PatchTeamBody,
         routes::team::TeamResponse,
         error_response::ErrorBody,
@@ -125,44 +130,13 @@ pub fn app() -> Router {
 
 pub fn app_with_state(state: Arc<ApiState>) -> Router {
     let console_router = Router::new()
-        .route("/api/console/auth/login", post(routes::auth::login))
-        .route("/api/console/me", get(routes::me::get_me))
-        .route(
-            "/api/console/team",
-            get(routes::team::get_team).patch(routes::team::patch_team),
-        )
-        .route(
-            "/api/console/members",
-            get(routes::members::list_members).post(routes::members::create_member),
-        )
-        .route(
-            "/api/console/members/:id/disable",
-            post(routes::members::disable_member),
-        )
-        .route(
-            "/api/console/members/:id/reset-password",
-            post(routes::members::reset_member),
-        )
-        .route(
-            "/api/console/members/:id/roles",
-            put(routes::members::replace_member_roles),
-        )
-        .route(
-            "/api/console/roles",
-            get(routes::roles::list_roles).post(routes::roles::create_role),
-        )
-        .route(
-            "/api/console/roles/:id",
-            patch(routes::roles::update_role).delete(routes::roles::delete_role),
-        )
-        .route(
-            "/api/console/roles/:id/permissions",
-            get(routes::roles::get_role_permissions).put(routes::roles::replace_role_permissions),
-        )
-        .route(
-            "/api/console/permissions",
-            get(routes::permissions::list_permissions),
-        )
+        .nest("/api/console", routes::me::router())
+        .nest("/api/console", routes::team::router())
+        .nest("/api/console", routes::members::router())
+        .nest("/api/console", routes::roles::router())
+        .nest("/api/console", routes::permissions::router())
+        .nest("/api/console", routes::session::router())
+        .nest("/api/public/auth", routes::auth::router())
         .with_state(state);
 
     base_router().merge(console_router)

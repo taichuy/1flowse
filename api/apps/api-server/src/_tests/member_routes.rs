@@ -45,7 +45,8 @@ async fn member_routes_create_disable_and_reset_password() {
         .await
         .unwrap();
     let created_member: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let member_id = created_member["id"].as_str().unwrap();
+    let member_id = created_member["data"]["id"].as_str().unwrap();
+    assert!(created_member["meta"].is_null());
 
     let list_response = app
         .clone()
@@ -61,6 +62,10 @@ async fn member_routes_create_disable_and_reset_password() {
         .unwrap();
 
     assert_eq!(list_response.status(), StatusCode::OK);
+    let list_body = to_bytes(list_response.into_body(), usize::MAX).await.unwrap();
+    let list_payload: serde_json::Value = serde_json::from_slice(&list_body).unwrap();
+    assert!(list_payload["data"].is_array());
+    assert!(list_payload["meta"].is_null());
 
     let replace_roles_response = app
         .clone()
