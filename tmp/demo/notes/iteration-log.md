@@ -1,5 +1,45 @@
 # Demo Iteration Log
 
+## 2026-04-13 01:35
+
+### 本轮批判
+
+- 上一版 `tmp/demo` 虽然把五个任务域和跨视图跳转讲清楚了，但仍然是静态原型，不符合“参考 `web/` 依赖、固定 `3200` 端口”的目标。
+- 侧栏与概览页同时展开同一批 repo 现状，信息重复感偏强，桌面和移动端都显得啰嗦。
+- 移动端首轮截图暴露出一个更严重的问题：首屏先看到的是侧栏，而不是当前任务域主内容，违背了 `workspace-rules.md` 的小屏降级要求。
+- 直接引用 `web/` 现有依赖时，`tmp/demo` 不是 workspace 子包，导致 TypeScript、Vitest、Vite 对模块和类型都不会自动继承，需要额外桥接。
+
+### 本轮执行
+
+- 把 `tmp/demo` 重构成 `React + Vite + Ant Design + TanStack Router + Zustand` 的独立 demo 项目。
+- 删除旧的 `script.js / demo-data.js / styles.css` 静态模板，实现 `overview / orchestration / api / logs / monitoring` 五个视图。
+- 引入真实 workspace 依赖与包能力：复用 `web` 中已有前端依赖，并直接使用 `api-client / embed-sdk / embedded-contracts / page-protocol` 源码导出的类型与方法。
+- 加入稳定的 `Run Drawer`、`Node Inspector`、跨页状态跳转和 mock 数据单一事实源。
+- 通过重新组织 DOM 顺序与桌面 `grid-area`，把移动端结构改成“主内容优先、侧栏后置”的语义布局。
+- 把构建产物拆成 `react / antd / app` 三个主要 chunk，避免所有依赖继续挤在单一 bundle。
+
+### 测试与验证
+
+- `npm test`：通过，`2` 个测试全部通过。
+- `npm run build`：通过，输出 `react / antd / app` 三个主要 JS chunk。
+- `vite preview`：已在提权后成功监听 `127.0.0.1:3200`。
+- Playwright：已成功产出
+  - `tmp/demo/desktop.png`
+  - `tmp/demo/mobile.png`
+  - `tmp/demo/mobile-pixel5.png`
+
+### 本轮结论
+
+- demo 已从静态稿升级成真正可运行、可测试、可构建的前端项目。
+- 桌面端结构已经比较稳定，当前更明显的改进方向转向：进一步减少侧栏与概览页的重复信息。
+- 移动端在普通缩窗截图里仍容易看到桌面浏览器语义干扰；使用 `Pixel 5` 设备模拟时，主内容优先顺序已经符合预期。
+
+### 下轮入口
+
+- 优先继续压缩侧栏信息密度，把“项目现状”和“本轮批判”合并成更短的摘要块。
+- 若要继续提升 bundle 结构，可把五个视图进一步懒加载，而不是只做 vendor chunk 切分。
+- 如果后续要把这套 demo 往正式 `web/app` 迁移，应先抽出 workspace primitives，而不是直接复制页面。
+
 ## 2026-04-13 00:05
 
 ### 本轮批判

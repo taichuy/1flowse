@@ -1,0 +1,11 @@
+{
+  "name": "1flowse-demo-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "../../web/node_modules/.bin/vite",
+    "build": "../../web/node_modules/.bin/tsc -p tsconfig.json --noEmit && ../../web/node_modules/.bin/vite build",
+    "preview": "../../web/node_modules/.bin/vite preview --host 0.0.0.0 --port 3200 --strictPort",
+    "test": "../../web/node_modules/.bin/vitest --run"
+  }
+}
