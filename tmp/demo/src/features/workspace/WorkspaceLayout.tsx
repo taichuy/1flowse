@@ -4,9 +4,7 @@ import type { PropsWithChildren } from 'react';
 import {
   embedRuntimeSnapshot,
   embeddedArtifacts,
-  iterationCritique,
-  nextIterationFocus,
-  repoReality,
+  getWorkspacePageForPath,
   workspaceMeta,
   workspacePages
 } from '../../data/workspace-data';
@@ -17,10 +15,32 @@ export function WorkspaceLayout({ children }: PropsWithChildren) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname
   });
+  const currentPage = getWorkspacePageForPath(pathname);
 
   return (
     <div className="workspace-shell">
-      <main className="workspace-main">{children}</main>
+      <main className="workspace-main">
+        <nav className="mobile-domain-nav" aria-label="任务域切换">
+          {workspacePages.map((page) => {
+            const isActive =
+              page.route === '/'
+                ? pathname === page.route
+                : pathname.startsWith(page.route);
+
+            return (
+              <Link
+                key={`mobile-${page.id}`}
+                to={page.route}
+                className={`switch-link ${isActive ? 'is-active' : ''}`}
+              >
+                {page.title}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {children}
+      </main>
 
       <aside className="workspace-sidebar">
         <div className="sidebar-top">
@@ -60,55 +80,42 @@ export function WorkspaceLayout({ children }: PropsWithChildren) {
         </nav>
 
         <section className="panel sidebar-panel">
-          <p className="section-label">当前代码现状</p>
+          <p className="section-label">Workspace capsule</p>
           <div className="stack-list">
-            {repoReality.map((item) => (
-              <article key={item.title} className="stack-row compact-row">
-                <div>
-                  <strong>{item.title}</strong>
-                </div>
-                <StatusBadge status={item.status} label={item.statusLabel} />
-              </article>
-            ))}
+            <article className="stack-row compact-row">
+              <div>
+                <strong>当前任务域</strong>
+                <p>
+                  {currentPage.title} · {currentPage.summary}
+                </p>
+              </div>
+              <span className="meta-chip">Active now</span>
+            </article>
+            <article className="stack-row compact-row">
+              <div>
+                <strong>Published surface</strong>
+                <p>OpenAI compatible · {workspaceMeta.publishedVersion}</p>
+              </div>
+              <StatusBadge status="published" label="Live traffic" />
+            </article>
+            <article className="stack-row compact-row">
+              <div>
+                <strong>Host context</strong>
+                <p>
+                  {embedRuntimeSnapshot.applicationId} ·{' '}
+                  {embedRuntimeSnapshot.teamId}
+                </p>
+              </div>
+              <StatusBadge status="healthy" label="Host wired" />
+            </article>
+            <article className="stack-row compact-row">
+              <div>
+                <strong>Embedded manifests</strong>
+                <p>{embeddedArtifacts.length} staged artifacts waiting for runtime</p>
+              </div>
+              <StatusBadge status="draft" label="Shell only" />
+            </article>
           </div>
-        </section>
-
-        <section className="panel sidebar-panel">
-          <p className="section-label">本轮批判</p>
-          <ul className="bullet-list">
-            {iterationCritique.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="panel sidebar-panel">
-          <p className="section-label">Embedded snapshot</p>
-          <div className="stack-list compact-list">
-            {embeddedArtifacts.map((artifact) => (
-              <article key={artifact.appId} className="stack-row compact-row">
-                <div>
-                  <strong>{artifact.name}</strong>
-                  <p>
-                    {artifact.routePrefix} · {artifact.version}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
-          <p className="sidebar-copy">
-            Host context: {embedRuntimeSnapshot.applicationId} ·{' '}
-            {embedRuntimeSnapshot.teamId}
-          </p>
-        </section>
-
-        <section className="panel sidebar-panel">
-          <p className="section-label">下轮方向</p>
-          <ul className="bullet-list">
-            {nextIterationFocus.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
         </section>
       </aside>
       <RunDrawer />

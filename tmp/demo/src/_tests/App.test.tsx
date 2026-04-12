@@ -21,19 +21,16 @@ describe('workspace demo', () => {
       screen.getByRole('button', { name: '进入编排' })
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText(/真实代码已打通 bootstrap 与 API health/i).length
-    ).toBeGreaterThan(0);
+      screen.getByRole('heading', { name: '最近运行摘要' })
+    ).toBeInTheDocument();
   });
 
-  it('opens a run drawer from the logs page', async () => {
-    window.history.pushState({}, '', '/logs');
-
+  it('opens the waiting run drawer from overview recent runs', async () => {
     render(<App />);
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: '查看 run_2048 详情' })
-    );
+    fireEvent.click(await screen.findByRole('button', { name: '查看等待态 run_2048' }));
 
+    expect(await screen.findByRole('heading', { name: '调用日志' })).toBeInTheDocument();
     expect(await screen.findByText(/为什么停在这里/i)).toBeInTheDocument();
     expect(await screen.findByText(/Checkpoint persisted/i)).toBeInTheDocument();
   });

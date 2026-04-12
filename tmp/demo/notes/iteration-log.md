@@ -1,5 +1,52 @@
 # Demo Iteration Log
 
+## 2026-04-13 02:12
+
+### 本轮批判
+
+- `overview` 上一版仍然混入“为什么要 React 化 / 本轮建议”这类实现说明，偏离了工作区 `L0` 概览页应该只讲当前状态、最近运行摘要和唯一主入口的 recipe。
+- 桌面端的左侧栏和主内容都在重复讲 `repo 现状 / 本轮批判 / 下轮方向`，信息没有做到互斥，导致页面看起来像“笔记墙”而不是 workspace。
+- 移动端虽然已经把主内容放前，但任务域切换仍然主要依赖后置 sidebar；用户浏览完第一屏后，切页入口还是不够靠前。
+- 当前 build 仍然只有 `react / antd / app` 三大块，主 app chunk 已涨到 `434.52 kB`，继续堆页面文案和状态会让 demo 很快变钝。
+
+### 本轮执行
+
+- 新增 `tmp/demo/notes/2026-04-13-0203-demo-critique-and-plan.md`，把这轮的信息架构诊断和改造计划固定下来。
+- 按测试先行把 `overview -> logs drawer` 的新行为锁定下来：概览页必须出现“最近运行摘要”，并能直接带用户进入日志页查看等待态 run。
+- 重构 `overview`，删掉“为什么这轮要 React 化 / 本轮建议”，改成：
+  - `最近运行摘要`
+  - `Published 与 Draft 明确分层`
+  - `真实路由成熟度`
+  - `Embedded runtime snapshot`
+- 收缩 `WorkspaceLayout` 的 sidebar，只保留身份、导航和 `workspace capsule`，不再重复堆放批判、现状和下轮方向。
+- 补了移动端顶部任务域切换条；在小屏下隐藏 sidebar 导航，避免必须滚到后面才能换页。
+- 给日志页主标题补了可访问 heading，使跨页跳转后的测试与语义更稳定。
+
+### 测试与验证
+
+- `npm test`：通过，`2` 个测试全部通过。
+- `npm run build`：通过，产物为：
+  - `dist/assets/index-DXqE0ui5.css` `11.78 kB`
+  - `dist/assets/react-Bxqk-rQc.js` `106.54 kB`
+  - `dist/assets/index-BM-gct2J.js` `434.52 kB`
+  - `dist/assets/antd-FPCx2csc.js` `466.01 kB`
+- `vite preview --host 127.0.0.1 --port 3200 --strictPort`：提权后成功监听 `http://127.0.0.1:3200/`。
+- Playwright：
+  - 移动端截图成功：`uploads/1flowse-demo-2026-04-13-mobile.png`
+  - 桌面端提权截图申请被拒绝；随后在沙箱内直接运行系统 Chrome 截图失败，报 `setsockopt: Operation not permitted`，因此本轮没有拿到新的桌面截图。
+
+### 本轮结论
+
+- demo 的 `overview` 已经更像真正的 workspace 概览页，而不是实现说明页。
+- 移动端首屏现在能直接看到任务域切换、状态和唯一主入口，交互路径明显更短。
+- sidebar 的职责已经收紧，但桌面端还缺一次新的截图验证，不能对桌面视觉细节做过度乐观结论。
+
+### 下轮入口
+
+- 优先继续处理构建体积，至少考虑把五个任务域按路由懒加载，而不是继续把内容塞进单一 app chunk。
+- 如果后续能拿到桌面截图权限，先复查桌面端是否仍然存在“主内容太像文档板块”的问题，再决定是否继续减字。
+- 可以考虑把 `workspace capsule` 和 `overview` 共用的一部分摘要提炼成真正的 workspace primitive，为后续迁移到 `web/app` 做准备。
+
 ## 2026-04-13 01:35
 
 ### 本轮批判

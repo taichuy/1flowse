@@ -12,7 +12,10 @@ export function LogsView() {
 
   return (
     <section className="view-stack">
-      <Card className="panel" title="调用日志">
+      <Card
+        className="panel"
+        title={<span role="heading" aria-level={1}>调用日志</span>}
+      >
         <div className="header-split">
           <p className="hero-copy">
             这里不重新解释产品定位，只回答 run 发生了什么、停在哪里、怎样恢复。详情统一用 Drawer 打开，保持 Shell 页的 L1 详情模型一致。

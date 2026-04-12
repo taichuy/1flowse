@@ -3,15 +3,22 @@ import { useNavigate } from '@tanstack/react-router';
 
 import {
   contracts,
+  embedRuntimeSnapshot,
+  embeddedArtifacts,
+  getRun,
+  overviewRunSummaries,
   repoReality,
   summaryStats,
   workspaceMeta
 } from '../../../data/workspace-data';
+import { useWorkspaceStore } from '../../../state/workspace-store';
 import { SummaryStats } from '../components/SummaryStats';
 import { StatusBadge } from '../components/StatusBadge';
 
 export function OverviewView() {
   const navigate = useNavigate();
+  const openRun = useWorkspaceStore((state) => state.openRun);
+  const setRunFilter = useWorkspaceStore((state) => state.setRunFilter);
 
   return (
     <section className="view-stack">
@@ -21,8 +28,9 @@ export function OverviewView() {
             <p className="section-label">应用概览</p>
             <h2>{workspaceMeta.name} workspace demo</h2>
             <p className="hero-copy">
-              这一版 demo 不再只是漂亮静态图，而是把当前真实仓库状态、目标工作区语义与
-              embedded runtime 线索一起放进可运行项目里。
+              当前 published contract 已在跑 live traffic；Classifier、Approval gate
+              与 Reply composer 还有 3 个 draft changes，embedded runtime 仍停留在
+              shell only 阶段。
             </p>
             <div className="action-row">
               <Button
@@ -43,7 +51,7 @@ export function OverviewView() {
             />
             <StatusBadge status="healthy" label="Runtime healthy" />
             <p className="sidebar-copy">
-              概览页只回答当前状态、repo 现实与下一步去哪；完整编排、API 正文、日志细节和监控都回到各自任务域。
+              概览页只保留当前状态、最近运行摘要和下一跳；完整契约、日志细节与节点编辑都回到各自任务域。
             </p>
           </div>
         </div>
@@ -52,6 +60,43 @@ export function OverviewView() {
       <SummaryStats items={summaryStats} />
 
       <div className="content-grid content-grid-overview">
+        <Card
+          className="panel"
+          title={<span role="heading" aria-level={2}>最近运行摘要</span>}
+        >
+          <div className="stack-list">
+            {overviewRunSummaries.map((item) => {
+              const run = getRun(item.runId);
+
+              if (!run) {
+                return null;
+              }
+
+              return (
+                <article key={run.id} className="stack-row">
+                  <div>
+                    <div className="badge-row">
+                      <StatusBadge status={run.status} label={run.statusLabel} />
+                      <span className="meta-chip">{run.currentNode}</span>
+                    </div>
+                    <strong>{run.title}</strong>
+                    <p>{item.note}</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setRunFilter(run.status);
+                      openRun(run.id);
+                      void navigate({ to: '/logs' });
+                    }}
+                  >
+                    {item.actionLabel}
+                  </Button>
+                </article>
+              );
+            })}
+          </div>
+        </Card>
+
         <Card className="panel" title="Published 与 Draft 明确分层">
           <div className="stack-list">
             <article className="stack-row">
@@ -90,20 +135,27 @@ export function OverviewView() {
           </div>
         </Card>
 
-        <Card className="panel" title="为什么这轮要 React 化">
-          <ul className="bullet-list">
-            <li>原静态稿无法证明和 `web/` 依赖体系一起运行。</li>
-            <li>概览页主入口必须唯一，不能再堆多个主按钮。</li>
-            <li>后续定时任务需要在组件化结构上继续拆、测、截图，而不是继续堆字符串模板。</li>
-          </ul>
-        </Card>
+        <Card className="panel" title="Embedded runtime snapshot">
+          <div className="stack-list">
+            {embeddedArtifacts.map((artifact) => (
+              <article key={artifact.appId} className="stack-row">
+                <div>
+                  <strong>{artifact.name}</strong>
+                  <p>
+                    {artifact.routePrefix} · {artifact.version}
+                  </p>
+                </div>
+                <StatusBadge status="draft" label="Manifest staged" />
+              </article>
+            ))}
+          </div>
 
-        <Card className="panel" title="本轮建议">
-          <ul className="bullet-list">
-            <li>先在编排页验证节点状态、选中态和 draft change 的分离是否足够清楚。</li>
-            <li>再去 API 页看 published 与 draft parity 的边界是否讲清楚。</li>
-            <li>日志与监控两页只承担运行事实，不承担“解释产品定位”的责任。</li>
-          </ul>
+          <div className="info-block">
+            <h3>Host context</h3>
+            <p>
+              {embedRuntimeSnapshot.applicationId} · {embedRuntimeSnapshot.teamId}
+            </p>
+          </div>
         </Card>
       </div>
     </section>

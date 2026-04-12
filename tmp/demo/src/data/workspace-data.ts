@@ -119,6 +119,12 @@ export interface MonitoringHotspot {
   actionLabel: string;
 }
 
+export interface OverviewRunSummary {
+  runId: string;
+  note: string;
+  actionLabel: string;
+}
+
 export const workspaceMeta = {
   code: 'revenue-copilot',
   name: 'Revenue Copilot',
@@ -452,6 +458,24 @@ export const runs: FlowRun[] = [
         note: '结果会同步到 API contract 视图。'
       }
     ]
+  }
+];
+
+export const overviewRunSummaries: OverviewRunSummary[] = [
+  {
+    runId: 'run_2048',
+    note: '审批等待必须显式停住并保留 checkpoint，不能被系统悄悄跳过。',
+    actionLabel: '查看等待态 run_2048'
+  },
+  {
+    runId: 'run_2047',
+    note: '失败样本继续暴露在 logs 与 monitoring，先修 adapter，再谈重新发布。',
+    actionLabel: '查看失败样本 run_2047'
+  },
+  {
+    runId: 'run_2045',
+    note: '兼容模式还在运行中校验，说明 draft parity 还没有收敛成正式暴露面。',
+    actionLabel: '查看运行中 run_2045'
   }
 ];
 
@@ -801,4 +825,12 @@ export function getRun(runId: string | null) {
 
 export function getRunsByFilter(filter: RunFilter) {
   return filter === 'all' ? runs : runs.filter((run) => run.status === filter);
+}
+
+export function getWorkspacePageForPath(pathname: string) {
+  return (
+    workspacePages.find((page) =>
+      page.route === '/' ? pathname === page.route : pathname.startsWith(page.route)
+    ) ?? workspacePages[0]
+  );
 }

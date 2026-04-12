@@ -74,7 +74,7 @@ code {
 
 .workspace-shell {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 288px minmax(0, 1fr);
   grid-template-areas: 'sidebar main';
   min-height: 100vh;
 }
@@ -85,9 +85,9 @@ code {
   top: 0;
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 16px;
   height: 100vh;
-  padding: 24px 20px;
+  padding: 22px 18px;
   border-right: 1px solid rgba(61, 58, 57, 0.8);
   background: var(--bg-sidebar);
   backdrop-filter: blur(20px);
@@ -96,7 +96,7 @@ code {
 
 .workspace-main {
   grid-area: main;
-  padding: 28px 30px 40px;
+  padding: 24px 26px 36px;
 }
 
 .view-stack,
@@ -105,7 +105,8 @@ code {
 .metric-grid,
 .stack-list,
 .bullet-list,
-.mobile-node-list {
+.mobile-node-list,
+.sidebar-nav {
   display: grid;
 }
 
@@ -176,6 +177,18 @@ code {
   padding: 16px;
 }
 
+.mobile-domain-nav {
+  display: none;
+  gap: 10px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mobile-domain-nav::-webkit-scrollbar {
+  display: none;
+}
+
 .sidebar-top h1,
 .hero-card h2,
 .panel h2 {
@@ -231,6 +244,10 @@ code {
     transform 0.18s ease;
 }
 
+.sidebar-nav {
+  gap: 8px;
+}
+
 .nav-item span {
   color: var(--text-secondary);
   font-size: 13px;
@@ -245,6 +262,27 @@ code {
 }
 
 .nav-item.is-active strong {
+  color: var(--color-primary);
+}
+
+.switch-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.switch-link.is-active {
+  border-color: rgba(0, 217, 146, 0.35);
+  background: rgba(0, 217, 146, 0.1);
   color: var(--color-primary);
 }
 
@@ -556,11 +594,21 @@ code {
     flex-direction: column;
   }
 
+  .mobile-domain-nav {
+    display: flex;
+  }
+
   .workspace-sidebar {
     position: static;
     height: auto;
+    gap: 12px;
+    padding: 14px 18px 20px;
     border-right: none;
     border-bottom: 1px solid rgba(61, 58, 57, 0.8);
+  }
+
+  .workspace-sidebar .sidebar-nav {
+    display: none;
   }
 
   .workspace-main {
@@ -578,7 +626,8 @@ code {
   .hero-layout,
   .header-split,
   .metric-top,
-  .run-row {
+  .run-row,
+  .stack-row {
     flex-direction: column;
     align-items: stretch;
   }
