@@ -18,6 +18,8 @@
   - Embedded App 以静态产物 zip 上传、路由挂载与登录态复用接入平台的设计稿
 - [2026-04-11-development-skills-design.md](./2026-04-11-development-skills-design.md)
   - 前后端通用开发 Skill 的设计稿，聚焦防止代码腐化的原则、检查清单与少量示例
+- [2026-04-12-backend-interface-kernel-design.md](./2026-04-12-backend-interface-kernel-design.md)
+  - 后端接口内核、扩展边界、runtime 与业务插件白名单的统一设计稿
 - [modules/README.md](./modules/README.md)
   - 模块化讨论目录，按功能模块逐项沉淀讨论进度与完成情况
 
