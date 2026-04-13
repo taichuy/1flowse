@@ -40,7 +40,7 @@ describe('account popup layout', () => {
     expect(styles.height).toBe(styles.lineHeight);
   });
 
-  test('horizontal submenu popup does not stretch title content', async () => {
+  test('horizontal submenu popup does not override native row metrics', async () => {
     render(
       <Menu
         className="app-shell-account-menu"
@@ -57,9 +57,17 @@ describe('account popup layout', () => {
       path.resolve(import.meta.dirname, '../../styles/global.css'),
       'utf8'
     );
+    const popupItemRuleMatch = globalCss.match(
+      /\.app-shell-account-popup \.ant-menu-item,\s*\n\.app-shell-account-popup \.ant-menu-submenu-title \{([\s\S]*?)\n\}/
+    );
 
+    expect(popupItemRuleMatch).not.toBeNull();
+    const popupItemRule = popupItemRuleMatch?.[1] ?? '';
+
+    expect(popupItemRule).not.toContain('display: flex;');
+    expect(popupItemRule).not.toContain('min-height:');
+    expect(popupItemRule).not.toContain('line-height: 1.25;');
     expect(globalCss).toContain('.app-shell-account-popup .ant-menu-title-content');
     expect(globalCss).toContain('line-height: inherit;');
-    expect(globalCss).not.toContain('line-height: 1.15;');
   });
 });

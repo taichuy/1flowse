@@ -280,12 +280,8 @@ a {
 
 .app-shell-account-popup .ant-menu-item,
 .app-shell-account-popup .ant-menu-submenu-title {
-  display: flex;
-  align-items: center;
-  min-height: clamp(3rem, 3.6vw, 3.45rem);
   margin: 0 !important;
   padding: 0 clamp(0.8rem, 1vw, 1.15rem) !important;
-  line-height: 1.25;
 }
 
 .app-shell-account-popup .ant-menu-title-content {
