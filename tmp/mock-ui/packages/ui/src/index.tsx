@@ -45,20 +45,24 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
 export interface AppShellProps extends PropsWithChildren {
   title: string;
   navigation?: ReactNode;
+  actions?: ReactNode;
 }
 
-export function AppShell({ title, navigation, children }: AppShellProps) {
+export function AppShell({ title, navigation, actions, children }: AppShellProps) {
   return (
     <Layout className="app-shell">
       <Header className="app-shell-header">
-        <div className="app-shell-brand">
-          <span className="app-shell-signal" aria-hidden="true" />
-          <Typography.Title level={4} className="app-shell-title">
-            {title}
-          </Typography.Title>
-          <Typography.Text className="app-shell-kicker">Mock workspace</Typography.Text>
+        <div className="app-shell-header-main">
+          <div className="app-shell-brand">
+            <span className="app-shell-signal" aria-hidden="true" />
+            <Typography.Title level={4} className="app-shell-title">
+              {title}
+            </Typography.Title>
+            <Typography.Text className="app-shell-kicker">Mock workspace</Typography.Text>
+          </div>
+          <div className="app-shell-nav">{navigation}</div>
         </div>
-        <div className="app-shell-nav">{navigation}</div>
+        {actions ? <div className="app-shell-actions">{actions}</div> : null}
       </Header>
       <Content className="app-shell-content">{children}</Content>
     </Layout>

@@ -76,26 +76,35 @@ a {
   position: sticky;
   top: 0;
   z-index: 20;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   align-items: center;
   min-height: 64px;
   height: 64px;
   line-height: 1.2;
-  gap: 16px;
+  gap: 20px;
   padding: 0 20px;
-  background: rgba(248, 252, 250, 0.88) !important;
+  background: rgba(248, 252, 250, 0.94) !important;
   border-bottom: 1px solid rgba(213, 221, 216, 0.84);
-  box-shadow: 0 10px 28px rgba(13, 23, 18, 0.05);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 8px 22px rgba(13, 23, 18, 0.04);
+  backdrop-filter: blur(14px);
+}
+
+.app-shell-header-main {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .app-shell-brand {
-  grid-column: 1;
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: none;
 }
 
 .app-shell-signal {
@@ -111,12 +120,12 @@ a {
   margin: 0;
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid rgba(213, 221, 216, 0.92);
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(213, 221, 216, 0.84);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
   color: var(--text-secondary);
@@ -132,24 +141,25 @@ a {
 }
 
 .app-shell-nav {
-  grid-column: 2;
-  justify-self: center;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .app-shell-navigation {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .app-shell-menu.ant-menu-horizontal {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   border-bottom: none !important;
   background: transparent !important;
   line-height: 1;
+  min-width: 0;
 }
 
 .app-shell-menu.ant-menu-horizontal::after {
@@ -161,29 +171,20 @@ a {
   top: 0;
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 64px;
   margin: 0 !important;
   padding-inline: 0 !important;
-  border: 1px solid transparent;
-  border-radius: 12px;
   color: var(--text-secondary) !important;
   transition:
     color 160ms ease,
-    background-color 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
-}
-
-.app-shell-menu.ant-menu-horizontal > .ant-menu-item::after,
-.app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item::after {
-  display: none !important;
+    opacity 160ms ease;
 }
 
 .app-shell-menu.ant-menu-horizontal > .ant-menu-item .ant-menu-title-content,
 .app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item .ant-menu-title-content {
   display: flex;
   align-items: center;
+  height: 100%;
 }
 
 .app-shell-menu-link {
@@ -191,8 +192,8 @@ a {
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 0 14px;
-  font-size: 14px;
+  padding: 0 4px;
+  font-size: 15px;
   font-weight: 500;
   color: inherit;
   white-space: nowrap;
@@ -200,18 +201,66 @@ a {
 
 .app-shell-menu.ant-menu-horizontal > .ant-menu-item:hover,
 .app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item:hover {
-  background: rgba(255, 255, 255, 0.74);
-  border-color: rgba(188, 200, 193, 0.9);
   color: var(--text-primary) !important;
-  transform: translateY(-1px);
+  opacity: 1;
 }
 
 .app-shell-menu.ant-menu-horizontal > .ant-menu-item-selected,
 .app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item-selected {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(213, 221, 216, 0.92);
-  box-shadow: 0 10px 22px rgba(15, 23, 20, 0.08);
+  color: var(--text-primary) !important;
+  background: transparent !important;
+}
+
+.app-shell-menu.ant-menu-horizontal > .ant-menu-item-selected::after,
+.app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item-selected::after,
+.app-shell-menu.ant-menu-horizontal > .ant-menu-item:hover::after,
+.app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item:hover::after {
+  border-bottom-width: 2px !important;
+}
+
+.app-shell-menu.ant-menu-horizontal > .ant-menu-item-active,
+.app-shell-menu.ant-menu-horizontal > .ant-menu-overflow-item-active {
+  color: var(--text-primary) !important;
+}
+
+.app-shell-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
+}
+
+.app-shell-user-trigger.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid rgba(213, 221, 216, 0.88);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 4px 12px rgba(13, 23, 18, 0.04);
+}
+
+.app-shell-user-trigger.ant-btn:hover,
+.app-shell-user-trigger.ant-btn:focus {
+  border-color: rgba(188, 200, 193, 0.96) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: var(--text-primary) !important;
+}
+
+.app-shell-user-avatar.ant-avatar {
+  background: linear-gradient(135deg, #d8fff0, #bdf4df);
+  color: #15553e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-shell-user-name {
+  padding-right: 6px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .app-shell-content.ant-layout-content {
@@ -575,10 +624,18 @@ a {
 
 @media (max-width: 767px) {
   .app-shell-header.ant-layout-header {
-    grid-template-columns: 1fr;
+    align-items: stretch;
+    flex-direction: column;
     gap: 12px;
     height: auto;
     padding: 14px 16px 16px;
+  }
+
+  .app-shell-header-main {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
   }
 
   .app-shell-brand {
@@ -591,8 +648,6 @@ a {
   }
 
   .app-shell-nav {
-    grid-column: 1;
-    justify-self: stretch;
     width: 100%;
     overflow-x: auto;
   }
@@ -601,8 +656,8 @@ a {
     width: 100%;
   }
 
-  .app-shell-links {
-    width: max-content;
+  .app-shell-actions {
+    justify-content: flex-start;
   }
 
   .app-shell-content.ant-layout-content {

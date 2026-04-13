@@ -7,7 +7,7 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
-import { Menu, Typography } from 'antd';
+import { Avatar, Button, Dropdown, Menu, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 
 import { AppShell } from '@1flowse/ui';
@@ -58,11 +58,32 @@ function AppNavigation() {
   );
 }
 
+function AppHeaderActions() {
+  const items: MenuProps['items'] = [
+    { key: 'profile', label: 'Profile' },
+    { key: 'settings', label: 'Settings' },
+    { type: 'divider' },
+    { key: 'sign-out', label: 'Sign out' }
+  ];
+
+  return (
+    <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
+      <Button className="app-shell-user-trigger" aria-label="Workspace settings" type="text">
+        <Avatar className="app-shell-user-avatar" size={32}>
+          TF
+        </Avatar>
+        <span className="app-shell-user-name">Taichu</span>
+      </Button>
+    </Dropdown>
+  );
+}
+
 function RootLayout() {
   return (
     <AppShell
       title="1Flowse Bootstrap"
       navigation={<AppNavigation />}
+      actions={<AppHeaderActions />}
     >
       <Outlet />
     </AppShell>
