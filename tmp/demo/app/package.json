@@ -1,0 +1,25 @@
+{
+  "name": "@1flowse/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@1flowse/api-client": "workspace:*",
+    "@1flowse/embed-sdk": "workspace:*",
+    "@1flowse/embedded-contracts": "workspace:*",
+    "@1flowse/shared-types": "workspace:*",
+    "@1flowse/ui": "workspace:*",
+    "@tanstack/react-query": "^5.73.3",
+    "@tanstack/react-router": "^1.114.15",
+    "antd": "^5.24.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.3"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "vitest --run"
+  }
+}
