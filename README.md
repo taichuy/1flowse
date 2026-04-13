@@ -90,11 +90,10 @@ pnpm build
 ### Backend
 
 ```bash
-cd api
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
+node scripts/node/verify-backend.js
 ```
+
+该脚本会统一执行后端格式化、静态检查、测试和 `check`，并默认把 `cargo` 并发限制在当前系统可用 CPU 的一半，避免全量验证时把机器资源打满。
 
 ## Local URLs
 

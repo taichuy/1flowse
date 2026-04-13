@@ -1,0 +1,57 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+function getExpectedParallelism() {
+  const available = typeof os.availableParallelism === 'function'
+    ? os.availableParallelism()
+    : os.cpus().length;
+
+  return Math.max(1, Math.floor(available / 2));
+}
+
+test('verify-backend limits cargo concurrency to half of available CPU', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowse-verify-backend-'));
+  const fakeBinDir = path.join(tempDir, 'bin');
+  const logPath = path.join(tempDir, 'cargo.log');
+  const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const scriptPath = path.join(repoRoot, 'scripts', 'node', 'verify-backend.js');
+  const fakeCargoPath = path.join(fakeBinDir, 'cargo');
+  const expectedParallelism = getExpectedParallelism();
+
+  fs.mkdirSync(fakeBinDir, { recursive: true });
+  fs.writeFileSync(
+    fakeCargoPath,
+    [
+      '#!/usr/bin/env bash',
+      'printf "%s\\n" "$*" >> "$VERIFY_BACKEND_LOG"',
+      'exit 0',
+    ].join('\n')
+  );
+  fs.chmodSync(fakeCargoPath, 0o755);
+
+  const result = spawnSync('node', [scriptPath], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PATH: `${fakeBinDir}:${process.env.PATH ?? ''}`,
+      VERIFY_BACKEND_LOG: logPath,
+    },
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+
+  const invocations = fs
+    .readFileSync(logPath, 'utf8')
+    .trim()
+    .split('\n');
+
+  assert.equal(invocations.length, 4);
+  assert.match(invocations[1], new RegExp(`clippy --workspace --all-targets --jobs ${expectedParallelism} -- -D warnings`));
+  assert.match(invocations[2], new RegExp(`test --workspace --jobs ${expectedParallelism} -- --test-threads=${expectedParallelism}`));
+  assert.match(invocations[3], new RegExp(`check --workspace --jobs ${expectedParallelism}`));
+});

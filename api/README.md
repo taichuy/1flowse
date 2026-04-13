@@ -15,3 +15,5 @@ Run from the repository root:
 ```bash
 node scripts/node/verify-backend.js
 ```
+
+The verification script caps `cargo` build and test concurrency at half of the machine's available CPU so full backend runs stay within a safer resource envelope by default.
