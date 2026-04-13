@@ -19,3 +19,10 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn()
   }))
 });
+
+const originalGetComputedStyle = window.getComputedStyle.bind(window);
+
+Object.defineProperty(window, 'getComputedStyle', {
+  writable: true,
+  value: vi.fn().mockImplementation((element: Element) => originalGetComputedStyle(element))
+});

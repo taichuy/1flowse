@@ -4,9 +4,11 @@ import {
   RouterProvider,
   createRootRoute,
   createRoute,
-  createRouter
+  createRouter,
+  useRouterState
 } from '@tanstack/react-router';
-import { Space } from 'antd';
+import { Menu } from 'antd';
+import type { MenuProps } from 'antd';
 
 import { AppShell } from '@1flowse/ui';
 
@@ -16,16 +18,88 @@ import { EmbeddedAppsPage } from '../features/embedded-apps/EmbeddedAppsPage';
 import { EmbeddedMountPage } from '../features/embedded-runtime/EmbeddedMountPage';
 import { HomePage } from '../features/home/HomePage';
 
+function AppNavigation() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname
+  });
+
+  const selectedKey = pathname.startsWith('/agent-flow')
+    ? 'agent-flow'
+    : pathname.startsWith('/embedded-apps') || pathname.startsWith('/embedded/')
+      ? 'embedded-apps'
+      : 'home';
+
+  const items: MenuProps['items'] = [
+    {
+      key: 'home',
+      label: (
+        <Link to="/" className="app-shell-menu-link">
+          Home
+        </Link>
+      )
+    },
+    {
+      key: 'embedded-apps',
+      label: (
+        <Link to="/embedded-apps" className="app-shell-menu-link">
+          Embedded Apps
+        </Link>
+      )
+    },
+    {
+      key: 'agent-flow',
+      label: (
+        <Link to="/agent-flow" className="app-shell-menu-link">
+          Agent Flow
+        </Link>
+      )
+    }
+  ];
+
+  return (
+    <nav className="app-shell-navigation" aria-label="Primary">
+      <Menu
+        className="app-shell-menu"
+        mode="horizontal"
+        selectedKeys={[selectedKey]}
+        items={items}
+        disabledOverflow
+      />
+    </nav>
+  );
+}
+
+function AppHeaderActions() {
+  const items: MenuProps['items'] = [
+    {
+      key: 'account',
+      label: <span className="app-shell-account-label">Taichu</span>,
+      children: [
+        { key: 'profile', label: 'Profile' },
+        { key: 'settings', label: 'Settings' },
+        { type: 'divider' },
+        { key: 'sign-out', label: 'Sign out' }
+      ]
+    }
+  ];
+
+  return (
+    <Menu
+      className="app-shell-account-menu"
+      mode="horizontal"
+      selectable={false}
+      items={items}
+      disabledOverflow
+    />
+  );
+}
+
 function RootLayout() {
   return (
     <AppShell
       title="1Flowse Bootstrap"
-      navigation={
-        <Space>
-          <Link to="/">Home</Link>
-          <Link to="/agent-flow">agentFlow</Link>
-        </Space>
-      }
+      navigation={<AppNavigation />}
+      actions={<AppHeaderActions />}
     >
       <Outlet />
     </AppShell>
