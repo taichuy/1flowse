@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
+import type { ComponentType, LazyExoticComponent } from 'react';
 
 import {
   Link,
@@ -9,16 +10,10 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
-import { Button, Drawer, Menu, Space, Tag, Typography } from 'antd';
+import { Button, Card, Drawer, Menu, Space, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 
 import { AppShell } from '@1flowse/ui';
-
-import { AgentFlowPage } from '../features/agent-flow/AgentFlowPage';
-import { HomePage } from '../features/home/HomePage';
-import { EmbeddedAppsPage } from '../features/embedded-apps/EmbeddedAppsPage';
-import { SettingsPage } from '../features/settings/SettingsPage';
-import { ToolsPage } from '../features/tools/ToolsPage';
 
 const primaryRoutes = [
   {
@@ -26,6 +21,12 @@ const primaryRoutes = [
     label: '工作台',
     to: '/',
     description: '查看行动队列与最近运行'
+  },
+  {
+    key: 'studio',
+    label: '流程编排',
+    to: '/studio',
+    description: '继续推进 Flow、发布与恢复点'
   },
   {
     key: 'subsystems',
@@ -47,7 +48,36 @@ const primaryRoutes = [
   }
 ] as const;
 
+const HomePage = lazy(async () => {
+  const module = await import('../features/home/HomePage');
+  return { default: module.HomePage };
+});
+
+const AgentFlowPage = lazy(async () => {
+  const module = await import('../features/agent-flow/AgentFlowPage');
+  return { default: module.AgentFlowPage };
+});
+
+const EmbeddedAppsPage = lazy(async () => {
+  const module = await import('../features/embedded-apps/EmbeddedAppsPage');
+  return { default: module.EmbeddedAppsPage };
+});
+
+const ToolsPage = lazy(async () => {
+  const module = await import('../features/tools/ToolsPage');
+  return { default: module.ToolsPage };
+});
+
+const SettingsPage = lazy(async () => {
+  const module = await import('../features/settings/SettingsPage');
+  return { default: module.SettingsPage };
+});
+
 function getSelectedKey(pathname: string) {
+  if (pathname.startsWith('/studio')) {
+    return 'studio';
+  }
+
   if (pathname.startsWith('/subsystems')) {
     return 'subsystems';
   }
@@ -61,6 +91,28 @@ function getSelectedKey(pathname: string) {
   }
 
   return 'home';
+}
+
+function RouteFallback() {
+  return (
+    <div className="demo-page">
+      <Card className="demo-card route-loading-card">
+        <Typography.Text>正在加载页面模块...</Typography.Text>
+      </Card>
+    </div>
+  );
+}
+
+function RouteView({
+  Page
+}: {
+  Page: LazyExoticComponent<ComponentType>;
+}) {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Page />
+    </Suspense>
+  );
 }
 
 function AppNavigation() {
@@ -180,31 +232,31 @@ const rootRoute = createRootRoute({
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage
+  component: () => <RouteView Page={HomePage} />
 });
 
 const studioRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/studio',
-  component: AgentFlowPage
+  component: () => <RouteView Page={AgentFlowPage} />
 });
 
 const subsystemRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/subsystems',
-  component: EmbeddedAppsPage
+  component: () => <RouteView Page={EmbeddedAppsPage} />
 });
 
 const toolsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tools',
-  component: ToolsPage
+  component: () => <RouteView Page={ToolsPage} />
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: SettingsPage
+  component: () => <RouteView Page={SettingsPage} />
 });
 
 const routeTree = rootRoute.addChildren([

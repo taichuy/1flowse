@@ -1,86 +1,199 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { Button, Card, Col, Descriptions, Row, Space, Typography } from 'antd';
+import { Link } from '@tanstack/react-router';
+import { Card, Col, Descriptions, List, Row, Space, Typography } from 'antd';
 
-import { demoRuns, studioNodes } from '../demo-data';
+import {
+  studioActions,
+  studioNodes,
+  studioOverview,
+  studioReleaseItems,
+  studioRuntimeTrack,
+  studioStateItems
+} from '../demo-data';
 import { DemoPageHero } from '../../shared/ui/DemoPageHero';
 import { StatusPill } from '../../shared/ui/StatusPill';
 
 export function AgentFlowPage() {
   const [activeNodeId, setActiveNodeId] = useState(studioNodes[0]?.id ?? null);
-  const activeNode = studioNodes.find((item) => item.id === activeNodeId) ?? studioNodes[0];
+  const activeNode = useMemo(
+    () => studioNodes.find((item) => item.id === activeNodeId) ?? studioNodes[0],
+    [activeNodeId]
+  );
 
   return (
     <div className="demo-page">
       <DemoPageHero
-        kicker="执行工作区"
+        kicker="工作流主线"
         title="流程编排"
-        description="编排页保持画布与 inspector 的固定组合，用于继续推进当前流程，而不是承担顶层导航职责。"
+        description="编排页直接展示 1Flowse 的核心闭环：Flow 不是摆完节点就结束，而是要经过发布检查、运行时恢复点和状态记忆绑定，最后形成稳定对外入口。"
+        aside={
+          <Card size="small" title="当前交付物" className="shell-summary-card">
+            <Descriptions
+              column={1}
+              colon={false}
+              items={studioReleaseItems.slice(0, 3).map((item) => ({
+                key: item.key,
+                label: item.label,
+                children: item.value
+              }))}
+            />
+          </Card>
+        }
       />
 
-      <Row gutter={[18, 18]}>
-        <Col xs={24} xl={15}>
-          <Card title="画布概览" className="demo-card studio-surface-card">
-            <div className="studio-surface">
-              {studioNodes.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`studio-node ${item.id === activeNode.id ? 'is-active' : ''}`}
-                  onClick={() => setActiveNodeId(item.id)}
-                >
-                  <span className="studio-node-kind">{item.kind}</span>
-                  <span className="studio-node-name">{item.name}</span>
-                  <StatusPill status={item.status}>{item.statusLabel}</StatusPill>
-                </button>
-              ))}
-            </div>
-            <div className="studio-lane">
-              {demoRuns.slice(0, 2).map((item) => (
-                <div key={item.id} className="studio-lane-row">
-                  <span>{item.id}</span>
-                  <span>{item.flow}</span>
-                  <StatusPill status={item.status}>{item.summary}</StatusPill>
-                </div>
-              ))}
-            </div>
+      <div className="metric-grid">
+        {studioOverview.map((item) => (
+          <Card key={item.label} className="metric-card">
+            <StatusPill status={item.status}>{item.label}</StatusPill>
+            <Typography.Title level={2}>{item.value}</Typography.Title>
+            <Typography.Paragraph>{item.note}</Typography.Paragraph>
           </Card>
+        ))}
+      </div>
+
+      <Row gutter={[18, 18]} align="top">
+        <Col xs={24} xl={15}>
+          <div className="section-stack">
+            <Card title="执行链路" className="demo-card studio-surface-card">
+              <div className="studio-flow-grid">
+                {studioNodes.map((item, index) => (
+                  <div key={item.id} className="studio-flow-step">
+                    <button
+                      type="button"
+                      className={`studio-node ${item.id === activeNode.id ? 'is-active' : ''}`}
+                      onClick={() => setActiveNodeId(item.id)}
+                    >
+                      <span className="studio-node-kind">
+                        {index + 1}. {item.kind}
+                      </span>
+                      <span className="studio-node-name">{item.name}</span>
+                      <span className="studio-node-description">{item.description}</span>
+                      <span className="studio-node-meta">
+                        <span>{item.owner}</span>
+                        <StatusPill status={item.status}>{item.statusLabel}</StatusPill>
+                      </span>
+                    </button>
+                    {index < studioNodes.length - 1 ? (
+                      <span className="studio-flow-connector" aria-hidden="true" />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card title="运行轨道" className="demo-card studio-runtime-card">
+              <div className="studio-runtime-list">
+                {studioRuntimeTrack.map((item) => (
+                  <div key={item.key} className="studio-runtime-item">
+                    <div className="studio-runtime-head">
+                      <div>
+                        <Typography.Text strong>{item.title}</Typography.Text>
+                        <Typography.Paragraph className="card-paragraph">
+                          {item.note}
+                        </Typography.Paragraph>
+                      </div>
+                      <StatusPill status={item.status}>{item.statusLabel}</StatusPill>
+                    </div>
+                    <div className="row-meta-line">
+                      <span>{item.time}</span>
+                      <span>运行时恢复点</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
         </Col>
 
         <Col xs={24} xl={9}>
-          <Card title="当前聚焦节点" className="demo-card studio-inspector-card">
-            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-              <div>
-                <Typography.Title level={4}>{activeNode.name}</Typography.Title>
-                <Typography.Paragraph>{activeNode.description}</Typography.Paragraph>
+          <div className="section-stack">
+            <Card
+              title="当前聚焦节点"
+              className="demo-card studio-inspector-card"
+              role="region"
+              aria-label="当前聚焦节点"
+            >
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <div>
+                  <Typography.Title level={4}>{activeNode.name}</Typography.Title>
+                  <Typography.Paragraph>{activeNode.description}</Typography.Paragraph>
+                </div>
+                <Descriptions
+                  column={1}
+                  colon={false}
+                  items={[
+                    {
+                      key: 'owner',
+                      label: '负责人',
+                      children: activeNode.owner
+                    },
+                    {
+                      key: 'kind',
+                      label: '节点类型',
+                      children: activeNode.kind
+                    },
+                    {
+                      key: 'status',
+                      label: '状态',
+                      children: <StatusPill status={activeNode.status}>{activeNode.statusLabel}</StatusPill>
+                    }
+                  ]}
+                />
+                <Card size="small" title="输出摘要">
+                  <p className="card-paragraph">{activeNode.output}</p>
+                </Card>
+                <Link to="/tools" className="demo-cta-link demo-cta-link-primary">
+                  打开运行事件
+                </Link>
+              </Space>
+            </Card>
+
+            <Card title="发布检查" className="demo-card">
+              <div className="studio-evidence-list">
+                {studioReleaseItems.map((item) => (
+                  <div key={item.key} className="studio-evidence-item">
+                    <div className="studio-evidence-head">
+                      <Typography.Text strong>{item.label}</Typography.Text>
+                      <StatusPill status={item.status}>{item.value}</StatusPill>
+                    </div>
+                    <Typography.Paragraph className="card-paragraph">
+                      {item.note}
+                    </Typography.Paragraph>
+                  </div>
+                ))}
               </div>
-              <Descriptions
-                column={1}
-                colon={false}
-                items={[
-                  {
-                    key: 'owner',
-                    label: '负责人',
-                    children: activeNode.owner
-                  },
-                  {
-                    key: 'kind',
-                    label: '节点类型',
-                    children: activeNode.kind
-                  },
-                  {
-                    key: 'status',
-                    label: '状态',
-                    children: <StatusPill status={activeNode.status}>{activeNode.statusLabel}</StatusPill>
-                  }
-                ]}
+            </Card>
+
+            <Card title="状态记忆" className="demo-card">
+              <List
+                dataSource={studioStateItems}
+                renderItem={(item) => (
+                  <List.Item>
+                    <div className="demo-list-block">
+                      <Typography.Text strong>{item.label}</Typography.Text>
+                      <Typography.Paragraph>{item.value}</Typography.Paragraph>
+                      <Typography.Text className="entry-link-note">{item.note}</Typography.Text>
+                    </div>
+                  </List.Item>
+                )}
               />
-              <Card size="small" title="输出摘要">
-                <p className="card-paragraph">{activeNode.output}</p>
-              </Card>
-              <Button type="primary">继续发布检查</Button>
-            </Space>
-          </Card>
+            </Card>
+
+            <Card title="关联入口" className="demo-card">
+              <div className="entry-grid">
+                {studioActions.map((item) => (
+                  <Link key={item.key} to={item.href} className="entry-link-card">
+                    <div className="entry-link-header">
+                      <Typography.Text strong>{item.title}</Typography.Text>
+                      <StatusPill status={item.status}>{item.badge}</StatusPill>
+                    </div>
+                    <Typography.Paragraph>{item.description}</Typography.Paragraph>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          </div>
         </Col>
       </Row>
     </div>

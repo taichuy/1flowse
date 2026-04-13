@@ -70,6 +70,46 @@ export interface StudioNode {
   output: string;
 }
 
+export interface StudioOverviewItem {
+  label: string;
+  value: string;
+  note: string;
+  status: DemoStatus;
+}
+
+export interface StudioReleaseItem {
+  key: string;
+  label: string;
+  value: string;
+  note: string;
+  status: DemoStatus;
+}
+
+export interface StudioRuntimeItem {
+  key: string;
+  title: string;
+  time: string;
+  note: string;
+  status: DemoStatus;
+  statusLabel: string;
+}
+
+export interface StudioStateItem {
+  key: string;
+  label: string;
+  value: string;
+  note: string;
+}
+
+export interface StudioActionItem {
+  key: string;
+  title: string;
+  description: string;
+  href: string;
+  status: DemoStatus;
+  badge: string;
+}
+
 export interface SubsystemItem {
   id: string;
   name: string;
@@ -343,6 +383,147 @@ export const studioNodes: StudioNode[] = [
     statusLabel: '已就绪',
     description: '负责把已确认流程发布到宿主运行时，并同步更新入口版本。',
     output: '生成 runtime revision，通知工具台和日志页回填状态。'
+  }
+];
+
+export const studioOverview: StudioOverviewItem[] = [
+  {
+    label: '当前 Flow',
+    value: '发布检查',
+    note: '本轮演示围绕发布前治理闭环，而不是泛节点堆叠。',
+    status: 'running'
+  },
+  {
+    label: '对外入口',
+    value: '/agentflows/publish-check/runs',
+    note: 'Flow 发布后以稳定 Agent API 暴露，不再停留在控制台内调试。',
+    status: 'healthy'
+  },
+  {
+    label: '恢复点',
+    value: '04',
+    note: '包含 webhook、人工复核和回调恢复三个关键边界。',
+    status: 'waiting'
+  },
+  {
+    label: '状态字段',
+    value: '06',
+    note: '团队、权限、发布 revision 和回写窗口都进入结构化状态层。',
+    status: 'selected'
+  }
+];
+
+export const studioReleaseItems: StudioReleaseItem[] = [
+  {
+    key: 'endpoint',
+    label: '发布入口',
+    value: '/agentflows/publish-check/runs',
+    note: '保持 Agent 友好的统一调用入口。',
+    status: 'healthy'
+  },
+  {
+    key: 'revision',
+    label: '当前 revision',
+    value: 'revision-24',
+    note: '最新发布快照已生成，正在等待回写确认。',
+    status: 'waiting'
+  },
+  {
+    key: 'exposure',
+    label: '暴露级别',
+    value: '外部 Agent + 控制台治理',
+    note: '公开调用与治理入口语义已经分开，不再混在一张表里。',
+    status: 'running'
+  },
+  {
+    key: 'callback',
+    label: '回写窗口',
+    value: '5 分钟可恢复',
+    note: '超过时间窗后自动转入工具台阻塞事件。',
+    status: 'failed'
+  }
+];
+
+export const studioRuntimeTrack: StudioRuntimeItem[] = [
+  {
+    key: 'snapshot',
+    title: '生成发布快照',
+    time: '09:40',
+    note: '把 Flow 定义、输入输出契约和当前 revision 一起固化成可恢复对象。',
+    status: 'healthy',
+    statusLabel: '已固化'
+  },
+  {
+    key: 'checkpoint',
+    title: '写入 checkpoint',
+    time: '09:43',
+    note: '在 webhook 等待前先落 checkpoint，避免回写失败后丢失运行上下文。',
+    status: 'running',
+    statusLabel: '已完成'
+  },
+  {
+    key: 'callback',
+    title: '等待第三方回写',
+    time: '09:46',
+    note: '当前仍在回写窗口内，超时后会进入工具台阻塞事件。',
+    status: 'waiting',
+    statusLabel: '等待回写'
+  },
+  {
+    key: 'recovery',
+    title: '恢复并补记发布状态',
+    time: '下一步',
+    note: '如果回写缺失，平台负责人需要根据日志和回调时间戳决定是否人工补记。',
+    status: 'draft',
+    statusLabel: '待执行'
+  }
+];
+
+export const studioStateItems: StudioStateItem[] = [
+  {
+    key: 'memory',
+    label: '长期记忆：团队发布偏好',
+    value: '保留 5 分钟回写窗口，允许人工补记成功状态。',
+    note: '属于跨会话可复用策略，不应散落在页面临时提示里。'
+  },
+  {
+    key: 'session',
+    label: '当前会话：增长实验室 / 平台负责人',
+    value: '继承控制台会话与当前工作区上下文。',
+    note: '确保发布审批、工具台和子系统页看到同一组治理边界。'
+  },
+  {
+    key: 'permissions',
+    label: '权限绑定：发布审批 + 访问控制复核',
+    value: 'own/all 冲突会直接阻塞发布，不允许绕过治理页。',
+    note: '权限模型是一等运行前校验条件，不是纯展示字段。'
+  }
+];
+
+export const studioActions: StudioActionItem[] = [
+  {
+    key: 'tools',
+    title: '打开工具台事件队列',
+    description: '查看回写超时、权限冲突和发布窗口异常是否需要人工接管。',
+    href: '/tools',
+    status: 'waiting',
+    badge: '阻塞事件'
+  },
+  {
+    key: 'settings',
+    title: '返回访问控制',
+    description: '继续收口角色矩阵、公开接口边界和审计要求。',
+    href: '/settings',
+    status: 'failed',
+    badge: '治理出口'
+  },
+  {
+    key: 'subsystems',
+    title: '核对子系统挂载',
+    description: '确认最新 revision 已同步到宿主扩展与业务入口。',
+    href: '/subsystems',
+    status: 'running',
+    badge: '发布影响面'
   }
 ];
 

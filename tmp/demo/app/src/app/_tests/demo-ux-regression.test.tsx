@@ -11,7 +11,9 @@ describe('demo ux regression coverage', () => {
   test('home separates the action queue from recent runs and keeps product-facing copy', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '工作台' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: '工作台' }, { timeout: 5000 })
+    ).toBeInTheDocument();
     expect(screen.queryByText('CURRENT PRODUCT DEMO')).not.toBeInTheDocument();
     expect(screen.queryByText('本轮批判')).not.toBeInTheDocument();
     expect(screen.queryByText('Agent Flow Studio')).not.toBeInTheDocument();
@@ -27,7 +29,7 @@ describe('demo ux regression coverage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '查看 权限矩阵复核' }));
 
-    const dialog = await screen.findByRole('dialog', { name: '权限矩阵复核' });
+    const dialog = await screen.findByRole('dialog', { name: '权限矩阵复核' }, { timeout: 5000 });
     expect(
       within(dialog).getByText('当前权限矩阵里仍有一个角色同时触发 own 与 all 两条授权语义，工作台只保留人工复核入口，不再在首页直接展开矩阵细节。')
     ).toBeInTheDocument();
@@ -39,13 +41,13 @@ describe('demo ux regression coverage', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '子系统' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '子系统' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '子系统卡片列表' })).toBeInTheDocument();
     expect(screen.queryByText('Growth Portal')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '查看 增长门户 详情' }));
 
-    const dialog = await screen.findByRole('dialog', { name: '增长门户' });
+    const dialog = await screen.findByRole('dialog', { name: '增长门户' }, { timeout: 5000 });
     expect(within(dialog).getByText('/embedded/growth-portal')).toBeInTheDocument();
     expect(within(dialog).getByText('增长系统')).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: '进入接入治理' })).toBeInTheDocument();
@@ -56,7 +58,7 @@ describe('demo ux regression coverage', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '工具' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '工具' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('事件队列')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '事件卡片列表' })).toBeInTheDocument();
     expect(screen.queryByText('Security')).not.toBeInTheDocument();
@@ -67,7 +69,7 @@ describe('demo ux regression coverage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '查看 权限矩阵冲突' }));
 
-    const dialog = await screen.findByRole('dialog', { name: '权限矩阵冲突' });
+    const dialog = await screen.findByRole('dialog', { name: '权限矩阵冲突' }, { timeout: 5000 });
     expect(
       within(dialog).getByText('回到设置 / 访问控制，确认 own 与 all 的最终授权口径。')
     ).toBeInTheDocument();
@@ -80,13 +82,13 @@ describe('demo ux regression coverage', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '设置' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '设置' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '安全设置' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: '团队' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('menuitem', { name: '安全设置' }));
 
-    expect(await screen.findByText('密码与会话')).toBeInTheDocument();
+    expect(await screen.findByText('密码与会话', undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByText('最近 30 天未出现异常设备登录。')).toBeInTheDocument();
   });
 });
