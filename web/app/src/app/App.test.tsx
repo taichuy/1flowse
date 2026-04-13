@@ -50,6 +50,12 @@ test('renders the bootstrap shell and health state', async () => {
   fireEvent.mouseEnter(accountTrigger);
   expect(await screen.findByText('Profile')).toBeInTheDocument();
   expect(document.querySelectorAll('.app-shell-account-popup-label').length).toBe(3);
+  expect(
+    Array.from(document.querySelectorAll('.app-shell-account-popup-label')).every(
+      (element) =>
+        (element as HTMLElement).style.getPropertyValue('--account-popup-font-size') === '18px'
+    )
+  ).toBe(true);
   expect(screen.queryByRole('link', { name: 'Theme Preview' })).not.toBeInTheDocument();
   expect(await screen.findByText(/api-server/i)).toBeInTheDocument();
 });

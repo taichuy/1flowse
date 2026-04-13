@@ -298,6 +298,9 @@ a {
   align-items: center;
   justify-content: center;
   width: 100%;
+  font-size: var(--account-popup-font-size, 18px);
+  font-weight: 500;
+  line-height: 1.15;
   text-align: center;
 }
 

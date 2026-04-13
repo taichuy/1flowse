@@ -82,16 +82,37 @@ function AppHeaderActions() {
       children: [
         {
           key: 'profile',
-          label: <span className="app-shell-account-popup-label">Profile</span>
+          label: (
+            <span
+              className="app-shell-account-popup-label"
+              style={{ ['--account-popup-font-size' as string]: '18px' }}
+            >
+              Profile
+            </span>
+          )
         },
         {
           key: 'settings',
-          label: <span className="app-shell-account-popup-label">Settings</span>
+          label: (
+            <span
+              className="app-shell-account-popup-label"
+              style={{ ['--account-popup-font-size' as string]: '18px' }}
+            >
+              Settings
+            </span>
+          )
         },
         { type: 'divider' },
         {
           key: 'sign-out',
-          label: <span className="app-shell-account-popup-label">Sign out</span>
+          label: (
+            <span
+              className="app-shell-account-popup-label"
+              style={{ ['--account-popup-font-size' as string]: '18px' }}
+            >
+              Sign out
+            </span>
+          )
         }
       ]
     }
