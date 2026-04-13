@@ -12,4 +12,9 @@ describe('route truth layer', () => {
     ]);
     expect(getSelectedRouteId('/embedded/demo-app')).toBe('embedded-apps');
   });
+
+  test('declares explicit bootstrap guard metadata for every route', () => {
+    expect(APP_ROUTES.every((route) => route.guard === 'bootstrap-allow')).toBe(true);
+    expect(APP_ROUTES.every((route) => typeof route.permissionKey === 'string')).toBe(true);
+  });
 });

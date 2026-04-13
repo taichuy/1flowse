@@ -13,6 +13,8 @@ import { EmbeddedAppDetailPage } from '../features/embedded-apps/pages/EmbeddedA
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { EmbeddedMountPage } from '../features/embedded-runtime/pages/EmbeddedMountPage';
 import { HomePage } from '../features/home/pages/HomePage';
+import { getRouteDefinition } from '../routes/route-helpers';
+import { RouteGuard } from '../routes/route-guards';
 
 function RootLayout() {
   const pathname = useRouterState({
@@ -33,31 +35,51 @@ const rootRoute = createRootRoute({
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage
+  component: () => (
+    <RouteGuard permissionKey={getRouteDefinition('home').permissionKey}>
+      <HomePage />
+    </RouteGuard>
+  )
 });
 
 const agentFlowRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agent-flow',
-  component: AgentFlowPage
+  component: () => (
+    <RouteGuard permissionKey={getRouteDefinition('agent-flow').permissionKey}>
+      <AgentFlowPage />
+    </RouteGuard>
+  )
 });
 
 const embeddedAppsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/embedded-apps',
-  component: EmbeddedAppsPage
+  component: () => (
+    <RouteGuard permissionKey={getRouteDefinition('embedded-apps').permissionKey}>
+      <EmbeddedAppsPage />
+    </RouteGuard>
+  )
 });
 
 const embeddedAppDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/embedded-apps/$embeddedAppId',
-  component: EmbeddedAppDetailPage
+  component: () => (
+    <RouteGuard permissionKey={getRouteDefinition('embedded-apps').permissionKey}>
+      <EmbeddedAppDetailPage />
+    </RouteGuard>
+  )
 });
 
 const embeddedMountRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/embedded/$embeddedAppId',
-  component: EmbeddedMountPage
+  component: () => (
+    <RouteGuard permissionKey={getRouteDefinition('embedded-runtime').permissionKey}>
+      <EmbeddedMountPage />
+    </RouteGuard>
+  )
 });
 
 const routeTree = rootRoute.addChildren([

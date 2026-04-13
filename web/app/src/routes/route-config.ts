@@ -5,7 +5,8 @@ export interface AppRouteDefinition {
   path: string;
   navLabel: string | null;
   selectedMatchers: Array<(pathname: string) => boolean>;
-  permissionKey: string | null;
+  permissionKey: string;
+  guard: 'bootstrap-allow';
 }
 
 export const APP_ROUTES: AppRouteDefinition[] = [
@@ -14,7 +15,8 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     path: '/',
     navLabel: '工作台',
     selectedMatchers: [(pathname) => pathname === '/'],
-    permissionKey: 'home.view'
+    permissionKey: 'home.view',
+    guard: 'bootstrap-allow'
   },
   {
     id: 'embedded-apps',
@@ -24,21 +26,24 @@ export const APP_ROUTES: AppRouteDefinition[] = [
       (pathname) => pathname.startsWith('/embedded-apps'),
       (pathname) => pathname.startsWith('/embedded/')
     ],
-    permissionKey: 'embedded-apps.view'
+    permissionKey: 'embedded-apps.view',
+    guard: 'bootstrap-allow'
   },
   {
     id: 'embedded-runtime',
     path: '/embedded/$embeddedAppId',
     navLabel: null,
     selectedMatchers: [(pathname) => pathname.startsWith('/embedded/')],
-    permissionKey: 'embedded-runtime.view'
+    permissionKey: 'embedded-runtime.view',
+    guard: 'bootstrap-allow'
   },
   {
     id: 'agent-flow',
     path: '/agent-flow',
     navLabel: '前台',
     selectedMatchers: [(pathname) => pathname.startsWith('/agent-flow')],
-    permissionKey: 'agent-flow.view'
+    permissionKey: 'agent-flow.view',
+    guard: 'bootstrap-allow'
   }
 ];
 

@@ -12,6 +12,15 @@
 
 **Approval:** User approved continuing from the spec into an implementation plan on `2026-04-13 16`.
 
+## Execution Result
+
+- Status: completed
+- Completed at: `2026-04-13 19:37`
+- Notes:
+  - Continued from an already-partially-implemented worktree and finished the remaining route-guard slice plus verification cleanup.
+  - Re-ran frontend verification with `pnpm --dir web lint`, `pnpm --dir web test -- --testTimeout=15000`, `pnpm --dir web/app build`, runtime `style-boundary` checks, and Playwright screenshots.
+  - Screenshot artifacts were refreshed under `uploads/frontend-bootstrap-realignment/`.
+
 ---
 
 ## Scope Notes
@@ -99,7 +108,7 @@
 - Modify: `web/app/src/style-boundary/registry.tsx`
 - Modify: `web/packages/shared-types/src/index.ts`
 
-- [ ] **Step 1: Write the failing route-truth and navigation tests**
+- [x] **Step 1: Write the failing route-truth and navigation tests**
 
 Create `web/app/src/routes/_tests/route-config.test.ts`:
 
@@ -142,13 +151,13 @@ describe('Navigation', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused failures**
+- [x] **Step 2: Run the focused failures**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-config.test.ts src/app-shell/_tests/navigation.test.tsx`
 
 Expected: FAIL because `route-config.ts`, `Navigation.tsx`, and the expanded route ids do not exist yet.
 
-- [ ] **Step 3: Implement route config, shared route ids, and shell extraction**
+- [x] **Step 3: Implement route config, shared route ids, and shell extraction**
 
 Create `web/app/src/routes/route-config.ts`:
 
@@ -376,13 +385,13 @@ function RootLayout() {
 }
 ```
 
-- [ ] **Step 4: Re-run focused tests and existing registry coverage**
+- [x] **Step 4: Re-run focused tests and existing registry coverage**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-config.test.ts src/app-shell/_tests/navigation.test.tsx src/style-boundary/_tests/registry.test.tsx`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit the shell and route-truth slice**
+- [x] **Step 5: Commit the shell and route-truth slice**
 
 ```bash
 git add web/app/src/app-shell web/app/src/routes web/app/src/app/router.tsx web/app/src/style-boundary/registry.tsx web/packages/shared-types/src/index.ts
@@ -404,7 +413,7 @@ git commit -m "feat(web): extract app shell and route truth layer"
 - Modify: `web/app/src/app/router.tsx`
 - Modify: `web/app/src/style-boundary/registry.tsx`
 
-- [ ] **Step 1: Write failing feature-path and feature-api tests**
+- [x] **Step 1: Write failing feature-path and feature-api tests**
 
 Create `web/app/src/features/home/_tests/home-page.test.tsx`:
 
@@ -480,13 +489,13 @@ describe('EmbeddedAppsPage', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused failures**
+- [x] **Step 2: Run the focused failures**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/home/_tests/home-api.test.ts src/features/home/_tests/home-page.test.tsx src/features/embedded-apps/_tests/embedded-apps-page.test.tsx`
 
 Expected: FAIL because the `pages/` and `api/` entrypoints do not exist yet.
 
-- [ ] **Step 3: Implement feature `pages/` files and feature api consumption**
+- [x] **Step 3: Implement feature `pages/` files and feature api consumption**
 
 Create `web/app/src/features/home/api/health.ts`:
 
@@ -576,13 +585,13 @@ export function EmbeddedAppsPage() {
 }
 ```
 
-- [ ] **Step 4: Re-run the focused feature and route regressions**
+- [x] **Step 4: Re-run the focused feature and route regressions**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-config.test.ts src/app-shell/_tests/navigation.test.tsx src/features/home/_tests/home-api.test.ts src/features/home/_tests/home-page.test.tsx src/features/embedded-apps/_tests/embedded-apps-page.test.tsx`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit the feature-directory and api slice**
+- [x] **Step 5: Commit the feature-directory and api slice**
 
 ```bash
 git add web/app/src/features web/app/src/app/router.tsx web/app/src/style-boundary/registry.tsx
@@ -606,7 +615,7 @@ git commit -m "refactor(web): move pages and feature api into target directories
 - Delete after move: `web/packages/embed-sdk/src/index.test.ts`
 - Delete after move: `web/packages/embedded-contracts/src/index.test.ts`
 
-- [ ] **Step 1: Move the failing test intent into proper `_tests` files**
+- [x] **Step 1: Move the failing test intent into proper `_tests` files**
 
 Create `web/app/src/app/_tests/app-shell.test.tsx` with the current app-shell assertions from `App.test.tsx`, but use Testing Library and semantic queries only:
 
@@ -639,13 +648,13 @@ Update the style-boundary harness test to query by `data-testid` instead of cont
 expect(screen.getByTestId('style-boundary-scene')).toBeInTheDocument();
 ```
 
-- [ ] **Step 2: Run lint and confirm the current failures disappear only after the moves**
+- [x] **Step 2: Run lint and confirm the current failures disappear only after the moves**
 
 Run: `pnpm --dir web lint`
 
 Expected: FAIL at first with `testing-library/no-node-access`, `testing-library/no-container`, and `react-refresh/only-export-components`.
 
-- [ ] **Step 3: Split exports and finish the lint fixes**
+- [x] **Step 3: Split exports and finish the lint fixes**
 
 Move `StyleBoundaryHarness` into `web/app/src/style-boundary/StyleBoundaryHarness.tsx`:
 
@@ -702,7 +711,7 @@ test('createEmbeddedAppManifest returns the provided manifest', () => {
 });
 ```
 
-- [ ] **Step 4: Re-run lint and all frontend tests**
+- [x] **Step 4: Re-run lint and all frontend tests**
 
 Run:
 
@@ -713,7 +722,7 @@ pnpm --dir web test -- --testTimeout=15000
 
 Expected: PASS
 
-- [ ] **Step 5: Commit the test and lint cleanup**
+- [x] **Step 5: Commit the test and lint cleanup**
 
 ```bash
 git add web/app/src/app/_tests web/app/src/app-shell/_tests web/app/src/style-boundary web/packages/embed-sdk/src/_tests web/packages/embedded-contracts/src/_tests
@@ -735,7 +744,7 @@ git commit -m "test(web): relocate frontend tests and fix lint violations"
 - Modify: `web/app/src/style-boundary/registry.tsx`
 - Delete after move: `web/app/src/styles/global.css`
 
-- [ ] **Step 1: Add failing style-boundary coverage for the new shell file layout**
+- [x] **Step 1: Add failing style-boundary coverage for the new shell file layout**
 
 Update `scenario-manifest.json` so shell scenes no longer rely only on `app/router.tsx`; they must point to the new `app-shell/*` files, `app-shell/app-shell.css`, `styles/tokens.css`, and `styles/globals.css`.
 
@@ -752,7 +761,7 @@ node scripts/node/check-style-boundary.js file web/app/src/styles/globals.css
 
 Expected: FAIL or report outdated impact mappings until the manifest and CSS ownership are updated.
 
-- [ ] **Step 2: Split shell, token, and document-level CSS ownership**
+- [x] **Step 2: Split shell, token, and document-level CSS ownership**
 
 Create `web/app/src/app-shell/app-shell.css` and move shell/menu/account rules there, for example:
 
@@ -810,7 +819,7 @@ import '../styles/globals.css';
 Update `web/app/src/app-shell/_tests/account-popup.boundary.test.tsx` to import `../../styles/tokens.css`, `../../styles/globals.css`, and `../app-shell.css`.  
 Delete `web/app/src/styles/global.css` once both new files and the shell stylesheet are wired in.
 
-- [ ] **Step 3: Push generic `Ant Design` styling into theme tokens where possible**
+- [x] **Step 3: Push generic `Ant Design` styling into theme tokens where possible**
 
 Update `web/packages/ui/src/index.tsx` to prefer component tokens over global `.ant-*` overrides, for example:
 
@@ -837,7 +846,7 @@ After this pass, the old `global.css` responsibilities should be redistributed a
 - `globals.css` for document-level resets and backgrounds only
 - only the smallest possible set of wrapper-scoped slot overrides that cannot be expressed as theme tokens
 
-- [ ] **Step 4: Re-run style-boundary and screenshot verification**
+- [x] **Step 4: Re-run style-boundary and screenshot verification**
 
 Run:
 
@@ -855,7 +864,7 @@ pnpm --dir web exec playwright screenshot --browser chromium --channel chrome --
 
 Expected: PASS on all style-boundary commands and a stable shell screenshot.
 
-- [ ] **Step 5: Commit the CSS ownership pass**
+- [x] **Step 5: Commit the CSS ownership pass**
 
 ```bash
 git add web/app/src/app-shell web/app/src/main.tsx web/app/src/style-boundary/main.tsx web/app/src/styles web/packages/ui/src/index.tsx web/app/src/style-boundary/scenario-manifest.json web/app/src/style-boundary/registry.tsx
@@ -872,7 +881,7 @@ git commit -m "refactor(web): scope shell styles and reduce global ant overrides
 - Modify: `web/app/src/app/_tests/app-shell.test.tsx`
 - Modify: `web/app/src/routes/_tests/route-config.test.ts`
 
-- [ ] **Step 1: Add failing tests for route metadata and guard wrapping**
+- [x] **Step 1: Add failing tests for route metadata and guard wrapping**
 
 Extend `web/app/src/routes/_tests/route-config.test.ts`:
 
@@ -905,13 +914,13 @@ describe('RouteGuard', () => {
 
 Add `web/app/src/app/_tests/app-shell.test.tsx` coverage that protected routes still render through the shell when the bootstrap guard allows access.
 
-- [ ] **Step 2: Run the focused failures**
+- [x] **Step 2: Run the focused failures**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-config.test.ts src/routes/_tests/route-guards.test.tsx src/app/_tests/app-shell.test.tsx`
 
 Expected: FAIL until the guard scaffold and route metadata are wired into the route tree.
 
-- [ ] **Step 3: Implement the bootstrap guard scaffold**
+- [x] **Step 3: Implement the bootstrap guard scaffold**
 
 Create `web/app/src/routes/route-guards.tsx`:
 
@@ -941,7 +950,7 @@ component: () => (
 
 This scaffold is intentionally allow-all for now; the purpose is to establish the file boundary and metadata contract before real auth lands.
 
-- [ ] **Step 4: Run the full frontend verification**
+- [x] **Step 4: Run the full frontend verification**
 
 Run:
 
@@ -965,7 +974,7 @@ pnpm --dir web exec playwright screenshot --device "Pixel 5" --browser chromium 
 
 Expected: all commands PASS, screenshots stable, no placeholder/debug/mock copy remains in UI.
 
-- [ ] **Step 5: Commit the final frontend bootstrap alignment**
+- [x] **Step 5: Commit the final frontend bootstrap alignment**
 
 ```bash
 git add web/app/src/routes web/app/src/app web/app/src/app-shell web/app/src/features web/app/src/style-boundary web/app/src/styles web/app/src/main.tsx web/packages/shared-types/src/index.ts web/packages/ui/src/index.tsx
