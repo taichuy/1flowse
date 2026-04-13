@@ -1,26 +1,31 @@
 ---
 memory_type: tool
-topic: 先列目录再读取辅助文档，避免假定 plan.md 存在
-summary: 在仓库辅助脚本目录里直接用 `sed` 打开猜测的文档路径可能失败；已验证的做法是先用 `find` 或 `ls` 确认文件存在，再读取目标文件。
+topic: 先确认路径存在且是文件，再用 sed 读取内容
+summary: 在仓库里直接用 `sed` 读取猜测路径可能因为目标不存在或实际是目录而失败；已验证做法是先用 `find`、`ls -ld` 或 `file` 确认路径存在且为普通文件，再读取目标文件。
 keywords:
   - bash
   - sed
   - missing-file
+  - is-a-directory
   - find
 match_when:
   - 需要读取脚本目录里的辅助文档或说明文件
   - 使用 `sed` 打开猜测路径时报“没有那个文件或目录”
+  - 使用 `sed` 读取路径时报“是一个目录”
 created_at: 2026-04-13 08
-updated_at: 2026-04-13 08
-last_verified_at: 2026-04-13 08
+updated_at: 2026-04-13 14
+last_verified_at: 2026-04-13 14
 decision_policy: reference_on_failure
 scope:
   - bash
-  - scripts/node
   - sed
+  - find
+  - ls
+  - docs/superpowers
+  - api/apps/api-server/src
 ---
 
-# 先列目录再读取辅助文档，避免假定 plan.md 存在
+# 先确认路径存在且是文件，再用 sed 读取内容
 
 ## 时间
 
@@ -28,24 +33,34 @@ scope:
 
 ## 失败现象
 
-执行 `sed -n '1,260p' scripts/node/mock-ui-sync/plan.md` 时返回“没有那个文件或目录”。
+执行 `sed` 读取猜测路径时，可能返回“没有那个文件或目录”或“是一个目录”。
 
 ## 触发条件
 
-在探索仓库内脚本工具目录时，主观假定会存在 `plan.md` 或同类说明文件，直接按猜测路径读取。
+在探索仓库目录时，主观假定某个路径就是文档文件，直接按猜测路径读取，没有先确认它是否存在、是否其实是目录，或者真实内容是否已经搬到别的文件。
 
 ## 根因
 
-该目录实际只有 `core.js` 和测试文件，没有额外说明文档；失败来自路径假设，而不是权限或编码问题。
+失败来自路径假设，而不是权限或编码问题：
+
+- 某些路径根本不存在；
+- 某些路径存在，但实际是目录；
+- 某些职责已经挪到相邻文件，例如 OpenAPI 聚合放在 `lib.rs`，并不存在单独的 `openapi.rs`。
 
 ## 解法
 
-先用 `find <dir> -maxdepth 2 -type f` 或 `ls` 确认目录内容，再对确认存在的文件执行 `sed` / `cat`。
+先用 `find <dir> -maxdepth 2 -type f`、`ls -ld <path>` 或 `file <path>` 确认目录内容和路径类型，再对确认存在的普通文件执行 `sed` / `cat`。
 
 ## 验证方式
 
-先执行 `find scripts/node/mock-ui-sync -maxdepth 2 -type f`，确认真实存在的文件后，再读取 `scripts/node/mock-ui-sync/core.js` 成功。
+先执行目录或文件类型检查，再读取真实文件：
+
+- `find scripts/node/mock-ui-sync -maxdepth 2 -type f`
+- `find docs/superpowers/specs/1flowse/modules/01-user-auth-and-team -maxdepth 2 \\( -name 'AGENTS.md' -o -type f \\)`
+- `ls -ld api/apps/api-server/src/lib.rs`
 
 ## 复现记录
 
 - `2026-04-13 08`：在 `scripts/node/mock-ui-sync` 目录假定存在 `plan.md` 失败，改为先列目录后已成功读取实际文件。
+- `2026-04-13 14`：读取 `docs/superpowers/specs/1flowse/modules/01-user-auth-and-team*` 时命中目录本身，`sed` 返回“是一个目录”；改为先用 `find` 列出目录中的真实文件，再读取 `README.md` 成功。
+- `2026-04-13 14`：主观假定 `api/apps/api-server/src/openapi.rs` 存在，`sed` 返回“没有那个文件或目录”；改为检索 `#[openapi(` 后确认 OpenAPI 聚合定义实际在 `api/apps/api-server/src/lib.rs`。
