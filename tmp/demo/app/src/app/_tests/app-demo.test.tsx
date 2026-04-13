@@ -22,8 +22,8 @@ test('renders the control-plane shell and current primary navigation', async () 
   expect(within(primaryNavigation).getByRole('link', { name: '工具' })).toBeInTheDocument();
   expect(within(primaryNavigation).getByRole('link', { name: '设置' })).toBeInTheDocument();
 
-  expect(screen.getByRole('link', { name: '进入 Agent Flow Studio' })).toBeInTheDocument();
-  expect(screen.queryByText('Theme Preview')).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '进入流程编排' })).toBeInTheDocument();
+  expect(screen.queryByText('CURRENT PRODUCT DEMO')).not.toBeInTheDocument();
   expect(screen.queryByText('1Flowse Bootstrap')).not.toBeInTheDocument();
 });
 
@@ -32,8 +32,8 @@ test('renders the studio route and updates the inspector when a node is focused'
 
   render(<App />);
 
-  expect(await screen.findByRole('heading', { name: 'Agent Flow Studio' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Knowledge Intake/i })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: '流程编排' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /需求汇总/i })).toBeInTheDocument();
   expect(screen.getByText('当前聚焦节点')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: /发布网关/i }));
@@ -50,11 +50,12 @@ test('renders the tools route and opens a run drawer from the logs view', async 
 
   expect(await screen.findByRole('heading', { name: '工具' })).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole('tab', { name: '调用日志' }));
-  fireEvent.click(screen.getByRole('button', { name: /查看 run_1021 详情/i }));
+  fireEvent.click(screen.getByRole('button', { name: /查看 Policy Review \/ role-grid/i }));
 
-  expect(await screen.findByRole('dialog', { name: 'run_1021' })).toBeInTheDocument();
-  expect(screen.getByText('最近一次发布任务已完成，等待 webhook 回写。')).toBeInTheDocument();
+  expect(await screen.findByRole('dialog', { name: 'Policy Review / role-grid' })).toBeInTheDocument();
+  expect(
+    screen.getByText('角色矩阵中存在一条 own/all 语义冲突，需要人工回到访问控制面板处理。')
+  ).toBeInTheDocument();
 });
 
 test('renders the settings route and switches to access control content', async () => {
@@ -67,5 +68,5 @@ test('renders the settings route and switches to access control content', async 
   fireEvent.click(screen.getByRole('menuitem', { name: '访问控制' }));
 
   expect(await screen.findByText('角色矩阵')).toBeInTheDocument();
-  expect(screen.getByText('Platform Owner')).toBeInTheDocument();
+  expect(screen.getByText('平台负责人')).toBeInTheDocument();
 });

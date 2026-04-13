@@ -79,8 +79,9 @@ function AppHeaderActions() {
       <Tag className="demo-shell-status" bordered={false}>
         平台健康 99.94%
       </Tag>
-      <Link to="/settings" className="demo-shell-profile">
+      <Link to="/settings" className="demo-shell-profile" aria-label="打开账户与设置">
         <span className="demo-shell-profile-name">Mina Chen</span>
+        <span className="demo-shell-profile-separator">·</span>
         <span className="demo-shell-profile-meta">Growth Lab</span>
       </Link>
     </Space>

@@ -1,29 +1,26 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button, Card, Col, Descriptions, Row, Space, Typography } from 'antd';
 
 import { demoRuns, studioNodes } from '../demo-data';
+import { DemoPageHero } from '../../shared/ui/DemoPageHero';
+import { StatusPill } from '../../shared/ui/StatusPill';
 
 export function AgentFlowPage() {
   const [activeNodeId, setActiveNodeId] = useState(studioNodes[0]?.id ?? null);
-  const activeNode = useMemo(
-    () => studioNodes.find((item) => item.id === activeNodeId) ?? studioNodes[0],
-    [activeNodeId]
-  );
+  const activeNode = studioNodes.find((item) => item.id === activeNodeId) ?? studioNodes[0];
 
   return (
     <div className="demo-page">
-      <section className="demo-page-hero studio-hero">
-        <span className="demo-kicker">L3 Execute Workspace</span>
-        <Typography.Title level={1}>Agent Flow Studio</Typography.Title>
-        <Typography.Paragraph className="demo-page-lede">
-          Studio 作为执行层单独存在，保持画布与 inspector 的固定组合，不再混进一级导航。
-        </Typography.Paragraph>
-      </section>
+      <DemoPageHero
+        kicker="执行工作区"
+        title="流程编排"
+        description="编排页保持画布与 inspector 的固定组合，用于继续推进当前流程，而不是承担顶层导航职责。"
+      />
 
       <Row gutter={[18, 18]}>
         <Col xs={24} xl={15}>
-          <Card title="Flow Surface" className="demo-card studio-surface-card">
+          <Card title="画布概览" className="demo-card studio-surface-card">
             <div className="studio-surface">
               {studioNodes.map((item) => (
                 <button
@@ -34,9 +31,9 @@ export function AgentFlowPage() {
                 >
                   <span className="studio-node-kind">{item.kind}</span>
                   <span className="studio-node-name">{item.name}</span>
-                  <span className={`status-pill ${item.status}`}>
+                  <StatusPill status={item.status}>
                     {item.status === 'healthy' ? 'ready' : item.status}
-                  </span>
+                  </StatusPill>
                 </button>
               ))}
             </div>
@@ -45,7 +42,7 @@ export function AgentFlowPage() {
                 <div key={item.id} className="studio-lane-row">
                   <span>{item.id}</span>
                   <span>{item.flow}</span>
-                  <span className={`status-pill ${item.status}`}>{item.summary}</span>
+                  <StatusPill status={item.status}>{item.summary}</StatusPill>
                 </div>
               ))}
             </div>
@@ -65,27 +62,25 @@ export function AgentFlowPage() {
                 items={[
                   {
                     key: 'owner',
-                    label: 'Owner',
+                    label: '负责人',
                     children: activeNode.owner
                   },
                   {
                     key: 'kind',
-                    label: 'Kind',
+                    label: '节点类型',
                     children: activeNode.kind
                   },
                   {
                     key: 'status',
-                    label: 'Status',
-                    children: (
-                      <span className={`status-pill ${activeNode.status}`}>{activeNode.status}</span>
-                    )
+                    label: '状态',
+                    children: <StatusPill status={activeNode.status}>{activeNode.status}</StatusPill>
                   }
                 ]}
               />
-              <Card size="small" title="输出">
-                <Typography.Paragraph>{activeNode.output}</Typography.Paragraph>
+              <Card size="small" title="输出摘要">
+                <p className="card-paragraph">{activeNode.output}</p>
               </Card>
-              <Button type="primary">继续执行当前节点</Button>
+              <Button type="primary">继续发布检查</Button>
             </Space>
           </Card>
         </Col>

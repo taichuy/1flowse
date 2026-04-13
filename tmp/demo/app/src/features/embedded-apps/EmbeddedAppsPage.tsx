@@ -1,17 +1,24 @@
-import { Card, Table, Typography } from 'antd';
+import { useState } from 'react';
+
+import { Card, Descriptions, Drawer, Table } from 'antd';
 
 import { subsystems } from '../demo-data';
+import { DemoPageHero } from '../../shared/ui/DemoPageHero';
+import { StatusPill } from '../../shared/ui/StatusPill';
 
 export function EmbeddedAppsPage() {
+  const [activeSubsystemId, setActiveSubsystemId] = useState<string | null>(null);
+  const activeSubsystem = activeSubsystemId
+    ? subsystems.find((item) => item.id === activeSubsystemId) ?? null
+    : null;
+
   return (
     <div className="demo-page">
-      <section className="demo-page-hero">
-        <span className="demo-kicker">L2 Stable Entry</span>
-        <Typography.Title level={1}>子系统</Typography.Title>
-        <Typography.Paragraph className="demo-page-lede">
-          当前项目仍以 embedded-apps 作为稳定子系统边界。这里用 mock 数据演示版本、挂载路径和宿主约束的展示方式。
-        </Typography.Paragraph>
-      </section>
+      <DemoPageHero
+        kicker="子系统管理"
+        title="子系统"
+        description="这里集中查看所有已接入入口的挂载路由、访问上下文和待办事项，确认每个业务前台都落在统一宿主边界内。"
+      />
 
       <Card title="已接入子系统" className="demo-card">
         <Table
@@ -24,11 +31,21 @@ export function EmbeddedAppsPage() {
               dataIndex: 'name',
               key: 'name',
               render: (value: string, record) => (
-                <div className="table-block">
-                  <Typography.Text strong>{value}</Typography.Text>
-                  <Typography.Paragraph>{record.summary}</Typography.Paragraph>
-                </div>
+                <button
+                  type="button"
+                  className="subsystem-trigger"
+                  aria-label={`查看 ${value} 详情`}
+                  onClick={() => setActiveSubsystemId(record.id)}
+                >
+                  <span className="subsystem-trigger-title">{value}</span>
+                  <span className="subsystem-trigger-summary">{record.summary}</span>
+                </button>
               )
+            },
+            {
+              title: '负责人',
+              dataIndex: 'owner',
+              key: 'owner'
             },
             {
               title: '挂载路径',
@@ -44,11 +61,67 @@ export function EmbeddedAppsPage() {
               title: '状态',
               dataIndex: 'status',
               key: 'status',
-              render: (value: string) => <span className={`status-pill ${value}`}>{value}</span>
+              render: (value: string) => <StatusPill status={value as never}>{value}</StatusPill>
             }
           ]}
         />
       </Card>
+
+      <Drawer
+        open={Boolean(activeSubsystem)}
+        title={activeSubsystem?.name}
+        width={420}
+        onClose={() => setActiveSubsystemId(null)}
+      >
+        {activeSubsystem ? (
+          <div className="drawer-stack">
+            <Descriptions
+              column={1}
+              colon={false}
+              items={[
+                {
+                  key: 'owner',
+                  label: '负责人',
+                  children: activeSubsystem.owner
+                },
+                {
+                  key: 'route',
+                  label: '挂载路径',
+                  children: activeSubsystem.routePrefix
+                },
+                {
+                  key: 'version',
+                  label: '版本',
+                  children: activeSubsystem.version
+                },
+                {
+                  key: 'mode',
+                  label: '挂载方式',
+                  children: activeSubsystem.mountMode
+                },
+                {
+                  key: 'auth',
+                  label: '访问上下文',
+                  children: activeSubsystem.authScope
+                },
+                {
+                  key: 'updated',
+                  label: '最近更新',
+                  children: activeSubsystem.lastUpdated
+                }
+              ]}
+            />
+
+            <Card size="small" title="待办事项" className="drawer-timeline-card">
+              <ul className="drawer-list">
+                {activeSubsystem.pendingActions.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        ) : null}
+      </Drawer>
     </div>
   );
 }

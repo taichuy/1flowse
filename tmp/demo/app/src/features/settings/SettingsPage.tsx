@@ -1,20 +1,28 @@
 import { useState } from 'react';
 
-import { Card, Col, Descriptions, Menu, Row, Table, Typography } from 'antd';
+import { Card, Col, Descriptions, List, Menu, Row, Table, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 
-import { accessMatrix, apiSurface } from '../demo-data';
+import {
+  accessMatrix,
+  apiDocHighlights,
+  apiSurface,
+  profileFields,
+  securityFields,
+  securityNotes
+} from '../demo-data';
+import { DemoPageHero } from '../../shared/ui/DemoPageHero';
 
-type SettingsSectionKey = 'profile' | 'team' | 'access' | 'api';
+type SettingsSectionKey = 'profile' | 'security' | 'access' | 'api';
 
 const settingsItems: MenuProps['items'] = [
   {
     key: 'profile',
-    label: '个人资料'
+    label: '账户资料'
   },
   {
-    key: 'team',
-    label: '团队'
+    key: 'security',
+    label: '安全设置'
   },
   {
     key: 'access',
@@ -31,13 +39,11 @@ export function SettingsPage() {
 
   return (
     <div className="demo-page">
-      <section className="demo-page-hero">
-        <span className="demo-kicker">L2 Manage Entry</span>
-        <Typography.Title level={1}>设置</Typography.Title>
-        <Typography.Paragraph className="demo-page-lede">
-          当前设计把个人资料、团队、访问控制和 API 文档统一收进设置页，避免继续依赖零散的 bootstrap 卡片。
-        </Typography.Paragraph>
-      </section>
+      <DemoPageHero
+        kicker="控制台设置"
+        title="设置"
+        description="设置页负责管理账户资料、安全策略、访问控制与接口文档，保持控制台管理域的入口一致。"
+      />
 
       <Row gutter={[18, 18]}>
         <Col xs={24} xl={7}>
@@ -55,52 +61,37 @@ export function SettingsPage() {
           <Card className="demo-card settings-content-card">
             {activeSection === 'profile' ? (
               <Descriptions
-                title="个人资料"
+                title="账户资料"
                 column={1}
                 colon={false}
-                items={[
-                  {
-                    key: 'name',
-                    label: '当前用户',
-                    children: 'Mina Chen'
-                  },
-                  {
-                    key: 'role',
-                    label: '职责',
-                    children: 'Platform Owner'
-                  },
-                  {
-                    key: 'focus',
-                    label: '本周关注',
-                    children: '控制台壳层、访问控制矩阵和 Studio 收口'
-                  }
-                ]}
+                items={profileFields.map((item) => ({
+                  key: item.key,
+                  label: item.label,
+                  children: item.value
+                }))}
               />
             ) : null}
 
-            {activeSection === 'team' ? (
-              <Descriptions
-                title="团队"
-                column={1}
-                colon={false}
-                items={[
-                  {
-                    key: 'team',
-                    label: '当前团队',
-                    children: 'Growth Lab'
-                  },
-                  {
-                    key: 'mode',
-                    label: '工作区模式',
-                    children: 'single-team / hosted auth'
-                  },
-                  {
-                    key: 'policy',
-                    label: '通知策略',
-                    children: '运行告警触达 Platform Owner 与 Ops Lead'
-                  }
-                ]}
-              />
+            {activeSection === 'security' ? (
+              <div className="settings-stack">
+                <Descriptions
+                  title="密码与会话"
+                  column={1}
+                  colon={false}
+                  items={securityFields.map((item) => ({
+                    key: item.key,
+                    label: item.label,
+                    children: item.value
+                  }))}
+                />
+
+                <Card size="small" title="登录风险" className="drawer-timeline-card">
+                  <List
+                    dataSource={securityNotes}
+                    renderItem={(item) => <List.Item>{item}</List.Item>}
+                  />
+                </Card>
+              </div>
             ) : null}
 
             {activeSection === 'access' ? (
@@ -132,8 +123,12 @@ export function SettingsPage() {
             ) : null}
 
             {activeSection === 'api' ? (
-              <div>
+              <div className="settings-stack">
                 <Typography.Title level={4}>API 文档入口</Typography.Title>
+                <List
+                  dataSource={apiDocHighlights}
+                  renderItem={(item) => <List.Item>{item}</List.Item>}
+                />
                 <Table
                   rowKey="path"
                   pagination={false}

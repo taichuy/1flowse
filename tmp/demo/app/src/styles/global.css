@@ -194,12 +194,15 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-width: max-content;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .demo-shell-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .demo-shell-status.ant-tag {
@@ -211,12 +214,15 @@ button {
 }
 
 .demo-shell-profile {
-  display: grid;
-  gap: 2px;
-  padding: 6px 10px;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
 }
 
 .demo-shell-profile-name {
@@ -225,8 +231,12 @@ button {
   color: var(--text-primary);
 }
 
+.demo-shell-profile-separator {
+  color: var(--text-tertiary);
+}
+
 .demo-shell-profile-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -286,6 +296,22 @@ button {
   box-shadow: var(--shadow-card);
 }
 
+.demo-page-hero-grid {
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+  align-items: stretch;
+  gap: 20px;
+}
+
+.demo-page-hero-main {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.demo-page-hero-aside {
+  min-width: 0;
+}
+
 .demo-page-hero .ant-typography {
   margin-bottom: 0;
 }
@@ -310,6 +336,12 @@ button {
   margin: 0;
   color: var(--text-secondary);
   font-size: 15px;
+}
+
+.shell-summary-card .ant-card-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
 }
 
 .demo-cta-link {
@@ -352,6 +384,10 @@ button {
 .demo-card .ant-card-body {
   display: grid;
   gap: 14px;
+}
+
+.demo-card-wide {
+  width: 100%;
 }
 
 .demo-list-block {
@@ -402,8 +438,70 @@ button {
   color: var(--text-secondary);
 }
 
+.demo-grid-columns {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.demo-two-column {
+  min-width: 0;
+}
+
+.entry-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.entry-link-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.entry-link-card:hover {
+  border-color: rgba(0, 217, 146, 0.42);
+  box-shadow: 0 16px 28px rgba(14, 24, 20, 0.08);
+  transform: translateY(-1px);
+}
+
+.entry-link-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entry-link-card .ant-typography {
+  margin: 0;
+}
+
+.entry-link-note {
+  color: var(--text-secondary);
+}
+
 .drawer-timeline-card .ant-card-body {
   padding-top: 4px;
+}
+
+.drawer-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.drawer-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
 }
 
 .status-pill {
@@ -419,6 +517,11 @@ button {
   text-transform: lowercase;
   color: var(--text-primary);
   background: rgba(22, 33, 29, 0.06);
+}
+
+.status-pill.is-caps {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .status-pill.running {
@@ -523,6 +626,29 @@ button {
   margin: 0;
 }
 
+.subsystem-trigger {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.subsystem-trigger-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.subsystem-trigger-summary {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 .settings-nav-card .ant-menu {
   border-inline-end: none !important;
   background: transparent !important;
@@ -540,6 +666,17 @@ button {
 
 .settings-content-card .ant-typography {
   margin-top: 0;
+}
+
+.settings-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.card-paragraph {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 @media (max-width: 960px) {
@@ -573,6 +710,11 @@ button {
   .demo-page-hero {
     padding: 20px;
   }
+
+  .demo-page-hero-grid,
+  .demo-grid-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -586,6 +728,12 @@ button {
   }
 
   .demo-shell-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .demo-shell-profile {
     width: 100%;
     justify-content: space-between;
   }
