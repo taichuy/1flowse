@@ -1,17 +1,27 @@
-use std::sync::{
+use std::{
+    collections::HashMap,
+    sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
+    },
 };
 
 use anyhow::Result;
+use argon2::{
+    password_hash::{PasswordHasher, SaltString},
+    Argon2,
+};
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::ports::{BootstrapRepository, CreateMemberInput, MemberRepository, RoleRepository};
+use crate::ports::{
+    AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, RoleRepository,
+    SessionStore,
+};
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
-    RoleScopeKind, RoleTemplate, TeamRecord, UserRecord, UserStatus,
+    RoleScopeKind, RoleTemplate, SessionRecord, TeamRecord, UserRecord, UserStatus,
 };
 
 #[derive(Default, Clone)]
@@ -315,6 +325,166 @@ impl RoleRepository for MemoryRoleRepository {
     }
 
     async fn append_audit_log(&self, _event: &AuditLogRecord) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub fn password_hash(password: &str) -> String {
+    let salt = SaltString::encode_b64(b"session-security-tests")
+        .expect("static salt should be valid base64");
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .expect("password hashing should succeed in tests")
+        .to_string()
+}
+
+#[derive(Clone)]
+pub struct MemoryAuthRepository {
+    user: Arc<RwLock<UserRecord>>,
+    audit_events: Arc<RwLock<Vec<String>>>,
+    bump_session_version_calls: Arc<RwLock<Vec<(Uuid, Uuid)>>>,
+}
+
+impl MemoryAuthRepository {
+    pub fn new(user: UserRecord) -> Self {
+        Self {
+            user: Arc::new(RwLock::new(user)),
+            audit_events: Arc::new(RwLock::new(Vec::new())),
+            bump_session_version_calls: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    pub fn user(&self) -> UserRecord {
+        self.user
+            .try_read()
+            .expect("user lock should be free in assertions")
+            .clone()
+    }
+
+    pub fn audit_events(&self) -> Vec<String> {
+        self.audit_events
+            .try_read()
+            .expect("audit_events lock should be free in assertions")
+            .clone()
+    }
+
+    pub fn bump_session_version_calls(&self) -> Vec<(Uuid, Uuid)> {
+        self.bump_session_version_calls
+            .try_read()
+            .expect("bump_session_version_calls lock should be free in assertions")
+            .clone()
+    }
+}
+
+#[async_trait]
+impl AuthRepository for MemoryAuthRepository {
+    async fn find_authenticator(&self, _name: &str) -> Result<Option<AuthenticatorRecord>> {
+        Ok(None)
+    }
+
+    async fn find_user_for_password_login(&self, _identifier: &str) -> Result<Option<UserRecord>> {
+        Ok(None)
+    }
+
+    async fn find_user_by_id(&self, user_id: Uuid) -> Result<Option<UserRecord>> {
+        let user = self.user.read().await.clone();
+        Ok((user.id == user_id).then_some(user))
+    }
+
+    async fn load_actor_context(
+        &self,
+        user_id: Uuid,
+        team_id: Uuid,
+        display_role: Option<&str>,
+    ) -> Result<ActorContext> {
+        Ok(ActorContext {
+            user_id,
+            team_id,
+            effective_display_role: display_role.unwrap_or("manager").to_string(),
+            is_root: false,
+            permissions: Default::default(),
+        })
+    }
+
+    async fn update_password_hash(
+        &self,
+        user_id: Uuid,
+        password_hash: &str,
+        _actor_id: Uuid,
+    ) -> Result<i64> {
+        let mut user = self.user.write().await;
+        anyhow::ensure!(user.id == user_id, "unknown user");
+        user.password_hash = password_hash.to_string();
+        user.session_version += 1;
+        Ok(user.session_version)
+    }
+
+    async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> Result<i64> {
+        let mut user = self.user.write().await;
+        anyhow::ensure!(user.id == user_id, "unknown user");
+        user.session_version += 1;
+        self.bump_session_version_calls
+            .write()
+            .await
+            .push((user_id, actor_id));
+        Ok(user.session_version)
+    }
+
+    async fn list_permissions(&self) -> Result<Vec<PermissionDefinition>> {
+        Ok(Vec::new())
+    }
+
+    async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_events
+            .write()
+            .await
+            .push(event.event_code.clone());
+        Ok(())
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct MemorySessionStore {
+    sessions: Arc<RwLock<HashMap<String, SessionRecord>>>,
+    deleted_session_ids: Arc<RwLock<Vec<String>>>,
+}
+
+impl MemorySessionStore {
+    pub fn deleted_session_ids(&self) -> Vec<String> {
+        self.deleted_session_ids
+            .try_read()
+            .expect("deleted_session_ids lock should be free in assertions")
+            .clone()
+    }
+}
+
+#[async_trait]
+impl SessionStore for MemorySessionStore {
+    async fn put(&self, session: SessionRecord) -> Result<()> {
+        self.sessions
+            .write()
+            .await
+            .insert(session.session_id.clone(), session);
+        Ok(())
+    }
+
+    async fn get(&self, session_id: &str) -> Result<Option<SessionRecord>> {
+        Ok(self.sessions.read().await.get(session_id).cloned())
+    }
+
+    async fn delete(&self, session_id: &str) -> Result<()> {
+        self.sessions.write().await.remove(session_id);
+        self.deleted_session_ids
+            .write()
+            .await
+            .push(session_id.to_string());
+        Ok(())
+    }
+
+    async fn touch(&self, session_id: &str, expires_at_unix: i64) -> Result<()> {
+        if let Some(existing) = self.sessions.write().await.get_mut(session_id) {
+            existing.expires_at_unix = expires_at_unix;
+        }
         Ok(())
     }
 }

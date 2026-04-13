@@ -9,6 +9,7 @@ pub mod model_definition;
 pub mod ports;
 pub mod profile;
 pub mod role;
+pub mod session_security;
 pub mod team;
 
 pub fn crate_name() -> &'static str {
