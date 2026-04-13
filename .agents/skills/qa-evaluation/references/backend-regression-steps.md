@@ -30,6 +30,7 @@
 ## Step 2: Run Backend Verification
 
 优先运行仓库约定的后端验证脚本；如果脚本尚未落地，至少执行最小后端验证命令。
+同一工作区内的 `cargo` 验证命令默认串行执行，不要并发启动多条 `cargo test / check / clippy`，否则容易卡在 `package cache` 或 `artifact directory` 锁上，拿不到稳定 QA 证据。
 
 优先：
 
@@ -51,6 +52,8 @@ cargo check --workspace
 ```bash
 cargo test -p <crate-name>
 ```
+
+如果需要补多个 crate 的 targeted tests，也按串行顺序逐条执行，并在记录里保留每条命令对应的结果，不要把锁等待当成测试通过。
 
 无法执行时，必须在报告里明确说明为什么要跑、为什么没跑成、因此哪些结论只能停留在 `未验证`。
 
