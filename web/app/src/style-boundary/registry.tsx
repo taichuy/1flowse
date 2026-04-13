@@ -1,6 +1,9 @@
 import { Menu } from 'antd';
 
-import { createAccountMenuItems } from '../app/router';
+import { AppShellFrame, createAccountMenuItems } from '../app/router';
+import { AgentFlowPage } from '../features/agent-flow/AgentFlowPage';
+import { EmbeddedAppsPage } from '../features/embedded-apps/EmbeddedAppsPage';
+import { HomePage } from '../features/home/HomePage';
 import manifest from './scenario-manifest.json';
 import type {
   StyleBoundaryManifestScene,
@@ -28,11 +31,43 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
     <div className="app-shell-account-popup">
       <Menu mode="vertical" selectable={false} items={getAccountPopupChildren()} />
     </div>
+  ),
+  'component.account-trigger': () => (
+    <Menu
+      className="app-shell-account-menu"
+      mode="horizontal"
+      selectable={false}
+      items={createAccountMenuItems()}
+      openKeys={['account']}
+    />
+  ),
+  'page.home': () => (
+    <AppShellFrame pathname="/">
+      <HomePage />
+    </AppShellFrame>
+  ),
+  'page.embedded-apps': () => (
+    <AppShellFrame pathname="/embedded-apps">
+      <EmbeddedAppsPage />
+    </AppShellFrame>
+  ),
+  'page.agent-flow': () => (
+    <AppShellFrame pathname="/agent-flow">
+      <AgentFlowPage />
+    </AppShellFrame>
   )
 };
 
 export function getSceneManifest(): StyleBoundaryManifestScene[] {
   return manifest as StyleBoundaryManifestScene[];
+}
+
+export function getSceneIdsForFiles(files: string[]): string[] {
+  const fileSet = new Set(files);
+
+  return getSceneManifest()
+    .filter((scene) => scene.files.some((file) => fileSet.has(file)))
+    .map((scene) => scene.id);
 }
 
 export function getRuntimeScene(sceneId: string): StyleBoundaryRuntimeScene {

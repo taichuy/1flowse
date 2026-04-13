@@ -16,7 +16,7 @@ export function StyleBoundaryHarness({
     scene
   };
 
-  return scene.render();
+  return <div data-style-boundary-scene={scene.id}>{scene.render()}</div>;
 }
 
 export function bootstrapStyleBoundary(rootElement: HTMLElement) {

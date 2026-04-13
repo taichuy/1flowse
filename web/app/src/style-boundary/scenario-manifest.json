@@ -19,5 +19,92 @@
         ]
       }
     ]
+  },
+  {
+    "id": "component.account-trigger",
+    "kind": "component",
+    "title": "Account Trigger",
+    "files": [
+      "web/app/src/styles/global.css",
+      "web/app/src/app/router.tsx"
+    ],
+    "nodes": [
+      {
+        "id": "submenu-title",
+        "selector": ".app-shell-account-menu .ant-menu-submenu-title",
+        "assertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "page.home",
+    "kind": "page",
+    "title": "Home Page",
+    "files": [
+      "web/app/src/styles/global.css",
+      "web/app/src/features/home/HomePage.tsx",
+      "web/app/src/app/router.tsx"
+    ],
+    "nodes": [
+      {
+        "id": "shell-header",
+        "selector": ".app-shell-header",
+        "assertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "page.embedded-apps",
+    "kind": "page",
+    "title": "Embedded Apps Page",
+    "files": [
+      "web/app/src/styles/global.css",
+      "web/app/src/features/embedded-apps/EmbeddedAppsPage.tsx",
+      "web/app/src/app/router.tsx"
+    ],
+    "nodes": [
+      {
+        "id": "shell-header",
+        "selector": ".app-shell-header",
+        "assertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "page.agent-flow",
+    "kind": "page",
+    "title": "Agent Flow Page",
+    "files": [
+      "web/app/src/styles/global.css",
+      "web/app/src/features/agent-flow/AgentFlowPage.tsx",
+      "web/app/src/app/router.tsx"
+    ],
+    "nodes": [
+      {
+        "id": "shell-header",
+        "selector": ".app-shell-header",
+        "assertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      }
+    ]
   }
 ]

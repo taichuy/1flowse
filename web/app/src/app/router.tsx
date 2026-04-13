@@ -24,41 +24,55 @@ import { EmbeddedAppsPage } from '../features/embedded-apps/EmbeddedAppsPage';
 import { EmbeddedMountPage } from '../features/embedded-runtime/EmbeddedMountPage';
 import { HomePage } from '../features/home/HomePage';
 
-function AppNavigation() {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname
-  });
-
-  const selectedKey = pathname.startsWith('/agent-flow')
+function getSelectedNavigationKey(pathname: string) {
+  return pathname.startsWith('/agent-flow')
     ? 'agent-flow'
     : pathname.startsWith('/embedded-apps') || pathname.startsWith('/embedded/')
       ? 'embedded-apps'
       : 'home';
+}
+
+function renderNavigationLink(
+  pathname: string,
+  label: string,
+  useRouterLinks: boolean
+) {
+  if (useRouterLinks) {
+    return (
+      <Link to={pathname} className="app-shell-menu-link">
+        {label}
+      </Link>
+    );
+  }
+
+  return (
+    <a href={pathname} className="app-shell-menu-link">
+      {label}
+    </a>
+  );
+}
+
+function AppNavigation({
+  pathname,
+  useRouterLinks
+}: {
+  pathname: string;
+  useRouterLinks: boolean;
+}) {
+  const selectedKey = getSelectedNavigationKey(pathname);
 
   const items: MenuProps['items'] = [
     {
       key: 'home',
-      label: (
-        <Link to="/" className="app-shell-menu-link">
-          工作台
-        </Link>
-      )
+      label: renderNavigationLink('/', '工作台', useRouterLinks)
     },
     {
       key: 'embedded-apps',
-      label: (
-        <Link to="/embedded-apps" className="app-shell-menu-link">
-          团队
-        </Link>
-      )
+      label: renderNavigationLink('/embedded-apps', '团队', useRouterLinks)
     },
     {
       key: 'agent-flow',
-      label: (
-        <Link to="/agent-flow" className="app-shell-menu-link">
-          前台
-        </Link>
-      )
+      label: renderNavigationLink('/agent-flow', '前台', useRouterLinks)
     }
   ];
 
@@ -119,11 +133,15 @@ function AppHeaderActions() {
   );
 }
 
-export function AppShellFrame({ children }: PropsWithChildren) {
+export function AppShellFrame({
+  children,
+  pathname = '/',
+  useRouterLinks = false
+}: PropsWithChildren<{ pathname?: string; useRouterLinks?: boolean }>) {
   return (
     <AppShell
       title="1Flowse Bootstrap"
-      navigation={<AppNavigation />}
+      navigation={<AppNavigation pathname={pathname} useRouterLinks={useRouterLinks} />}
       actions={<AppHeaderActions />}
     >
       {children}
@@ -132,8 +150,12 @@ export function AppShellFrame({ children }: PropsWithChildren) {
 }
 
 function RootLayout() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname
+  });
+
   return (
-    <AppShellFrame>
+    <AppShellFrame pathname={pathname} useRouterLinks>
       <Outlet />
     </AppShellFrame>
   );
