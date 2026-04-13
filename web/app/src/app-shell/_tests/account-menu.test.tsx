@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { createAccountMenuItems } from '../router';
+import { createAccountMenuItems } from '../account-menu-items';
 
 describe('createAccountMenuItems', () => {
   test('uses native Ant menu icons for account actions', () => {
@@ -13,6 +13,7 @@ describe('createAccountMenuItems', () => {
       Array.isArray(accountItem.children)
         ? accountItem.children
         : [];
+
     expect(
       rawChildren.flatMap((item: unknown) => {
         if (

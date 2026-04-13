@@ -3,21 +3,8 @@ import ReactDOM from 'react-dom/client';
 
 import { AppProviders } from '../app/AppProviders';
 import '../styles/global.css';
+import { StyleBoundaryHarness } from './StyleBoundaryHarness';
 import { getRuntimeScene } from './registry';
-import type { StyleBoundaryRuntimeScene } from './types';
-
-export function StyleBoundaryHarness({
-  scene
-}: {
-  scene: StyleBoundaryRuntimeScene;
-}) {
-  window.__STYLE_BOUNDARY__ = {
-    ready: true,
-    scene
-  };
-
-  return <div data-style-boundary-scene={scene.id}>{scene.render()}</div>;
-}
 
 export function bootstrapStyleBoundary(rootElement: HTMLElement) {
   const params = new URLSearchParams(window.location.search);

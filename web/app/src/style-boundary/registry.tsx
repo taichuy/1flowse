@@ -1,7 +1,7 @@
 import { Menu } from 'antd';
 
-import { createAccountMenuItems } from '../app-shell/AccountMenu';
 import { AppShellFrame } from '../app-shell/AppShellFrame';
+import { createAccountMenuItems } from '../app-shell/account-menu-items';
 import { AgentFlowPage } from '../features/agent-flow/pages/AgentFlowPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';

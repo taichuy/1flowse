@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { Menu } from 'antd';
 import { describe, expect, test } from 'vitest';
 
 import '../../styles/global.css';
-import { createAccountMenuItems } from '../router';
+import { createAccountMenuItems } from '../account-menu-items';
 
 function getAccountPopupChildren() {
   const items = createAccountMenuItems() ?? [];
@@ -32,10 +32,10 @@ describe('account popup layout', () => {
       </div>
     );
 
-    const profileItem = (await screen.findByText('Profile')).closest('.ant-menu-item');
+    const menu = await screen.findByRole('menu');
+    const [profileItem] = within(menu).getAllByRole('menuitem');
+    const styles = window.getComputedStyle(profileItem);
 
-    expect(profileItem).not.toBeNull();
-    const styles = window.getComputedStyle(profileItem as HTMLElement);
     expect(styles.display).toBe('block');
     expect(styles.height).toBe(styles.lineHeight);
   });
@@ -52,6 +52,7 @@ describe('account popup layout', () => {
     );
 
     await screen.findByText('Settings');
+    expect(screen.getByText('Taichu')).toBeInTheDocument();
 
     const globalCss = fs.readFileSync(
       path.resolve(import.meta.dirname, '../../styles/global.css'),
@@ -60,10 +61,9 @@ describe('account popup layout', () => {
     const popupItemRuleMatch = globalCss.match(
       /\.app-shell-account-popup \.ant-menu-item,\s*\n\.app-shell-account-popup \.ant-menu-submenu-title \{([\s\S]*?)\n\}/
     );
-
-    expect(popupItemRuleMatch).not.toBeNull();
     const popupItemRule = popupItemRuleMatch?.[1] ?? '';
 
+    expect(popupItemRuleMatch).not.toBeNull();
     expect(popupItemRule).not.toContain('display: flex;');
     expect(popupItemRule).not.toContain('min-height:');
     expect(popupItemRule).not.toContain('line-height: 1.25;');

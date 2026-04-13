@@ -2,14 +2,14 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
 import { AppProviders } from '../../app/AppProviders';
-import { StyleBoundaryHarness } from '../main';
+import { StyleBoundaryHarness } from '../StyleBoundaryHarness';
 import { getRuntimeScene, getSceneIdsForFiles } from '../registry';
 
 describe('style boundary registry', () => {
   test('renders the account popup component scene and exposes scene metadata on window', async () => {
     const scene = getRuntimeScene('component.account-popup');
 
-    const { container } = render(
+    render(
       <AppProviders>
         <StyleBoundaryHarness scene={scene} />
       </AppProviders>
@@ -18,9 +18,7 @@ describe('style boundary registry', () => {
     expect(await screen.findByText('Profile')).toBeInTheDocument();
     expect(window.__STYLE_BOUNDARY__?.scene.id).toBe('component.account-popup');
     expect(window.__STYLE_BOUNDARY__?.ready).toBe(true);
-    expect(
-      container.querySelector('[data-style-boundary-scene="component.account-popup"]')
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('style-boundary-scene')).toBeInTheDocument();
   });
 
   test('throws when a requested scene id is missing', () => {

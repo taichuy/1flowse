@@ -53,6 +53,7 @@ export function AppShell({ title, navigation, actions, children }: AppShellProps
     <Layout className="app-shell">
       <Header
         className="app-shell-header"
+        role="banner"
         style={{ ['--app-shell-edge-gap' as string]: '5%' }}
       >
         <div className="app-shell-header-main">

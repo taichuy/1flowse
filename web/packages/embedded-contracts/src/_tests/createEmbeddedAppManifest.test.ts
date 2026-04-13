@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { createEmbeddedAppManifest } from './index';
+import { createEmbeddedAppManifest } from '../index';
 
 test('createEmbeddedAppManifest returns the provided manifest', () => {
   expect(

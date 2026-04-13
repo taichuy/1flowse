@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { createEmbedContext } from './index';
+import { createEmbedContext } from '../index';
 
 test('createEmbedContext returns the provided context', () => {
   expect(
