@@ -46,10 +46,10 @@ impl PgMemberMapper {
             roles: row
                 .roles
                 .into_iter()
-                .map(|(code, scope_kind, team_id)| BoundRole {
+                .map(|(code, scope_kind, workspace_id)| BoundRole {
                     code,
                     scope_kind,
-                    team_id,
+                    workspace_id,
                 })
                 .collect(),
         }

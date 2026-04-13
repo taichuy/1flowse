@@ -99,8 +99,13 @@ impl RuntimeEngine {
     }
 
     pub async fn list_records(&self, input: RuntimeListInput) -> Result<RuntimeListResult> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.team_id, input.app_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.team_id, input.app_id)?;
+        let metadata = self.load_metadata(
+            &input.model_code,
+            input.actor.current_workspace_id,
+            input.app_id,
+        )?;
+        let scope_id =
+            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
 
         self.records
@@ -120,8 +125,13 @@ impl RuntimeEngine {
     }
 
     pub async fn get_record(&self, input: RuntimeGetInput) -> Result<Option<Value>> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.team_id, input.app_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.team_id, input.app_id)?;
+        let metadata = self.load_metadata(
+            &input.model_code,
+            input.actor.current_workspace_id,
+            input.app_id,
+        )?;
+        let scope_id =
+            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
 
         self.records
@@ -136,8 +146,13 @@ impl RuntimeEngine {
 
     pub async fn create_record(&self, input: RuntimeCreateInput) -> Result<Value> {
         resolve_access_scope(&input.actor, RuntimeDataAction::Create)?;
-        let metadata = self.load_metadata(&input.model_code, input.actor.team_id, input.app_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.team_id, input.app_id)?;
+        let metadata = self.load_metadata(
+            &input.model_code,
+            input.actor.current_workspace_id,
+            input.app_id,
+        )?;
+        let scope_id =
+            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
         let payload = self
             .default_value_resolver
             .apply(input.actor.user_id, &input.model_code, input.payload)
@@ -152,8 +167,13 @@ impl RuntimeEngine {
     }
 
     pub async fn update_record(&self, input: RuntimeUpdateInput) -> Result<Value> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.team_id, input.app_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.team_id, input.app_id)?;
+        let metadata = self.load_metadata(
+            &input.model_code,
+            input.actor.current_workspace_id,
+            input.app_id,
+        )?;
+        let scope_id =
+            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Edit)?;
         self.validator
             .validate(input.actor.user_id, &input.model_code, &input.payload)
@@ -172,8 +192,13 @@ impl RuntimeEngine {
     }
 
     pub async fn delete_record(&self, input: RuntimeDeleteInput) -> Result<Value> {
-        let metadata = self.load_metadata(&input.model_code, input.actor.team_id, input.app_id)?;
-        let scope_id = self.scope_id_for(&metadata, input.actor.team_id, input.app_id)?;
+        let metadata = self.load_metadata(
+            &input.model_code,
+            input.actor.current_workspace_id,
+            input.app_id,
+        )?;
+        let scope_id =
+            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Delete)?;
         let deleted = self
             .records

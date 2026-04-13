@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, DataModelScopeKind, ModelDefinitionRecord,
-    ModelFieldKind, ModelFieldRecord, PermissionDefinition, RoleTemplate, SessionRecord,
-    TeamRecord, UserRecord,
+    ModelFieldKind, ModelFieldRecord, PermissionDefinition, RoleTemplate, ScopeContext,
+    SessionRecord, TeamRecord, TenantRecord, UserRecord,
 };
 use uuid::Uuid;
 
@@ -27,11 +27,16 @@ pub trait BootstrapRepository: Send + Sync {
         &self,
         permissions: &[PermissionDefinition],
     ) -> anyhow::Result<()>;
-    async fn upsert_team(&self, team_name: &str) -> anyhow::Result<TeamRecord>;
-    async fn upsert_builtin_roles(&self, team_id: Uuid) -> anyhow::Result<()>;
+    async fn upsert_root_tenant(&self) -> anyhow::Result<TenantRecord>;
+    async fn upsert_workspace(
+        &self,
+        tenant_id: Uuid,
+        workspace_name: &str,
+    ) -> anyhow::Result<TeamRecord>;
+    async fn upsert_builtin_roles(&self, workspace_id: Uuid) -> anyhow::Result<()>;
     async fn upsert_root_user(
         &self,
-        team_id: Uuid,
+        workspace_id: Uuid,
         account: &str,
         email: &str,
         password_hash: &str,
@@ -48,6 +53,7 @@ pub trait AuthRepository: Send + Sync {
         identifier: &str,
     ) -> anyhow::Result<Option<UserRecord>>;
     async fn find_user_by_id(&self, user_id: Uuid) -> anyhow::Result<Option<UserRecord>>;
+    async fn default_scope_for_user(&self, user_id: Uuid) -> anyhow::Result<ScopeContext>;
     async fn load_actor_context(
         &self,
         user_id: Uuid,

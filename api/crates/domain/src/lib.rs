@@ -5,6 +5,7 @@ pub mod auth;
 pub mod base;
 pub mod modeling;
 pub mod resource;
+pub mod scope;
 pub mod team;
 
 pub use audit::AuditLogRecord;
@@ -15,6 +16,7 @@ pub use auth::{
 pub use base::BaseFields;
 pub use modeling::{DataModelScopeKind, ModelDefinitionRecord, ModelFieldKind, ModelFieldRecord};
 pub use resource::runtime_model_resource_code;
+pub use scope::{ScopeContext, TenantRecord, WorkspaceRecord};
 pub use team::TeamRecord;
 
 pub fn crate_name() -> &'static str {

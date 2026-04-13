@@ -21,7 +21,8 @@ use crate::ports::{
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
-    RoleScopeKind, RoleTemplate, SessionRecord, TeamRecord, UserRecord, UserStatus,
+    RoleScopeKind, RoleTemplate, ScopeContext, SessionRecord, TeamRecord, TenantRecord, UserRecord,
+    UserStatus,
 };
 
 #[derive(Default, Clone)]
@@ -32,8 +33,11 @@ pub struct MemoryBootstrapRepository {
 #[derive(Default)]
 struct MemoryBootstrapRepositoryInner {
     authenticator_upserts: AtomicUsize,
+    root_tenant_upserts: AtomicUsize,
+    workspace_upserts: AtomicUsize,
     root_user_creates: AtomicUsize,
-    team: RwLock<Option<TeamRecord>>,
+    root_tenant: RwLock<Option<TenantRecord>>,
+    workspace: RwLock<Option<TeamRecord>>,
     root_user: RwLock<Option<UserRecord>>,
 }
 
@@ -44,6 +48,14 @@ impl MemoryBootstrapRepository {
 
     pub fn root_user_creates(&self) -> usize {
         self.inner.root_user_creates.load(Ordering::SeqCst)
+    }
+
+    pub fn root_tenant_upserts(&self) -> usize {
+        self.inner.root_tenant_upserts.load(Ordering::SeqCst)
+    }
+
+    pub fn workspace_upserts(&self) -> usize {
+        self.inner.workspace_upserts.load(Ordering::SeqCst)
     }
 }
 
@@ -60,28 +72,49 @@ impl BootstrapRepository for MemoryBootstrapRepository {
         Ok(())
     }
 
-    async fn upsert_team(&self, team_name: &str) -> Result<TeamRecord> {
-        if let Some(team) = self.inner.team.read().await.clone() {
-            return Ok(team);
+    async fn upsert_root_tenant(&self) -> Result<TenantRecord> {
+        self.inner
+            .root_tenant_upserts
+            .fetch_add(1, Ordering::SeqCst);
+        if let Some(tenant) = self.inner.root_tenant.read().await.clone() {
+            return Ok(tenant);
         }
 
-        let team = TeamRecord {
+        let tenant = TenantRecord {
             id: Uuid::now_v7(),
-            name: team_name.to_string(),
+            code: "root-tenant".to_string(),
+            name: "Root Tenant".to_string(),
+            is_root: true,
+            is_hidden: true,
+        };
+        *self.inner.root_tenant.write().await = Some(tenant.clone());
+        Ok(tenant)
+    }
+
+    async fn upsert_workspace(&self, tenant_id: Uuid, workspace_name: &str) -> Result<TeamRecord> {
+        self.inner.workspace_upserts.fetch_add(1, Ordering::SeqCst);
+        if let Some(workspace) = self.inner.workspace.read().await.clone() {
+            return Ok(workspace);
+        }
+
+        let workspace = TeamRecord {
+            id: Uuid::now_v7(),
+            tenant_id,
+            name: workspace_name.to_string(),
             logo_url: None,
             introduction: String::new(),
         };
-        *self.inner.team.write().await = Some(team.clone());
-        Ok(team)
+        *self.inner.workspace.write().await = Some(workspace.clone());
+        Ok(workspace)
     }
 
-    async fn upsert_builtin_roles(&self, _team_id: Uuid) -> Result<()> {
+    async fn upsert_builtin_roles(&self, _workspace_id: Uuid) -> Result<()> {
         Ok(())
     }
 
     async fn upsert_root_user(
         &self,
-        team_id: Uuid,
+        _workspace_id: Uuid,
         account: &str,
         email: &str,
         password_hash: &str,
@@ -110,8 +143,8 @@ impl BootstrapRepository for MemoryBootstrapRepository {
             session_version: 1,
             roles: vec![BoundRole {
                 code: "root".to_string(),
-                scope_kind: RoleScopeKind::App,
-                team_id: Some(team_id),
+                scope_kind: RoleScopeKind::System,
+                workspace_id: None,
             }],
         };
         *self.inner.root_user.write().await = Some(user.clone());
@@ -191,8 +224,8 @@ impl MemberRepository for MemoryMemberRepository {
             session_version: 1,
             roles: vec![BoundRole {
                 code: "manager".to_string(),
-                scope_kind: RoleScopeKind::Team,
-                team_id: Some(Uuid::nil()),
+                scope_kind: RoleScopeKind::Workspace,
+                workspace_id: Some(Uuid::nil()),
             }],
         })
     }
@@ -273,7 +306,7 @@ impl RoleRepository for MemoryRoleRepository {
         self.roles.write().await.push(RoleTemplate {
             code: code.to_string(),
             name: name.to_string(),
-            scope_kind: RoleScopeKind::Team,
+            scope_kind: RoleScopeKind::Workspace,
             is_builtin: false,
             is_editable: true,
             permissions: Vec::new(),
@@ -391,6 +424,13 @@ impl AuthRepository for MemoryAuthRepository {
         Ok((user.id == user_id).then_some(user))
     }
 
+    async fn default_scope_for_user(&self, _user_id: Uuid) -> Result<ScopeContext> {
+        Ok(ScopeContext {
+            tenant_id: Uuid::nil(),
+            workspace_id: Uuid::nil(),
+        })
+    }
+
     async fn load_actor_context(
         &self,
         user_id: Uuid,
@@ -399,7 +439,8 @@ impl AuthRepository for MemoryAuthRepository {
     ) -> Result<ActorContext> {
         Ok(ActorContext {
             user_id,
-            team_id,
+            tenant_id: Uuid::nil(),
+            current_workspace_id: team_id,
             effective_display_role: display_role.unwrap_or("manager").to_string(),
             is_root: false,
             permissions: Default::default(),

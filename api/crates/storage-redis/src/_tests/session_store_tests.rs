@@ -9,7 +9,8 @@ async fn in_memory_session_store_round_trips_and_touches_sessions() {
     let session = SessionRecord {
         session_id: "session-1".into(),
         user_id: Uuid::now_v7(),
-        team_id: Uuid::now_v7(),
+        tenant_id: Uuid::now_v7(),
+        current_workspace_id: Uuid::now_v7(),
         session_version: 1,
         csrf_token: "csrf-1".into(),
         expires_at_unix: 100,

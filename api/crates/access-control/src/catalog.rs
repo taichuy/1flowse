@@ -175,7 +175,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         RoleTemplate {
             code: "root".to_string(),
             name: "Root".to_string(),
-            scope_kind: RoleScopeKind::App,
+            scope_kind: RoleScopeKind::System,
             is_builtin: true,
             is_editable: false,
             permissions: Vec::new(),
@@ -183,7 +183,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         RoleTemplate {
             code: "admin".to_string(),
             name: "Admin".to_string(),
-            scope_kind: RoleScopeKind::Team,
+            scope_kind: RoleScopeKind::Workspace,
             is_builtin: true,
             is_editable: true,
             permissions: all_codes.clone(),
@@ -191,7 +191,7 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
         RoleTemplate {
             code: "manager".to_string(),
             name: "Manager".to_string(),
-            scope_kind: RoleScopeKind::Team,
+            scope_kind: RoleScopeKind::Workspace,
             is_builtin: true,
             is_editable: true,
             permissions: manager_permissions,

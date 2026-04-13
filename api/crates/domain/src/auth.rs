@@ -12,15 +12,23 @@ pub enum UserStatus {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RoleScopeKind {
-    App,
-    Team,
+    System,
+    Workspace,
+}
+
+impl RoleScopeKind {
+    #[allow(non_upper_case_globals)]
+    pub const App: Self = Self::System;
+
+    #[allow(non_upper_case_globals)]
+    pub const Team: Self = Self::Workspace;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BoundRole {
     pub code: String,
     pub scope_kind: RoleScopeKind,
-    pub team_id: Option<Uuid>,
+    pub workspace_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,17 +69,33 @@ impl UserRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActorContext {
     pub user_id: Uuid,
-    pub team_id: Uuid,
+    pub tenant_id: Uuid,
+    pub current_workspace_id: Uuid,
     pub effective_display_role: String,
     pub is_root: bool,
     pub permissions: HashSet<String>,
 }
 
 impl ActorContext {
-    pub fn root(user_id: Uuid, team_id: Uuid, effective_display_role: &str) -> Self {
+    pub fn root(user_id: Uuid, current_workspace_id: Uuid, effective_display_role: &str) -> Self {
+        Self::root_in_scope(
+            user_id,
+            Uuid::nil(),
+            current_workspace_id,
+            effective_display_role,
+        )
+    }
+
+    pub fn root_in_scope(
+        user_id: Uuid,
+        tenant_id: Uuid,
+        current_workspace_id: Uuid,
+        effective_display_role: &str,
+    ) -> Self {
         Self {
             user_id,
-            team_id,
+            tenant_id,
+            current_workspace_id,
             effective_display_role: effective_display_role.to_string(),
             is_root: true,
             permissions: HashSet::new(),
@@ -80,13 +104,30 @@ impl ActorContext {
 
     pub fn scoped(
         user_id: Uuid,
-        team_id: Uuid,
+        current_workspace_id: Uuid,
+        effective_display_role: &str,
+        permissions: impl IntoIterator<Item = String>,
+    ) -> Self {
+        Self::scoped_in_scope(
+            user_id,
+            Uuid::nil(),
+            current_workspace_id,
+            effective_display_role,
+            permissions,
+        )
+    }
+
+    pub fn scoped_in_scope(
+        user_id: Uuid,
+        tenant_id: Uuid,
+        current_workspace_id: Uuid,
         effective_display_role: &str,
         permissions: impl IntoIterator<Item = String>,
     ) -> Self {
         Self {
             user_id,
-            team_id,
+            tenant_id,
+            current_workspace_id,
             effective_display_role: effective_display_role.to_string(),
             is_root: false,
             permissions: permissions.into_iter().collect(),
@@ -139,7 +180,8 @@ pub struct UserAuthIdentity {
 pub struct SessionRecord {
     pub session_id: String,
     pub user_id: Uuid,
-    pub team_id: Uuid,
+    pub tenant_id: Uuid,
+    pub current_workspace_id: Uuid,
     pub session_version: i64,
     pub csrf_token: String,
     pub expires_at_unix: i64,

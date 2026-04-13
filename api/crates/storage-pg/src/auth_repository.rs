@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use control_plane::ports::{AuthRepository, BootstrapRepository};
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
-    RoleScopeKind, UserRecord,
+    RoleScopeKind, ScopeContext, TenantRecord, UserRecord,
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -14,13 +14,16 @@ use crate::{
         member_mapper::{PgMemberMapper, StoredMemberRow},
         team_mapper::{PgTeamMapper, StoredTeamRow},
     },
-    repositories::{decode_role_scope_kind, PgControlPlaneStore},
+    repositories::{
+        decode_role_scope_kind, tenant_id_for_team, PgControlPlaneStore, ROOT_TENANT_CODE,
+        ROOT_TENANT_ID, ROOT_TENANT_NAME,
+    },
 };
 
 async fn load_bound_roles(pool: &PgPool, user_id: Uuid) -> Result<Vec<BoundRole>> {
     let rows = sqlx::query(
         r#"
-        select r.code, r.scope_kind, r.team_id
+        select r.code, r.scope_kind, r.team_id as workspace_id
         from user_role_bindings urb
         join roles r on r.id = urb.role_id
         where urb.user_id = $1
@@ -36,7 +39,7 @@ async fn load_bound_roles(pool: &PgPool, user_id: Uuid) -> Result<Vec<BoundRole>
         .map(|row| BoundRole {
             code: row.get("code"),
             scope_kind: decode_role_scope_kind(row.get::<String, _>("scope_kind").as_str()),
-            team_id: row.get("team_id"),
+            workspace_id: row.get("workspace_id"),
         })
         .collect())
 }
@@ -46,7 +49,7 @@ pub(crate) async fn map_user_row(pool: &PgPool, row: sqlx::postgres::PgRow) -> R
     let roles = load_bound_roles(pool, user_id)
         .await?
         .into_iter()
-        .map(|role| (role.code, role.scope_kind, role.team_id))
+        .map(|role| (role.code, role.scope_kind, role.workspace_id))
         .collect();
 
     Ok(PgMemberMapper::to_user_record(StoredMemberRow {
@@ -127,16 +130,58 @@ impl BootstrapRepository for PgControlPlaneStore {
         Ok(())
     }
 
-    async fn upsert_team(&self, team_name: &str) -> Result<domain::TeamRecord> {
-        let existing = sqlx::query(
-            "select id, name, logo_url, introduction from teams order by created_at asc limit 1",
+    async fn upsert_root_tenant(&self) -> Result<TenantRecord> {
+        let tenant_id = Uuid::parse_str(ROOT_TENANT_ID).expect("root tenant id should be valid");
+        let row = sqlx::query(
+            r#"
+            insert into tenants (id, code, name, is_root, is_hidden)
+            values ($1, $2, $3, true, true)
+            on conflict (code) do update
+              set name = excluded.name,
+                  is_root = true,
+                  is_hidden = true,
+                  updated_at = now()
+            returning id, code, name, is_root, is_hidden
+            "#,
         )
+        .bind(tenant_id)
+        .bind(ROOT_TENANT_CODE)
+        .bind(ROOT_TENANT_NAME)
+        .fetch_one(self.pool())
+        .await?;
+
+        Ok(TenantRecord {
+            id: row.get("id"),
+            code: row.get("code"),
+            name: row.get("name"),
+            is_root: row.get("is_root"),
+            is_hidden: row.get("is_hidden"),
+        })
+    }
+
+    async fn upsert_workspace(
+        &self,
+        tenant_id: Uuid,
+        workspace_name: &str,
+    ) -> Result<domain::TeamRecord> {
+        let existing = sqlx::query(
+            r#"
+            select id, tenant_id, name, logo_url, introduction
+            from teams
+            where tenant_id = $1 and lower(name) = lower($2)
+            order by created_at asc
+            limit 1
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(workspace_name)
         .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = existing {
             return Ok(PgTeamMapper::to_team_record(StoredTeamRow {
                 id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
                 name: row.get("name"),
                 logo_url: row.get("logo_url"),
                 introduction: row.get("introduction"),
@@ -145,31 +190,33 @@ impl BootstrapRepository for PgControlPlaneStore {
 
         let id = Uuid::now_v7();
         sqlx::query(
-            "insert into teams (id, name, logo_url, introduction) values ($1, $2, null, '')",
+            "insert into teams (id, tenant_id, name, logo_url, introduction) values ($1, $2, $3, null, '')",
         )
         .bind(id)
-        .bind(team_name)
+        .bind(tenant_id)
+        .bind(workspace_name)
         .execute(self.pool())
         .await?;
 
         Ok(PgTeamMapper::to_team_record(StoredTeamRow {
             id,
-            name: team_name.to_string(),
+            tenant_id,
+            name: workspace_name.to_string(),
             logo_url: None,
             introduction: String::new(),
         }))
     }
 
-    async fn upsert_builtin_roles(&self, team_id: Uuid) -> Result<()> {
+    async fn upsert_builtin_roles(&self, workspace_id: Uuid) -> Result<()> {
         let mut tx = self.pool().begin().await?;
 
         for role in access_control::builtin_role_templates() {
             let scope_kind = match role.scope_kind {
-                RoleScopeKind::App => "app",
-                RoleScopeKind::Team => "team",
+                RoleScopeKind::System => "system",
+                RoleScopeKind::Workspace => "workspace",
             };
-            let scoped_team_id = if matches!(role.scope_kind, RoleScopeKind::Team) {
-                Some(team_id)
+            let scoped_workspace_id = if matches!(role.scope_kind, RoleScopeKind::Workspace) {
+                Some(workspace_id)
             } else {
                 None
             };
@@ -184,7 +231,7 @@ impl BootstrapRepository for PgControlPlaneStore {
             )
             .bind(Uuid::now_v7())
             .bind(scope_kind)
-            .bind(scoped_team_id)
+            .bind(scoped_workspace_id)
             .bind(&role.code)
             .bind(&role.name)
             .bind(role.is_builtin)
@@ -194,18 +241,18 @@ impl BootstrapRepository for PgControlPlaneStore {
             .await?;
 
             let role_id: Uuid = match role.scope_kind {
-                RoleScopeKind::App => {
+                RoleScopeKind::System => {
                     sqlx::query_scalar(
-                        "select id from roles where scope_kind = 'app' and code = $1",
+                        "select id from roles where scope_kind = 'system' and code = $1",
                     )
                     .bind(&role.code)
                     .fetch_one(&mut *tx)
                     .await?
                 }
-                RoleScopeKind::Team => sqlx::query_scalar(
-                    "select id from roles where scope_kind = 'team' and team_id = $1 and code = $2",
+                RoleScopeKind::Workspace => sqlx::query_scalar(
+                    "select id from roles where scope_kind = 'workspace' and team_id = $1 and code = $2",
                 )
-                .bind(team_id)
+                .bind(workspace_id)
                 .bind(&role.code)
                 .fetch_one(&mut *tx)
                 .await?,
@@ -237,7 +284,7 @@ impl BootstrapRepository for PgControlPlaneStore {
 
     async fn upsert_root_user(
         &self,
-        team_id: Uuid,
+        workspace_id: Uuid,
         account: &str,
         email: &str,
         password_hash: &str,
@@ -273,7 +320,7 @@ impl BootstrapRepository for PgControlPlaneStore {
             "insert into team_memberships (id, team_id, user_id, introduction) values ($1, $2, $3, '') on conflict (team_id, user_id) do nothing",
         )
         .bind(Uuid::now_v7())
-        .bind(team_id)
+        .bind(workspace_id)
         .bind(user_id)
         .execute(&mut *tx)
         .await?;
@@ -281,7 +328,7 @@ impl BootstrapRepository for PgControlPlaneStore {
         sqlx::query(
             r#"
             insert into user_role_bindings (id, user_id, role_id)
-            select $1, $2, id from roles where code = 'root' and scope_kind = 'app'
+            select $1, $2, id from roles where code = 'root' and scope_kind = 'system'
             on conflict (user_id, role_id) do nothing
             "#,
         )
@@ -364,6 +411,34 @@ impl AuthRepository for PgControlPlaneStore {
         }
     }
 
+    async fn default_scope_for_user(&self, user_id: Uuid) -> Result<ScopeContext> {
+        if let Some(row) = sqlx::query(
+            r#"
+            select t.tenant_id, tm.team_id as workspace_id
+            from team_memberships tm
+            join teams t on t.id = tm.team_id
+            where tm.user_id = $1
+            order by tm.created_at asc
+            limit 1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(self.pool())
+        .await?
+        {
+            return Ok(ScopeContext {
+                tenant_id: row.get("tenant_id"),
+                workspace_id: row.get("workspace_id"),
+            });
+        }
+
+        let workspace_id = crate::repositories::primary_team_id(self.pool()).await?;
+        Ok(ScopeContext {
+            tenant_id: tenant_id_for_team(self.pool(), workspace_id).await?,
+            workspace_id,
+        })
+    }
+
     async fn load_actor_context(
         &self,
         user_id: Uuid,
@@ -375,7 +450,7 @@ impl AuthRepository for PgControlPlaneStore {
             select r.code
             from user_role_bindings urb
             join roles r on r.id = urb.role_id
-            where urb.user_id = $1 and (r.scope_kind = 'app' or r.team_id = $2)
+            where urb.user_id = $1 and (r.scope_kind = 'system' or r.team_id = $2)
             order by r.scope_kind asc, r.code asc
             "#,
         )
@@ -391,7 +466,7 @@ impl AuthRepository for PgControlPlaneStore {
             join roles r on r.id = urb.role_id
             join role_permissions rp on rp.role_id = r.id
             join permission_definitions pd on pd.id = rp.permission_id
-            where urb.user_id = $1 and (r.scope_kind = 'app' or r.team_id = $2)
+            where urb.user_id = $1 and (r.scope_kind = 'system' or r.team_id = $2)
             order by pd.code asc
             "#,
         )
@@ -405,13 +480,13 @@ impl AuthRepository for PgControlPlaneStore {
             .or_else(|| codes.first().cloned())
             .unwrap_or_else(|| "manager".to_string());
 
-        Ok(ActorContext {
+        Ok(ActorContext::scoped_in_scope(
             user_id,
+            tenant_id_for_team(self.pool(), team_id).await?,
             team_id,
-            effective_display_role,
-            is_root: codes.iter().any(|code| code == "root"),
-            permissions: permissions.into_iter().collect(),
-        })
+            &effective_display_role,
+            permissions,
+        ))
     }
 
     async fn update_password_hash(

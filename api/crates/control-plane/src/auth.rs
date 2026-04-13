@@ -19,7 +19,6 @@ pub struct LoginCommand {
     pub authenticator: String,
     pub identifier: String,
     pub password: String,
-    pub team_id: Uuid,
 }
 
 pub struct LoginResult {
@@ -105,13 +104,15 @@ where
     pub async fn issue(
         &self,
         user_id: Uuid,
-        team_id: Uuid,
+        tenant_id: Uuid,
+        current_workspace_id: Uuid,
         session_version: i64,
     ) -> Result<SessionRecord> {
         let session = SessionRecord {
             session_id: Uuid::now_v7().to_string(),
             user_id,
-            team_id,
+            tenant_id,
+            current_workspace_id,
             session_version,
             csrf_token: Uuid::now_v7().to_string(),
             expires_at_unix: (OffsetDateTime::now_utc() + time::Duration::days(self.ttl_days))
@@ -162,17 +163,23 @@ where
             return Err(ControlPlaneError::PermissionDenied("user_disabled").into());
         }
 
+        let scope = self.repository.default_scope_for_user(user.id).await?;
         let actor = self
             .repository
             .load_actor_context(
                 user.id,
-                command.team_id,
+                scope.workspace_id,
                 user.default_display_role.as_deref(),
             )
             .await?;
         let session = self
             .issuer
-            .issue(user.id, command.team_id, user.session_version)
+            .issue(
+                user.id,
+                scope.tenant_id,
+                scope.workspace_id,
+                user.session_version,
+            )
             .await?;
 
         Ok(LoginResult { actor, session })

@@ -41,11 +41,15 @@ where
             .upsert_permission_catalog(&permission_catalog())
             .await?;
 
-        let team = self.repository.upsert_team(&config.team_name).await?;
-        self.repository.upsert_builtin_roles(team.id).await?;
+        let tenant = self.repository.upsert_root_tenant().await?;
+        let workspace = self
+            .repository
+            .upsert_workspace(tenant.id, &config.team_name)
+            .await?;
+        self.repository.upsert_builtin_roles(workspace.id).await?;
         self.repository
             .upsert_root_user(
-                team.id,
+                workspace.id,
                 &config.root_account,
                 &config.root_email,
                 &config.root_password_hash,

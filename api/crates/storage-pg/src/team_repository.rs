@@ -12,14 +12,17 @@ use crate::{
 #[async_trait]
 impl TeamRepository for PgControlPlaneStore {
     async fn get_team(&self, team_id: Uuid) -> Result<Option<domain::TeamRecord>> {
-        let row = sqlx::query("select id, name, logo_url, introduction from teams where id = $1")
-            .bind(team_id)
-            .fetch_optional(self.pool())
-            .await?;
+        let row = sqlx::query(
+            "select id, tenant_id, name, logo_url, introduction from teams where id = $1",
+        )
+        .bind(team_id)
+        .fetch_optional(self.pool())
+        .await?;
 
         Ok(row.map(|row| {
             PgTeamMapper::to_team_record(StoredTeamRow {
                 id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
                 name: row.get("name"),
                 logo_url: row.get("logo_url"),
                 introduction: row.get("introduction"),
@@ -44,7 +47,7 @@ impl TeamRepository for PgControlPlaneStore {
                 updated_by = $5,
                 updated_at = now()
             where id = $1
-            returning id, name, logo_url, introduction
+            returning id, tenant_id, name, logo_url, introduction
             "#,
         )
         .bind(team_id)
@@ -57,6 +60,7 @@ impl TeamRepository for PgControlPlaneStore {
 
         Ok(PgTeamMapper::to_team_record(StoredTeamRow {
             id: row.get("id"),
+            tenant_id: row.get("tenant_id"),
             name: row.get("name"),
             logo_url: row.get("logo_url"),
             introduction: row.get("introduction"),

@@ -4,7 +4,7 @@ use control_plane::ports::{
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, PermissionDefinition, RoleScopeKind,
-    TeamRecord, UserRecord,
+    TeamRecord, TenantRecord, UserRecord,
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -36,17 +36,30 @@ impl PgControlPlaneStore {
         BootstrapRepository::upsert_permission_catalog(self, permissions).await
     }
 
-    pub async fn upsert_team(&self, team_name: &str) -> Result<TeamRecord> {
-        BootstrapRepository::upsert_team(self, team_name).await
+    pub async fn upsert_root_tenant(&self) -> Result<TenantRecord> {
+        BootstrapRepository::upsert_root_tenant(self).await
     }
 
-    pub async fn upsert_builtin_roles(&self, team_id: Uuid) -> Result<()> {
-        BootstrapRepository::upsert_builtin_roles(self, team_id).await
+    pub async fn upsert_workspace(
+        &self,
+        tenant_id: Uuid,
+        workspace_name: &str,
+    ) -> Result<TeamRecord> {
+        BootstrapRepository::upsert_workspace(self, tenant_id, workspace_name).await
+    }
+
+    pub async fn upsert_team(&self, team_name: &str) -> Result<TeamRecord> {
+        let tenant = self.upsert_root_tenant().await?;
+        self.upsert_workspace(tenant.id, team_name).await
+    }
+
+    pub async fn upsert_builtin_roles(&self, workspace_id: Uuid) -> Result<()> {
+        BootstrapRepository::upsert_builtin_roles(self, workspace_id).await
     }
 
     pub async fn upsert_root_user(
         &self,
-        team_id: Uuid,
+        workspace_id: Uuid,
         account: &str,
         email: &str,
         password_hash: &str,
@@ -55,7 +68,7 @@ impl PgControlPlaneStore {
     ) -> Result<UserRecord> {
         BootstrapRepository::upsert_root_user(
             self,
-            team_id,
+            workspace_id,
             account,
             email,
             password_hash,
@@ -136,16 +149,28 @@ impl PgControlPlaneStore {
 
 pub(crate) fn decode_role_scope_kind(value: &str) -> RoleScopeKind {
     match value {
-        "app" => RoleScopeKind::App,
-        _ => RoleScopeKind::Team,
+        "app" | "system" => RoleScopeKind::System,
+        _ => RoleScopeKind::Workspace,
     }
 }
+
+pub(crate) const ROOT_TENANT_ID: &str = "00000000-0000-0000-0000-000000000001";
+pub(crate) const ROOT_TENANT_CODE: &str = "root-tenant";
+pub(crate) const ROOT_TENANT_NAME: &str = "Root Tenant";
 
 pub(crate) async fn primary_team_id(pool: &PgPool) -> Result<Uuid> {
     sqlx::query_scalar("select id from teams order by created_at asc limit 1")
         .fetch_optional(pool)
         .await?
         .ok_or(control_plane::errors::ControlPlaneError::NotFound("team").into())
+}
+
+pub(crate) async fn tenant_id_for_team(pool: &PgPool, team_id: Uuid) -> Result<Uuid> {
+    sqlx::query_scalar("select tenant_id from teams where id = $1")
+        .bind(team_id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or(control_plane::errors::ControlPlaneError::NotFound("tenant").into())
 }
 
 pub(crate) async fn team_id_for_user(pool: &PgPool, user_id: Uuid) -> Result<Uuid> {
@@ -176,7 +201,7 @@ pub(crate) async fn is_root_user(pool: &PgPool, user_id: Uuid) -> Result<bool> {
           from user_role_bindings urb
           join roles r on r.id = urb.role_id
           where urb.user_id = $1
-            and r.scope_kind = 'app'
+            and r.scope_kind = 'system'
             and r.code = 'root'
         )
         "#,
@@ -202,21 +227,21 @@ pub(crate) fn stored_role_from_row(row: sqlx::postgres::PgRow) -> StoredRoleRow 
 
 pub(crate) async fn find_role_by_code(
     pool: &PgPool,
-    team_id: Uuid,
+    workspace_id: Uuid,
     role_code: &str,
 ) -> Result<Option<StoredRoleRow>> {
     let row = sqlx::query(
         r#"
         select id, code, name, scope_kind, is_builtin, is_editable
         from roles
-        where (scope_kind = 'app' and code = $1)
-           or (scope_kind = 'team' and team_id = $2 and code = $1)
+        where (scope_kind = 'system' and code = $1)
+           or (scope_kind = 'workspace' and team_id = $2 and code = $1)
         order by scope_kind asc
         limit 1
         "#,
     )
     .bind(role_code)
-    .bind(team_id)
+    .bind(workspace_id)
     .fetch_optional(pool)
     .await?;
 

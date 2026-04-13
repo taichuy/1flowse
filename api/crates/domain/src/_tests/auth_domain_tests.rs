@@ -21,8 +21,8 @@ fn sample_user(default_display_role: Option<&str>, roles: &[&str]) -> UserRecord
             .iter()
             .map(|code| BoundRole {
                 code: (*code).into(),
-                scope_kind: RoleScopeKind::Team,
-                team_id: Some(Uuid::nil()),
+                scope_kind: RoleScopeKind::Workspace,
+                workspace_id: Some(Uuid::nil()),
             })
             .collect(),
     }
