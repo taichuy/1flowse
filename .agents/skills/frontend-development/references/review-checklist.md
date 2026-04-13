@@ -33,8 +33,9 @@
 - 第三方原生组件的交互、布局和图标链路是否仍然成立？
 - 当前样式改动是否能说清 blast radius，且已检查受影响消费者？
 - 本次改动是否已经运行 `node scripts/node/check-style-boundary.js component ... / page ... / file ...` 中至少一种合适模式？
-- 如果改动影响共享样式或第三方 slot，`web/app/src/style-boundary/scenario-manifest.json` 是否已经补上对应覆盖？
-- 失败截图和样式来源证据是否已进入 `uploads/`，而不是只给口头判断？
+- 如果改动影响共享样式或第三方 slot，`web/app/src/style-boundary/scenario-manifest.json` 是否已经补上对应的页面/组件场景与 `impactFiles` 映射？
+- `boundaryNodes / propertyAssertions` 是否只表达样式边界断言，而没有混入泛视觉主观描述？
+- 若出现“样式边界失败 / 样式扩散失败”，失败截图和样式来源证据是否已进入 `uploads/`，而不是只给口头判断？
 - 导航文案、`route id`、`path`、选中态是否仍一致？
 - L1 详情模型是否仍然只剩 `Drawer` 或 `Inspector` 两种？
 - 列表状态点、节点 badge、Inspector 状态字段是否仍然一致？

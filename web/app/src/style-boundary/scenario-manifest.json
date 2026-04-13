@@ -3,15 +3,15 @@
     "id": "component.account-popup",
     "kind": "component",
     "title": "Account Popup",
-    "files": [
+    "impactFiles": [
       "web/app/src/styles/global.css",
       "web/app/src/app/router.tsx"
     ],
-    "nodes": [
+    "boundaryNodes": [
       {
         "id": "popup-item",
         "selector": ".app-shell-account-popup .ant-menu-item",
-        "assertions": [
+        "propertyAssertions": [
           {
             "property": "display",
             "expected": "block"
@@ -24,15 +24,15 @@
     "id": "component.account-trigger",
     "kind": "component",
     "title": "Account Trigger",
-    "files": [
+    "impactFiles": [
       "web/app/src/styles/global.css",
       "web/app/src/app/router.tsx"
     ],
-    "nodes": [
+    "boundaryNodes": [
       {
         "id": "submenu-title",
         "selector": ".app-shell-account-menu .ant-menu-submenu-title",
-        "assertions": [
+        "propertyAssertions": [
           {
             "property": "display",
             "expected": "flex"
@@ -45,16 +45,16 @@
     "id": "page.home",
     "kind": "page",
     "title": "Home Page",
-    "files": [
+    "impactFiles": [
       "web/app/src/styles/global.css",
       "web/app/src/features/home/HomePage.tsx",
       "web/app/src/app/router.tsx"
     ],
-    "nodes": [
+    "boundaryNodes": [
       {
         "id": "shell-header",
         "selector": ".app-shell-header",
-        "assertions": [
+        "propertyAssertions": [
           {
             "property": "display",
             "expected": "flex"
@@ -67,16 +67,16 @@
     "id": "page.embedded-apps",
     "kind": "page",
     "title": "Embedded Apps Page",
-    "files": [
+    "impactFiles": [
       "web/app/src/styles/global.css",
       "web/app/src/features/embedded-apps/EmbeddedAppsPage.tsx",
       "web/app/src/app/router.tsx"
     ],
-    "nodes": [
+    "boundaryNodes": [
       {
         "id": "shell-header",
         "selector": ".app-shell-header",
-        "assertions": [
+        "propertyAssertions": [
           {
             "property": "display",
             "expected": "flex"
@@ -89,16 +89,16 @@
     "id": "page.agent-flow",
     "kind": "page",
     "title": "Agent Flow Page",
-    "files": [
+    "impactFiles": [
       "web/app/src/styles/global.css",
       "web/app/src/features/agent-flow/AgentFlowPage.tsx",
       "web/app/src/app/router.tsx"
     ],
-    "nodes": [
+    "boundaryNodes": [
       {
         "id": "shell-header",
         "selector": ".app-shell-header",
-        "assertions": [
+        "propertyAssertions": [
           {
             "property": "display",
             "expected": "flex"

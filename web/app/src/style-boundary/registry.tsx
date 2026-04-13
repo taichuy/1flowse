@@ -66,7 +66,7 @@ export function getSceneIdsForFiles(files: string[]): string[] {
   const fileSet = new Set(files);
 
   return getSceneManifest()
-    .filter((scene) => scene.files.some((file) => fileSet.has(file)))
+    .filter((scene) => scene.impactFiles.some((file) => fileSet.has(file)))
     .map((scene) => scene.id);
 }
 

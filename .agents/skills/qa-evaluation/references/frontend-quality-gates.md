@@ -64,9 +64,11 @@
 
 ## Gate 5: Runtime Style Regression Evidence
 
+- `web/app/src/style-boundary/scenario-manifest.json` 只维护三件事：页面场景、组件场景、文件影响面映射
+- manifest 中的 `propertyAssertions` 只用于样式边界断言，不用于泛 UI 质量主观判断
 - 导航、共享壳层、全局样式、第三方 slot 覆写改动后，必须至少运行一次 `node scripts/node/check-style-boundary.js component|page|file ...`
-- `--file` 模式若提示“覆盖关系未声明”，视为门禁未通过，先补场景映射
-- 失败报告必须包含场景 ID、关键节点、样式属性、实际值、命中的 selector，以及 `uploads/` 中的截图
+- `--file` 模式若提示“样式扩散失败”，视为文件影响面映射缺失，门禁未通过，先补场景映射
+- 若输出“样式边界失败”，视为声明边界属性被打坏；报告必须包含场景 ID、关键节点、样式属性、实际值、命中的 selector，以及 `uploads/` 中的截图
 
 ## Default Severity Hints
 

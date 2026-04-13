@@ -1,24 +1,24 @@
 import type { ReactElement } from 'react';
 
-export type StyleBoundarySceneKind = 'component' | 'page' | 'route';
+export type StyleBoundarySceneKind = 'component' | 'page';
 
-export interface StyleBoundaryAssertion {
+export interface StyleBoundaryPropertyAssertion {
   property: string;
   expected: string;
 }
 
-export interface StyleBoundaryProbeNode {
+export interface StyleBoundaryTargetNode {
   id: string;
   selector: string;
-  assertions: StyleBoundaryAssertion[];
+  propertyAssertions: StyleBoundaryPropertyAssertion[];
 }
 
 export interface StyleBoundaryManifestScene {
   id: string;
   kind: StyleBoundarySceneKind;
   title: string;
-  files: string[];
-  nodes: StyleBoundaryProbeNode[];
+  impactFiles: string[];
+  boundaryNodes: StyleBoundaryTargetNode[];
 }
 
 export interface StyleBoundaryRuntimeScene extends StyleBoundaryManifestScene {

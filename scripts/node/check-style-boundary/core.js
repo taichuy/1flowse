@@ -64,11 +64,11 @@ function resolveSceneIds(manifest, options) {
       return manifest.filter((scene) => scene.kind === 'page').map((scene) => scene.id);
     case 'file': {
       const matched = manifest
-        .filter((scene) => scene.files.includes(options.target))
+        .filter((scene) => scene.impactFiles.includes(options.target))
         .map((scene) => scene.id);
 
       if (matched.length === 0) {
-        throw new Error(`No style boundary scenes declare coverage for ${options.target}`);
+        throw new Error(`样式扩散失败：未声明 ${options.target} 的页面/组件场景映射`);
       }
 
       return matched;
@@ -122,16 +122,16 @@ async function collectNodeResult(page, cdp, styleSheets, node) {
     element.setAttribute('data-style-boundary-probe', 'active');
   });
 
-  const actual = await locator.evaluate((element, assertions) => {
+  const actual = await locator.evaluate((element, propertyAssertions) => {
     const styles = window.getComputedStyle(element);
 
     return Object.fromEntries(
-      assertions.map((assertion) => [
+      propertyAssertions.map((assertion) => [
         assertion.property,
         styles.getPropertyValue(assertion.property)
       ])
     );
-  }, node.assertions);
+  }, node.propertyAssertions);
 
   const { root } = await cdp.send('DOM.getDocument', {});
   const nodeId = await cdp.send('DOM.querySelector', {
@@ -157,7 +157,7 @@ async function collectNodeResult(page, cdp, styleSheets, node) {
 
 function collectViolations(results) {
   return results.flatMap((result) =>
-    result.node.assertions
+    result.node.propertyAssertions
       .filter((assertion) => result.actual[assertion.property] !== assertion.expected)
       .map((assertion) => ({
         nodeId: result.node.id,
@@ -168,6 +168,17 @@ function collectViolations(results) {
         matchedRules: result.matchedRules
       }))
   );
+}
+
+function formatBoundaryFailure(sceneId, violations) {
+  return `样式边界失败：${sceneId} ${violations
+    .map(
+      (violation) =>
+        `${violation.nodeId}.${violation.property} expected=${violation.expected} actual=${violation.actual} source=${violation.matchedRules
+          .map((rule) => `${rule.sourceUrl}::${rule.selector}`)
+          .join('|')}`
+    )
+    .join(', ')}`;
 }
 
 async function runScene(browser, baseUrl, scene) {
@@ -186,7 +197,7 @@ async function runScene(browser, baseUrl, scene) {
 
   const nodeResults = [];
 
-  for (const node of scene.nodes) {
+  for (const node of scene.boundaryNodes) {
     nodeResults.push(await collectNodeResult(page, cdp, styleSheets, node));
   }
 
@@ -237,16 +248,7 @@ async function main(argv) {
       if (result.violations.length > 0) {
         const screenshotPath = path.join(uploadsDir, `${scene.id}.png`);
         await result.page.screenshot({ path: screenshotPath, fullPage: true });
-        throw new Error(
-          `${scene.id} failed: ${result.violations
-            .map(
-              (violation) =>
-                `${violation.nodeId}.${violation.property} expected=${violation.expected} actual=${violation.actual} source=${violation.matchedRules
-                  .map((rule) => `${rule.sourceUrl}::${rule.selector}`)
-                  .join('|')}`
-            )
-            .join(', ')}`
-        );
+        throw new Error(formatBoundaryFailure(scene.id, result.violations));
       }
 
       process.stdout.write(`[1flowse-style-boundary] PASS ${scene.id}\n`);
@@ -259,6 +261,7 @@ async function main(argv) {
 
 module.exports = {
   createProbeUrl,
+  formatBoundaryFailure,
   main,
   parseCliArgs,
   resolveSceneIds
