@@ -9,6 +9,8 @@ const {
   shouldManageDocker,
   selectServiceKeys,
   getServiceDefinitions,
+  ensureServiceEnvFile,
+  buildServiceEnv,
   ensureRustfsVolumePermissions,
 } = require('../core.js');
 
@@ -46,7 +48,7 @@ test('selectServiceKeys maps scopes to managed services', () => {
   assert.deepEqual(selectServiceKeys('backend'), ['api-server', 'plugin-runner']);
 });
 
-test('getServiceDefinitions uses repo default ports without command overrides', () => {
+test('getServiceDefinitions uses repo default ports and explicit backend binaries', () => {
   const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
   const services = getServiceDefinitions(repoRoot);
 
@@ -58,8 +60,8 @@ test('getServiceDefinitions uses repo default ports without command overrides', 
   assert.equal(services['api-server'].bindHost, '0.0.0.0');
   assert.equal(services['api-server'].probeHost, '127.0.0.1');
   assert.deepEqual(services.web.args, ['--filter', '@1flowse/web', 'dev']);
-  assert.deepEqual(services['api-server'].args, ['run', '-p', 'api-server']);
-  assert.deepEqual(services['plugin-runner'].args, ['run', '-p', 'plugin-runner']);
+  assert.deepEqual(services['api-server'].args, ['run', '-p', 'api-server', '--bin', 'api-server']);
+  assert.deepEqual(services['plugin-runner'].args, ['run', '-p', 'plugin-runner', '--bin', 'plugin-runner']);
 });
 
 test('ensureRustfsVolumePermissions creates writable rustfs bind mount directories', () => {
@@ -76,4 +78,38 @@ test('ensureRustfsVolumePermissions creates writable rustfs bind mount directori
   assert.equal(fs.statSync(path.join(dockerDir, 'volumes', 'rustfs')).mode & 0o777, 0o777);
   assert.equal(fs.statSync(rustfsDataDir).mode & 0o777, 0o777);
   assert.equal(fs.statSync(rustfsLogsDir).mode & 0o777, 0o777);
+});
+
+test('ensureServiceEnvFile seeds api env defaults and buildServiceEnv loads them', () => {
+  const tempRepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'oneflowse-dev-up-env-'));
+  const apiServerDir = path.join(tempRepoRoot, 'api', 'apps', 'api-server');
+  const envExamplePath = path.join(apiServerDir, '.env.example');
+
+  fs.mkdirSync(apiServerDir, { recursive: true });
+  fs.writeFileSync(
+    envExamplePath,
+    [
+      '# api defaults',
+      'API_DATABASE_URL=postgres://from-example',
+      'API_REDIS_URL=redis://from-example',
+      'BOOTSTRAP_TEAM_NAME=\"1Flowse\"',
+    ].join('\n')
+  );
+
+  const services = getServiceDefinitions(tempRepoRoot);
+  const apiService = services['api-server'];
+
+  assert.equal(fs.existsSync(apiService.envFile), false);
+  assert.equal(ensureServiceEnvFile(apiService), true);
+  assert.equal(fs.existsSync(apiService.envFile), true);
+
+  const env = buildServiceEnv(apiService, {
+    API_DATABASE_URL: 'postgres://from-shell',
+    EXTRA_FLAG: 'enabled',
+  });
+
+  assert.equal(env.API_DATABASE_URL, 'postgres://from-shell');
+  assert.equal(env.API_REDIS_URL, 'redis://from-example');
+  assert.equal(env.BOOTSTRAP_TEAM_NAME, '1Flowse');
+  assert.equal(env.EXTRA_FLAG, 'enabled');
 });

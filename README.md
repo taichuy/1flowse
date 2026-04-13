@@ -58,9 +58,12 @@ node scripts/node/mock-ui-sync.js
 
 ```bash
 cd api
-cargo run -p api-server
-cargo run -p plugin-runner
+cargo run -p api-server --bin api-server
+cargo run -p plugin-runner --bin plugin-runner
 ```
+
+如果使用 `node scripts/node/dev-up.js`，脚本会在首次启动时自动从 `api/apps/api-server/.env.example` 生成本地 `.env`。
+如果直接执行 `cargo run`，请先自行准备 `api/apps/api-server/.env`。
 
 后端默认地址：
 

@@ -132,11 +132,13 @@ function selectServiceKeys(scope) {
 
 function getServiceDefinitions(repoRoot) {
   const paths = getRuntimePaths(repoRoot);
+  const apiServerEnvDir = path.join(repoRoot, 'api', 'apps', 'api-server');
 
   return {
     web: {
       key: 'web',
       label: 'frontend',
+      repoRoot,
       cwd: path.join(repoRoot, 'web'),
       command: 'pnpm',
       args: ['--filter', '@1flowse/web', 'dev'],
@@ -149,21 +151,25 @@ function getServiceDefinitions(repoRoot) {
     'api-server': {
       key: 'api-server',
       label: 'api-server',
+      repoRoot,
       cwd: path.join(repoRoot, 'api'),
       command: 'cargo',
-      args: ['run', '-p', 'api-server'],
+      args: ['run', '-p', 'api-server', '--bin', 'api-server'],
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 7800,
+      envFile: path.join(apiServerEnvDir, '.env'),
+      envExampleFile: path.join(apiServerEnvDir, '.env.example'),
       logFile: path.join(paths.logDir, 'api-server.log'),
       pidFile: path.join(paths.pidDir, 'api-server.json'),
     },
     'plugin-runner': {
       key: 'plugin-runner',
       label: 'plugin-runner',
+      repoRoot,
       cwd: path.join(repoRoot, 'api'),
       command: 'cargo',
-      args: ['run', '-p', 'plugin-runner'],
+      args: ['run', '-p', 'plugin-runner', '--bin', 'plugin-runner'],
       bindHost: '0.0.0.0',
       probeHost: '127.0.0.1',
       port: 7801,
@@ -217,6 +223,62 @@ function buildLocalLoopbackEnv(sourceEnv) {
     NO_PROXY: noProxyValue,
     no_proxy: noProxyValue,
   };
+}
+
+function parseEnvFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return {};
+  }
+
+  const env = {};
+  const content = fs.readFileSync(filePath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    env[key] = value;
+  }
+
+  return env;
+}
+
+function ensureServiceEnvFile(service) {
+  if (!service.envFile || !service.envExampleFile) {
+    return false;
+  }
+
+  if (fs.existsSync(service.envFile) || !fs.existsSync(service.envExampleFile)) {
+    return false;
+  }
+
+  fs.mkdirSync(path.dirname(service.envFile), { recursive: true });
+  fs.copyFileSync(service.envExampleFile, service.envFile);
+  log(`已创建 ${path.relative(service.repoRoot || getRepoRoot(), service.envFile)}`);
+  return true;
+}
+
+function buildServiceEnv(service, sourceEnv = process.env) {
+  const fileEnv = parseEnvFile(service.envFile);
+  return buildLocalLoopbackEnv({
+    ...fileEnv,
+    ...sourceEnv,
+  });
 }
 
 function runCommand(command, args, options = {}) {
@@ -469,11 +531,12 @@ async function startService(service) {
     await stopService(service);
   }
 
+  ensureServiceEnvFile(service);
   requireCommand(service.command);
   const outputFd = fs.openSync(service.logFile, 'a');
   const child = spawn(service.command, service.args, {
     cwd: service.cwd,
-    env: buildLocalLoopbackEnv(process.env),
+    env: buildServiceEnv(service),
     detached: process.platform !== 'win32',
     stdio: ['ignore', outputFd, outputFd],
   });
@@ -622,6 +685,8 @@ module.exports = {
   shouldManageDocker,
   selectServiceKeys,
   getServiceDefinitions,
+  ensureServiceEnvFile,
+  buildServiceEnv,
   ensureRustfsVolumePermissions,
   main,
 };

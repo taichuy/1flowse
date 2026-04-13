@@ -15,3 +15,6 @@ docker/.env.local
 
 # Local runtime outputs
 tmp/*
+
+# Local backend env
+api/apps/api-server/.env
