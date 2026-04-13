@@ -26,12 +26,7 @@ async fn openapi_paths() -> Map<String, Value> {
     payload["paths"].as_object().cloned().unwrap_or_default()
 }
 
-async fn create_member(
-    app: &axum::Router,
-    cookie: &str,
-    csrf: &str,
-    account: &str,
-) -> String {
+async fn create_member(app: &axum::Router, cookie: &str, csrf: &str, account: &str) -> String {
     let response = app
         .clone()
         .oneshot(
@@ -105,6 +100,22 @@ async fn openapi_excludes_legacy_member_mutation_routes() {
             "expected openapi to exclude legacy path {route}"
         );
     }
+
+    let member_mutation_paths = paths
+        .keys()
+        .filter(|route| {
+            route.starts_with("/api/console/members/{id}/")
+                && (route.contains("disable") || route.contains("reset-password"))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(
+        member_mutation_paths,
+        vec![
+            "/api/console/members/{id}/actions/disable".to_string(),
+            "/api/console/members/{id}/actions/reset-password".to_string(),
+        ]
+    );
 
     let action_reset_response = app
         .clone()

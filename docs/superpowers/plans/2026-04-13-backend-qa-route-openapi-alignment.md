@@ -218,39 +218,47 @@ Execution note: `api/apps/api-server/src/_tests/member_routes.rs` also had to be
 - Test: `api/apps/api-server/src/_tests/openapi_alignment.rs`
 - Test: `api/apps/api-server/tests/health_routes.rs`
 
-- [ ] **Step 1: Run the dedicated OpenAPI regressions**
+- [x] **Step 1: Run the dedicated OpenAPI regressions**
 
 Run: `cargo test -p api-server openapi_alignment -- --nocapture`
 
 Expected: PASS
 
-- [ ] **Step 2: Run the health and docs smoke tests**
+- [x] **Step 2: Run the health and docs smoke tests**
 
 Run: `cargo test -p api-server openapi_route_exposes_api_title -- --exact --nocapture`
 
 Expected: PASS
 
-Run: `cargo test -p api-server openapi_contains_runtime_and_model_detail_routes -- --exact --nocapture`
+Run: `cargo test -p api-server --lib _tests::openapi_alignment::openapi_contains_runtime_and_model_detail_routes -- --exact --nocapture`
 
 Expected: PASS
 
-- [ ] **Step 3: Run the unified backend verification**
+- [x] **Step 3: Run the unified backend verification**
 
 Run: `node scripts/node/verify-backend.js`
 
 Expected: PASS
 
-- [ ] **Step 4: Diff the generated contract manually**
+- [x] **Step 4: Diff the generated contract manually**
 
-Run: `cargo test -p api-server openapi_excludes_legacy_member_mutation_routes -- --exact --nocapture`
+Run: `cargo test -p api-server --lib _tests::openapi_alignment::openapi_excludes_legacy_member_mutation_routes -- --exact --nocapture`
 
 Expected: PASS and confirm the new action paths are the only member mutation routes.
 
-- [ ] **Step 5: Commit the verified topic-C batch**
+- [x] **Step 5: Commit the verified topic-C batch**
 
 ```bash
 git add .
 git commit -m "test: verify backend route openapi alignment"
 ```
+
+Task 3 completed at `2026-04-13 16:59`.
+Execution note: unit tests under `src/_tests` again used full module paths with `-- --exact`.
+Execution note: `node scripts/node/verify-backend.js` first failed on rustfmt diffs in the touched Rust files; after formatting, the full backend verification passed.
+Execution note: `cargo fmt --manifest-path api/Cargo.toml --all -- ...` was first run from the repository root with `apps/...` paths and failed because rustfmt resolved file arguments relative to the current working directory; rerunning from `api/` with the same relative paths fixed it.
+Execution note: the Step 4 contract diff was codified by asserting the member mutation path set in `/openapi.json` is exactly:
+- `/api/console/members/{id}/actions/disable`
+- `/api/console/members/{id}/actions/reset-password`
 
 Plan complete and saved to `docs/superpowers/plans/2026-04-13-backend-qa-route-openapi-alignment.md`.

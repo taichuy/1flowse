@@ -53,7 +53,10 @@ pub struct RuntimeListResponse {
 
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
-        .route("/models/:model_code/records", get(list_records).post(create_record))
+        .route(
+            "/models/:model_code/records",
+            get(list_records).post(create_record),
+        )
         .route(
             "/models/:model_code/records/:id",
             get(get_record).patch(update_record).delete(delete_record),
