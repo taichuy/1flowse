@@ -1,9 +1,10 @@
 import { Menu } from 'antd';
 
-import { AppShellFrame, createAccountMenuItems } from '../app/router';
-import { AgentFlowPage } from '../features/agent-flow/AgentFlowPage';
-import { EmbeddedAppsPage } from '../features/embedded-apps/EmbeddedAppsPage';
-import { HomePage } from '../features/home/HomePage';
+import { createAccountMenuItems } from '../app-shell/AccountMenu';
+import { AppShellFrame } from '../app-shell/AppShellFrame';
+import { AgentFlowPage } from '../features/agent-flow/pages/AgentFlowPage';
+import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
+import { HomePage } from '../features/home/pages/HomePage';
 import manifest from './scenario-manifest.json';
 import type {
   StyleBoundaryManifestScene,

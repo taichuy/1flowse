@@ -1,18 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { Button, Card, Space, Typography } from 'antd';
 
-import { fetchApiHealth, getDefaultApiBaseUrl } from '@1flowse/api-client';
-
-import { useAppStore } from '../../state/app-store';
+import { useAppStore } from '../../../state/app-store';
+import { getApiHealthQueryOptions } from '../api/health';
 
 export function HomePage() {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl(window.location);
   const visitCount = useAppStore((state) => state.visitCount);
   const increment = useAppStore((state) => state.increment);
-  const healthQuery = useQuery({
-    queryKey: ['api-health', apiBaseUrl],
-    queryFn: () => fetchApiHealth(apiBaseUrl)
-  });
+  const healthQuery = useQuery(
+    getApiHealthQueryOptions(typeof window !== 'undefined' ? window.location : undefined)
+  );
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>

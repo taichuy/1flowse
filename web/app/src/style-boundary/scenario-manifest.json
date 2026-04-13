@@ -47,7 +47,7 @@
     "title": "Home Page",
     "impactFiles": [
       "web/app/src/styles/global.css",
-      "web/app/src/features/home/HomePage.tsx",
+      "web/app/src/features/home/pages/HomePage.tsx",
       "web/app/src/app/router.tsx"
     ],
     "boundaryNodes": [
@@ -69,7 +69,7 @@
     "title": "Embedded Apps Page",
     "impactFiles": [
       "web/app/src/styles/global.css",
-      "web/app/src/features/embedded-apps/EmbeddedAppsPage.tsx",
+      "web/app/src/features/embedded-apps/pages/EmbeddedAppsPage.tsx",
       "web/app/src/app/router.tsx"
     ],
     "boundaryNodes": [
@@ -91,7 +91,7 @@
     "title": "Agent Flow Page",
     "impactFiles": [
       "web/app/src/styles/global.css",
-      "web/app/src/features/agent-flow/AgentFlowPage.tsx",
+      "web/app/src/features/agent-flow/pages/AgentFlowPage.tsx",
       "web/app/src/app/router.tsx"
     ],
     "boundaryNodes": [

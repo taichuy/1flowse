@@ -4,4 +4,8 @@ export interface HealthResponse {
   version: string;
 }
 
-export type AppRouteId = 'home' | 'agent-flow';
+export type AppRouteId =
+  | 'home'
+  | 'embedded-apps'
+  | 'embedded-runtime'
+  | 'agent-flow';

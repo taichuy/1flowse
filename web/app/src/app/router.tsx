@@ -1,5 +1,4 @@
 import {
-  Link,
   Outlet,
   RouterProvider,
   createRootRoute,
@@ -7,147 +6,13 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
-import {
-  LogoutOutlined,
-  SettingOutlined,
-  UserOutlined
-} from '@ant-design/icons';
-import { Menu } from 'antd';
-import type { MenuProps } from 'antd';
-import type { PropsWithChildren } from 'react';
 
-import { AppShell } from '@1flowse/ui';
-
-import { AgentFlowPage } from '../features/agent-flow/AgentFlowPage';
-import { EmbeddedAppDetailPage } from '../features/embedded-apps/EmbeddedAppDetailPage';
-import { EmbeddedAppsPage } from '../features/embedded-apps/EmbeddedAppsPage';
-import { EmbeddedMountPage } from '../features/embedded-runtime/EmbeddedMountPage';
-import { HomePage } from '../features/home/HomePage';
-
-function getSelectedNavigationKey(pathname: string) {
-  return pathname.startsWith('/agent-flow')
-    ? 'agent-flow'
-    : pathname.startsWith('/embedded-apps') || pathname.startsWith('/embedded/')
-      ? 'embedded-apps'
-      : 'home';
-}
-
-function renderNavigationLink(
-  pathname: string,
-  label: string,
-  useRouterLinks: boolean
-) {
-  if (useRouterLinks) {
-    return (
-      <Link to={pathname} className="app-shell-menu-link">
-        {label}
-      </Link>
-    );
-  }
-
-  return (
-    <a href={pathname} className="app-shell-menu-link">
-      {label}
-    </a>
-  );
-}
-
-function AppNavigation({
-  pathname,
-  useRouterLinks
-}: {
-  pathname: string;
-  useRouterLinks: boolean;
-}) {
-  const selectedKey = getSelectedNavigationKey(pathname);
-
-  const items: MenuProps['items'] = [
-    {
-      key: 'home',
-      label: renderNavigationLink('/', '工作台', useRouterLinks)
-    },
-    {
-      key: 'embedded-apps',
-      label: renderNavigationLink('/embedded-apps', '团队', useRouterLinks)
-    },
-    {
-      key: 'agent-flow',
-      label: renderNavigationLink('/agent-flow', '前台', useRouterLinks)
-    }
-  ];
-
-  return (
-    <nav className="app-shell-navigation" aria-label="Primary">
-      <Menu
-        className="app-shell-menu"
-        mode="horizontal"
-        selectedKeys={[selectedKey]}
-        items={items}
-        disabledOverflow
-      />
-    </nav>
-  );
-}
-
-export function createAccountMenuItems(): MenuProps['items'] {
-  return [
-    {
-      key: 'account',
-      label: (
-        <span className="app-shell-account-block">
-          <span className="app-shell-account-label">Taichu</span>
-        </span>
-      ),
-      popupClassName: 'app-shell-account-popup',
-      children: [
-        {
-          key: 'profile',
-          label: 'Profile',
-          icon: <UserOutlined />
-        },
-        {
-          key: 'settings',
-          label: 'Settings',
-          icon: <SettingOutlined />
-        },
-        { type: 'divider' },
-        {
-          key: 'sign-out',
-          label: 'Sign out',
-          icon: <LogoutOutlined />
-        }
-      ]
-    }
-  ];
-}
-
-function AppHeaderActions() {
-  return (
-    <Menu
-      className="app-shell-account-menu"
-      mode="horizontal"
-      selectable={false}
-      items={createAccountMenuItems()}
-      disabledOverflow
-    />
-  );
-}
-
-export function AppShellFrame({
-  children,
-  pathname = '/',
-  useRouterLinks = false
-}: PropsWithChildren<{ pathname?: string; useRouterLinks?: boolean }>) {
-  return (
-    <AppShell
-      title="1Flowse Bootstrap"
-      navigation={<AppNavigation pathname={pathname} useRouterLinks={useRouterLinks} />}
-      actions={<AppHeaderActions />}
-    >
-      {children}
-    </AppShell>
-  );
-}
+import { AppShellFrame } from '../app-shell/AppShellFrame';
+import { AgentFlowPage } from '../features/agent-flow/pages/AgentFlowPage';
+import { EmbeddedAppDetailPage } from '../features/embedded-apps/pages/EmbeddedAppDetailPage';
+import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
+import { EmbeddedMountPage } from '../features/embedded-runtime/pages/EmbeddedMountPage';
+import { HomePage } from '../features/home/pages/HomePage';
 
 function RootLayout() {
   const pathname = useRouterState({

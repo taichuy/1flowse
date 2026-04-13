@@ -31,7 +31,7 @@ describe('style boundary registry', () => {
 
   test('maps changed files to explicitly declared scenes', () => {
     expect(
-      getSceneIdsForFiles(['web/app/src/features/home/HomePage.tsx'])
+      getSceneIdsForFiles(['web/app/src/features/home/pages/HomePage.tsx'])
     ).toEqual(['page.home']);
     expect(getSceneIdsForFiles(['web/app/src/styles/global.css'])).toEqual([
       'component.account-popup',
