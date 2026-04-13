@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 
 vi.mock('@1flowse/api-client', () => ({
@@ -42,7 +42,11 @@ test('renders the bootstrap shell and health state', async () => {
   expect(
     within(primaryNavigation).queryByRole('link', { name: 'Agent Flow' })
   ).not.toBeInTheDocument();
-  expect(screen.getByRole('menuitem', { name: 'Taichu' })).toBeInTheDocument();
+  const accountTrigger = screen.getByText('Taichu');
+  expect(accountTrigger).toBeInTheDocument();
+  fireEvent.click(accountTrigger);
+  expect(document.querySelector('.ant-dropdown-placement-bottomLeft')).not.toBeNull();
+  expect(screen.getByText('Profile')).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Theme Preview' })).not.toBeInTheDocument();
   expect(await screen.findByText(/api-server/i)).toBeInTheDocument();
 });
