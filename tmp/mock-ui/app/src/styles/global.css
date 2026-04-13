@@ -227,12 +227,14 @@ a {
   align-items: center;
   justify-content: flex-end;
   flex: none;
+  min-width: max-content;
 }
 
 .app-shell-account-menu.ant-menu-horizontal {
   border-bottom: none !important;
   background: transparent !important;
   line-height: 1;
+  min-width: max-content;
 }
 
 .app-shell-account-menu.ant-menu-horizontal::after {

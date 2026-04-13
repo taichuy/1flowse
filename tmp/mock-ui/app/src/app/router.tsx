@@ -72,7 +72,15 @@ function AppHeaderActions() {
     }
   ];
 
-  return <Menu className="app-shell-account-menu" mode="horizontal" selectable={false} items={items} />;
+  return (
+    <Menu
+      className="app-shell-account-menu"
+      mode="horizontal"
+      selectable={false}
+      items={items}
+      disabledOverflow
+    />
+  );
 }
 
 function RootLayout() {

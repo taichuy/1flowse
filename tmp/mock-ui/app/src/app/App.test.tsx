@@ -36,8 +36,12 @@ test('renders the bootstrap shell and health state', async () => {
     screen.getByText('Taichu')
   ).toBeInTheDocument();
   expect(
+    screen.getByRole('menuitem', { name: 'Taichu' })
+  ).toBeInTheDocument();
+  expect(
     screen.queryByRole('button', { name: 'Workspace settings' })
   ).not.toBeInTheDocument();
+  expect(screen.queryByText('...')).not.toBeInTheDocument();
   expect(screen.queryByText('TF')).not.toBeInTheDocument();
   expect(
     screen.queryByText('Light shell mock with emerald signal accents')
