@@ -2,7 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import { AppProviders } from '../app/AppProviders';
-import '../styles/global.css';
+import '../styles/tokens.css';
+import '../styles/globals.css';
 import { StyleBoundaryHarness } from './StyleBoundaryHarness';
 import { getRuntimeScene } from './registry';
 

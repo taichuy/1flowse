@@ -31,7 +31,7 @@ describe('style boundary registry', () => {
     expect(
       getSceneIdsForFiles(['web/app/src/features/home/pages/HomePage.tsx'])
     ).toEqual(['page.home']);
-    expect(getSceneIdsForFiles(['web/app/src/styles/global.css'])).toEqual([
+    expect(getSceneIdsForFiles(['web/app/src/app-shell/app-shell.css'])).toEqual([
       'component.account-popup',
       'component.account-trigger',
       'page.home',

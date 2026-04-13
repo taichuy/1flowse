@@ -4,6 +4,7 @@ import { AppShell } from '@1flowse/ui';
 
 import { AccountMenu } from './AccountMenu';
 import { Navigation } from './Navigation';
+import './app-shell.css';
 
 export function AppShellFrame({
   children,

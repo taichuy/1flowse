@@ -4,8 +4,11 @@
     "kind": "component",
     "title": "Account Popup",
     "impactFiles": [
-      "web/app/src/styles/global.css",
-      "web/app/src/app/router.tsx"
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx"
     ],
     "boundaryNodes": [
       {
@@ -25,8 +28,11 @@
     "kind": "component",
     "title": "Account Trigger",
     "impactFiles": [
-      "web/app/src/styles/global.css",
-      "web/app/src/app/router.tsx"
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx"
     ],
     "boundaryNodes": [
       {
@@ -46,7 +52,13 @@
     "kind": "page",
     "title": "Home Page",
     "impactFiles": [
-      "web/app/src/styles/global.css",
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/app/src/app-shell/AppShellFrame.tsx",
+      "web/app/src/app-shell/Navigation.tsx",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx",
       "web/app/src/features/home/pages/HomePage.tsx",
       "web/app/src/app/router.tsx"
     ],
@@ -68,7 +80,13 @@
     "kind": "page",
     "title": "Embedded Apps Page",
     "impactFiles": [
-      "web/app/src/styles/global.css",
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/app/src/app-shell/AppShellFrame.tsx",
+      "web/app/src/app-shell/Navigation.tsx",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx",
       "web/app/src/features/embedded-apps/pages/EmbeddedAppsPage.tsx",
       "web/app/src/app/router.tsx"
     ],
@@ -90,7 +108,13 @@
     "kind": "page",
     "title": "Agent Flow Page",
     "impactFiles": [
-      "web/app/src/styles/global.css",
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/app-shell/app-shell.css",
+      "web/app/src/app-shell/AppShellFrame.tsx",
+      "web/app/src/app-shell/Navigation.tsx",
+      "web/app/src/app-shell/AccountMenu.tsx",
+      "web/app/src/app-shell/account-menu-items.tsx",
       "web/app/src/features/agent-flow/pages/AgentFlowPage.tsx",
       "web/app/src/app/router.tsx"
     ],

@@ -5,7 +5,9 @@ import { render, screen, within } from '@testing-library/react';
 import { Menu } from 'antd';
 import { describe, expect, test } from 'vitest';
 
-import '../../styles/global.css';
+import '../../styles/tokens.css';
+import '../../styles/globals.css';
+import '../app-shell.css';
 import { createAccountMenuItems } from '../account-menu-items';
 
 function getAccountPopupChildren() {
@@ -54,11 +56,11 @@ describe('account popup layout', () => {
     await screen.findByText('Settings');
     expect(screen.getByText('Taichu')).toBeInTheDocument();
 
-    const globalCss = fs.readFileSync(
-      path.resolve(import.meta.dirname, '../../styles/global.css'),
+    const appShellCss = fs.readFileSync(
+      path.resolve(import.meta.dirname, '../app-shell.css'),
       'utf8'
     );
-    const popupItemRuleMatch = globalCss.match(
+    const popupItemRuleMatch = appShellCss.match(
       /\.app-shell-account-popup \.ant-menu-item,\s*\n\.app-shell-account-popup \.ant-menu-submenu-title \{([\s\S]*?)\n\}/
     );
     const popupItemRule = popupItemRuleMatch?.[1] ?? '';
@@ -67,7 +69,7 @@ describe('account popup layout', () => {
     expect(popupItemRule).not.toContain('display: flex;');
     expect(popupItemRule).not.toContain('min-height:');
     expect(popupItemRule).not.toContain('line-height: 1.25;');
-    expect(globalCss).toContain('.app-shell-account-popup .ant-menu-title-content');
-    expect(globalCss).toContain('line-height: inherit;');
+    expect(appShellCss).toContain('.app-shell-account-popup .ant-menu-title-content');
+    expect(appShellCss).toContain('line-height: inherit;');
   });
 });
