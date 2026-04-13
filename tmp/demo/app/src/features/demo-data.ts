@@ -80,9 +80,12 @@ export interface SubsystemItem {
   version: string;
   summary: string;
   mountMode: string;
+  mountModeNote: string;
   authScope: string;
   lastUpdated: string;
   pendingActions: string[];
+  actionLabel: string;
+  actionHref: string;
 }
 
 export interface SettingField {
@@ -114,6 +117,8 @@ export interface ToolIncident {
   relatedSurface: string;
   relatedEndpoint: string;
   playbook: string[];
+  actionLabel: string;
+  actionHref: string;
 }
 
 export const workbenchMetrics: MetricCard[] = [
@@ -156,7 +161,7 @@ export const consoleEntries: ConsoleEntry[] = [
     title: '查看工具台',
     href: '/tools',
     description: '集中处理接口审阅、运行告警与交付检查，不再散落在多张临时卡片里。',
-    note: '当前有 3 条事件等待平台 owner 排队收口。',
+    note: '当前有 3 条事件等待平台负责人排队收口。',
     status: 'waiting',
     badge: '事件处理中'
   },
@@ -189,7 +194,7 @@ export const workspaceSnapshot: SnapshotItem[] = [
   {
     key: 'team',
     label: '当前团队',
-    value: 'Growth Lab'
+    value: '增长实验室'
   },
   {
     key: 'role',
@@ -206,9 +211,9 @@ export const workspaceSnapshot: SnapshotItem[] = [
 export const homeActionQueue: QueueItem[] = [
   {
     id: 'queue-acl',
-    title: '权限复核 / own-all matrix',
+    title: '权限矩阵复核',
     area: '访问控制',
-    owner: 'Security',
+    owner: '安全团队',
     dueAt: '今天 11:30',
     status: 'waiting',
     statusLabel: '待确认',
@@ -225,9 +230,9 @@ export const homeActionQueue: QueueItem[] = [
   },
   {
     id: 'queue-webhook',
-    title: 'Webhook 回写 / revision-24',
+    title: '发布回写确认',
     area: '发布网关',
-    owner: 'Platform Ops',
+    owner: '平台运维',
     dueAt: '今天 10:15',
     status: 'waiting',
     statusLabel: '等待回写',
@@ -244,19 +249,19 @@ export const homeActionQueue: QueueItem[] = [
   },
   {
     id: 'queue-cache',
-    title: '子系统缓存策略 / Growth Portal',
+    title: '子系统缓存切换',
     area: '子系统接入',
-    owner: 'Growth Systems',
+    owner: '增长系统',
     dueAt: '今天 15:00',
     status: 'running',
     statusLabel: '处理中',
     summary: '新资源包已经准备完成，但缓存策略还未从“立即替换”切换到“分批刷新”。',
     detail:
-      'Growth Portal 的新版资源包已经上传到宿主侧，当前需要先确定缓存刷新策略，再推进到正式挂载窗口。',
+      '增长门户的新资源包已经上传到宿主侧，当前需要先确定缓存刷新策略，再推进到正式挂载窗口。',
     nextAction: '确认缓存刷新方案后进入子系统发布窗口',
     followUps: [
       '确认新旧包共存时间是否需要跨越一个发布周期。',
-      '比对子系统挂载版本与 manifest 中的资源引用。',
+      '比对子系统挂载版本与接入清单中的资源引用。',
       '为业务方准备一次回滚说明。'
     ],
     href: '/subsystems'
@@ -266,8 +271,8 @@ export const homeActionQueue: QueueItem[] = [
 export const demoRuns: RunItem[] = [
   {
     id: 'run_1021',
-    flow: '发布检查 / revision-24',
-    owner: 'Platform Ops',
+    flow: '发布检查 / 修订 24',
+    owner: '平台运维',
     startedAt: '09:40',
     status: 'waiting',
     summary: '等待回写',
@@ -280,22 +285,22 @@ export const demoRuns: RunItem[] = [
   },
   {
     id: 'run_1018',
-    flow: '子系统同步 / embed-registry',
-    owner: 'Growth Systems',
+    flow: '子系统同步 / 接入清单',
+    owner: '增长系统',
     startedAt: '08:05',
     status: 'running',
     summary: '同步进行中',
-    detail: '子系统挂载注册表正在增量同步，等待最后一轮 manifest 校验完成。',
+    detail: '子系统挂载注册表正在增量同步，等待最后一轮接入清单校验完成。',
     events: [
-      '08:05 读取最新 manifest',
-      '08:11 更新 routePrefix 和 mount context',
-      '08:18 校验权限边界和 host capability'
+      '08:05 读取最新接入清单',
+      '08:11 更新挂载路径和访问上下文',
+      '08:18 校验权限边界和宿主能力'
     ]
   },
   {
     id: 'run_1014',
-    flow: 'Policy Review / role-grid',
-    owner: 'Security',
+    flow: '权限复核 / 角色矩阵',
+    owner: '安全团队',
     startedAt: '昨天 17:20',
     status: 'failed',
     summary: '权限冲突',
@@ -344,45 +349,54 @@ export const studioNodes: StudioNode[] = [
 export const subsystems: SubsystemItem[] = [
   {
     id: 'growth-portal',
-    name: 'Growth Portal',
+    name: '增长门户',
     status: 'healthy',
     statusLabel: '稳定',
     routePrefix: '/embedded/growth-portal',
-    owner: 'Growth Systems',
+    owner: '增长系统',
     version: '0.4.2',
-    summary: '营销工作台，当前通过 host-extension 方式挂到控制台。',
-    mountMode: 'host-extension',
+    summary: '营销工作台，当前通过宿主扩展方式挂到控制台。',
+    mountMode: '宿主扩展',
+    mountModeNote: 'host-extension',
     authScope: '继承当前控制台会话',
     lastUpdated: '2026-04-13 18:10',
-    pendingActions: ['确认新版资源包的缓存策略', '补齐默认团队欢迎页']
+    pendingActions: ['确认新版资源包的缓存策略', '补齐默认团队欢迎页'],
+    actionLabel: '进入接入治理',
+    actionHref: '/tools'
   },
   {
     id: 'ops-board',
-    name: 'Ops Board',
+    name: '运营看板',
     status: 'running',
     statusLabel: '同步中',
     routePrefix: '/embedded/ops-board',
-    owner: 'Operations',
+    owner: '运营团队',
     version: '0.3.8',
     summary: '运营协同板，依赖统一会话和权限上下文。',
-    mountMode: 'embedded-runtime',
+    mountMode: '运行时嵌入',
+    mountModeNote: 'embedded-runtime',
     authScope: '控制台会话 + 运行时权限映射',
     lastUpdated: '2026-04-13 15:35',
-    pendingActions: ['等待最新 manifest 校验完成']
+    pendingActions: ['等待最新接入清单校验完成'],
+    actionLabel: '查看同步事件',
+    actionHref: '/tools'
   },
   {
     id: 'docs-hub',
-    name: 'Docs Hub',
+    name: '文档中心',
     status: 'draft',
     statusLabel: '待发布',
     routePrefix: '/embedded/docs-hub',
-    owner: 'Developer Experience',
+    owner: '开发者体验',
     version: '0.2.0',
     summary: '正在收口 API 文档与最佳实践入口，还未进入正式发布。',
-    mountMode: 'static bundle',
+    mountMode: '静态资源包',
+    mountModeNote: 'static-bundle',
     authScope: '只读文档访问',
     lastUpdated: '2026-04-12 21:20',
-    pendingActions: ['补齐 API 文档跳转入口', '确认版本切换策略']
+    pendingActions: ['补齐 API 文档跳转入口', '确认版本切换策略'],
+    actionLabel: '查看 API 文档',
+    actionHref: '/settings'
   }
 ];
 
@@ -391,28 +405,28 @@ export const apiSurface: ApiSurfaceItem[] = [
     key: 'me',
     method: 'GET',
     path: '/api/console/me',
-    exposure: 'console',
+    exposure: '控制台内',
     note: '读取当前登录用户、角色和团队上下文。'
   },
   {
     key: 'permissions',
     method: 'GET',
     path: '/api/console/permissions',
-    exposure: 'console',
+    exposure: '控制台内',
     note: '获取控制台可绑定的权限定义。'
   },
   {
     key: 'team',
     method: 'PATCH',
     path: '/api/console/team',
-    exposure: 'console',
+    exposure: '控制台内',
     note: '更新团队显示名、通知策略和工作区默认配置。'
   },
   {
     key: 'signin',
     method: 'POST',
     path: '/api/public/auth/providers/password-local/sign-in',
-    exposure: 'public',
+    exposure: '公开入口',
     note: '本地账号登录，建立当前设备会话。'
   }
 ];
@@ -428,7 +442,7 @@ export const monitoringSignals: MetricCard[] = [
     label: '待审核变更',
     value: '05',
     status: 'waiting',
-    note: '需要平台 owner 或 security 二次确认。'
+    note: '需要平台负责人或安全团队二次确认。'
   },
   {
     label: '稳定窗口',
@@ -442,7 +456,7 @@ export const toolIncidents: ToolIncident[] = [
   {
     id: 'incident-acl',
     title: '权限矩阵冲突',
-    owner: 'Security',
+    owner: '安全团队',
     domain: '访问控制',
     status: 'waiting',
     statusLabel: '待确认',
@@ -458,12 +472,14 @@ export const toolIncidents: ToolIncident[] = [
       '先确认问题是否只影响单个角色，避免扩大 blast radius。',
       '对照 API 文档中的权限说明，确认是否存在过期描述。',
       '复核完成后更新发布审批记录，再解除阻塞状态。'
-    ]
+    ],
+    actionLabel: '前往访问控制',
+    actionHref: '/settings'
   },
   {
     id: 'incident-webhook',
     title: 'Webhook 回写超时',
-    owner: 'Platform Ops',
+    owner: '平台运维',
     domain: '发布网关',
     status: 'failed',
     statusLabel: '已阻塞',
@@ -473,39 +489,43 @@ export const toolIncidents: ToolIncident[] = [
     detail:
       '当前运行时已经完成发布动作，但回写通道没有在预期窗口内返回最终确认，工具台需要把它收口成阻塞事件而不是停留在模糊“待处理”。',
     nextAction: '比对发布日志与第三方回调时间戳，决定是否补记发布成功。',
-    relatedSurface: 'revision-24 / publish gateway',
-    relatedEndpoint: 'external webhook callback',
+    relatedSurface: '修订 24 / 发布网关',
+    relatedEndpoint: '外部回写通道',
     playbook: [
-      '核对发布网关日志中的 request id 和第三方回调日志。',
+      '核对发布网关日志中的请求标识和第三方回调日志。',
       '确认是否需要人工补记一次成功状态，避免误触发重试。',
       '为下轮发布补充回写窗口的监控告警。'
-    ]
+    ],
+    actionLabel: '查看发布检查',
+    actionHref: '/studio'
   },
   {
     id: 'incident-registry',
     title: '子系统清单同步滞后',
-    owner: 'Growth Systems',
+    owner: '增长系统',
     domain: '子系统注册',
     status: 'running',
     statusLabel: '处理中',
     severity: '中',
     updatedAt: '今天 08:26',
-    summary: 'manifest 增量同步已经开始，但仍有一个入口未完成 host capability 校验。',
+    summary: '接入清单增量同步已经开始，但仍有一个入口未完成宿主能力校验。',
     detail:
-      '子系统清单同步仍在进行中，工具台只展示影响治理的收口动作，不把整张 manifest 当作主界面内容。',
-    nextAction: '补完 host capability 校验，再回写到子系统页的版本摘要。',
-    relatedSurface: 'embedded registry / manifest sync',
+      '子系统清单同步仍在进行中，工具台只展示影响治理的收口动作，不把整张接入清单当作主界面内容。',
+    nextAction: '补完宿主能力校验，再回写到子系统页的版本摘要。',
+    relatedSurface: '接入清单 / 同步窗口',
     relatedEndpoint: '/embedded/ops-board',
     playbook: [
       '确认缺失的 capability 是否来自最新资源包。',
       '完成校验后同步更新子系统页的挂载版本。',
       '记录本次同步滞后是否来自缓存策略。'
-    ]
+    ],
+    actionLabel: '打开子系统页',
+    actionHref: '/subsystems'
   },
   {
     id: 'incident-api',
     title: '接口暴露级别待复核',
-    owner: 'Platform Core',
+    owner: '平台内核',
     domain: '接口治理',
     status: 'draft',
     statusLabel: '排队中',
@@ -515,13 +535,15 @@ export const toolIncidents: ToolIncident[] = [
     detail:
       '工具台保留这条排队事件，用来提示本轮仍有接口治理事项未关闭，但不会把它放到首页行动队列里抢主位。',
     nextAction: '确认公开接口只保留明确对外入口，再更新治理结论。',
-    relatedSurface: 'public / console surface',
+    relatedSurface: '公开接口 / 控制台接口',
     relatedEndpoint: '/api/public/auth/providers/password-local/sign-in',
     playbook: [
-      '列出当前所有 public 暴露面，确认是否仍有非预期开口。',
+      '列出当前所有公开暴露面，确认是否仍有非预期开口。',
       '将通过复核的接口回写到文档说明中。',
       '把未通过复核的接口标记到下一轮治理清单。'
-    ]
+    ],
+    actionLabel: '查看 API 文档',
+    actionHref: '/settings'
   }
 ];
 
@@ -582,20 +604,20 @@ export const accessMatrix = [
   {
     key: 'owner',
     role: '平台负责人',
-    scope: 'all',
-    permissions: 'members, roles, api-docs, publish'
+    scope: '全局',
+    permissions: '成员管理、角色治理、文档审阅、发布审批'
   },
   {
     key: 'ops',
     role: '运营负责人',
-    scope: 'team',
-    permissions: 'runs, monitoring, release-review'
+    scope: '团队',
+    permissions: '运行记录、监控排查、发布复核'
   },
   {
     key: 'builder',
     role: '流程构建者',
-    scope: 'own',
-    permissions: 'studio, draft-release'
+    scope: '本人',
+    permissions: '流程编排、草稿发布'
   }
 ];
 

@@ -577,6 +577,11 @@ button {
   align-items: start;
 }
 
+.incident-card-region,
+.subsystem-card-region {
+  display: none;
+}
+
 .incident-trigger {
   display: grid;
   gap: 6px;
@@ -597,6 +602,99 @@ button {
 .incident-trigger-summary {
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.incident-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.incident-mobile-card,
+.subsystem-mobile-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.84);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.incident-mobile-card:hover,
+.subsystem-mobile-card:hover {
+  border-color: rgba(0, 217, 146, 0.42);
+  box-shadow: 0 16px 28px rgba(14, 24, 20, 0.08);
+  transform: translateY(-1px);
+}
+
+.incident-mobile-card-head,
+.subsystem-mobile-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.incident-mobile-card-domain {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(22, 33, 29, 0.06);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.incident-mobile-card .ant-typography,
+.subsystem-mobile-card .ant-typography {
+  margin: 0;
+}
+
+.incident-mobile-card-meta,
+.subsystem-mobile-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.subsystem-mobile-card-title {
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.subsystem-mobile-card-owner {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.subsystem-mobile-card-summary {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.inline-empty-state {
+  padding: 18px;
+  border: 1px dashed var(--border-default);
+  border-radius: 16px;
+  background: rgba(248, 252, 249, 0.82);
+  color: var(--text-secondary);
 }
 
 .api-surface-list {
@@ -873,6 +971,17 @@ button {
 
   .tool-filter-bar {
     grid-template-columns: 1fr;
+  }
+
+  .incident-card-region,
+  .subsystem-card-region {
+    display: grid;
+    gap: 12px;
+  }
+
+  .incident-table-shell,
+  .subsystem-table-shell {
+    display: none;
   }
 }
 

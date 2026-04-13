@@ -35,7 +35,7 @@ test('opens the mobile navigation drawer with account and shell status context',
 
   const dialog = await screen.findByRole('dialog', { name: '控制台导航' });
 
-  expect(within(dialog).getByText('Growth Lab')).toBeInTheDocument();
+  expect(within(dialog).getByText('增长实验室')).toBeInTheDocument();
   expect(within(dialog).getByText('平台健康 99.94%')).toBeInTheDocument();
   expect(within(dialog).getByRole('link', { name: /工具/ })).toBeInTheDocument();
 });
@@ -62,17 +62,19 @@ test('renders the tools route and opens an incident drawer from the event queue'
   render(<App />);
 
   expect(await screen.findByRole('heading', { name: '工具' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: '事件卡片列表' })).toBeInTheDocument();
 
-  fireEvent.change(screen.getByPlaceholderText('搜索事件或负责人'), {
-    target: { value: '权限' }
+  fireEvent.change(screen.getByPlaceholderText('搜索事件、负责人或治理域'), {
+    target: { value: '安全' }
   });
 
   fireEvent.click(screen.getByRole('button', { name: '查看 权限矩阵冲突' }));
 
-  expect(await screen.findByRole('dialog', { name: '权限矩阵冲突' })).toBeInTheDocument();
+  const dialog = await screen.findByRole('dialog', { name: '权限矩阵冲突' });
   expect(
-    screen.getByText('同一角色同时命中 own 与 all 两类授权，需要回到访问控制面板重新确认范围。')
+    within(dialog).getByText('回到设置 / 访问控制，确认 own 与 all 的最终授权口径。')
   ).toBeInTheDocument();
+  expect(within(dialog).getByRole('link', { name: '前往访问控制' })).toBeInTheDocument();
 });
 
 test('renders the settings route and switches to access control content', async () => {

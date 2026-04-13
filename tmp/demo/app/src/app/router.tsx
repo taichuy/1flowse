@@ -111,7 +111,7 @@ function AppHeaderActions() {
         <Link to="/settings" className="demo-shell-profile" aria-label="打开账户与设置">
           <span className="demo-shell-profile-name">Mina Chen</span>
           <span className="demo-shell-profile-separator">·</span>
-          <span className="demo-shell-profile-meta">Growth Lab</span>
+          <span className="demo-shell-profile-meta">增长实验室</span>
         </Link>
       </Space>
 
@@ -133,7 +133,7 @@ function AppHeaderActions() {
         <div className="demo-shell-mobile-stack">
           <div className="demo-shell-mobile-summary">
             <Typography.Text strong>Mina Chen</Typography.Text>
-            <Typography.Text className="demo-shell-mobile-meta">Growth Lab</Typography.Text>
+            <Typography.Text className="demo-shell-mobile-meta">增长实验室</Typography.Text>
             <Typography.Text className="demo-shell-mobile-meta">平台负责人</Typography.Text>
           </div>
 

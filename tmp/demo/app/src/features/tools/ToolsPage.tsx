@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 
+import { Link } from '@tanstack/react-router';
 import { Card, Descriptions, Drawer, Input, List, Segmented, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -60,7 +61,7 @@ export function ToolsPage() {
           <button
             type="button"
             className="incident-trigger"
-            aria-label={`查看 ${value}`}
+            aria-label={`从表格查看 ${value}`}
             onClick={() => setActiveIncidentId(record.id)}
           >
             <span className="incident-trigger-title">{value}</span>
@@ -128,19 +129,53 @@ export function ToolsPage() {
               />
               <Input
                 value={searchValue}
-                placeholder="搜索事件或负责人"
+                placeholder="搜索事件、负责人或治理域"
                 allowClear
                 onChange={(event) => setSearchValue(event.target.value)}
               />
             </div>
 
-            <Table
-              rowKey="id"
-              pagination={false}
-              dataSource={filteredIncidents}
-              columns={incidentColumns}
-              locale={{ emptyText: '当前筛选下没有需要收口的事件。' }}
-            />
+            <section className="incident-card-region" aria-label="事件卡片列表">
+              {filteredIncidents.length > 0 ? (
+                <div className="incident-card-list">
+                  {filteredIncidents.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="incident-mobile-card"
+                      aria-label={`查看 ${item.title}`}
+                      onClick={() => setActiveIncidentId(item.id)}
+                    >
+                      <div className="incident-mobile-card-head">
+                        <span className="incident-mobile-card-domain">{item.domain}</span>
+                        <StatusPill status={item.status}>{item.statusLabel}</StatusPill>
+                      </div>
+                      <Typography.Text strong>{item.title}</Typography.Text>
+                      <Typography.Paragraph>{item.summary}</Typography.Paragraph>
+                      <div className="incident-mobile-card-meta">
+                        <span>{item.owner}</span>
+                        <span>{item.updatedAt}</span>
+                        <span>优先级 {item.severity}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="inline-empty-state">
+                  <Typography.Text>当前筛选下没有需要收口的事件。</Typography.Text>
+                </div>
+              )}
+            </section>
+
+            <div className="incident-table-shell">
+              <Table
+                rowKey="id"
+                pagination={false}
+                dataSource={filteredIncidents}
+                columns={incidentColumns}
+                locale={{ emptyText: '当前筛选下没有需要收口的事件。' }}
+              />
+            </div>
           </Card>
         </div>
 
@@ -233,6 +268,10 @@ export function ToolsPage() {
                 renderItem={(item) => <List.Item>{item}</List.Item>}
               />
             </Card>
+
+            <Link to={activeIncident.actionHref} className="demo-cta-link demo-cta-link-primary">
+              {activeIncident.actionLabel}
+            </Link>
           </div>
         ) : null}
       </Drawer>

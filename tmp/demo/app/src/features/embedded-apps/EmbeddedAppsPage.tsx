@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { Link } from '@tanstack/react-router';
 import { Card, Descriptions, Drawer, Table } from 'antd';
 
 import { subsystems } from '../demo-data';
@@ -21,50 +22,80 @@ export function EmbeddedAppsPage() {
       />
 
       <Card title="已接入子系统" className="demo-card">
-        <Table
-          rowKey="id"
-          pagination={false}
-          dataSource={subsystems}
-          columns={[
-            {
-              title: '应用',
-              dataIndex: 'name',
-              key: 'name',
-              render: (value: string, record) => (
-                <button
-                  type="button"
-                  className="subsystem-trigger"
-                  aria-label={`查看 ${value} 详情`}
-                  onClick={() => setActiveSubsystemId(record.id)}
-                >
-                  <span className="subsystem-trigger-title">{value}</span>
-                  <span className="subsystem-trigger-summary">{record.summary}</span>
-                </button>
-              )
-            },
-            {
-              title: '负责人',
-              dataIndex: 'owner',
-              key: 'owner'
-            },
-            {
-              title: '挂载路径',
-              dataIndex: 'routePrefix',
-              key: 'routePrefix'
-            },
-            {
-              title: '版本',
-              dataIndex: 'version',
-              key: 'version'
-            },
-            {
-              title: '状态',
-              dataIndex: 'status',
-              key: 'status',
-              render: (_, record) => <StatusPill status={record.status}>{record.statusLabel}</StatusPill>
-            }
-          ]}
-        />
+        <div className="subsystem-table-shell">
+          <Table
+            rowKey="id"
+            pagination={false}
+            dataSource={subsystems}
+            columns={[
+              {
+                title: '应用',
+                dataIndex: 'name',
+                key: 'name',
+                render: (value: string, record) => (
+                  <button
+                    type="button"
+                    className="subsystem-trigger"
+                    aria-label={`从表格查看 ${value} 详情`}
+                    onClick={() => setActiveSubsystemId(record.id)}
+                  >
+                    <span className="subsystem-trigger-title">{value}</span>
+                    <span className="subsystem-trigger-summary">{record.summary}</span>
+                  </button>
+                )
+              },
+              {
+                title: '负责人',
+                dataIndex: 'owner',
+                key: 'owner'
+              },
+              {
+                title: '挂载路径',
+                dataIndex: 'routePrefix',
+                key: 'routePrefix'
+              },
+              {
+                title: '版本',
+                dataIndex: 'version',
+                key: 'version'
+              },
+              {
+                title: '状态',
+                dataIndex: 'status',
+                key: 'status',
+                render: (_, record) => (
+                  <StatusPill status={record.status}>{record.statusLabel}</StatusPill>
+                )
+              }
+            ]}
+          />
+        </div>
+
+        <section className="subsystem-card-region" aria-label="子系统卡片列表">
+          {subsystems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="subsystem-mobile-card"
+              aria-label={`查看 ${item.name} 详情`}
+              onClick={() => setActiveSubsystemId(item.id)}
+            >
+              <div className="subsystem-mobile-card-head">
+                <div className="subsystem-mobile-card-title">
+                  <span>{item.name}</span>
+                  <span className="subsystem-mobile-card-owner">{item.owner}</span>
+                </div>
+                <StatusPill status={item.status}>{item.statusLabel}</StatusPill>
+              </div>
+              <p className="subsystem-mobile-card-summary">{item.summary}</p>
+              <div className="subsystem-mobile-card-meta">
+                <span>{item.routePrefix}</span>
+                <span>{item.version}</span>
+                <span>{item.mountMode}</span>
+              </div>
+            </button>
+          ))}
+        </section>
       </Card>
 
       <Drawer
@@ -97,7 +128,7 @@ export function EmbeddedAppsPage() {
                 {
                   key: 'mode',
                   label: '挂载方式',
-                  children: activeSubsystem.mountMode
+                  children: `${activeSubsystem.mountMode}（${activeSubsystem.mountModeNote}）`
                 },
                 {
                   key: 'auth',
@@ -119,6 +150,10 @@ export function EmbeddedAppsPage() {
                 ))}
               </ul>
             </Card>
+
+            <Link to={activeSubsystem.actionHref} className="demo-cta-link demo-cta-link-primary">
+              {activeSubsystem.actionLabel}
+            </Link>
           </div>
         ) : null}
       </Drawer>
