@@ -40,7 +40,7 @@ async fn add_field_returns_immediately_usable_metadata_without_publish_step() {
 
     assert_eq!(field.physical_column_name, "status");
 
-    let updated = service.get_model(created.id).await.unwrap();
+    let updated = service.get_model(Uuid::nil(), created.id).await.unwrap();
     assert_eq!(updated.fields.len(), 1);
 }
 

@@ -51,7 +51,7 @@
 - Modify: `api/apps/api-server/src/routes/model_definitions.rs`
 - Modify: `api/apps/api-server/src/_tests/model_definition_routes.rs`
 
-- [ ] **Step 1: Add failing tests for model-definition detail authorization**
+- [x] **Step 1: Add failing tests for model-definition detail authorization**
 
 Create `api/crates/control-plane/src/_tests/model_definition_acl_tests.rs` with focused tests for:
 
@@ -70,7 +70,7 @@ Extend `api/apps/api-server/src/_tests/model_definition_routes.rs` with a route 
 - verifies `GET /api/console/models/{id}` returns `200 OK`;
 - verifies a user without `state_model.view.own` or `.all` receives `403`.
 
-- [ ] **Step 2: Run the focused failures**
+- [x] **Step 2: Run the focused failures**
 
 Run: `cargo test -p control-plane get_model_requires_state_model_visibility -- --exact`
 
@@ -80,7 +80,7 @@ Run: `cargo test -p api-server model_definition_routes_require_state_model_visib
 
 Expected: FAIL because the route only requires a valid session and does not pass an actor into the service.
 
-- [ ] **Step 3: Implement explicit shared-resource state-model checks**
+- [x] **Step 3: Implement explicit shared-resource state-model checks**
 
 In `api/crates/control-plane/src/model_definition.rs`, change the read path from:
 
@@ -124,7 +124,7 @@ Use that helper for:
 
 Update `api/apps/api-server/src/routes/model_definitions.rs` so `get_model` passes `context.user.id` into the service instead of calling a permission-free lookup.
 
-- [ ] **Step 4: Re-run the model-definition ACL tests**
+- [x] **Step 4: Re-run the model-definition ACL tests**
 
 Run: `cargo test -p control-plane state_model_own_is_treated_as_scope_shared_read -- --exact`
 
@@ -134,12 +134,17 @@ Run: `cargo test -p api-server model_definition_routes_require_state_model_visib
 
 Expected: PASS
 
-- [ ] **Step 5: Commit the `state_model` repair**
+- [x] **Step 5: Commit the `state_model` repair**
 
 ```bash
 git add api/crates/control-plane/src/model_definition.rs api/crates/control-plane/src/_tests/mod.rs api/crates/control-plane/src/_tests/model_definition_acl_tests.rs api/apps/api-server/src/routes/model_definitions.rs api/apps/api-server/src/_tests/model_definition_routes.rs
 git commit -m "fix: enforce state model visibility on detail reads"
 ```
+
+Execution note (`2026-04-13 16`):
+- Red phase used full unit-test paths with `--exact`, for example `cargo test -p control-plane --lib _tests::model_definition_acl_tests::get_model_requires_state_model_visibility -- --exact`, because bare function names would not match src unit tests.
+- The control-plane red failure first surfaced as a signature mismatch because the approved fix requires `get_model` to accept `actor_user_id`; after implementing that interface, `cargo test -p control-plane --lib model_definition_acl_tests -- --nocapture` passed.
+- The route red failure matched the intended gap: `cargo test -p api-server --lib _tests::model_definition_routes::model_definition_routes_require_state_model_visibility -- --exact` returned `200` for an unprivileged user before the fix, and passed after the route forwarded `context.user.id`.
 
 ### Task 2: Land `state_data` Own/All Authorization In Runtime CRUD
 

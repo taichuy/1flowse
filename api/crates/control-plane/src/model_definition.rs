@@ -87,6 +87,20 @@ pub struct ModelDefinitionService<R> {
     repository: R,
 }
 
+fn ensure_state_model_permission(
+    actor: &domain::ActorContext,
+    action: &str,
+) -> Result<(), ControlPlaneError> {
+    if actor.is_root
+        || actor.has_permission(&format!("state_model.{action}.all"))
+        || actor.has_permission(&format!("state_model.{action}.own"))
+    {
+        return Ok(());
+    }
+
+    Err(ControlPlaneError::PermissionDenied("permission_denied"))
+}
+
 impl<R> ModelDefinitionService<R>
 where
     R: ModelDefinitionRepository,
@@ -103,8 +117,7 @@ where
             .repository
             .load_actor_context_for_user(actor_user_id)
             .await?;
-        ensure_permission(&actor, "state_model.view.all")
-            .map_err(ControlPlaneError::PermissionDenied)?;
+        ensure_state_model_permission(&actor, "view")?;
         self.repository.list_model_definitions().await
     }
 
@@ -142,7 +155,17 @@ where
         Ok(model)
     }
 
-    pub async fn get_model(&self, model_id: Uuid) -> Result<domain::ModelDefinitionRecord> {
+    pub async fn get_model(
+        &self,
+        actor_user_id: Uuid,
+        model_id: Uuid,
+    ) -> Result<domain::ModelDefinitionRecord> {
+        let actor = self
+            .repository
+            .load_actor_context_for_user(actor_user_id)
+            .await?;
+        ensure_state_model_permission(&actor, "view")?;
+
         self.repository
             .get_model_definition(model_id)
             .await?
@@ -157,8 +180,7 @@ where
             .repository
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
-        ensure_permission(&actor, "state_model.manage.all")
-            .map_err(ControlPlaneError::PermissionDenied)?;
+        ensure_state_model_permission(&actor, "manage")?;
 
         let model = self
             .repository
@@ -189,8 +211,7 @@ where
             .repository
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
-        ensure_permission(&actor, "state_model.manage.all")
-            .map_err(ControlPlaneError::PermissionDenied)?;
+        ensure_state_model_permission(&actor, "manage")?;
 
         let field = self
             .repository
@@ -230,8 +251,7 @@ where
             .repository
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
-        ensure_permission(&actor, "state_model.manage.all")
-            .map_err(ControlPlaneError::PermissionDenied)?;
+        ensure_state_model_permission(&actor, "manage")?;
 
         let field = self
             .repository
@@ -270,8 +290,7 @@ where
             .repository
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
-        ensure_permission(&actor, "state_model.manage.all")
-            .map_err(ControlPlaneError::PermissionDenied)?;
+        ensure_state_model_permission(&actor, "manage")?;
 
         self.repository
             .delete_model_definition(command.actor_user_id, command.model_id)
@@ -298,8 +317,7 @@ where
             .repository
             .load_actor_context_for_user(command.actor_user_id)
             .await?;
-        ensure_permission(&actor, "state_model.manage.all")
-            .map_err(ControlPlaneError::PermissionDenied)?;
+        ensure_state_model_permission(&actor, "manage")?;
 
         self.repository
             .delete_model_field(command.actor_user_id, command.model_id, command.field_id)

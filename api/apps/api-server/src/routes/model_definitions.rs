@@ -269,9 +269,9 @@ pub async fn get_model(
     headers: HeaderMap,
     Path(model_id): Path<String>,
 ) -> Result<Json<ApiSuccess<ModelDefinitionResponse>>, ApiError> {
-    let _context = require_session(&state, &headers).await?;
+    let context = require_session(&state, &headers).await?;
     let model = ModelDefinitionService::new(state.store.clone())
-        .get_model(parse_uuid(&model_id, "model_id")?)
+        .get_model(context.user.id, parse_uuid(&model_id, "model_id")?)
         .await?;
 
     Ok(Json(ApiSuccess::new(to_model_definition_response(model))))
