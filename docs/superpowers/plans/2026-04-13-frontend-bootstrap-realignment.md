@@ -239,6 +239,126 @@ Move shell composition out of `router.tsx` by creating:
 - `app-shell/AccountMenu.tsx`
 - `app-shell/AppShellFrame.tsx`
 
+`web/app/src/app-shell/Navigation.tsx`:
+
+```tsx
+import { Link } from '@tanstack/react-router';
+import { Menu } from 'antd';
+import type { MenuProps } from 'antd';
+
+import { APP_ROUTES, getSelectedRouteId } from '../routes/route-config';
+
+function renderNavigationLink(path: string, label: string, useRouterLinks: boolean) {
+  if (useRouterLinks) {
+    return (
+      <Link to={path} className="app-shell-menu-link">
+        {label}
+      </Link>
+    );
+  }
+
+  return (
+    <a href={path} className="app-shell-menu-link">
+      {label}
+    </a>
+  );
+}
+
+export function Navigation({
+  pathname,
+  useRouterLinks
+}: {
+  pathname: string;
+  useRouterLinks: boolean;
+}) {
+  const selectedKey = getSelectedRouteId(pathname);
+  const items: MenuProps['items'] = APP_ROUTES.filter((route) => route.navLabel).map((route) => ({
+    key: route.id,
+    label: renderNavigationLink(route.path.replace('/$embeddedAppId', ''), route.navLabel!, useRouterLinks)
+  }));
+
+  return (
+    <nav className="app-shell-navigation" aria-label="Primary">
+      <Menu
+        className="app-shell-menu"
+        mode="horizontal"
+        selectedKeys={[selectedKey]}
+        items={items}
+        disabledOverflow
+      />
+    </nav>
+  );
+}
+```
+
+`web/app/src/app-shell/AccountMenu.tsx`:
+
+```tsx
+import { LogoutOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
+import { Menu } from 'antd';
+import type { MenuProps } from 'antd';
+
+export function createAccountMenuItems(): MenuProps['items'] {
+  return [
+    {
+      key: 'account',
+      label: (
+        <span className="app-shell-account-block">
+          <span className="app-shell-account-label">Taichu</span>
+        </span>
+      ),
+      popupClassName: 'app-shell-account-popup',
+      children: [
+        { key: 'profile', label: 'Profile', icon: <UserOutlined /> },
+        { key: 'settings', label: 'Settings', icon: <SettingOutlined /> },
+        { type: 'divider' },
+        { key: 'sign-out', label: 'Sign out', icon: <LogoutOutlined /> }
+      ]
+    }
+  ];
+}
+
+export function AccountMenu() {
+  return (
+    <Menu
+      className="app-shell-account-menu"
+      mode="horizontal"
+      selectable={false}
+      items={createAccountMenuItems()}
+      disabledOverflow
+    />
+  );
+}
+```
+
+`web/app/src/app-shell/AppShellFrame.tsx`:
+
+```tsx
+import type { PropsWithChildren } from 'react';
+
+import { AppShell } from '@1flowse/ui';
+
+import { AccountMenu } from './AccountMenu';
+import { Navigation } from './Navigation';
+import './app-shell.css';
+
+export function AppShellFrame({
+  children,
+  pathname = '/',
+  useRouterLinks = false
+}: PropsWithChildren<{ pathname?: string; useRouterLinks?: boolean }>) {
+  return (
+    <AppShell
+      title="1Flowse Bootstrap"
+      navigation={<Navigation pathname={pathname} useRouterLinks={useRouterLinks} />}
+      actions={<AccountMenu />}
+    >
+      {children}
+    </AppShell>
+  );
+}
+```
+
 `router.tsx` should end up doing only:
 
 ```tsx
@@ -386,9 +506,41 @@ export function homeHealthQueryOptions(apiBaseUrl: string) {
 Create `web/app/src/features/home/pages/HomePage.tsx` and update it to consume the helper:
 
 ```tsx
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl(window.location);
-const healthQuery = useQuery(homeHealthQueryOptions(apiBaseUrl));
+import { useQuery } from '@tanstack/react-query';
+import { Button, Card, Space, Typography } from 'antd';
+
+import { getDefaultApiBaseUrl } from '@1flowse/api-client';
+
+import { useAppStore } from '../../../state/app-store';
+import { homeHealthQueryOptions } from '../api/health';
+
+export function HomePage() {
+  const apiBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl(window.location);
+  const visitCount = useAppStore((state) => state.visitCount);
+  const increment = useAppStore((state) => state.increment);
+  const healthQuery = useQuery(homeHealthQueryOptions(apiBaseUrl));
+
+  return (
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Card title="Workspace Bootstrap">
+        <Typography.Paragraph>
+          前端工作区、共享壳层和后端健康检查已接入同一条 bootstrap 链路。
+        </Typography.Paragraph>
+        <Typography.Paragraph>Visit count: {visitCount}</Typography.Paragraph>
+        <Button onClick={increment}>Increment</Button>
+      </Card>
+      <Card title="API Health">
+        <Typography.Paragraph>
+          {healthQuery.isPending && 'Loading health status...'}
+          {healthQuery.isError && 'Health request failed.'}
+          {healthQuery.data &&
+            `${healthQuery.data.service} ${healthQuery.data.status} (${healthQuery.data.version})`}
+        </Typography.Paragraph>
+      </Card>
+    </Space>
+  );
+}
 ```
 
 Move the remaining page containers into:
@@ -403,9 +555,25 @@ Update `router.tsx` and `style-boundary/registry.tsx` imports to reference the n
 While moving these files, replace obvious placeholder copy with formal bootstrap-safe product text, for example:
 
 ```tsx
-<Typography.Paragraph>
-  管理已接入的嵌入式前端应用版本、路由前缀和挂载上下文。
-</Typography.Paragraph>
+const bootstrapCapabilities = [
+  '已接入应用的版本与构建产物清单',
+  '路由前缀、挂载上下文和宿主约束',
+  '后续接入发布、回滚和运行态诊断的入口'
+];
+
+export function EmbeddedAppsPage() {
+  return (
+    <Card title="Embedded Apps">
+      <Typography.Paragraph>
+        管理已接入的嵌入式前端应用版本、路由前缀和挂载上下文。
+      </Typography.Paragraph>
+      <List
+        dataSource={bootstrapCapabilities}
+        renderItem={(item) => <List.Item>{item}</List.Item>}
+      />
+    </Card>
+  );
+}
 ```
 
 - [ ] **Step 4: Re-run the focused feature and route regressions**
