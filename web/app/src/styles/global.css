@@ -291,7 +291,7 @@ a {
 .app-shell-account-popup .ant-menu-title-content {
   font-size: clamp(1.05rem, 0.98rem + 0.28vw, 1.18rem);
   font-weight: 500;
-  line-height: 1.15;
+  line-height: inherit;
 }
 
 .app-shell-account-popup .ant-menu-item .ant-menu-item-icon,
