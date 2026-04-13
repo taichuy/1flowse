@@ -7,6 +7,7 @@ pub mod middleware;
 pub mod openapi;
 pub mod response;
 pub mod routes;
+pub mod runtime_registry_sync;
 
 use std::{net::SocketAddr, sync::Arc};
 

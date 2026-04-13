@@ -11,6 +11,7 @@ use control_plane::model_definition::{
     DeleteModelFieldCommand, ModelDefinitionService, UpdateModelDefinitionCommand,
     UpdateModelFieldCommand,
 };
+use control_plane::runtime_registry_sync::ModelDefinitionMutationService;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -20,6 +21,7 @@ use crate::{
     error_response::ApiError,
     middleware::{require_csrf::require_csrf, require_session::require_session},
     response::ApiSuccess,
+    runtime_registry_sync::ApiRuntimeRegistrySync,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -194,10 +196,13 @@ fn parse_field_kind(raw: &str) -> Result<domain::ModelFieldKind, ApiError> {
     }
 }
 
-async fn refresh_runtime_registry(state: &ApiState) -> Result<(), ApiError> {
-    let metadata = state.store.list_runtime_model_metadata().await?;
-    state.runtime_engine.registry().rebuild(metadata);
-    Ok(())
+fn mutation_service(
+    state: &ApiState,
+) -> ModelDefinitionMutationService<storage_pg::PgControlPlaneStore, ApiRuntimeRegistrySync> {
+    ModelDefinitionMutationService::new(
+        state.store.clone(),
+        ApiRuntimeRegistrySync::new(state.store.clone(), state.runtime_engine.registry().clone()),
+    )
 }
 
 #[utoipa::path(
@@ -252,7 +257,7 @@ pub async fn create_model(
             .pipe(|value| parse_uuid(value, "scope_id"))?,
     };
 
-    let model = ModelDefinitionService::new(state.store.clone())
+    let model = mutation_service(&state)
         .create_model(CreateModelDefinitionCommand {
             actor_user_id: context.user.id,
             scope_kind,
@@ -261,7 +266,6 @@ pub async fn create_model(
             title: body.title,
         })
         .await?;
-    refresh_runtime_registry(&state).await?;
 
     Ok((
         StatusCode::CREATED,
@@ -304,14 +308,13 @@ pub async fn update_model(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let model = ModelDefinitionService::new(state.store.clone())
+    let model = mutation_service(&state)
         .update_model(UpdateModelDefinitionCommand {
             actor_user_id: context.user.id,
             model_id: parse_uuid(&model_id, "model_id")?,
             title: body.title,
         })
         .await?;
-    refresh_runtime_registry(&state).await?;
 
     Ok(Json(ApiSuccess::new(to_model_definition_response(model))))
 }
@@ -334,14 +337,13 @@ pub async fn delete_model(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    ModelDefinitionService::new(state.store.clone())
+    mutation_service(&state)
         .delete_model(DeleteModelDefinitionCommand {
             actor_user_id: context.user.id,
             model_id: parse_uuid(&model_id, "model_id")?,
             confirmed: query.confirmed.unwrap_or(false),
         })
         .await?;
-    refresh_runtime_registry(&state).await?;
 
     Ok(Json(ApiSuccess::new(
         serde_json::json!({ "deleted": true }),
@@ -364,7 +366,7 @@ pub async fn create_field(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let field = ModelDefinitionService::new(state.store.clone())
+    let field = mutation_service(&state)
         .add_field(AddModelFieldCommand {
             actor_user_id: context.user.id,
             model_id: parse_uuid(&model_id, "model_id")?,
@@ -384,7 +386,6 @@ pub async fn create_field(
             relation_options: body.relation_options,
         })
         .await?;
-    refresh_runtime_registry(&state).await?;
 
     Ok((
         StatusCode::CREATED,
@@ -411,7 +412,7 @@ pub async fn update_field(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let field = ModelDefinitionService::new(state.store.clone())
+    let field = mutation_service(&state)
         .update_field(UpdateModelFieldCommand {
             actor_user_id: context.user.id,
             model_id: parse_uuid(&model_id, "model_id")?,
@@ -425,7 +426,6 @@ pub async fn update_field(
             relation_options: body.relation_options,
         })
         .await?;
-    refresh_runtime_registry(&state).await?;
 
     Ok(Json(ApiSuccess::new(to_model_field_response(field))))
 }
@@ -449,7 +449,7 @@ pub async fn delete_field(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    ModelDefinitionService::new(state.store.clone())
+    mutation_service(&state)
         .delete_field(DeleteModelFieldCommand {
             actor_user_id: context.user.id,
             model_id: parse_uuid(&model_id, "model_id")?,
@@ -457,7 +457,6 @@ pub async fn delete_field(
             confirmed: query.confirmed.unwrap_or(false),
         })
         .await?;
-    refresh_runtime_registry(&state).await?;
 
     Ok(Json(ApiSuccess::new(
         serde_json::json!({ "deleted": true }),
