@@ -19,30 +19,32 @@ import { ThemePreviewPage } from '../features/theme-preview/ThemePreviewPage';
 
 function AppNavigation() {
   return (
-    <div className="app-shell-links">
-      <Link
-        to="/"
-        activeOptions={{ exact: true }}
-        activeProps={{ className: 'app-shell-link is-active' }}
-        inactiveProps={{ className: 'app-shell-link' }}
-      >
-        Home
-      </Link>
-      <Link
-        to="/theme-preview"
-        activeProps={{ className: 'app-shell-link is-active' }}
-        inactiveProps={{ className: 'app-shell-link' }}
-      >
-        Theme Preview
-      </Link>
-      <Link
-        to="/agent-flow"
-        activeProps={{ className: 'app-shell-link is-active' }}
-        inactiveProps={{ className: 'app-shell-link' }}
-      >
-        agentFlow
-      </Link>
-    </div>
+    <nav className="app-shell-navigation" aria-label="Primary">
+      <div className="app-shell-links">
+        <Link
+          to="/"
+          activeOptions={{ exact: true }}
+          activeProps={{ className: 'app-shell-link is-active' }}
+          inactiveProps={{ className: 'app-shell-link' }}
+        >
+          Home
+        </Link>
+        <Link
+          to="/theme-preview"
+          activeProps={{ className: 'app-shell-link is-active' }}
+          inactiveProps={{ className: 'app-shell-link' }}
+        >
+          Theme Preview
+        </Link>
+        <Link
+          to="/agent-flow"
+          activeProps={{ className: 'app-shell-link is-active' }}
+          inactiveProps={{ className: 'app-shell-link' }}
+        >
+          Agent Flow
+        </Link>
+      </div>
+    </nav>
   );
 }
 
@@ -50,7 +52,6 @@ function RootLayout() {
   return (
     <AppShell
       title="1Flowse Bootstrap"
-      subtitle="Light shell mock with emerald signal accents"
       navigation={<AppNavigation />}
     >
       <Outlet />

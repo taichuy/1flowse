@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 
 vi.mock('@1flowse/api-client', () => ({
@@ -20,10 +20,20 @@ test('renders the bootstrap shell and health state', async () => {
   render(<App />);
 
   expect(await screen.findByText('1Flowse Bootstrap')).toBeInTheDocument();
-  expect(await screen.findByRole('link', { name: 'Theme Preview' })).toBeInTheDocument();
+  const primaryNavigation = await screen.findByRole('navigation', {
+    name: 'Primary'
+  });
+
+  expect(within(primaryNavigation).getByRole('link', { name: 'Home' })).toBeInTheDocument();
   expect(
-    await screen.findByRole('link', { name: 'agentFlow' })
+    within(primaryNavigation).getByRole('link', { name: 'Theme Preview' })
   ).toBeInTheDocument();
+  expect(
+    within(primaryNavigation).getByRole('link', { name: 'Agent Flow' })
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText('Light shell mock with emerald signal accents')
+  ).not.toBeInTheDocument();
   expect(await screen.findByText(/api-server/i)).toBeInTheDocument();
 });
 

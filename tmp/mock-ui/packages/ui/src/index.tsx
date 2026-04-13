@@ -44,29 +44,19 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
 
 export interface AppShellProps extends PropsWithChildren {
   title: string;
-  subtitle?: string;
   navigation?: ReactNode;
 }
 
-export function AppShell({ title, subtitle, navigation, children }: AppShellProps) {
+export function AppShell({ title, navigation, children }: AppShellProps) {
   return (
     <Layout className="app-shell">
       <Header className="app-shell-header">
         <div className="app-shell-brand">
           <span className="app-shell-signal" aria-hidden="true" />
-          <div className="app-shell-brand-copy">
-            <Typography.Text className="app-shell-kicker">
-              1Flowse mock workspace
-            </Typography.Text>
-            <Typography.Title level={3} className="app-shell-title">
-              {title}
-            </Typography.Title>
-            {subtitle ? (
-              <Typography.Text className="app-shell-subtitle">
-                {subtitle}
-              </Typography.Text>
-            ) : null}
-          </div>
+          <Typography.Title level={4} className="app-shell-title">
+            {title}
+          </Typography.Title>
+          <Typography.Text className="app-shell-kicker">Mock workspace</Typography.Text>
         </div>
         <div className="app-shell-nav">{navigation}</div>
       </Header>
