@@ -256,23 +256,25 @@ a {
 }
 
 .app-shell-account-block {
+  min-width: clamp(7.5rem, 8vw, 9.5rem);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 132px;
-  height: 56px;
+  height: 100%;
+  padding-inline: clamp(0.5rem, 0.8vw, 0.875rem);
   text-align: center;
 }
 
 .app-shell-account-label {
-  font-size: 16px;
+  font-size: clamp(1rem, 0.92rem + 0.28vw, 1.2rem);
   font-weight: 600;
+  line-height: 1.1;
 }
 
 .app-shell-account-popup .ant-menu {
-  min-width: 240px;
+  min-width: clamp(12rem, 13vw, 14.5rem);
   border-radius: 18px;
-  padding: 14px 0;
+  padding-block: clamp(0.45rem, 0.7vw, 0.75rem);
   box-shadow: var(--shadow-float);
 }
 
@@ -280,28 +282,22 @@ a {
 .app-shell-account-popup .ant-menu-submenu-title {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: 58px;
+  min-height: clamp(3rem, 3.6vw, 3.45rem);
   margin: 0 !important;
-  padding: 0 18px !important;
-  text-align: center;
+  padding: 0 clamp(0.8rem, 1vw, 1.15rem) !important;
   line-height: 1.25;
 }
 
 .app-shell-account-popup .ant-menu-title-content {
-  flex: none;
-  margin-inline: 0 !important;
-}
-
-.app-shell-account-popup-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  font-size: var(--account-popup-font-size, 18px);
+  font-size: clamp(1.05rem, 0.98rem + 0.28vw, 1.18rem);
   font-weight: 500;
   line-height: 1.15;
-  text-align: center;
+}
+
+.app-shell-account-popup .ant-menu-item .ant-menu-item-icon,
+.app-shell-account-popup .ant-menu-submenu-title .ant-menu-item-icon {
+  font-size: clamp(1rem, 0.94rem + 0.2vw, 1.12rem);
+  color: var(--text-secondary);
 }
 
 .app-shell-content.ant-layout-content {

@@ -7,6 +7,11 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
+import {
+  LogoutOutlined,
+  SettingOutlined,
+  UserOutlined
+} from '@ant-design/icons';
 import { Menu } from 'antd';
 import type { MenuProps } from 'antd';
 
@@ -69,8 +74,8 @@ function AppNavigation() {
   );
 }
 
-function AppHeaderActions() {
-  const items: MenuProps['items'] = [
+export function createAccountMenuItems(): MenuProps['items'] {
+  return [
     {
       key: 'account',
       label: (
@@ -82,48 +87,32 @@ function AppHeaderActions() {
       children: [
         {
           key: 'profile',
-          label: (
-            <span
-              className="app-shell-account-popup-label"
-              style={{ ['--account-popup-font-size' as string]: '18px' }}
-            >
-              Profile
-            </span>
-          )
+          label: 'Profile',
+          icon: <UserOutlined />
         },
         {
           key: 'settings',
-          label: (
-            <span
-              className="app-shell-account-popup-label"
-              style={{ ['--account-popup-font-size' as string]: '18px' }}
-            >
-              Settings
-            </span>
-          )
+          label: 'Settings',
+          icon: <SettingOutlined />
         },
         { type: 'divider' },
         {
           key: 'sign-out',
-          label: (
-            <span
-              className="app-shell-account-popup-label"
-              style={{ ['--account-popup-font-size' as string]: '18px' }}
-            >
-              Sign out
-            </span>
-          )
+          label: 'Sign out',
+          icon: <LogoutOutlined />
         }
       ]
     }
   ];
+}
 
+function AppHeaderActions() {
   return (
     <Menu
       className="app-shell-account-menu"
       mode="horizontal"
       selectable={false}
-      items={items}
+      items={createAccountMenuItems()}
       disabledOverflow
     />
   );

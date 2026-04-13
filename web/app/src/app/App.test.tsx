@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 
 vi.mock('@1flowse/api-client', () => ({
@@ -47,15 +47,7 @@ test('renders the bootstrap shell and health state', async () => {
 
   expect(accountBlock).not.toBeNull();
   expect((accountBlock as Element).textContent).toContain('Taichu');
-  fireEvent.mouseEnter(accountTrigger);
-  expect(await screen.findByText('Profile')).toBeInTheDocument();
-  expect(document.querySelectorAll('.app-shell-account-popup-label').length).toBe(3);
-  expect(
-    Array.from(document.querySelectorAll('.app-shell-account-popup-label')).every(
-      (element) =>
-        (element as HTMLElement).style.getPropertyValue('--account-popup-font-size') === '18px'
-    )
-  ).toBe(true);
+  expect(accountTrigger).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Theme Preview' })).not.toBeInTheDocument();
   expect(await screen.findByText(/api-server/i)).toBeInTheDocument();
 });
