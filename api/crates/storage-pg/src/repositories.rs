@@ -1,11 +1,11 @@
 use anyhow::Result;
 use control_plane::ports::{
-    AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, TeamRepository,
-    UpdateProfileInput,
+    AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, UpdateProfileInput,
+    WorkspaceRepository,
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, PermissionDefinition, RoleScopeKind,
-    TeamRecord, TenantRecord, UserRecord,
+    TenantRecord, UserRecord, WorkspaceRecord,
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -45,13 +45,8 @@ impl PgControlPlaneStore {
         &self,
         tenant_id: Uuid,
         workspace_name: &str,
-    ) -> Result<TeamRecord> {
+    ) -> Result<WorkspaceRecord> {
         BootstrapRepository::upsert_workspace(self, tenant_id, workspace_name).await
-    }
-
-    pub async fn upsert_team(&self, team_name: &str) -> Result<TeamRecord> {
-        let tenant = self.upsert_root_tenant().await?;
-        self.upsert_workspace(tenant.id, team_name).await
     }
 
     pub async fn upsert_builtin_roles(&self, workspace_id: Uuid) -> Result<()> {
@@ -130,20 +125,27 @@ impl PgControlPlaneStore {
         AuthRepository::append_audit_log(self, event).await
     }
 
-    pub async fn get_team(&self, team_id: Uuid) -> Result<Option<TeamRecord>> {
-        TeamRepository::get_team(self, team_id).await
+    pub async fn get_workspace(&self, workspace_id: Uuid) -> Result<Option<WorkspaceRecord>> {
+        WorkspaceRepository::get_workspace(self, workspace_id).await
     }
 
-    pub async fn update_team(
+    pub async fn update_workspace(
         &self,
         actor_user_id: Uuid,
-        team_id: Uuid,
+        workspace_id: Uuid,
         name: &str,
         logo_url: Option<&str>,
         introduction: &str,
-    ) -> Result<TeamRecord> {
-        TeamRepository::update_team(self, actor_user_id, team_id, name, logo_url, introduction)
-            .await
+    ) -> Result<WorkspaceRecord> {
+        WorkspaceRepository::update_workspace(
+            self,
+            actor_user_id,
+            workspace_id,
+            name,
+            logo_url,
+            introduction,
+        )
+        .await
     }
 
     pub async fn create_member_with_default_role(
@@ -165,26 +167,26 @@ pub(crate) const ROOT_TENANT_ID: &str = "00000000-0000-0000-0000-000000000001";
 pub(crate) const ROOT_TENANT_CODE: &str = "root-tenant";
 pub(crate) const ROOT_TENANT_NAME: &str = "Root Tenant";
 
-pub(crate) async fn primary_team_id(pool: &PgPool) -> Result<Uuid> {
-    sqlx::query_scalar("select id from teams order by created_at asc limit 1")
+pub(crate) async fn primary_workspace_id(pool: &PgPool) -> Result<Uuid> {
+    sqlx::query_scalar("select id from workspaces order by created_at asc limit 1")
         .fetch_optional(pool)
         .await?
-        .ok_or(control_plane::errors::ControlPlaneError::NotFound("team").into())
+        .ok_or(control_plane::errors::ControlPlaneError::NotFound("workspace").into())
 }
 
-pub(crate) async fn tenant_id_for_team(pool: &PgPool, team_id: Uuid) -> Result<Uuid> {
-    sqlx::query_scalar("select tenant_id from teams where id = $1")
-        .bind(team_id)
+pub(crate) async fn tenant_id_for_workspace(pool: &PgPool, workspace_id: Uuid) -> Result<Uuid> {
+    sqlx::query_scalar("select tenant_id from workspaces where id = $1")
+        .bind(workspace_id)
         .fetch_optional(pool)
         .await?
         .ok_or(control_plane::errors::ControlPlaneError::NotFound("tenant").into())
 }
 
-pub(crate) async fn team_id_for_user(pool: &PgPool, user_id: Uuid) -> Result<Uuid> {
-    if let Some(team_id) = sqlx::query_scalar(
+pub(crate) async fn workspace_id_for_user(pool: &PgPool, user_id: Uuid) -> Result<Uuid> {
+    if let Some(workspace_id) = sqlx::query_scalar(
         r#"
-        select team_id
-        from team_memberships
+        select workspace_id
+        from workspace_memberships
         where user_id = $1
         order by created_at asc
         limit 1
@@ -194,9 +196,9 @@ pub(crate) async fn team_id_for_user(pool: &PgPool, user_id: Uuid) -> Result<Uui
     .fetch_optional(pool)
     .await?
     {
-        Ok(team_id)
+        Ok(workspace_id)
     } else {
-        primary_team_id(pool).await
+        primary_workspace_id(pool).await
     }
 }
 
@@ -242,7 +244,7 @@ pub(crate) async fn find_role_by_code(
         select id, code, name, scope_kind, is_builtin, is_editable
         from roles
         where (scope_kind = 'system' and code = $1)
-           or (scope_kind = 'workspace' and team_id = $2 and code = $1)
+           or (scope_kind = 'workspace' and workspace_id = $2 and code = $1)
         order by scope_kind asc
         limit 1
         "#,

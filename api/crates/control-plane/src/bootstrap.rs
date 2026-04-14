@@ -6,7 +6,7 @@ use crate::ports::BootstrapRepository;
 
 #[derive(Debug, Clone)]
 pub struct BootstrapConfig {
-    pub team_name: String,
+    pub workspace_name: String,
     pub root_account: String,
     pub root_email: String,
     pub root_password_hash: String,
@@ -44,7 +44,7 @@ where
         let tenant = self.repository.upsert_root_tenant().await?;
         let workspace = self
             .repository
-            .upsert_workspace(tenant.id, &config.team_name)
+            .upsert_workspace(tenant.id, &config.workspace_name)
             .await?;
         self.repository.upsert_builtin_roles(workspace.id).await?;
         self.repository

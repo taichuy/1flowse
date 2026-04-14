@@ -49,5 +49,5 @@ pub struct ApiState {
     pub session_store: SessionStoreHandle,
     pub cookie_name: String,
     pub session_ttl_days: i64,
-    pub bootstrap_team_name: String,
+    pub bootstrap_workspace_name: String,
 }

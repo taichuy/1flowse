@@ -150,6 +150,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(model.id),
@@ -198,6 +199,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(command.model_id),
@@ -238,6 +240,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(command.model_id),
@@ -276,6 +279,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(command.model_id),
@@ -303,6 +307,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(command.model_id),
@@ -330,6 +335,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(command.model_id),
@@ -355,6 +361,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "state_model",
                 Some(command.model_id),

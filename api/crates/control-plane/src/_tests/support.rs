@@ -17,12 +17,12 @@ use uuid::Uuid;
 
 use crate::ports::{
     AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, RoleRepository,
-    SessionStore, TeamRepository, UpdateProfileInput,
+    SessionStore, UpdateProfileInput, WorkspaceRepository,
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
-    RoleScopeKind, RoleTemplate, ScopeContext, SessionRecord, TeamRecord, TenantRecord, UserRecord,
-    UserStatus,
+    RoleScopeKind, RoleTemplate, ScopeContext, SessionRecord, TenantRecord, UserRecord, UserStatus,
+    WorkspaceRecord,
 };
 
 #[derive(Default, Clone)]
@@ -37,7 +37,7 @@ struct MemoryBootstrapRepositoryInner {
     workspace_upserts: AtomicUsize,
     root_user_creates: AtomicUsize,
     root_tenant: RwLock<Option<TenantRecord>>,
-    workspace: RwLock<Option<TeamRecord>>,
+    workspace: RwLock<Option<WorkspaceRecord>>,
     root_user: RwLock<Option<UserRecord>>,
 }
 
@@ -91,13 +91,17 @@ impl BootstrapRepository for MemoryBootstrapRepository {
         Ok(tenant)
     }
 
-    async fn upsert_workspace(&self, tenant_id: Uuid, workspace_name: &str) -> Result<TeamRecord> {
+    async fn upsert_workspace(
+        &self,
+        tenant_id: Uuid,
+        workspace_name: &str,
+    ) -> Result<WorkspaceRecord> {
         self.inner.workspace_upserts.fetch_add(1, Ordering::SeqCst);
         if let Some(workspace) = self.inner.workspace.read().await.clone() {
             return Ok(workspace);
         }
 
-        let workspace = TeamRecord {
+        let workspace = WorkspaceRecord {
             id: Uuid::now_v7(),
             tenant_id,
             name: workspace_name.to_string(),
@@ -417,25 +421,28 @@ pub fn password_hash(password: &str) -> String {
 }
 
 #[derive(Default, Clone)]
-pub struct MemoryTeamRepository {
-    teams: Arc<RwLock<HashMap<Uuid, TeamRecord>>>,
+pub struct MemoryWorkspaceRepository {
+    workspaces: Arc<RwLock<HashMap<Uuid, WorkspaceRecord>>>,
     accessible_workspaces: Arc<RwLock<HashMap<Uuid, Vec<Uuid>>>>,
     root_user_ids: Arc<RwLock<HashSet<Uuid>>>,
 }
 
-impl MemoryTeamRepository {
+impl MemoryWorkspaceRepository {
     #[allow(dead_code)]
-    pub async fn upsert_team(&self, team: TeamRecord) {
-        self.teams.write().await.insert(team.id, team);
+    pub async fn upsert_workspace(&self, workspace: WorkspaceRecord) {
+        self.workspaces
+            .write()
+            .await
+            .insert(workspace.id, workspace);
     }
 
-    pub async fn set_accessible_workspaces(&self, user_id: Uuid, workspaces: Vec<TeamRecord>) {
+    pub async fn set_accessible_workspaces(&self, user_id: Uuid, workspaces: Vec<WorkspaceRecord>) {
         let workspace_ids: Vec<Uuid> = workspaces.iter().map(|workspace| workspace.id).collect();
-        let mut teams = self.teams.write().await;
+        let mut stored_workspaces = self.workspaces.write().await;
         for workspace in workspaces {
-            teams.insert(workspace.id, workspace);
+            stored_workspaces.insert(workspace.id, workspace);
         }
-        drop(teams);
+        drop(stored_workspaces);
 
         self.accessible_workspaces
             .write()
@@ -450,15 +457,15 @@ impl MemoryTeamRepository {
 }
 
 #[async_trait]
-impl TeamRepository for MemoryTeamRepository {
-    async fn get_team(&self, team_id: Uuid) -> Result<Option<TeamRecord>> {
-        Ok(self.teams.read().await.get(&team_id).cloned())
+impl WorkspaceRepository for MemoryWorkspaceRepository {
+    async fn get_workspace(&self, workspace_id: Uuid) -> Result<Option<WorkspaceRecord>> {
+        Ok(self.workspaces.read().await.get(&workspace_id).cloned())
     }
 
-    async fn list_accessible_workspaces(&self, user_id: Uuid) -> Result<Vec<TeamRecord>> {
-        let teams = self.teams.read().await;
+    async fn list_accessible_workspaces(&self, user_id: Uuid) -> Result<Vec<WorkspaceRecord>> {
+        let stored_workspaces = self.workspaces.read().await;
         let mut workspaces = if self.root_user_ids.read().await.contains(&user_id) {
-            teams.values().cloned().collect::<Vec<_>>()
+            stored_workspaces.values().cloned().collect::<Vec<_>>()
         } else {
             self.accessible_workspaces
                 .read()
@@ -467,7 +474,7 @@ impl TeamRepository for MemoryTeamRepository {
                 .cloned()
                 .unwrap_or_default()
                 .into_iter()
-                .filter_map(|workspace_id| teams.get(&workspace_id).cloned())
+                .filter_map(|workspace_id| stored_workspaces.get(&workspace_id).cloned())
                 .collect::<Vec<_>>()
         };
 
@@ -484,10 +491,10 @@ impl TeamRepository for MemoryTeamRepository {
         &self,
         user_id: Uuid,
         workspace_id: Uuid,
-    ) -> Result<Option<TeamRecord>> {
-        let teams = self.teams.read().await;
+    ) -> Result<Option<WorkspaceRecord>> {
+        let workspaces = self.workspaces.read().await;
         if self.root_user_ids.read().await.contains(&user_id) {
-            return Ok(teams.get(&workspace_id).cloned());
+            return Ok(workspaces.get(&workspace_id).cloned());
         }
 
         let is_accessible = self
@@ -499,30 +506,32 @@ impl TeamRepository for MemoryTeamRepository {
             .unwrap_or(false);
 
         Ok(is_accessible
-            .then(|| teams.get(&workspace_id).cloned())
+            .then(|| workspaces.get(&workspace_id).cloned())
             .flatten())
     }
 
-    async fn update_team(
+    async fn update_workspace(
         &self,
         _actor_user_id: Uuid,
-        team_id: Uuid,
+        workspace_id: Uuid,
         name: &str,
         logo_url: Option<&str>,
         introduction: &str,
-    ) -> Result<TeamRecord> {
-        let mut teams = self.teams.write().await;
-        let team = teams.entry(team_id).or_insert_with(|| TeamRecord {
-            id: team_id,
-            tenant_id: Uuid::nil(),
-            name: String::new(),
-            logo_url: None,
-            introduction: String::new(),
-        });
-        team.name = name.to_string();
-        team.logo_url = logo_url.map(str::to_string);
-        team.introduction = introduction.to_string();
-        Ok(team.clone())
+    ) -> Result<WorkspaceRecord> {
+        let mut workspaces = self.workspaces.write().await;
+        let workspace = workspaces
+            .entry(workspace_id)
+            .or_insert_with(|| WorkspaceRecord {
+                id: workspace_id,
+                tenant_id: Uuid::nil(),
+                name: String::new(),
+                logo_url: None,
+                introduction: String::new(),
+            });
+        workspace.name = name.to_string();
+        workspace.logo_url = logo_url.map(str::to_string);
+        workspace.introduction = introduction.to_string();
+        Ok(workspace.clone())
     }
 }
 
@@ -530,6 +539,7 @@ impl TeamRepository for MemoryTeamRepository {
 pub struct MemoryAuthRepository {
     user: Arc<RwLock<UserRecord>>,
     audit_events: Arc<RwLock<Vec<String>>>,
+    audit_logs: Arc<RwLock<Vec<AuditLogRecord>>>,
     bump_session_version_calls: Arc<RwLock<Vec<(Uuid, Uuid)>>>,
 }
 
@@ -538,6 +548,7 @@ impl MemoryAuthRepository {
         Self {
             user: Arc::new(RwLock::new(user)),
             audit_events: Arc::new(RwLock::new(Vec::new())),
+            audit_logs: Arc::new(RwLock::new(Vec::new())),
             bump_session_version_calls: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -553,6 +564,13 @@ impl MemoryAuthRepository {
         self.audit_events
             .try_read()
             .expect("audit_events lock should be free in assertions")
+            .clone()
+    }
+
+    pub fn audit_logs(&self) -> Vec<AuditLogRecord> {
+        self.audit_logs
+            .try_read()
+            .expect("audit_logs lock should be free in assertions")
             .clone()
     }
 
@@ -660,6 +678,7 @@ impl AuthRepository for MemoryAuthRepository {
     }
 
     async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
+        self.audit_logs.write().await.push(event.clone());
         self.audit_events
             .write()
             .await

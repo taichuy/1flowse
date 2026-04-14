@@ -94,7 +94,7 @@ async fn role_routes_create_replace_permissions_and_protect_root() {
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({
-                        "permission_codes": ["team.configure.all"]
+                        "permission_codes": ["workspace.configure.all"]
                     })
                     .to_string(),
                 ))

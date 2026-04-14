@@ -14,11 +14,14 @@ async fn main() -> Result<()> {
     run_migrations(&pool).await?;
 
     let store = PgControlPlaneStore::new(pool);
-    let team = store.upsert_team(&config.bootstrap_team_name).await?;
+    let tenant = store.upsert_root_tenant().await?;
+    let workspace = store
+        .upsert_workspace(tenant.id, &config.bootstrap_workspace_name)
+        .await?;
     store
         .upsert_permission_catalog(&access_control::permission_catalog())
         .await?;
-    store.upsert_builtin_roles(team.id).await?;
+    store.upsert_builtin_roles(workspace.id).await?;
 
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
@@ -28,7 +31,7 @@ async fn main() -> Result<()> {
 
     let root = store
         .upsert_root_user(
-            team.id,
+            workspace.id,
             &config.bootstrap_root_account,
             &config.bootstrap_root_email,
             &password_hash,

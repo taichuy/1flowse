@@ -50,7 +50,7 @@ async fn role_service_rejects_root_mutation_and_replaces_permissions_for_team_ro
         .replace_permissions(ReplaceRolePermissionsCommand {
             actor_user_id: repository.root_user_id(),
             role_code: "root".into(),
-            permission_codes: vec!["team.configure.all".into()],
+            permission_codes: vec!["workspace.configure.all".into()],
         })
         .await
         .is_err());

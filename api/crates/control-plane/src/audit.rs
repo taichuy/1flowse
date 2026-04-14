@@ -3,6 +3,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 pub fn audit_log(
+    workspace_id: Option<Uuid>,
     actor_user_id: Option<Uuid>,
     target_type: &str,
     target_id: Option<Uuid>,
@@ -11,7 +12,7 @@ pub fn audit_log(
 ) -> AuditLogRecord {
     AuditLogRecord {
         id: Uuid::now_v7(),
-        team_id: None,
+        workspace_id,
         actor_user_id,
         target_type: target_type.to_string(),
         target_id,

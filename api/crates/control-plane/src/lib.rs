@@ -11,7 +11,7 @@ pub mod profile;
 pub mod role;
 pub mod runtime_registry_sync;
 pub mod session_security;
-pub mod team;
+pub mod workspace;
 pub mod workspace_session;
 
 pub fn crate_name() -> &'static str {

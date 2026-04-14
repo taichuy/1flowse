@@ -136,7 +136,7 @@ pub fn permission_catalog() -> Vec<PermissionDefinition> {
     );
     push_permissions(
         &mut permissions,
-        "team",
+        "workspace",
         &[("view", &["all"]), ("configure", &["all"])],
     );
 

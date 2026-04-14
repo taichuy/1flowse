@@ -28,7 +28,7 @@ fn default_test_config() -> ApiConfig {
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "change-me"),
-        ("BOOTSTRAP_TEAM_NAME", "1Flowse"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1Flowse"),
     ])
     .unwrap()
 }
@@ -59,7 +59,7 @@ pub async fn test_app_with_database_url() -> (Router, String) {
 
     BootstrapService::new(store.clone())
         .run(&BootstrapConfig {
-            team_name: config.bootstrap_team_name.clone(),
+            workspace_name: config.bootstrap_workspace_name.clone(),
             root_account: config.bootstrap_root_account.clone(),
             root_email: config.bootstrap_root_email.clone(),
             root_password_hash,
@@ -84,7 +84,7 @@ pub async fn test_app_with_database_url() -> (Router, String) {
             ),
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
-            bootstrap_team_name: config.bootstrap_team_name.clone(),
+            bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
         }),
         &config,
     );
@@ -145,7 +145,7 @@ pub async fn seed_workspace(database_url: &str, workspace_name: &str) -> Uuid {
     let workspace_id = Uuid::now_v7();
 
     sqlx::query(
-        "insert into teams (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
     )
     .bind(workspace_id)
     .bind(tenant_id)

@@ -1,4 +1,4 @@
-use control_plane::ports::{AuthRepository, TeamRepository};
+use control_plane::ports::{AuthRepository, WorkspaceRepository};
 use sqlx::PgPool;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
 use uuid::Uuid;
@@ -29,7 +29,7 @@ async fn root_tenant_id(store: &PgControlPlaneStore) -> Uuid {
 async fn insert_workspace(store: &PgControlPlaneStore, tenant_id: Uuid, name: &str) -> Uuid {
     let workspace_id = Uuid::now_v7();
     sqlx::query(
-        "insert into teams (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
+        "insert into workspaces (id, tenant_id, name, created_by, updated_by) values ($1, $2, $3, null, null)",
     )
     .bind(workspace_id)
     .bind(tenant_id)
@@ -80,7 +80,7 @@ async fn insert_workspace_role(
     sqlx::query(
         r#"
         insert into roles (
-            id, scope_kind, team_id, code, name, introduction, is_builtin, is_editable
+            id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
         )
         values ($1, 'workspace', $2, $3, $4, '', false, true)
         "#,
@@ -101,7 +101,7 @@ async fn insert_root_role(store: &PgControlPlaneStore) -> Uuid {
     sqlx::query(
         r#"
         insert into roles (
-            id, scope_kind, team_id, code, name, introduction, is_builtin, is_editable
+            id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable
         )
         values ($1, 'system', null, 'root', 'Root', '', true, false)
         "#,
@@ -116,7 +116,7 @@ async fn insert_root_role(store: &PgControlPlaneStore) -> Uuid {
 
 async fn insert_membership(store: &PgControlPlaneStore, workspace_id: Uuid, user_id: Uuid) {
     sqlx::query(
-        "insert into team_memberships (id, team_id, user_id, introduction) values ($1, $2, $3, '')",
+        "insert into workspace_memberships (id, workspace_id, user_id, introduction) values ($1, $2, $3, '')",
     )
     .bind(Uuid::now_v7())
     .bind(workspace_id)
@@ -152,7 +152,7 @@ async fn list_accessible_workspaces_returns_only_memberships_for_non_root() {
     insert_membership(&store, workspace_c, user_id).await;
 
     let workspaces =
-        <PgControlPlaneStore as TeamRepository>::list_accessible_workspaces(&store, user_id)
+        <PgControlPlaneStore as WorkspaceRepository>::list_accessible_workspaces(&store, user_id)
             .await
             .unwrap();
     let ids: Vec<Uuid> = workspaces.iter().map(|workspace| workspace.id).collect();
@@ -162,7 +162,7 @@ async fn list_accessible_workspaces_returns_only_memberships_for_non_root() {
     assert!(ids.contains(&workspace_c));
     assert!(!ids.contains(&workspace_b));
     assert!(
-        <PgControlPlaneStore as TeamRepository>::get_accessible_workspace(
+        <PgControlPlaneStore as WorkspaceRepository>::get_accessible_workspace(
             &store,
             user_id,
             workspace_a
@@ -172,7 +172,7 @@ async fn list_accessible_workspaces_returns_only_memberships_for_non_root() {
         .is_some()
     );
     assert!(
-        <PgControlPlaneStore as TeamRepository>::get_accessible_workspace(
+        <PgControlPlaneStore as WorkspaceRepository>::get_accessible_workspace(
             &store,
             user_id,
             workspace_b
@@ -199,7 +199,7 @@ async fn list_accessible_workspaces_returns_all_workspaces_for_root() {
     bind_role(&store, user_id, root_role_id).await;
 
     let workspaces =
-        <PgControlPlaneStore as TeamRepository>::list_accessible_workspaces(&store, user_id)
+        <PgControlPlaneStore as WorkspaceRepository>::list_accessible_workspaces(&store, user_id)
             .await
             .unwrap();
     let ids: Vec<Uuid> = workspaces.iter().map(|workspace| workspace.id).collect();
@@ -209,7 +209,7 @@ async fn list_accessible_workspaces_returns_all_workspaces_for_root() {
     assert!(ids.contains(&workspace_b));
     assert!(ids.contains(&workspace_c));
     assert!(
-        <PgControlPlaneStore as TeamRepository>::get_accessible_workspace(
+        <PgControlPlaneStore as WorkspaceRepository>::get_accessible_workspace(
             &store,
             user_id,
             workspace_b

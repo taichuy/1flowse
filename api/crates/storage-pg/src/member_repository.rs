@@ -11,15 +11,17 @@ use uuid::Uuid;
 
 use crate::{
     auth_repository::map_user_row,
-    repositories::{is_root_user, team_id_for_user, tenant_id_for_team, PgControlPlaneStore},
+    repositories::{
+        is_root_user, tenant_id_for_workspace, workspace_id_for_user, PgControlPlaneStore,
+    },
 };
 
 #[async_trait]
 impl MemberRepository for PgControlPlaneStore {
     async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
-        let team_id = team_id_for_user(self.pool(), actor_user_id).await?;
-        let tenant_id = tenant_id_for_team(self.pool(), team_id).await?;
-        AuthRepository::load_actor_context(self, actor_user_id, tenant_id, team_id, None).await
+        let workspace_id = workspace_id_for_user(self.pool(), actor_user_id).await?;
+        let tenant_id = tenant_id_for_workspace(self.pool(), workspace_id).await?;
+        AuthRepository::load_actor_context(self, actor_user_id, tenant_id, workspace_id, None).await
     }
 
     async fn create_member_with_default_role(
@@ -27,7 +29,7 @@ impl MemberRepository for PgControlPlaneStore {
         input: &CreateMemberInput,
     ) -> Result<domain::UserRecord> {
         let manager_role_id: Uuid = sqlx::query_scalar(
-            "select id from roles where scope_kind = 'workspace' and team_id = $1 and code = 'manager'",
+            "select id from roles where scope_kind = 'workspace' and workspace_id = $1 and code = 'manager'",
         )
         .bind(input.workspace_id)
         .fetch_optional(self.pool())
@@ -65,9 +67,9 @@ impl MemberRepository for PgControlPlaneStore {
 
         sqlx::query(
             r#"
-            insert into team_memberships (id, team_id, user_id, introduction, created_by, updated_by)
+            insert into workspace_memberships (id, workspace_id, user_id, introduction, created_by, updated_by)
             values ($1, $2, $3, $4, $5, $5)
-            on conflict (team_id, user_id) do nothing
+            on conflict (workspace_id, user_id) do nothing
             "#,
         )
         .bind(Uuid::now_v7())
@@ -208,7 +210,7 @@ impl MemberRepository for PgControlPlaneStore {
         let mut role_ids = Vec::new();
         for role_code in &normalized_codes {
             let role_id: Uuid = sqlx::query_scalar(
-                "select id from roles where scope_kind = 'workspace' and team_id = $1 and code = $2",
+                "select id from roles where scope_kind = 'workspace' and workspace_id = $1 and code = $2",
             )
             .bind(workspace_id)
             .bind(role_code)
@@ -226,7 +228,7 @@ impl MemberRepository for PgControlPlaneStore {
             where urb.role_id = r.id
               and urb.user_id = $1
               and r.scope_kind = 'workspace'
-              and r.team_id = $2
+              and r.workspace_id = $2
             "#,
         )
         .bind(target_user_id)
@@ -261,9 +263,9 @@ impl MemberRepository for PgControlPlaneStore {
               u.id, u.account, u.email, u.phone, u.password_hash, u.name, u.nickname, u.avatar_url,
               u.introduction, u.default_display_role, u.email_login_enabled, u.phone_login_enabled,
               u.status, u.session_version
-            from team_memberships tm
+            from workspace_memberships tm
             join users u on u.id = tm.user_id
-            where tm.team_id = $1
+            where tm.workspace_id = $1
             order by tm.created_at asc, u.created_at asc
             "#,
         )

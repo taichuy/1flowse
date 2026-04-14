@@ -1,3 +1,15 @@
+create table if not exists tenants (
+  id uuid primary key,
+  code text not null unique,
+  name text not null,
+  is_root boolean not null default false,
+  is_hidden boolean not null default false,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists users (
   id uuid primary key,
   account text not null unique,
@@ -20,8 +32,9 @@ create table if not exists users (
   check (status in ('active', 'disabled'))
 );
 
-create table if not exists teams (
+create table if not exists workspaces (
   id uuid primary key,
+  tenant_id uuid not null references tenants(id) on delete cascade,
   name text not null,
   logo_url text,
   introduction text not null default '',
@@ -31,22 +44,25 @@ create table if not exists teams (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists team_memberships (
+create unique index if not exists workspaces_tenant_name_uidx
+  on workspaces (tenant_id, lower(name));
+
+create table if not exists workspace_memberships (
   id uuid primary key,
-  team_id uuid not null references teams(id) on delete cascade,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
   user_id uuid not null references users(id) on delete cascade,
   introduction text not null default '',
   created_by uuid,
   created_at timestamptz not null default now(),
   updated_by uuid,
   updated_at timestamptz not null default now(),
-  unique (team_id, user_id)
+  unique (workspace_id, user_id)
 );
 
 create table if not exists roles (
   id uuid primary key,
   scope_kind text not null,
-  team_id uuid references teams(id) on delete cascade,
+  workspace_id uuid references workspaces(id) on delete cascade,
   code text not null,
   name text not null,
   introduction text not null default '',
@@ -57,11 +73,16 @@ create table if not exists roles (
   created_at timestamptz not null default now(),
   updated_by uuid,
   updated_at timestamptz not null default now(),
-  check (scope_kind in ('app', 'team'))
+  check (scope_kind in ('system', 'workspace'))
 );
 
-create unique index if not exists roles_app_code_uidx on roles (code) where scope_kind = 'app';
-create unique index if not exists roles_team_code_uidx on roles (team_id, code) where scope_kind = 'team';
+create unique index if not exists roles_system_code_uidx
+  on roles (code)
+  where scope_kind = 'system';
+
+create unique index if not exists roles_workspace_code_uidx
+  on roles (workspace_id, code)
+  where scope_kind = 'workspace';
 
 create table if not exists permission_definitions (
   id uuid primary key,
@@ -132,7 +153,7 @@ create unique index if not exists user_auth_identities_subject_uidx
 
 create table if not exists audit_logs (
   id uuid primary key,
-  team_id uuid references teams(id) on delete set null,
+  workspace_id uuid references workspaces(id) on delete set null,
   actor_user_id uuid references users(id) on delete set null,
   target_type text not null,
   target_id uuid,

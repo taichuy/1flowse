@@ -1,12 +1,12 @@
-use crate::_tests::support::{MemoryAuthRepository, MemorySessionStore, MemoryTeamRepository};
+use crate::_tests::support::{MemoryAuthRepository, MemorySessionStore, MemoryWorkspaceRepository};
 use crate::errors::ControlPlaneError;
 use crate::workspace_session::{SwitchWorkspaceCommand, WorkspaceSessionService};
 use control_plane::ports::SessionStore;
-use domain::{BoundRole, RoleScopeKind, SessionRecord, TeamRecord, UserRecord, UserStatus};
+use domain::{BoundRole, RoleScopeKind, SessionRecord, UserRecord, UserStatus, WorkspaceRecord};
 use uuid::Uuid;
 
-fn test_workspace(tenant_id: Uuid, workspace_id: Uuid, name: &str) -> TeamRecord {
-    TeamRecord {
+fn test_workspace(tenant_id: Uuid, workspace_id: Uuid, name: &str) -> WorkspaceRecord {
+    WorkspaceRecord {
         id: workspace_id,
         tenant_id,
         name: name.to_string(),
@@ -67,7 +67,7 @@ async fn switch_workspace_rewrites_session_scope_and_rotates_csrf() {
     let target_workspace = test_workspace(tenant_id, target_workspace_id, "Target Workspace");
     let user = test_user(source_workspace_id, target_workspace_id);
     let repository = MemoryAuthRepository::new(user.clone());
-    let team_repository = MemoryTeamRepository::default();
+    let team_repository = MemoryWorkspaceRepository::default();
     let session_store = MemorySessionStore::default();
     let session = test_session(user.id, tenant_id, source_workspace_id);
 
@@ -97,6 +97,44 @@ async fn switch_workspace_rewrites_session_scope_and_rotates_csrf() {
 }
 
 #[tokio::test]
+async fn switch_workspace_writes_workspace_id_into_audit_log() {
+    let tenant_id = Uuid::now_v7();
+    let source_workspace_id = Uuid::now_v7();
+    let target_workspace_id = Uuid::now_v7();
+    let source_workspace = test_workspace(tenant_id, source_workspace_id, "Source Workspace");
+    let target_workspace = test_workspace(tenant_id, target_workspace_id, "Target Workspace");
+    let user = test_user(source_workspace_id, target_workspace_id);
+    let repository = MemoryAuthRepository::new(user.clone());
+    let team_repository = MemoryWorkspaceRepository::default();
+    let session_store = MemorySessionStore::default();
+    let session = test_session(user.id, tenant_id, source_workspace_id);
+
+    team_repository
+        .set_accessible_workspaces(user.id, vec![source_workspace, target_workspace])
+        .await;
+    session_store.put(session.clone()).await.unwrap();
+
+    WorkspaceSessionService::new(repository.clone(), team_repository, session_store)
+        .switch_workspace(SwitchWorkspaceCommand {
+            actor_user_id: user.id,
+            session_id: session.session_id,
+            target_workspace_id,
+        })
+        .await
+        .unwrap();
+
+    let audit_log = repository
+        .audit_logs()
+        .into_iter()
+        .last()
+        .expect("switch workspace should write audit log");
+
+    assert_eq!(audit_log.workspace_id, Some(target_workspace_id));
+    assert_eq!(audit_log.actor_user_id, Some(user.id));
+    assert_eq!(audit_log.event_code, "session.switch_workspace");
+}
+
+#[tokio::test]
 async fn switch_workspace_rejects_inaccessible_target_for_non_root() {
     let tenant_id = Uuid::now_v7();
     let source_workspace_id = Uuid::now_v7();
@@ -104,7 +142,7 @@ async fn switch_workspace_rejects_inaccessible_target_for_non_root() {
     let source_workspace = test_workspace(tenant_id, source_workspace_id, "Source Workspace");
     let user = test_user(source_workspace_id, blocked_workspace_id);
     let repository = MemoryAuthRepository::new(user.clone());
-    let team_repository = MemoryTeamRepository::default();
+    let team_repository = MemoryWorkspaceRepository::default();
     let session_store = MemorySessionStore::default();
     let session = test_session(user.id, tenant_id, source_workspace_id);
 
@@ -138,7 +176,7 @@ async fn switch_workspace_keeps_session_id_and_expiry() {
     let target_workspace = test_workspace(tenant_id, target_workspace_id, "Target Workspace");
     let user = test_user(source_workspace_id, target_workspace_id);
     let repository = MemoryAuthRepository::new(user.clone());
-    let team_repository = MemoryTeamRepository::default();
+    let team_repository = MemoryWorkspaceRepository::default();
     let session_store = MemorySessionStore::default();
     let session = test_session(user.id, tenant_id, source_workspace_id);
 

@@ -12,10 +12,10 @@ use crate::{
     mappers::{
         auth_mapper::{PgAuthMapper, StoredAuthenticatorRow},
         member_mapper::{PgMemberMapper, StoredMemberRow},
-        team_mapper::{PgTeamMapper, StoredTeamRow},
+        workspace_mapper::{PgWorkspaceMapper, StoredWorkspaceRow},
     },
     repositories::{
-        decode_role_scope_kind, tenant_id_for_team, PgControlPlaneStore, ROOT_TENANT_CODE,
+        decode_role_scope_kind, tenant_id_for_workspace, PgControlPlaneStore, ROOT_TENANT_CODE,
         ROOT_TENANT_ID, ROOT_TENANT_NAME,
     },
 };
@@ -23,7 +23,7 @@ use crate::{
 async fn load_bound_roles(pool: &PgPool, user_id: Uuid) -> Result<Vec<BoundRole>> {
     let rows = sqlx::query(
         r#"
-        select r.code, r.scope_kind, r.team_id as workspace_id
+        select r.code, r.scope_kind, r.workspace_id as workspace_id
         from user_role_bindings urb
         join roles r on r.id = urb.role_id
         where urb.user_id = $1
@@ -163,11 +163,11 @@ impl BootstrapRepository for PgControlPlaneStore {
         &self,
         tenant_id: Uuid,
         workspace_name: &str,
-    ) -> Result<domain::TeamRecord> {
+    ) -> Result<domain::WorkspaceRecord> {
         let existing = sqlx::query(
             r#"
             select id, tenant_id, name, logo_url, introduction
-            from teams
+            from workspaces
             where tenant_id = $1 and lower(name) = lower($2)
             order by created_at asc
             limit 1
@@ -179,7 +179,7 @@ impl BootstrapRepository for PgControlPlaneStore {
         .await?;
 
         if let Some(row) = existing {
-            return Ok(PgTeamMapper::to_team_record(StoredTeamRow {
+            return Ok(PgWorkspaceMapper::to_workspace_record(StoredWorkspaceRow {
                 id: row.get("id"),
                 tenant_id: row.get("tenant_id"),
                 name: row.get("name"),
@@ -190,7 +190,7 @@ impl BootstrapRepository for PgControlPlaneStore {
 
         let id = Uuid::now_v7();
         sqlx::query(
-            "insert into teams (id, tenant_id, name, logo_url, introduction) values ($1, $2, $3, null, '')",
+            "insert into workspaces (id, tenant_id, name, logo_url, introduction) values ($1, $2, $3, null, '')",
         )
         .bind(id)
         .bind(tenant_id)
@@ -198,7 +198,7 @@ impl BootstrapRepository for PgControlPlaneStore {
         .execute(self.pool())
         .await?;
 
-        Ok(PgTeamMapper::to_team_record(StoredTeamRow {
+        Ok(PgWorkspaceMapper::to_workspace_record(StoredWorkspaceRow {
             id,
             tenant_id,
             name: workspace_name.to_string(),
@@ -223,7 +223,7 @@ impl BootstrapRepository for PgControlPlaneStore {
 
             let inserted_role_id: Option<Uuid> = sqlx::query_scalar(
                 r#"
-                insert into roles (id, scope_kind, team_id, code, name, introduction, is_builtin, is_editable, system_kind)
+                insert into roles (id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable, system_kind)
                 values ($1, $2, $3, $4, $5, '', $6, $7, $8)
                 on conflict do nothing
                 returning id
@@ -250,7 +250,7 @@ impl BootstrapRepository for PgControlPlaneStore {
                     .await?
                 }
                 RoleScopeKind::Workspace => sqlx::query_scalar(
-                    "select id from roles where scope_kind = 'workspace' and team_id = $1 and code = $2",
+                    "select id from roles where scope_kind = 'workspace' and workspace_id = $1 and code = $2",
                 )
                 .bind(workspace_id)
                 .bind(&role.code)
@@ -317,7 +317,7 @@ impl BootstrapRepository for PgControlPlaneStore {
         .await?;
 
         sqlx::query(
-            "insert into team_memberships (id, team_id, user_id, introduction) values ($1, $2, $3, '') on conflict (team_id, user_id) do nothing",
+            "insert into workspace_memberships (id, workspace_id, user_id, introduction) values ($1, $2, $3, '') on conflict (workspace_id, user_id) do nothing",
         )
         .bind(Uuid::now_v7())
         .bind(workspace_id)
@@ -414,9 +414,9 @@ impl AuthRepository for PgControlPlaneStore {
     async fn default_scope_for_user(&self, user_id: Uuid) -> Result<ScopeContext> {
         if let Some(row) = sqlx::query(
             r#"
-            select t.tenant_id, tm.team_id as workspace_id
-            from team_memberships tm
-            join teams t on t.id = tm.team_id
+            select t.tenant_id, tm.workspace_id as workspace_id
+            from workspace_memberships tm
+            join workspaces t on t.id = tm.workspace_id
             where tm.user_id = $1
             order by tm.created_at asc
             limit 1
@@ -432,9 +432,9 @@ impl AuthRepository for PgControlPlaneStore {
             });
         }
 
-        let workspace_id = crate::repositories::primary_team_id(self.pool()).await?;
+        let workspace_id = crate::repositories::primary_workspace_id(self.pool()).await?;
         Ok(ScopeContext {
-            tenant_id: tenant_id_for_team(self.pool(), workspace_id).await?,
+            tenant_id: tenant_id_for_workspace(self.pool(), workspace_id).await?,
             workspace_id,
         })
     }
@@ -451,7 +451,7 @@ impl AuthRepository for PgControlPlaneStore {
             select r.code
             from user_role_bindings urb
             join roles r on r.id = urb.role_id
-            where urb.user_id = $1 and (r.scope_kind = 'system' or r.team_id = $2)
+            where urb.user_id = $1 and (r.scope_kind = 'system' or r.workspace_id = $2)
             order by r.scope_kind asc, r.code asc
             "#,
         )
@@ -467,7 +467,7 @@ impl AuthRepository for PgControlPlaneStore {
             join roles r on r.id = urb.role_id
             join role_permissions rp on rp.role_id = r.id
             join permission_definitions pd on pd.id = rp.permission_id
-            where urb.user_id = $1 and (r.scope_kind = 'system' or r.team_id = $2)
+            where urb.user_id = $1 and (r.scope_kind = 'system' or r.workspace_id = $2)
             order by pd.code asc
             "#,
         )
@@ -599,12 +599,12 @@ impl AuthRepository for PgControlPlaneStore {
     async fn append_audit_log(&self, event: &AuditLogRecord) -> Result<()> {
         sqlx::query(
             r#"
-            insert into audit_logs (id, team_id, actor_user_id, target_type, target_id, event_code, payload, created_at)
+            insert into audit_logs (id, workspace_id, actor_user_id, target_type, target_id, event_code, payload, created_at)
             values ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
         )
         .bind(event.id)
-        .bind(event.team_id)
+        .bind(event.workspace_id)
         .bind(event.actor_user_id)
         .bind(&event.target_type)
         .bind(event.target_id)

@@ -31,7 +31,7 @@ pub struct ApiConfig {
     pub cookie_name: String,
     pub session_ttl_days: i64,
     pub cors_allowed_origins: Option<Vec<HeaderValue>>,
-    pub bootstrap_team_name: String,
+    pub bootstrap_workspace_name: String,
     pub bootstrap_root_account: String,
     pub bootstrap_root_email: String,
     pub bootstrap_root_password: String,
@@ -83,7 +83,7 @@ impl ApiConfig {
                 .and_then(|value| value.parse::<i64>().ok())
                 .unwrap_or(7),
             cors_allowed_origins,
-            bootstrap_team_name: get("BOOTSTRAP_TEAM_NAME")?,
+            bootstrap_workspace_name: get("BOOTSTRAP_WORKSPACE_NAME")?,
             bootstrap_root_account: get("BOOTSTRAP_ROOT_ACCOUNT")?,
             bootstrap_root_email: get("BOOTSTRAP_ROOT_EMAIL")?,
             bootstrap_root_password: get("BOOTSTRAP_ROOT_PASSWORD")?,

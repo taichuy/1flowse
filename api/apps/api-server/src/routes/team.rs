@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{extract::State, http::HeaderMap, routing::get, Json, Router};
-use control_plane::team::{TeamService, UpdateTeamCommand};
+use control_plane::workspace::{UpdateWorkspaceCommand, WorkspaceService};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -27,7 +27,7 @@ pub struct TeamResponse {
     pub introduction: String,
 }
 
-fn to_team_response(team: domain::TeamRecord) -> TeamResponse {
+fn to_team_response(team: domain::WorkspaceRecord) -> TeamResponse {
     TeamResponse {
         id: team.id.to_string(),
         name: team.name,
@@ -50,8 +50,8 @@ pub async fn get_team(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<TeamResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let team = TeamService::new(state.store.clone())
-        .get_team(context.session.current_workspace_id)
+    let team = WorkspaceService::new(state.store.clone())
+        .get_workspace(context.session.current_workspace_id)
         .await?;
 
     Ok(Json(ApiSuccess::new(to_team_response(team))))
@@ -71,10 +71,10 @@ pub async fn patch_team(
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let team = TeamService::new(state.store.clone())
-        .update_team(UpdateTeamCommand {
+    let team = WorkspaceService::new(state.store.clone())
+        .update_workspace(UpdateWorkspaceCommand {
             actor: context.actor,
-            team_id: context.session.current_workspace_id,
+            workspace_id: context.session.current_workspace_id,
             name: body.name,
             logo_url: body.logo_url,
             introduction: body.introduction,

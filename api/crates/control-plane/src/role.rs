@@ -85,6 +85,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "role",
                 None,
@@ -116,6 +117,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "role",
                 None,
@@ -145,6 +147,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "role",
                 None,
@@ -176,6 +179,7 @@ where
             .await?;
         self.repository
             .append_audit_log(&audit_log(
+                Some(actor.current_workspace_id),
                 Some(command.actor_user_id),
                 "role",
                 None,

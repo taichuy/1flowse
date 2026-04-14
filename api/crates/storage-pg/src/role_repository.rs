@@ -12,17 +12,17 @@ use uuid::Uuid;
 use crate::{
     mappers::role_mapper::PgRoleMapper,
     repositories::{
-        find_role_by_code, permission_codes_for_role, stored_role_from_row, team_id_for_user,
-        tenant_id_for_team, PgControlPlaneStore,
+        find_role_by_code, permission_codes_for_role, stored_role_from_row,
+        tenant_id_for_workspace, workspace_id_for_user, PgControlPlaneStore,
     },
 };
 
 #[async_trait]
 impl RoleRepository for PgControlPlaneStore {
     async fn load_actor_context_for_user(&self, actor_user_id: Uuid) -> Result<ActorContext> {
-        let team_id = team_id_for_user(self.pool(), actor_user_id).await?;
-        let tenant_id = tenant_id_for_team(self.pool(), team_id).await?;
-        AuthRepository::load_actor_context(self, actor_user_id, tenant_id, team_id, None).await
+        let workspace_id = workspace_id_for_user(self.pool(), actor_user_id).await?;
+        let tenant_id = tenant_id_for_workspace(self.pool(), workspace_id).await?;
+        AuthRepository::load_actor_context(self, actor_user_id, tenant_id, workspace_id, None).await
     }
 
     async fn list_roles(&self, workspace_id: Uuid) -> Result<Vec<domain::RoleTemplate>> {
@@ -30,7 +30,7 @@ impl RoleRepository for PgControlPlaneStore {
             r#"
             select id, code, name, scope_kind, is_builtin, is_editable
             from roles
-            where scope_kind = 'workspace' and team_id = $1
+            where scope_kind = 'workspace' and workspace_id = $1
             order by scope_kind asc, code asc
             "#,
         )
@@ -66,7 +66,7 @@ impl RoleRepository for PgControlPlaneStore {
         sqlx::query(
             r#"
             insert into roles (
-                id, scope_kind, team_id, code, name, introduction, is_builtin, is_editable,
+                id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable,
                 created_by, updated_by
             )
             values ($1, 'workspace', $2, $3, $4, $5, false, true, $6, $6)

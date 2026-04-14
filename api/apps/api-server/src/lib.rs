@@ -145,7 +145,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
 
     BootstrapService::new(store.clone())
         .run(&BootstrapConfig {
-            team_name: config.bootstrap_team_name.clone(),
+            workspace_name: config.bootstrap_workspace_name.clone(),
             root_account: config.bootstrap_root_account.clone(),
             root_email: config.bootstrap_root_email.clone(),
             root_password_hash,
@@ -167,7 +167,7 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
             session_store: SessionStoreHandle::Redis(Box::new(session_store)),
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
-            bootstrap_team_name: config.bootstrap_team_name.clone(),
+            bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
         }),
         config,
     ))

@@ -49,12 +49,18 @@ where
     }
 
     pub async fn revoke_all_sessions(&self, command: RevokeAllSessionsCommand) -> Result<()> {
+        let workspace_id = self
+            .session_store
+            .get(&command.session_id)
+            .await?
+            .map(|session| session.current_workspace_id);
         self.repository
             .bump_session_version(command.actor_user_id, command.actor_user_id)
             .await?;
         self.session_store.delete(&command.session_id).await?;
         self.repository
             .append_audit_log(&audit_log(
+                workspace_id,
                 Some(command.actor_user_id),
                 "user",
                 Some(command.actor_user_id),
@@ -71,6 +77,11 @@ where
             .find_user_by_id(command.actor_user_id)
             .await?
             .ok_or(ControlPlaneError::NotFound("user"))?;
+        let workspace_id = self
+            .session_store
+            .get(&command.session_id)
+            .await?
+            .map(|session| session.current_workspace_id);
         let parsed_hash = PasswordHash::new(&user.password_hash)
             .map_err(|err| anyhow::anyhow!("invalid password hash: {err}"))?;
         Argon2::default()
@@ -87,6 +98,7 @@ where
         self.session_store.delete(&command.session_id).await?;
         self.repository
             .append_audit_log(&audit_log(
+                workspace_id,
                 Some(command.actor_user_id),
                 "user",
                 Some(command.actor_user_id),

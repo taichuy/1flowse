@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{extract::State, http::HeaderMap, routing::get, Json, Router};
-use control_plane::team::TeamService;
+use control_plane::workspace::WorkspaceService;
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -20,7 +20,7 @@ pub struct WorkspaceSummaryResponse {
 }
 
 fn to_workspace_summary(
-    workspace: domain::TeamRecord,
+    workspace: domain::WorkspaceRecord,
     current_workspace_id: uuid::Uuid,
 ) -> WorkspaceSummaryResponse {
     WorkspaceSummaryResponse {
@@ -46,7 +46,7 @@ pub async fn list_workspaces(
     headers: HeaderMap,
 ) -> Result<Json<ApiSuccess<Vec<WorkspaceSummaryResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let workspaces = TeamService::new(state.store.clone())
+    let workspaces = WorkspaceService::new(state.store.clone())
         .list_accessible_workspaces(context.user.id)
         .await?;
     let current_workspace_id = context.session.current_workspace_id;

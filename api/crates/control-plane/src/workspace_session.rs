@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     audit::audit_log,
     errors::ControlPlaneError,
-    ports::{AuthRepository, SessionStore, TeamRepository},
+    ports::{AuthRepository, SessionStore, WorkspaceRepository},
 };
 
 #[derive(Debug)]
@@ -23,20 +23,20 @@ pub struct SwitchWorkspaceResult {
 
 pub struct WorkspaceSessionService<R, T, S> {
     auth_repository: R,
-    team_repository: T,
+    workspace_repository: T,
     session_store: S,
 }
 
 impl<R, T, S> WorkspaceSessionService<R, T, S>
 where
     R: AuthRepository,
-    T: TeamRepository,
+    T: WorkspaceRepository,
     S: SessionStore,
 {
-    pub fn new(auth_repository: R, team_repository: T, session_store: S) -> Self {
+    pub fn new(auth_repository: R, workspace_repository: T, session_store: S) -> Self {
         Self {
             auth_repository,
-            team_repository,
+            workspace_repository,
             session_store,
         }
     }
@@ -78,7 +78,7 @@ where
         }
 
         let target_workspace = self
-            .team_repository
+            .workspace_repository
             .get_accessible_workspace(command.actor_user_id, command.target_workspace_id)
             .await?
             .ok_or(ControlPlaneError::PermissionDenied(
@@ -108,6 +108,7 @@ where
         self.session_store.put(next_session.clone()).await?;
         self.auth_repository
             .append_audit_log(&audit_log(
+                Some(next_session.current_workspace_id),
                 Some(command.actor_user_id),
                 "session",
                 None,

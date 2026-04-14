@@ -6,7 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AuditLogRecord {
     pub id: Uuid,
-    pub team_id: Option<Uuid>,
+    pub workspace_id: Option<Uuid>,
     pub actor_user_id: Option<Uuid>,
     pub target_type: String,
     pub target_id: Option<Uuid>,

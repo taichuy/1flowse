@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, DataModelScopeKind, ModelDefinitionRecord,
     ModelFieldKind, ModelFieldRecord, PermissionDefinition, RoleTemplate, ScopeContext,
-    SessionRecord, TeamRecord, TenantRecord, UserRecord,
+    SessionRecord, TenantRecord, UserRecord, WorkspaceRecord,
 };
 use uuid::Uuid;
 
@@ -32,7 +32,7 @@ pub trait BootstrapRepository: Send + Sync {
         &self,
         tenant_id: Uuid,
         workspace_name: &str,
-    ) -> anyhow::Result<TeamRecord>;
+    ) -> anyhow::Result<WorkspaceRecord>;
     async fn upsert_builtin_roles(&self, workspace_id: Uuid) -> anyhow::Result<()>;
     async fn upsert_root_user(
         &self,
@@ -74,22 +74,25 @@ pub trait AuthRepository: Send + Sync {
 }
 
 #[async_trait]
-pub trait TeamRepository: Send + Sync {
-    async fn get_team(&self, team_id: Uuid) -> anyhow::Result<Option<TeamRecord>>;
-    async fn list_accessible_workspaces(&self, user_id: Uuid) -> anyhow::Result<Vec<TeamRecord>>;
+pub trait WorkspaceRepository: Send + Sync {
+    async fn get_workspace(&self, workspace_id: Uuid) -> anyhow::Result<Option<WorkspaceRecord>>;
+    async fn list_accessible_workspaces(
+        &self,
+        user_id: Uuid,
+    ) -> anyhow::Result<Vec<WorkspaceRecord>>;
     async fn get_accessible_workspace(
         &self,
         user_id: Uuid,
         workspace_id: Uuid,
-    ) -> anyhow::Result<Option<TeamRecord>>;
-    async fn update_team(
+    ) -> anyhow::Result<Option<WorkspaceRecord>>;
+    async fn update_workspace(
         &self,
         actor_user_id: Uuid,
-        team_id: Uuid,
+        workspace_id: Uuid,
         name: &str,
         logo_url: Option<&str>,
         introduction: &str,
-    ) -> anyhow::Result<TeamRecord>;
+    ) -> anyhow::Result<WorkspaceRecord>;
 }
 
 #[derive(Debug, Clone)]

@@ -29,7 +29,7 @@ fn default_test_config() -> ApiConfig {
         ("BOOTSTRAP_ROOT_ACCOUNT", "root"),
         ("BOOTSTRAP_ROOT_EMAIL", "root@example.com"),
         ("BOOTSTRAP_ROOT_PASSWORD", "change-me"),
-        ("BOOTSTRAP_TEAM_NAME", "1Flowse"),
+        ("BOOTSTRAP_WORKSPACE_NAME", "1Flowse"),
     ])
     .unwrap()
 }
@@ -60,7 +60,7 @@ async fn test_app() -> Router {
 
     BootstrapService::new(store.clone())
         .run(&BootstrapConfig {
-            team_name: config.bootstrap_team_name.clone(),
+            workspace_name: config.bootstrap_workspace_name.clone(),
             root_account: config.bootstrap_root_account.clone(),
             root_email: config.bootstrap_root_email.clone(),
             root_password_hash,
@@ -86,7 +86,7 @@ async fn test_app() -> Router {
             ),
             cookie_name: config.cookie_name.clone(),
             session_ttl_days: config.session_ttl_days,
-            bootstrap_team_name: config.bootstrap_team_name.clone(),
+            bootstrap_workspace_name: config.bootstrap_workspace_name.clone(),
         }),
         &config,
     )
