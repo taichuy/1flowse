@@ -14,6 +14,8 @@
 
 **Execution Mode:** Execute in the current repository. Do not create a git worktree for this plan.
 
+**Execution Status:** Completed on `2026-04-14 10`. Task 1 to Task 3 landed in commits `47e562e3`, `d15fab79`, and `d45f978c`; Task 4 verification and documentation sync were backfilled after rerunning focused checks and the unified backend gate.
+
 ---
 
 ## Scope Notes
@@ -86,7 +88,7 @@ This plan does not cover:
 - `api/crates/storage-pg/src/_tests/mod.rs`
 - `api/crates/storage-pg/src/_tests/workspace_access_tests.rs`
 
-- [ ] **Step 1: add failing repository coverage for accessible workspace listing and root bypass**
+- [x] **Step 1: add failing repository coverage for accessible workspace listing and root bypass**
 
 Create `api/crates/storage-pg/src/_tests/workspace_access_tests.rs` with:
 
@@ -120,7 +122,7 @@ The third test should prove this regression:
 - target workspace only grants `manager`
 - `load_actor_context(..., Some("admin"))` must return `effective_display_role = "manager"` instead of leaking a stale role label
 
-- [ ] **Step 2: run focused failures**
+- [x] **Step 2: run focused failures**
 
 Run:
 
@@ -134,7 +136,7 @@ Expected:
 - the tests fail because `TeamRepository` has no accessible-workspace query API yet
 - the display-role test fails because `load_actor_context` still trusts the requested display role even if it does not exist in the target workspace
 
-- [ ] **Step 3: implement explicit workspace access queries**
+- [x] **Step 3: implement explicit workspace access queries**
 
 Extend `api/crates/control-plane/src/ports.rs` `TeamRepository` with:
 
@@ -199,7 +201,7 @@ Update `api/crates/control-plane/src/_tests/support.rs` so the memory team/auth 
 - distinguish root and non-root callers
 - expose the display-role fallback behavior in unit tests
 
-- [ ] **Step 4: rerun focused tests and verify pass**
+- [x] **Step 4: rerun focused tests and verify pass**
 
 Run:
 
@@ -211,7 +213,7 @@ cargo test -p storage-pg _tests::workspace_access_tests::load_actor_context_igno
 
 Expected: all three tests pass.
 
-- [ ] **Step 5: commit the query foundation**
+- [x] **Step 5: commit the query foundation**
 
 ```bash
 git add \
@@ -239,7 +241,7 @@ git commit -m "feat: add accessible workspace queries"
 - `api/crates/control-plane/src/_tests/workspace_session_service_tests.rs`
 - `api/crates/storage-redis/src/_tests/session_store_tests.rs`
 
-- [ ] **Step 1: add failing unit tests for workspace switching**
+- [x] **Step 1: add failing unit tests for workspace switching**
 
 Create `api/crates/control-plane/src/_tests/workspace_session_service_tests.rs` with:
 
@@ -272,7 +274,7 @@ async fn put_overwrites_existing_session_payload() {}
 
 so the session-store contract explicitly proves we can rewrite an existing session entry in place.
 
-- [ ] **Step 2: run focused failures**
+- [x] **Step 2: run focused failures**
 
 Run:
 
@@ -286,7 +288,7 @@ Expected:
 - the service test fails because no workspace-switch service exists yet
 - the storage test either fails or is absent, documenting the overwrite contract before relying on it
 
-- [ ] **Step 3: implement the workspace session service**
+- [x] **Step 3: implement the workspace session service**
 
 Create `api/crates/control-plane/src/workspace_session.rs` with:
 
@@ -353,7 +355,7 @@ Update `api/crates/control-plane/src/_tests/support.rs` with a memory `TeamRepos
 
 Update `api/crates/storage-redis/src/_tests/session_store_tests.rs` so repeated `put()` on the same `session_id` proves overwrite semantics.
 
-- [ ] **Step 4: rerun focused tests and verify pass**
+- [x] **Step 4: rerun focused tests and verify pass**
 
 Run:
 
@@ -366,7 +368,7 @@ cargo test -p storage-redis put_overwrites_existing_session_payload -- --exact
 
 Expected: all four tests pass.
 
-- [ ] **Step 5: commit the session-switch service**
+- [x] **Step 5: commit the session-switch service**
 
 ```bash
 git add \
@@ -395,7 +397,7 @@ git commit -m "feat: support workspace session switching"
 - `api/apps/api-server/src/_tests/workspace_routes.rs`
 - `api/apps/api-server/src/_tests/openapi_alignment.rs`
 
-- [ ] **Step 1: add failing route and OpenAPI tests**
+- [x] **Step 1: add failing route and OpenAPI tests**
 
 Create `api/apps/api-server/src/_tests/workspace_routes.rs` with:
 
@@ -426,7 +428,7 @@ Use `test_app_with_database_url()` in route tests so you can seed:
 - a membership row for the root test user when needed
 - a member user with no access to the target workspace for the rejection case
 
-- [ ] **Step 2: run focused failures**
+- [x] **Step 2: run focused failures**
 
 Run:
 
@@ -442,7 +444,7 @@ Expected:
 - switch route test fails because `/api/console/session/actions/switch-workspace` does not exist yet
 - OpenAPI test fails because the new paths and schemas are not registered
 
-- [ ] **Step 3: implement backend routes**
+- [x] **Step 3: implement backend routes**
 
 Create `api/apps/api-server/src/routes/workspaces.rs` with:
 
@@ -510,7 +512,7 @@ Update `api/apps/api-server/src/openapi.rs` to register:
 
 Update `api/apps/api-server/src/_tests/support.rs` only if needed for reusable seeding helpers; keep helpers focused instead of stuffing raw SQL into many test files.
 
-- [ ] **Step 4: rerun focused tests and verify pass**
+- [x] **Step 4: rerun focused tests and verify pass**
 
 Run:
 
@@ -528,7 +530,7 @@ Expected:
 - the response actor/session both report the new `current_workspace_id`
 - the forbidden-path test returns `403` for inaccessible targets
 
-- [ ] **Step 5: commit the HTTP contract**
+- [x] **Step 5: commit the HTTP contract**
 
 ```bash
 git add \
@@ -553,7 +555,7 @@ git commit -m "feat: expose workspace switch backend routes"
 - `docs/superpowers/specs/1flowse/2026-04-13-backend-governance-phase-two-design.md`
 - `docs/superpowers/plans/2026-04-14-backend-workspace-switch.md`
 
-- [ ] **Step 1: update the governance spec after implementation lands**
+- [x] **Step 1: update the governance spec after implementation lands**
 
 After Task 1 to Task 3 are complete, update:
 
@@ -565,7 +567,7 @@ so Section `9` no longer lists backend workspace switching as “still not in th
 - naming cleanup from `TeamRecord` to explicit workspace naming
 - runtime metadata operator repair workflow
 
-- [ ] **Step 2: run focused cargo verification serially**
+- [x] **Step 2: run focused cargo verification serially**
 
 Run in order:
 
@@ -577,7 +579,7 @@ cargo test -p api-server _tests::workspace_routes::switch_workspace_route_update
 
 Expected: all three commands pass.
 
-- [ ] **Step 3: run the full backend gate**
+- [x] **Step 3: run the full backend gate**
 
 Run:
 
@@ -592,7 +594,7 @@ Expected:
 - no `rustfmt` diff failure
 - no route/OpenAPI regression
 
-- [ ] **Step 4: commit final verification and doc sync**
+- [x] **Step 4: commit final verification and doc sync**
 
 ```bash
 git add \

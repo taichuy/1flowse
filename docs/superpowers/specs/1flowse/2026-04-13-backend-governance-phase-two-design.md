@@ -198,6 +198,6 @@ session 与鉴权上下文现在都必须显式持有当前业务空间：
 ## 9. 当前仍未进入本轮扩展范围的事项
 
 - tenant 管理接口与 UI 仍然关闭，继续保持 hidden infrastructure 语义
-- workspace 切换 API 与前端选择器不在本轮范围；当前只保证 session 持有 `current_workspace_id`
+- `2026-04-14 10` 已落地后端 workspace 列表与 session 切换 API；当前后端已支持列出可访问 workspace、切换 `current_workspace_id`、轮换 `csrf_token` 并写入审计日志，后续待补的是前端选择器与导航接入
 - `teams` / `TeamRecord` 的兼容性命名清理可在后续独立重构，不作为本轮治理收口前置条件
 - 面向运营的 runtime metadata 修复工作流可后续单独设计，本轮先保证“可隔离、可识别、不泄漏原始错误”
