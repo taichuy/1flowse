@@ -66,24 +66,35 @@ describe('style boundary registry', () => {
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
   });
 
-  test('renders the settings scene with mocked api docs data', async () => {
-    const scene = getRuntimeScene('page.settings');
+  test(
+    'renders the settings scene with mocked api docs data',
+    async () => {
+      const scene = getRuntimeScene('page.settings');
 
-    render(
-      <AppProviders>
-        <StyleBoundaryHarness scene={scene} />
-      </AppProviders>
-    );
+      render(
+        <AppProviders>
+          <StyleBoundaryHarness scene={scene} />
+        </AppProviders>
+      );
 
-    expect(
-      await screen.findByRole(
-        'heading',
-        { name: 'API 文档', level: 3 },
-        { timeout: 5000 }
-      )
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByRole('button', { name: /console/i }, { timeout: 5000 })
-    ).toBeInTheDocument();
-  });
+      expect(
+        await screen.findByRole(
+          'heading',
+          { name: 'API 文档', level: 3 },
+          { timeout: 5000 }
+        )
+      ).toBeInTheDocument();
+      expect(
+        await screen.findByRole('combobox', { name: '接口分类' }, { timeout: 5000 })
+      ).toBeInTheDocument();
+      expect(
+        await screen.findByRole(
+          'button',
+          { name: /get \/api\/console\/members/i },
+          { timeout: 5000 }
+        )
+      ).toBeInTheDocument();
+    },
+    15000
+  );
 });
