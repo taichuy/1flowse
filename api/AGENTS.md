@@ -36,7 +36,7 @@
 - session 必须显式持有 `tenant_id` 与 `current_workspace_id`。
 - 单个请求链路只允许落在一个显式 `workspace` 上下文。
 - `root/system` 与业务 `workspace` 严格分离。
-- 外部接口与业务语义统一使用 `workspace`；旧 `team*` 命名只允许停留在存储实现层。
+- 外部接口与业务语义统一使用 `workspace`
 - 登录结果、session 读取与请求中间件必须继续向下传递 `current_workspace_id`。
 - 成员、角色、权限、模型、会话等关键动作必须写审计日志。
 - 会影响 session 安全边界的写动作必须经过显式 service。
