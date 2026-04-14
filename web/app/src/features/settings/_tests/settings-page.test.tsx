@@ -34,28 +34,24 @@ const permissionsApi = vi.hoisted(() => ({
 
 const docsApi = vi.hoisted(() => ({
   settingsApiDocsCatalogQueryKey: ['settings', 'docs', 'catalog'],
-  settingsApiDocsCategoryOperationsQueryKey: vi.fn((categoryId: string) => [
+  settingsApiDocsCategorySpecQueryKey: vi.fn((categoryId: string) => [
     'settings',
     'docs',
     'category',
     categoryId,
-    'operations'
-  ]),
-  settingsApiDocSpecQueryKey: vi.fn((operationId: string) => [
-    'settings',
-    'docs',
-    'operation',
-    operationId
+    'openapi'
   ]),
   fetchSettingsApiDocsCatalog: vi.fn(),
-  fetchSettingsApiDocsCategoryOperations: vi.fn(),
-  fetchSettingsApiOperationSpec: vi.fn()
+  fetchSettingsApiDocsCategorySpec: vi.fn()
 }));
 
 vi.mock('../api/members', () => membersApi);
 vi.mock('../api/roles', () => rolesApi);
 vi.mock('../api/permissions', () => permissionsApi);
 vi.mock('../api/api-docs', () => docsApi);
+vi.mock('@scalar/api-reference-react', () => ({
+  ApiReferenceReact: () => <div data-testid="settings-page-scalar">Scalar</div>
+}));
 
 import { AppProviders } from '../../../app/AppProviders';
 import { AppRouterProvider } from '../../../app/router';
@@ -129,12 +125,7 @@ describe('SettingsPage', () => {
         }
       ]
     });
-    docsApi.fetchSettingsApiDocsCategoryOperations.mockResolvedValue({
-      id: 'console',
-      label: 'console',
-      operations: []
-    });
-    docsApi.fetchSettingsApiOperationSpec.mockResolvedValue({
+    docsApi.fetchSettingsApiDocsCategorySpec.mockResolvedValue({
       openapi: '3.1.0',
       info: { title: '1Flowse API', version: '0.1.0' },
       paths: {},

@@ -190,19 +190,16 @@ async fn docs_routes_allow_root_and_granted_members() {
         .await
         .unwrap();
     let catalog_payload: Value = serde_json::from_slice(&catalog_body).unwrap();
-    assert!(
-        catalog_payload["data"]["categories"]
-            .as_array()
-            .unwrap()
-            .len()
-            > 0
-    );
+    assert!(!catalog_payload["data"]["categories"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 
     let category_response = app
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/console/docs/categories/console/operations")
+                .uri("/api/console/docs/categories/console/openapi.json")
                 .header("cookie", &root_cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -214,30 +211,9 @@ async fn docs_routes_allow_root_and_granted_members() {
         .await
         .unwrap();
     let category_payload: Value = serde_json::from_slice(&category_body).unwrap();
-    assert!(category_payload["data"]["operations"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|operation| operation["id"] == "patch_me"));
-
-    let operation_response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/api/console/docs/operations/patch_me/openapi.json")
-                .header("cookie", &root_cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(operation_response.status(), StatusCode::OK);
-    let operation_body = to_bytes(operation_response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let operation_payload: Value = serde_json::from_slice(&operation_body).unwrap();
-    assert_eq!(operation_payload["info"]["title"], "1Flowse API");
-    assert!(operation_payload["paths"]["/api/console/me"]["patch"].is_object());
+    assert_eq!(category_payload["info"]["title"], "1Flowse API");
+    assert!(category_payload["paths"]["/api/console/me"]["patch"].is_object());
+    assert!(category_payload["paths"]["/api/console/members"]["get"].is_object());
 
     let member_id = create_member(&app, &root_cookie, &root_csrf, "docs-viewer", "temp-pass").await;
     create_role(&app, &root_cookie, &root_csrf, "docs_viewer").await;
@@ -269,7 +245,7 @@ async fn docs_routes_allow_root_and_granted_members() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/console/docs/categories/console/operations")
+                .uri("/api/console/docs/categories/console/openapi.json")
                 .header("cookie", &member_cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -277,18 +253,6 @@ async fn docs_routes_allow_root_and_granted_members() {
         .await
         .unwrap();
     assert_eq!(member_category_response.status(), StatusCode::OK);
-
-    let member_operation_response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/console/docs/operations/patch_me/openapi.json")
-                .header("cookie", &member_cookie)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(member_operation_response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -318,7 +282,7 @@ async fn docs_category_route_returns_404_for_unknown_category() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/console/docs/categories/missing/operations")
+                .uri("/api/console/docs/categories/missing/openapi.json")
                 .header("cookie", cookie)
                 .body(Body::empty())
                 .unwrap(),

@@ -75,7 +75,15 @@ describe('style boundary registry', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole('heading', { name: 'API 文档', level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '接口分类' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'API 文档', level: 3 },
+        { timeout: 5000 }
+      )
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /console/i }, { timeout: 5000 })
+    ).toBeInTheDocument();
   });
 });

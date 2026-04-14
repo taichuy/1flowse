@@ -185,12 +185,16 @@
         ]
       },
       {
-        "id": "api-docs-split",
-        "selector": ".api-docs-panel__body",
+        "id": "api-docs-categories",
+        "selector": ".api-docs-panel__categories",
         "propertyAssertions": [
           {
-            "property": "grid-template-columns",
-            "expected": "280px 604px"
+            "property": "display",
+            "expected": "grid"
+          },
+          {
+            "property": "gap",
+            "expected": "16px"
           }
         ]
       },

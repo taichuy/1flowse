@@ -48,6 +48,17 @@ export function fetchConsoleApiDocsCategoryOperations(
   });
 }
 
+export function fetchConsoleApiDocsCategorySpec(
+  categoryId: string,
+  baseUrl?: string
+): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>({
+    path: `/api/console/docs/categories/${encodeURIComponent(categoryId)}/openapi.json`,
+    baseUrl,
+    unwrapSuccess: false
+  });
+}
+
 export function fetchConsoleApiOperationSpec(
   operationId: string,
   baseUrl?: string

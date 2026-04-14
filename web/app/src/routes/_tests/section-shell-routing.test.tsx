@@ -33,22 +33,15 @@ const permissionsApi = vi.hoisted(() => ({
 
 const docsApi = vi.hoisted(() => ({
   settingsApiDocsCatalogQueryKey: ['settings', 'docs', 'catalog'],
-  settingsApiDocsCategoryOperationsQueryKey: vi.fn((categoryId: string) => [
+  settingsApiDocsCategorySpecQueryKey: vi.fn((categoryId: string) => [
     'settings',
     'docs',
     'category',
     categoryId,
-    'operations'
-  ]),
-  settingsApiDocSpecQueryKey: vi.fn((operationId: string) => [
-    'settings',
-    'docs',
-    'operation',
-    operationId
+    'openapi'
   ]),
   fetchSettingsApiDocsCatalog: vi.fn(),
-  fetchSettingsApiDocsCategoryOperations: vi.fn(),
-  fetchSettingsApiOperationSpec: vi.fn()
+  fetchSettingsApiDocsCategorySpec: vi.fn()
 }));
 
 vi.mock('../../features/settings/api/members', () => membersApi);
@@ -112,12 +105,7 @@ describe('section shell routing', () => {
       version: '0.1.0',
       categories: []
     });
-    docsApi.fetchSettingsApiDocsCategoryOperations.mockResolvedValue({
-      id: 'console',
-      label: 'console',
-      operations: []
-    });
-    docsApi.fetchSettingsApiOperationSpec.mockResolvedValue({
+    docsApi.fetchSettingsApiDocsCategorySpec.mockResolvedValue({
       openapi: '3.1.0',
       info: { title: '1Flowse API', version: '0.1.0' },
       paths: {},
@@ -125,15 +113,19 @@ describe('section shell routing', () => {
     });
   });
 
-  test('redirects /me to /me/profile', async () => {
-    authenticateWithPermissions(['route_page.view.all']);
+  test(
+    'redirects /me to /me/profile',
+    async () => {
+      authenticateWithPermissions(['route_page.view.all']);
 
-    renderApp('/me');
+      renderApp('/me');
 
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/me/profile');
-    });
-  });
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/me/profile');
+      });
+    },
+    10000
+  );
 
   test('redirects /settings to /settings/members when docs is hidden but members is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);

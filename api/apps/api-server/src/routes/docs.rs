@@ -26,6 +26,10 @@ pub fn router() -> Router<Arc<ApiState>> {
             get(get_category_operations),
         )
         .route(
+            "/docs/categories/:category_id/openapi.json",
+            get(get_category_openapi),
+        )
+        .route(
             "/docs/operations/:operation_id/openapi.json",
             get(get_operation_openapi),
         )
@@ -58,6 +62,24 @@ pub async fn get_category_operations(
         .ok_or(ControlPlaneError::NotFound("category_id"))?;
 
     Ok(Json(ApiSuccess::new(operations)))
+}
+
+pub async fn get_category_openapi(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(category_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    ensure_permission(&context.actor, "api_reference.view.all")
+        .map_err(ControlPlaneError::PermissionDenied)?;
+
+    let spec = state
+        .api_docs
+        .category_spec(&category_id)
+        .cloned()
+        .ok_or(ControlPlaneError::NotFound("category_id"))?;
+
+    Ok(Json(spec))
 }
 
 pub async fn get_operation_openapi(

@@ -1,30 +1,19 @@
 import {
   fetchConsoleApiDocsCatalog,
-  fetchConsoleApiDocsCategoryOperations,
-  fetchConsoleApiOperationSpec,
-  type ConsoleApiDocsCatalog,
-  type ConsoleApiDocsCategoryOperations
+  fetchConsoleApiDocsCategorySpec,
+  type ConsoleApiDocsCatalog
 } from '@1flowse/api-client';
 
 export type SettingsApiDocsCatalog = ConsoleApiDocsCatalog;
-export type SettingsApiDocsCategoryOperations = ConsoleApiDocsCategoryOperations;
 
 export const settingsApiDocsCatalogQueryKey = ['settings', 'docs', 'catalog'] as const;
-export const settingsApiDocsCategoryOperationsQueryKey = (categoryId: string) =>
-  ['settings', 'docs', 'category', categoryId, 'operations'] as const;
-export const settingsApiDocSpecQueryKey = (operationId: string) =>
-  ['settings', 'docs', 'operation', operationId] as const;
+export const settingsApiDocsCategorySpecQueryKey = (categoryId: string) =>
+  ['settings', 'docs', 'category', categoryId, 'openapi'] as const;
 
 export function fetchSettingsApiDocsCatalog(): Promise<SettingsApiDocsCatalog> {
   return fetchConsoleApiDocsCatalog();
 }
 
-export function fetchSettingsApiDocsCategoryOperations(
-  categoryId: string
-): Promise<SettingsApiDocsCategoryOperations> {
-  return fetchConsoleApiDocsCategoryOperations(categoryId);
-}
-
-export function fetchSettingsApiOperationSpec(operationId: string) {
-  return fetchConsoleApiOperationSpec(operationId);
+export function fetchSettingsApiDocsCategorySpec(categoryId: string) {
+  return fetchConsoleApiDocsCategorySpec(categoryId);
 }

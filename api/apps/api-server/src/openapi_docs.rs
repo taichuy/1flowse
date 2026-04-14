@@ -46,6 +46,7 @@ pub struct DocsCatalog {
 pub struct ApiDocsRegistry {
     catalog: DocsCatalog,
     category_operations: HashMap<String, DocsCatalogCategoryOperations>,
+    category_specs: HashMap<String, Value>,
     operation_specs: HashMap<String, Value>,
 }
 
@@ -60,6 +61,10 @@ impl ApiDocsRegistry {
 
     pub fn category_operations(&self, category_id: &str) -> Option<&DocsCatalogCategoryOperations> {
         self.category_operations.get(category_id)
+    }
+
+    pub fn category_spec(&self, category_id: &str) -> Option<&Value> {
+        self.category_specs.get(category_id)
     }
 }
 
@@ -96,7 +101,9 @@ pub fn build_api_docs_registry(canonical: Value) -> Result<ApiDocsRegistry> {
         .context("canonical OpenAPI document must contain paths")?;
 
     let mut category_operations = HashMap::<String, DocsCatalogCategoryOperations>::new();
+    let mut category_members = HashMap::<String, Vec<(String, String)>>::new();
     let mut category_singleton_flags = HashMap::<String, bool>::new();
+    let mut category_specs = HashMap::new();
     let mut operation_specs = HashMap::new();
     let mut seen_ids = HashSet::new();
 
@@ -145,6 +152,10 @@ pub fn build_api_docs_registry(canonical: Value) -> Result<ApiDocsRegistry> {
             };
 
             category_singleton_flags.insert(category_id.clone(), is_singleton);
+            category_members
+                .entry(category_id.clone())
+                .or_default()
+                .push((path.to_string(), (*method).to_string()));
             category_operations
                 .entry(category_id.clone())
                 .or_insert_with(|| DocsCatalogCategoryOperations {
@@ -157,13 +168,17 @@ pub fn build_api_docs_registry(canonical: Value) -> Result<ApiDocsRegistry> {
 
             operation_specs.insert(
                 operation_id.to_string(),
-                close_operation_spec(&canonical, path, method, operation)?,
+                close_operation_spec(&canonical, path, method)?,
             );
         }
     }
 
     for operations in category_operations.values_mut() {
         operations.operations.sort_by(compare_operations);
+    }
+
+    for (category_id, members) in &category_members {
+        category_specs.insert(category_id.clone(), close_scoped_spec(&canonical, members)?);
     }
 
     let mut categories = category_operations
@@ -183,6 +198,7 @@ pub fn build_api_docs_registry(canonical: Value) -> Result<ApiDocsRegistry> {
             categories,
         },
         category_operations,
+        category_specs,
         operation_specs,
     })
 }
@@ -258,33 +274,50 @@ pub fn collect_refs(value: &Value, refs: &mut BTreeSet<String>) {
     }
 }
 
-fn close_operation_spec(
-    canonical: &Value,
-    path: &str,
-    method: &str,
-    operation: &Value,
-) -> Result<Value> {
+fn close_operation_spec(canonical: &Value, path: &str, method: &str) -> Result<Value> {
+    close_scoped_spec(canonical, &[(path.to_string(), method.to_string())])
+}
+
+fn close_scoped_spec(canonical: &Value, scoped_operations: &[(String, String)]) -> Result<Value> {
     let canonical_map = canonical
         .as_object()
         .context("canonical OpenAPI document must be a JSON object")?;
-    let path_item_map = canonical_map
+    let canonical_paths = canonical_map
         .get("paths")
         .and_then(Value::as_object)
-        .and_then(|paths| paths.get(path))
-        .and_then(Value::as_object)
-        .with_context(|| format!("path `{path}` not found in canonical document"))?;
+        .context("canonical OpenAPI document must contain paths")?;
 
-    let mut scoped_path_item = Map::new();
-    for (key, value) in path_item_map {
-        if key == method || !HTTP_METHODS.contains(&key.as_str()) {
-            scoped_path_item.insert(key.clone(), value.clone());
+    let mut scoped_paths = Map::new();
+    let mut operation_tags = BTreeSet::new();
+
+    for (path, method) in scoped_operations {
+        let path_item_map = canonical_paths
+            .get(path)
+            .and_then(Value::as_object)
+            .with_context(|| format!("path `{path}` not found in canonical document"))?;
+        let scoped_path_item = scoped_paths
+            .entry(path.clone())
+            .or_insert_with(|| Value::Object(Map::new()));
+        let scoped_path_item_map = scoped_path_item
+            .as_object_mut()
+            .context("scoped path item must be an object")?;
+
+        for (key, value) in path_item_map {
+            if key == method || !HTTP_METHODS.contains(&key.as_str()) {
+                scoped_path_item_map
+                    .entry(key.clone())
+                    .or_insert_with(|| value.clone());
+            }
         }
+
+        let operation = path_item_map.get(method).with_context(|| {
+            format!("operation `{method} {path}` not found in canonical document")
+        })?;
+        operation_tags.extend(extract_tags(operation));
     }
 
-    scoped_path_item.insert(method.to_string(), operation.clone());
-
     let mut refs = BTreeSet::new();
-    collect_refs(&Value::Object(scoped_path_item.clone()), &mut refs);
+    collect_refs(&Value::Object(scoped_paths.clone()), &mut refs);
 
     let mut components = Value::Object(Map::new());
     let mut pending_refs = refs.iter().cloned().collect::<Vec<_>>();
@@ -314,7 +347,6 @@ fn close_operation_spec(
         pending_refs.extend(nested_refs);
     }
 
-    let operation_tags = extract_tags(operation).into_iter().collect::<BTreeSet<_>>();
     let filtered_tags = canonical_map
         .get("tags")
         .and_then(Value::as_array)
@@ -349,13 +381,7 @@ fn close_operation_spec(
     if let Some(servers) = canonical_map.get("servers") {
         spec.insert("servers".to_string(), servers.clone());
     }
-    spec.insert(
-        "paths".to_string(),
-        Value::Object(Map::from_iter([(
-            path.to_string(),
-            Value::Object(scoped_path_item),
-        )])),
-    );
+    spec.insert("paths".to_string(), Value::Object(scoped_paths));
     spec.insert("components".to_string(), components);
     if !filtered_tags.is_empty() {
         spec.insert("tags".to_string(), Value::Array(filtered_tags));

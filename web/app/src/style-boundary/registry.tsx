@@ -87,7 +87,7 @@ function seedStyleBoundaryDocsFetch() {
               {
                 id: 'console',
                 label: 'console',
-                operation_count: 1
+                operation_count: 2
               }
             ]
           },
@@ -100,40 +100,20 @@ function seedStyleBoundaryDocsFetch() {
       );
     }
 
-    if (url.includes('/api/console/docs/categories/console/operations')) {
-      return new Response(
-        JSON.stringify({
-          data: {
-            id: 'console',
-            label: 'console',
-            operations: [
-              {
-                id: 'list_members',
-                method: 'GET',
-                path: '/api/console/members',
-                summary: 'List members',
-                description: null,
-                tags: ['members'],
-                group: 'console',
-                deprecated: false
-              }
-            ]
-          },
-          meta: null
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        }
-      );
-    }
-
-    if (url.includes('/api/console/docs/operations/list_members/openapi.json')) {
+    if (url.includes('/api/console/docs/categories/console/openapi.json')) {
       return new Response(
         JSON.stringify({
           openapi: '3.1.0',
           info: { title: '1Flowse API', version: '0.1.0' },
           paths: {
+            '/api/console/me': {
+              patch: {
+                operationId: 'patch_me',
+                responses: {
+                  '200': { description: 'ok' }
+                }
+              }
+            },
             '/api/console/members': {
               get: {
                 operationId: 'list_members',
@@ -189,7 +169,7 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.tools': () => renderShellScene('/tools', <ToolsPage />),
   'page.settings': () => {
     seedStyleBoundaryDocsFetch();
-    return renderRouterScene('/settings/docs?category=console&operation=list_members');
+    return renderRouterScene('/settings/docs?category=console');
   },
   'page.me': () => renderRouterScene('/me/profile'),
   'page.sign-in': () => <SignInPage />

@@ -74,3 +74,33 @@ fn registry_groups_catalog_by_api_prefix_and_singletons_for_non_api_paths() {
     assert_eq!(singleton_category.operations.len(), 1);
     assert_eq!(singleton_category.operations[0].id, "health");
 }
+
+#[test]
+fn category_spec_builder_keeps_all_category_operations_closed() {
+    let canonical = json!({
+        "openapi": "3.1.0",
+        "info": { "title": "T", "version": "1" },
+        "paths": {
+            "/api/console/me": {
+                "patch": { "operationId": "patch_me", "summary": "Patch me" }
+            },
+            "/api/console/members": {
+                "get": { "operationId": "list_members", "summary": "List members" }
+            },
+            "/api/runtime/jobs": {
+                "get": { "operationId": "list_runtime_jobs", "summary": "List runtime jobs" }
+            }
+        }
+    });
+
+    let registry = build_api_docs_registry(canonical).expect("catalog should build");
+    let spec = registry
+        .category_spec("console")
+        .expect("console category spec should exist");
+
+    assert_eq!(spec["paths"].as_object().unwrap().len(), 2);
+    assert!(spec["paths"]["/api/console/me"]["patch"].is_object());
+    assert!(spec["paths"]["/api/console/members"]["get"].is_object());
+    assert!(spec["paths"]["/api/runtime/jobs"].is_null());
+    assert!(spec["components"].is_object());
+}
