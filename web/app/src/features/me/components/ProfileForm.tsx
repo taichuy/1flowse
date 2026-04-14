@@ -158,6 +158,7 @@ export function ProfileForm({
       </Card>
 
       <Drawer
+        forceRender
         title="编辑个人信息"
         width={400}
         onClose={handleDrawerClose}

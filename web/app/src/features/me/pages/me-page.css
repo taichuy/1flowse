@@ -4,10 +4,11 @@
   margin: 0 auto;
 }
 
-.me-profile-card {
+.me-profile-card.ant-card,
+.me-profile-card.ant-card:not(.ant-card-bordered) {
   width: 100%;
-  border-radius: 16px;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+  border-radius: 16px !important;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08) !important;
 }
 
 .me-profile-card__header .ant-typography {

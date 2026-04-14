@@ -143,9 +143,12 @@
       "web/app/src/app-shell/Navigation.tsx",
       "web/app/src/app-shell/AccountMenu.tsx",
       "web/app/src/app-shell/account-menu-items.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionSidebarNav.tsx",
+      "web/app/src/shared/ui/section-page-layout/section-page-layout.css",
       "web/app/src/features/settings/pages/SettingsPage.tsx",
+      "web/app/src/features/settings/lib/settings-sections.tsx",
       "web/app/src/features/settings/components/ApiDocsPanel.tsx",
-      "web/app/src/features/settings/components/SettingsSidebar.tsx",
       "web/app/src/app/router.tsx"
     ],
     "boundaryNodes": [
@@ -156,6 +159,26 @@
           {
             "property": "display",
             "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "section-rail",
+        "selector": ".section-page-layout__rail",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "section-shell",
+        "selector": ".section-page-layout__shell",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "grid"
           }
         ]
       }
@@ -173,7 +196,12 @@
       "web/app/src/app-shell/Navigation.tsx",
       "web/app/src/app-shell/AccountMenu.tsx",
       "web/app/src/app-shell/account-menu-items.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx",
+      "web/app/src/shared/ui/section-page-layout/SectionSidebarNav.tsx",
+      "web/app/src/shared/ui/section-page-layout/section-page-layout.css",
       "web/app/src/features/me/pages/MePage.tsx",
+      "web/app/src/features/me/pages/me-page.css",
+      "web/app/src/features/me/lib/me-sections.tsx",
       "web/app/src/features/me/components/ProfileForm.tsx",
       "web/app/src/features/me/components/ChangePasswordForm.tsx",
       "web/app/src/app/router.tsx"
@@ -186,6 +214,30 @@
           {
             "property": "display",
             "expected": "flex"
+          }
+        ]
+      },
+      {
+        "id": "profile-card",
+        "selector": ".me-profile-card",
+        "propertyAssertions": [
+          {
+            "property": "border-radius",
+            "expected": "16px"
+          },
+          {
+            "property": "box-shadow",
+            "expected": "rgba(15, 23, 42, 0.08) 0px 16px 32px 0px"
+          }
+        ]
+      },
+      {
+        "id": "selected-nav",
+        "selector": ".section-page-layout__nav .ant-menu-item-selected",
+        "propertyAssertions": [
+          {
+            "property": "background-color",
+            "expected": "rgb(232, 247, 240)"
           }
         ]
       }

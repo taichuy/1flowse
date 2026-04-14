@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
 import { Menu } from 'antd';
 
+import { AppRouterProvider } from '../app/router';
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { createAccountMenuItems } from '../app-shell/account-menu-items';
 import { SignInPage } from '../features/auth/pages/SignInPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';
-import { MePage } from '../features/me/pages/MePage';
-import { SettingsPage } from '../features/settings/pages/SettingsPage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { useAuthStore } from '../state/auth-store';
 import manifest from './scenario-manifest.json';
@@ -62,6 +61,13 @@ function renderShellScene(pathname: string, page: ReactNode) {
   return <AppShellFrame pathname={pathname}>{page}</AppShellFrame>;
 }
 
+function renderRouterScene(pathname: string) {
+  seedStyleBoundaryAuth();
+  window.history.replaceState({}, '', pathname);
+
+  return <AppRouterProvider />;
+}
+
 const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'component.account-popup': () => (
     <div className="app-shell-account-popup">
@@ -80,8 +86,8 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.home': () => renderShellScene('/', <HomePage />),
   'page.embedded-apps': () => renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
   'page.tools': () => renderShellScene('/tools', <ToolsPage />),
-  'page.settings': () => renderShellScene('/settings', <SettingsPage />),
-  'page.me': () => renderShellScene('/me', <MePage />),
+  'page.settings': () => renderRouterScene('/settings/docs'),
+  'page.me': () => renderRouterScene('/me/profile'),
   'page.sign-in': () => <SignInPage />
 };
 

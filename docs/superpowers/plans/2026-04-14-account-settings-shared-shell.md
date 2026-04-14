@@ -404,7 +404,7 @@ Run: `pnpm --dir web/app test -- src/features/me/_tests/me-page.test.tsx`
 
 Expected: PASS
 
-- [ ] **Step 5: 提交 `/me` 迁移与样式收口**
+- [x] **Step 5: 提交 `/me` 迁移与样式收口**
 
 ```bash
 git add web/app/src/features/me/pages/MePage.tsx web/app/src/features/me/pages/me-page.css
@@ -421,7 +421,7 @@ git commit -m "feat(web): migrate me page to shared shell"
 - Modify: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 - Modify: `web/app/src/routes/_tests/route-config.test.ts`
 
-- [ ] **Step 1: 先补会失败的样式边界与场景断言**
+- [x] **Step 1: 先补会失败的样式边界与场景断言**
 
 把 `scenario-manifest.json` 先改出新的影响面与边界断言预期：
 
@@ -448,20 +448,20 @@ git commit -m "feat(web): migrate me page to shared shell"
 - `page.me` 上 `.me-profile-card` 的 `border-radius` / `box-shadow`；
 - `page.me` 上当前选中导航项的背景色仍为浅绿色语义。
 
-- [ ] **Step 2: 跑 style-boundary 文件校验，确认映射尚未补齐**
+- [x] **Step 2: 跑 style-boundary 文件校验，确认映射尚未补齐**
 
 Run: `node scripts/node/check-style-boundary.js file web/app/src/features/me/pages/MePage.tsx`
 
 Expected: FAIL or mismatch because共享壳层文件与 `/me` 私有样式文件还未完整进入 `impactFiles`。
 
-- [ ] **Step 3: 完成 manifest 收口并同步修正测试断言**
+- [x] **Step 3: 完成 manifest 收口并同步修正测试断言**
 
 完成后确保：
 - `page.settings` / `page.me` 的 `impactFiles` 覆盖共享模板、feature catalog、page container 和私有样式文件；
 - `route-config.test.ts` 明确锁住 `/settings/*` 与 `/me/*` 子路由仍归属一级导航；
 - `me-page.test.tsx` / `settings-page.test.tsx` 都只依赖真实路由结果，不再依赖页内 `useState`。
 
-- [ ] **Step 4: 重跑样式边界与关键回归**
+- [x] **Step 4: 重跑样式边界与关键回归**
 
 Run:
 

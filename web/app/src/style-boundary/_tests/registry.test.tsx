@@ -40,6 +40,12 @@ describe('style boundary registry', () => {
       'page.settings',
       'page.me'
     ]);
+    expect(
+      getSceneIdsForFiles(['web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx'])
+    ).toEqual(['page.settings', 'page.me']);
+    expect(getSceneIdsForFiles(['web/app/src/features/me/pages/me-page.css'])).toEqual([
+      'page.me'
+    ]);
   });
 
   test('renders the home page scene inside the shared shell frame', async () => {
