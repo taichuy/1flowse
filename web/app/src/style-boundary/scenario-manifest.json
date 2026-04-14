@@ -183,6 +183,30 @@
             "expected": "flex"
           }
         ]
+      },
+      {
+        "id": "api-docs-split",
+        "selector": ".api-docs-panel__body",
+        "propertyAssertions": [
+          {
+            "property": "grid-template-columns",
+            "expected": "442px 442px"
+          }
+        ]
+      },
+      {
+        "id": "api-docs-scalar-root",
+        "selector": ".api-docs-panel__detail .scalar-api-reference",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "grid"
+          },
+          {
+            "property": "background-color",
+            "expected": "rgb(255, 255, 255)"
+          }
+        ]
       }
     ]
   },

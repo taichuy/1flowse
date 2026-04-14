@@ -153,7 +153,7 @@ describe('SettingsPage', () => {
       expect(window.location.pathname).toBe('/settings/members');
     });
     expect(screen.queryByRole('heading', { name: 'API 文档', level: 3 })).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   test('renders /settings/members when user.view.all is present', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);

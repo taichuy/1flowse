@@ -13,8 +13,8 @@ match_when:
   - 需要恢复本地浏览器验收链路
   - 清理 devtools 遗留进程
 created_at: 2026-04-14 03
-updated_at: 2026-04-14 03
-last_verified_at: 2026-04-14 03
+updated_at: 2026-04-14 19
+last_verified_at: 2026-04-14 19
 decision_policy: reference_on_failure
 scope:
   - chrome-devtools
@@ -72,3 +72,4 @@ ps -ef | rg '/home/taichu/.cache/chrome-devtools-mcp/chrome-profile|chrome-devto
 ## 复现记录
 
 - `2026-04-14 03`：`tmp/demo` 浏览器验收时命中 `browser already running for chrome-profile`；宽匹配 `pkill` 让当前 shell 直接异常退出。改为先 `ps` 定位遗留进程后，再重新打开页面，浏览器验收恢复正常。
+- `2026-04-14 19`：设置区 `API 文档` 浏览器验收时再次命中 `new_page` / `list_pages` 的 `browser already running for chrome-profile`。本次先用 `ps -ef` 确认 `/home/taichu/.cache/chrome-devtools-mcp/chrome-profile` 下的实际 Chrome 进程，再只对这些 browser/profile PID 执行 `kill`，随后 `new_page` 恢复可用。

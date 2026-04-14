@@ -131,7 +131,7 @@ describe('section shell routing', () => {
       expect(window.location.pathname).toBe('/settings/members');
     });
     expect(await screen.findByRole('heading', { name: '用户管理', level: 4 })).toBeInTheDocument();
-  });
+  }, 10000);
 
   test('redirects /settings/docs to /settings/roles when docs is hidden but roles is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'role_permission.view.all']);

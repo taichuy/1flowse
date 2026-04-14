@@ -4,6 +4,7 @@ import { SearchOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouterState } from '@tanstack/react-router';
 import { ApiReferenceReact } from '@scalar/api-reference-react';
+import '@scalar/api-reference-react/style.css';
 import { Empty, Input, Result, Spin, Tag, Typography } from 'antd';
 
 import {
@@ -129,15 +130,17 @@ export function ApiDocsPanel() {
     }
 
     return (
-      <ApiReferenceReact
-        configuration={{
-          content: operationQuery.data,
-          hideClientButton: true,
-          hideTestRequestButton: true,
-          hiddenClients: true,
-          documentDownloadType: 'none'
-        }}
-      />
+      <div className="api-docs-panel__detail-viewer">
+        <ApiReferenceReact
+          configuration={{
+            content: operationQuery.data,
+            hideClientButton: true,
+            hideTestRequestButton: true,
+            hiddenClients: true,
+            documentDownloadType: 'none'
+          }}
+        />
+      </div>
     );
   }
 

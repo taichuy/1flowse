@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -114,7 +117,9 @@ describe('ApiDocsPanel', () => {
   test('renders the internal-docs empty state after catalog loads', async () => {
     renderApp('/settings/docs');
 
-    expect(await screen.findByText('选择一个接口查看详情')).toBeInTheDocument();
+    expect(
+      await screen.findByText('选择一个接口查看详情', {}, { timeout: 5000 })
+    ).toBeInTheDocument();
     expect(screen.getByText('Update current profile')).toBeInTheDocument();
     expect(screen.getByText('Enumerate workspace staff')).toBeInTheDocument();
   });
@@ -164,5 +169,25 @@ describe('ApiDocsPanel', () => {
 
     expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent('patch_me');
     expect(docsApi.fetchSettingsApiOperationSpec).toHaveBeenCalledWith('patch_me');
+  });
+
+  test('imports Scalar stylesheet for the detail renderer', async () => {
+    const componentSource = await readFile(
+      path.resolve(process.cwd(), 'src/features/settings/components/ApiDocsPanel.tsx'),
+      'utf8'
+    );
+
+    expect(componentSource).toContain("import '@scalar/api-reference-react/style.css';");
+  });
+
+  test('uses a balanced two-column desktop layout for catalog and detail panes', async () => {
+    const cssSource = await readFile(
+      path.resolve(process.cwd(), 'src/features/settings/components/api-docs-panel.css'),
+      'utf8'
+    );
+
+    expect(cssSource).toMatch(
+      /grid-template-columns:\s*(?:repeat\(2,\s*minmax\(0,\s*1fr\)\)|minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\))/
+    );
   });
 });

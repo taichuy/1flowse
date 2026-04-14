@@ -166,7 +166,7 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.tools': () => renderShellScene('/tools', <ToolsPage />),
   'page.settings': () => {
     seedStyleBoundaryDocsFetch();
-    return renderRouterScene('/settings/docs');
+    return renderRouterScene('/settings/docs?operation=list_members');
   },
   'page.me': () => renderRouterScene('/me/profile'),
   'page.sign-in': () => <SignInPage />

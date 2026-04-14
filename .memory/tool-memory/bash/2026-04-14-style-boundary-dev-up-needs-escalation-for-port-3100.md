@@ -14,8 +14,8 @@ match_when:
   - 运行 `node scripts/node/dev-up.js ensure` 或 `status`
   - 日志里出现 `listen EPERM` 或端口 `3100`
 created_at: 2026-04-14 15
-updated_at: 2026-04-14 15
-last_verified_at: 2026-04-14 15
+updated_at: 2026-04-14 19
+last_verified_at: 2026-04-14 19
 decision_policy: reference_on_failure
 scope:
   - bash
@@ -59,3 +59,4 @@ scope:
 ## 复现记录
 
 - `2026-04-14 15`：共享壳计划的最终 style-boundary 回归在默认沙箱下因 `3100` 端口监听触发 `listen EPERM`；改为提权执行相关 Node 脚本后通过。
+- `2026-04-14 19`：设置区 `API 文档` 页面修正时，默认沙箱下再次在 `node scripts/node/check-style-boundary.js page page.settings` 启动链路触发 `listen EPERM: operation not permitted 127.0.0.1:3100`；先对 `node scripts/node/dev-up.js ensure --frontend-only --skip-docker` 提权启动前端，再提权跑 `check-style-boundary` 后通过。

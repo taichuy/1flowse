@@ -22,12 +22,13 @@
 
 .api-docs-panel__body {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
 
 .api-docs-panel__catalog,
 .api-docs-panel__detail {
+  min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 20px;
@@ -149,10 +150,14 @@
 
 .api-docs-panel__detail {
   min-height: 640px;
-  overflow: auto;
+  overflow: hidden;
   background:
     radial-gradient(circle at top right, rgba(43, 185, 177, 0.12), transparent 28%),
     linear-gradient(180deg, var(--bg-elevated), var(--bg-surface));
+}
+
+.api-docs-panel__detail-viewer {
+  min-height: 640px;
 }
 
 .api-docs-panel__detail-state {

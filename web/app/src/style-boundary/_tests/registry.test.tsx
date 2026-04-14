@@ -1,5 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+vi.mock('@scalar/api-reference-react', () => ({
+  ApiReferenceReact: () => <div data-testid="style-boundary-scalar">Scalar</div>
+}));
 
 import { AppProviders } from '../../app/AppProviders';
 import { StyleBoundaryHarness } from '../StyleBoundaryHarness';
@@ -73,5 +77,6 @@ describe('style boundary registry', () => {
 
     expect(await screen.findByText('List members')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'API 文档', level: 3 })).toBeInTheDocument();
+    expect(screen.getByTestId('style-boundary-scalar')).toBeInTheDocument();
   });
 });
