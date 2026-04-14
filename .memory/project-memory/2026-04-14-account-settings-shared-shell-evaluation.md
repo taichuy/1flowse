@@ -71,6 +71,7 @@ scope:
   - 桌面端固定左栏，移动端退化为顶部 `Segmented/Tabs` 或 `Drawer`
   - 不可见 section 直接隐藏；当前 URL 无权限时跳转到第一个可见 section；全部不可见时显示正式空态
   - `/me` 里的 inline style 本轮顺手收口为模板 class + token，但视觉效果保持一致
+  - 完成实现后必须打开浏览器做 `/me` 视觉回归，并以 `uploads/image_aionui_1776142647213.png` 作为截图基线比对
   - section 路由与权限点绑定，后续采用动态子路由/受控子路由方式统一处理
 - `/me` 当前 sidebar 同时承载 section 切换和 `退出登录` 这类 destructive action，后续抽象时应拆成：
   - section 导航

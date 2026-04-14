@@ -15,6 +15,7 @@
 - [web/app/src/routes/route-config.ts](../../../../web/app/src/routes/route-config.ts)
 - [web/app/src/app/router.tsx](../../../../web/app/src/app/router.tsx)
 - [web/app/src/app-shell/app-shell.css](../../../../web/app/src/app-shell/app-shell.css)
+- [uploads/image_aionui_1776142647213.png](../../../../uploads/image_aionui_1776142647213.png)
 
 ## 1. 文档目标
 
@@ -26,6 +27,7 @@
 - `/me` 与 `/settings` 从页内 `useState` 切换到子路由
 - section 可见性、默认落点和无权限跳转规则
 - `/me` 相关 inline style 收口为模板 class 与 token，视觉效果保持现状
+- 实现完成后必须打开浏览器，以截图基线完成 `/me` 视觉回归
 
 本轮设计不覆盖：
 
@@ -354,6 +356,20 @@ export interface SectionPageLayoutProps {
 - 不通过无边界 `.ant-*` 后代选择器递归覆盖
 - 被本轮触达的 `/me` 卡片、标题、侧栏间距、选中态样式统一收口
 
+本轮视觉基线固定参考：
+
+- `uploads/image_aionui_1776142647213.png`
+
+抽象重构后，至少要保持以下可见结果不变：
+
+- 顶部壳层高度、留白和导航密度
+- 左侧 `/me` 二级导航区宽度、位置和浅绿色选中态
+- 页面整体浅色背景氛围
+- 主卡片的宽度、居中位置、圆角、阴影和顶部操作按钮位置
+- 头像、主标题、状态标签、字段栅格和段落留白
+
+如果实现中发现共享模板会改变以上任一视觉结果，不能自行接受“接近即可”，必须继续调整到与基线一致，或先征得用户确认。
+
 ## 8. 文件级改造边界
 
 ### 8.1 新增
@@ -448,6 +464,17 @@ export interface SectionPageLayoutProps {
 - `node scripts/node/check-style-boundary.js file web/app/src/features/settings/pages/SettingsPage.tsx`
 
 若共享模板被多个场景复用，还应额外对共享组件文件执行一次 `file` 模式校验。
+
+### 10.4 浏览器视觉回归
+
+实现完成后，除命令验证外，还必须进行浏览器视觉回归：
+
+- 打开真实 `/me` 页面进行浏览器检查
+- 以 `uploads/image_aionui_1776142647213.png` 作为基线截图做对比
+- 重新截取一张实现后的 `/me` 页面截图，保存到 `uploads/`
+- 对比基线图与新图，确认抽象重构没有改变 `/me` 的视觉效果
+
+该回归是硬门禁，不允许只根据代码审查或 DOM 结构判断“应该没变”。
 
 ## 11. 实施顺序建议
 
