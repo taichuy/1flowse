@@ -13,65 +13,65 @@ use crate::{
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct PatchTeamBody {
+pub struct PatchWorkspaceBody {
     pub name: String,
     pub logo_url: Option<String>,
     pub introduction: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct TeamResponse {
+pub struct WorkspaceResponse {
     pub id: String,
     pub name: String,
     pub logo_url: Option<String>,
     pub introduction: String,
 }
 
-fn to_team_response(team: domain::WorkspaceRecord) -> TeamResponse {
-    TeamResponse {
-        id: team.id.to_string(),
-        name: team.name,
-        logo_url: team.logo_url,
-        introduction: team.introduction,
+fn to_workspace_response(workspace: domain::WorkspaceRecord) -> WorkspaceResponse {
+    WorkspaceResponse {
+        id: workspace.id.to_string(),
+        name: workspace.name,
+        logo_url: workspace.logo_url,
+        introduction: workspace.introduction,
     }
 }
 
 pub fn router() -> Router<Arc<ApiState>> {
-    Router::new().route("/team", get(get_team).patch(patch_team))
+    Router::new().route("/workspace", get(get_workspace).patch(patch_workspace))
 }
 
 #[utoipa::path(
     get,
-    path = "/api/console/team",
-    responses((status = 200, body = TeamResponse), (status = 401, body = crate::error_response::ErrorBody))
+    path = "/api/console/workspace",
+    responses((status = 200, body = WorkspaceResponse), (status = 401, body = crate::error_response::ErrorBody))
 )]
-pub async fn get_team(
+pub async fn get_workspace(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<ApiSuccess<TeamResponse>>, ApiError> {
+) -> Result<Json<ApiSuccess<WorkspaceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
-    let team = WorkspaceService::new(state.store.clone())
+    let workspace = WorkspaceService::new(state.store.clone())
         .get_workspace(context.session.current_workspace_id)
         .await?;
 
-    Ok(Json(ApiSuccess::new(to_team_response(team))))
+    Ok(Json(ApiSuccess::new(to_workspace_response(workspace))))
 }
 
 #[utoipa::path(
     patch,
-    path = "/api/console/team",
-    request_body = PatchTeamBody,
-    responses((status = 200, body = TeamResponse), (status = 403, body = crate::error_response::ErrorBody))
+    path = "/api/console/workspace",
+    request_body = PatchWorkspaceBody,
+    responses((status = 200, body = WorkspaceResponse), (status = 403, body = crate::error_response::ErrorBody))
 )]
-pub async fn patch_team(
+pub async fn patch_workspace(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-    Json(body): Json<PatchTeamBody>,
-) -> Result<Json<ApiSuccess<TeamResponse>>, ApiError> {
+    Json(body): Json<PatchWorkspaceBody>,
+) -> Result<Json<ApiSuccess<WorkspaceResponse>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     require_csrf(&headers, &context.session)?;
 
-    let team = WorkspaceService::new(state.store.clone())
+    let workspace = WorkspaceService::new(state.store.clone())
         .update_workspace(UpdateWorkspaceCommand {
             actor: context.actor,
             workspace_id: context.session.current_workspace_id,
@@ -81,5 +81,5 @@ pub async fn patch_team(
         })
         .await?;
 
-    Ok(Json(ApiSuccess::new(to_team_response(team))))
+    Ok(Json(ApiSuccess::new(to_workspace_response(workspace))))
 }

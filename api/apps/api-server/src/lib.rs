@@ -107,7 +107,7 @@ pub fn app_with_state(state: Arc<ApiState>) -> Router {
 fn console_router(state: Arc<ApiState>) -> Router {
     Router::new()
         .nest("/api/console", routes::me::router())
-        .nest("/api/console", routes::team::router())
+        .nest("/api/console", routes::workspace::router())
         .nest("/api/console", routes::members::router())
         .nest("/api/console", routes::model_definitions::router())
         .nest("/api/console", routes::roles::router())

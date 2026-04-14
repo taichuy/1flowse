@@ -202,3 +202,63 @@ async fn switch_workspace_route_rejects_inaccessible_target_for_member() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn current_workspace_route_reads_and_updates_workspace_metadata() {
+    let app = test_app_with_database_url().await.0;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let get_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/workspace")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(get_response.status(), StatusCode::OK);
+    let body = to_bytes(get_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["data"]["name"], "1Flowse");
+
+    let patch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/api/console/workspace")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "Flowse Workspace",
+                        "logo_url": "https://example.com/workspace.png",
+                        "introduction": "workspace intro"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(patch_response.status(), StatusCode::OK);
+    let body = to_bytes(patch_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(payload["data"]["name"], "Flowse Workspace");
+    assert_eq!(
+        payload["data"]["logo_url"],
+        Value::String("https://example.com/workspace.png".to_string())
+    );
+    assert_eq!(payload["data"]["introduction"], "workspace intro");
+}

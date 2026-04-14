@@ -146,6 +146,14 @@ async fn openapi_contains_workspace_switch_routes() {
 }
 
 #[tokio::test]
+async fn openapi_contains_workspace_detail_path_and_omits_team_path() {
+    let paths = openapi_paths().await;
+
+    assert!(paths.contains_key("/api/console/workspace"));
+    assert!(!paths.contains_key("/api/console/team"));
+}
+
+#[tokio::test]
 async fn openapi_excludes_legacy_member_mutation_routes() {
     let paths = openapi_paths().await;
     let app = test_app().await;
