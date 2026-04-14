@@ -1,6 +1,6 @@
 ## Scope
 - 作用域：`web/` 及其子目录。
-- 当前阶段：前端仍处于 bootstrap 阶段；新增代码要向目标结构收敛，不要继续把混合职责堆进 `app/router.tsx` 和 `styles/global.css`。
+- 当前阶段：前端仍处于 bootstrap 阶段；新增代码要向目标结构收敛，不要继续把混合职责堆进 `app/src/app/router.tsx` 和 `app/src/styles/globals.css`。
 
 ## Skills
 - 做前端实现、页面、壳层、组件、交互时：使用 `frontend-development`
@@ -8,8 +8,9 @@
 - 做质量评估、回归审计时：使用 `qa-evaluation`
 
 ## Directory Rules
+- `app/src/` 是主前端源码根；下面提到的 `app/`、`app-shell/`、`routes/`、`features/`、`shared/`、`state/`、`styles/`、`style-boundary/` 默认都指 `app/src` 下对应目录。
 - `app/` 只保留应用启动、Provider 组装、入口级装配。
-- `app-shell/` 只承载共享壳层和壳层级菜单，不承载 route tree。
+- `app-shell/` 只承载共享壳层和壳层级菜单，不承载 route tree、feature 页面容器或 feature 私有组件。
 - `routes/` 负责路由真值层：`route id / path / selected state / permission key / guard`。
 - `features/*/pages` 放页面容器，`features/*/components` 放 feature 内部组件。
 - `features/*/api` 放 feature 级请求消费层，例如 query key、queryFn、mutation 和当前 feature 的请求适配。
@@ -17,9 +18,14 @@
 - `shared/ui` 放跨 feature 复用组件，不承担 `app-shell` 专属结构。
 - `shared/utils` 只放纯函数工具，不放请求、副作用和界面组件。
 - `shared/api` 只放多个 feature 共同依赖的请求编排；若只是单 feature 使用，优先留在 `features/*/api`。
-- 底层原始请求 client、DTO、transport 放 `web/packages/api-client`；页面和组件里不要直接写请求函数。
-- 测试文件必须进入最近的 `_tests/`。
+- `state/` 只放跨页面共享的客户端状态；feature 私有状态留在 feature 内，服务端数据优先留在 query/mutation 消费层，不要塞进 store。
+- `styles/` 只放 token、reset、global 和应用级样式边界；feature 或页面专属样式应跟最近的页面、组件或壳层 owner 放在一起。
+- `test/` 只放全局测试 setup 和跨场景测试工具；业务测试文件必须进入最近的 `_tests/`。
 - `style-boundary/` 只负责样式场景注册和样式边界回归，不负责泛 UI 质量结论。
+- `packages/api-client` 放底层原始请求 client、DTO、transport；页面和组件里不要直接写请求函数。
+- `packages/ui` 只放设计系统级通用组件；单 feature 组件和 `app-shell` 专属结构不要上提到这里。
+- 其他 `packages/*` 只在需要脱离 `app/` 独立复用、发布或承载 runtime/protocol/schema/SDK 时出现；不要为了“更整洁”把普通页面逻辑提成 package。
+- 同一目录下文件数量接近 `15` 个时，先按职责继续收纳子目录，不要继续横向摊平；单文件接近 `1500` 行时先拆分职责。
 
 ## Local Rules
 - 优先复用 `@1flowse/ui` 与 `antd`，不要重复造轮子。
