@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -34,6 +34,13 @@ const permissionsApi = vi.hoisted(() => ({
 
 const docsApi = vi.hoisted(() => ({
   settingsApiDocsCatalogQueryKey: ['settings', 'docs', 'catalog'],
+  settingsApiDocsCategoryOperationsQueryKey: vi.fn((categoryId: string) => [
+    'settings',
+    'docs',
+    'category',
+    categoryId,
+    'operations'
+  ]),
   settingsApiDocSpecQueryKey: vi.fn((operationId: string) => [
     'settings',
     'docs',
@@ -41,6 +48,7 @@ const docsApi = vi.hoisted(() => ({
     operationId
   ]),
   fetchSettingsApiDocsCatalog: vi.fn(),
+  fetchSettingsApiDocsCategoryOperations: vi.fn(),
   fetchSettingsApiOperationSpec: vi.fn()
 }));
 
@@ -113,6 +121,17 @@ describe('SettingsPage', () => {
     docsApi.fetchSettingsApiDocsCatalog.mockResolvedValue({
       title: '1Flowse API',
       version: '0.1.0',
+      categories: [
+        {
+          id: 'console',
+          label: '控制面',
+          operation_count: 0
+        }
+      ]
+    });
+    docsApi.fetchSettingsApiDocsCategoryOperations.mockResolvedValue({
+      id: 'console',
+      label: 'console',
       operations: []
     });
     docsApi.fetchSettingsApiOperationSpec.mockResolvedValue({
@@ -169,6 +188,56 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('heading', { name: '用户管理', level: 4 })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '新建用户' })).not.toBeInTheDocument();
   });
+
+  test(
+    'disables root member write actions while leaving normal members operable',
+    async () => {
+      authenticateWithPermissions([], 'root');
+      membersApi.fetchSettingsMembers.mockResolvedValue([
+        {
+          id: 'root-user',
+          account: 'root',
+          email: 'root@example.com',
+          phone: null,
+          name: 'Root',
+          nickname: 'Root',
+          introduction: '',
+          default_display_role: 'root',
+          email_login_enabled: true,
+          phone_login_enabled: false,
+          status: 'active',
+          role_codes: ['root']
+        },
+        {
+          id: 'manager-1',
+          account: 'manager-1',
+          email: 'manager-1@example.com',
+          phone: null,
+          name: 'Manager 1',
+          nickname: 'Manager 1',
+          introduction: '',
+          default_display_role: 'manager',
+          email_login_enabled: true,
+          phone_login_enabled: false,
+          status: 'active',
+          role_codes: ['manager']
+        }
+      ]);
+
+      renderApp('/settings/members');
+
+      const rootRow = await screen.findByRole('row', { name: /Root/ });
+      const managerRow = await screen.findByRole('row', { name: /Manager 1/ });
+
+      expect(within(rootRow).getByRole('button', { name: /编辑$/ })).toBeDisabled();
+      expect(within(rootRow).getByRole('button', { name: /停用$/ })).toBeDisabled();
+      expect(within(rootRow).getByRole('button', { name: /重置密码$/ })).toBeDisabled();
+      expect(within(managerRow).getByRole('button', { name: /编辑$/ })).toBeEnabled();
+      expect(within(managerRow).getByRole('button', { name: /停用$/ })).toBeEnabled();
+      expect(within(managerRow).getByRole('button', { name: /重置密码$/ })).toBeEnabled();
+    },
+    10000
+  );
 
   test('redirects /settings/docs to /settings/members when docs is hidden but members is visible', async () => {
     authenticateWithPermissions(['route_page.view.all', 'user.view.all']);

@@ -206,3 +206,51 @@ async fn reset_password_invalidates_member_session() {
 
     assert_eq!(new_login_response.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn disable_root_member_is_forbidden() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let session_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/session")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(session_response.status(), StatusCode::OK);
+    let session_body = to_bytes(session_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let session_payload: serde_json::Value = serde_json::from_slice(&session_body).unwrap();
+    let root_user_id = session_payload["data"]["actor"]["id"].as_str().unwrap();
+
+    let disable_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/console/members/{root_user_id}/actions/disable"
+                ))
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(disable_response.status(), StatusCode::FORBIDDEN);
+    let disable_body = to_bytes(disable_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let disable_payload: serde_json::Value = serde_json::from_slice(&disable_body).unwrap();
+    assert_eq!(disable_payload["code"], "root_user_immutable");
+}

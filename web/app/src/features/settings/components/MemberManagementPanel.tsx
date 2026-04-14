@@ -222,8 +222,10 @@ export function MemberManagementPanel({
       {
         title: '角色',
         key: 'roles',
-        render: (_: unknown, member: SettingsMember) =>
-          canManageRoleBindings ? (
+        render: (_: unknown, member: SettingsMember) => {
+          const isRootMember = member.role_codes.includes('root');
+
+          return canManageRoleBindings ? (
             <Space wrap size={4}>
               {member.role_codes.map((roleCode) => (
                 <Tag key={roleCode}>{roleCode}</Tag>
@@ -233,7 +235,8 @@ export function MemberManagementPanel({
                 size="small"
                 icon={<EditOutlined />}
                 style={{ padding: '0 4px', fontSize: 12 }}
-                onClick={() => handleOpenRoleEdit(member)}
+                disabled={isRootMember}
+                onClick={isRootMember ? undefined : () => handleOpenRoleEdit(member)}
               >
                 编辑
               </Button>
@@ -244,7 +247,8 @@ export function MemberManagementPanel({
                 <Tag key={roleCode}>{roleCode}</Tag>
               ))}
             </Space>
-          )
+          );
+        }
       },
       ...(canManageMembers
         ? [
@@ -252,44 +256,60 @@ export function MemberManagementPanel({
               title: '操作',
               key: 'action',
               width: 160,
-              render: (_: unknown, member: SettingsMember) => (
-                <Space size={4}>
-                  {member.status === 'active' ? (
-                    <Popconfirm
-                      title="停用账号"
-                      description={`确定要停用 ${member.name} 的账号吗？停用后该用户将无法登录。`}
-                      onConfirm={() => disableMutation.mutate(member.id)}
-                      okText="确认停用"
-                      cancelText="取消"
-                      okButtonProps={{ danger: true }}
-                    >
-                      <Button
-                        size="small"
-                        danger
-                        icon={<StopOutlined />}
-                        loading={disableMutation.isPending}
-                      >
-                        停用
+              render: (_: unknown, member: SettingsMember) => {
+                const isRootMember = member.role_codes.includes('root');
+
+                return (
+                  <Space size={4}>
+                    {member.status === 'active' ? (
+                      isRootMember ? (
+                        <Button size="small" danger icon={<StopOutlined />} disabled>
+                          停用
+                        </Button>
+                      ) : (
+                        <Popconfirm
+                          title="停用账号"
+                          description={`确定要停用 ${member.name} 的账号吗？停用后该用户将无法登录。`}
+                          onConfirm={() => disableMutation.mutate(member.id)}
+                          okText="确认停用"
+                          cancelText="取消"
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            icon={<StopOutlined />}
+                            loading={disableMutation.isPending}
+                          >
+                            停用
+                          </Button>
+                        </Popconfirm>
+                      )
+                    ) : null}
+                    {isRootMember ? (
+                      <Button size="small" icon={<KeyOutlined />} disabled>
+                        重置密码
                       </Button>
-                    </Popconfirm>
-                  ) : null}
-                  <Popconfirm
-                    title="重置密码"
-                    description={`将 ${member.name} 的密码重置为默认临时密码，用户登录后需立即修改。`}
-                    onConfirm={() => resetPasswordMutation.mutate(member.id)}
-                    okText="确认重置"
-                    cancelText="取消"
-                  >
-                    <Button
-                      size="small"
-                      icon={<KeyOutlined />}
-                      loading={resetPasswordMutation.isPending}
-                    >
-                      重置密码
-                    </Button>
-                  </Popconfirm>
-                </Space>
-              )
+                    ) : (
+                      <Popconfirm
+                        title="重置密码"
+                        description={`将 ${member.name} 的密码重置为默认临时密码，用户登录后需立即修改。`}
+                        onConfirm={() => resetPasswordMutation.mutate(member.id)}
+                        okText="确认重置"
+                        cancelText="取消"
+                      >
+                        <Button
+                          size="small"
+                          icon={<KeyOutlined />}
+                          loading={resetPasswordMutation.isPending}
+                        >
+                          重置密码
+                        </Button>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                );
+              }
             }
           ]
         : [])
