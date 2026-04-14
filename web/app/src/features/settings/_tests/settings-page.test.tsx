@@ -34,15 +34,23 @@ const permissionsApi = vi.hoisted(() => ({
 
 const docsApi = vi.hoisted(() => ({
   settingsApiDocsCatalogQueryKey: ['settings', 'docs', 'catalog'],
-  settingsApiDocsCategorySpecQueryKey: vi.fn((categoryId: string) => [
+  settingsApiDocsCategoryOperationsQueryKey: vi.fn((categoryId: string) => [
     'settings',
     'docs',
     'category',
     categoryId,
+    'operations'
+  ]),
+  settingsApiDocsOperationSpecQueryKey: vi.fn((operationId: string) => [
+    'settings',
+    'docs',
+    'operation',
+    operationId,
     'openapi'
   ]),
   fetchSettingsApiDocsCatalog: vi.fn(),
-  fetchSettingsApiDocsCategorySpec: vi.fn()
+  fetchSettingsApiDocsCategoryOperations: vi.fn(),
+  fetchSettingsApiDocsOperationSpec: vi.fn()
 }));
 
 vi.mock('../api/members', () => membersApi);
@@ -125,7 +133,12 @@ describe('SettingsPage', () => {
         }
       ]
     });
-    docsApi.fetchSettingsApiDocsCategorySpec.mockResolvedValue({
+    docsApi.fetchSettingsApiDocsCategoryOperations.mockResolvedValue({
+      id: 'console',
+      label: '控制面',
+      operations: []
+    });
+    docsApi.fetchSettingsApiDocsOperationSpec.mockResolvedValue({
       openapi: '3.1.0',
       info: { title: '1Flowse API', version: '0.1.0' },
       paths: {},
