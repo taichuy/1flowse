@@ -98,7 +98,7 @@ describe('SectionPageLayout', () => {
       xxl: false
     });
 
-    const firstRender = renderInRouter(
+    const view = renderInRouter(
       <SectionPageLayout
         pageTitle="个人资料"
         navItems={navItems.slice(0, 4)}
@@ -111,7 +111,7 @@ describe('SectionPageLayout', () => {
     expect(await screen.findByRole('tablist')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '更多分区' })).not.toBeInTheDocument();
 
-    firstRender.unmount();
+    view.unmount();
 
     renderInRouter(
       <SectionPageLayout

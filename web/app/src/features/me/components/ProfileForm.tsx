@@ -123,7 +123,6 @@ export function ProfileForm({
             <Descriptions 
               column={{ xs: 1, sm: 2, md: 3 }} 
               layout="vertical"
-              variant="borderless"
               styles={{ label: { color: 'rgba(0, 0, 0, 0.45)', paddingBottom: 8 }, content: { color: 'rgba(0, 0, 0, 0.88)', fontWeight: 400, paddingBottom: 24 } }}
             >
               <Descriptions.Item label="账号名称">{me.account}</Descriptions.Item>

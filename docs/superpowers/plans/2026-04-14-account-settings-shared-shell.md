@@ -474,7 +474,7 @@ node scripts/node/check-style-boundary.js file web/app/src/shared/ui/section-pag
 
 Expected: PASS
 
-- [ ] **Step 5: 提交样式边界与回归锁定**
+- [x] **Step 5: 提交样式边界与回归锁定**
 
 ```bash
 git add web/app/src/style-boundary/scenario-manifest.json
@@ -488,7 +488,7 @@ git commit -m "test(web): refresh shared shell regression coverage"
 - Verify only: `web/`
 - Screenshot output: `uploads/2026-04-14-me-shared-shell-regression.png`
 
-- [ ] **Step 1: 运行前端全量验证**
+- [x] **Step 1: 运行前端全量验证**
 
 Run:
 
@@ -500,7 +500,7 @@ pnpm --dir web/app build
 
 Expected: PASS
 
-- [ ] **Step 2: 运行最终 style-boundary 文件回归**
+- [x] **Step 2: 运行最终 style-boundary 文件回归**
 
 Run:
 
@@ -512,7 +512,7 @@ node scripts/node/check-style-boundary.js file web/app/src/shared/ui/section-pag
 
 Expected: PASS
 
-- [ ] **Step 3: 启动本地联调环境并做 `/me` 基线截图对比**
+- [x] **Step 3: 启动本地联调环境并做 `/me` 基线截图对比**
 
 Run:
 
@@ -532,12 +532,17 @@ Expected:
 - 重新截取一张 `/me/profile` 当前实现截图，保存为 `uploads/2026-04-14-me-shared-shell-regression.png`
 - 再打开移动端宽度，确认 `/me` 与 `/settings` 的二级导航退化到 `Tabs/Segmented` 或 `Drawer`
 
-- [ ] **Step 4: 提交最终验证结果**
+- [x] **Step 4: 提交最终验证结果**
 
 ```bash
-git add uploads/2026-04-14-me-shared-shell-regression.png
+git add -f uploads/2026-04-14-me-shared-shell-regression.png
 git commit -m "chore(web): verify shared me settings shell regression"
 ```
+
+### Execution Notes
+
+- `pnpm --dir web/app test -- <file>` 在当前仓库会落回整套测试脚本；执行定向 Vitest 时实际使用 `pnpm --dir web/app exec vitest run <file...>`。
+- `node scripts/node/check-style-boundary.js file ...` 会内部触发 `node scripts/node/dev-up.js ensure --frontend-only --skip-docker`；在默认沙箱下会因监听 `3100` 端口触发 `listen EPERM`，实际执行时需要提升权限。
 
 ## Self-Review
 
