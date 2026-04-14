@@ -60,8 +60,17 @@ export function HeroAnimation() {
         <Typography.Title level={1} style={{ fontSize: '3.5rem', marginBottom: 16 }}>
           1Flowse
         </Typography.Title>
-        <Typography.Paragraph style={{ fontSize: '1.25rem', color: token.colorTextSecondary, maxWidth: 500 }}>
-          构建下一代智能工作流编排引擎。将复杂的业务逻辑转化为可视化、可观测、可扩展的自动化流程。
+        <Typography.Paragraph 
+          style={{ 
+            fontSize: '1.5rem', 
+            fontWeight: 500,
+            background: `linear-gradient(90deg, ${token.colorPrimary}, ${token.colorInfo})`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            maxWidth: 500 
+          }}
+        >
+          知道为什么构建是构建前提
         </Typography.Paragraph>
       </div>
 

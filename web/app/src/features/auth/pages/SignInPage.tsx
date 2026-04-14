@@ -50,16 +50,18 @@ export function SignInPage() {
           flexDirection: 'column', 
           justifyContent: 'center',
           padding: '0 64px',
-          backgroundColor: token.colorBgContainer,
-          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.02)'
+          background: `linear-gradient(145deg, ${token.colorBgContainer} 60%, ${token.colorBgLayout} 100%)`,
+          boxShadow: '-10px 0 32px rgba(0, 0, 0, 0.05)',
+          borderLeft: `1px solid ${token.colorBorderSecondary}`,
+          position: 'relative',
+          zIndex: 10
         }}
       >
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div>
-            <Typography.Title level={2}>登录</Typography.Title>
-            <Typography.Paragraph>
-              使用控制台账号登录 1Flowse，继续访问工作台与管理入口。
-            </Typography.Paragraph>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <Typography.Title level={2} style={{ margin: 0 }}>
+              1Flowse
+            </Typography.Title>
           </div>
           {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
           <Form layout="vertical" onFinish={handleFinish} autoComplete="off">
@@ -82,6 +84,19 @@ export function SignInPage() {
             </Button>
           </Form>
         </Space>
+        
+        <div style={{ textAlign: 'center', marginTop: 48 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <a 
+              href="https://www.taichuy.com" 
+              target="_blank" 
+              rel="noreferrer" 
+              style={{ color: token.colorTextDescription, textDecoration: 'none' }}
+            >
+              power by taichuy
+            </a>
+          </Typography.Text>
+        </div>
       </div>
     </div>
   );

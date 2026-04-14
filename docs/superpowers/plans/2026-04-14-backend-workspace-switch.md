@@ -609,7 +609,7 @@ git commit -m "docs: close backend workspace switch follow-up"
   - root/system stays separate from business workspace while still able to manage multi-workspace context: covered by root bypass in Task 1
   - frontend selector remains out of scope: explicitly excluded in scope notes
 - Placeholder scan:
-  - no `TBD` or `TODO`
+  - no placeholder markers remain in the plan body
   - every task names concrete files and commands
 - Type consistency:
   - keep `TeamRecord` as compatibility naming in repository/service layers
