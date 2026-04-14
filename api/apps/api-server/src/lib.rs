@@ -68,12 +68,20 @@ pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> SocketAdd
         .unwrap_or_else(|| default_addr.parse().unwrap())
 }
 
-fn cors_layer() -> CorsLayer {
-    CorsLayer::new()
+fn development_cors_layer() -> CorsLayer {
+    CorsLayer::very_permissive()
+}
+
+fn cors_layer(config: &ApiConfig) -> CorsLayer {
+    let base = CorsLayer::new()
         .allow_credentials(true)
         .allow_headers(AllowHeaders::mirror_request())
-        .allow_methods(AllowMethods::mirror_request())
-        .allow_origin(AllowOrigin::mirror_request())
+        .allow_methods(AllowMethods::mirror_request());
+
+    match &config.cors_allowed_origins {
+        Some(origins) => base.allow_origin(AllowOrigin::list(origins.clone())),
+        None => development_cors_layer(),
+    }
 }
 
 fn base_router() -> Router {
@@ -85,12 +93,19 @@ fn base_router() -> Router {
 
 pub fn app() -> Router {
     base_router()
-        .layer(cors_layer())
+        .layer(development_cors_layer())
         .layer(TraceLayer::new_for_http())
 }
 
 pub fn app_with_state(state: Arc<ApiState>) -> Router {
-    let console_router = Router::new()
+    base_router()
+        .merge(console_router(state))
+        .layer(development_cors_layer())
+        .layer(TraceLayer::new_for_http())
+}
+
+fn console_router(state: Arc<ApiState>) -> Router {
+    Router::new()
         .nest("/api/console", routes::me::router())
         .nest("/api/console", routes::team::router())
         .nest("/api/console", routes::members::router())
@@ -100,11 +115,13 @@ pub fn app_with_state(state: Arc<ApiState>) -> Router {
         .nest("/api/console", routes::session::router())
         .nest("/api/runtime", routes::runtime_models::router())
         .nest("/api/public/auth", routes::auth::router())
-        .with_state(state);
+        .with_state(state)
+}
 
+pub fn app_with_state_and_config(state: Arc<ApiState>, config: &ApiConfig) -> Router {
     base_router()
-        .merge(console_router)
-        .layer(cors_layer())
+        .merge(console_router(state))
+        .layer(cors_layer(config))
         .layer(TraceLayer::new_for_http())
 }
 
@@ -142,14 +159,17 @@ pub async fn app_from_config(config: &ApiConfig) -> Result<Router> {
         Arc::new(store.clone()),
     ));
 
-    Ok(app_with_state(Arc::new(ApiState {
-        store,
-        runtime_engine,
-        session_store: SessionStoreHandle::Redis(Box::new(session_store)),
-        cookie_name: config.cookie_name.clone(),
-        session_ttl_days: config.session_ttl_days,
-        bootstrap_team_name: config.bootstrap_team_name.clone(),
-    })))
+    Ok(app_with_state_and_config(
+        Arc::new(ApiState {
+            store,
+            runtime_engine,
+            session_store: SessionStoreHandle::Redis(Box::new(session_store)),
+            cookie_name: config.cookie_name.clone(),
+            session_ttl_days: config.session_ttl_days,
+            bootstrap_team_name: config.bootstrap_team_name.clone(),
+        }),
+        config,
+    ))
 }
 
 pub fn init_tracing() {

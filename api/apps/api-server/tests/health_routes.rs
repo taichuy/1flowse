@@ -1,7 +1,7 @@
 use api_server::{
     app,
     app_state::{ApiState, SessionStoreHandle},
-    app_with_state,
+    app_with_state_and_config,
     config::ApiConfig,
 };
 use argon2::{
@@ -77,14 +77,19 @@ async fn test_app() -> Router {
         std::sync::Arc::new(store.clone()),
     ));
 
-    app_with_state(std::sync::Arc::new(ApiState {
-        store,
-        runtime_engine,
-        session_store: SessionStoreHandle::InMemory(storage_redis::InMemorySessionStore::default()),
-        cookie_name: config.cookie_name,
-        session_ttl_days: config.session_ttl_days,
-        bootstrap_team_name: config.bootstrap_team_name,
-    }))
+    app_with_state_and_config(
+        std::sync::Arc::new(ApiState {
+            store,
+            runtime_engine,
+            session_store: SessionStoreHandle::InMemory(
+                storage_redis::InMemorySessionStore::default(),
+            ),
+            cookie_name: config.cookie_name.clone(),
+            session_ttl_days: config.session_ttl_days,
+            bootstrap_team_name: config.bootstrap_team_name.clone(),
+        }),
+        &config,
+    )
 }
 
 async fn login_and_capture_cookie(

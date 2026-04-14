@@ -1,12 +1,36 @@
 use anyhow::{anyhow, Result};
+use axum::http::HeaderValue;
 use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApiEnvironment {
+    Development,
+    Production,
+}
+
+impl ApiEnvironment {
+    fn parse(raw: Option<&str>) -> Result<Self> {
+        match raw
+            .unwrap_or("development")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "development" | "dev" | "local" => Ok(Self::Development),
+            "production" | "prod" => Ok(Self::Production),
+            value => Err(anyhow!("invalid API_ENV `{value}`")),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ApiConfig {
+    pub env: ApiEnvironment,
     pub database_url: String,
     pub redis_url: String,
     pub cookie_name: String,
     pub session_ttl_days: i64,
+    pub cors_allowed_origins: Option<Vec<HeaderValue>>,
     pub bootstrap_team_name: String,
     pub bootstrap_root_account: String,
     pub bootstrap_root_email: String,
@@ -37,8 +61,17 @@ impl ApiConfig {
                 .cloned()
                 .ok_or_else(|| anyhow!("missing env {key}"))
         };
+        let env = ApiEnvironment::parse(map.get("API_ENV").map(String::as_str))?;
+        let cors_allowed_origins = parse_cors_allowed_origins(map.get("API_ALLOWED_ORIGINS"))?;
+
+        if env == ApiEnvironment::Production && cors_allowed_origins.is_none() {
+            return Err(anyhow!(
+                "missing env API_ALLOWED_ORIGINS when API_ENV=production"
+            ));
+        }
 
         Ok(Self {
+            env,
             database_url: get("API_DATABASE_URL")?,
             redis_url: get("API_REDIS_URL")?,
             cookie_name: map
@@ -49,6 +82,7 @@ impl ApiConfig {
                 .get("API_SESSION_TTL_DAYS")
                 .and_then(|value| value.parse::<i64>().ok())
                 .unwrap_or(7),
+            cors_allowed_origins,
             bootstrap_team_name: get("BOOTSTRAP_TEAM_NAME")?,
             bootstrap_root_account: get("BOOTSTRAP_ROOT_ACCOUNT")?,
             bootstrap_root_email: get("BOOTSTRAP_ROOT_EMAIL")?,
@@ -63,4 +97,26 @@ impl ApiConfig {
                 .unwrap_or_else(|| "Root".to_string()),
         })
     }
+}
+
+fn parse_cors_allowed_origins(value: Option<&String>) -> Result<Option<Vec<HeaderValue>>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    let origins = value
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            HeaderValue::from_str(entry)
+                .map_err(|_| anyhow!("invalid origin in API_ALLOWED_ORIGINS: `{entry}`"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    if origins.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(origins))
 }

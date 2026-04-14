@@ -75,14 +75,19 @@ pub async fn test_app_with_database_url() -> (Router, String) {
         std::sync::Arc::new(store.clone()),
     ));
 
-    let app = crate::app_with_state(std::sync::Arc::new(ApiState {
-        store,
-        runtime_engine,
-        session_store: SessionStoreHandle::InMemory(storage_redis::InMemorySessionStore::default()),
-        cookie_name: config.cookie_name,
-        session_ttl_days: config.session_ttl_days,
-        bootstrap_team_name: config.bootstrap_team_name,
-    }));
+    let app = crate::app_with_state_and_config(
+        std::sync::Arc::new(ApiState {
+            store,
+            runtime_engine,
+            session_store: SessionStoreHandle::InMemory(
+                storage_redis::InMemorySessionStore::default(),
+            ),
+            cookie_name: config.cookie_name.clone(),
+            session_ttl_days: config.session_ttl_days,
+            bootstrap_team_name: config.bootstrap_team_name.clone(),
+        }),
+        &config,
+    );
 
     (app, config.database_url)
 }
