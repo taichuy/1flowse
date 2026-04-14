@@ -1,52 +1,88 @@
-# 07 状态与记忆模型
+# 07 数据建模、作用域与 Runtime CRUD
 
-日期：2026-04-10
-状态：已确认
+日期：2026-04-14
+状态：已形成当前实现基线
 
 ## 讨论进度
 
-- 状态：`completed`
-- 完成情况：已完成状态字段类型、读写方式、注入时机、后台最小能力与外部数据源边界定稿，并获用户确认。
-- 最后更新：2026-04-10 18:57 CST
+- 状态：`implemented_baseline`
+- 完成情况：已从旧“状态与记忆模型”模块改写为当前代码真实主线：后台数据建模定义、`workspace/system` 作用域、物理表实时生效与 runtime CRUD。
+- 最后更新：2026-04-14 19:45 CST
 
-## 已整理来源文档
+## 为什么改名
 
-- [2026-04-10-product-design.md](../../2026-04-10-product-design.md)
-- [2026-04-10-product-requirements.md](../../2026-04-10-product-requirements.md)
-- [2026-04-10-p1-architecture.md](../../2026-04-10-p1-architecture.md)
-- [2026-04-10-orchestration-design-draft.md](../../2026-04-10-orchestration-design-draft.md)
+原模块名里的“记忆”会误导后续开发者，以为当前已经有：
+
+- Flow 层的记忆注入
+- `StateRead / StateWrite` 节点闭环
+- 启动快照与运行中刷新语义
+
+这些在当前代码里都还没有形成实现真相。
+
+当前真正已经存在的是：
+
+- 数据建模定义控制面
+- 作用域收口
+- PostgreSQL 物理表实时生效
+- runtime CRUD 路由
+- metadata 健康治理
 
 ## 本模块范围
 
-- State Model 定义
-- State Data 持久化
-- 上下文注入策略
-- 记忆与业务状态边界
+- 数据建模定义
+- 字段定义与关系字段
+- `workspace / system` 作用域
+- 物理表与物理列策略
+- runtime registry
+- runtime CRUD 路由
+- metadata 可用性治理
 
-## 已确认
+## 当前代码事实
 
-- `State Model` 是结构化持久化层。
-- 它服务于记忆与状态，不演化成完整低代码平台。
-- `State Model` 用于承接跨会话记忆、业务状态持久化、上下文注入和基础运营管理数据。
-- P1 状态层定位为 Flow 的结构化记忆层，不是独立数据库产品。
-- 状态模型中的数据必须可以按规则注入 Flow 运行上下文，作为跨会话记忆或业务上下文来源。
-- 运行时不得直接绕过状态服务访问底层表，以保持权限与审计一致。
-- 外部数据源允许接入，但 Flow 和状态模型的使用都必须经过统一权限治理。
-- P1 编排层已纳入 `StateRead` 与 `StateWrite` 节点。
-- `state_write` 已进入统一 `Binding Schema` 范围。
-- P1 状态字段类型收敛为：`string`、`text`、`number`、`boolean`、`datetime`、`enum`、`json`、`single_ref`、`multi_ref`。
-- 系统保留字段统一内建：`id`、`created_at`、`updated_at`。
-- `Flow` 访问状态统一通过显式 `StateRead` / `StateWrite` 节点完成；`StateWrite` 在 P1 仅开放 `create`、`update`、`upsert`，不默认开放 `delete`。
-- 记忆注入采用“启动快照 + 显式刷新”模式：`Flow Run` 启动时按规则注入只读状态快照；若流程中需要最新状态，必须显式使用 `StateRead` 再读取。
-- 注入作用域先收敛到 `application / user / conversation / session` 等明确对象。
-- 管理后台数据视图采用最小 CRUD 管理台：模型列表、字段结构、记录列表、分页、搜索、基础筛选、详情查看、创建/编辑、关联记录跳转。
-- 状态模型与外部数据源在 P1 严格分离：`State Model` 是平台托管状态层，`External Data Source` 是独立集成资源；两者统一治理权限，但对象边界不合并。
-- 若外部数据需要稳定注入、可运营管理、可回写审计，应进入平台托管的 `State Model`；是否提供同步/映射能力留待后续版本。
+- 控制面已提供模型定义与字段定义 API
+- `scope_kind` 已固定为：
+  - `workspace`
+  - `system`
+- `system` 作用域固定使用 `SYSTEM_SCOPE_ID`
+- 静态控制面表使用 `workspace_id`
+- runtime 动态表统一使用 `scope_id`
+- runtime 路由已形成：
+  - `/api/runtime/models/{model_code}/records`
+- metadata 已引入健康状态：
+  - `available`
+  - `unavailable`
+  - `broken`
+
+## 本轮确认
+
+- 本模块的核心定位是“后台数据建模定义 + runtime 数据访问层”，不是独立数据库产品。
+- 数据建模定义继续采用：
+  - 控制面保存定义
+  - 实时修改 PostgreSQL 物理表
+  - runtime 统一路由访问真实表
+- 模型作用域固定只允许：
+  - `workspace`
+  - `system`
+- system-scoped 数据继续通过固定 `SYSTEM_SCOPE_ID` 表达，不再保留旧 `app` 语义。
+- runtime 物理过滤列统一使用 `scope_id`，不再拆 `team_id / app_id`。
+- 当前字段类型与关系能力，以现有实现为准，不再沿用旧文档里的“记忆字段”口径。
+- runtime registry 继续采用：
+  - 数据库元数据为真相源
+  - registry 为运行时缓存
+  - 物理对象不健康时隔离模型，而不是把错误原样泄漏给业务请求
+
+## 明确不纳入本模块
+
+以下内容不再写进本模块标题或当前实现说明：
+
+- Flow 层记忆注入
+- `StateRead / StateWrite` 节点编排语义
+- 启动快照与显式刷新
+- 面向 Flow 的跨会话记忆模型
+
+如果后续需要把“Flow 记忆注入”继续做成真实实现，应作为 `04 / 05 / 07` 的联动专题单独重开，而不是继续沿用旧模块名假定它已经存在。
 
 ## 当前结论摘要
 
-- P1 先做最小结构化字段类型集，保证状态服务、自动 CRUD、权限和注入链路统一可控。
-- 状态访问统一节点化，避免隐式读写破坏调试、审计与运行语义。
-- 记忆采用启动快照注入，实时状态依赖显式 `StateRead`，兼顾稳定性与灵活性。
-- 后台先收敛到最小 CRUD 管理台，先打通“建模 -> 管理 -> 注入 -> 编排读写”闭环。
-- 外部数据源与平台托管状态层严格分离，后续再视需要扩展受控映射或同步能力。
+- `07` 的当前代码真相是“数据建模、作用域与 Runtime CRUD”。
+- 后续一切围绕建表、字段、关系、runtime CRUD、作用域和 metadata 健康的开发，都应优先对齐本模块。
