@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@1flowse/api-client', () => ({
@@ -10,29 +11,54 @@ vi.mock('@1flowse/api-client', () => ({
   })
 }));
 
+vi.mock('../../features/auth/components/AuthBootstrap', () => ({
+  AuthBootstrap: ({ children }: { children: ReactNode }) => children
+}));
+
+import { useAuthStore } from '../../state/auth-store';
 import { App } from '../App';
 
 describe('App shell', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/');
+    useAuthStore.getState().setAuthenticated({
+      csrfToken: 'csrf-123',
+      actor: {
+        id: 'user-1',
+        account: 'root',
+        effective_display_role: 'manager',
+        current_workspace_id: 'workspace-1'
+      },
+      me: {
+        id: 'user-1',
+        account: 'root',
+        email: 'root@example.com',
+        phone: null,
+        nickname: 'Captain Root',
+        name: 'Root',
+        avatar_url: null,
+        introduction: '',
+        effective_display_role: 'manager',
+        permissions: ['route_page.view.all', 'embedded_app.view.all']
+      }
+    });
   });
 
-  test('renders the bootstrap shell and health state', async () => {
+  test('renders the formal console shell with settings and account actions', async () => {
     render(<App />);
 
-    expect(
-      await screen.findByRole('heading', { name: '1Flowse Bootstrap' })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '1Flowse' })).toBeInTheDocument();
 
     const header = screen.getByRole('banner');
     const primaryNavigation = screen.getByRole('navigation', { name: 'Primary' });
-    const accountTrigger = screen.getByRole('menuitem', { name: 'Taichu' });
 
     expect(header).toHaveStyle('--app-shell-edge-gap: 5%');
     expect(within(primaryNavigation).getByRole('menu')).toBeInTheDocument();
     expect(within(primaryNavigation).getByRole('link', { name: '工作台' })).toBeInTheDocument();
-    expect(within(primaryNavigation).getByRole('link', { name: '团队' })).toBeInTheDocument();
-    expect(within(primaryNavigation).getByRole('link', { name: '前台' })).toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole('link', { name: '子系统' })).toBeInTheDocument();
+    expect(within(primaryNavigation).getByRole('link', { name: '工具' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '设置' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Captain Root' })).toBeInTheDocument();
     expect(within(primaryNavigation).queryByRole('link', { name: 'Home' })).not.toBeInTheDocument();
     expect(
       within(primaryNavigation).queryByRole('link', { name: 'Embedded Apps' })
@@ -40,7 +66,7 @@ describe('App shell', () => {
     expect(
       within(primaryNavigation).queryByRole('link', { name: 'Agent Flow' })
     ).not.toBeInTheDocument();
-    expect(accountTrigger).toHaveTextContent('Taichu');
+    expect(screen.queryByText('Workspace Bootstrap')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Theme Preview' })).not.toBeInTheDocument();
     expect(await screen.findByText(/api-server/i)).toBeInTheDocument();
   });
@@ -50,22 +76,17 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Embedded Apps')).toBeInTheDocument();
+    expect(await screen.findByText('子系统')).toBeInTheDocument();
   });
 
-  test('renders the embedded app detail route', async () => {
-    window.history.pushState({}, '', '/embedded-apps/demo-app');
+  test.each(['/agent-flow', '/embedded/demo-app', '/embedded-apps/demo-app'])(
+    'no longer resolves legacy console route %s',
+    async (pathname) => {
+      window.history.pushState({}, '', pathname);
 
-    render(<App />);
+      render(<App />);
 
-    expect(await screen.findByText('Embedded App Detail')).toBeInTheDocument();
-  });
-
-  test('renders the embedded mount route', async () => {
-    window.history.pushState({}, '', '/embedded/demo-app');
-
-    render(<App />);
-
-    expect(await screen.findByText('Embedded App Mount')).toBeInTheDocument();
-  });
+      expect(await screen.findByText('页面不存在')).toBeInTheDocument();
+    }
+  );
 });

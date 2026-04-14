@@ -84,6 +84,40 @@ async fn openapi_contains_runtime_and_model_detail_routes() {
 }
 
 #[tokio::test]
+async fn openapi_contains_session_csrf_and_patch_me_routes() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&body).unwrap();
+    let paths = payload["paths"].as_object().cloned().unwrap_or_default();
+    let components = payload["components"]["schemas"]
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+
+    assert!(paths.contains_key("/api/console/session"));
+    assert_eq!(
+        paths["/api/console/me"]["patch"]["operationId"].as_str(),
+        Some("patch_me")
+    );
+    assert!(components.contains_key("PatchMeBody"));
+    assert_eq!(
+        components["SessionResponse"]["properties"]["csrf_token"]["type"].as_str(),
+        Some("string")
+    );
+}
+
+#[tokio::test]
 async fn openapi_excludes_legacy_member_mutation_routes() {
     let paths = openapi_paths().await;
     let app = test_app().await;

@@ -22,7 +22,10 @@ use rand_core::OsRng;
 use serde::Serialize;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
 use storage_redis::RedisSessionStore;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer},
+    trace::TraceLayer,
+};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::SwaggerUi;
@@ -65,17 +68,25 @@ pub fn parse_bind_addr(candidate: Option<&str>, default_addr: &str) -> SocketAdd
         .unwrap_or_else(|| default_addr.parse().unwrap())
 }
 
+fn cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_credentials(true)
+        .allow_headers(AllowHeaders::mirror_request())
+        .allow_methods(AllowMethods::mirror_request())
+        .allow_origin(AllowOrigin::mirror_request())
+}
+
 fn base_router() -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/api/console/health", get(console_health))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", openapi::ApiDoc::openapi()))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
 }
 
 pub fn app() -> Router {
     base_router()
+        .layer(cors_layer())
+        .layer(TraceLayer::new_for_http())
 }
 
 pub fn app_with_state(state: Arc<ApiState>) -> Router {
@@ -91,7 +102,10 @@ pub fn app_with_state(state: Arc<ApiState>) -> Router {
         .nest("/api/public/auth", routes::auth::router())
         .with_state(state);
 
-    base_router().merge(console_router)
+    base_router()
+        .merge(console_router)
+        .layer(cors_layer())
+        .layer(TraceLayer::new_for_http())
 }
 
 pub async fn app_from_env() -> Result<Router> {

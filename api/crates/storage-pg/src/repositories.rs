@@ -1,6 +1,7 @@
 use anyhow::Result;
 use control_plane::ports::{
     AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, TeamRepository,
+    UpdateProfileInput,
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, PermissionDefinition, RoleScopeKind,
@@ -111,6 +112,10 @@ impl PgControlPlaneStore {
         actor_id: Uuid,
     ) -> Result<i64> {
         AuthRepository::update_password_hash(self, user_id, password_hash, actor_id).await
+    }
+
+    pub async fn update_profile(&self, input: &UpdateProfileInput) -> Result<UserRecord> {
+        AuthRepository::update_profile(self, input).await
     }
 
     pub async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> Result<i64> {

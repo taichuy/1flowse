@@ -6,17 +6,22 @@ import {
   createRouter,
   useRouterState
 } from '@tanstack/react-router';
+import { Result } from 'antd';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
-import { AgentFlowPage } from '../features/agent-flow/pages/AgentFlowPage';
-import { EmbeddedAppDetailPage } from '../features/embedded-apps/pages/EmbeddedAppDetailPage';
+import { SignInPage } from '../features/auth/pages/SignInPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
-import { EmbeddedMountPage } from '../features/embedded-runtime/pages/EmbeddedMountPage';
 import { HomePage } from '../features/home/pages/HomePage';
-import { getRouteDefinition } from '../routes/route-helpers';
+import { MePage } from '../features/me/pages/MePage';
+import { SettingsPage } from '../features/settings/pages/SettingsPage';
+import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { RouteGuard } from '../routes/route-guards';
 
-function RootLayout() {
+function NotFoundPage() {
+  return <Result status="404" title="页面不存在" />;
+}
+
+function ShellLayout() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname
   });
@@ -29,69 +34,90 @@ function RootLayout() {
 }
 
 const rootRoute = createRootRoute({
-  component: RootLayout
+  component: () => <Outlet />,
+  notFoundComponent: NotFoundPage
+});
+
+const shellRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'shell',
+  component: ShellLayout,
+  notFoundComponent: NotFoundPage
 });
 
 const homeRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: '/',
   component: () => (
-    <RouteGuard permissionKey={getRouteDefinition('home').permissionKey}>
+    <RouteGuard routeId="home">
       <HomePage />
     </RouteGuard>
   )
 });
 
-const agentFlowRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/agent-flow',
-  component: () => (
-    <RouteGuard permissionKey={getRouteDefinition('agent-flow').permissionKey}>
-      <AgentFlowPage />
-    </RouteGuard>
-  )
-});
-
 const embeddedAppsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => shellRoute,
   path: '/embedded-apps',
+  notFoundComponent: NotFoundPage,
   component: () => (
-    <RouteGuard permissionKey={getRouteDefinition('embedded-apps').permissionKey}>
+    <RouteGuard routeId="embedded-apps">
       <EmbeddedAppsPage />
     </RouteGuard>
   )
 });
 
-const embeddedAppDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/embedded-apps/$embeddedAppId',
+const toolsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/tools',
+  notFoundComponent: NotFoundPage,
   component: () => (
-    <RouteGuard permissionKey={getRouteDefinition('embedded-apps').permissionKey}>
-      <EmbeddedAppDetailPage />
+    <RouteGuard routeId="tools">
+      <ToolsPage />
     </RouteGuard>
   )
 });
 
-const embeddedMountRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/embedded/$embeddedAppId',
+const settingsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings',
+  notFoundComponent: NotFoundPage,
   component: () => (
-    <RouteGuard permissionKey={getRouteDefinition('embedded-runtime').permissionKey}>
-      <EmbeddedMountPage />
+    <RouteGuard routeId="settings">
+      <SettingsPage />
+    </RouteGuard>
+  )
+});
+
+const meRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/me',
+  notFoundComponent: NotFoundPage,
+  component: () => (
+    <RouteGuard routeId="me">
+      <MePage />
+    </RouteGuard>
+  )
+});
+
+const signInRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sign-in',
+  component: () => (
+    <RouteGuard routeId="sign-in">
+      <SignInPage />
     </RouteGuard>
   )
 });
 
 const routeTree = rootRoute.addChildren([
-  homeRoute,
-  agentFlowRoute,
-  embeddedAppsRoute,
-  embeddedAppDetailRoute,
-  embeddedMountRoute
+  shellRoute.addChildren([homeRoute, embeddedAppsRoute, toolsRoute, settingsRoute, meRoute]),
+  signInRoute
 ]);
 
 const router = createRouter({
-  routeTree
+  routeTree,
+  defaultNotFoundComponent: NotFoundPage,
+  notFoundMode: 'root'
 });
 
 declare module '@tanstack/react-router' {

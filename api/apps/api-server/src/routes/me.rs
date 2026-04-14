@@ -11,7 +11,7 @@ use axum::{
     Json, Router,
 };
 use axum_extra::extract::cookie::CookieJar;
-use control_plane::profile::ProfileService;
+use control_plane::profile::{ProfileService, UpdateMeCommand};
 use control_plane::session_security::{ChangeOwnPasswordCommand, SessionSecurityService};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
@@ -30,8 +30,11 @@ pub struct MeResponse {
     pub id: String,
     pub account: String,
     pub email: String,
+    pub phone: Option<String>,
     pub nickname: String,
     pub name: String,
+    pub avatar_url: Option<String>,
+    pub introduction: String,
     pub effective_display_role: String,
     pub permissions: Vec<String>,
 }
@@ -40,6 +43,16 @@ pub struct MeResponse {
 pub struct ChangePasswordBody {
     pub old_password: String,
     pub new_password: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PatchMeBody {
+    pub name: String,
+    pub nickname: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub avatar_url: Option<String>,
+    pub introduction: String,
 }
 
 fn hash_password(password: &str) -> Result<String, ApiError> {
@@ -52,8 +65,26 @@ fn hash_password(password: &str) -> Result<String, ApiError> {
 
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
-        .route("/me", get(get_me))
+        .route("/me", get(get_me).patch(patch_me))
         .route("/me/actions/change-password", post(change_password))
+}
+
+fn to_me_response(profile: control_plane::profile::MeProfile) -> MeResponse {
+    let mut permissions = profile.actor.permissions.into_iter().collect::<Vec<_>>();
+    permissions.sort();
+
+    MeResponse {
+        id: profile.user.id.to_string(),
+        account: profile.user.account,
+        email: profile.user.email,
+        phone: profile.user.phone,
+        nickname: profile.user.nickname,
+        name: profile.user.name,
+        avatar_url: profile.user.avatar_url,
+        introduction: profile.user.introduction,
+        effective_display_role: profile.actor.effective_display_role,
+        permissions,
+    }
 }
 
 #[utoipa::path(
@@ -73,18 +104,38 @@ pub async fn get_me(
             context.session.current_workspace_id,
         )
         .await?;
-    let mut permissions = profile.actor.permissions.into_iter().collect::<Vec<_>>();
-    permissions.sort();
+    Ok(Json(ApiSuccess::new(to_me_response(profile))))
+}
 
-    Ok(Json(ApiSuccess::new(MeResponse {
-        id: profile.user.id.to_string(),
-        account: profile.user.account,
-        email: profile.user.email,
-        nickname: profile.user.nickname,
-        name: profile.user.name,
-        effective_display_role: profile.actor.effective_display_role,
-        permissions,
-    })))
+#[utoipa::path(
+    patch,
+    path = "/api/console/me",
+    request_body = PatchMeBody,
+    responses((status = 200, body = MeResponse), (status = 401, body = crate::error_response::ErrorBody))
+)]
+pub async fn patch_me(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Json(body): Json<PatchMeBody>,
+) -> Result<Json<ApiSuccess<MeResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let profile = ProfileService::new(state.store.clone())
+        .update_me(UpdateMeCommand {
+            actor_user_id: context.user.id,
+            tenant_id: context.session.tenant_id,
+            workspace_id: context.session.current_workspace_id,
+            name: body.name,
+            nickname: body.nickname,
+            email: body.email,
+            phone: body.phone,
+            avatar_url: body.avatar_url,
+            introduction: body.introduction,
+        })
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_me_response(profile))))
 }
 
 #[utoipa::path(

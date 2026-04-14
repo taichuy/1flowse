@@ -67,6 +67,7 @@ pub trait AuthRepository: Send + Sync {
         password_hash: &str,
         actor_id: Uuid,
     ) -> anyhow::Result<i64>;
+    async fn update_profile(&self, input: &UpdateProfileInput) -> anyhow::Result<UserRecord>;
     async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> anyhow::Result<i64>;
     async fn list_permissions(&self) -> anyhow::Result<Vec<PermissionDefinition>>;
     async fn append_audit_log(&self, event: &AuditLogRecord) -> anyhow::Result<()>;
@@ -98,6 +99,18 @@ pub struct CreateMemberInput {
     pub introduction: String,
     pub email_login_enabled: bool,
     pub phone_login_enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateProfileInput {
+    pub actor_user_id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub nickname: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub avatar_url: Option<String>,
+    pub introduction: String,
 }
 
 #[derive(Debug, Clone)]

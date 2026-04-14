@@ -117,7 +117,7 @@
 - Modify: `api/apps/api-server/src/_tests/session_routes.rs`
 - Modify: `api/apps/api-server/src/_tests/openapi_alignment.rs`
 
-- [ ] **Step 1: Add failing service and route coverage for the missing contract**
+- [x] **Step 1: Add failing service and route coverage for the missing contract**
 
 Create `api/crates/control-plane/src/_tests/profile_service_tests.rs`:
 
@@ -147,7 +147,7 @@ Extend `api/apps/api-server/src/_tests/openapi_alignment.rs` with:
 async fn openapi_contains_session_csrf_and_patch_me_routes() {}
 ```
 
-- [ ] **Step 2: Run the focused backend failures**
+- [x] **Step 2: Run the focused backend failures**
 
 Run: `cargo test -p control-plane _tests::profile_service_tests::update_me_updates_only_profile_fields -- --exact`
 Expected: FAIL because `ProfileService` has no update command.
@@ -155,7 +155,7 @@ Expected: FAIL because `ProfileService` has no update command.
 Run: `cargo test -p api-server _tests::me_routes::patch_me_route_updates_editable_fields -- --exact`
 Expected: FAIL because `PATCH /api/console/me` is not registered.
 
-- [ ] **Step 3: Implement the profile update path and `csrf_token` recovery**
+- [x] **Step 3: Implement the profile update path and `csrf_token` recovery**
 
 Add an explicit repository input in `api/crates/control-plane/src/ports.rs`:
 
@@ -242,7 +242,7 @@ pub struct PatchMeBody {
 
 Update `api/apps/api-server/src/openapi.rs` so the new `patch_me` path and `PatchMeBody` schema are exported.
 
-- [ ] **Step 4: Re-run the focused backend tests**
+- [x] **Step 4: Re-run the focused backend tests**
 
 Run: `cargo test -p control-plane _tests::profile_service_tests::update_me_updates_only_profile_fields -- --exact`
 Expected: PASS
@@ -256,7 +256,7 @@ Expected: PASS
 Run: `cargo test -p api-server _tests::openapi_alignment::openapi_contains_session_csrf_and_patch_me_routes -- --exact`
 Expected: PASS
 
-- [ ] **Step 5: Commit the backend contract slice**
+- [x] **Step 5: Commit the backend contract slice**
 
 ```bash
 git add api/crates/control-plane/src/profile.rs api/crates/control-plane/src/ports.rs api/crates/control-plane/src/_tests/mod.rs api/crates/control-plane/src/_tests/support.rs api/crates/control-plane/src/_tests/profile_service_tests.rs api/crates/storage-pg/src/auth_repository.rs api/crates/storage-pg/src/repositories.rs api/apps/api-server/src/routes/me.rs api/apps/api-server/src/routes/session.rs api/apps/api-server/src/openapi.rs api/apps/api-server/src/_tests/me_routes.rs api/apps/api-server/src/_tests/session_routes.rs api/apps/api-server/src/_tests/openapi_alignment.rs
@@ -283,7 +283,7 @@ git commit -m "feat(api): add session csrf recovery and me profile update"
 - Modify: `web/app/src/features/home/pages/HomePage.tsx`
 - Modify: `web/app/src/features/embedded-apps/pages/EmbeddedAppsPage.tsx`
 
-- [ ] **Step 1: Update the existing frontend tests to express the new shell**
+- [x] **Step 1: Update the existing frontend tests to express the new shell**
 
 Change `web/app/src/routes/_tests/route-config.test.ts` to assert:
 
@@ -311,12 +311,12 @@ Change `web/app/src/app/_tests/app-shell.test.tsx` to assert:
 - right-side actions contain `设置` and `用户`;
 - `/agent-flow`, `/embedded/*`, and `/embedded-apps/:id` no longer resolve.
 
-- [ ] **Step 2: Run the shell-focused failures**
+- [x] **Step 2: Run the shell-focused failures**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-config.test.ts src/app-shell/_tests/navigation.test.tsx src/app/_tests/app-shell.test.tsx`
 Expected: FAIL because the route ids, shell title, and route tree still describe the bootstrap console.
 
-- [ ] **Step 3: Rebuild the route truth layer and shell chrome**
+- [x] **Step 3: Rebuild the route truth layer and shell chrome**
 
 Update `web/packages/shared-types/src/index.ts`:
 
@@ -385,12 +385,12 @@ Update page copy:
 - `ToolsPage` is a formal “建设中” page with no demo language;
 - `SettingsPage`, `MePage`, and `SignInPage` are created as route-valid placeholders for later tasks.
 
-- [ ] **Step 4: Re-run the route and shell tests**
+- [x] **Step 4: Re-run the route and shell tests**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-config.test.ts src/app-shell/_tests/account-menu.test.tsx src/app-shell/_tests/navigation.test.tsx src/app/_tests/app-shell.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit the shell realignment**
+- [x] **Step 5: Commit the shell realignment**
 
 ```bash
 git add web/packages/shared-types/src/index.ts web/app/src/routes/route-config.ts web/app/src/app/router.tsx web/app/src/app-shell/AppShellFrame.tsx web/app/src/app-shell/Navigation.tsx web/app/src/app-shell/account-menu-items.tsx web/app/src/app-shell/_tests/account-menu.test.tsx web/app/src/app-shell/_tests/navigation.test.tsx web/app/src/app/_tests/app-shell.test.tsx web/app/src/routes/_tests/route-config.test.ts web/app/src/features/home/pages/HomePage.tsx web/app/src/features/embedded-apps/pages/EmbeddedAppsPage.tsx web/app/src/features/tools/pages/ToolsPage.tsx web/app/src/features/settings/pages/SettingsPage.tsx web/app/src/features/me/pages/MePage.tsx web/app/src/features/auth/pages/SignInPage.tsx
@@ -423,7 +423,7 @@ git commit -m "feat(web): replace bootstrap shell with formal console routes"
 - Modify: `web/app/src/features/auth/pages/SignInPage.tsx`
 - Modify: `web/app/src/routes/_tests/route-guards.test.tsx`
 
-- [ ] **Step 1: Write the auth/client failures first**
+- [x] **Step 1: Write the auth/client failures first**
 
 Create `web/packages/api-client/src/_tests/transport.test.ts`:
 
@@ -445,7 +445,7 @@ test('redirects anonymous users from session routes to /sign-in', async () => {}
 test('renders permission denied state for authenticated users missing the route permission', async () => {});
 ```
 
-- [ ] **Step 2: Run the auth/client failures**
+- [x] **Step 2: Run the auth/client failures**
 
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-guards.test.tsx src/features/auth/_tests/sign-in-page.test.tsx`
 Expected: FAIL because the auth state and sign-in flow do not exist.
@@ -453,7 +453,7 @@ Expected: FAIL because the auth state and sign-in flow do not exist.
 Run: `pnpm --dir web/packages/api-client exec vitest --run src/_tests/transport.test.ts`
 Expected: FAIL because the split transport modules do not exist.
 
-- [ ] **Step 3: Implement the shared transport and session bootstrap**
+- [x] **Step 3: Implement the shared transport and session bootstrap**
 
 Split `web/packages/api-client/src/index.ts` into focused modules and export a shared transport:
 
@@ -522,7 +522,7 @@ Update `AccountMenu.tsx` to:
 - call `DELETE /api/console/session` with `x-csrf-token`;
 - clear auth state and navigate to `/sign-in`.
 
-- [ ] **Step 4: Re-run the auth and client tests**
+- [x] **Step 4: Re-run the auth and client tests**
 
 Run: `pnpm --dir web/packages/api-client exec vitest --run src/_tests/transport.test.ts`
 Expected: PASS
@@ -530,7 +530,7 @@ Expected: PASS
 Run: `pnpm --dir web/app exec vitest --run src/routes/_tests/route-guards.test.tsx src/features/auth/_tests/auth-bootstrap.test.tsx src/features/auth/_tests/sign-in-page.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit the auth foundation**
+- [x] **Step 5: Commit the auth foundation**
 
 ```bash
 git add web/packages/api-client/src web/app/src/features/auth web/app/src/state/auth-store.ts web/app/src/shared/ui/PermissionDeniedState.tsx web/app/src/app/App.tsx web/app/src/app/AppProviders.tsx web/app/src/routes/route-guards.tsx web/app/src/app-shell/AccountMenu.tsx web/app/src/routes/_tests/route-guards.test.tsx
@@ -550,7 +550,7 @@ git commit -m "feat(web): add console auth session foundation"
 - Create: `web/app/src/features/settings/_tests/settings-page.test.tsx`
 - Modify: `web/app/src/features/settings/pages/SettingsPage.tsx`
 
-- [ ] **Step 1: Add failing settings-page coverage**
+- [x] **Step 1: Add failing settings-page coverage**
 
 Create `web/app/src/features/settings/_tests/settings-page.test.tsx`:
 
@@ -565,12 +565,12 @@ The test fixtures should exercise three permission sets:
 - `['route_page.view.all', 'user.view.all']`
 - `['route_page.view.all', 'user.view.all', 'user.manage.all', 'role_permission.view.all', 'role_permission.manage.all']`
 
-- [ ] **Step 2: Run the settings failure**
+- [x] **Step 2: Run the settings failure**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/settings/_tests/settings-page.test.tsx`
 Expected: FAIL because `SettingsPage` is still a stub and no feature API wrappers exist.
 
-- [ ] **Step 3: Build the settings feature on top of the real backend endpoints**
+- [x] **Step 3: Build the settings feature on top of the real backend endpoints**
 
 Create feature-level API modules that wrap the typed `api-client` functions:
 - `members.ts` → list/create/disable/reset password/replace roles
@@ -609,12 +609,12 @@ const sections = [
 
 When a user can open `/settings` but lacks every privileged section, show only `API 文档` and never an empty sidebar slot.
 
-- [ ] **Step 4: Re-run the settings tests**
+- [x] **Step 4: Re-run the settings tests**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/settings/_tests/settings-page.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit the settings slice**
+- [x] **Step 5: Commit the settings slice**
 
 ```bash
 git add web/app/src/features/settings
@@ -633,7 +633,7 @@ git commit -m "feat(web): add settings workspace"
 - Modify: `web/app/src/features/home/_tests/home-page.test.tsx`
 - Modify: `web/app/src/app-shell/AccountMenu.tsx`
 
-- [ ] **Step 1: Write the failing profile-page tests**
+- [x] **Step 1: Write the failing profile-page tests**
 
 Create `web/app/src/features/me/_tests/me-page.test.tsx`:
 
@@ -647,12 +647,12 @@ Update `web/app/src/features/home/_tests/home-page.test.tsx` to assert:
 - role text uses `effective_display_role`;
 - backend health is shown as secondary status, not a bootstrap card title.
 
-- [ ] **Step 2: Run the profile failures**
+- [x] **Step 2: Run the profile failures**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/me/_tests/me-page.test.tsx src/features/home/_tests/home-page.test.tsx`
 Expected: FAIL because `/me` is still a stub and `HomePage` still renders bootstrap copy.
 
-- [ ] **Step 3: Implement the profile forms and home/account refresh**
+- [x] **Step 3: Implement the profile forms and home/account refresh**
 
 Create `web/app/src/features/me/api/me.ts` with helpers for:
 - `GET /api/console/me`
@@ -687,12 +687,12 @@ Update `AccountMenu.tsx` so the trigger label prefers:
 auth.me?.nickname || auth.me?.name || auth.actor?.account || '用户'
 ```
 
-- [ ] **Step 4: Re-run the profile and home tests**
+- [x] **Step 4: Re-run the profile and home tests**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/me/_tests/me-page.test.tsx src/features/home/_tests/home-page.test.tsx src/app/_tests/app-shell.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit the profile slice**
+- [x] **Step 5: Commit the profile slice**
 
 ```bash
 git add web/app/src/features/me web/app/src/features/home/pages/HomePage.tsx web/app/src/features/home/_tests/home-page.test.tsx web/app/src/app-shell/AccountMenu.tsx
@@ -710,19 +710,19 @@ git commit -m "feat(web): add me profile page and home summary"
 - Delete: `web/app/src/features/embedded-apps/pages/EmbeddedAppDetailPage.tsx`
 - Delete: `web/app/src/state/app-store.ts`
 
-- [ ] **Step 1: Update style-boundary tests for the new chrome**
+- [x] **Step 1: Update style-boundary tests for the new chrome**
 
 Change `web/app/src/style-boundary/_tests/registry.test.tsx` so it expects:
 - `个人资料` instead of `Profile`;
 - changed-file mapping for `page.home`, `page.embedded-apps`, `page.tools`, `page.settings`;
 - the shared shell title `1Flowse`.
 
-- [ ] **Step 2: Run the focused style-boundary failure**
+- [x] **Step 2: Run the focused style-boundary failure**
 
 Run: `pnpm --dir web/app exec vitest --run src/style-boundary/_tests/registry.test.tsx`
 Expected: FAIL because the manifest and runtime scene registry still describe `page.agent-flow` and old account-menu copy.
 
-- [ ] **Step 3: Refresh the manifest and scene registry**
+- [x] **Step 3: Refresh the manifest and scene registry**
 
 Update `web/app/src/style-boundary/scenario-manifest.json` to replace `page.agent-flow` with:
 - `page.tools`
@@ -738,7 +738,7 @@ and the account popup scene uses the new Chinese account items.
 
 Remove dead bootstrap files listed above after the route tree and tests no longer reference them.
 
-- [ ] **Step 4: Run the full verification suite**
+- [x] **Step 4: Run the full verification suite**
 
 Run frontend verification:
 
@@ -774,7 +774,10 @@ Perform one manual browser pass in both desktop and mobile widths for:
 - `/settings`
 - `/me`
 
-- [ ] **Step 5: Commit the regression cleanup**
+Manual verification note:
+- Local browser login no longer hits a CORS wall after the router-level CORS fix, but the persistent dev database rejected `root / change-me` with `401 not authenticated`. `/sign-in` render was verified directly, and `/`, `/settings`, `/me` were verified in desktop/mobile widths by injecting authenticated Zustand state in-browser instead of mutating the user's local root credential.
+
+- [x] **Step 5: Commit the regression cleanup**
 
 ```bash
 git add web/app/src/style-boundary/scenario-manifest.json web/app/src/style-boundary/registry.tsx web/app/src/style-boundary/_tests/registry.test.tsx

@@ -15,7 +15,7 @@ describe('style boundary registry', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByText('Profile')).toBeInTheDocument();
+    expect(await screen.findByText('个人资料')).toBeInTheDocument();
     expect(window.__STYLE_BOUNDARY__?.scene.id).toBe('component.account-popup');
     expect(window.__STYLE_BOUNDARY__?.ready).toBe(true);
     expect(screen.getByTestId('style-boundary-scene')).toBeInTheDocument();
@@ -36,7 +36,9 @@ describe('style boundary registry', () => {
       'component.account-trigger',
       'page.home',
       'page.embedded-apps',
-      'page.agent-flow'
+      'page.tools',
+      'page.settings',
+      'page.me'
     ]);
   });
 
@@ -49,7 +51,8 @@ describe('style boundary registry', () => {
       </AppProviders>
     );
 
-    expect(await screen.findByText('1Flowse Bootstrap')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '1Flowse' })).toBeInTheDocument();
+    expect(screen.getByText('欢迎，Root')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
   });
 });

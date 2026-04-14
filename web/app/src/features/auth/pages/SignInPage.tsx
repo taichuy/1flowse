@@ -1,0 +1,73 @@
+import { Alert, Button, Form, Input, Space, Typography } from 'antd';
+import { useState } from 'react';
+
+import { useNavigate } from '@tanstack/react-router';
+
+import { useAuthStore } from '../../../state/auth-store';
+import { fetchCurrentMe, signInWithPassword } from '../api/session';
+
+export function SignInPage() {
+  const navigate = useNavigate();
+  const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleFinish = async (values: { identifier: string; password: string }) => {
+    setSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const session = await signInWithPassword(values);
+      const me = await fetchCurrentMe();
+
+      setAuthenticated({
+        csrfToken: session.csrf_token,
+        actor: {
+          id: me.id,
+          account: me.account,
+          effective_display_role: session.effective_display_role,
+          current_workspace_id: session.current_workspace_id
+        },
+        me
+      });
+      await navigate({ to: '/' });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '登录失败，请稍后重试。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 420, margin: '72px auto' }}>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <div>
+          <Typography.Title level={2}>登录</Typography.Title>
+          <Typography.Paragraph>
+            使用控制台账号登录 1Flowse，继续访问工作台与管理入口。
+          </Typography.Paragraph>
+        </div>
+        {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
+        <Form layout="vertical" onFinish={handleFinish} autoComplete="off">
+          <Form.Item
+            label="账号"
+            name="identifier"
+            rules={[{ required: true, message: '请输入账号或邮箱。' }]}
+          >
+            <Input placeholder="root / root@example.com" />
+          </Form.Item>
+          <Form.Item
+            label="密码"
+            name="password"
+            rules={[{ required: true, message: '请输入密码。' }]}
+          >
+            <Input.Password placeholder="请输入密码" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={submitting} block>
+            登录
+          </Button>
+        </Form>
+      </Space>
+    </div>
+  );
+}

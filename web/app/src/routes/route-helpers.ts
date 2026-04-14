@@ -12,6 +12,10 @@ export function getRouteDefinition(routeId: AppRouteId): AppRouteDefinition {
   return route;
 }
 
-export function getNavigationRoutes(): AppRouteDefinition[] {
-  return APP_ROUTES.filter((route) => route.navLabel !== null);
+export function getPrimaryNavigationRoutes(): AppRouteDefinition[] {
+  return APP_ROUTES.filter((route) => route.chromeSlot === 'primary' && route.navLabel !== null);
+}
+
+export function getSecondaryChromeRoutes(): AppRouteDefinition[] {
+  return APP_ROUTES.filter((route) => route.chromeSlot === 'secondary' && route.navLabel !== null);
 }

@@ -24,6 +24,7 @@ use crate::{
 pub struct SessionResponse {
     pub actor: serde_json::Value,
     pub session: serde_json::Value,
+    pub csrf_token: String,
 }
 
 pub(crate) fn expired_session_cookie(cookie_name: &str) -> Cookie<'static> {
@@ -64,6 +65,7 @@ pub async fn get_session(
             "tenant_id": context.session.tenant_id,
             "current_workspace_id": context.session.current_workspace_id,
         }),
+        csrf_token: context.session.csrf_token,
     })))
 }
 

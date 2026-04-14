@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use control_plane::ports::{AuthRepository, BootstrapRepository};
+use control_plane::ports::{AuthRepository, BootstrapRepository, UpdateProfileInput};
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
     RoleScopeKind, ScopeContext, TenantRecord, UserRecord,
@@ -523,6 +523,38 @@ impl AuthRepository for PgControlPlaneStore {
         .await?;
 
         Ok(row.get("session_version"))
+    }
+
+    async fn update_profile(&self, input: &UpdateProfileInput) -> Result<UserRecord> {
+        let row = sqlx::query(
+            r#"
+            update users
+            set name = $2,
+                nickname = $3,
+                email = $4,
+                phone = $5,
+                avatar_url = $6,
+                introduction = $7,
+                updated_by = $8,
+                updated_at = now()
+            where id = $1
+            returning id, account, email, phone, password_hash, name, nickname, avatar_url,
+                      introduction, default_display_role, email_login_enabled, phone_login_enabled,
+                      status, session_version
+            "#,
+        )
+        .bind(input.user_id)
+        .bind(&input.name)
+        .bind(&input.nickname)
+        .bind(&input.email)
+        .bind(&input.phone)
+        .bind(&input.avatar_url)
+        .bind(&input.introduction)
+        .bind(input.actor_user_id)
+        .fetch_one(self.pool())
+        .await?;
+
+        map_user_row(self.pool(), row).await
     }
 
     async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> Result<i64> {

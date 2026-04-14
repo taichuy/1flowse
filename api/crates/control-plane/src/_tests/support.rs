@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::ports::{
     AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, RoleRepository,
-    SessionStore,
+    SessionStore, UpdateProfileInput,
 };
 use domain::{
     ActorContext, AuditLogRecord, AuthenticatorRecord, BoundRole, PermissionDefinition,
@@ -504,6 +504,18 @@ impl AuthRepository for MemoryAuthRepository {
         user.password_hash = password_hash.to_string();
         user.session_version += 1;
         Ok(user.session_version)
+    }
+
+    async fn update_profile(&self, input: &UpdateProfileInput) -> Result<UserRecord> {
+        let mut user = self.user.write().await;
+        anyhow::ensure!(user.id == input.user_id, "unknown user");
+        user.name = input.name.clone();
+        user.nickname = input.nickname.clone();
+        user.email = input.email.clone();
+        user.phone = input.phone.clone();
+        user.avatar_url = input.avatar_url.clone();
+        user.introduction = input.introduction.clone();
+        Ok(user.clone())
     }
 
     async fn bump_session_version(&self, user_id: Uuid, actor_id: Uuid) -> Result<i64> {

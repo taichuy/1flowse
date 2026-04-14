@@ -7,6 +7,53 @@ use serde_json::json;
 use tower::ServiceExt;
 
 #[tokio::test]
+async fn patch_me_route_updates_editable_fields() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/api/console/me")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "name": "Root Next",
+                        "nickname": "Captain Root",
+                        "email": "root-next@example.com",
+                        "phone": "13900000000",
+                        "avatar_url": "https://example.com/avatar-next.png",
+                        "introduction": "updated intro"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let me_response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/console/me")
+                .header("cookie", &cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(me_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
 async fn change_password_route_invalidates_old_session() {
     let app = test_app().await;
     let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;

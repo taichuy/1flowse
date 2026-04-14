@@ -7,14 +7,23 @@ describe('route truth layer', () => {
     expect(APP_ROUTES.map((route) => route.id)).toEqual([
       'home',
       'embedded-apps',
-      'embedded-runtime',
-      'agent-flow'
+      'tools',
+      'settings',
+      'me',
+      'sign-in'
     ]);
-    expect(getSelectedRouteId('/embedded/demo-app')).toBe('embedded-apps');
+    expect(getSelectedRouteId('/settings')).toBe('settings');
+    expect(getSelectedRouteId('/me')).toBe('me');
   });
 
-  test('declares explicit bootstrap guard metadata for every route', () => {
-    expect(APP_ROUTES.every((route) => route.guard === 'bootstrap-allow')).toBe(true);
-    expect(APP_ROUTES.every((route) => typeof route.permissionKey === 'string')).toBe(true);
+  test('declares guard and permission metadata for formal console routes', () => {
+    expect(APP_ROUTES.find((route) => route.id === 'home')?.permissionKey).toBe(
+      'route_page.view.all'
+    );
+    expect(APP_ROUTES.find((route) => route.id === 'embedded-apps')?.permissionKey).toBe(
+      'embedded_app.view.all'
+    );
+    expect(APP_ROUTES.find((route) => route.id === 'settings')?.permissionKey).toBeNull();
+    expect(APP_ROUTES.find((route) => route.id === 'sign-in')?.guard).toBe('public-only');
   });
 });

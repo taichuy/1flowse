@@ -36,9 +36,8 @@ describe('createAccountMenuItems', () => {
         ];
       })
     ).toEqual([
-      { key: 'profile', label: 'Profile', hasIcon: true },
-      { key: 'settings', label: 'Settings', hasIcon: true },
-      { key: 'sign-out', label: 'Sign out', hasIcon: true }
+      { key: 'profile', label: '个人资料', hasIcon: true },
+      { key: 'sign-out', label: '退出登录', hasIcon: true }
     ]);
   });
 });

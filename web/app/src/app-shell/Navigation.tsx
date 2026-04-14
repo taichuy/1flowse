@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Menu } from 'antd';
 import type { MenuProps } from 'antd';
 
-import { getNavigationRoutes } from '../routes/route-helpers';
+import { getPrimaryNavigationRoutes } from '../routes/route-helpers';
 import { getSelectedRouteId } from '../routes/route-config';
 
 function renderNavigationLink(
@@ -42,7 +42,7 @@ export function Navigation({
   useRouterLinks: boolean;
 }) {
   const selectedKey = getSelectedRouteId(pathname);
-  const items: MenuProps['items'] = getNavigationRoutes().map((route) => ({
+  const items: MenuProps['items'] = getPrimaryNavigationRoutes().map((route) => ({
     key: route.id,
     label: renderNavigationLink(
       route.path,

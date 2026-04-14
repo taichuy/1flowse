@@ -4,9 +4,10 @@ export interface AppRouteDefinition {
   id: AppRouteId;
   path: string;
   navLabel: string | null;
+  chromeSlot: 'primary' | 'secondary' | 'hidden';
   selectedMatchers: Array<(pathname: string) => boolean>;
-  permissionKey: string;
-  guard: 'bootstrap-allow';
+  permissionKey: string | null;
+  guard: 'public-only' | 'session-required';
 }
 
 export const APP_ROUTES: AppRouteDefinition[] = [
@@ -14,36 +15,55 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     id: 'home',
     path: '/',
     navLabel: '工作台',
+    chromeSlot: 'primary',
     selectedMatchers: [(pathname) => pathname === '/'],
-    permissionKey: 'home.view',
-    guard: 'bootstrap-allow'
+    permissionKey: 'route_page.view.all',
+    guard: 'session-required'
   },
   {
     id: 'embedded-apps',
     path: '/embedded-apps',
-    navLabel: '团队',
-    selectedMatchers: [
-      (pathname) => pathname.startsWith('/embedded-apps'),
-      (pathname) => pathname.startsWith('/embedded/')
-    ],
-    permissionKey: 'embedded-apps.view',
-    guard: 'bootstrap-allow'
+    navLabel: '子系统',
+    chromeSlot: 'primary',
+    selectedMatchers: [(pathname) => pathname.startsWith('/embedded-apps')],
+    permissionKey: 'embedded_app.view.all',
+    guard: 'session-required'
   },
   {
-    id: 'embedded-runtime',
-    path: '/embedded/$embeddedAppId',
+    id: 'tools',
+    path: '/tools',
+    navLabel: '工具',
+    chromeSlot: 'primary',
+    selectedMatchers: [(pathname) => pathname.startsWith('/tools')],
+    permissionKey: 'route_page.view.all',
+    guard: 'session-required'
+  },
+  {
+    id: 'settings',
+    path: '/settings',
+    navLabel: '设置',
+    chromeSlot: 'secondary',
+    selectedMatchers: [(pathname) => pathname.startsWith('/settings')],
+    permissionKey: null,
+    guard: 'session-required'
+  },
+  {
+    id: 'me',
+    path: '/me',
     navLabel: null,
-    selectedMatchers: [(pathname) => pathname.startsWith('/embedded/')],
-    permissionKey: 'embedded-runtime.view',
-    guard: 'bootstrap-allow'
+    chromeSlot: 'hidden',
+    selectedMatchers: [(pathname) => pathname.startsWith('/me')],
+    permissionKey: null,
+    guard: 'session-required'
   },
   {
-    id: 'agent-flow',
-    path: '/agent-flow',
-    navLabel: '前台',
-    selectedMatchers: [(pathname) => pathname.startsWith('/agent-flow')],
-    permissionKey: 'agent-flow.view',
-    guard: 'bootstrap-allow'
+    id: 'sign-in',
+    path: '/sign-in',
+    navLabel: null,
+    chromeSlot: 'hidden',
+    selectedMatchers: [(pathname) => pathname.startsWith('/sign-in')],
+    permissionKey: null,
+    guard: 'public-only'
   }
 ];
 

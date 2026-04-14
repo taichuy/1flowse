@@ -13,23 +13,44 @@ vi.mock('../api/health', () => ({
 }));
 
 import { AppProviders } from '../../../app/AppProviders';
-import { useAppStore } from '../../../state/app-store';
+import { useAuthStore } from '../../../state/auth-store';
 import { HomePage } from '../pages/HomePage';
 
 describe('HomePage', () => {
   beforeEach(() => {
-    useAppStore.setState({ visitCount: 0 });
+    useAuthStore.getState().setAuthenticated({
+      csrfToken: 'csrf-123',
+      actor: {
+        id: 'user-1',
+        account: 'root',
+        effective_display_role: 'manager',
+        current_workspace_id: 'workspace-1'
+      },
+      me: {
+        id: 'user-1',
+        account: 'root',
+        email: 'root@example.com',
+        phone: null,
+        nickname: 'Captain Root',
+        name: 'Root',
+        avatar_url: null,
+        introduction: '',
+        effective_display_role: 'manager',
+        permissions: ['route_page.view.all']
+      }
+    });
   });
 
-  test('renders visit count and resolved health status from the feature api layer', async () => {
+  test('renders authenticated welcome copy, role summary, and compact backend health', async () => {
     render(
       <AppProviders>
         <HomePage />
       </AppProviders>
     );
 
-    expect(await screen.findByText('Workspace Bootstrap')).toBeInTheDocument();
-    expect(screen.getByText('Visit count: 0')).toBeInTheDocument();
+    expect(await screen.findByText('欢迎，Root')).toBeInTheDocument();
+    expect(screen.getByText('当前角色 manager')).toBeInTheDocument();
     expect(await screen.findByText('api-server ok (0.1.0)')).toBeInTheDocument();
+    expect(screen.queryByText('API Health')).not.toBeInTheDocument();
   });
 });

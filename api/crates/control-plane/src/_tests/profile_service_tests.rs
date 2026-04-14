@@ -1,0 +1,67 @@
+use crate::_tests::support::MemoryAuthRepository;
+use crate::profile::{ProfileService, UpdateMeCommand};
+use domain::{BoundRole, RoleScopeKind, UserRecord, UserStatus};
+use uuid::Uuid;
+
+fn test_user() -> UserRecord {
+    UserRecord {
+        id: Uuid::now_v7(),
+        account: "root".to_string(),
+        email: "root@example.com".to_string(),
+        phone: Some("13800000000".to_string()),
+        password_hash: "password-hash".to_string(),
+        name: "Root".to_string(),
+        nickname: "Root".to_string(),
+        avatar_url: Some("https://example.com/avatar.png".to_string()),
+        introduction: "before".to_string(),
+        default_display_role: Some("root".to_string()),
+        email_login_enabled: true,
+        phone_login_enabled: true,
+        status: UserStatus::Active,
+        session_version: 1,
+        roles: vec![BoundRole {
+            code: "root".to_string(),
+            scope_kind: RoleScopeKind::System,
+            workspace_id: None,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn update_me_updates_only_profile_fields() {
+    let repository = MemoryAuthRepository::new(test_user());
+    let service = ProfileService::new(repository.clone());
+    let existing_user = repository.user();
+
+    let profile = service
+        .update_me(UpdateMeCommand {
+            actor_user_id: existing_user.id,
+            tenant_id: Uuid::nil(),
+            workspace_id: Uuid::nil(),
+            name: "Root Next".to_string(),
+            nickname: "Captain Root".to_string(),
+            email: "root-next@example.com".to_string(),
+            phone: Some("13900000000".to_string()),
+            avatar_url: Some("https://example.com/next-avatar.png".to_string()),
+            introduction: "updated intro".to_string(),
+        })
+        .await
+        .unwrap();
+
+    let stored_user = repository.user();
+    assert_eq!(stored_user.name, "Root Next");
+    assert_eq!(stored_user.nickname, "Captain Root");
+    assert_eq!(stored_user.email, "root-next@example.com");
+    assert_eq!(stored_user.phone.as_deref(), Some("13900000000"));
+    assert_eq!(
+        stored_user.avatar_url.as_deref(),
+        Some("https://example.com/next-avatar.png")
+    );
+    assert_eq!(stored_user.introduction, "updated intro");
+    assert_eq!(stored_user.account, existing_user.account);
+    assert_eq!(stored_user.status, existing_user.status);
+    assert_eq!(stored_user.session_version, existing_user.session_version);
+    assert_eq!(profile.user.email, "root-next@example.com");
+    assert_eq!(profile.user.nickname, "Captain Root");
+    assert_eq!(profile.actor.effective_display_role, "root");
+}

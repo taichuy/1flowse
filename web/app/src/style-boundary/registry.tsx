@@ -1,10 +1,14 @@
+import type { ReactNode } from 'react';
 import { Menu } from 'antd';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { createAccountMenuItems } from '../app-shell/account-menu-items';
-import { AgentFlowPage } from '../features/agent-flow/pages/AgentFlowPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';
+import { MePage } from '../features/me/pages/MePage';
+import { SettingsPage } from '../features/settings/pages/SettingsPage';
+import { ToolsPage } from '../features/tools/pages/ToolsPage';
+import { useAuthStore } from '../state/auth-store';
 import manifest from './scenario-manifest.json';
 import type {
   StyleBoundaryManifestScene,
@@ -27,6 +31,36 @@ function getAccountPopupChildren() {
   return firstItem.children;
 }
 
+function seedStyleBoundaryAuth() {
+  useAuthStore.getState().setAuthenticated({
+    csrfToken: 'style-boundary-csrf',
+    actor: {
+      id: 'user-1',
+      account: 'root',
+      effective_display_role: 'manager',
+      current_workspace_id: 'workspace-1'
+    },
+    me: {
+      id: 'user-1',
+      account: 'root',
+      email: 'root@example.com',
+      phone: null,
+      nickname: 'Captain Root',
+      name: 'Root',
+      avatar_url: null,
+      introduction: 'Boundary user',
+      effective_display_role: 'manager',
+      permissions: ['route_page.view.all', 'embedded_app.view.all']
+    }
+  });
+}
+
+function renderShellScene(pathname: string, page: ReactNode) {
+  seedStyleBoundaryAuth();
+
+  return <AppShellFrame pathname={pathname}>{page}</AppShellFrame>;
+}
+
 const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'component.account-popup': () => (
     <div className="app-shell-account-popup">
@@ -42,21 +76,11 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
       openKeys={['account']}
     />
   ),
-  'page.home': () => (
-    <AppShellFrame pathname="/">
-      <HomePage />
-    </AppShellFrame>
-  ),
-  'page.embedded-apps': () => (
-    <AppShellFrame pathname="/embedded-apps">
-      <EmbeddedAppsPage />
-    </AppShellFrame>
-  ),
-  'page.agent-flow': () => (
-    <AppShellFrame pathname="/agent-flow">
-      <AgentFlowPage />
-    </AppShellFrame>
-  )
+  'page.home': () => renderShellScene('/', <HomePage />),
+  'page.embedded-apps': () => renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
+  'page.tools': () => renderShellScene('/tools', <ToolsPage />),
+  'page.settings': () => renderShellScene('/settings', <SettingsPage />),
+  'page.me': () => renderShellScene('/me', <MePage />)
 };
 
 export function getSceneManifest(): StyleBoundaryManifestScene[] {

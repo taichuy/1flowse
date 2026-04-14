@@ -7,5 +7,7 @@ export interface HealthResponse {
 export type AppRouteId =
   | 'home'
   | 'embedded-apps'
-  | 'embedded-runtime'
-  | 'agent-flow';
+  | 'tools'
+  | 'settings'
+  | 'me'
+  | 'sign-in';

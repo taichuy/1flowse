@@ -1,4 +1,4 @@
-import { Card, List, Typography } from 'antd';
+import { List, Space, Typography } from 'antd';
 
 const embeddedAppCapabilities = [
   '已接入应用的版本与构建产物清单',
@@ -8,14 +8,20 @@ const embeddedAppCapabilities = [
 
 export function EmbeddedAppsPage() {
   return (
-    <Card title="Embedded Apps">
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <div>
+        <Typography.Title level={2}>子系统</Typography.Title>
+        <Typography.Paragraph>
+          管理已接入子系统的发布清单、路由前缀与宿主约束。
+        </Typography.Paragraph>
+      </div>
       <Typography.Paragraph>
-        管理已接入的嵌入式前端应用版本、路由前缀和挂载上下文。
+        当前页用于统一查看已接入子系统的运行边界和接入状态。
       </Typography.Paragraph>
       <List
         dataSource={embeddedAppCapabilities}
         renderItem={(item) => <List.Item>{item}</List.Item>}
       />
-    </Card>
+    </Space>
   );
 }

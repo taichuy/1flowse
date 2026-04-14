@@ -53,8 +53,9 @@ describe('account popup layout', () => {
       />
     );
 
-    await screen.findByText('Settings');
-    expect(screen.getByText('Taichu')).toBeInTheDocument();
+    await screen.findByText('个人资料');
+    expect(screen.getByText('退出登录')).toBeInTheDocument();
+    expect(screen.getByText('用户')).toBeInTheDocument();
 
     const appShellCss = fs.readFileSync(
       path.resolve(import.meta.dirname, '../app-shell.css'),
