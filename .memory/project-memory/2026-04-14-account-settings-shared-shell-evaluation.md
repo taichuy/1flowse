@@ -55,6 +55,15 @@ scope:
 - 用户已确认统一方向：
   - 只抽共享封装组件，不合并 `/me` 与 `设置` 的信息架构
   - section 从页内 `useState` 改为子路由
+  - 子路由命名冻结为：
+    - `/me/profile`
+    - `/me/security`
+    - `/settings/docs`
+    - `/settings/members`
+    - `/settings/roles`
+  - 访问 `/me`、`/settings` 时直接 `replace` 到首个可见子路由，不保留父路由空壳内容页
+  - 路由策略采用：静态注册全部子路由，运行时根据权限控制侧栏可见性、子路由守卫与自动跳转
+  - 移动端二级导航规则采用：`visible sections <= 4` 用顶部 `Tabs/Segmented`，更多时退化为 `Drawer`
   - 侧栏内容由调用方传入，模板不内建固定 section
   - 模板支持轻量分组，但第一版不做复杂视觉
   - 模板放 `shared/ui`，业务 section 配置留在各自 feature
@@ -71,6 +80,8 @@ scope:
   - 左侧导航骨架
   - 内容区宽度与响应式
   - 统一选中态与 danger/action 样式
+  - section 分组与空态处理
+  - `navItems` 与 `sidebarFooter/actions` 的结构分离，避免导航与 destructive action 混放
 - 共享模板不负责：
   - `me` 和 `settings` 的数据请求
   - 权限判断
