@@ -13,7 +13,13 @@ describe('route truth layer', () => {
       'sign-in'
     ]);
     expect(getSelectedRouteId('/settings')).toBe('settings');
+    expect(getSelectedRouteId('/settings/docs')).toBe('settings');
+    expect(getSelectedRouteId('/settings/roles')).toBe('settings');
     expect(getSelectedRouteId('/me')).toBe('me');
+    expect(getSelectedRouteId('/me/profile')).toBe('me');
+    expect(getSelectedRouteId('/me/security')).toBe('me');
+    expect(getSelectedRouteId('/settings-foo')).toBe('home');
+    expect(getSelectedRouteId('/me-profile')).toBe('home');
   });
 
   test('declares guard and permission metadata for formal console routes', () => {

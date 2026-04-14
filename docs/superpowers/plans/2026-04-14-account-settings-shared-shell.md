@@ -58,7 +58,7 @@
 - Create: `web/app/src/shared/ui/section-page-layout/section-page-layout.css`
 - Create: `web/app/src/shared/ui/section-page-layout/_tests/section-page-layout.test.tsx`
 
-- [ ] **Step 1: 先写共享壳层的失败测试**
+- [x] **Step 1: 先写共享壳层的失败测试**
 
 在 `web/app/src/shared/ui/section-page-layout/_tests/section-page-layout.test.tsx` 中先覆盖三件事：
 
@@ -75,13 +75,13 @@ test('switches to compact mobile navigation when breakpoint is below lg', () => 
 - 移动端 `visible sections <= 4` 渲染 `Tabs/Segmented`；
 - 移动端 `visible sections > 4` 渲染按钮触发的 `Drawer`。
 
-- [ ] **Step 2: 运行定向测试，确认骨架尚未存在**
+- [x] **Step 2: 运行定向测试，确认骨架尚未存在**
 
 Run: `pnpm --dir web/app test -- src/shared/ui/section-page-layout/_tests/section-page-layout.test.tsx`
 
 Expected: FAIL because `section-page-layout` 模块和导出尚不存在。
 
-- [ ] **Step 3: 写出最小共享布局实现**
+- [x] **Step 3: 写出最小共享布局实现**
 
 在 `SectionPageLayout.tsx` 冻结设计稿里的最小 API：
 
@@ -125,13 +125,13 @@ const compactVariant = visibleItems.length <= 4 ? 'tabs' : 'drawer';
   - `.section-page-layout__drawer-trigger`
 - 内容宽度沿用设计稿要求：`min(1200px, calc(100% - 48px))`，不要在 feature 页面里重复计算。
 
-- [ ] **Step 4: 重跑共享布局测试**
+- [x] **Step 4: 重跑共享布局测试**
 
 Run: `pnpm --dir web/app test -- src/shared/ui/section-page-layout/_tests/section-page-layout.test.tsx`
 
 Expected: PASS
 
-- [ ] **Step 5: 提交共享壳层基础设施**
+- [x] **Step 5: 提交共享壳层基础设施**
 
 ```bash
 git add web/app/src/shared/ui/section-page-layout
@@ -148,7 +148,7 @@ git commit -m "feat(web): add shared section page layout"
 - Modify: `web/app/src/routes/route-config.ts`
 - Modify: `web/app/src/routes/_tests/route-config.test.ts`
 
-- [ ] **Step 1: 先写路由级失败测试**
+- [x] **Step 1: 先写路由级失败测试**
 
 在 `web/app/src/routes/_tests/section-shell-routing.test.tsx` 中新增三组回归：
 
@@ -167,13 +167,13 @@ expect(getSelectedRouteId('/me/profile')).toBe('me');
 expect(getSelectedRouteId('/me/security')).toBe('me');
 ```
 
-- [ ] **Step 2: 跑路由测试，确认深链目前不可用**
+- [x] **Step 2: 跑路由测试，确认深链目前不可用**
 
 Run: `pnpm --dir web/app test -- src/routes/_tests/route-config.test.ts src/routes/_tests/section-shell-routing.test.tsx`
 
 Expected: FAIL because router 目前只注册 `/me` 与 `/settings` 父路径，深链路径会落到 `404` 或停留在页内状态。
 
-- [ ] **Step 3: 建立 feature 自有 section catalog，并把 router 改成静态子路由**
+- [x] **Step 3: 建立 feature 自有 section catalog，并把 router 改成静态子路由**
 
 `web/app/src/features/me/lib/me-sections.tsx` 先冻结：
 
@@ -226,7 +226,7 @@ selectedMatchers: [
 
 `/me` 同理。
 
-- [ ] **Step 4: 重跑路由测试**
+- [x] **Step 4: 重跑路由测试**
 
 Run: `pnpm --dir web/app test -- src/routes/_tests/route-config.test.ts src/routes/_tests/section-shell-routing.test.tsx`
 

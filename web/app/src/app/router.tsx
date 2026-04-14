@@ -12,7 +12,9 @@ import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { SignInPage } from '../features/auth/pages/SignInPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';
+import type { MeSectionKey } from '../features/me/lib/me-sections';
 import { MePage } from '../features/me/pages/MePage';
+import type { SettingsSectionKey } from '../features/settings/lib/settings-sections';
 import { SettingsPage } from '../features/settings/pages/SettingsPage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { RouteGuard } from '../routes/route-guards';
@@ -77,26 +79,69 @@ const toolsRoute = createRoute({
   )
 });
 
-const settingsRoute = createRoute({
+function renderSettingsRoute(requestedSectionKey?: SettingsSectionKey) {
+  return (
+    <RouteGuard routeId="settings">
+      <SettingsPage requestedSectionKey={requestedSectionKey} />
+    </RouteGuard>
+  );
+}
+
+function renderMeRoute(requestedSectionKey?: MeSectionKey) {
+  return (
+    <RouteGuard routeId="me">
+      <MePage requestedSectionKey={requestedSectionKey} />
+    </RouteGuard>
+  );
+}
+
+const settingsIndexRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/settings',
   notFoundComponent: NotFoundPage,
-  component: () => (
-    <RouteGuard routeId="settings">
-      <SettingsPage />
-    </RouteGuard>
-  )
+  component: () => renderSettingsRoute()
 });
 
-const meRoute = createRoute({
+const settingsDocsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/docs',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('docs')
+});
+
+const settingsMembersRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/members',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('members')
+});
+
+const settingsRolesRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/settings/roles',
+  notFoundComponent: NotFoundPage,
+  component: () => renderSettingsRoute('roles')
+});
+
+const meIndexRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: '/me',
   notFoundComponent: NotFoundPage,
-  component: () => (
-    <RouteGuard routeId="me">
-      <MePage />
-    </RouteGuard>
-  )
+  component: () => renderMeRoute()
+});
+
+const meProfileRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/me/profile',
+  notFoundComponent: NotFoundPage,
+  component: () => renderMeRoute('profile')
+});
+
+const meSecurityRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/me/security',
+  notFoundComponent: NotFoundPage,
+  component: () => renderMeRoute('security')
 });
 
 const signInRoute = createRoute({
@@ -110,7 +155,18 @@ const signInRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  shellRoute.addChildren([homeRoute, embeddedAppsRoute, toolsRoute, settingsRoute, meRoute]),
+  shellRoute.addChildren([
+    homeRoute,
+    embeddedAppsRoute,
+    toolsRoute,
+    settingsIndexRoute,
+    settingsDocsRoute,
+    settingsMembersRoute,
+    settingsRolesRoute,
+    meIndexRoute,
+    meProfileRoute,
+    meSecurityRoute
+  ]),
   signInRoute
 ]);
 

@@ -1,48 +1,54 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
+import { Navigate } from '@tanstack/react-router';
 import { Flex } from 'antd';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { ApiDocsPanel } from '../components/ApiDocsPanel';
 import { MemberManagementPanel } from '../components/MemberManagementPanel';
 import { RolePermissionPanel } from '../components/RolePermissionPanel';
+import { SettingsSidebar } from '../components/SettingsSidebar';
 import {
-  SettingsSidebar,
-  type SettingsSection
-} from '../components/SettingsSidebar';
+  getVisibleSettingsSections,
+  type SettingsSectionKey
+} from '../lib/settings-sections';
 
-export function SettingsPage() {
+export function SettingsPage({
+  requestedSectionKey
+}: {
+  requestedSectionKey?: SettingsSectionKey;
+}) {
   const actor = useAuthStore((state) => state.actor);
   const me = useAuthStore((state) => state.me);
   const permissionSet = useMemo(() => new Set(me?.permissions ?? []), [me?.permissions]);
   const isRoot = actor?.effective_display_role === 'root';
-  const canViewMembers = isRoot || permissionSet.has('user.view.all');
   const canManageMembers = isRoot || permissionSet.has('user.manage.all');
-  const canViewRoles = isRoot || permissionSet.has('role_permission.view.all');
   const canManageRoles = isRoot || permissionSet.has('role_permission.manage.all');
+  const visibleSections = getVisibleSettingsSections({
+    isRoot,
+    permissions: me?.permissions ?? []
+  });
+  const fallbackSection = visibleSections[0];
+  const activeSection = visibleSections.find((section) => section.key === requestedSectionKey);
 
-  const sections: SettingsSection[] = [
-    { key: 'docs', label: 'API 文档', visible: true },
-    { key: 'members', label: '用户管理', visible: canViewMembers },
-    { key: 'roles', label: '权限管理', visible: canViewRoles }
-  ];
-  const visibleSections = sections.filter((section) => section.visible);
-  const [activeSectionKey, setActiveSectionKey] = useState(visibleSections[0]?.key ?? 'docs');
+  if (!fallbackSection) {
+    return null;
+  }
 
-  useEffect(() => {
-    if (!visibleSections.some((section) => section.key === activeSectionKey)) {
-      setActiveSectionKey(visibleSections[0]?.key ?? 'docs');
-    }
-  }, [activeSectionKey, visibleSections]);
-
-  const activeSection = visibleSections.find((section) => section.key === activeSectionKey);
+  if (!requestedSectionKey || !activeSection) {
+    return <Navigate to={fallbackSection.to} replace />;
+  }
 
   return (
     <Flex align="flex-start" gap={24}>
       <SettingsSidebar
-        sections={sections}
-        activeKey={activeSectionKey}
-        onSelect={setActiveSectionKey}
+        sections={visibleSections.map((section) => ({
+          key: section.key,
+          label: section.label,
+          visible: true
+        }))}
+        activeKey={activeSection.key}
+        onSelect={() => {}}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         {activeSection?.key === 'members' ? (

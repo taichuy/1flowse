@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { KeyOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Navigate, useNavigate } from '@tanstack/react-router';
 import { Layout, Menu, Result, Space, Spin, Typography } from 'antd';
 
 import { useAuthStore } from '../../../state/auth-store';
@@ -14,6 +14,7 @@ import {
 } from '../api/me';
 import { ChangePasswordForm } from '../components/ChangePasswordForm';
 import { ProfileForm } from '../components/ProfileForm';
+import { getMeSections, type MeSectionKey } from '../lib/me-sections';
 
 const { Sider, Content } = Layout;
 
@@ -21,7 +22,11 @@ function getErrorMessage(error: unknown): string | null {
   return error instanceof Error ? error.message : null;
 }
 
-export function MePage() {
+export function MePage({
+  requestedSectionKey
+}: {
+  requestedSectionKey?: MeSectionKey;
+}) {
   const navigate = useNavigate();
   const sessionStatus = useAuthStore((state) => state.sessionStatus);
   const csrfToken = useAuthStore((state) => state.csrfToken);
@@ -29,8 +34,9 @@ export function MePage() {
   const me = useAuthStore((state) => state.me);
   const setMe = useAuthStore((state) => state.setMe);
   const setAnonymous = useAuthStore((state) => state.setAnonymous);
-
-  const [selectedKey, setSelectedKey] = useState('profile');
+  const visibleSections = getMeSections();
+  const fallbackSection = visibleSections[0];
+  const activeSection = visibleSections.find((section) => section.key === requestedSectionKey);
 
   const profileQuery = useQuery({
     queryKey: ['me', 'profile'],
@@ -82,7 +88,11 @@ export function MePage() {
         await navigate({ to: '/sign-in' });
       }
     } else {
-      setSelectedKey(key);
+      const nextSection = visibleSections.find((section) => section.key === key);
+
+      if (nextSection) {
+        await navigate({ to: nextSection.to });
+      }
     }
   };
 
@@ -100,6 +110,14 @@ export function MePage() {
         subTitle="当前会话缺少必要的用户上下文，请重新登录后重试。"
       />
     );
+  }
+
+  if (!fallbackSection) {
+    return null;
+  }
+
+  if (!requestedSectionKey || !activeSection) {
+    return <Navigate to={fallbackSection.to} replace />;
   }
 
   return (
@@ -120,7 +138,7 @@ export function MePage() {
         </Typography.Title>
         <Menu
           mode="inline"
-          selectedKeys={[selectedKey]}
+          selectedKeys={[activeSection.key]}
           onClick={handleMenuClick}
           style={{ borderRight: 0, background: 'transparent' }}
           items={[
@@ -128,13 +146,13 @@ export function MePage() {
               key: 'profile', 
               icon: <UserOutlined />, 
               label: '个人信息',
-              style: selectedKey === 'profile' ? { background: '#e6f7f2', color: '#00d084', borderRadius: '8px', margin: '0 16px' } : { margin: '0 16px', borderRadius: '8px' }
+              style: activeSection.key === 'profile' ? { background: '#e6f7f2', color: '#00d084', borderRadius: '8px', margin: '0 16px' } : { margin: '0 16px', borderRadius: '8px' }
             },
             { 
-              key: 'password', 
+              key: 'security', 
               icon: <KeyOutlined />, 
-              label: '修改密码',
-              style: selectedKey === 'password' ? { background: '#e6f7f2', color: '#00d084', borderRadius: '8px', margin: '4px 16px' } : { margin: '4px 16px', borderRadius: '8px' }
+              label: '安全设置',
+              style: activeSection.key === 'security' ? { background: '#e6f7f2', color: '#00d084', borderRadius: '8px', margin: '4px 16px' } : { margin: '4px 16px', borderRadius: '8px' }
             },
             { type: 'divider', style: { margin: '16px 16px', borderColor: 'transparent' } },
             { 
@@ -149,7 +167,7 @@ export function MePage() {
       </Sider>
       <Content style={{ padding: '32px 48px', background: 'transparent', marginLeft: 'calc(240px - max(0px, (100vw - min(1200px, calc(100vw - 48px))) / 2))', display: 'flex', justifyContent: 'center' }}>
         <div style={{ width: '100%', maxWidth: 800 }}>
-          {selectedKey === 'profile' && (
+          {activeSection.key === 'profile' && (
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
               <ProfileForm
                 me={currentProfile}
@@ -163,7 +181,7 @@ export function MePage() {
             </Space>
           )}
 
-          {selectedKey === 'password' && (
+          {activeSection.key === 'security' && (
             <Space direction="vertical" size="large" style={{ width: '100%', maxWidth: 600, margin: '0 auto', display: 'flex' }}>
               <div>
                 <Typography.Title level={2}>修改密码</Typography.Title>

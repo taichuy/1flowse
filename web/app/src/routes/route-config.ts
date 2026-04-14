@@ -43,7 +43,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     path: '/settings',
     navLabel: '设置',
     chromeSlot: 'secondary',
-    selectedMatchers: [(pathname) => pathname.startsWith('/settings')],
+    selectedMatchers: [(pathname) => pathname === '/settings' || pathname.startsWith('/settings/')],
     permissionKey: null,
     guard: 'session-required'
   },
@@ -52,7 +52,7 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     path: '/me',
     navLabel: null,
     chromeSlot: 'hidden',
-    selectedMatchers: [(pathname) => pathname.startsWith('/me')],
+    selectedMatchers: [(pathname) => pathname === '/me' || pathname.startsWith('/me/')],
     permissionKey: null,
     guard: 'session-required'
   },
