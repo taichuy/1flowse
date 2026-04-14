@@ -28,13 +28,20 @@ impl MemberRepository for PgControlPlaneStore {
         &self,
         input: &CreateMemberInput,
     ) -> Result<domain::UserRecord> {
-        let manager_role_id: Uuid = sqlx::query_scalar(
-            "select id from roles where scope_kind = 'workspace' and workspace_id = $1 and code = 'manager'",
+        let default_role: (Uuid, String) = sqlx::query_as(
+            r#"
+            select id, code
+            from roles
+            where scope_kind = 'workspace'
+              and workspace_id = $1
+              and is_default_member_role = true
+            limit 1
+            "#,
         )
         .bind(input.workspace_id)
         .fetch_optional(self.pool())
         .await?
-        .ok_or(ControlPlaneError::NotFound("manager_role"))?;
+        .ok_or(ControlPlaneError::NotFound("default_member_role"))?;
         let user_id = Uuid::now_v7();
         let mut tx = self.pool().begin().await?;
 
@@ -47,7 +54,7 @@ impl MemberRepository for PgControlPlaneStore {
             )
             values (
                 $1, $2, $3, $4, $5, $6, $7, null, $8,
-                'manager', $9, $10, 'active', 1, $11, $11
+                $9, $10, $11, 'active', 1, $12, $12
             )
             "#,
         )
@@ -59,6 +66,7 @@ impl MemberRepository for PgControlPlaneStore {
         .bind(&input.name)
         .bind(&input.nickname)
         .bind(&input.introduction)
+        .bind(&default_role.1)
         .bind(input.email_login_enabled)
         .bind(input.phone_login_enabled)
         .bind(input.actor_user_id)
@@ -115,7 +123,7 @@ impl MemberRepository for PgControlPlaneStore {
         )
         .bind(Uuid::now_v7())
         .bind(user_id)
-        .bind(manager_role_id)
+        .bind(default_role.0)
         .bind(input.actor_user_id)
         .execute(&mut *tx)
         .await?;

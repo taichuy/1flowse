@@ -26,3 +26,30 @@ async fn create_member_assigns_default_manager_role_and_records_audit() {
     assert_eq!(repository.created_members()[0].role_codes, vec!["manager"]);
     assert_eq!(repository.audit_events(), vec!["member.created"]);
 }
+
+#[tokio::test]
+async fn create_member_assigns_current_default_member_role_and_records_audit() {
+    let repository = MemoryMemberRepository::with_default_role("qa");
+    let service = MemberService::new(repository.clone());
+
+    let created_member = service
+        .create_member(CreateMemberCommand {
+            actor_user_id: repository.root_user_id(),
+            account: "qa-1".into(),
+            email: "qa-1@example.com".into(),
+            phone: Some("13800000001".into()),
+            password_hash: "hash".into(),
+            name: "QA 1".into(),
+            nickname: "QA 1".into(),
+            introduction: String::new(),
+            email_login_enabled: true,
+            phone_login_enabled: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(repository.created_members().len(), 1);
+    assert_eq!(repository.created_members()[0].role_codes, vec!["qa"]);
+    assert_eq!(created_member.default_display_role.as_deref(), Some("qa"));
+    assert_eq!(repository.audit_events(), vec!["member.created"]);
+}

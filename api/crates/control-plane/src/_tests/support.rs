@@ -164,21 +164,27 @@ pub struct CreatedMember {
 #[derive(Clone)]
 pub struct MemoryMemberRepository {
     root_user_id: Uuid,
+    default_role_code: Arc<RwLock<String>>,
     created_members: Arc<RwLock<Vec<CreatedMember>>>,
     audit_events: Arc<RwLock<Vec<String>>>,
 }
 
 impl Default for MemoryMemberRepository {
     fn default() -> Self {
-        Self {
-            root_user_id: Uuid::now_v7(),
-            created_members: Arc::new(RwLock::new(Vec::new())),
-            audit_events: Arc::new(RwLock::new(Vec::new())),
-        }
+        Self::with_default_role("manager")
     }
 }
 
 impl MemoryMemberRepository {
+    pub fn with_default_role(role_code: &str) -> Self {
+        Self {
+            root_user_id: Uuid::now_v7(),
+            default_role_code: Arc::new(RwLock::new(role_code.to_string())),
+            created_members: Arc::new(RwLock::new(Vec::new())),
+            audit_events: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
     pub fn root_user_id(&self) -> Uuid {
         self.root_user_id
     }
@@ -208,26 +214,27 @@ impl MemberRepository for MemoryMemberRepository {
         &self,
         _input: &CreateMemberInput,
     ) -> Result<UserRecord> {
+        let default_role_code = self.default_role_code.read().await.clone();
         self.created_members.write().await.push(CreatedMember {
-            role_codes: vec!["manager".to_string()],
+            role_codes: vec![default_role_code.clone()],
         });
         Ok(UserRecord {
             id: Uuid::now_v7(),
-            account: "manager-1".to_string(),
-            email: "manager-1@example.com".to_string(),
+            account: format!("{default_role_code}-1"),
+            email: format!("{default_role_code}-1@example.com"),
             phone: Some("13800000000".to_string()),
             password_hash: "hash".to_string(),
-            name: "Manager 1".to_string(),
-            nickname: "Manager 1".to_string(),
+            name: format!("{} 1", default_role_code.to_uppercase()),
+            nickname: format!("{} 1", default_role_code.to_uppercase()),
             avatar_url: None,
             introduction: String::new(),
-            default_display_role: Some("manager".to_string()),
+            default_display_role: Some(default_role_code.clone()),
             email_login_enabled: true,
             phone_login_enabled: false,
             status: UserStatus::Active,
             session_version: 1,
             roles: vec![BoundRole {
-                code: "manager".to_string(),
+                code: default_role_code,
                 scope_kind: RoleScopeKind::Workspace,
                 workspace_id: Some(Uuid::nil()),
             }],

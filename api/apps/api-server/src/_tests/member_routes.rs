@@ -141,6 +141,80 @@ async fn member_routes_create_disable_and_reset_password() {
 }
 
 #[tokio::test]
+async fn member_creation_uses_workspace_default_member_role() {
+    let app = test_app().await;
+    let (cookie, csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
+
+    let create_role_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/roles")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "code": "qa",
+                        "name": "QA",
+                        "introduction": "qa role",
+                        "auto_grant_new_permissions": false,
+                        "is_default_member_role": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_role_response.status(), StatusCode::CREATED);
+
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/console/members")
+                .header("cookie", &cookie)
+                .header("x-csrf-token", &csrf)
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "account": "qa-1",
+                        "email": "qa-1@example.com",
+                        "phone": "13800000000",
+                        "password": "temp-pass",
+                        "name": "QA 1",
+                        "nickname": "QA 1",
+                        "introduction": "",
+                        "email_login_enabled": true,
+                        "phone_login_enabled": false
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::CREATED);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let create_payload: serde_json::Value = serde_json::from_slice(&create_body).unwrap();
+    assert_eq!(
+        create_payload["data"]["default_display_role"].as_str(),
+        Some("qa")
+    );
+    assert_eq!(
+        create_payload["data"]["role_codes"].as_array().unwrap(),
+        &vec![serde_json::Value::String("qa".to_string())]
+    );
+}
+
+#[tokio::test]
 async fn reset_password_invalidates_member_session() {
     let app = test_app().await;
     let (root_cookie, root_csrf) = login_and_capture_cookie(&app, "root", "change-me").await;
