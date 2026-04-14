@@ -9,7 +9,7 @@ fn runtime_model_registry_rebuilds_and_refreshes_by_model_code() {
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: uuid::Uuid::nil(),
         physical_table_name: "rtm_workspace_demo_orders".into(),
-        scope_column_name: "team_id".into(),
+        scope_column_name: "scope_id".into(),
         fields: vec![],
         resource: runtime_core::resource_descriptor::ResourceDescriptor::runtime_model(
             "orders",

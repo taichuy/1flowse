@@ -35,7 +35,6 @@ pub async fn create_runtime_model_table(
     model: &domain::ModelDefinitionRecord,
 ) -> Result<()> {
     let table_name = quote_identifier(&model.physical_table_name)?;
-    let scope_column = quote_identifier(scope_column_name(model.scope_kind))?;
     let statement = format!(
         r#"
         create table {table_name} (
@@ -44,7 +43,7 @@ pub async fn create_runtime_model_table(
           updated_at timestamptz not null default now(),
           created_by uuid,
           updated_by uuid,
-          {scope_column} uuid not null
+          scope_id uuid not null
         )
         "#
     );
@@ -183,13 +182,6 @@ fn quote_identifier(value: &str) -> Result<String> {
 fn constraint_name(prefix: &str, id: uuid::Uuid) -> String {
     let simple = id.simple().to_string();
     format!("{prefix}_{}", &simple[..16])
-}
-
-fn scope_column_name(scope_kind: domain::DataModelScopeKind) -> &'static str {
-    match scope_kind {
-        domain::DataModelScopeKind::Workspace => "team_id",
-        domain::DataModelScopeKind::System => "app_id",
-    }
 }
 
 async fn maybe_create_unique_index(

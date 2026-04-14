@@ -38,7 +38,6 @@ async fn state_data_view_own_filters_list_by_created_by() {
     engine
         .create_record(RuntimeCreateInput {
             actor: manager.clone(),
-            app_id: None,
             model_code: "orders".into(),
             payload: json!({ "title": "manager-order", "status": "draft" }),
         })
@@ -47,7 +46,6 @@ async fn state_data_view_own_filters_list_by_created_by() {
     engine
         .create_record(RuntimeCreateInput {
             actor: admin,
-            app_id: None,
             model_code: "orders".into(),
             payload: json!({ "title": "admin-order", "status": "draft" }),
         })
@@ -57,7 +55,6 @@ async fn state_data_view_own_filters_list_by_created_by() {
     let listed = engine
         .list_records(RuntimeListInput {
             actor: manager,
-            app_id: None,
             model_code: "orders".into(),
             filters: vec![],
             sorts: vec![],
@@ -91,7 +88,6 @@ async fn state_data_edit_own_rejects_updating_another_users_record() {
     let foreign_record = engine
         .create_record(RuntimeCreateInput {
             actor: admin,
-            app_id: None,
             model_code: "orders".into(),
             payload: json!({ "title": "admin-order", "status": "draft" }),
         })
@@ -102,7 +98,6 @@ async fn state_data_edit_own_rejects_updating_another_users_record() {
     let error = engine
         .update_record(RuntimeUpdateInput {
             actor: manager,
-            app_id: None,
             model_code: "orders".into(),
             record_id: foreign_record_id,
             payload: json!({ "title": "blocked-update", "status": "draft" }),
@@ -135,7 +130,6 @@ async fn state_data_delete_all_allows_cross_owner_delete() {
     let record = engine
         .create_record(RuntimeCreateInput {
             actor: manager.clone(),
-            app_id: None,
             model_code: "orders".into(),
             payload: json!({ "title": "manager-order", "status": "draft" }),
         })
@@ -146,7 +140,6 @@ async fn state_data_delete_all_allows_cross_owner_delete() {
     let deleted = engine
         .delete_record(RuntimeDeleteInput {
             actor: admin.clone(),
-            app_id: None,
             model_code: "orders".into(),
             record_id: record_id.clone(),
         })
@@ -157,7 +150,6 @@ async fn state_data_delete_all_allows_cross_owner_delete() {
     let fetched = engine
         .get_record(RuntimeGetInput {
             actor: admin,
-            app_id: None,
             model_code: "orders".into(),
             record_id,
         })

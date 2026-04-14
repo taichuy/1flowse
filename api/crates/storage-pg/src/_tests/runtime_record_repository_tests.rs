@@ -6,12 +6,24 @@ use runtime_core::runtime_record_repository::{
     RuntimeFilterInput, RuntimeListQuery, RuntimeRecordRepository, RuntimeSortInput,
 };
 use serde_json::json;
+use sqlx::PgPool;
 use storage_pg::{connect, run_migrations, PgControlPlaneStore};
 use uuid::Uuid;
 
-fn database_url() -> String {
+fn base_database_url() -> String {
     std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows".into())
+}
+
+async fn isolated_database_url() -> String {
+    let admin_pool = PgPool::connect(&base_database_url()).await.unwrap();
+    let schema = format!("test_{}", Uuid::now_v7().to_string().replace('-', ""));
+    sqlx::query(&format!("create schema if not exists {schema}"))
+        .execute(&admin_pool)
+        .await
+        .unwrap();
+
+    format!("{}?options=-csearch_path%3D{schema}", base_database_url())
 }
 
 async fn root_tenant_id(store: &PgControlPlaneStore) -> Uuid {
@@ -47,7 +59,7 @@ async fn insert_user(store: &PgControlPlaneStore, user_id: Uuid, account: &str) 
 
 #[tokio::test]
 async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expansion() {
-    let pool = connect(&database_url()).await.unwrap();
+    let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);
     let team_id = Uuid::now_v7();
@@ -196,6 +208,8 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
         .find(|model| model.model_code == "orders" && model.scope_id == team_id)
         .unwrap()
         .clone();
+    assert_eq!(customer_metadata.scope_column_name, "scope_id");
+    assert_eq!(order_metadata.scope_column_name, "scope_id");
 
     let alice = RuntimeRecordRepository::create_record(
         &store,
@@ -318,7 +332,7 @@ async fn runtime_record_repository_supports_crud_filter_sort_and_relation_expans
 
 #[tokio::test]
 async fn runtime_record_repository_enforces_owner_scope() {
-    let pool = connect(&database_url()).await.unwrap();
+    let pool = connect(&isolated_database_url().await).await.unwrap();
     run_migrations(&pool).await.unwrap();
     let store = PgControlPlaneStore::new(pool);
     let team_id = Uuid::now_v7();
@@ -378,6 +392,7 @@ async fn runtime_record_repository_enforces_owner_scope() {
         .into_iter()
         .find(|model| model.model_code == "orders_acl" && model.scope_id == team_id)
         .unwrap();
+    assert_eq!(metadata.scope_column_name, "scope_id");
 
     let owner_record = RuntimeRecordRepository::create_record(
         &store,

@@ -154,7 +154,6 @@ pub async fn list_records(
         .runtime_engine
         .list_records(runtime_core::runtime_engine::RuntimeListInput {
             actor: context.actor.clone(),
-            app_id: None,
             model_code,
             filters: parse_filters(query.filter.as_deref())?,
             sorts: parse_sorts(query.sort.as_deref())?,
@@ -190,7 +189,6 @@ pub async fn get_record(
         .runtime_engine
         .get_record(runtime_core::runtime_engine::RuntimeGetInput {
             actor: context.actor.clone(),
-            app_id: None,
             model_code,
             record_id,
         })
@@ -223,7 +221,6 @@ pub async fn create_record(
         .runtime_engine
         .create_record(runtime_core::runtime_engine::RuntimeCreateInput {
             actor: context.actor.clone(),
-            app_id: None,
             model_code,
             payload,
         })
@@ -256,7 +253,6 @@ pub async fn update_record(
         .runtime_engine
         .update_record(runtime_core::runtime_engine::RuntimeUpdateInput {
             actor: context.actor.clone(),
-            app_id: None,
             model_code,
             record_id,
             payload,
@@ -288,7 +284,6 @@ pub async fn delete_record(
         .runtime_engine
         .delete_record(runtime_core::runtime_engine::RuntimeDeleteInput {
             actor: context.actor.clone(),
-            app_id: None,
             model_code,
             record_id,
         })

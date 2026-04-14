@@ -25,7 +25,6 @@ pub use crate::runtime_record_repository::{
 #[derive(Debug, Clone)]
 pub struct RuntimeListInput {
     pub actor: domain::ActorContext,
-    pub app_id: Option<Uuid>,
     pub model_code: String,
     pub filters: Vec<RuntimeFilterInput>,
     pub sorts: Vec<RuntimeSortInput>,
@@ -37,7 +36,6 @@ pub struct RuntimeListInput {
 #[derive(Debug, Clone)]
 pub struct RuntimeGetInput {
     pub actor: domain::ActorContext,
-    pub app_id: Option<Uuid>,
     pub model_code: String,
     pub record_id: String,
 }
@@ -45,7 +43,6 @@ pub struct RuntimeGetInput {
 #[derive(Debug, Clone)]
 pub struct RuntimeCreateInput {
     pub actor: domain::ActorContext,
-    pub app_id: Option<Uuid>,
     pub model_code: String,
     pub payload: Value,
 }
@@ -53,7 +50,6 @@ pub struct RuntimeCreateInput {
 #[derive(Debug, Clone)]
 pub struct RuntimeUpdateInput {
     pub actor: domain::ActorContext,
-    pub app_id: Option<Uuid>,
     pub model_code: String,
     pub record_id: String,
     pub payload: Value,
@@ -62,7 +58,6 @@ pub struct RuntimeUpdateInput {
 #[derive(Debug, Clone)]
 pub struct RuntimeDeleteInput {
     pub actor: domain::ActorContext,
-    pub app_id: Option<Uuid>,
     pub model_code: String,
     pub record_id: String,
 }
@@ -112,13 +107,8 @@ impl RuntimeEngine {
     }
 
     pub async fn list_records(&self, input: RuntimeListInput) -> Result<RuntimeListResult> {
-        let metadata = self.load_metadata(
-            &input.model_code,
-            input.actor.current_workspace_id,
-            input.app_id,
-        )?;
-        let scope_id =
-            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
+        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
 
         self.records
@@ -138,13 +128,8 @@ impl RuntimeEngine {
     }
 
     pub async fn get_record(&self, input: RuntimeGetInput) -> Result<Option<Value>> {
-        let metadata = self.load_metadata(
-            &input.model_code,
-            input.actor.current_workspace_id,
-            input.app_id,
-        )?;
-        let scope_id =
-            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
+        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::View)?;
 
         self.records
@@ -159,13 +144,8 @@ impl RuntimeEngine {
 
     pub async fn create_record(&self, input: RuntimeCreateInput) -> Result<Value> {
         resolve_access_scope(&input.actor, RuntimeDataAction::Create)?;
-        let metadata = self.load_metadata(
-            &input.model_code,
-            input.actor.current_workspace_id,
-            input.app_id,
-        )?;
-        let scope_id =
-            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
+        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let payload = self
             .default_value_resolver
             .apply(input.actor.user_id, &input.model_code, input.payload)
@@ -180,13 +160,8 @@ impl RuntimeEngine {
     }
 
     pub async fn update_record(&self, input: RuntimeUpdateInput) -> Result<Value> {
-        let metadata = self.load_metadata(
-            &input.model_code,
-            input.actor.current_workspace_id,
-            input.app_id,
-        )?;
-        let scope_id =
-            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
+        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Edit)?;
         self.validator
             .validate(input.actor.user_id, &input.model_code, &input.payload)
@@ -205,13 +180,8 @@ impl RuntimeEngine {
     }
 
     pub async fn delete_record(&self, input: RuntimeDeleteInput) -> Result<Value> {
-        let metadata = self.load_metadata(
-            &input.model_code,
-            input.actor.current_workspace_id,
-            input.app_id,
-        )?;
-        let scope_id =
-            self.scope_id_for(&metadata, input.actor.current_workspace_id, input.app_id)?;
+        let metadata = self.load_metadata(&input.model_code, input.actor.current_workspace_id)?;
+        let scope_id = self.scope_id_for(&metadata, input.actor.current_workspace_id);
         let access_scope = resolve_access_scope(&input.actor, RuntimeDataAction::Delete)?;
         let deleted = self
             .records
@@ -230,41 +200,27 @@ impl RuntimeEngine {
         Ok(serde_json::json!({ "deleted": true }))
     }
 
-    fn load_metadata(
-        &self,
-        model_code: &str,
-        workspace_id: Uuid,
-        app_id: Option<Uuid>,
-    ) -> Result<ModelMetadata> {
-        if let Some(app_id) = app_id {
-            if let Some(metadata) =
-                self.registry
-                    .get(domain::DataModelScopeKind::System, app_id, model_code)
-            {
-                return Ok(metadata);
-            }
-        }
-
+    fn load_metadata(&self, model_code: &str, workspace_id: Uuid) -> Result<ModelMetadata> {
         self.registry
             .get(
                 domain::DataModelScopeKind::Workspace,
                 workspace_id,
                 model_code,
             )
+            .or_else(|| {
+                self.registry.get(
+                    domain::DataModelScopeKind::System,
+                    domain::SYSTEM_SCOPE_ID,
+                    model_code,
+                )
+            })
             .ok_or_else(|| RuntimeModelError::unavailable(model_code).into())
     }
 
-    fn scope_id_for(
-        &self,
-        metadata: &ModelMetadata,
-        workspace_id: Uuid,
-        app_id: Option<Uuid>,
-    ) -> Result<Uuid> {
+    fn scope_id_for(&self, metadata: &ModelMetadata, workspace_id: Uuid) -> Uuid {
         match metadata.scope_kind {
-            domain::DataModelScopeKind::Workspace => Ok(workspace_id),
-            domain::DataModelScopeKind::System => {
-                app_id.ok_or_else(|| anyhow!("missing app scope context"))
-            }
+            domain::DataModelScopeKind::Workspace => workspace_id,
+            domain::DataModelScopeKind::System => domain::SYSTEM_SCOPE_ID,
         }
     }
 }
@@ -517,7 +473,7 @@ fn test_model_metadata() -> ModelMetadata {
         scope_kind: domain::DataModelScopeKind::Workspace,
         scope_id: Uuid::nil(),
         physical_table_name: "rtm_workspace_demo_orders".into(),
-        scope_column_name: "team_id".into(),
+        scope_column_name: "scope_id".into(),
         fields: vec![
             domain::ModelFieldRecord {
                 id: Uuid::nil(),

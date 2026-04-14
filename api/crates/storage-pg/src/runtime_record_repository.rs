@@ -526,10 +526,7 @@ fn to_runtime_model_metadata(model: domain::ModelDefinitionRecord) -> ModelMetad
         scope_kind: model.scope_kind,
         scope_id: model.scope_id,
         physical_table_name: model.physical_table_name,
-        scope_column_name: match model.scope_kind {
-            domain::DataModelScopeKind::Workspace => "team_id".into(),
-            domain::DataModelScopeKind::System => "app_id".into(),
-        },
+        scope_column_name: "scope_id".into(),
         fields: model
             .fields
             .into_iter()
