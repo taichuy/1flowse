@@ -13,9 +13,10 @@
 ## Execution Status
 
 - Last synced: `2026-04-14 22`
-- Recovery audit: 中断恢复时确认 Task 1 已通过提交 `b2950d8d` 落地；Task 2 已在恢复执行中补齐交互测试并完成文件级验证；Task 3 已完成范围审查，正在收尾提交。
+- Recovery audit: 中断恢复时确认 Task 1 已通过提交 `b2950d8d` 落地；Task 2 已在恢复执行中补齐交互测试并完成文件级验证；Task 3 已完成范围审查并提交功能代码。
 - Command note: `web/app` 的定向 Vitest 验证统一使用 `pnpm --dir web/app exec vitest run ...`，避免 package script 回落到整套测试。
 - Workspace verification snapshot: `pnpm --dir web lint` PASS，`pnpm --dir web/app build` PASS；`pnpm --dir web test` FAIL，失败项为 `src/routes/_tests/section-shell-routing.test.tsx`、`src/style-boundary/_tests/registry.test.tsx` 与 `src/features/me/_tests/me-page.test.tsx` 中的 5 个超时用例，均不在本次提交路径内。
+- Feature commit: `867fd30b feat(settings): use searchable docs category select`
 
 ---
 
@@ -341,7 +342,7 @@ Expected: PASS.
 
 Recovery note (`2026-04-14 22`): 恢复执行中先定位 `rc-select` 虚拟列表会把 `role="option"` 渲染到隐藏的可访问性镜像层，随后将切换用例改为点击可视层 `.ant-select-item-option`，再执行 `pnpm --dir web/app exec vitest run src/features/settings/_tests/api-docs-panel.test.tsx`，结果为 PASS。
 
-- [ ] **Step 5: Commit the selector-card implementation**
+- [x] **Step 5: Commit the selector-card implementation**
 
 ```bash
 git add web/app/src/features/settings/components/ApiDocsPanel.tsx
@@ -349,6 +350,8 @@ git add web/app/src/features/settings/components/api-docs-panel.css
 git add web/app/src/features/settings/_tests/api-docs-panel.test.tsx
 git commit -m "feat(settings): use searchable docs category select"
 ```
+
+Commit note (`2026-04-14 22`): 恢复执行完成后已提交 `867fd30b feat(settings): use searchable docs category select`。
 
 ## Task 3: Run Feature And Workspace Verification
 
@@ -402,7 +405,7 @@ Expected: only the selector-card UI, helper, and tests changed for this feature.
 
 Review note (`2026-04-14 22`): 已执行路径级 `git diff --stat` 与 `git diff -- ...`，本次功能相关 diff 仅落在计划文档、`ApiDocsPanel.tsx`、`api-docs-panel.css` 和 `api-docs-panel.test.tsx`；helper 文件已由提交 `b2950d8d` 独立落地。
 
-- [ ] **Step 4: Commit the verified feature**
+- [x] **Step 4: Commit the verified feature**
 
 ```bash
 git add web/app/src/features/settings/components/ApiDocsPanel.tsx
@@ -412,3 +415,5 @@ git add web/app/src/features/settings/lib/api-docs-category-search.ts
 git add web/app/src/features/settings/lib/_tests/api-docs-category-search.test.ts
 git commit -m "feat(settings): refine docs category selection"
 ```
+
+Commit note (`2026-04-14 22`): 本轮恢复执行未重提 helper 提交，沿用已有提交 `b2950d8d`；选择器卡片实现与计划同步状态已提交到 `867fd30b feat(settings): use searchable docs category select`。
