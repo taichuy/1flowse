@@ -1,4 +1,4 @@
-# 1Flowse 角色自动接收新增权限设计稿
+# 1Flowse 角色权限策略与默认新用户角色设计稿
 
 日期：2026-04-14
 状态：已完成设计确认，待用户审阅
@@ -9,31 +9,43 @@
 - [.agents/skills/frontend-development/SKILL.md](../../../../.agents/skills/frontend-development/SKILL.md)
 - [api/crates/access-control/src/catalog.rs](../../../../api/crates/access-control/src/catalog.rs)
 - [api/crates/control-plane/src/bootstrap.rs](../../../../api/crates/control-plane/src/bootstrap.rs)
+- [api/crates/control-plane/src/member.rs](../../../../api/crates/control-plane/src/member.rs)
 - [api/crates/storage-pg/src/auth_repository.rs](../../../../api/crates/storage-pg/src/auth_repository.rs)
+- [api/crates/storage-pg/src/member_repository.rs](../../../../api/crates/storage-pg/src/member_repository.rs)
 - [api/crates/storage-pg/src/role_repository.rs](../../../../api/crates/storage-pg/src/role_repository.rs)
+- [api/apps/api-server/src/routes/members.rs](../../../../api/apps/api-server/src/routes/members.rs)
 - [api/apps/api-server/src/routes/roles.rs](../../../../api/apps/api-server/src/routes/roles.rs)
-- [api/apps/api-server/src/routes/permissions.rs](../../../../api/apps/api-server/src/routes/permissions.rs)
 - [web/app/src/features/settings/components/RolePermissionPanel.tsx](../../../../web/app/src/features/settings/components/RolePermissionPanel.tsx)
 
 ## 1. 文档目标
 
-本文档用于冻结“角色自动接收后续新增权限”的实现边界。
+本文档用于冻结两类角色策略：
+
+- 角色是否自动接收后续新增权限
+- 角色是否作为“新建用户默认角色”
 
 本轮目标：
 
-- 让所有角色都可以配置“自动接收后续新增权限”
-- 新权限进入权限目录后，自动补绑到开启该开关的角色
-- 内建角色默认值固定为：
-  - `admin = true`
-  - `manager = false`
-- 设置页角色管理中提供可视化勾选并保存
+- 让所有角色都可以配置 `auto_grant_new_permissions`
+- 让工作空间角色可以配置 `is_default_member_role`
+- 新权限进入权限目录后，自动补绑到开启自动接收的角色
+- 新建用户时，自动绑定当前工作空间唯一默认角色，而不是继续写死 `manager`
+- 设置页角色管理中用简单勾选方式展示和保存这两个策略
+
+本轮固定约束：
+
+- `admin` 默认 `auto_grant_new_permissions = true`
+- `manager` 默认 `auto_grant_new_permissions = false`
+- `manager` 默认 `is_default_member_role = true`
+- 默认角色切换后，只影响之后新建的用户，不回填已有用户
 
 本轮不做：
 
 - 不回填历史权限
 - 不做权限级“默认角色”配置
-- 不新增独立的“同步历史权限”按钮
-- 不改变 `root` 作为特殊角色的现有权限语义
+- 不做“批量迁移已有用户到新默认角色”
+- 不做“同步历史权限”按钮
+- 不改变 `root` 的特殊角色语义
 
 ## 2. 当前现状
 
@@ -43,100 +55,162 @@
 
 应用启动时，[api/crates/control-plane/src/bootstrap.rs](../../../../api/crates/control-plane/src/bootstrap.rs) 调用 `upsert_permission_catalog()`，由存储层把权限写入 `permission_definitions`。
 
-### 2.2 角色只支持显式绑定权限
+### 2.2 角色只有显式权限绑定，没有策略位
 
-当前角色与权限之间只有 `role_permissions` 这张显式绑定表。
+当前角色和权限之间只有 `role_permissions` 显式绑定表。
 
-现有系统没有“角色策略位”，也没有“新权限出现时自动授予某些角色”的机制。因此：
+现有系统没有：
 
-- 新增权限写入目录后，会进入 `permission_definitions`
-- 但不会自动出现在已有角色上
-- 内建角色也不会因为权限目录新增而自动补齐
+- “角色自动接收未来新增权限”的策略位
+- “哪个角色是新建用户默认角色”的策略位
 
-### 2.3 当前设置页只能手工编辑角色权限
+因此：
 
-前端设置页的 [RolePermissionPanel](../../../../web/app/src/features/settings/components/RolePermissionPanel.tsx) 当前只支持：
+- 新权限写入目录后，不会自动补齐到已有角色
+- 角色也无法表达“以后我想自动拿到新增权限”
 
-- 查看角色列表
+### 2.3 新建用户仍然写死默认绑 `manager`
+
+[api/crates/storage-pg/src/member_repository.rs](../../../../api/crates/storage-pg/src/member_repository.rs) 当前在 `create_member_with_default_role()` 中直接：
+
+- 查 workspace 下 code 为 `manager` 的角色
+- 把用户 `default_display_role` 写成 `manager`
+- 把该用户自动绑定到 `manager`
+
+这意味着“默认新用户角色”现在不是配置，而是硬编码。
+
+### 2.4 设置页只能改基础信息和权限树
+
+当前设置页的 [RolePermissionPanel](../../../../web/app/src/features/settings/components/RolePermissionPanel.tsx) 只支持：
+
 - 新建角色
-- 编辑角色基础信息
-- 手工勾选角色已有权限
+- 编辑角色名称和说明
+- 手工勾选已有权限
 
-当前没有角色级“自动接收未来新增权限”的展示或保存入口。
+当前没有角色级策略配置入口。
 
 ## 3. 设计结论
 
-### 3.1 策略位归属到角色，不归属到权限
+### 3.1 两个策略位都归属到角色
 
-本轮新增角色字段：
+本轮在角色上新增两个字段：
 
 - `auto_grant_new_permissions: boolean`
+- `is_default_member_role: boolean`
 
-选择把该字段放在角色上，而不是放在权限上，原因是：
+原因：
 
-- 用户已明确要求“不仅是内置角色，是所有角色都支持”
-- 如果把默认逻辑挂在权限定义上，模型天然会偏向固定角色集合
-- “是否自动接收未来新增权限”本质是角色策略，不是单条权限属性
+- 用户明确要求“不仅是内置角色，是所有角色都支持”
+- “是否自动接收未来新增权限”和“是否作为新建用户默认角色”本质都是角色策略
+- 把这两个语义挂在权限定义上会天然偏向固定角色集合，边界不干净
 
-### 3.2 行为语义固定为“仅影响未来新增权限”
+### 3.2 自动接收新增权限只影响未来新增权限
 
 用户已明确选择：
 
 - 开启自动接收后，只影响未来新增的权限
 - 不回填当前系统里已经存在的历史权限
 
-因此本字段的语义是：
+因此其语义固定为：
 
-- “当系统以后新增权限定义时，这个角色是否自动获得这些新权限”
+- “以后权限目录新增权限时，这个角色是否自动获得这些新权限”
 
 而不是：
 
 - “这个角色现在是否应该拥有所有权限”
 
-### 3.3 手工权限编辑继续保留
+### 3.3 默认新用户角色只影响未来新建用户
 
-本轮不是用自动策略替代手工绑定，而是增加一层默认同步机制。
+用户已明确选择：
 
-两者关系固定为：
+- 切换默认角色时，只影响之后新建的用户
+- 已有用户保持不变
 
-- `role_permissions` 仍然是真实权限绑定结果
-- `auto_grant_new_permissions` 只决定未来新权限进入时是否自动补绑
-- 关闭该开关不会删除已存在的权限绑定
-- 已存在权限仍可继续手工勾选或取消
+因此其语义固定为：
+
+- “此后通过成员创建接口新建的用户，应自动绑定哪个角色”
+
+而不是：
+
+- “把当前所有用户都迁到这个角色”
+
+### 3.4 默认角色必须唯一
+
+默认新用户角色只能有一个。
+
+约束固定为：
+
+- 每个 workspace 必须且只能存在一个 `is_default_member_role = true` 的 workspace 角色
+- system 角色不参与默认新用户角色语义
+- 如果某个角色被设置为默认角色，当前 workspace 其他角色必须自动清为 `false`
+
+### 3.5 当前默认角色不能被直接清空
+
+不允许把当前唯一默认角色直接取消成“没有默认角色”。
+
+原因：
+
+- 新建用户链路需要始终能解析到唯一默认角色
+- “没有默认角色”会让成员创建语义重新退回模糊状态
+
+因此允许的切换方式只有：
+
+- 去另一个角色上勾选为默认角色，由后端自动完成唯一切换
 
 ## 4. 数据模型设计
 
 ### 4.1 数据库字段
 
-在 `roles` 表新增字段：
+在 `roles` 表新增两个字段：
 
 - `auto_grant_new_permissions boolean not null default false`
+- `is_default_member_role boolean not null default false`
 
-该字段适用于：
+### 4.2 作用域约束
 
-- 工作空间角色
-- 系统角色
+`auto_grant_new_permissions`：
 
-### 4.2 内建角色默认值
+- system 角色可读写
+- workspace 角色可读写
+
+`is_default_member_role`：
+
+- 只对 workspace 角色生效
+- system 角色固定为 `false`
+
+### 4.3 唯一性约束
+
+数据库层至少保证：
+
+- 同一个 `workspace_id` 下，最多只能有一个 `is_default_member_role = true` 的 workspace 角色
+
+业务层再保证：
+
+- 系统启动完成后，每个 workspace 至少有一个默认角色
+- 角色更新时不能把默认角色清成“没有默认”
+
+### 4.4 内建角色默认值
 
 内建角色初始化时固定为：
 
-- `root = false`
-- `admin = true`
-- `manager = false`
+- `root`
+  - `auto_grant_new_permissions = false`
+  - `is_default_member_role = false`
+- `admin`
+  - `auto_grant_new_permissions = true`
+  - `is_default_member_role = false`
+- `manager`
+  - `auto_grant_new_permissions = false`
+  - `is_default_member_role = true`
 
-说明：
-
-- `root` 继续走特殊角色语义，不依赖自动绑定机制
-- `admin` 应自动接收未来新增权限，符合其管理角色定位
-- `manager` 默认不自动接收，避免权限面静默扩张
-
-### 4.3 新建角色默认值
+### 4.5 新建角色默认值
 
 非内建角色新建时：
 
-- 默认 `false`
-- 可由前端创建表单显式勾选为 `true`
+- `auto_grant_new_permissions` 默认 `false`
+- `is_default_member_role` 默认 `false`
+
+若创建时显式勾选 `is_default_member_role = true`，则该角色成为新默认角色，并清除同 workspace 其他角色的默认标记。
 
 ## 5. 后端行为设计
 
@@ -146,7 +220,7 @@
 
 本轮调整为：
 
-- 在写入权限目录时，识别哪些权限是本次第一次进入 `permission_definitions`
+- 写入权限目录时，识别哪些权限是本次第一次进入 `permission_definitions`
 - 只对这些“本次新增权限”继续做自动角色绑定
 
 ### 5.2 自动绑定目标
@@ -155,30 +229,45 @@
 
 - `auto_grant_new_permissions = true` 的角色
 
-作用域规则：
+规则：
 
-- 系统角色只处理系统作用域角色
-- 工作空间角色只处理对应工作空间内角色
+- system 角色按 system 角色集合处理
+- workspace 角色按各自 workspace 处理
+- 已存在绑定保持幂等，不重复插入
 
-若某角色和某权限已存在绑定，则保持幂等，不重复插入。
+### 5.3 新建用户默认角色解析
 
-### 5.3 历史权限不回填
+成员创建时，不再写死查 `manager`。
 
-开启开关时，不执行以下行为：
+改为：
 
-- 不扫描历史 `permission_definitions`
-- 不自动把现有全部权限补给该角色
+- 先解析当前 workspace 的唯一默认角色
+- 把新用户的 `default_display_role` 写成该角色 code
+- 自动创建该角色的 `user_role_bindings`
 
-这是本轮冻结语义，避免“勾一下就瞬间拿到所有历史权限”的高风险行为。
+若当前 workspace 缺少默认角色，应明确报错，而不是偷偷回退到 `manager`。
 
-### 5.4 关闭开关不撤销已有权限
+### 5.4 默认角色切换
 
-关闭 `auto_grant_new_permissions` 时：
+当角色创建或更新请求中带 `is_default_member_role = true` 时：
 
-- 只影响未来新增权限
-- 不删除当前已经绑定到该角色的权限
+- 当前角色设置为默认角色
+- 同 workspace 其他 workspace 角色自动清为 `false`
 
-这样可避免系统在“策略位变化”和“权限结果变化”之间产生难以追踪的隐式副作用。
+当更新当前默认角色并传 `is_default_member_role = false` 时：
+
+- 直接拒绝
+- 返回明确错误，要求先在其他角色上设置默认角色
+
+### 5.5 历史用户不回填
+
+角色切换为默认角色后，不执行以下行为：
+
+- 不更新已有用户的 `default_display_role`
+- 不替换已有用户的角色绑定
+- 不触发已有成员批量迁移
+
+这条规则固定为本轮设计边界。
 
 ## 6. 接口设计
 
@@ -189,8 +278,7 @@
 响应中的角色对象新增字段：
 
 - `auto_grant_new_permissions`
-
-用于设置页展示当前角色策略。
+- `is_default_member_role`
 
 ### 6.2 角色创建接口
 
@@ -199,8 +287,12 @@
 请求体新增字段：
 
 - `auto_grant_new_permissions?: boolean`
+- `is_default_member_role?: boolean`
 
-若前端未传，后端按默认值 `false` 处理。
+默认规则：
+
+- 缺失 `auto_grant_new_permissions` 时按 `false`
+- 缺失 `is_default_member_role` 时按 `false`
 
 ### 6.3 角色更新接口
 
@@ -209,81 +301,95 @@
 请求体新增字段：
 
 - `auto_grant_new_permissions?: boolean`
+- `is_default_member_role?: boolean`
 
-用于设置页编辑角色策略。
+规则：
 
-若请求体缺失该字段，则保持角色当前值不变。
+- 缺失字段时保持原值
+- 若 `is_default_member_role = true`，则切换当前 workspace 唯一默认角色
+- 若对当前默认角色传 `false` 且没有新的默认角色接替，则拒绝
 
-### 6.4 不新增独立策略接口
+### 6.4 成员创建接口不增加新参数
 
-本轮不新增独立的：
+`POST /api/console/members`
 
-- `PATCH /roles/:id/auto-grant-policy`
+本轮不新增“创建用户时显式指定默认角色”参数。
 
-原因是该字段属于角色元数据的一部分，继续并入角色创建/更新接口即可，避免 API 无谓膨胀。
+成员创建仍然只走：
+
+- 当前 workspace 的默认角色策略
+
+避免在“策略默认分配”和“显式指定角色”之间混入两套入口。
 
 ## 7. 前端设计
 
 ### 7.1 展示位置
 
-设置页只增加一个勾选，不新增独立页面或复杂交互。
+设置页角色管理中继续使用简单勾选，不新增独立页面。
 
-放置位置：
+在以下位置增加两个勾选项：
 
 - 角色创建弹窗
 - 角色编辑弹窗
-- 角色详情/编辑区域可展示当前状态
 
-文案固定为：
+字段文案：
 
 - `自动接收后续新增权限`
+- `默认新用户角色`
 
-必要辅助说明可简短补一句：
+### 7.2 交互语义
 
-- `开启后，仅对未来新增的权限自动授予当前角色，不影响已有权限。`
+`自动接收后续新增权限`：
 
-### 7.2 保存方式
+- 普通布尔开关
+- 可独立勾选或取消
 
-创建角色时：
+`默认新用户角色`：
 
-- 勾选状态随创建接口一起提交
+- UI 形态仍然是单个勾选框
+- 但语义是“把当前角色设为唯一默认角色”
+- 在当前默认角色上不允许直接取消成 `false`
+- 要切换默认角色时，应到目标角色上勾选 `true`
 
-编辑角色时：
+### 7.3 辅助文案
 
-- 勾选状态随更新接口一起提交
+建议补充短说明：
 
-不需要单独“保存策略”按钮。
+- `自动接收后续新增权限`
+  - `开启后，仅对未来新增的权限自动授予当前角色。`
+- `默认新用户角色`
+  - `开启后，新建用户会自动绑定该角色；同一工作空间只能有一个默认角色。`
 
-### 7.3 权限树保持不变
+### 7.4 权限树保持不变
 
-右侧权限树仍然只表达“当前已绑定权限结果”。
+右侧权限树仍然只表达当前已绑定权限结果。
 
-不在每一条权限上显示“这是自动绑定还是手工绑定”，因为本轮需求只关心策略位和最终结果，不要求追踪绑定来源。
+本轮不在每条权限上标识“自动绑定来源”或“默认角色来源”。
 
-## 8. 实现边界与约束
+## 8. 实现约束
 
 ### 8.1 幂等性
 
-系统启动、重复 bootstrap 或重复权限目录同步时，必须满足：
+必须保证：
 
-- 已存在权限不会重复插入
-- 已存在角色权限绑定不会重复插入
-- 自动补绑逻辑可以重复执行而不产生脏数据
+- 重复 bootstrap 不会重复插入权限或绑定
+- 重复设置同一角色为默认角色不会产生多条默认记录
+- 重复执行角色更新不会破坏唯一默认角色约束
 
 ### 8.2 审计
 
-角色策略变更属于角色管理动作的一部分，沿用角色更新审计入口即可。
+角色策略变更继续沿用角色创建/更新审计入口。
 
 本轮不单独新增新的审计资源类别。
 
 ### 8.3 向后兼容
 
-未更新前端时，后端也应允许旧请求继续工作：
+旧前端请求若不传新字段：
 
-- 创建角色不传该字段时，默认 `false`
-- 更新角色时若缺失该字段，保持原值不变
+- 创建角色仍能成功
+- 更新角色仍保持原值
 
-当前前后端仍应一次性同步升级该字段的展示与保存，但后端 contract 不应因为旧请求缺字段而报错。
+但新前端和新后端仍应在同一轮同步收口，避免 UI 不展示真实策略。
 
 ## 9. 测试设计
 
@@ -292,45 +398,50 @@
 至少覆盖：
 
 - 新权限首次进入目录时，只给 `auto_grant_new_permissions = true` 的角色补绑
-- `admin` 默认会自动接收新权限
-- `manager` 默认不会自动接收新权限
-- 重复执行同步时不重复插入绑定
+- `admin` 默认自动接收新增权限
+- `manager` 默认不自动接收新增权限
+- `manager` 默认是默认新用户角色
+- 新建用户时使用当前默认角色，而不是写死 `manager`
 
 ### 9.2 服务与路由测试
 
 至少覆盖：
 
-- `GET /api/console/roles` 返回该字段
-- 创建角色时可设置该字段
-- 更新角色时可修改该字段
-- 关闭开关不会删除现有权限
+- `GET /api/console/roles` 返回两个新字段
+- 创建角色时可设置两个字段
+- 更新角色时可修改自动接收策略
+- 设置某角色为默认角色时，会清除同 workspace 其他角色默认位
+- 对当前默认角色直接取消默认位会被拒绝
+- 新建成员时返回的 `default_display_role` 和绑定角色来自当前默认角色
 
 ### 9.3 前端测试
 
 至少覆盖：
 
-- 角色创建表单显示该勾选项并正确提交
-- 角色编辑表单显示当前值并能修改保存
-- 页面文案能表达“只影响未来新增权限”
+- 角色创建弹窗显示两个勾选并正确提交
+- 角色编辑弹窗显示当前值并能修改自动接收策略
+- 把某角色设为默认角色的请求能正确提交
+- 当前默认角色的“默认新用户角色”勾选不会被误用成可直接清空系统默认角色
 
 ## 10. 非目标
 
 以下内容明确不在本轮范围内：
 
-- 按资源、动作、作用域配置复杂自动授权规则
-- 为权限记录“自动绑定来源”
-- 打开开关时补发历史权限
-- 为不同角色批量应用策略模板
-- 在权限目录页单独编辑“默认角色集”
+- 权限级自动授权规则系统
+- 用户级批量迁移到新默认角色
+- 记录权限绑定来源
+- 创建成员时手工覆盖默认角色
+- 多默认角色、多级默认角色、按组织单元默认角色
 
 ## 11. 最终结论
 
-本轮以最小可用方式补齐“角色自动接收未来新增权限”能力：
+本轮以角色策略最小扩展方式收口权限与成员默认分配：
 
-- 用 `roles.auto_grant_new_permissions` 承载角色策略
-- 默认 `admin=true`、`manager=false`
-- 新权限进入目录时自动授予开启该策略的角色
-- 不回填历史权限
-- 设置页只增加一个勾选并随角色创建/编辑一起保存
+- 用 `roles.auto_grant_new_permissions` 处理未来新增权限自动补绑
+- 用 `roles.is_default_member_role` 处理新建用户默认角色
+- `admin` 默认自动接收新增权限
+- `manager` 默认作为默认新用户角色
+- 默认角色切换只影响未来新建用户，不影响已有用户
+- 设置页继续只加简单勾选，不把问题扩成新的规则系统
 
-这能满足当前需求，同时保持后端权限目录、角色模型、设置页交互的边界清晰，不把问题扩成新的权限规则系统。
+这样可以同时解决“新权限补齐”和“新用户默认角色不应写死 manager”两个问题，并保持后端边界、前端交互和数据语义一致。

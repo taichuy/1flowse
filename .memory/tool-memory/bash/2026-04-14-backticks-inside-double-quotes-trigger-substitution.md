@@ -13,8 +13,8 @@ match_when:
   - 模式字符串被双引号包裹
   - 输出出现 `未找到命令` 且命令名来自搜索模式
 created_at: 2026-04-14 07
-updated_at: 2026-04-14 07
-last_verified_at: 2026-04-14 07
+updated_at: 2026-04-14 20
+last_verified_at: 2026-04-14 20
 decision_policy: reference_on_failure
 scope:
   - bash
@@ -63,3 +63,7 @@ rg -n 'TODO|TBD|missing `permissionKey`' docs/superpowers/plans/2026-04-14-conso
 
 - 在 bash 里搜索 Markdown/代码片段时，只要模式包含反引号，默认优先使用单引号。
 - 如果必须用双引号，就先检查是否需要对反引号做转义。
+
+## 复现记录
+
+- `2026-04-14 20`：执行 `rg -n "web/app/src/features/settings/api/roles.ts|Extend \`api/crates/storage-pg/src/mappers/role_mapper.rs\`|Placeholder scan:" docs/superpowers/plans/2026-04-14-role-auto-grant-new-permissions.md` 时，bash 先尝试执行 ``api/crates/storage-pg/src/mappers/role_mapper.rs``，报 `/bin/bash: 行 1: api/crates/storage-pg/src/mappers/role_mapper.rs: 权限不够`；随后改回不用反引号或改用单引号包裹模式后恢复正常。

@@ -1,10 +1,10 @@
-# Role Auto-Grant New Permissions Implementation Plan
+# Role Policy Flags Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a role-level `auto_grant_new_permissions` policy so roles can automatically receive future permission-catalog additions, with `admin=true`, `manager=false`, no historical backfill, and a settings-page checkbox for create/edit flows.
+**Goal:** Add role-level policy flags for `auto_grant_new_permissions` and `is_default_member_role`, keep `admin` auto-grant enabled, keep `manager` as the default new-member role, and make new member creation resolve the current default role instead of hardcoding `manager`.
 
-**Architecture:** Implement this in four slices. First, extend the PostgreSQL schema and bootstrap/storage sync so new permission definitions can be detected and granted to roles that opted in. Next, thread the new field through the domain, service, and HTTP role contracts. Then update the web API client and role-management UI so the policy is visible and editable. Finish with targeted and full verification before the feature commit.
+**Architecture:** Implement this in five slices. First, extend the schema, domain model, builtin role defaults, and permission bootstrap logic so policy flags exist and new permissions can be auto-granted to opted-in roles. Next, thread both flags through the role repository, service, and HTTP contracts while enforcing one default member role per workspace. Then update member creation to resolve the workspace default role at write time. After that, expose both flags in the web API client and settings role dialogs with simple checkboxes. Finish with targeted tests and full verification before the feature commit.
 
 **Tech Stack:** Rust stable, Axum, SQLx/PostgreSQL, React 19, TypeScript, TanStack Query, Ant Design, Vitest
 
@@ -15,8 +15,8 @@
 ## File Structure
 
 **Create**
-- `api/crates/storage-pg/migrations/20260414193000_add_role_auto_grant_new_permissions.sql`
-- `api/crates/storage-pg/src/_tests/role_auto_grant_tests.rs`
+- `api/crates/storage-pg/migrations/20260414203000_add_role_policy_flags.sql`
+- `api/crates/storage-pg/src/_tests/role_policy_tests.rs`
 - `web/app/src/features/settings/_tests/role-permission-panel.test.tsx`
 
 **Modify**
@@ -28,20 +28,23 @@
 - `api/crates/storage-pg/src/repositories.rs`
 - `api/crates/storage-pg/src/auth_repository.rs`
 - `api/crates/storage-pg/src/role_repository.rs`
+- `api/crates/storage-pg/src/member_repository.rs`
 - `api/crates/control-plane/src/ports.rs`
 - `api/crates/control-plane/src/role.rs`
 - `api/crates/control-plane/src/_tests/support.rs`
 - `api/crates/control-plane/src/_tests/role_service_tests.rs`
+- `api/crates/control-plane/src/_tests/member_service_tests.rs`
 - `api/apps/api-server/src/routes/roles.rs`
 - `api/apps/api-server/src/_tests/role_routes.rs`
+- `api/apps/api-server/src/_tests/member_routes.rs`
 - `web/packages/api-client/src/console-roles.ts`
 - `web/app/src/features/settings/components/RolePermissionPanel.tsx`
 
-## Task 1: Add Schema And Storage Auto-Grant Sync
+## Task 1: Add Schema, Domain Flags, And Permission Bootstrap Sync
 
 **Files:**
-- Create: `api/crates/storage-pg/migrations/20260414193000_add_role_auto_grant_new_permissions.sql`
-- Create: `api/crates/storage-pg/src/_tests/role_auto_grant_tests.rs`
+- Create: `api/crates/storage-pg/migrations/20260414203000_add_role_policy_flags.sql`
+- Create: `api/crates/storage-pg/src/_tests/role_policy_tests.rs`
 - Modify: `api/crates/storage-pg/src/_tests/mod.rs`
 - Modify: `api/crates/storage-pg/src/_tests/migration_smoke.rs`
 - Modify: `api/crates/domain/src/auth.rs`
@@ -52,7 +55,7 @@
 
 - [ ] **Step 1: Write the failing storage tests**
 
-Create `api/crates/storage-pg/src/_tests/role_auto_grant_tests.rs`:
+Create `api/crates/storage-pg/src/_tests/role_policy_tests.rs`:
 
 ```rust
 use sqlx::PgPool;
@@ -60,60 +63,59 @@ use storage_pg::{connect, run_migrations, PgControlPlaneStore};
 use uuid::Uuid;
 
 async fn isolated_database_url() -> String {
-    let admin_pool = PgPool::connect(
-        &std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows".into()
-        }),
-    )
-    .await
-    .unwrap();
+    let base = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows".into());
+    let admin_pool = PgPool::connect(&base).await.unwrap();
     let schema = format!("test_{}", Uuid::now_v7().to_string().replace('-', ""));
     sqlx::query(&format!("create schema if not exists {schema}"))
         .execute(&admin_pool)
         .await
         .unwrap();
-    format!(
-        "{}?options=-csearch_path%3D{schema}",
-        std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://postgres:sevenflows@127.0.0.1:35432/sevenflows".into()
-        })
-    )
+    format!("{base}?options=-csearch_path%3D{schema}")
 }
 
 #[tokio::test]
 async fn upsert_permission_catalog_grants_new_permissions_only_to_auto_grant_roles() {}
 
 #[tokio::test]
-async fn upsert_builtin_roles_sets_admin_true_and_manager_false() {}
+async fn upsert_builtin_roles_sets_admin_auto_grant_and_manager_default_member_role() {}
 ```
 
 Extend `api/crates/storage-pg/src/_tests/migration_smoke.rs` with:
 
 ```rust
 assert!(role_columns.contains(&"auto_grant_new_permissions".to_string()));
+assert!(role_columns.contains(&"is_default_member_role".to_string()));
 ```
 
-Register the new test module in `api/crates/storage-pg/src/_tests/mod.rs`:
+Register the module in `api/crates/storage-pg/src/_tests/mod.rs`:
 
 ```rust
-mod role_auto_grant_tests;
+mod role_policy_tests;
 ```
 
-- [ ] **Step 2: Run the storage tests to verify they fail**
+- [ ] **Step 2: Run the focused failures**
 
-Run: `cargo test -p storage-pg _tests::role_auto_grant_tests::upsert_permission_catalog_grants_new_permissions_only_to_auto_grant_roles -- --exact --nocapture`
-Expected: FAIL because `roles.auto_grant_new_permissions` does not exist and no auto-grant logic runs.
+Run: `cargo test -p storage-pg _tests::role_policy_tests::upsert_permission_catalog_grants_new_permissions_only_to_auto_grant_roles -- --exact --nocapture`
+Expected: FAIL because the new columns and auto-grant sync do not exist.
 
 Run: `cargo test -p storage-pg _tests::migration_smoke::migration_smoke_creates_workspace_tables_and_workspace_scoped_indexes -- --exact --nocapture`
-Expected: FAIL because the new column assertion is missing from the schema.
+Expected: FAIL because the schema does not contain the new role-policy columns.
 
-- [ ] **Step 3: Add the schema field and builtin defaults**
+- [ ] **Step 3: Add the schema fields and builtin defaults**
 
-Create `api/crates/storage-pg/migrations/20260414193000_add_role_auto_grant_new_permissions.sql`:
+Create `api/crates/storage-pg/migrations/20260414203000_add_role_policy_flags.sql`:
 
 ```sql
 alter table roles
   add column if not exists auto_grant_new_permissions boolean not null default false;
+
+alter table roles
+  add column if not exists is_default_member_role boolean not null default false;
+
+create unique index if not exists roles_workspace_default_member_role_uidx
+  on roles (workspace_id)
+  where scope_kind = 'workspace' and is_default_member_role = true;
 
 update roles
 set auto_grant_new_permissions = true
@@ -122,6 +124,14 @@ where scope_kind = 'workspace' and code = 'admin';
 update roles
 set auto_grant_new_permissions = false
 where code in ('manager', 'root');
+
+update roles
+set is_default_member_role = true
+where scope_kind = 'workspace' and code = 'manager';
+
+update roles
+set is_default_member_role = false
+where code in ('admin', 'root');
 ```
 
 Extend `api/crates/domain/src/auth.rs`:
@@ -135,11 +145,12 @@ pub struct RoleTemplate {
     pub is_builtin: bool,
     pub is_editable: bool,
     pub auto_grant_new_permissions: bool,
+    pub is_default_member_role: bool,
     pub permissions: Vec<String>,
 }
 ```
 
-Extend `api/crates/access-control/src/catalog.rs` builtin roles:
+Update builtin templates in `api/crates/access-control/src/catalog.rs`:
 
 ```rust
 RoleTemplate {
@@ -149,6 +160,7 @@ RoleTemplate {
     is_builtin: true,
     is_editable: true,
     auto_grant_new_permissions: true,
+    is_default_member_role: false,
     permissions: all_codes.clone(),
 }
 ```
@@ -163,11 +175,12 @@ RoleTemplate {
     is_builtin: true,
     is_editable: true,
     auto_grant_new_permissions: false,
+    is_default_member_role: true,
     permissions: manager_permissions,
 }
 ```
 
-- [ ] **Step 4: Implement storage read/write and new-permission sync**
+- [ ] **Step 4: Implement storage reads and permission auto-grant sync**
 
 Update `api/crates/storage-pg/src/mappers/role_mapper.rs`:
 
@@ -181,20 +194,22 @@ pub struct StoredRoleRow {
     pub is_builtin: bool,
     pub is_editable: bool,
     pub auto_grant_new_permissions: bool,
+    pub is_default_member_role: bool,
 }
+```
 
-impl PgRoleMapper {
-    pub fn to_role_template(row: StoredRoleRow, permissions: Vec<String>) -> RoleTemplate {
-        RoleTemplate {
-            code: row.code,
-            name: row.name,
-            scope_kind: row.scope_kind,
-            is_builtin: row.is_builtin,
-            is_editable: row.is_editable,
-            auto_grant_new_permissions: row.auto_grant_new_permissions,
-            permissions,
-        }
-    }
+and:
+
+```rust
+RoleTemplate {
+    code: row.code,
+    name: row.name,
+    scope_kind: row.scope_kind,
+    is_builtin: row.is_builtin,
+    is_editable: row.is_editable,
+    auto_grant_new_permissions: row.auto_grant_new_permissions,
+    is_default_member_role: row.is_default_member_role,
+    permissions,
 }
 ```
 
@@ -209,10 +224,11 @@ StoredRoleRow {
     is_builtin: row.get("is_builtin"),
     is_editable: row.get("is_editable"),
     auto_grant_new_permissions: row.get("auto_grant_new_permissions"),
+    is_default_member_role: row.get("is_default_member_role"),
 }
 ```
 
-Update `api/crates/storage-pg/src/auth_repository.rs` `upsert_permission_catalog()` so it collects newly inserted permission ids:
+Update `api/crates/storage-pg/src/auth_repository.rs` `upsert_permission_catalog()` so it only auto-binds newly inserted permissions:
 
 ```rust
 let inserted_permission_id: Option<Uuid> = sqlx::query_scalar(
@@ -225,7 +241,7 @@ let inserted_permission_id: Option<Uuid> = sqlx::query_scalar(
 )
 ```
 
-Then auto-bind only those new ids:
+and:
 
 ```rust
 for permission_id in inserted_permission_ids {
@@ -245,29 +261,23 @@ for permission_id in inserted_permission_ids {
 }
 ```
 
-Update `upsert_builtin_roles()` to persist the new field:
+Update `upsert_builtin_roles()` to persist both flags:
 
 ```rust
 insert into roles (
     id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable,
-    auto_grant_new_permissions, system_kind
+    auto_grant_new_permissions, is_default_member_role, system_kind
 )
-values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9)
+values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, $10)
 on conflict do nothing
-```
-
-with:
-
-```rust
-.bind(role.auto_grant_new_permissions)
 ```
 
 - [ ] **Step 5: Re-run the storage tests and commit**
 
-Run: `cargo test -p storage-pg _tests::role_auto_grant_tests::upsert_permission_catalog_grants_new_permissions_only_to_auto_grant_roles -- --exact --nocapture`
+Run: `cargo test -p storage-pg _tests::role_policy_tests::upsert_permission_catalog_grants_new_permissions_only_to_auto_grant_roles -- --exact --nocapture`
 Expected: PASS
 
-Run: `cargo test -p storage-pg _tests::role_auto_grant_tests::upsert_builtin_roles_sets_admin_true_and_manager_false -- --exact --nocapture`
+Run: `cargo test -p storage-pg _tests::role_policy_tests::upsert_builtin_roles_sets_admin_auto_grant_and_manager_default_member_role -- --exact --nocapture`
 Expected: PASS
 
 Run: `cargo test -p storage-pg _tests::migration_smoke::migration_smoke_creates_workspace_tables_and_workspace_scoped_indexes -- --exact --nocapture`
@@ -276,11 +286,11 @@ Expected: PASS
 Commit:
 
 ```bash
-git add api/crates/domain/src/auth.rs api/crates/access-control/src/catalog.rs api/crates/storage-pg/src/mappers/role_mapper.rs api/crates/storage-pg/src/repositories.rs api/crates/storage-pg/src/auth_repository.rs api/crates/storage-pg/src/_tests/mod.rs api/crates/storage-pg/src/_tests/migration_smoke.rs api/crates/storage-pg/src/_tests/role_auto_grant_tests.rs api/crates/storage-pg/migrations/20260414193000_add_role_auto_grant_new_permissions.sql
-git commit -m "feat(api): auto grant new permissions for opted-in roles"
+git add api/crates/domain/src/auth.rs api/crates/access-control/src/catalog.rs api/crates/storage-pg/src/_tests/mod.rs api/crates/storage-pg/src/_tests/migration_smoke.rs api/crates/storage-pg/src/_tests/role_policy_tests.rs api/crates/storage-pg/src/mappers/role_mapper.rs api/crates/storage-pg/src/repositories.rs api/crates/storage-pg/src/auth_repository.rs api/crates/storage-pg/migrations/20260414203000_add_role_policy_flags.sql
+git commit -m "feat(api): add role policy flags"
 ```
 
-## Task 2: Thread The Policy Through Role Service And Routes
+## Task 2: Expose Role Policy Flags And Enforce One Default Role
 
 **Files:**
 - Modify: `api/crates/control-plane/src/ports.rs`
@@ -297,25 +307,25 @@ Extend `api/crates/control-plane/src/_tests/role_service_tests.rs` with:
 
 ```rust
 #[tokio::test]
-async fn role_service_tracks_auto_grant_policy_on_create_and_update() {}
+async fn role_service_tracks_policy_flags_on_create_and_update() {}
 ```
 
 Extend `api/apps/api-server/src/_tests/role_routes.rs` with:
 
 ```rust
 #[tokio::test]
-async fn role_routes_roundtrip_auto_grant_policy() {}
+async fn role_routes_roundtrip_policy_flags_and_protect_default_role_from_clear() {}
 ```
 
 - [ ] **Step 2: Run the focused failures**
 
-Run: `cargo test -p control-plane _tests::role_service_tests::role_service_tracks_auto_grant_policy_on_create_and_update -- --exact --nocapture`
-Expected: FAIL because the role commands and memory repository do not carry the new field.
+Run: `cargo test -p control-plane _tests::role_service_tests::role_service_tracks_policy_flags_on_create_and_update -- --exact --nocapture`
+Expected: FAIL because the role commands and test repository do not carry the new fields.
 
-Run: `cargo test -p api-server _tests::role_routes::role_routes_roundtrip_auto_grant_policy -- --exact --nocapture`
-Expected: FAIL because the HTTP request/response bodies do not expose `auto_grant_new_permissions`.
+Run: `cargo test -p api-server _tests::role_routes::role_routes_roundtrip_policy_flags_and_protect_default_role_from_clear -- --exact --nocapture`
+Expected: FAIL because the HTTP bodies and role route responses do not expose the policy flags.
 
-- [ ] **Step 3: Update the role command and repository contracts**
+- [ ] **Step 3: Thread the new fields through the service contracts**
 
 Extend `api/crates/control-plane/src/role.rs`:
 
@@ -326,6 +336,7 @@ pub struct CreateRoleCommand {
     pub name: String,
     pub introduction: String,
     pub auto_grant_new_permissions: bool,
+    pub is_default_member_role: bool,
 }
 
 pub struct UpdateRoleCommand {
@@ -334,6 +345,7 @@ pub struct UpdateRoleCommand {
     pub name: String,
     pub introduction: String,
     pub auto_grant_new_permissions: Option<bool>,
+    pub is_default_member_role: Option<bool>,
 }
 ```
 
@@ -348,6 +360,7 @@ async fn create_team_role(
     name: &str,
     introduction: &str,
     auto_grant_new_permissions: bool,
+    is_default_member_role: bool,
 ) -> anyhow::Result<()>;
 
 async fn update_team_role(
@@ -358,36 +371,58 @@ async fn update_team_role(
     name: &str,
     introduction: &str,
     auto_grant_new_permissions: Option<bool>,
+    is_default_member_role: Option<bool>,
 ) -> anyhow::Result<()>;
 ```
 
-Update `RoleService::create_role()` and `RoleService::update_role()` to pass the new values straight through to the repository.
+Update `RoleService::create_role()` and `RoleService::update_role()` to pass the new values through.
 
-- [ ] **Step 4: Implement storage, route, and test-double support**
+- [ ] **Step 4: Implement repository, route, and test-double behavior**
 
-Update `api/crates/storage-pg/src/role_repository.rs` create/update SQL:
+Update `api/crates/storage-pg/src/role_repository.rs` create SQL:
 
 ```rust
 insert into roles (
     id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable,
-    auto_grant_new_permissions, created_by, updated_by
+    auto_grant_new_permissions, is_default_member_role, created_by, updated_by
 )
-values ($1, 'workspace', $2, $3, $4, $5, false, true, $6, $7, $7)
+values ($1, 'workspace', $2, $3, $4, $5, false, true, $6, $7, $8, $8)
+```
+
+If `is_default_member_role` is `true`, clear the workspace’s previous default inside the same transaction:
+
+```rust
+sqlx::query(
+    "update roles set is_default_member_role = false where scope_kind = 'workspace' and workspace_id = $1"
+)
+.bind(workspace_id)
+.execute(&mut *tx)
+.await?;
+```
+
+Update workspace-role update logic:
+
+```rust
+if matches!(is_default_member_role, Some(false)) && role.is_default_member_role {
+    return Err(ControlPlaneError::InvalidInput("default_member_role_required").into());
+}
 ```
 
 and:
 
 ```rust
-update roles
-set name = $2,
-    introduction = $3,
-    auto_grant_new_permissions = coalesce($4, auto_grant_new_permissions),
-    updated_by = $5,
-    updated_at = now()
-where id = $1
+if matches!(is_default_member_role, Some(true)) {
+    sqlx::query(
+        "update roles set is_default_member_role = false where scope_kind = 'workspace' and workspace_id = $1 and id <> $2"
+    )
+    .bind(workspace_id)
+    .bind(role.id)
+    .execute(&mut *tx)
+    .await?;
+}
 ```
 
-Update `api/crates/control-plane/src/_tests/support.rs`:
+Update `api/crates/control-plane/src/_tests/support.rs` role fixture construction:
 
 ```rust
 RoleTemplate {
@@ -397,11 +432,12 @@ RoleTemplate {
     is_builtin: false,
     is_editable: true,
     auto_grant_new_permissions,
+    is_default_member_role,
     permissions: Vec::new(),
 }
 ```
 
-Update `api/apps/api-server/src/routes/roles.rs` bodies and response:
+Update `api/apps/api-server/src/routes/roles.rs` request/response shapes:
 
 ```rust
 #[derive(Debug, Deserialize, ToSchema)]
@@ -410,6 +446,7 @@ pub struct CreateRoleBody {
     pub name: String,
     pub introduction: String,
     pub auto_grant_new_permissions: Option<bool>,
+    pub is_default_member_role: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -417,6 +454,7 @@ pub struct UpdateRoleBody {
     pub name: String,
     pub introduction: String,
     pub auto_grant_new_permissions: Option<bool>,
+    pub is_default_member_role: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -427,22 +465,17 @@ pub struct RoleResponse {
     pub is_builtin: bool,
     pub is_editable: bool,
     pub auto_grant_new_permissions: bool,
+    pub is_default_member_role: bool,
     pub permission_codes: Vec<String>,
 }
 ```
 
-Route create should default to `false`:
-
-```rust
-auto_grant_new_permissions: body.auto_grant_new_permissions.unwrap_or(false),
-```
-
 - [ ] **Step 5: Re-run focused backend tests and commit**
 
-Run: `cargo test -p control-plane _tests::role_service_tests::role_service_tracks_auto_grant_policy_on_create_and_update -- --exact --nocapture`
+Run: `cargo test -p control-plane _tests::role_service_tests::role_service_tracks_policy_flags_on_create_and_update -- --exact --nocapture`
 Expected: PASS
 
-Run: `cargo test -p api-server _tests::role_routes::role_routes_roundtrip_auto_grant_policy -- --exact --nocapture`
+Run: `cargo test -p api-server _tests::role_routes::role_routes_roundtrip_policy_flags_and_protect_default_role_from_clear -- --exact --nocapture`
 Expected: PASS
 
 Run: `cargo test -p api-server _tests::role_routes::role_routes_create_replace_permissions_and_protect_root -- --exact --nocapture`
@@ -452,10 +485,95 @@ Commit:
 
 ```bash
 git add api/crates/control-plane/src/ports.rs api/crates/control-plane/src/role.rs api/crates/control-plane/src/_tests/support.rs api/crates/control-plane/src/_tests/role_service_tests.rs api/crates/storage-pg/src/role_repository.rs api/apps/api-server/src/routes/roles.rs api/apps/api-server/src/_tests/role_routes.rs
-git commit -m "feat(api): expose role auto grant policy"
+git commit -m "feat(api): expose role policy flags"
 ```
 
-## Task 3: Add The Settings Checkbox And Web Contract
+## Task 3: Resolve The Default Member Role During Member Creation
+
+**Files:**
+- Modify: `api/crates/storage-pg/src/member_repository.rs`
+- Modify: `api/crates/control-plane/src/_tests/support.rs`
+- Modify: `api/crates/control-plane/src/_tests/member_service_tests.rs`
+- Modify: `api/apps/api-server/src/_tests/member_routes.rs`
+
+- [ ] **Step 1: Write the failing member tests**
+
+Extend `api/crates/control-plane/src/_tests/member_service_tests.rs` with:
+
+```rust
+#[tokio::test]
+async fn create_member_assigns_current_default_member_role_and_records_audit() {}
+```
+
+Extend `api/apps/api-server/src/_tests/member_routes.rs` with:
+
+```rust
+#[tokio::test]
+async fn member_creation_uses_workspace_default_member_role() {}
+```
+
+- [ ] **Step 2: Run the focused failures**
+
+Run: `cargo test -p control-plane _tests::member_service_tests::create_member_assigns_current_default_member_role_and_records_audit -- --exact --nocapture`
+Expected: FAIL because the in-memory member creation fixture still hardcodes `manager`.
+
+Run: `cargo test -p api-server _tests::member_routes::member_creation_uses_workspace_default_member_role -- --exact --nocapture`
+Expected: FAIL because the PostgreSQL repository still resolves `manager` directly.
+
+- [ ] **Step 3: Implement workspace-default role resolution**
+
+Update `api/crates/storage-pg/src/member_repository.rs`:
+
+```rust
+let default_role: (Uuid, String) = sqlx::query_as(
+    r#"
+    select id, code
+    from roles
+    where scope_kind = 'workspace'
+      and workspace_id = $1
+      and is_default_member_role = true
+    limit 1
+    "#,
+)
+.bind(input.workspace_id)
+.fetch_optional(self.pool())
+.await?
+.ok_or(ControlPlaneError::NotFound("default_member_role"))?;
+```
+
+Use the resolved code instead of the literal `manager`:
+
+```rust
+.bind(&default_role.1)
+```
+
+Use the resolved role id when inserting `user_role_bindings`:
+
+```rust
+.bind(default_role.0)
+```
+
+Update the in-memory member test support in `api/crates/control-plane/src/_tests/support.rs` so created members inherit the repository’s configured default role instead of hardcoded `manager`.
+
+- [ ] **Step 4: Re-run member tests and commit**
+
+Run: `cargo test -p control-plane _tests::member_service_tests::create_member_assigns_current_default_member_role_and_records_audit -- --exact --nocapture`
+Expected: PASS
+
+Run: `cargo test -p api-server _tests::member_routes::member_creation_uses_workspace_default_member_role -- --exact --nocapture`
+Expected: PASS
+
+Run: `cargo test -p api-server _tests::member_routes::member_routes_create_disable_and_reset_password -- --exact --nocapture`
+Expected: PASS
+
+Commit:
+
+```bash
+git add api/crates/storage-pg/src/member_repository.rs api/crates/control-plane/src/_tests/support.rs api/crates/control-plane/src/_tests/member_service_tests.rs api/apps/api-server/src/_tests/member_routes.rs
+git commit -m "feat(api): use workspace default role for new members"
+```
+
+## Task 4: Add Both Checkboxes To The Settings Role Dialogs
 
 **Files:**
 - Create: `web/app/src/features/settings/_tests/role-permission-panel.test.tsx`
@@ -464,7 +582,7 @@ git commit -m "feat(api): expose role auto grant policy"
 
 - [ ] **Step 1: Write the failing UI test**
 
-Create `web/app/src/features/settings/_tests/role-permission-panel.test.tsx`:
+Create `web/app/src/features/settings/_tests/role-permission-panel.test.tsx` with:
 
 ```tsx
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -481,19 +599,20 @@ const rolesApi = vi.hoisted(() => ({
   replaceSettingsRolePermissions: vi.fn()
 }));
 
-test('submits auto_grant_new_permissions from the create and edit dialogs', async () => {});
+test('submits auto_grant_new_permissions and is_default_member_role from the create and edit dialogs', async () => {});
 ```
 
-Use role fixtures like:
+Use fixtures like:
 
 ```tsx
 {
-  code: 'admin',
-  name: 'Admin',
+  code: 'manager',
+  name: 'Manager',
   scope_kind: 'workspace',
   is_builtin: true,
   is_editable: true,
-  auto_grant_new_permissions: true,
+  auto_grant_new_permissions: false,
+  is_default_member_role: true,
   permission_codes: []
 }
 ```
@@ -501,9 +620,9 @@ Use role fixtures like:
 - [ ] **Step 2: Run the UI test to verify it fails**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/settings/_tests/role-permission-panel.test.tsx`
-Expected: FAIL because `ConsoleRole` and the role forms do not know about `auto_grant_new_permissions`.
+Expected: FAIL because the web role contract and dialogs do not expose either flag.
 
-- [ ] **Step 3: Implement the API client and checkbox UI**
+- [ ] **Step 3: Implement the web contract and dialog controls**
 
 Update `web/packages/api-client/src/console-roles.ts`:
 
@@ -515,6 +634,7 @@ export interface ConsoleRole {
   is_builtin: boolean;
   is_editable: boolean;
   auto_grant_new_permissions: boolean;
+  is_default_member_role: boolean;
   permission_codes: string[];
 }
 
@@ -523,16 +643,18 @@ export interface CreateConsoleRoleInput {
   name: string;
   introduction: string;
   auto_grant_new_permissions?: boolean;
+  is_default_member_role?: boolean;
 }
 
 export interface UpdateConsoleRoleInput {
   name: string;
   introduction: string;
   auto_grant_new_permissions?: boolean;
+  is_default_member_role?: boolean;
 }
 ```
 
-Update the create modal in `web/app/src/features/settings/components/RolePermissionPanel.tsx`:
+Update the create form in `web/app/src/features/settings/components/RolePermissionPanel.tsx`:
 
 ```tsx
 <Form.Item
@@ -542,27 +664,35 @@ Update the create modal in `web/app/src/features/settings/components/RolePermiss
 >
   <Checkbox>自动接收后续新增权限</Checkbox>
 </Form.Item>
+
+<Form.Item
+  name="is_default_member_role"
+  valuePropName="checked"
+  extra="同一工作空间只能有一个默认新用户角色。"
+>
+  <Checkbox>默认新用户角色</Checkbox>
+</Form.Item>
 ```
 
-Initialize the edit form with the selected role:
+Initialize the edit dialog with both flags:
 
 ```tsx
 editForm.setFieldsValue({
   name: role.name,
-  introduction: '',
-  auto_grant_new_permissions: role.auto_grant_new_permissions
+  introduction: role.introduction ?? '',
+  auto_grant_new_permissions: role.auto_grant_new_permissions,
+  is_default_member_role: role.is_default_member_role
 });
 ```
 
-Show the current policy in the details header:
+Render compact status tags in the details header:
 
 ```tsx
-<Tag color={selectedRole.auto_grant_new_permissions ? 'blue' : 'default'}>
-  {selectedRole.auto_grant_new_permissions ? '自动接收新增权限' : '手动维护权限'}
-</Tag>
+{selectedRole.auto_grant_new_permissions ? <Tag color="blue">自动接收新增权限</Tag> : null}
+{selectedRole.is_default_member_role ? <Tag color="green">默认新用户角色</Tag> : null}
 ```
 
-- [ ] **Step 4: Re-run the UI tests and commit**
+- [ ] **Step 4: Re-run UI tests and commit**
 
 Run: `pnpm --dir web/app exec vitest --run src/features/settings/_tests/role-permission-panel.test.tsx`
 Expected: PASS
@@ -574,10 +704,10 @@ Commit:
 
 ```bash
 git add web/packages/api-client/src/console-roles.ts web/app/src/features/settings/components/RolePermissionPanel.tsx web/app/src/features/settings/_tests/role-permission-panel.test.tsx
-git commit -m "feat(web): manage role auto grant policy in settings"
+git commit -m "feat(web): manage role policy flags in settings"
 ```
 
-## Task 4: Full Verification And Final Feature Commit
+## Task 5: Run Full Verification And Commit The Integrated Feature
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-14-role-auto-grant-new-permissions.md`
@@ -585,7 +715,7 @@ git commit -m "feat(web): manage role auto grant policy in settings"
 - [ ] **Step 1: Run the backend verification suite**
 
 Run: `node scripts/node/verify-backend.js`
-Expected: PASS with no failing cargo or formatting checks.
+Expected: PASS with no failing cargo, format, or route tests.
 
 - [ ] **Step 2: Run the frontend verification suite**
 
@@ -604,30 +734,30 @@ Run:
 
 ```bash
 git status --short
-git diff --stat HEAD~3..HEAD
+git diff --stat HEAD~4..HEAD
 ```
 
-Expected: Only the role auto-grant backend/frontend files and this plan/spec chain are part of the feature diff.
+Expected: Only the role policy backend/frontend files plus the updated spec/plan and memory notes are part of this feature work.
 
 - [ ] **Step 4: Commit the integrated feature**
 
 Run:
 
 ```bash
-git add api/crates/domain/src/auth.rs api/crates/access-control/src/catalog.rs api/crates/storage-pg/src/_tests/mod.rs api/crates/storage-pg/src/_tests/migration_smoke.rs api/crates/storage-pg/src/_tests/role_auto_grant_tests.rs api/crates/storage-pg/src/mappers/role_mapper.rs api/crates/storage-pg/src/repositories.rs api/crates/storage-pg/src/auth_repository.rs api/crates/storage-pg/src/role_repository.rs api/crates/storage-pg/migrations/20260414193000_add_role_auto_grant_new_permissions.sql api/crates/control-plane/src/ports.rs api/crates/control-plane/src/role.rs api/crates/control-plane/src/_tests/support.rs api/crates/control-plane/src/_tests/role_service_tests.rs api/apps/api-server/src/routes/roles.rs api/apps/api-server/src/_tests/role_routes.rs web/packages/api-client/src/console-roles.ts web/app/src/features/settings/components/RolePermissionPanel.tsx web/app/src/features/settings/_tests/role-permission-panel.test.tsx
-git commit -m "feat: auto grant new permissions for opted-in roles"
+git add api/crates/domain/src/auth.rs api/crates/access-control/src/catalog.rs api/crates/storage-pg/src/_tests/mod.rs api/crates/storage-pg/src/_tests/migration_smoke.rs api/crates/storage-pg/src/_tests/role_policy_tests.rs api/crates/storage-pg/src/mappers/role_mapper.rs api/crates/storage-pg/src/repositories.rs api/crates/storage-pg/src/auth_repository.rs api/crates/storage-pg/src/role_repository.rs api/crates/storage-pg/src/member_repository.rs api/crates/storage-pg/migrations/20260414203000_add_role_policy_flags.sql api/crates/control-plane/src/ports.rs api/crates/control-plane/src/role.rs api/crates/control-plane/src/_tests/support.rs api/crates/control-plane/src/_tests/role_service_tests.rs api/crates/control-plane/src/_tests/member_service_tests.rs api/apps/api-server/src/routes/roles.rs api/apps/api-server/src/_tests/role_routes.rs api/apps/api-server/src/_tests/member_routes.rs web/packages/api-client/src/console-roles.ts web/app/src/features/settings/components/RolePermissionPanel.tsx web/app/src/features/settings/_tests/role-permission-panel.test.tsx
+git commit -m "feat: add role policy flags and default member role"
 ```
 
 ## Self-Review
 
 - Spec coverage:
-  - role-level policy field: Task 1 and Task 2
-  - builtin defaults `admin=true`, `manager=false`: Task 1
-  - only future permissions, no backfill: Task 1 storage sync logic and tests
-  - settings checkbox create/edit/save: Task 3
+  - role-level auto-grant policy: Task 1, Task 2, Task 4
+  - unique default member role: Task 1, Task 2, Task 3, Task 4
+  - `manager` stays default for new members: Task 1
+  - switching default only affects future users: Task 3 tests and repository logic
 - Placeholder scan:
   - no placeholder markers remain
 - Type consistency:
-  - backend field name is always `auto_grant_new_permissions`
-  - create/update API contracts use `Option<bool>` / optional boolean consistently
-  - frontend uses the same snake_case field to match the existing API shape
+  - backend and frontend both use `auto_grant_new_permissions`
+  - backend and frontend both use `is_default_member_role`
+  - create/update contracts keep both flags optional and preserve old behavior when omitted
