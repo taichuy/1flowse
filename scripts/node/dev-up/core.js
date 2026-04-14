@@ -6,6 +6,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const ACTIONS = new Set(['start', 'ensure', 'stop', 'status', 'restart']);
 const SCOPES = new Set(['all', 'frontend', 'backend']);
 const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '127.0.0.0/8', '::1'];
+const LOCAL_POSTGRES_HOSTS = new Set(['127.0.0.1', 'localhost']);
 
 function getRepoRoot() {
   return path.resolve(__dirname, '..', '..', '..');
@@ -281,6 +282,122 @@ function buildServiceEnv(service, sourceEnv = process.env) {
   });
 }
 
+function getCommandOutput(result) {
+  return [result?.stdout, result?.stderr, result?.error?.message].filter(Boolean).join('\n');
+}
+
+function writeCommandOutput(result) {
+  if (result?.stdout) {
+    process.stdout.write(result.stdout);
+  }
+
+  if (result?.stderr) {
+    process.stderr.write(result.stderr);
+  }
+}
+
+function isMigrationChecksumMismatch(result) {
+  return getCommandOutput(result).includes('was previously applied but has been modified');
+}
+
+function quotePostgresIdentifier(identifier) {
+  return `"${String(identifier).replaceAll('"', '""')}"`;
+}
+
+function parsePostgresDatabaseUrl(databaseUrl) {
+  if (!databaseUrl) {
+    return null;
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(databaseUrl);
+  } catch (_error) {
+    return null;
+  }
+
+  if (parsedUrl.protocol !== 'postgres:' && parsedUrl.protocol !== 'postgresql:') {
+    return null;
+  }
+
+  const databaseName = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
+  if (!databaseName) {
+    return null;
+  }
+
+  return {
+    host: parsedUrl.hostname.trim().toLowerCase(),
+    port: parsedUrl.port || '5432',
+    user: decodeURIComponent(parsedUrl.username || 'postgres'),
+    databaseName,
+  };
+}
+
+function getMiddlewarePostgresPort(repoRoot) {
+  const dockerDir = path.join(repoRoot, 'docker');
+  for (const fileName of ['middleware.env', 'middleware.env.example']) {
+    const fileEnv = parseEnvFile(path.join(dockerDir, fileName));
+    if (fileEnv.POSTGRES_PORT) {
+      return String(fileEnv.POSTGRES_PORT);
+    }
+  }
+
+  return '35432';
+}
+
+function buildLocalPostgresResetPlan(service, databaseUrl) {
+  if (!service?.repoRoot) {
+    return null;
+  }
+
+  const database = parsePostgresDatabaseUrl(databaseUrl);
+  if (!database || !LOCAL_POSTGRES_HOSTS.has(database.host)) {
+    return null;
+  }
+
+  const expectedPort = getMiddlewarePostgresPort(service.repoRoot);
+  if (database.port !== expectedPort) {
+    return null;
+  }
+
+  const quotedDatabaseName = quotePostgresIdentifier(database.databaseName);
+  return {
+    databaseName: database.databaseName,
+    commands: [
+      {
+        description: `重建开发数据库 ${database.databaseName}`,
+        args: [
+          'exec',
+          '-T',
+          'db',
+          'psql',
+          '-U',
+          database.user,
+          '-d',
+          'postgres',
+          '-c',
+          `DROP DATABASE IF EXISTS ${quotedDatabaseName} WITH (FORCE);`,
+        ],
+      },
+      {
+        description: `创建开发数据库 ${database.databaseName}`,
+        args: [
+          'exec',
+          '-T',
+          'db',
+          'psql',
+          '-U',
+          database.user,
+          '-d',
+          'postgres',
+          '-c',
+          `CREATE DATABASE ${quotedDatabaseName};`,
+        ],
+      },
+    ],
+  };
+}
+
 function parseApiEnvironment(value) {
   const normalized = String(value || 'development')
     .trim()
@@ -316,6 +433,88 @@ function getServicePrestartCommands(service, sourceEnv = process.env) {
       env,
     },
   ];
+}
+
+function tryRecoverApiServerPrestartFailure(
+  service,
+  prestartCommand,
+  result,
+  { runMiddlewareComposeImpl = runMiddlewareCompose, logImpl = log } = {}
+) {
+  if (!service || service.key !== 'api-server' || !prestartCommand?.env) {
+    return false;
+  }
+
+  if (parseApiEnvironment(prestartCommand.env.API_ENV) === 'production') {
+    return false;
+  }
+
+  if (!isMigrationChecksumMismatch(result)) {
+    return false;
+  }
+
+  const resetPlan = buildLocalPostgresResetPlan(service, prestartCommand.env.API_DATABASE_URL);
+  if (!resetPlan) {
+    return false;
+  }
+
+  logImpl(
+    `${service.label} 检测到本地开发数据库 migration checksum 失配，准备重建数据库 ${resetPlan.databaseName}`
+  );
+
+  for (const command of resetPlan.commands) {
+    const resetResult = runMiddlewareComposeImpl(service.repoRoot, command.args, {
+      captureOutput: true,
+      allowFailure: true,
+    });
+    ensureCommandSuccess(command.description, resetResult);
+  }
+
+  logImpl(`${service.label} 已重建数据库 ${resetPlan.databaseName}，重试预启动步骤`);
+  return true;
+}
+
+function runServicePrestartCommands(
+  service,
+  {
+    sourceEnv = process.env,
+    runCommandImpl = runCommand,
+    runMiddlewareComposeImpl = runMiddlewareCompose,
+    logImpl = log,
+  } = {}
+) {
+  for (const prestartCommand of getServicePrestartCommands(service, sourceEnv)) {
+    logImpl(`${service.label} 执行预启动步骤：${prestartCommand.description}`);
+    let recovered = false;
+
+    while (true) {
+      const result = runCommandImpl(prestartCommand.command, prestartCommand.args, {
+        cwd: prestartCommand.cwd,
+        env: prestartCommand.env,
+        captureOutput: true,
+      });
+
+      if (!result.error && result.status === 0) {
+        writeCommandOutput(result);
+        break;
+      }
+
+      writeCommandOutput(result);
+
+      if (
+        !recovered &&
+        tryRecoverApiServerPrestartFailure(service, prestartCommand, result, {
+          runMiddlewareComposeImpl,
+          logImpl,
+        })
+      ) {
+        recovered = true;
+        continue;
+      }
+
+      ensureCommandSuccess(prestartCommand.description, result);
+    }
+  }
 }
 
 function runCommand(command, args, options = {}) {
@@ -560,15 +759,7 @@ async function waitForProcessExit(pid, timeoutMs = 5000) {
 async function startService(service) {
   ensureServiceEnvFile(service);
   requireCommand(service.command);
-
-  for (const prestartCommand of getServicePrestartCommands(service)) {
-    log(`${service.label} 执行预启动步骤：${prestartCommand.description}`);
-    const result = runCommand(prestartCommand.command, prestartCommand.args, {
-      cwd: prestartCommand.cwd,
-      env: prestartCommand.env,
-    });
-    ensureCommandSuccess(prestartCommand.description, result);
-  }
+  runServicePrestartCommands(service);
 
   const pidRecord = readPidRecord(service.pidFile);
   if (pidRecord && isProcessAlive(pidRecord.pid) && (await isPortOpen(getProbeHost(service), service.port))) {
@@ -735,6 +926,7 @@ module.exports = {
   ensureServiceEnvFile,
   buildServiceEnv,
   getServicePrestartCommands,
+  runServicePrestartCommands,
   ensureRustfsVolumePermissions,
   main,
 };
