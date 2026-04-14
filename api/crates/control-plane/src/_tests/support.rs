@@ -327,6 +327,8 @@ impl RoleRepository for MemoryRoleRepository {
             scope_kind: RoleScopeKind::Workspace,
             is_builtin: false,
             is_editable: true,
+            auto_grant_new_permissions: false,
+            is_default_member_role: false,
             permissions: Vec::new(),
         });
         Ok(())

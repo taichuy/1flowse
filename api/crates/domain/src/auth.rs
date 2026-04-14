@@ -155,6 +155,8 @@ pub struct RoleTemplate {
     pub scope_kind: RoleScopeKind,
     pub is_builtin: bool,
     pub is_editable: bool,
+    pub auto_grant_new_permissions: bool,
+    pub is_default_member_role: bool,
     pub permissions: Vec<String>,
 }
 

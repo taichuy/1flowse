@@ -231,6 +231,8 @@ pub(crate) fn stored_role_from_row(row: sqlx::postgres::PgRow) -> StoredRoleRow 
         scope_kind: decode_role_scope_kind(&scope_kind),
         is_builtin: row.get("is_builtin"),
         is_editable: row.get("is_editable"),
+        auto_grant_new_permissions: row.get("auto_grant_new_permissions"),
+        is_default_member_role: row.get("is_default_member_role"),
     }
 }
 
@@ -241,7 +243,15 @@ pub(crate) async fn find_role_by_code(
 ) -> Result<Option<StoredRoleRow>> {
     let row = sqlx::query(
         r#"
-        select id, code, name, scope_kind, is_builtin, is_editable
+        select
+          id,
+          code,
+          name,
+          scope_kind,
+          is_builtin,
+          is_editable,
+          auto_grant_new_permissions,
+          is_default_member_role
         from roles
         where (scope_kind = 'system' and code = $1)
            or (scope_kind = 'workspace' and workspace_id = $2 and code = $1)

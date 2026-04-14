@@ -102,18 +102,15 @@ impl BootstrapRepository for PgControlPlaneStore {
 
     async fn upsert_permission_catalog(&self, permissions: &[PermissionDefinition]) -> Result<()> {
         let mut tx = self.pool().begin().await?;
+        let mut inserted_permission_ids = Vec::new();
 
         for permission in permissions {
-            sqlx::query(
+            let inserted_permission_id: Option<Uuid> = sqlx::query_scalar(
                 r#"
                 insert into permission_definitions (id, resource, action, scope, code, name, introduction)
                 values ($1, $2, $3, $4, $5, $6, '')
-                on conflict (code) do update
-                  set resource = excluded.resource,
-                      action = excluded.action,
-                      scope = excluded.scope,
-                      name = excluded.name,
-                      updated_at = now()
+                on conflict (code) do nothing
+                returning id
                 "#,
             )
             .bind(Uuid::now_v7())
@@ -122,8 +119,58 @@ impl BootstrapRepository for PgControlPlaneStore {
             .bind(&permission.scope)
             .bind(&permission.code)
             .bind(&permission.name)
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            sqlx::query(
+                r#"
+                update permission_definitions
+                set resource = $2,
+                    action = $3,
+                    scope = $4,
+                    name = $5,
+                    updated_at = now()
+                where code = $1
+                "#,
+            )
+            .bind(&permission.code)
+            .bind(&permission.resource)
+            .bind(&permission.action)
+            .bind(&permission.scope)
+            .bind(&permission.name)
             .execute(&mut *tx)
             .await?;
+
+            if let Some(permission_id) = inserted_permission_id {
+                inserted_permission_ids.push(permission_id);
+            }
+        }
+
+        for permission_id in inserted_permission_ids {
+            let role_ids: Vec<Uuid> = sqlx::query_scalar(
+                r#"
+                select id
+                from roles
+                where auto_grant_new_permissions = true
+                "#,
+            )
+            .fetch_all(&mut *tx)
+            .await?;
+
+            for role_id in role_ids {
+                sqlx::query(
+                    r#"
+                    insert into role_permissions (id, role_id, permission_id)
+                    values ($1, $2, $3)
+                    on conflict (role_id, permission_id) do nothing
+                    "#,
+                )
+                .bind(Uuid::now_v7())
+                .bind(role_id)
+                .bind(permission_id)
+                .execute(&mut *tx)
+                .await?;
+            }
         }
 
         tx.commit().await?;
@@ -223,8 +270,20 @@ impl BootstrapRepository for PgControlPlaneStore {
 
             let inserted_role_id: Option<Uuid> = sqlx::query_scalar(
                 r#"
-                insert into roles (id, scope_kind, workspace_id, code, name, introduction, is_builtin, is_editable, system_kind)
-                values ($1, $2, $3, $4, $5, '', $6, $7, $8)
+                insert into roles (
+                    id,
+                    scope_kind,
+                    workspace_id,
+                    code,
+                    name,
+                    introduction,
+                    is_builtin,
+                    is_editable,
+                    auto_grant_new_permissions,
+                    is_default_member_role,
+                    system_kind
+                )
+                values ($1, $2, $3, $4, $5, '', $6, $7, $8, $9, $10)
                 on conflict do nothing
                 returning id
                 "#,
@@ -236,6 +295,8 @@ impl BootstrapRepository for PgControlPlaneStore {
             .bind(&role.name)
             .bind(role.is_builtin)
             .bind(role.is_editable)
+            .bind(role.auto_grant_new_permissions)
+            .bind(role.is_default_member_role)
             .bind(&role.code)
             .fetch_optional(&mut *tx)
             .await?;

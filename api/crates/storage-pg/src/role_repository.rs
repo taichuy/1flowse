@@ -28,7 +28,15 @@ impl RoleRepository for PgControlPlaneStore {
     async fn list_roles(&self, workspace_id: Uuid) -> Result<Vec<domain::RoleTemplate>> {
         let rows = sqlx::query(
             r#"
-            select id, code, name, scope_kind, is_builtin, is_editable
+            select
+              id,
+              code,
+              name,
+              scope_kind,
+              is_builtin,
+              is_editable,
+              auto_grant_new_permissions,
+              is_default_member_role
             from roles
             where scope_kind = 'workspace' and workspace_id = $1
             order by scope_kind asc, code asc

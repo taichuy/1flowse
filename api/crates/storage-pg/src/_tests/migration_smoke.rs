@@ -124,6 +124,8 @@ async fn migration_smoke_creates_workspace_tables_and_workspace_scoped_indexes()
     assert!(tables.contains(&"workspace_memberships".to_string()));
     assert!(workspace_columns.contains(&"tenant_id".to_string()));
     assert!(role_columns.contains(&"workspace_id".to_string()));
+    assert!(role_columns.contains(&"auto_grant_new_permissions".to_string()));
+    assert!(role_columns.contains(&"is_default_member_role".to_string()));
     assert!(audit_log_columns.contains(&"workspace_id".to_string()));
     assert!(permission_codes.contains(&"workspace.configure.all".to_string()));
     assert_eq!(root_tenant_code.as_deref(), Some("root-tenant"));

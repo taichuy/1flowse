@@ -179,6 +179,8 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
             scope_kind: RoleScopeKind::System,
             is_builtin: true,
             is_editable: false,
+            auto_grant_new_permissions: false,
+            is_default_member_role: false,
             permissions: Vec::new(),
         },
         RoleTemplate {
@@ -187,6 +189,8 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
             scope_kind: RoleScopeKind::Workspace,
             is_builtin: true,
             is_editable: true,
+            auto_grant_new_permissions: true,
+            is_default_member_role: false,
             permissions: all_codes.clone(),
         },
         RoleTemplate {
@@ -195,6 +199,8 @@ pub fn builtin_role_templates() -> Vec<RoleTemplate> {
             scope_kind: RoleScopeKind::Workspace,
             is_builtin: true,
             is_editable: true,
+            auto_grant_new_permissions: false,
+            is_default_member_role: true,
             permissions: manager_permissions,
         },
     ]
