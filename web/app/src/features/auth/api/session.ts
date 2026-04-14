@@ -18,6 +18,25 @@ export function getAuthApiBaseUrl(
   return import.meta.env.VITE_API_BASE_URL ?? getDefaultApiBaseUrl(locationLike);
 }
 
+export function getScalarApiBaseUrl(
+  locationLike: ApiBaseUrlLocation | undefined =
+    typeof window !== 'undefined' ? window.location : undefined
+): string {
+  if (import.meta.env.VITE_SCALAR_API_BASE_URL) {
+    return import.meta.env.VITE_SCALAR_API_BASE_URL;
+  }
+
+  if (locationLike?.origin) {
+    return locationLike.origin;
+  }
+
+  const protocol = locationLike?.protocol === 'https:' ? 'https:' : 'http:';
+  const hostname = locationLike?.hostname || '127.0.0.1';
+  const port = locationLike?.port;
+
+  return port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
+}
+
 export function signInWithPassword(
   input: PasswordSignInInput,
   baseUrl = getAuthApiBaseUrl()

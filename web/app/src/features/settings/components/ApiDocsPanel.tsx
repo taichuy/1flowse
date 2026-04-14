@@ -8,7 +8,7 @@ import { Empty, Input, Result, Select, Spin, Typography } from 'antd';
 
 import {
   fetchCurrentSession,
-  getAuthApiBaseUrl
+  getScalarApiBaseUrl
 } from '../../auth/api/session';
 import {
   fetchSettingsApiDocsCatalog,
@@ -500,7 +500,7 @@ export function ApiDocsPanel() {
               operationSpecQuery.data,
               docsViewerSessionQuery.data
             ),
-            baseServerURL: getAuthApiBaseUrl(),
+            baseServerURL: getScalarApiBaseUrl(),
             content: operationSpecQuery.data,
             showSidebar: false
           }}

@@ -27,7 +27,8 @@ const docsApi = vi.hoisted(() => ({
 
 const authApi = vi.hoisted(() => ({
   fetchCurrentSession: vi.fn(),
-  getAuthApiBaseUrl: vi.fn(() => 'http://127.0.0.1:7800')
+  getAuthApiBaseUrl: vi.fn(() => 'http://127.0.0.1:7800'),
+  getScalarApiBaseUrl: vi.fn(() => 'http://127.0.0.1:3100')
 }));
 
 vi.mock('../api/api-docs', () => docsApi);
@@ -346,7 +347,7 @@ describe('ApiDocsPanel', () => {
 
     expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent('/api/console/members');
     expect(screen.getByTestId('scalar-viewer')).not.toHaveTextContent('"operationId":"patch_me"');
-    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"baseServerURL":"http://127.0.0.1:7800"');
+    expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"baseServerURL":"http://127.0.0.1:3100"');
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"preferredSecurityScheme":["sessionCookie"]');
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"value":"session-123"');
     expect(screen.getByTestId('scalar-viewer')).toHaveTextContent('"value":"csrf-123"');
@@ -359,6 +360,23 @@ describe('ApiDocsPanel', () => {
     );
     expect(docsApi.fetchSettingsApiDocsOperationSpec).toHaveBeenCalledWith('list_members');
     expect(authApi.fetchCurrentSession).toHaveBeenCalled();
+    expect(authApi.getScalarApiBaseUrl).toHaveBeenCalled();
+  });
+
+  test('uses the dedicated Scalar base URL override when provided', async () => {
+    authApi.getScalarApiBaseUrl.mockReturnValueOnce('https://docs.flowse.test');
+
+    renderApp('/settings/docs?category=console');
+
+    fireEvent.click(await screen.findByRole('button', { name: /get \/api\/console\/members/i }));
+
+    await waitFor(() => {
+      expect(window.location.search).toBe('?category=console&operation=list_members');
+    });
+
+    expect(await screen.findByTestId('scalar-viewer')).toHaveTextContent(
+      '"baseServerURL":"https://docs.flowse.test"'
+    );
   });
 
   test('uses cookie plus csrf authentication defaults for mutating console operations', async () => {

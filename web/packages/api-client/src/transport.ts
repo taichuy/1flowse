@@ -9,6 +9,8 @@ export interface HealthResponse {
 export interface ApiBaseUrlLocation {
   protocol?: string;
   hostname?: string;
+  port?: string;
+  origin?: string;
 }
 
 interface ApiSuccessEnvelope<T> {
