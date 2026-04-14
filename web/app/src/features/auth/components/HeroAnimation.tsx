@@ -1,0 +1,105 @@
+import { Typography, theme } from 'antd';
+import React from 'react';
+
+export function HeroAnimation() {
+  const { token } = theme.useToken();
+  
+  return (
+    <div
+      style={{
+        flex: 1,
+        backgroundColor: token.colorBgLayout,
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        className="hero-shape shape-1"
+        style={{
+          position: 'absolute',
+          width: '600px',
+          height: '600px',
+          borderRadius: '50%',
+          background: `radial-gradient(circle at center, ${token.colorPrimary}40 0%, transparent 70%)`,
+          top: '-10%',
+          left: '-10%',
+          filter: 'blur(40px)',
+        }}
+      />
+      <div
+        className="hero-shape shape-2"
+        style={{
+          position: 'absolute',
+          width: '800px',
+          height: '800px',
+          borderRadius: '50%',
+          background: `radial-gradient(circle at center, ${token.colorInfo}30 0%, transparent 70%)`,
+          bottom: '-20%',
+          right: '-10%',
+          filter: 'blur(60px)',
+        }}
+      />
+      <div
+        className="hero-shape shape-3"
+        style={{
+          position: 'absolute',
+          width: '400px',
+          height: '400px',
+          borderRadius: '50%',
+          background: `radial-gradient(circle at center, ${token.colorSuccess}20 0%, transparent 70%)`,
+          top: '40%',
+          left: '60%',
+          filter: 'blur(30px)',
+        }}
+      />
+      
+      <div style={{ zIndex: 1, textAlign: 'left', padding: '0 80px', maxWidth: 800 }}>
+        <Typography.Title level={1} style={{ fontSize: '3.5rem', marginBottom: 16 }}>
+          1Flowse
+        </Typography.Title>
+        <Typography.Paragraph style={{ fontSize: '1.25rem', color: token.colorTextSecondary, maxWidth: 500 }}>
+          构建下一代智能工作流编排引擎。将复杂的业务逻辑转化为可视化、可观测、可扩展的自动化流程。
+        </Typography.Paragraph>
+      </div>
+
+      <style>
+        {`
+          .hero-shape {
+            animation: float 20s ease-in-out infinite alternate;
+          }
+          .shape-1 {
+            animation-delay: 0s;
+            animation-duration: 25s;
+          }
+          .shape-2 {
+            animation-delay: -5s;
+            animation-duration: 30s;
+            animation-direction: alternate-reverse;
+          }
+          .shape-3 {
+            animation-delay: -10s;
+            animation-duration: 20s;
+          }
+
+          @keyframes float {
+            0% {
+              transform: translate(0, 0) scale(1);
+            }
+            33% {
+              transform: translate(30px, -50px) scale(1.1);
+            }
+            66% {
+              transform: translate(-20px, 20px) scale(0.9);
+            }
+            100% {
+              transform: translate(0, 0) scale(1);
+            }
+          }
+        `}
+      </style>
+    </div>
+  );
+}

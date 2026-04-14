@@ -3,6 +3,7 @@ import { Menu } from 'antd';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { createAccountMenuItems } from '../app-shell/account-menu-items';
+import { SignInPage } from '../features/auth/pages/SignInPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';
 import { MePage } from '../features/me/pages/MePage';
@@ -80,7 +81,8 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'page.embedded-apps': () => renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
   'page.tools': () => renderShellScene('/tools', <ToolsPage />),
   'page.settings': () => renderShellScene('/settings', <SettingsPage />),
-  'page.me': () => renderShellScene('/me', <MePage />)
+  'page.me': () => renderShellScene('/me', <MePage />),
+  'page.sign-in': () => <SignInPage />
 };
 
 export function getSceneManifest(): StyleBoundaryManifestScene[] {

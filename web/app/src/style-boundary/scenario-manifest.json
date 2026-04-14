@@ -190,5 +190,29 @@
         ]
       }
     ]
+  },
+  {
+    "id": "page.sign-in",
+    "kind": "page",
+    "title": "Sign In Page",
+    "impactFiles": [
+      "web/app/src/styles/tokens.css",
+      "web/app/src/styles/globals.css",
+      "web/app/src/features/auth/pages/SignInPage.tsx",
+      "web/app/src/features/auth/components/HeroAnimation.tsx",
+      "web/app/src/app/router.tsx"
+    ],
+    "boundaryNodes": [
+      {
+        "id": "sign-in-container",
+        "selector": ".ant-btn-primary",
+        "propertyAssertions": [
+          {
+            "property": "display",
+            "expected": "inline-flex"
+          }
+        ]
+      }
+    ]
   }
 ]

@@ -1,13 +1,15 @@
-import { Alert, Button, Form, Input, Space, Typography } from 'antd';
+import { Alert, Button, Form, Input, Space, Typography, theme } from 'antd';
 import { useState } from 'react';
 
 import { useNavigate } from '@tanstack/react-router';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { fetchCurrentMe, signInWithPassword } from '../api/session';
+import { HeroAnimation } from '../components/HeroAnimation';
 
 export function SignInPage() {
   const navigate = useNavigate();
+  const { token } = theme.useToken();
   const setAuthenticated = useAuthStore((state) => state.setAuthenticated);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -39,35 +41,48 @@ export function SignInPage() {
   };
 
   return (
-    <div style={{ maxWidth: 420, margin: '72px auto' }}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <div>
-          <Typography.Title level={2}>登录</Typography.Title>
-          <Typography.Paragraph>
-            使用控制台账号登录 1Flowse，继续访问工作台与管理入口。
-          </Typography.Paragraph>
-        </div>
-        {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
-        <Form layout="vertical" onFinish={handleFinish} autoComplete="off">
-          <Form.Item
-            label="账号"
-            name="identifier"
-            rules={[{ required: true, message: '请输入账号或邮箱。' }]}
-          >
-            <Input placeholder="root / root@example.com" />
-          </Form.Item>
-          <Form.Item
-            label="密码"
-            name="password"
-            rules={[{ required: true, message: '请输入密码。' }]}
-          >
-            <Input.Password placeholder="请输入密码" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" loading={submitting} block>
-            登录
-          </Button>
-        </Form>
-      </Space>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw' }}>
+      <HeroAnimation />
+      <div 
+        style={{ 
+          flex: '0 0 480px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'center',
+          padding: '0 64px',
+          backgroundColor: token.colorBgContainer,
+          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.02)'
+        }}
+      >
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <div>
+            <Typography.Title level={2}>登录</Typography.Title>
+            <Typography.Paragraph>
+              使用控制台账号登录 1Flowse，继续访问工作台与管理入口。
+            </Typography.Paragraph>
+          </div>
+          {errorMessage ? <Alert type="error" message={errorMessage} showIcon /> : null}
+          <Form layout="vertical" onFinish={handleFinish} autoComplete="off">
+            <Form.Item
+              label="账号"
+              name="identifier"
+              rules={[{ required: true, message: '请输入账号或邮箱。' }]}
+            >
+              <Input placeholder="root / root@example.com" size="large" />
+            </Form.Item>
+            <Form.Item
+              label="密码"
+              name="password"
+              rules={[{ required: true, message: '请输入密码。' }]}
+            >
+              <Input.Password placeholder="请输入密码" size="large" />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={submitting} block size="large">
+              登录
+            </Button>
+          </Form>
+        </Space>
+      </div>
     </div>
   );
 }
