@@ -1,22 +1,29 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button,
-  Drawer,
+  Checkbox,
   Form,
   Input,
   Modal,
   Popconfirm,
   Space,
-  Table,
+  Tabs,
   Tag,
   Tree,
   Typography,
   message
 } from 'antd';
 import type { TreeDataNode } from 'antd';
-import { PlusOutlined, EditOutlined, SafetyCertificateOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  SearchOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  TeamOutlined,
+  SafetyCertificateOutlined
+} from '@ant-design/icons';
 
 import { useAuthStore } from '../../../state/auth-store';
 import { fetchSettingsPermissions, settingsPermissionsQueryKey, type SettingsPermission } from '../api/permissions';
@@ -32,28 +39,25 @@ import {
   type SettingsRole
 } from '../api/roles';
 
-// Helper to group permissions by resource into a Tree structure
-function buildPermissionTree(permissions: SettingsPermission[]): TreeDataNode[] {
-  const resourceMap = new Map<string, SettingsPermission[]>();
+// 分类映射，根据要求
+const RESOURCE_MAP: Record<string, { tab: string; label: string; order: number }> = {
+  'role_permission': { tab: '基础配置', label: '权限 (role_permission)', order: 1 },
+  'user': { tab: '基础配置', label: '用户 (user)', order: 2 },
+  'team': { tab: '基础配置', label: '团队 (team)', order: 3 },
+  'external_data_source': { tab: '基础配置', label: '数据源 (external_data_source)', order: 4 },
   
-  permissions.forEach(p => {
-    // If resource is empty, we fall back to action or 'other'
-    const res = p.resource || 'other';
-    if (!resourceMap.has(res)) {
-      resourceMap.set(res, []);
-    }
-    resourceMap.get(res)!.push(p);
-  });
+  'application': { tab: '系统管理', label: '应用 (application)', order: 1 },
+  'embedded_app': { tab: '系统管理', label: '子系统 (embedded_app)', order: 2 },
+  'plugin_config': { tab: '系统管理', label: '插件配置 (plugin_config)', order: 3 },
+  'state_model': { tab: '系统管理', label: '模型供应商 (state_model)', order: 4 },
+  
+  'route_page': { tab: '路由页面', label: '路由权限 (route_page)', order: 1 },
+  
+  'flow': { tab: 'Agent 应用', label: '工作流 (flow)', order: 1 },
+  'publish_endpoint': { tab: 'Agent 应用', label: '发布 (publish_endpoint)', order: 2 },
+};
 
-  return Array.from(resourceMap.entries()).map(([resource, perms]) => ({
-    title: resource,
-    key: `resource:${resource}`,
-    children: perms.map(p => ({
-      title: `${p.name} (${p.code})`,
-      key: p.code,
-    }))
-  }));
-}
+const TAB_ORDER = ['基础配置', '系统管理', '路由页面', 'Agent 应用', '其他'];
 
 export function RolePermissionPanel({
   canManageRoles
@@ -64,13 +68,16 @@ export function RolePermissionPanel({
   const queryClient = useQueryClient();
   const [messageApi, contextHolder] = message.useMessage();
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRoleCode, setSelectedRoleCode] = useState<string | null>(null);
+  
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<SettingsRole | null>(null);
-  const [permissionDrawerRole, setPermissionDrawerRole] = useState<SettingsRole | null>(null);
   
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
+  // Queries
   const rolesQuery = useQuery({
     queryKey: settingsRolesQueryKey,
     queryFn: fetchSettingsRoles
@@ -79,95 +86,104 @@ export function RolePermissionPanel({
   const permissionsQuery = useQuery({
     queryKey: settingsPermissionsQueryKey,
     queryFn: fetchSettingsPermissions,
-    enabled: !!permissionDrawerRole
   });
 
   const rolePermissionsQuery = useQuery({
-    queryKey: settingsRolePermissionsQueryKey(permissionDrawerRole?.code ?? 'none'),
-    queryFn: () => fetchSettingsRolePermissions(permissionDrawerRole?.code ?? ''),
-    enabled: Boolean(permissionDrawerRole)
+    queryKey: settingsRolePermissionsQueryKey(selectedRoleCode ?? 'none'),
+    queryFn: () => fetchSettingsRolePermissions(selectedRoleCode ?? ''),
+    enabled: Boolean(selectedRoleCode)
   });
 
-  const treeData = useMemo(() => {
-    return buildPermissionTree(permissionsQuery.data ?? []);
+  // Local state for fast UI updates
+  const [localCheckedCodes, setLocalCheckedCodes] = useState<string[]>([]);
+
+  useEffect(() => {
+    setLocalCheckedCodes(rolePermissionsQuery.data?.permission_codes ?? []);
+  }, [rolePermissionsQuery.data?.permission_codes]);
+
+  useEffect(() => {
+    if (!selectedRoleCode && rolesQuery.data?.length) {
+      setSelectedRoleCode(rolesQuery.data[0].code);
+    }
+  }, [rolesQuery.data, selectedRoleCode]);
+
+  const filteredRoles = useMemo(() => {
+    if (!rolesQuery.data) return [];
+    return rolesQuery.data.filter(r => 
+      r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      r.code.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [rolesQuery.data, searchQuery]);
+
+  const selectedRole = useMemo(() => {
+    return rolesQuery.data?.find(r => r.code === selectedRoleCode) || null;
+  }, [rolesQuery.data, selectedRoleCode]);
+
+  const tabsData = useMemo(() => {
+    const allPerms = permissionsQuery.data ?? [];
+    const tabsMap = new Map<string, Map<string, SettingsPermission[]>>();
+    
+    allPerms.forEach(p => {
+      const resKey = p.resource || 'other';
+      const mapInfo = RESOURCE_MAP[resKey];
+      const tabName = mapInfo ? mapInfo.tab : '其他';
+      
+      if (!tabsMap.has(tabName)) {
+        tabsMap.set(tabName, new Map());
+      }
+      const resMap = tabsMap.get(tabName)!;
+      if (!resMap.has(resKey)) {
+        resMap.set(resKey, []);
+      }
+      resMap.get(resKey)!.push(p);
+    });
+
+    return TAB_ORDER.filter(t => tabsMap.has(t)).map(tabName => {
+      const resMap = tabsMap.get(tabName)!;
+      const resources = Array.from(resMap.entries()).map(([resKey, perms]) => {
+        const mapInfo = RESOURCE_MAP[resKey];
+        return {
+          key: resKey,
+          label: mapInfo ? mapInfo.label : resKey,
+          order: mapInfo ? mapInfo.order : 99,
+          permissions: perms
+        };
+      }).sort((a, b) => a.order - b.order);
+
+      const treeData: TreeDataNode[] = resources.map(res => ({
+        title: res.label,
+        key: `resource:${res.key}`,
+        children: res.permissions.map(p => ({
+          title: <span title={p.code}>{p.name}</span>,
+          key: p.code
+        }))
+      }));
+
+      const tabLeafKeys = resources.flatMap(res => res.permissions.map(p => p.code));
+
+      return {
+        key: tabName,
+        label: tabName,
+        treeData,
+        tabLeafKeys
+      };
+    });
   }, [permissionsQuery.data]);
 
   const invalidateRoles = async () => {
     await queryClient.invalidateQueries({ queryKey: settingsRolesQueryKey });
-    if (permissionDrawerRole) {
+    if (selectedRoleCode) {
       await queryClient.invalidateQueries({
-        queryKey: settingsRolePermissionsQueryKey(permissionDrawerRole.code)
+        queryKey: settingsRolePermissionsQueryKey(selectedRoleCode)
       });
     }
   };
 
-  const createMutation = useMutation({
-    mutationFn: async (values: Record<string, unknown>) => {
-      if (!csrfToken) throw new Error('missing csrf token');
-      return createSettingsRole(
-        {
-          code: String(values.code ?? ''),
-          name: String(values.name ?? ''),
-          introduction: String(values.introduction ?? '')
-        },
-        csrfToken
-      );
-    },
-    onSuccess: async () => {
-      messageApi.success('角色创建成功');
-      createForm.resetFields();
-      setIsCreateModalOpen(false);
-      await invalidateRoles();
-    },
-    onError: () => {
-      messageApi.error('角色创建失败');
-    }
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async (values: Record<string, unknown>) => {
-      if (!csrfToken || !editingRole) throw new Error('missing csrf token or editing role');
-      return updateSettingsRole(
-        editingRole.code,
-        {
-          name: String(values.name ?? ''),
-          introduction: String(values.introduction ?? '')
-        },
-        csrfToken
-      );
-    },
-    onSuccess: async () => {
-      messageApi.success('角色更新成功');
-      setEditingRole(null);
-      await invalidateRoles();
-    },
-    onError: () => {
-      messageApi.error('角色更新失败');
-    }
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (roleCode: string) => {
-      if (!csrfToken) throw new Error('missing csrf token');
-      return deleteSettingsRole(roleCode, csrfToken);
-    },
-    onSuccess: async () => {
-      messageApi.success('角色已删除');
-      if (permissionDrawerRole?.code === deleteMutation.variables) {
-        setPermissionDrawerRole(null);
-      }
-      await invalidateRoles();
-    },
-    onError: () => {
-      messageApi.error('角色删除失败');
-    }
-  });
-
   const replacePermissionsMutation = useMutation({
     mutationFn: async (permissionCodes: string[]) => {
-      if (!csrfToken || !permissionDrawerRole) throw new Error('missing selection');
+      if (!csrfToken || !selectedRoleCode) throw new Error('missing selection');
       return replaceSettingsRolePermissions(
-        permissionDrawerRole.code,
+        selectedRoleCode,
         { permission_codes: permissionCodes },
         csrfToken
       );
@@ -178,7 +194,69 @@ export function RolePermissionPanel({
     },
     onError: () => {
       messageApi.error('权限更新失败');
+      // revert local state on error
+      setLocalCheckedCodes(rolePermissionsQuery.data?.permission_codes ?? []);
     }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (values: Record<string, unknown>) => {
+      if (!csrfToken) throw new Error('missing csrf token');
+      return createSettingsRole(
+        {
+          code: String(values.code ?? ''),
+          name: String(values.name ?? ''),
+          introduction: String(values.introduction ?? ''),
+          auto_grant_new_permissions: Boolean(values.auto_grant_new_permissions),
+          is_default_member_role: Boolean(values.is_default_member_role)
+        },
+        csrfToken
+      );
+    },
+    onSuccess: async () => {
+      messageApi.success('角色创建成功');
+      createForm.resetFields();
+      setIsCreateModalOpen(false);
+      await invalidateRoles();
+    },
+    onError: () => messageApi.error('角色创建失败')
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (values: Record<string, unknown>) => {
+      if (!csrfToken || !editingRole) throw new Error('missing csrf token or editing role');
+      return updateSettingsRole(
+        editingRole.code,
+        {
+          name: String(values.name ?? ''),
+          introduction: String(values.introduction ?? ''),
+          auto_grant_new_permissions: Boolean(values.auto_grant_new_permissions),
+          is_default_member_role: Boolean(values.is_default_member_role)
+        },
+        csrfToken
+      );
+    },
+    onSuccess: async () => {
+      messageApi.success('角色更新成功');
+      setEditingRole(null);
+      await invalidateRoles();
+    },
+    onError: () => messageApi.error('角色更新失败')
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (roleCode: string) => {
+      if (!csrfToken) throw new Error('missing csrf token');
+      return deleteSettingsRole(roleCode, csrfToken);
+    },
+    onSuccess: async (_, variables) => {
+      messageApi.success('角色已删除');
+      if (selectedRoleCode === variables) {
+        setSelectedRoleCode(rolesQuery.data?.[0]?.code ?? null);
+      }
+      await invalidateRoles();
+    },
+    onError: () => messageApi.error('角色删除失败')
   });
 
   const handleEditClick = (role: SettingsRole) => {
@@ -186,141 +264,172 @@ export function RolePermissionPanel({
     editForm.setFieldsValue({
       name: role.name,
       // @ts-expect-error type
-      introduction: role.introduction ?? ''
+      introduction: role.introduction ?? '',
+      auto_grant_new_permissions: role.auto_grant_new_permissions,
+      is_default_member_role: role.is_default_member_role
     });
   };
 
-  const handleTreeCheck = (
-    checkedKeys: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] }
-  ) => {
-    // antd tree onCheck returns either string[] or { checked: string[], halfChecked: string[] }
-    // We only care about the checked leaf nodes (the actual permission codes)
-    const keys = Array.isArray(checkedKeys) ? checkedKeys : checkedKeys.checked;
-    const permissionCodes = keys
-      .map(String)
-      .filter((k: string) => !k.startsWith('resource:'));
-    replacePermissionsMutation.mutate(permissionCodes);
-  };
-
-  const handleSelectAll = () => {
-    if (!permissionsQuery.data) return;
-    const allCodes = permissionsQuery.data.map(p => p.code);
-    replacePermissionsMutation.mutate(allCodes);
-  };
-
-  const handleClearAll = () => {
-    replacePermissionsMutation.mutate([]);
-  };
-
-  // Compute checked keys for Tree:
-  // Antd Tree expects both parent and leaf keys in checkedKeys if parent is checked.
-  // But since we extract only leaf keys to save to backend, 
-  // we can just pass the leaf permission codes to checkedKeys.
-  // The Tree component will automatically show parents as half-checked.
-  const checkedPermissionCodes = rolePermissionsQuery.data?.permission_codes ?? [];
-  const allPermissionsCount = permissionsQuery.data?.length ?? 0;
-  const isAllSelected = allPermissionsCount > 0 && checkedPermissionCodes.length === allPermissionsCount;
-
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', minHeight: 'calc(100vh - 120px)' }}>
       {contextHolder}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <Typography.Title level={3}>权限管理</Typography.Title>
-          <Typography.Paragraph type="secondary">
-            管理工作台角色、查看权限绑定，并在授权范围内调整角色定义。
-          </Typography.Paragraph>
-        </div>
-        {canManageRoles && (
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            新建角色
-          </Button>
-        )}
+      
+      <div>
+        <Typography.Title level={3}>角色权限管理</Typography.Title>
+        <Typography.Paragraph type="secondary">
+          管理工作台角色与查看权限绑定，使用左右布局快速切换选择角色并分配模块功能。
+        </Typography.Paragraph>
       </div>
 
-      <Table<SettingsRole>
-        rowKey="code"
-        loading={rolesQuery.isLoading}
-        dataSource={rolesQuery.data ?? []}
-        pagination={false}
-        columns={[
-          {
-            title: '角色名称',
-            render: (_, role) => (
-              <Space direction="vertical" size={0}>
-                <Typography.Text strong>{role.name}</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: '12px' }}>{role.code}</Typography.Text>
-              </Space>
-            )
-          },
-          {
-            title: '作用域',
-            dataIndex: 'scope_kind',
-            render: (kind) => <Tag color={kind === 'global' ? 'blue' : 'default'}>{kind}</Tag>
-          },
-          {
-            title: '类型',
-            dataIndex: 'is_builtin',
-            render: (isBuiltin) => <Tag color={isBuiltin ? 'gold' : 'green'}>{isBuiltin ? '内置' : '自定义'}</Tag>
-          },
-          {
-            title: '权限数量',
-            render: (_, role) => (
-              <Tag icon={<SafetyCertificateOutlined />}>
-                {role.permission_codes.length}
-              </Tag>
-            )
-          },
-          {
-            title: '操作',
-            width: 280,
-            render: (_, role) =>
-              canManageRoles ? (
-                <Space size="middle">
-                  <Button
-                    type="text"
-                    icon={<SafetyCertificateOutlined />}
-                    onClick={() => setPermissionDrawerRole(role)}
-                  >
-                    配置权限
-                  </Button>
-                  <Button
-                    type="text"
-                    icon={<EditOutlined />}
-                    onClick={() => handleEditClick(role)}
-                    disabled={!role.is_editable}
-                  >
-                    编辑
-                  </Button>
-                  <Popconfirm
-                    title="删除角色"
-                    description={`确定要删除角色 "${role.name}" 吗？此操作不可恢复。`}
-                    onConfirm={() => deleteMutation.mutate(role.code)}
-                    okText="删除"
-                    cancelText="取消"
-                    okButtonProps={{ danger: true, loading: deleteMutation.isPending && deleteMutation.variables === role.code }}
-                    disabled={!role.is_editable}
-                  >
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      disabled={!role.is_editable}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', border: '1px solid #f0f0f0', borderRadius: '8px', background: '#fff', overflow: 'hidden' }}>
+        
+        {/* 左侧：角色列表 */}
+        <div style={{ width: 280, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', background: '#fafafa', flexShrink: 0 }}>
+          <div style={{ padding: 16, borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              {canManageRoles && (
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />} 
+                  block 
+                  onClick={() => setIsCreateModalOpen(true)}
+                >
+                  新建角色
+                </Button>
+              )}
+              <Input 
+                placeholder="搜索角色..." 
+                prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                allowClear
+              />
+            </Space>
+          </div>
+          
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {rolesQuery.isLoading ? (
+              <div style={{ padding: 16, textAlign: 'center', color: '#bfbfbf' }}>加载中...</div>
+            ) : filteredRoles.length === 0 ? (
+              <div style={{ padding: 32, textAlign: 'center', color: '#bfbfbf' }}>暂无角色</div>
+            ) : (
+              <div style={{ padding: '8px 0' }}>
+                {filteredRoles.map(role => {
+                  const isActive = selectedRoleCode === role.code;
+                  return (
+                    <div
+                      key={role.code}
+                      onClick={() => setSelectedRoleCode(role.code)}
+                      style={{
+                        padding: '12px 16px',
+                        cursor: 'pointer',
+                        background: isActive ? '#e6f4ff' : 'transparent',
+                        borderRight: isActive ? '3px solid #1677ff' : '3px solid transparent',
+                        transition: 'all 0.2s'
+                      }}
                     >
-                      删除
-                    </Button>
-                  </Popconfirm>
-                </Space>
-              ) : (
-                <Typography.Text type="secondary">只读</Typography.Text>
-              )
-          }
-        ]}
-      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Typography.Text strong={isActive} style={{ color: isActive ? '#1677ff' : 'inherit' }}>
+                          {role.name}
+                        </Typography.Text>
+                        {role.is_builtin && <Tag color="gold" style={{ margin: 0, border: 'none' }}>内置</Tag>}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                        {role.code}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 右侧：权限配置详情 */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {selectedRole ? (
+            <>
+              {/* 头部信息 */}
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+                <div>
+                  <Typography.Title level={4} style={{ margin: 0, marginBottom: 8 }}>
+                    <SafetyCertificateOutlined style={{ marginRight: 8, color: '#1677ff' }} />
+                    {selectedRole.name}
+                  </Typography.Title>
+                  <Space size="large" style={{ color: '#595959' }}>
+                    <span>编码：{selectedRole.code}</span>
+                    <span>作用域：{selectedRole.scope_kind}</span>
+                    {/* @ts-expect-error type */}
+                    {selectedRole.introduction && <span>说明：{selectedRole.introduction}</span>}
+                    {selectedRole.auto_grant_new_permissions ? (
+                      <Tag color="blue">自动接收新增权限</Tag>
+                    ) : null}
+                    {selectedRole.is_default_member_role ? (
+                      <Tag color="green">默认新用户角色</Tag>
+                    ) : null}
+                  </Space>
+                </div>
+                {canManageRoles && selectedRole.is_editable && (
+                  <Space>
+                    <Button icon={<EditOutlined />} onClick={() => handleEditClick(selectedRole)}>编辑基本信息</Button>
+                    <Popconfirm
+                      title="确定要删除该角色吗？"
+                      onConfirm={() => deleteMutation.mutate(selectedRole.code)}
+                      okText="删除"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button danger icon={<DeleteOutlined />}>删除角色</Button>
+                    </Popconfirm>
+                  </Space>
+                )}
+              </div>
+
+              {/* 权限多 Tab 配置 */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+                {permissionsQuery.isLoading || rolePermissionsQuery.isLoading ? (
+                  <div style={{ padding: 32, textAlign: 'center' }}>加载权限数据中...</div>
+                ) : (
+                  <Tabs 
+                    defaultActiveKey={TAB_ORDER[0]} 
+                    items={tabsData.map(tab => ({
+                      key: tab.key,
+                      label: tab.label,
+                      children: (
+                        <div style={{ paddingBottom: 32 }}>
+                          <Tree
+                            checkable
+                            disabled={!canManageRoles || !selectedRole.is_editable}
+                            checkedKeys={localCheckedCodes.filter(code => tab.tabLeafKeys.includes(code))}
+                            onCheck={(checkedKeysValue) => {
+                              const keys = Array.isArray(checkedKeysValue) ? checkedKeysValue : checkedKeysValue.checked;
+                              const newlyCheckedLeaves = keys.map(String).filter(k => !k.startsWith('resource:'));
+                              
+                              const otherCheckedCodes = localCheckedCodes.filter(c => !tab.tabLeafKeys.includes(c));
+                              const newCodes = [...otherCheckedCodes, ...newlyCheckedLeaves];
+                              
+                              setLocalCheckedCodes(newCodes);
+                              replacePermissionsMutation.mutate(newCodes);
+                            }}
+                            treeData={tab.treeData}
+                            defaultExpandAll={false}
+                          />
+                        </div>
+                      )
+                    }))}
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#bfbfbf' }}>
+              <Space direction="vertical" align="center">
+                <TeamOutlined style={{ fontSize: 48 }} />
+                <Typography.Text type="secondary">请在左侧选择一个角色查看详情</Typography.Text>
+              </Space>
+            </div>
+          )}
+        </div>
+      </div>
 
       <Modal
         title="新建角色"
@@ -331,31 +440,40 @@ export function RolePermissionPanel({
         }}
         onOk={() => createForm.submit()}
         confirmLoading={createMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={createForm}
           layout="vertical"
           onFinish={(values) => createMutation.mutate(values)}
+          initialValues={{
+            auto_grant_new_permissions: false,
+            is_default_member_role: false
+          }}
           style={{ marginTop: 24 }}
         >
-          <Form.Item
-            label="角色名称"
-            name="name"
-            rules={[{ required: true, message: '请输入角色名称' }]}
-          >
+          <Form.Item label="角色名称" name="name" rules={[{ required: true, message: '请输入角色名称' }]}>
             <Input placeholder="例如：运营专员" />
           </Form.Item>
-          <Form.Item
-            label="角色编码"
-            name="code"
-            rules={[{ required: true, message: '请输入角色编码' }]}
-            extra="编码需全局唯一，创建后不可修改。"
-          >
+          <Form.Item label="角色编码" name="code" rules={[{ required: true, message: '请输入角色编码' }]} extra="编码需全局唯一，创建后不可修改。">
             <Input placeholder="例如：role_ops_specialist" />
           </Form.Item>
           <Form.Item label="角色说明" name="introduction">
             <Input.TextArea placeholder="简要描述该角色的职责和适用范围" rows={3} />
+          </Form.Item>
+          <Form.Item
+            name="auto_grant_new_permissions"
+            valuePropName="checked"
+            extra="开启后，仅对未来新增的权限自动授予当前角色。"
+          >
+            <Checkbox>自动接收后续新增权限</Checkbox>
+          </Form.Item>
+          <Form.Item
+            name="is_default_member_role"
+            valuePropName="checked"
+            extra="同一工作空间只能有一个默认新用户角色。"
+          >
+            <Checkbox>默认新用户角色</Checkbox>
           </Form.Item>
         </Form>
       </Modal>
@@ -366,7 +484,7 @@ export function RolePermissionPanel({
         onCancel={() => setEditingRole(null)}
         onOk={() => editForm.submit()}
         confirmLoading={updateMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={editForm}
@@ -374,64 +492,28 @@ export function RolePermissionPanel({
           onFinish={(values) => updateMutation.mutate(values)}
           style={{ marginTop: 24 }}
         >
-          <Form.Item
-            label="角色名称"
-            name="name"
-            rules={[{ required: true, message: '请输入角色名称' }]}
-          >
+          <Form.Item label="角色名称" name="name" rules={[{ required: true, message: '请输入角色名称' }]}>
             <Input />
           </Form.Item>
           <Form.Item label="角色说明" name="introduction">
             <Input.TextArea rows={3} />
           </Form.Item>
+          <Form.Item
+            name="auto_grant_new_permissions"
+            valuePropName="checked"
+            extra="开启后，仅对未来新增的权限自动授予当前角色。"
+          >
+            <Checkbox>自动接收后续新增权限</Checkbox>
+          </Form.Item>
+          <Form.Item
+            name="is_default_member_role"
+            valuePropName="checked"
+            extra="同一工作空间只能有一个默认新用户角色。"
+          >
+            <Checkbox>默认新用户角色</Checkbox>
+          </Form.Item>
         </Form>
       </Modal>
-
-      <Drawer
-        title={
-          <Space direction="vertical" size={0}>
-            <span>配置权限</span>
-            <Typography.Text type="secondary" style={{ fontSize: '12px', fontWeight: 'normal' }}>
-              {permissionDrawerRole?.name} ({permissionDrawerRole?.code})
-            </Typography.Text>
-          </Space>
-        }
-        placement="right"
-        width={500}
-        onClose={() => setPermissionDrawerRole(null)}
-        open={!!permissionDrawerRole}
-        destroyOnClose
-      >
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-              为该角色分配系统权限。勾选后将自动保存。
-            </Typography.Paragraph>
-            <Space>
-              <Button size="small" onClick={handleSelectAll} disabled={isAllSelected || !canManageRoles || !permissionDrawerRole?.is_editable}>
-                全选
-              </Button>
-              <Button size="small" onClick={handleClearAll} disabled={checkedPermissionCodes.length === 0 || !canManageRoles || !permissionDrawerRole?.is_editable}>
-                清空
-              </Button>
-            </Space>
-          </div>
-          <div style={{ maxHeight: 'calc(100vh - 150px)', overflowY: 'auto' }}>
-            {permissionsQuery.isLoading || rolePermissionsQuery.isLoading ? (
-              <Typography.Text type="secondary">加载中...</Typography.Text>
-            ) : (
-              <Tree
-                checkable
-                disabled={!canManageRoles || !permissionDrawerRole?.is_editable}
-                checkedKeys={checkedPermissionCodes}
-                onCheck={handleTreeCheck}
-                treeData={treeData}
-                defaultExpandAll={false}
-              />
-            )}
-          </div>
-        </Space>
-      </Drawer>
-    </Space>
+    </div>
   );
 }

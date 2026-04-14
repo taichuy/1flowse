@@ -6,6 +6,8 @@ export interface ConsoleRole {
   scope_kind: 'system' | 'workspace';
   is_builtin: boolean;
   is_editable: boolean;
+  auto_grant_new_permissions: boolean;
+  is_default_member_role: boolean;
   permission_codes: string[];
 }
 
@@ -18,11 +20,15 @@ export interface CreateConsoleRoleInput {
   code: string;
   name: string;
   introduction: string;
+  auto_grant_new_permissions?: boolean;
+  is_default_member_role?: boolean;
 }
 
 export interface UpdateConsoleRoleInput {
   name: string;
   introduction: string;
+  auto_grant_new_permissions?: boolean;
+  is_default_member_role?: boolean;
 }
 
 export interface ReplaceConsoleRolePermissionsInput {
