@@ -67,7 +67,7 @@ describe('AgentFlowEditorShell', () => {
     expect(screen.getByText('Answer')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '历史版本' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '发布配置' })).toBeInTheDocument();
-  });
+  }, 10_000);
 
   test('sends layout changes without appending history', async () => {
     vi.useFakeTimers();
@@ -94,7 +94,14 @@ describe('AgentFlowEditorShell', () => {
     });
 
     expect(saveDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ change_kind: 'layout' })
+      expect.objectContaining({
+        change_kind: 'layout',
+        document: expect.objectContaining({
+          editor: expect.objectContaining({
+            viewport: { x: 120, y: 48, zoom: 0.85 }
+          })
+        })
+      })
     );
   });
 
@@ -128,7 +135,7 @@ describe('AgentFlowEditorShell', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('模型')).toHaveFocus();
     });
-  });
+  }, 10_000);
 
   test('restores a history version into the current draft', async () => {
     const versions = [

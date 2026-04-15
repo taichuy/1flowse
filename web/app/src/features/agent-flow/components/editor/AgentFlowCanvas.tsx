@@ -1,8 +1,19 @@
 import '@xyflow/react/dist/style.css';
 
-import { Background, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import { AimOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
+import {
+  Background,
+  Panel,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  useViewport,
+  type NodeChange,
+  type Viewport
+} from '@xyflow/react';
 import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   createNextNodeId,
@@ -11,6 +22,7 @@ import {
 } from '../../lib/default-agent-flow-document';
 import {
   agentFlowNodeTypes,
+  agentFlowEdgeTypes,
   toCanvasEdges,
   toCanvasNodes
 } from '../nodes/node-registry';
@@ -23,6 +35,124 @@ interface AgentFlowCanvasProps {
   onOpenContainer: (nodeId: string) => void;
   onSelectNode: (nodeId: string | null) => void;
   onDocumentChange: (document: FlowAuthoringDocument) => void;
+}
+
+interface InsertNodeEventDetail {
+  edgeId: string;
+  nodeType: Parameters<typeof createNodeDocument>[0];
+  sourceNodeId: string;
+}
+
+function applyNodePositionChanges(
+  document: FlowAuthoringDocument,
+  changes: NodeChange[]
+) {
+  const nextPositionsByNodeId = new Map<string, { x: number; y: number }>();
+
+  for (const change of changes) {
+    if (change.type !== 'position' || !change.position) {
+      continue;
+    }
+
+    nextPositionsByNodeId.set(change.id, change.position);
+  }
+
+  if (nextPositionsByNodeId.size === 0) {
+    return document;
+  }
+
+  return {
+    ...document,
+    graph: {
+      ...document.graph,
+      nodes: document.graph.nodes.map((node) => {
+        const nextPosition = nextPositionsByNodeId.get(node.id);
+
+        if (!nextPosition) {
+          return node;
+        }
+
+        return {
+          ...node,
+          position: nextPosition
+        };
+      })
+    }
+  };
+}
+
+function applyViewportChanges(
+  document: FlowAuthoringDocument,
+  viewport: Viewport
+) {
+  const currentViewport = document.editor.viewport;
+
+  if (
+    currentViewport.x === viewport.x &&
+    currentViewport.y === viewport.y &&
+    currentViewport.zoom === viewport.zoom
+  ) {
+    return document;
+  }
+
+  return {
+    ...document,
+    editor: {
+      ...document.editor,
+      viewport: {
+        x: viewport.x,
+        y: viewport.y,
+        zoom: viewport.zoom
+      }
+    }
+  };
+}
+
+function ZoomToolbar() {
+  const reactFlow = useReactFlow();
+  const { zoom } = useViewport();
+
+  return (
+    <Panel position="bottom-left" style={{ left: 0, bottom: 0 }}>
+      <div className="agent-flow-zoom-toolbar">
+        <div aria-label="画布缩放工具栏" className="agent-flow-zoom-toolbar__actions" role="toolbar">
+          <Button
+            aria-label="缩小画布"
+            className="agent-flow-zoom-toolbar__button"
+            icon={<MinusOutlined />}
+            onClick={() => {
+              void reactFlow.zoomOut({ duration: 160 });
+            }}
+            size="small"
+            type="text"
+          />
+          <Button
+            aria-label="放大画布"
+            className="agent-flow-zoom-toolbar__button"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              void reactFlow.zoomIn({ duration: 160 });
+            }}
+            size="small"
+            type="text"
+          />
+          <Button
+            aria-label="适应画布"
+            className="agent-flow-zoom-toolbar__button"
+            icon={<AimOutlined />}
+            onClick={() => {
+              void reactFlow.fitView({ duration: 160, padding: 0.16 });
+            }}
+            size="small"
+            type="text"
+          />
+        </div>
+        <div aria-label="当前缩放" className="agent-flow-zoom-display">
+          {Math.round(zoom * 100)}%
+        </div>
+      </div>
+    </Panel>
+  );
 }
 
 function AgentFlowCanvasInner({
@@ -88,20 +218,62 @@ function AgentFlowCanvasInner({
     [activeContainerId, document]
   );
 
+  useEffect(() => {
+    const handleInsert = (event: Event) => {
+      const detail = (event as CustomEvent<InsertNodeEventDetail>).detail;
+      const anchorNode = document.graph.nodes.find((node) => node.id === detail.sourceNodeId);
+
+      if (!anchorNode) {
+        return;
+      }
+
+      const nextNode = createNodeDocument(
+        detail.nodeType,
+        createNextNodeId(document, detail.nodeType),
+        anchorNode.position.x + 280,
+        anchorNode.position.y
+      );
+      const nextDocument = insertNodeAfter(document, detail.sourceNodeId, nextNode);
+
+      onDocumentChange(nextDocument);
+      onSelectNode(nextNode.id);
+    };
+
+    window.addEventListener('agent-flow-insert-node', handleInsert);
+
+    return () => window.removeEventListener('agent-flow-insert-node', handleInsert);
+  }, [document, onDocumentChange, onSelectNode]);
+
   return (
     <div className="agent-flow-canvas">
       <ReactFlow
-        fitView
         edges={edges}
         nodes={nodes}
+        viewport={document.editor.viewport}
         nodeTypes={agentFlowNodeTypes}
+        edgeTypes={agentFlowEdgeTypes}
+        nodesDraggable
+        onNodesChange={(changes) => {
+          const nextDocument = applyNodePositionChanges(document, changes);
+
+          if (nextDocument !== document) {
+            onDocumentChange(nextDocument);
+          }
+        }}
+        onViewportChange={(viewport) => {
+          const nextDocument = applyViewportChanges(document, viewport);
+
+          if (nextDocument !== document) {
+            onDocumentChange(nextDocument);
+          }
+        }}
         onPaneClick={() => {
           onSelectNode(null);
           setPickerNodeId(null);
         }}
       >
         <Background gap={20} size={1} />
-        <Controls showInteractive={false} />
+        <ZoomToolbar />
       </ReactFlow>
     </div>
   );

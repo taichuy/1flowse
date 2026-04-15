@@ -28,19 +28,17 @@ export function AgentFlowOverlay({
 
   return (
     <div className="agent-flow-editor__overlay">
-      <div>
-        <Typography.Title className="agent-flow-editor__title" level={4}>
+      <div className="agent-flow-editor__overlay-status" style={{ display: 'flex', alignItems: 'center' }}>
+        <Typography.Text strong style={{ marginRight: 12, fontSize: 16 }}>
           {applicationName}
-        </Typography.Title>
-        <Space size="small">
-          <Tag color="green">{autosaveLabel}</Tag>
-          <Tag color={statusTag.color}>{statusTag.label}</Tag>
-        </Space>
+        </Typography.Text>
+        <Tag color="green" bordered={false}>{autosaveLabel}</Tag>
+        <Tag color={statusTag.color} bordered={false}>{statusTag.label}</Tag>
       </div>
       <Space size="small">
         <Button onClick={onOpenIssues}>Issues</Button>
         <Button onClick={onOpenHistory}>历史版本</Button>
-        <Button disabled={publishDisabled} onClick={onOpenPublish}>
+        <Button type="primary" disabled={publishDisabled} onClick={onOpenPublish}>
           发布配置
         </Button>
       </Space>

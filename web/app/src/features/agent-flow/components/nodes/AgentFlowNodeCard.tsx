@@ -40,6 +40,9 @@ export function AgentFlowNodeCard({
           ) : null}
         </div>
         <div className="agent-flow-node-card__title">{data.alias}</div>
+        {data.description?.trim().length ? (
+          <div className="agent-flow-node-card__description">{data.description}</div>
+        ) : null}
       </div>
       <Handle
         type="source"

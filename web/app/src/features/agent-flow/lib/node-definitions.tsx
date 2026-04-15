@@ -33,6 +33,11 @@ export interface NodeDefinition {
   }>;
 }
 
+const basicFields: NodeDefinitionField[] = [
+  { key: 'alias', label: '节点别名', editor: 'text', required: true },
+  { key: 'description', label: '节点简介', editor: 'text' }
+];
+
 export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
   start: {
     label: 'Start',
@@ -40,7 +45,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'outputs',
@@ -55,7 +60,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -82,7 +87,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -125,7 +130,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -159,7 +164,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -186,7 +191,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -213,7 +218,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -244,7 +249,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -271,7 +276,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -299,7 +304,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -322,7 +327,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -349,7 +354,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -383,7 +388,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -405,7 +410,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',
@@ -437,7 +442,7 @@ export const nodeDefinitions: Partial<Record<FlowNodeType, NodeDefinition>> = {
       {
         key: 'basics',
         title: 'Basics',
-        fields: [{ key: 'alias', label: '节点名称', editor: 'text', required: true }]
+        fields: basicFields
       },
       {
         key: 'inputs',

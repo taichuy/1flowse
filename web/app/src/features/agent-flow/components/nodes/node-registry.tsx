@@ -75,6 +75,7 @@ export interface AgentFlowCanvasNodeData extends Record<string, unknown> {
   nodeType: FlowNodeType;
   typeLabel: string;
   alias: string;
+  description?: string;
   issueCount: number;
   canEnterContainer: boolean;
   pickerOpen: boolean;
@@ -125,6 +126,7 @@ export function toCanvasNodes(
         nodeType: node.type,
         typeLabel: nodeTypeLabel(node.type),
         alias: node.alias,
+        description: node.description,
         issueCount: issueCountByNodeId[node.id] ?? 0,
         canEnterContainer: node.type === 'iteration' || node.type === 'loop',
         pickerOpen: pickerNodeId === node.id,

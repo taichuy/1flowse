@@ -192,6 +192,7 @@ export function AgentFlowEditorShell({
           openSectionKey={openSectionKey}
           onDocumentChange={setDocument}
           onFocusHandled={() => setFocusFieldKey(null)}
+          onClose={() => setSelectedNodeId(null)}
         />
       </div>
       {issues.some((issue) => issue.scope === 'global') ? (

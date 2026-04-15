@@ -106,4 +106,4 @@
 ## 目录外排除项
 
 以下内容即使仍然保留在仓库中，也不再作为 `.memory` 记忆检索输入：
-1. `.memory/` 根目录下不属于 `AGENTS.md`、`user-memory.md` 和四类记忆目录的其他文件
+1. `.memory/` 根目录下不属于 `AGENTS.md`、`user-memory.md` 和指定记忆目录的其他文件

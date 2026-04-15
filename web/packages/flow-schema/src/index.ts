@@ -49,6 +49,7 @@ export interface FlowNodeDocument {
   id: string;
   type: FlowNodeType;
   alias: string;
+  description?: string;
   containerId: string | null;
   position: { x: number; y: number };
   configVersion: number;
@@ -112,6 +113,7 @@ export function createDefaultAgentFlowDocument({
           id: 'node-start',
           type: 'start',
           alias: 'Start',
+          description: '',
           containerId: null,
           position: { x: 80, y: 220 },
           configVersion: 1,
@@ -123,6 +125,7 @@ export function createDefaultAgentFlowDocument({
           id: 'node-llm',
           type: 'llm',
           alias: 'LLM',
+          description: '',
           containerId: null,
           position: { x: 360, y: 220 },
           configVersion: 1,
@@ -136,6 +139,7 @@ export function createDefaultAgentFlowDocument({
           id: 'node-answer',
           type: 'answer',
           alias: 'Answer',
+          description: '',
           containerId: null,
           position: { x: 640, y: 220 },
           configVersion: 1,

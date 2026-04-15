@@ -62,7 +62,7 @@ export function ApplicationDetailPage({
       pageTitle={application.name}
       navItems={getApplicationSections(applicationId)}
       activeKey={requestedSectionKey}
-      contentWidth="wide"
+      contentWidth={requestedSectionKey === 'orchestration' ? 'full' : 'wide'}
     >
       {content}
     </SectionPageLayout>

@@ -22,7 +22,7 @@ export interface SectionPageLayoutProps {
   children: ReactNode;
   sidebarFooter?: ReactNode;
   emptyState?: ReactNode;
-  contentWidth?: 'wide' | 'narrow';
+  contentWidth?: 'wide' | 'narrow' | 'full';
 }
 
 export function SectionPageLayout({

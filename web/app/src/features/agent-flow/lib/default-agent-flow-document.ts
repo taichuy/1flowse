@@ -97,6 +97,7 @@ export function createNodeDocument(
     id,
     type: nodeType,
     alias: humanizeNodeType(nodeType),
+    description: '',
     containerId: null,
     position: { x, y },
     configVersion: 1,

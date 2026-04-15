@@ -13,8 +13,8 @@ match_when:
   - cargo 输出 `Blocking waiting for file lock on package cache`
   - cargo 输出 `Blocking waiting for file lock on artifact directory`
 created_at: 2026-04-13 07
-updated_at: 2026-04-14 08
-last_verified_at: 2026-04-14 08
+updated_at: 2026-04-15 18
+last_verified_at: 2026-04-15 18
 decision_policy: reference_on_failure
 scope:
   - cargo
@@ -60,3 +60,4 @@ scope:
 - `2026-04-14 00`：执行 backend governance phase two 的 Task 5 聚焦测试时，用 `multi_tool_use.parallel` 同时跑两条 `cargo test -p plugin-framework --lib ... -- --exact`，再次出现 `Blocking waiting for file lock on package cache` 和 `artifact directory` 等待；随后恢复串行验证并完成后续全量门禁。
 - `2026-04-14 08`：为验证 `API_ENV / API_ALLOWED_ORIGINS` 配置切换，再次并发启动三条 `cargo test -p api-server ... --exact`，又出现 package cache / artifact directory 锁等待；确认这类后端精确测试在 1flowse 仓库里必须严格串行。
 - `2026-04-14 00`：为验证 settings docs 的三个后端红灯测试，用 `multi_tool_use.parallel` 同时启动三条 `cargo test -p api-server ... -- --nocapture`，再次出现 package cache / artifact directory 锁等待；等待已有进程结束后改回串行执行，结果恢复稳定。
+- `2026-04-15 18`：为确认 `04 agentFlow` 接口是否完整，误用 `multi_tool_use.parallel` 同时启动 `cargo test -p api-server openapi_contains_application_console_routes`、`cargo test -p api-server application_orchestration_routes_bootstrap_save_and_restore`、`cargo test -p control-plane save_draft_only_appends_history_for_logical_changes`，再次出现 `Blocking waiting for file lock on package cache` 和 `artifact directory`；三条命令最终通过，但验证起步明显被锁等待拖慢，后续同类 QA 仍应严格串行。

@@ -31,11 +31,13 @@ vi.mock('../components/node-picker/NodePickerPopover', () => ({
 
 function createProps({
   alias,
+  description = '',
   canEnterContainer = false,
   nodeType,
   showTargetHandle
 }: {
   alias: string;
+  description?: string;
   canEnterContainer?: boolean;
   nodeType: 'start' | 'llm';
   showTargetHandle: boolean;
@@ -54,6 +56,7 @@ function createProps({
     data: {
       alias,
       canEnterContainer,
+      description,
       issueCount: 0,
       nodeId: `node-${alias.toLowerCase()}`,
       nodeType,
@@ -86,5 +89,20 @@ describe('AgentFlowNodeCard', () => {
     expect(
       within(sourceHandle).getByRole('button', { name: '在 LLM 后新增节点' })
     ).toBeInTheDocument();
+  });
+
+  test('renders the node description when provided', () => {
+    render(
+      <AgentFlowNodeCard
+        {...createProps({
+          alias: 'Start',
+          description: '收集用户输入并进入主链路。',
+          nodeType: 'start',
+          showTargetHandle: false
+        })}
+      />
+    );
+
+    expect(screen.getByText('收集用户输入并进入主链路。')).toBeInTheDocument();
   });
 });

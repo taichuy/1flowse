@@ -21,6 +21,7 @@ describe('agent flow document helpers', () => {
       ['node-start', 'node-llm'],
       ['node-llm', 'node-answer']
     ]);
+    expect(document.graph.nodes.every((node) => node.description === '')).toBe(true);
   });
 
   test('treats viewport-only edits as layout changes', () => {

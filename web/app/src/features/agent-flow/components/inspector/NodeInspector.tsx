@@ -3,7 +3,8 @@ import type {
   FlowBinding,
   FlowNodeDocument
 } from '@1flowse/flow-schema';
-import { Collapse, Input, InputNumber, Typography } from 'antd';
+import { Collapse, Input, InputNumber, Typography, Button } from 'antd';
+import { CloseOutlined } from '@ant-design/icons';
 import { useEffect, useRef, useState } from 'react';
 
 import { ConditionGroupField } from '../bindings/ConditionGroupField';
@@ -25,6 +26,7 @@ interface NodeInspectorProps {
   openSectionKey?: InspectorSectionKey | null;
   onDocumentChange: (document: FlowAuthoringDocument) => void;
   onFocusHandled?: () => void;
+  onClose?: () => void;
 }
 
 function updateNode(
@@ -52,6 +54,10 @@ function getFieldValue(node: FlowNodeDocument, fieldKey: string) {
     return node.alias;
   }
 
+  if (fieldKey === 'description') {
+    return node.description ?? '';
+  }
+
   if (fieldKey.startsWith('config.')) {
     return node.config[fieldKey.slice('config.'.length)];
   }
@@ -76,6 +82,13 @@ function setFieldValue(
     return {
       ...node,
       alias: value
+    };
+  }
+
+  if (fieldKey === 'description' && typeof value === 'string') {
+    return {
+      ...node,
+      description: value
     };
   }
 
@@ -143,7 +156,8 @@ export function NodeInspector({
   focusFieldKey = null,
   openSectionKey = null,
   onDocumentChange,
-  onFocusHandled
+  onFocusHandled,
+  onClose
 }: NodeInspectorProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const selectedNode = selectedNodeId
@@ -322,11 +336,29 @@ export function NodeInspector({
 
   return (
     <aside ref={rootRef} className="agent-flow-editor__inspector">
-      <div className="agent-flow-editor__inspector-header">
-        <Typography.Text type="secondary">节点配置</Typography.Text>
-        <Typography.Title className="agent-flow-editor__inspector-title" level={5}>
-          {activeNode.alias}
-        </Typography.Title>
+      <div className="agent-flow-editor__inspector-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <Typography.Text type="secondary">节点配置</Typography.Text>
+          <Typography.Title className="agent-flow-editor__inspector-title" level={5}>
+            {activeNode.alias}
+          </Typography.Title>
+          {activeNode.description?.trim().length ? (
+            <Typography.Paragraph
+              className="agent-flow-editor__inspector-description"
+              type="secondary"
+            >
+              {activeNode.description}
+            </Typography.Paragraph>
+          ) : null}
+        </div>
+        {onClose && (
+          <Button
+            type="text"
+            icon={<CloseOutlined />}
+            onClick={onClose}
+            aria-label="Close Inspector"
+          />
+        )}
       </div>
       <Collapse
         activeKey={activeSectionKeys}
