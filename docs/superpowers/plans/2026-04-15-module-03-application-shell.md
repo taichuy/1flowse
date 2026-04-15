@@ -1905,7 +1905,7 @@ export function ApplicationSectionState({
           items={[
             { key: 'status', label: '能力状态', children: renderStatusTag(application.sections.api.status) },
             { key: 'credential_kind', label: '凭证类型', children: application.sections.api.credential_kind },
-            { key: 'routing_mode', label: '��由模式', children: application.sections.api.invoke_routing_mode },
+            { key: 'routing_mode', label: '����由模式', children: application.sections.api.invoke_routing_mode },
             { key: 'path_template', label: '调用路径模板', children: application.sections.api.invoke_path_template ?? '由 application_type 冻结，06B 再落地' },
             { key: 'credentials_status', label: '凭证生命周期', children: application.sections.api.credentials_status }
           ]}
@@ -2227,7 +2227,7 @@ git commit -m "feat(web): add application detail shell"
 - Verify: `web/app/src/routes/_tests/application-shell-routing.test.tsx`
 - Verify: `web/app/src/style-boundary/registry.tsx`
 
-- [ ] **Step 1: Run the focused backend tests**
+- [x] **Step 1: Run the focused backend tests**
 
 Run:
 
@@ -2240,7 +2240,7 @@ cargo test -p api-server application_routes -- --nocapture
 
 Expected: all PASS.
 
-- [ ] **Step 2: Run the focused frontend tests**
+- [x] **Step 2: Run the focused frontend tests**
 
 Run:
 
@@ -2257,7 +2257,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 3: Run required workspace verification**
+- [x] **Step 3: Run required workspace verification**
 
 Run:
 
@@ -2275,7 +2275,7 @@ Expected:
 - `pnpm --dir web test` PASS
 - `pnpm --dir web/app build` PASS
 
-- [ ] **Step 4: Run style-boundary regression for the affected pages**
+- [x] **Step 4: Run style-boundary regression for the affected pages**
 
 With `pnpm --dir web/app dev` running on `http://127.0.0.1:3100`, run:
 
@@ -2287,19 +2287,32 @@ node scripts/node/check-style-boundary.js page page.application-detail
 
 Expected: both commands print `[1flowse-style-boundary] PASS ...`.
 
-- [ ] **Step 5: Confirm the working tree is clean after verification**
+- [x] **Step 5: Confirm the working tree status after verification**
 
 ```bash
 git status --short
 ```
 
-Expected: no uncommitted changes remain after the task-level commits.
+Actual after `2026-04-15 11` execution-related commit: task-related changes are committed; repository still contains a pre-existing local modification in `.memory/user-memory.md`.
 
 ### Execution Notes
 
 - `pnpm --dir web/app test -- <file>` 在当前仓库不会稳定落到单文件；定向前端测试统一使用 `pnpm --dir web/app exec vitest run <file...>`。
 - `node scripts/node/check-style-boundary.js ...` 依赖本地前端服务 `http://127.0.0.1:3100`；如果在受限沙箱里运行，监听 `3100` 端口可能需要额外权限。
 - `HomePage` 和 `ApplicationDetailPage` 都会读取 React Query 数据，所以 `style-boundary` 场景必须通过 `AppProviders + AppRouterProvider` 提供 QueryClient 和路由上下文，不能再裸渲染页面组件。
+- `2026-04-15 11` 首次执行 `node scripts/node/verify-backend.js` 命中 `clippy::too_many_arguments`，位置在 `api/crates/control-plane/src/application.rs` 的 in-memory helper `build_application_record`。已把散参数收口到 `CreateApplicationInput` 后重跑，通过。
+- `2026-04-15 11` 计划内验证已实际执行并通过：
+  - `cargo test -p storage-pg application_repository_tests -- --nocapture`
+  - `cargo test -p control-plane application_service_tests -- --nocapture`
+  - `cargo test -p api-server application_routes -- --nocapture`
+  - `pnpm --dir web/app exec vitest run src/features/home/_tests/home-page.test.tsx src/features/applications/_tests/application-create-modal.test.tsx src/routes/_tests/application-shell-routing.test.tsx src/routes/_tests/route-config.test.ts src/app/_tests/app-shell.test.tsx src/style-boundary/_tests/registry.test.tsx`
+  - `node scripts/node/verify-backend.js`
+  - `pnpm --dir web lint`
+  - `pnpm --dir web test`
+  - `pnpm --dir web/app build`
+  - `node scripts/node/check-style-boundary.js page page.home`
+  - `node scripts/node/check-style-boundary.js page page.application-detail`
+- `2026-04-15 11` 手动启动 `pnpm dev --host 127.0.0.1 --port 3100` 时返回 `Port 3100 is already in use`；经核实占用进程是同仓库 `web/app` 的现有 `vite`，直接复用后两条 `style-boundary` 命令均通过，无需强制重启。
 
 ## Self-Review
 
@@ -2317,11 +2330,6 @@ Expected: no uncommitted changes remain after the task-level commits.
   - 前端路由统一为 `/applications/:applicationId/{orchestration|api|logs|monitoring}`，并保持一级导航高亮仍落在 `工作台`。
   - `API` 分区统一采用“同类型共享调用 URL、应用靠 API Key 绑定”的口径，没有把 `applicationId` 写进未来外部调用 URL。
 
-## Execution Handoff
+## Execution Result
 
-Plan complete and saved to `docs/superpowers/plans/2026-04-15-module-03-application-shell.md`. Two execution options:
-
-1. Subagent-Driven (recommended) - I dispatch a fresh subagent per task, review between tasks, fast iteration.
-2. Inline Execution - Execute tasks in this session using `executing-plans`, batch execution with checkpoints.
-
-Which approach?
+Execution completed inline in the current workspace on `2026-04-15 11`.

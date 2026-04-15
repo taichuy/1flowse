@@ -166,14 +166,16 @@ impl InMemoryApplicationRepository {
             .expect("in-memory app repo mutex poisoned");
         let application = build_application_record(
             Uuid::now_v7(),
-            inner.workspace_id,
-            actor_user_id,
-            domain::ApplicationType::AgentFlow,
-            name.to_string(),
-            String::new(),
-            None,
-            None,
-            None,
+            CreateApplicationInput {
+                actor_user_id,
+                workspace_id: inner.workspace_id,
+                application_type: domain::ApplicationType::AgentFlow,
+                name: name.to_string(),
+                description: String::new(),
+                icon: None,
+                icon_type: None,
+                icon_background: None,
+            },
         );
         inner
             .applications
@@ -235,17 +237,7 @@ impl ApplicationRepository for InMemoryApplicationRepository {
         &self,
         input: &CreateApplicationInput,
     ) -> Result<domain::ApplicationRecord> {
-        let application = build_application_record(
-            Uuid::now_v7(),
-            input.workspace_id,
-            input.actor_user_id,
-            input.application_type,
-            input.name.clone(),
-            input.description.clone(),
-            input.icon.clone(),
-            input.icon_type.clone(),
-            input.icon_background.clone(),
-        );
+        let application = build_application_record(Uuid::now_v7(), input.clone());
         self.inner
             .lock()
             .expect("in-memory app repo mutex poisoned")
@@ -282,29 +274,19 @@ impl ApplicationRepository for InMemoryApplicationRepository {
     }
 }
 
-fn build_application_record(
-    id: Uuid,
-    workspace_id: Uuid,
-    created_by: Uuid,
-    application_type: domain::ApplicationType,
-    name: String,
-    description: String,
-    icon: Option<String>,
-    icon_type: Option<String>,
-    icon_background: Option<String>,
-) -> domain::ApplicationRecord {
+fn build_application_record(id: Uuid, input: CreateApplicationInput) -> domain::ApplicationRecord {
     domain::ApplicationRecord {
         id,
-        workspace_id,
-        application_type,
-        name,
-        description,
-        icon,
-        icon_type,
-        icon_background,
-        created_by,
+        workspace_id: input.workspace_id,
+        application_type: input.application_type,
+        name: input.name,
+        description: input.description,
+        icon: input.icon,
+        icon_type: input.icon_type,
+        icon_background: input.icon_background,
+        created_by: input.actor_user_id,
         updated_at: time::OffsetDateTime::now_utc(),
-        sections: planned_sections(application_type),
+        sections: planned_sections(input.application_type),
     }
 }
 
