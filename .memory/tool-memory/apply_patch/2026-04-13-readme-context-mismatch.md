@@ -54,3 +54,4 @@ sed -n '1,220p' README.md
 
 - `2026-04-13 07`：为 `mock-ui` 同步脚本补 README 入口时，先按记忆中的“本地开发”段落打补丁失败；重新读取 `README.md` 后，改在 `Frontend` 段落后追加 `Mock UI Sandbox` 小节，补丁成功。
 - `2026-04-14 11`：更新 `.memory/project-memory/2026-04-14-account-settings-shared-shell-evaluation.md` 时，沿用旧版决策段落上下文补丁，因文件已被前一轮提交更新而匹配失败；重新 `sed` 当前文件后，按真实段落位置补丁成功。
+- `2026-04-15 10`：补写 `docs/superpowers/plans/2026-04-15-module-03-application-shell.md` 时，先按第一次读取的 Task 5 片段拼接大块补丁，因中间已经改过 Task 4 且文档上下文发生漂移，`apply_patch` 返回 `Failed to find expected lines`；重新 `sed` 当前段落后，改为按真实连续区块整体替换，补丁成功。
