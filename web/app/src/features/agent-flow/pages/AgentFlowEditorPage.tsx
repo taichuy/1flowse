@@ -7,6 +7,7 @@ import {
   fetchOrchestrationState,
   orchestrationQueryKey
 } from '../api/orchestration';
+import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell';
 
 export function AgentFlowEditorPage({
   applicationId,
@@ -43,24 +44,13 @@ export function AgentFlowEditorPage({
   const state = orchestrationQuery.data;
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Space align="center" size="middle">
-        <Typography.Text strong>30 秒自动保存</Typography.Text>
-        <Button type="default">Issues</Button>
-        <Button type="default">历史版本</Button>
-        <Button disabled={apiCapabilityStatus !== 'ready'}>发布配置</Button>
-      </Space>
-      <Typography.Title level={4} style={{ margin: 0 }}>
-        {applicationName}
-      </Typography.Title>
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        当前 Flow ID：{state.flow_id}
-      </Typography.Paragraph>
-      <Result
-        status="info"
-        title="AgentFlow Editor 正在初始化"
-        subTitle="Task 4 会在这里挂载完整画布、overlay、Issues 和右侧 Inspector。"
-      />
-    </Space>
+    <AgentFlowEditorShell
+      applicationId={applicationId}
+      applicationName={applicationName}
+      initialState={state}
+      saveDraftOverride={
+        apiCapabilityStatus === 'ready' ? undefined : async () => state
+      }
+    />
   );
 }

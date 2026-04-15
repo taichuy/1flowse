@@ -1211,12 +1211,14 @@ pnpm --dir web/app exec vitest run src/routes/_tests/application-shell-routing.t
 
 - Result: backend `1 passed`; frontend route suite `4 passed`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/apps/api-server/src/routes/application_orchestration.rs api/apps/api-server/src/routes/mod.rs api/apps/api-server/src/lib.rs api/apps/api-server/src/openapi.rs api/apps/api-server/src/_tests/mod.rs api/apps/api-server/src/_tests/openapi_alignment.rs api/apps/api-server/src/_tests/application_orchestration_routes.rs web/app/src/features/agent-flow/api/orchestration.ts web/app/src/features/agent-flow/pages/AgentFlowEditorPage.tsx web/app/src/features/applications/pages/ApplicationDetailPage.tsx web/app/src/features/applications/components/ApplicationSectionState.tsx web/app/src/app/router.tsx web/app/src/routes/_tests/application-shell-routing.test.tsx
 git commit -m "feat: expose application orchestration routes"
 ```
+
+Commit note (`2026-04-15 15:53`): committed as `bfe1b82d feat: expose application orchestration routes`.
 
 ## Task 4: Build The Editor Shell, Canvas Overlay, And Add-Node Interactions
 
@@ -1232,7 +1234,7 @@ git commit -m "feat: expose application orchestration routes"
 - Create: `web/app/src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx`
 - Create: `web/app/src/features/agent-flow/_tests/agent-flow-canvas.test.tsx`
 
-- [ ] **Step 1: Write the failing editor-shell and canvas tests**
+- [x] **Step 1: Write the failing editor-shell and canvas tests**
 
 ```tsx
 test('renders the default three nodes and overlay controls', async () => {
@@ -1291,7 +1293,7 @@ test('adds a node from the plus picker after the selected node', async () => {
 });
 ```
 
-- [ ] **Step 2: Implement default-document helpers, canvas node mapping, and add-node insertion**
+- [x] **Step 2: Implement default-document helpers, canvas node mapping, and add-node insertion**
 
 ```ts
 // web/app/src/features/agent-flow/lib/default-agent-flow-document.ts
@@ -1400,7 +1402,7 @@ export function toCanvasNodes(
 }
 ```
 
-- [ ] **Step 3: Implement the shell layout, overlay actions, and canvas controls**
+- [x] **Step 3: Implement the shell layout, overlay actions, and canvas controls**
 
 ```tsx
 // web/app/src/features/agent-flow/components/editor/AgentFlowEditorShell.tsx
@@ -1471,7 +1473,7 @@ return (
 </ReactFlow>
 ```
 
-- [ ] **Step 4: Run the targeted editor-shell tests and build**
+- [x] **Step 4: Run the targeted editor-shell tests and build**
 
 Run:
 
@@ -1481,6 +1483,18 @@ pnpm --dir web/app build
 ```
 
 Expected: the editor mounts with the default graph, plus-entry creation works, and the app build resolves the new XYFlow and Lexical imports.
+
+Execution note (`2026-04-15 16:00`):
+
+- Added `web/app/src/test/setup.ts` `ResizeObserver` mock so `@xyflow/react` custom nodes can render under jsdom.
+- Final verification ran with:
+
+```bash
+pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/agent-flow-editor-page.test.tsx src/features/agent-flow/_tests/agent-flow-canvas.test.tsx -v
+pnpm --dir web/app build
+```
+
+- Result: editor-shell suite `1 passed`; canvas suite `1 passed`; web production build succeeded.
 
 - [ ] **Step 5: Commit**
 

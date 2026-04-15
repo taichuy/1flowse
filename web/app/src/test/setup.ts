@@ -20,6 +20,17 @@ Object.defineProperty(window, 'matchMedia', {
   }))
 });
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+Object.defineProperty(globalThis, 'ResizeObserver', {
+  writable: true,
+  value: ResizeObserverMock
+});
+
 const originalGetComputedStyle = window.getComputedStyle.bind(window);
 
 Object.defineProperty(window, 'getComputedStyle', {

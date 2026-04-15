@@ -3,7 +3,8 @@ import { describe, expect, test } from 'vitest';
 import {
   FLOW_SCHEMA_VERSION,
   classifyDocumentChange,
-  createDefaultAgentFlowDocument
+  createDefaultAgentFlowDocument,
+  type FlowAuthoringDocument
 } from '@1flowse/flow-schema';
 
 describe('agent flow document helpers', () => {
@@ -31,7 +32,7 @@ describe('agent flow document helpers', () => {
         viewport: { x: 120, y: 48, zoom: 0.85 }
       }
     };
-    const logicalChange = {
+    const logicalChange: FlowAuthoringDocument = {
       ...before,
       graph: {
         ...before.graph,
@@ -42,7 +43,7 @@ describe('agent flow document helpers', () => {
                 bindings: {
                   ...node.bindings,
                   system_prompt: {
-                    kind: 'templated_text',
+                    kind: 'templated_text' as const,
                     value: 'You are a support agent.'
                   }
                 }
