@@ -1,3 +1,4 @@
+pub mod application_mapper;
 pub mod auth_mapper;
 pub mod member_mapper;
 pub mod model_definition_mapper;

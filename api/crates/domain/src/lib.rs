@@ -1,5 +1,6 @@
 extern crate self as domain;
 
+pub mod application;
 pub mod audit;
 pub mod auth;
 pub mod base;
@@ -7,6 +8,10 @@ pub mod modeling;
 pub mod resource;
 pub mod scope;
 
+pub use application::{
+    ApplicationApiSection, ApplicationLogsSection, ApplicationMonitoringSection,
+    ApplicationOrchestrationSection, ApplicationRecord, ApplicationSections, ApplicationType,
+};
 pub use audit::AuditLogRecord;
 pub use auth::{
     ActorContext, AuthenticatorRecord, BoundRole, PermissionDefinition, RoleScopeKind,

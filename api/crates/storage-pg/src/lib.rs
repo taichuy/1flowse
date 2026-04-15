@@ -1,5 +1,6 @@
 extern crate self as storage_pg;
 
+pub mod application_repository;
 pub mod auth_repository;
 mod connection;
 pub mod mappers;

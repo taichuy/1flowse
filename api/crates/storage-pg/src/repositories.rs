@@ -1,11 +1,11 @@
 use anyhow::Result;
 use control_plane::ports::{
-    AuthRepository, BootstrapRepository, CreateMemberInput, MemberRepository, UpdateProfileInput,
-    WorkspaceRepository,
+    ApplicationRepository, AuthRepository, BootstrapRepository, CreateApplicationInput,
+    CreateMemberInput, MemberRepository, UpdateProfileInput, WorkspaceRepository,
 };
 use domain::{
-    ActorContext, AuditLogRecord, AuthenticatorRecord, PermissionDefinition, RoleScopeKind,
-    TenantRecord, UserRecord, WorkspaceRecord,
+    ActorContext, ApplicationRecord, AuditLogRecord, AuthenticatorRecord, PermissionDefinition,
+    RoleScopeKind, TenantRecord, UserRecord, WorkspaceRecord,
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -153,6 +153,13 @@ impl PgControlPlaneStore {
         input: &CreateMemberInput,
     ) -> Result<UserRecord> {
         MemberRepository::create_member_with_default_role(self, input).await
+    }
+
+    pub async fn create_application(
+        &self,
+        input: &CreateApplicationInput,
+    ) -> Result<ApplicationRecord> {
+        ApplicationRepository::create_application(self, input).await
     }
 }
 

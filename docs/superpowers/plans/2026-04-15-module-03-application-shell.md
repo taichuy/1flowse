@@ -77,7 +77,7 @@
 - Modify: `api/crates/storage-pg/src/repositories.rs`
 - Modify: `api/crates/storage-pg/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing repository tests**
+- [x] **Step 1: Write the failing repository tests**
 
 Create `api/crates/storage-pg/src/_tests/application_repository_tests.rs`:
 
@@ -261,7 +261,7 @@ async fn get_application_returns_section_hooks_with_null_runtime_targets() {
 }
 ```
 
-- [ ] **Step 2: Run the repository tests to verify they fail**
+- [x] **Step 2: Run the repository tests to verify they fail**
 
 Run:
 
@@ -272,7 +272,7 @@ cargo test -p storage-pg application_repository_tests -- --nocapture
 
 Expected: FAIL because the migration, trait, mapper, and repository implementation do not exist yet.
 
-- [ ] **Step 3: Implement the migration, domain record, mapper, and repository**
+- [x] **Step 3: Implement the migration, domain record, mapper, and repository**
 
 Create `api/crates/storage-pg/migrations/20260415093000_create_application_tables.sql`:
 
@@ -454,7 +454,7 @@ let rows = sqlx::query(
 .await?;
 ```
 
-- [ ] **Step 4: Re-run the repository tests**
+- [x] **Step 4: Re-run the repository tests**
 
 Run:
 
@@ -465,7 +465,7 @@ cargo test -p storage-pg application_repository_tests -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the persistence slice**
+- [x] **Step 5: Commit the persistence slice**
 
 ```bash
 git add api/crates/domain/src/application.rs
