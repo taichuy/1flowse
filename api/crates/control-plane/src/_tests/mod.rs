@@ -1,3 +1,4 @@
+mod application_service_tests;
 mod bootstrap_tests;
 mod member_service_tests;
 mod model_definition_acl_tests;

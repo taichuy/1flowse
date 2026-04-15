@@ -1,5 +1,6 @@
 extern crate self as control_plane;
 
+pub mod application;
 pub mod audit;
 pub mod auth;
 pub mod bootstrap;

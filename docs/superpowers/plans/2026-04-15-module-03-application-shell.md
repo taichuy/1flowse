@@ -490,7 +490,7 @@ git commit -m "feat(api): add application persistence"
 - Modify: `api/crates/control-plane/src/lib.rs`
 - Modify: `api/crates/control-plane/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing service tests**
+- [x] **Step 1: Write the failing service tests**
 
 Create `api/crates/control-plane/src/_tests/application_service_tests.rs`:
 
@@ -567,7 +567,7 @@ async fn get_application_detail_returns_planned_future_hooks() {
 }
 ```
 
-- [ ] **Step 2: Run the service tests to verify they fail**
+- [x] **Step 2: Run the service tests to verify they fail**
 
 Run:
 
@@ -578,7 +578,7 @@ cargo test -p control-plane application_service_tests -- --nocapture
 
 Expected: FAIL because `ApplicationService` does not exist yet.
 
-- [ ] **Step 3: Implement the service with planned section hooks**
+- [x] **Step 3: Implement the service with planned section hooks**
 
 Create `api/crates/control-plane/src/application.rs`:
 
@@ -713,7 +713,7 @@ impl ApplicationService<InMemoryApplicationRepository> {
 }
 ```
 
-- [ ] **Step 4: Re-run the service tests**
+- [x] **Step 4: Re-run the service tests**
 
 Run:
 
@@ -724,7 +724,7 @@ cargo test -p control-plane application_service_tests -- --nocapture
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the service slice**
+- [x] **Step 5: Commit the service slice**
 
 ```bash
 git add api/crates/control-plane/src/application.rs
