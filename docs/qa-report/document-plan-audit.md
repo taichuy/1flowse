@@ -1,243 +1,240 @@
 # 文档计划审计优化报告
 
-更新时间：`2026-04-16 04:00 CST`
+更新时间：`2026-04-16 05:09 CST`
 
-说明：本轮继续沿用同主题滚动更新，但只补充新的问题证据与判断，不重复上一轮已经明确的“文档真值漂移、统一门禁未全绿、authoring 强于 publish/run”三类结论。
+说明：本轮继续沿用同主题滚动更新，但只补新的证据和判断，不重复上一轮已经明确的五个问题：`flow.edit.*` 未真正接到编排写入口、进入应用仍有整页刷新、发布入口假可用、一级导航暴露面偏大、产品阶段口径未切到 authoring baseline。
 
 审计输入：
 
-- `git` 时间窗口：`2026-04-15 04:00:53 CST` 到 `2026-04-16 04:00:53 CST`
-- 最近 `24` 小时提交数：`42`
-- 变更分布：
-  - `web/app/src/features/agent-flow`：`86` 条路径命中
-  - `web/app/src/features/applications`：`13` 条路径命中
-  - `api/`：`49` 条路径命中
-  - `docs/superpowers`：`33` 条路径命中
-  - `api/crates/publish-gateway`、`api/apps/plugin-runner`、`api/crates/runtime-core`、`api/crates/observability`：本窗口内无新增提交命中
-- 本轮重点抽样：
-  - 产品文档：`docs/superpowers/specs/1flowse/2026-04-10-product-requirements.md`
-  - 产品设计：`docs/superpowers/specs/1flowse/2026-04-10-product-design.md`
-  - 模块总览：`docs/superpowers/specs/1flowse/modules/README.md`
-  - 当前主线路径：`web/app/src/features/applications/*`、`web/app/src/features/agent-flow/*`
-  - 路由与权限：`web/app/src/routes/*`、`api/crates/control-plane/src/application.rs`、`api/crates/control-plane/src/flow.rs`
-  - 发布与运行骨架：`api/crates/publish-gateway/src/lib.rs`、`api/apps/plugin-runner/src/lib.rs`
+- `git` 时间窗口：`2026-04-15 05:09 CST` 到 `2026-04-16 05:09 CST`
+- 最近 `24` 小时提交数：`43`
+- 最近 `24` 小时推进重心：仍明显集中在 `03/04`
+  - `web/app/src/features/agent-flow/*`
+  - `web/app/src/features/applications/*`
+  - `api/apps/api-server/src/routes/application_orchestration.rs`
+  - `api/crates/control-plane/src/flow.rs`
+  - `api/crates/storage-pg/src/flow_repository.rs`
+- 本轮运行验证：
+  - `pnpm --dir web lint`：通过，但 `web/app/src/features/agent-flow/components/nodes/node-registry.tsx` 有 `4` 条 `react-refresh/only-export-components` warning
+  - `pnpm --dir web test`：通过，`30` 个测试文件、`89` 个测试
+  - `pnpm --dir web/app build`：通过，但主包 `dist/assets/index-D2ky4G0N.js` 达到 `5,191.42 kB`，gzip 后 `1,554.34 kB`
+  - `node scripts/node/verify-backend.js`：失败，先卡在 `rustfmt --check`
+  - `cargo test -p control-plane flow_service_tests -v`：通过，`2` 个测试
+  - `cargo test -p api-server application_orchestration_routes -v`：通过，`1` 个测试
+  - `cargo test -p storage-pg flow_repository_tests -v`：通过，`3` 个测试
+  - `node scripts/node/check-style-boundary.js page page.application-detail`：通过
 
 ## 1. 现状
 
 ### 1.1 现在开发情况和状态
 
-- 当前真实主线已经很清楚：`工作台 -> Application -> orchestration -> agentFlow editor`。
-- 最近 `24` 小时的代码推进明显偏向 `03/04`：
-  - `ApplicationListPage`、`ApplicationDetailPage`、`AgentFlowEditorPage` 持续收口
-  - `agentFlow` 编辑器继续增强保存、历史、视口保持、连线重连
-  - 后端也主要围绕 `application` 与 `orchestration` 控制面接口补齐
-- 但最近 `24` 小时几乎没有把主线往 `05/06B` 推进：
-  - `publish-gateway` 仍只有 `crate_name()`
-  - `plugin-runner` 仍只有 `/health`、CORS 和 tracing 初始化
-  - `runtime`、`observability` 本窗口内没有继续形成产品能力证据
+- 当前真实主线已经不再是“准备做 `03/04`”，而是“`03/04` 已进入可运行实现”：
+  - 工作台应用列表、应用详情四分区、`orchestration` 编排入口已经真实存在
+  - `agentFlow` editor 已具备默认 Draft、保存、历史恢复、容器子画布、节点配置与基础校验
+- 最近 `24` 小时的推进速度仍然很快，说明项目并不处于停滞或反复返工期。
+- 但当前推进不再只是“功能有没有在写”，而是进入了“真值层是否还能跟上”的阶段。
 
 ### 1.2 对当前开发健康来说是好还是差
 
-- 如果只看速度：`好`
-  - `42` 次提交说明不是停滞期，且不是纯文档空转，主线页面和后端 DTO/路由都在真实推进
-- 如果看“今天做完一段闭环没有”：`中上`
-  - `Application` 宿主容器和 `agentFlow` 编辑器已经形成可演示主路径
-- 如果看“明天继续推进时会不会越来越稳”：`中偏弱`
-  - 权限真值、路由真值、产品阶段口径仍然分裂
-  - 现在不是“做不动”，而是“推进速度已经开始超过治理速度”
+- 如果只看交付速度：`好`
+  - `43` 次提交、`03/04` 主线持续收口，且前端自动化通过。
+- 如果看工程门禁和协作信号：`中偏弱`
+  - 前端门禁绿，后端定向测试也绿，但统一后端验证脚本是红的。
+  - 计划文档、模块状态和代码现实已经开始脱节。
+- 当前更准确的判断不是“开发差”，而是：
+  - `实现健康`
+  - `治理信号亚健康`
 
-### 1.3 当前新增问题
+### 1.3 本轮新增问题
 
-#### 问题一：编排写权限没有真正切到 `flow.*`
-
-- 证据：
-  - 权限目录里已经定义了 `flow.view.*`、`flow.edit.*`：`api/crates/access-control/src/catalog.rs`
-  - 但 `FlowService::save_draft`、`restore_version` 只先调用 `ApplicationService::get_application`：`api/crates/control-plane/src/flow.rs`
-  - `ApplicationService::get_application` 实际只检查 `application.view.own/all`：`api/crates/control-plane/src/application.rs`
-  - 现有测试也只覆盖“看不见应用就不能进 editor”，没有覆盖“可见但不可编辑 flow”应被拒绝：`api/crates/control-plane/src/_tests/flow_service_tests.rs`
-- 这意味着什么：
-  - 当前“看得见应用”和“能改编排”事实上被混成了一套权限
-  - 等 `publish`、协作角色、审核流接进来后，这会直接变成权限口径错误，不只是文档问题
-
-#### 问题二：应用主路径还没有完全切到前端路由真值
+#### 问题一：统一验证入口已经失去“单一真相”作用
 
 - 证据：
-  - 创建成功后使用 `window.location.assign(...)`：`web/app/src/features/applications/pages/ApplicationListPage.tsx`
-  - 应用卡片入口还是 `<a href=...>`：`web/app/src/features/applications/components/ApplicationCardGrid.tsx`
-  - 但壳层和主路由已经是 `TanStack Router`：`web/app/src/app/router.tsx`、`web/app/src/app-shell/AppShellFrame.tsx`
+  - `pnpm --dir web lint`、`pnpm --dir web test`、`pnpm --dir web/app build` 全部通过
+  - `cargo test -p control-plane flow_service_tests -v`、`cargo test -p api-server application_orchestration_routes -v`、`cargo test -p storage-pg flow_repository_tests -v` 全部通过
+  - 但 `node scripts/node/verify-backend.js` 直接失败在 `rustfmt --check`
 - 这意味着什么：
-  - 当前“进入应用”仍会触发整页刷新，而不是留在 SPA 内部切换
-  - 查询缓存、局部状态、后续无刷新壳层行为会被不断打断
-  - 导航真值层已经建立了一半，但最后一步还没接上
+  - 当前代码并不是“后端能力不可用”，而是“统一门禁脚本无法代表当前真实健康”
+  - 在 AI 日更模式下，这会比单次格式问题更严重，因为后续每轮协作都会先看到假红灯
+- 为什么是问题：
+  - 一旦统一门禁不可信，后续 QA、计划验收和开发收尾都会转向“各自挑命令”，工程纪律会快速松动
 
-#### 问题三：界面开始出现“假可用”与研发内部术语泄露
+#### 问题二：计划文档和模块状态板已经开始误导开发进度判断
 
 - 证据：
-  - `AgentFlowOverlay` 暴露了主按钮 `发布配置`，但 `onOpenPublish={() => undefined}` 且 `publishDisabled={false}`：`web/app/src/features/agent-flow/components/editor/AgentFlowEditorShell.tsx`
-  - `ApplicationSectionState` 直接在用户界面写 `03 / 04 / 05 / 06B` 和 `planned`：`web/app/src/features/applications/components/ApplicationSectionState.tsx`
-  - `ToolsPage` 仍是正式“建设中”页面，但还在一级导航：`web/app/src/features/tools/pages/ToolsPage.tsx`、`web/app/src/routes/route-config.ts`
+  - `docs/superpowers/specs/1flowse/modules/README.md` 仍把 `03` 标成 `已确认待开发`、把 `04` 标成 `未来设计`
+  - `docs/superpowers/specs/1flowse/modules/03-workspace-and-application/README.md` 顶部状态仍写“待写 implementation plan”
+  - `docs/superpowers/plans/2026-04-15-agentflow-editor.md` 里 `Step 3: Update style-boundary scenes and run the final verification suite` 仍未勾选，但后面的 `Commit` 已勾选
+  - 该计划里曾记录 `storage-pg` 测试受本地 PostgreSQL 阻塞；而本轮实际执行 `cargo test -p storage-pg flow_repository_tests -v` 已通过
 - 这意味着什么：
-  - 用户会看到“可点但没有动作”的发布入口
-  - 产品界面把内部模块编号和研发分期直接暴露给用户
-  - 这不是单纯文案问题，而是产品可信度开始下降的信号
+  - 当前“模块状态”“计划状态”“代码状态”已经不是同一套真值
+  - 这会直接影响你后面按文档管理 AI 开发节奏，因为 plan 看起来像没收尾，但代码和测试已经往前走了
+- 为什么是问题：
+  - AI 时代的开发评估不能再只问“做了几页”，而要问“真值是不是同步”
+  - 现在的风险是：代码进度快于状态同步速度
 
-#### 问题四：P1 文档仍在描述“广口径平台”，代码却已经进入“Application-hosted authoring baseline”
+#### 问题三：性能债已经从“提醒”升级成结构性约束
 
 - 证据：
-  - 需求文档仍要求：
-    - `FR-004 应用概览`
-    - `FR-005 应用路由管理`
-    - `FR-007 页面结构协议`
-    - `FR-008 动态页面渲染`
-    - `FR-009 嵌入式前端接入`
-    - `FR-030 / FR-031 Flow Run / Node Run`
-  - 产品设计仍把 `Publish Endpoint` 和对外发布作为核心交付物：`docs/superpowers/specs/1flowse/2026-04-10-product-design.md`
-  - 但当前代码真实可证明的是：
-    - 工作台应用列表
-    - 应用详情四分区
-    - `agentFlow` 编辑器与 Draft/History
-  - 且最近 `24` 小时提交完全没有把 `publish-gateway / plugin-runner / runtime / observability` 推出最小真实链路
+  - 本轮生产构建主包达到 `5,191.42 kB`，gzip 后 `1,554.34 kB`
+  - `web/app/src/app/router.tsx` 仍是同步导入所有页面，没有路由级 lazy load
+  - `agentFlow` 最近新增了 `node-definitions.tsx`、`node-registry.tsx`、`NodeInspector.tsx`、画布与 binding-editor 家族，当前都被一起打进主应用装载链
 - 这意味着什么：
-  - 现在的问题已经不只是“README 落后”，而是产品阶段口径没有切换
-  - 如果继续沿旧口径评估，会把“正在做 editor baseline”误读成“正在做完整发布平台”
-
-#### 问题五：一级导航暴露面仍然大于当前主线成熟度
-
-- 证据：
-  - `embedded-apps` 和 `tools` 仍是 `primary` chrome：`web/app/src/routes/route-config.ts`
-  - `EmbeddedAppsPage` 当前只是能力边界说明页：`web/app/src/features/embedded-apps/pages/EmbeddedAppsPage.tsx`
-  - `ToolsPage` 当前是建设中页：`web/app/src/features/tools/pages/ToolsPage.tsx`
-- 这意味着什么：
-  - 当前最成熟的用户任务还是 `Application -> agentFlow`
-  - 但导航会把用户心智拉向“平台已经很完整”
-  - 这会稀释当前主线，也让审计和规划更难聚焦
+  - 当前不是“包有点大”，而是“继续按现在方式堆功能，会把所有路由都拖入 editor 成本”
+  - 即使用户只进入工作台或设置页，也要为越来越重的编排编辑器买单
+- 为什么是问题：
+  - 这类债一旦拖到 `05/06B` 再处理，拆分成本会显著高于现在
+  - 性能债会开始影响产品感知，而不只是工程内部指标
 
 ### 1.4 从短期来看风险和收益
 
 - 短期收益：
-  - `Application` 宿主和 `agentFlow` 编辑器已经做成真实可演示路径
-  - AI 时代用“日更闭环”看，当前推进速度是快的
+  - `Application -> orchestration -> agentFlow` 主路径已经具备真实演示价值
+  - 前端和后端关键切面都已有自动化和定向测试证据，不是纯“看起来能跑”
 - 短期风险：
-  - 如果继续只加 editor，`publish/run/logs` 的产品证明会继续落后
-  - 如果不先修正 `flow.edit.*` 权限边界，越早让多人进入编排，越容易把错误权限固化进测试和心智
-  - 如果继续保留假可用入口与内部术语，用户对产品完成度的判断会被误导
+  - 统一门禁红灯会持续制造误判
+  - 计划与模块状态失真会让后续讨论建立在错误进度感上
+  - 主包膨胀会让任何继续加 editor 能力的决策都带着隐藏成本
 
 ### 1.5 从长期来看软件健康和质量
 
 - 长期正向点：
-  - 路由壳层、应用宿主、画布编辑器这些一等对象已经开始稳定
-  - 后端依然保持 `route / service / repository / mapper` 的主分层
+  - `Application` 宿主与 `agentFlow` editor 已经形成稳定的一等对象
+  - 后端 `route / service / repository / mapper` 主分层还在
+  - 当前主线已有可证明的测试覆盖，而不是纯手工试跑
 - 长期风险点：
-  - 权限语义继续混用，会让后续 `publish_endpoint.*`、`flow.*`、`application.*` 越来越难拆
-  - 路由真值层如果长期半套，会导致 SPA 和整页刷新两种模型共存
-  - 产品文档如果一直保持“大平台”口径，会持续把 roadmap、实现顺序和用户期望拉偏
+  - 如果统一门禁继续不可信，工程质量会被“局部命令绿”慢慢替代
+  - 如果计划和模块状态继续落后，文档就会从“开发导航”退化成“历史记录”
+  - 如果不尽快做懒加载和拆包，后续 `05/06B` 只会把当前 `5.19 MB` 主包继续推高
 
-### 1.6 开发进度如何评估
+### 1.6 开发进度是如何
 
-- 不适合继续用旧人力时代“这周做了多少页”的口径评估。
-- 在当前 AI 日更模式下，更适合看三件事：
-  - 今天有没有把一条路径做成真实闭环
-  - 今天有没有让明天少走弯路
-  - 今天有没有减少产品真值和代码真值之间的歧义
+- 不适合再用旧人力时代“这一周开发了几个模块”的口径来评估。
+- 在当前 AI 日更模式下，更应该看四个指标：
+  - 今天有没有让主路径更完整
+  - 今天有没有让统一门禁更可信
+  - 今天有没有让计划和模块状态继续可用
+  - 今天有没有减少未来继续加功能的系统性成本
 - 按这个口径看：
-  - 主线闭环速度：`快`
-  - 产品证明闭环速度：`慢于 editor`
-  - 真值同步速度：`偏慢`
-  - 开发健康结论：`速度健康，治理亚健康`
+  - 主线实现进度：`快`
+  - 统一门禁健康：`一般`
+  - 真值同步质量：`偏慢`
+  - 性能与装载成本控制：`明显落后于功能速度`
 
-### 1.7 产品方向定位是否清晰、是否正确、是否需要调整
+### 1.7 产品方向定位是否清晰，是否正确，是否需要调整
 
-- 当前方向本身没有错：
-  - `Application` 作为一等宿主
+- 长期方向本身没有错：
+  - `Application` 作为宿主
   - `agentFlow` 作为第一条 authoring 主线
   - `publish-first` 作为最终产品目标
-- 但当前阶段描述需要调整：
-  - 现在更准确的阶段口径不是“完整发布优先平台已进入实现”
-  - 而是“Application-hosted agentFlow authoring baseline 已建立，下一步需要补最小 publish/run proof”
-- 这不是改方向，而是改阶段表达。
+- 当前真正需要调整的不是方向，而是阶段表达：
+  - 现在的现实不是“完整发布平台已进入均衡实现”
+  - 而是“authoring baseline 已经落地，统一门禁、状态真值和装载成本需要先收口，然后再进入 `05/06B` 的产品证明”
+- 所以结论是：
+  - `方向正确`
+  - `阶段表达需要收紧`
 
 ## 2. 可能方向
 
-### 方向 A：继续 editor-first
+### 方向 A：继续保持 `03/04` 高速推进
 
-- 继续加节点、面板、发布配置 UI、更多交互与编辑能力
+- 继续扩 `agentFlow` 节点、面板、交互和编辑器能力
 
-### 方向 B：truth-first
+### 方向 B：先做一次真值与门禁同步
 
-- 先收口权限真值、路由真值、界面文案和模块/需求状态口径
+- 先把统一验证、计划状态、模块状态和当前阶段表达收口
 
-### 方向 C：proof-first
+### 方向 C：先做一次性能与装载面收口
 
-- 暂停大幅扩 editor，优先补最小 `publish / run / logs` 真实链路
+- 优先做路由级 lazy load、主包拆分、减少 editor 对非编排路由的默认影响
+
+### 方向 D：再补最小 `05/06B` 产品证明
+
+- 在当前 authoring baseline 上补应用级 API Key、最小运行列表和发布边界
 
 ## 3. 不同方向的风险和收益
 
-### 方向 A：继续 editor-first
+### 方向 A：继续保持 `03/04` 高速推进
 
 - 收益：
-  - 最快看到更多“能演示”的界面与交互
-  - 对当前 `03/04` 动量最友好
+  - 最快继续看到 editor 能力增长
+  - 对当前开发动量最友好
 - 风险：
-  - `flow.edit.*` 权限错误会先被沉淀成现状
-  - 发布、运行、日志仍没有最小证明，产品定位会越来越偏成“编辑器产品”
-  - 假可用按钮和一级导航暴露面会继续放大误判
+  - `5.19 MB` 主包会继续恶化
+  - 计划与模块状态失真会越来越严重
+  - 统一门禁红灯会继续拖累每一轮收尾
 
-### 方向 B：truth-first
+### 方向 B：先做一次真值与门禁同步
 
 - 收益：
-  - 先把“谁能看、谁能改、怎么跳、怎么描述当前阶段”统一掉
-  - 会显著降低后续 AI 协作、QA 审计和文档判断成本
+  - 恢复“一个命令、一份计划、一张模块表”作为真实协作入口
+  - 会显著降低下一轮 AI 协作成本
 - 风险：
-  - 短期看起来像“没有增加很多新功能”
-  - 如果只做治理、不补产品证明，用户仍可能觉得平台还停在 authoring
+  - 短期功能增长看起来不明显
+  - 需要花时间补状态同步，而不是只做新功能
 
-### 方向 C：proof-first
+### 方向 C：先做一次性能与装载面收口
 
 - 收益：
-  - 能最快验证 `publish-first` 方向是不是站得住
-  - 可把 `API / logs / monitoring` 从“future hooks”至少拉成一条真实产品链路
+  - 现在处理拆包，成本远低于 `05/06B` 之后再回头治理
+  - 可以让工作台、设置页、应用详情壳层重新获得清晰的装载边界
 - 风险：
-  - 如果在权限、导航、文案真值仍混乱时直接补 proof，会把错误基础继续带到新模块
-  - 容易出现“做出来能跑，但治理债更深”的情况
+  - 会碰到路由、构建和共享依赖边界，不是零成本小修
+  - 如果做法不稳，可能短期影响路由或测试稳定性
 
-## 4. 对此你建议是什么
+### 方向 D：再补最小 `05/06B` 产品证明
 
-我的建议不是单选，而是固定顺序：`先 B，再 C，最后再回到 A`。
+- 收益：
+  - 能把“publish-first”重新从口号拉回证据
+  - 有助于验证当前产品定位没有跑偏成纯编辑器
+- 风险：
+  - 如果先不做 B/C，就会把门禁失真和装载成本一起带进新模块
+  - 容易出现“能力更多，但真值更散”的情况
 
-### 建议一：先补真值，不再继续接受“可见应用就能改 flow”
+## 4. 对此你建议是什么？
 
-- 先把 `save_draft / restore_version` 的服务入口从 `application.view.*` 切到 `flow.edit.*`
-- 同步补 route / service / test 三处证据，避免继续把错误权限变成事实
+我的建议顺序是：`先 B，再 C，再 D，最后再回到 A`。
 
-### 建议二：把 Application 主路径彻底切到 SPA 路由模型
+### 建议一：在下一轮开发前先恢复统一真值
 
-- 去掉 `window.location.assign`
-- 去掉应用卡片里的 `<a href>`
-- 统一改成 router navigation，避免主线每次进入都整页刷新
+- 先修 `node scripts/node/verify-backend.js` 的 `rustfmt --check` 红灯
+- 同步更新：
+  - `docs/superpowers/specs/1flowse/modules/README.md`
+  - `docs/superpowers/specs/1flowse/modules/03-workspace-and-application/README.md`
+  - `docs/superpowers/plans/2026-04-15-agentflow-editor.md`
+- 目标不是“补文档好看”，而是让计划、模块状态和真实验证结果重新对齐
 
-### 建议三：立即收掉假可用入口和内部研发术语
+### 建议二：立即把性能债从“以后再说”改成当前任务
 
-- `发布配置` 还没有动作前，不要给可点击主按钮
-- UI 中去掉 `03 / 04 / 05 / 06B / planned`
-- 改成用户能理解的正式能力文案，例如“未开放 / 准备中 / 尚未配置”
+- 先从 `web/app/src/app/router.tsx` 做路由级 lazy load
+- 优先把 `ApplicationDetailPage`、`AgentFlowEditorPage`、`SettingsPage`、`EmbeddedAppsPage`、`ToolsPage` 从主入口同步导入中拆出去
+- 必要时再配合 `manualChunks`，但不要先靠提高 chunk warning limit 掩盖问题
 
-### 建议四：正式把当前阶段口径改成“authoring baseline + next publish/run proof”
+### 建议三：把“进度判断方式”从模块名切到证据闭环
 
-- 同步 `product-requirements`
-- 同步 `modules/README.md`
-- 同步 `03/04` 模块 README
-- 目标不是删掉长期愿景，而是把“当前阶段”和“长期 P1 广口径”拆开
+- 对内评估时，不再用“03 做完没、04 做完没”这种旧口径
+- 改成三类看板：
+  - `主路径闭环`
+  - `统一门禁`
+  - `状态真值同步`
+- 这样更适合 AI 日更节奏，也更符合当前项目实际推进方式
 
-### 建议五：下一条真实产品证明不要再是 editor 细节，而是最小发布链路
+### 建议四：产品方向不改，但阶段表述必须收紧
 
-- 推荐最小证明顺序：
-  - 应用级 API Key 只读/创建基线
-  - 最小对外调用契约页
+- 对外和对内都建议明确当前阶段是：
+  - `Application-hosted agentFlow authoring baseline 已落地`
+  - `下一阶段补 05/06B 的最小产品证明`
+- 不要继续让模块总览和计划文档给人“03 还未开发、04 还只是未来设计”的错觉
+
+### 建议五：等 B/C 收口后，再进入最小 `05/06B` 证明
+
+- 推荐的最小证明顺序：
+  - 应用级 API Key 读写基线
   - 最小 `Application Run List`
-  - `publish-gateway` 真实接口边界
-- 这样既不需要一次做完整 `06B/05`，也能让“发布优先”重新有证据
+  - `publish-gateway` 的真实接口边界
+- 这样能最快证明方向，同时避免现在就把更多能力压进已经过重的主包里
 
 ## 受限项
 
-- 当前工作树存在未提交修改：`web/app/src/features/agent-flow/components/editor/agent-flow-editor.css`
-- 本轮已查看差异，只是 `min-height` 改为 CSS 变量；不影响上述核心结论，但说明前端 UI 高度策略仍在变化中
+- `style-boundary` 初次执行时因本地 dev server 绑定 `0.0.0.0:3100` 受限而超时；在允许启动本地端口后，`page.application-detail` 检查通过
+- 当前工作树仍有未提交改动：`web/app/src/features/agent-flow/components/editor/agent-flow-editor.css`
