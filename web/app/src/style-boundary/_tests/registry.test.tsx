@@ -39,6 +39,7 @@ describe('style boundary registry', () => {
       'component.account-popup',
       'component.account-trigger',
       'page.home',
+      'page.application-detail',
       'page.embedded-apps',
       'page.tools',
       'page.settings',
@@ -46,7 +47,7 @@ describe('style boundary registry', () => {
     ]);
     expect(
       getSceneIdsForFiles(['web/app/src/shared/ui/section-page-layout/SectionPageLayout.tsx'])
-    ).toEqual(['page.settings', 'page.me']);
+    ).toEqual(['page.application-detail', 'page.settings', 'page.me']);
     expect(getSceneIdsForFiles(['web/app/src/features/me/pages/me-page.css'])).toEqual([
       'page.me'
     ]);
@@ -62,7 +63,7 @@ describe('style boundary registry', () => {
     );
 
     expect(await screen.findByRole('heading', { name: '1Flowse' })).toBeInTheDocument();
-    expect(screen.getByText('欢迎，Root')).toBeInTheDocument();
+    expect(await screen.findByText('Support Agent')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
   });
 

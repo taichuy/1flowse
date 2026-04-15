@@ -21,6 +21,15 @@ export const APP_ROUTES: AppRouteDefinition[] = [
     guard: 'session-required'
   },
   {
+    id: 'application-detail',
+    path: '/applications',
+    navLabel: null,
+    chromeSlot: 'hidden',
+    selectedMatchers: [(pathname) => /^\/applications\/[^/]+(\/|$)/.test(pathname)],
+    permissionKey: 'route_page.view.all',
+    guard: 'session-required'
+  },
+  {
     id: 'embedded-apps',
     path: '/embedded-apps',
     navLabel: '子系统',
@@ -68,8 +77,9 @@ export const APP_ROUTES: AppRouteDefinition[] = [
 ];
 
 export function getSelectedRouteId(pathname: string): AppRouteId {
-  return (
+  const matchedRouteId =
     APP_ROUTES.find((route) => route.selectedMatchers.some((match) => match(pathname)))?.id ??
-    'home'
-  );
+    'home';
+
+  return matchedRouteId === 'application-detail' ? 'home' : matchedRouteId;
 }

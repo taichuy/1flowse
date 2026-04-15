@@ -67,12 +67,19 @@ export function SectionPageLayout({
 
           <div className="section-page-layout__content">
             {compactMode ? (
-              <SectionSidebarNav
-                navItems={visibleItems}
-                activeKey={activeKey}
-                compactMode
-                compactVariant={compactVariant}
-              />
+              <>
+                {pageTitle ? (
+                  <Typography.Title level={4} style={{ marginTop: 0 }}>
+                    {pageTitle}
+                  </Typography.Title>
+                ) : null}
+                <SectionSidebarNav
+                  navItems={visibleItems}
+                  activeKey={activeKey}
+                  compactMode
+                  compactVariant={compactVariant}
+                />
+              </>
             ) : null}
             {children}
           </div>

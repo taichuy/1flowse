@@ -6,6 +6,7 @@ describe('route truth layer', () => {
   test('keeps navigation ids, labels, paths, and selected-state logic in one source', () => {
     expect(APP_ROUTES.map((route) => route.id)).toEqual([
       'home',
+      'application-detail',
       'embedded-apps',
       'tools',
       'settings',
@@ -18,6 +19,9 @@ describe('route truth layer', () => {
     expect(getSelectedRouteId('/me')).toBe('me');
     expect(getSelectedRouteId('/me/profile')).toBe('me');
     expect(getSelectedRouteId('/me/security')).toBe('me');
+    expect(getSelectedRouteId('/applications/app-1')).toBe('home');
+    expect(getSelectedRouteId('/applications/app-1/orchestration')).toBe('home');
+    expect(getSelectedRouteId('/applications/app-1/api')).toBe('home');
     expect(getSelectedRouteId('/settings-foo')).toBe('home');
     expect(getSelectedRouteId('/me-profile')).toBe('home');
   });

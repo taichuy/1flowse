@@ -6,7 +6,6 @@ import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { createAccountMenuItems } from '../app-shell/account-menu-items';
 import { SignInPage } from '../features/auth/pages/SignInPage';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
-import { HomePage } from '../features/home/pages/HomePage';
 import { ToolsPage } from '../features/tools/pages/ToolsPage';
 import { useAuthStore } from '../state/auth-store';
 import manifest from './scenario-manifest.json';
@@ -52,6 +51,8 @@ function seedStyleBoundaryAuth() {
       effective_display_role: 'manager',
       permissions: [
         'route_page.view.all',
+        'application.view.all',
+        'application.create.all',
         'embedded_app.view.all',
         'api_reference.view.all'
       ]
@@ -179,6 +180,101 @@ function renderRouterScene(pathname: string) {
   return <AppRouterProvider />;
 }
 
+function seedStyleBoundaryApplicationFetch() {
+  if (typeof globalThis.fetch !== 'function') {
+    return;
+  }
+
+  styleBoundaryOriginalFetch ??= globalThis.fetch.bind(globalThis);
+  const originalFetch = styleBoundaryOriginalFetch;
+
+  globalThis.fetch = async (input, init) => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof Request
+          ? input.url
+          : String(input);
+
+    if (url.includes('/api/console/applications/app-1')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            id: 'app-1',
+            application_type: 'agent_flow',
+            name: 'Support Agent',
+            description: 'customer support',
+            icon: 'RobotOutlined',
+            icon_type: 'iconfont',
+            icon_background: '#E6F7F2',
+            updated_at: '2026-04-15T09:00:00Z',
+            sections: {
+              orchestration: {
+                status: 'planned',
+                subject_kind: 'agent_flow',
+                subject_status: 'unconfigured',
+                current_subject_id: null,
+                current_draft_id: null
+              },
+              api: {
+                status: 'planned',
+                credential_kind: 'application_api_key',
+                invoke_routing_mode: 'api_key_bound_application',
+                invoke_path_template: null,
+                api_capability_status: 'planned',
+                credentials_status: 'planned'
+              },
+              logs: {
+                status: 'planned',
+                runs_capability_status: 'planned',
+                run_object_kind: 'application_run',
+                log_retention_status: 'planned'
+              },
+              monitoring: {
+                status: 'planned',
+                metrics_capability_status: 'planned',
+                metrics_object_kind: 'application_metrics',
+                tracing_config_status: 'planned'
+              }
+            }
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (url.endsWith('/api/console/applications')) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'app-1',
+              application_type: 'agent_flow',
+              name: 'Support Agent',
+              description: 'customer support',
+              icon: 'RobotOutlined',
+              icon_type: 'iconfont',
+              icon_background: '#E6F7F2',
+              updated_at: '2026-04-15T09:00:00Z'
+            }
+          ],
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    return originalFetch(input as RequestInfo, init);
+  };
+}
+
 const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
   'component.account-popup': () => (
     <div className="app-shell-account-popup">
@@ -194,7 +290,14 @@ const renderers: Record<string, StyleBoundaryRuntimeScene['render']> = {
       openKeys={['account']}
     />
   ),
-  'page.home': () => renderShellScene('/', <HomePage />),
+  'page.home': () => {
+    seedStyleBoundaryApplicationFetch();
+    return renderRouterScene('/');
+  },
+  'page.application-detail': () => {
+    seedStyleBoundaryApplicationFetch();
+    return renderRouterScene('/applications/app-1/orchestration');
+  },
   'page.embedded-apps': () => renderShellScene('/embedded-apps', <EmbeddedAppsPage />),
   'page.tools': () => renderShellScene('/tools', <ToolsPage />),
   'page.settings': () => {

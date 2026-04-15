@@ -1,4 +1,5 @@
 import {
+  Navigate,
   Outlet,
   RouterProvider,
   createRootRoute,
@@ -10,6 +11,8 @@ import { Result } from 'antd';
 
 import { AppShellFrame } from '../app-shell/AppShellFrame';
 import { SignInPage } from '../features/auth/pages/SignInPage';
+import { ApplicationDetailPage } from '../features/applications/pages/ApplicationDetailPage';
+import type { ApplicationSectionKey } from '../features/applications/lib/application-sections';
 import { EmbeddedAppsPage } from '../features/embedded-apps/pages/EmbeddedAppsPage';
 import { HomePage } from '../features/home/pages/HomePage';
 import type { MeSectionKey } from '../features/me/lib/me-sections';
@@ -35,6 +38,35 @@ function ShellLayout() {
   );
 }
 
+function ApplicationIndexRedirect() {
+  const { applicationId } = applicationIndexRoute.useParams();
+
+  return (
+    <Navigate
+      to="/applications/$applicationId/orchestration"
+      params={{ applicationId }}
+      replace
+    />
+  );
+}
+
+function ApplicationSectionRoute({
+  applicationId,
+  requestedSectionKey
+}: {
+  applicationId: string;
+  requestedSectionKey: ApplicationSectionKey;
+}) {
+  return (
+    <RouteGuard routeId="application-detail">
+      <ApplicationDetailPage
+        applicationId={applicationId}
+        requestedSectionKey={requestedSectionKey}
+      />
+    </RouteGuard>
+  );
+}
+
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
   notFoundComponent: NotFoundPage
@@ -55,6 +87,71 @@ const homeRoute = createRoute({
       <HomePage />
     </RouteGuard>
   )
+});
+
+const applicationIndexRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/applications/$applicationId',
+  component: ApplicationIndexRedirect,
+  notFoundComponent: NotFoundPage
+});
+
+const applicationOrchestrationRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/applications/$applicationId/orchestration',
+  notFoundComponent: NotFoundPage,
+  component: () => {
+    const { applicationId } = applicationOrchestrationRoute.useParams();
+
+    return (
+      <ApplicationSectionRoute
+        applicationId={applicationId}
+        requestedSectionKey="orchestration"
+      />
+    );
+  }
+});
+
+const applicationApiRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/applications/$applicationId/api',
+  notFoundComponent: NotFoundPage,
+  component: () => {
+    const { applicationId } = applicationApiRoute.useParams();
+
+    return (
+      <ApplicationSectionRoute applicationId={applicationId} requestedSectionKey="api" />
+    );
+  }
+});
+
+const applicationLogsRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/applications/$applicationId/logs',
+  notFoundComponent: NotFoundPage,
+  component: () => {
+    const { applicationId } = applicationLogsRoute.useParams();
+
+    return (
+      <ApplicationSectionRoute applicationId={applicationId} requestedSectionKey="logs" />
+    );
+  }
+});
+
+const applicationMonitoringRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: '/applications/$applicationId/monitoring',
+  notFoundComponent: NotFoundPage,
+  component: () => {
+    const { applicationId } = applicationMonitoringRoute.useParams();
+
+    return (
+      <ApplicationSectionRoute
+        applicationId={applicationId}
+        requestedSectionKey="monitoring"
+      />
+    );
+  }
 });
 
 const embeddedAppsRoute = createRoute({
@@ -157,6 +254,11 @@ const signInRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   shellRoute.addChildren([
     homeRoute,
+    applicationIndexRoute,
+    applicationOrchestrationRoute,
+    applicationApiRoute,
+    applicationLogsRoute,
+    applicationMonitoringRoute,
     embeddedAppsRoute,
     toolsRoute,
     settingsIndexRoute,

@@ -60,9 +60,11 @@ export function SectionSidebarNav({
 
   if (compactVariant === 'tabs') {
     return (
-      <div className="section-page-layout__mobile-tabs">
-        <Tabs activeKey={activeKey} items={createTabItems(navItems)} />
-      </div>
+      <nav aria-label="Section navigation" className="section-page-layout__nav">
+        <div className="section-page-layout__mobile-tabs">
+          <Tabs activeKey={activeKey} items={createTabItems(navItems)} />
+        </div>
+      </nav>
     );
   }
 

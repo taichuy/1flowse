@@ -1528,7 +1528,7 @@ git commit -m "feat(web): add application list and create flow"
 - Modify: `web/app/src/style-boundary/registry.tsx`
 - Modify: `web/app/src/style-boundary/scenario-manifest.json`
 
-- [ ] **Step 1: Write the failing detail routing tests**
+- [x] **Step 1: Write the failing detail routing tests**
 
 Create `web/app/src/routes/_tests/application-shell-routing.test.tsx`:
 
@@ -1635,7 +1635,7 @@ describe('application shell routing', () => {
 });
 ```
 
-- [ ] **Step 2: Run the routing test to verify it fails**
+- [x] **Step 2: Run the routing test to verify it fails**
 
 Run:
 
@@ -1648,7 +1648,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL because there are no `/applications/*` routes or section components yet.
 
-- [ ] **Step 3: Implement the detail page, hidden route metadata, and style-boundary scenes**
+- [x] **Step 3: Implement the detail page, hidden route metadata, and style-boundary scenes**
 
 Update `web/packages/shared-types/src/index.ts`:
 
@@ -1905,7 +1905,7 @@ export function ApplicationSectionState({
           items={[
             { key: 'status', label: '能力状态', children: renderStatusTag(application.sections.api.status) },
             { key: 'credential_kind', label: '凭证类型', children: application.sections.api.credential_kind },
-            { key: 'routing_mode', label: '路由模式', children: application.sections.api.invoke_routing_mode },
+            { key: 'routing_mode', label: '��由模式', children: application.sections.api.invoke_routing_mode },
             { key: 'path_template', label: '调用路径模板', children: application.sections.api.invoke_path_template ?? '由 application_type 冻结，06B 再落地' },
             { key: 'credentials_status', label: '凭证生命周期', children: application.sections.api.credentials_status }
           ]}
@@ -2186,7 +2186,7 @@ Update `web/app/src/style-boundary/scenario-manifest.json`:
 }
 ```
 
-- [ ] **Step 4: Re-run the routing and style-boundary registry tests**
+- [x] **Step 4: Re-run the routing and style-boundary registry tests**
 
 Run:
 
@@ -2200,7 +2200,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the application shell slice**
+- [x] **Step 5: Commit the application shell slice**
 
 ```bash
 git add web/packages/shared-types/src/index.ts
