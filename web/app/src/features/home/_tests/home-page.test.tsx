@@ -1,15 +1,21 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-vi.mock('../api/health', () => ({
-  getApiHealthQueryOptions: vi.fn(() => ({
-    queryKey: ['api-health', 'http://127.0.0.1:7800'],
-    queryFn: async () => ({
-      service: 'api-server',
-      status: 'ok',
-      version: '0.1.0'
-    })
-  }))
+vi.mock('../../applications/api/applications', () => ({
+  applicationsQueryKey: ['applications'],
+  fetchApplications: vi.fn().mockResolvedValue([
+    {
+      id: 'app-1',
+      application_type: 'agent_flow',
+      name: 'Support Agent',
+      description: 'customer support',
+      icon: 'RobotOutlined',
+      icon_type: 'iconfont',
+      icon_background: '#E6F7F2',
+      updated_at: '2026-04-15T09:00:00Z'
+    }
+  ]),
+  createApplication: vi.fn()
 }));
 
 import { AppProviders } from '../../../app/AppProviders';
@@ -41,16 +47,16 @@ describe('HomePage', () => {
     });
   });
 
-  test('renders authenticated welcome copy, role summary, and compact backend health', async () => {
+  test('renders application cards instead of the old health summary', async () => {
     render(
       <AppProviders>
         <HomePage />
       </AppProviders>
     );
 
-    expect(await screen.findByText('欢迎，Root')).toBeInTheDocument();
-    expect(screen.getByText('当前角色 manager')).toBeInTheDocument();
-    expect(await screen.findByText('api-server ok (0.1.0)')).toBeInTheDocument();
-    expect(screen.queryByText('API Health')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '工作台' })).toBeInTheDocument();
+    expect(await screen.findByText('Support Agent')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '进入应用' })).toBeInTheDocument();
+    expect(screen.queryByText(/api-server ok/i)).not.toBeInTheDocument();
   });
 });

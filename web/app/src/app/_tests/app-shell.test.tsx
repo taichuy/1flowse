@@ -7,11 +7,18 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@1flowse/api-client', () => ({
   getDefaultApiBaseUrl: vi.fn().mockReturnValue('http://127.0.0.1:7800'),
-  fetchApiHealth: vi.fn().mockResolvedValue({
-    service: 'api-server',
-    status: 'ok',
-    version: '0.1.0'
-  })
+  listConsoleApplications: vi.fn().mockResolvedValue([
+    {
+      id: 'app-1',
+      application_type: 'agent_flow',
+      name: 'Support Agent',
+      description: 'customer support',
+      icon: 'RobotOutlined',
+      icon_type: 'iconfont',
+      icon_background: '#E6F7F2',
+      updated_at: '2026-04-15T09:00:00Z'
+    }
+  ])
 }));
 
 vi.mock('../../features/auth/components/AuthBootstrap', () => ({
@@ -48,7 +55,7 @@ describe('App shell', () => {
   });
 
   test(
-    'renders the formal console shell with settings and account actions',
+    'renders the formal console shell with application workspace content',
     async () => {
       render(<App />);
 
@@ -81,7 +88,9 @@ describe('App shell', () => {
       ).not.toBeInTheDocument();
       expect(screen.queryByText('Workspace Bootstrap')).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Theme Preview' })).not.toBeInTheDocument();
-      expect(await screen.findByText(/api-server/i)).toBeInTheDocument();
+      expect(await screen.findByText('Support Agent')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '进入应用' })).toBeInTheDocument();
+      expect(screen.queryByText(/api-server/i)).not.toBeInTheDocument();
     },
     15000
   );

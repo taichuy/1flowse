@@ -1038,7 +1038,7 @@ git commit -m "feat(api): add console application routes"
 - Modify: `web/app/src/features/home/_tests/home-page.test.tsx`
 - Modify: `web/app/src/app/_tests/app-shell.test.tsx`
 
-- [ ] **Step 1: Write the failing list/create UI tests**
+- [x] **Step 1: Write the failing list/create UI tests**
 
 Create `web/app/src/features/applications/_tests/application-create-modal.test.tsx`:
 
@@ -1128,7 +1128,7 @@ test('renders the formal console shell with application workspace content', asyn
 });
 ```
 
-- [ ] **Step 2: Run the focused frontend tests to verify they fail**
+- [x] **Step 2: Run the focused frontend tests to verify they fail**
 
 Run:
 
@@ -1141,7 +1141,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: FAIL because the applications client/module/components do not exist yet and `HomePage` still renders health content.
 
-- [ ] **Step 3: Implement the API client, query wrappers, list page, and create modal**
+- [x] **Step 3: Implement the API client, query wrappers, list page, and create modal**
 
 Create `web/packages/api-client/src/console-applications.ts`:
 
@@ -1484,7 +1484,7 @@ export function HomePage() {
 }
 ```
 
-- [ ] **Step 4: Re-run the focused frontend tests**
+- [x] **Step 4: Re-run the focused frontend tests**
 
 Run:
 
@@ -1498,7 +1498,7 @@ pnpm --dir web/app exec vitest run \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the list/create slice**
+- [x] **Step 5: Commit the list/create slice**
 
 ```bash
 git add web/packages/api-client/src/console-applications.ts

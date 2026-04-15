@@ -1,3 +1,4 @@
+export * from './console-applications';
 export * from './console-api-docs';
 export * from './console-me';
 export * from './console-members';
