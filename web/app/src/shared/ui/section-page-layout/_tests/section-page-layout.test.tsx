@@ -118,7 +118,7 @@ describe('SectionPageLayout', () => {
     expect(sectionLayoutCss).not.toContain(
       'margin-left: calc(240px - max(0px, (100vw - min(1200px, calc(100vw - 48px))) / 2));'
     );
-    expect(sectionLayoutCss).toContain('gap: 48px;');
+    expect(sectionLayoutCss).toContain('gap: 16px;');
     expect(sectionLayoutCss).toContain('position: sticky;');
     expect(sectionLayoutCss).not.toContain('position: fixed;');
   });
