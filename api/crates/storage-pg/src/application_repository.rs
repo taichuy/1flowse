@@ -23,6 +23,8 @@ fn map_application_record(row: sqlx::postgres::PgRow) -> Result<domain::Applicat
         icon_background: row.get("icon_background"),
         created_by: row.get("created_by"),
         updated_at: row.get("updated_at"),
+        current_flow_id: row.get("current_flow_id"),
+        current_draft_id: row.get("current_draft_id"),
     })
 }
 
@@ -60,7 +62,9 @@ impl ApplicationRepository for PgControlPlaneStore {
                 icon,
                 icon_background,
                 created_by,
-                updated_at
+                updated_at,
+                null::uuid as current_flow_id,
+                null::uuid as current_draft_id
             from applications
             where workspace_id = $1
               and ($3 = 'all' or created_by = $2)
@@ -104,7 +108,9 @@ impl ApplicationRepository for PgControlPlaneStore {
                 icon,
                 icon_background,
                 created_by,
-                updated_at
+                updated_at,
+                null::uuid as current_flow_id,
+                null::uuid as current_draft_id
             "#,
         )
         .bind(Uuid::now_v7())
@@ -130,19 +136,23 @@ impl ApplicationRepository for PgControlPlaneStore {
         let row = sqlx::query(
             r#"
             select
-                id,
-                workspace_id,
-                application_type,
-                name,
-                description,
-                icon_type,
-                icon,
-                icon_background,
-                created_by,
-                updated_at
-            from applications
-            where workspace_id = $1
-              and id = $2
+                a.id,
+                a.workspace_id,
+                a.application_type,
+                a.name,
+                a.description,
+                a.icon_type,
+                a.icon,
+                a.icon_background,
+                a.created_by,
+                a.updated_at,
+                f.id as current_flow_id,
+                fd.id as current_draft_id
+            from applications a
+            left join flows f on f.application_id = a.id
+            left join flow_drafts fd on fd.flow_id = f.id
+            where a.workspace_id = $1
+              and a.id = $2
             "#,
         )
         .bind(workspace_id)

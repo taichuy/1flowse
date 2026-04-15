@@ -1,11 +1,12 @@
 use anyhow::Result;
 use control_plane::ports::{
     ApplicationRepository, AuthRepository, BootstrapRepository, CreateApplicationInput,
-    CreateMemberInput, MemberRepository, UpdateProfileInput, WorkspaceRepository,
+    CreateMemberInput, FlowRepository, MemberRepository, UpdateProfileInput, WorkspaceRepository,
 };
 use domain::{
-    ActorContext, ApplicationRecord, AuditLogRecord, AuthenticatorRecord, PermissionDefinition,
-    RoleScopeKind, TenantRecord, UserRecord, WorkspaceRecord,
+    ActorContext, ApplicationRecord, AuditLogRecord, AuthenticatorRecord, FlowChangeKind,
+    FlowEditorState, PermissionDefinition, RoleScopeKind, TenantRecord, UserRecord,
+    WorkspaceRecord,
 };
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -160,6 +161,54 @@ impl PgControlPlaneStore {
         input: &CreateApplicationInput,
     ) -> Result<ApplicationRecord> {
         ApplicationRepository::create_application(self, input).await
+    }
+
+    pub async fn get_or_create_editor_state(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+        actor_user_id: Uuid,
+    ) -> Result<FlowEditorState> {
+        FlowRepository::get_or_create_editor_state(self, workspace_id, application_id, actor_user_id)
+            .await
+    }
+
+    pub async fn save_flow_draft(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+        actor_user_id: Uuid,
+        document: serde_json::Value,
+        change_kind: FlowChangeKind,
+        summary: &str,
+    ) -> Result<FlowEditorState> {
+        FlowRepository::save_draft(
+            self,
+            workspace_id,
+            application_id,
+            actor_user_id,
+            document,
+            change_kind,
+            summary,
+        )
+        .await
+    }
+
+    pub async fn restore_flow_version(
+        &self,
+        workspace_id: Uuid,
+        application_id: Uuid,
+        actor_user_id: Uuid,
+        version_id: Uuid,
+    ) -> Result<FlowEditorState> {
+        FlowRepository::restore_version(
+            self,
+            workspace_id,
+            application_id,
+            actor_user_id,
+            version_id,
+        )
+        .await
     }
 }
 

@@ -479,7 +479,7 @@ git commit -m "feat: add agent flow document contract"
 - Modify: `api/crates/storage-pg/src/application_repository.rs`
 - Modify: `api/crates/storage-pg/src/_tests/mod.rs`
 
-- [ ] **Step 1: Write the failing repository and service tests**
+- [x] **Step 1: Write the failing repository and service tests**
 
 ```rust
 use control_plane::{
@@ -635,7 +635,7 @@ async fn save_draft_only_appends_history_for_logical_changes() {
 }
 ```
 
-- [ ] **Step 2: Add the flow tables, domain records, and repository ports**
+- [x] **Step 2: Add the flow tables, domain records, and repository ports**
 
 ```sql
 create table if not exists flows (
@@ -755,7 +755,7 @@ pub trait FlowRepository: Send + Sync {
 }
 ```
 
-- [ ] **Step 3: Implement storage-pg mapping, the Flow service, and application section updates**
+- [x] **Step 3: Implement storage-pg mapping, the Flow service, and application section updates**
 
 ```rust
 // api/crates/control-plane/src/flow.rs
@@ -903,7 +903,7 @@ pub fn flow_sections(
 }
 ```
 
-- [ ] **Step 4: Run the targeted Rust tests**
+- [x] **Step 4: Run the targeted Rust tests**
 
 Run:
 
@@ -913,6 +913,18 @@ cargo test -p control-plane flow_service_tests -v
 ```
 
 Expected: the repository tests cover bootstrap, logical-save history, and restore; the service tests cover permission-gated application loading and save routing.
+
+Execution note (`2026-04-15 15:46`):
+
+- `cargo test -p control-plane flow_service_tests -v` passed directly in `api/`.
+- The local Docker-published PostgreSQL port `127.0.0.1:35432` accepted TCP but did not respond to PostgreSQL protocol packets on this machine, so `storage-pg` tests could not bootstrap a DB connection through the default URL.
+- Worked around verification with a temporary local proxy on `127.0.0.1:35433` that relayed each connection via `docker exec docker-db-1 nc 127.0.0.1 5432`, then ran:
+
+```bash
+DATABASE_URL='postgres://postgres:sevenflows@127.0.0.1:35433/sevenflows' cargo test -p storage-pg flow_repository_tests -v
+```
+
+- Result: `control-plane` target tests `2 passed`; `storage-pg` target tests `3 passed`.
 
 - [ ] **Step 5: Commit**
 

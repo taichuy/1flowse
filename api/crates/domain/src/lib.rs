@@ -4,6 +4,7 @@ pub mod application;
 pub mod audit;
 pub mod auth;
 pub mod base;
+pub mod flow;
 pub mod modeling;
 pub mod resource;
 pub mod scope;
@@ -18,6 +19,11 @@ pub use auth::{
     RoleTemplate, SessionRecord, UserAuthIdentity, UserRecord, UserStatus,
 };
 pub use base::BaseFields;
+pub use flow::{
+    default_flow_document, FlowChangeKind, FlowDraftRecord, FlowEditorState, FlowRecord,
+    FlowVersionRecord, FlowVersionTrigger, FLOW_AUTOSAVE_INTERVAL_SECONDS, FLOW_HISTORY_LIMIT,
+    FLOW_SCHEMA_VERSION,
+};
 pub use modeling::{
     DataModelScopeKind, MetadataAvailabilityStatus, ModelDefinitionRecord, ModelFieldKind,
     ModelFieldRecord,
