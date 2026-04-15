@@ -11,8 +11,8 @@ match_when:
   - 需要同时查看状态并提交改动
   - git 报“无法创建 .git/index.lock”
 created_at: 2026-04-13 09
-updated_at: 2026-04-13 09
-last_verified_at: 2026-04-13 09
+updated_at: 2026-04-15 17
+last_verified_at: 2026-04-15 17
 decision_policy: reference_on_failure
 scope:
   - git
@@ -52,3 +52,4 @@ fatal: 无法创建 '/home/taichu/git/1flowse/.git/index.lock'：文件已存在
 ## 复现记录
 
 - `2026-04-13 09`：在 1flowse 仓库并行执行状态检查和提交，触发 `index.lock` 冲突；改为串行执行后恢复正常。
+- `2026-04-15 17`：为了在结束前自动提交 `.memory/tool-memory` 变更，并行执行了 `git status --short` 和 `git add ... && git commit ...`，再次触发 `index.lock` 冲突；确认 `.git/index.lock` 已消失后，改为串行执行提交恢复正常。
