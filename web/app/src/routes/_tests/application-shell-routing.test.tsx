@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Grid } from 'antd';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -129,6 +129,35 @@ describe('application shell routing', () => {
       versions: [],
       autosave_interval_seconds: 30
     });
+    orchestrationApi.saveDraft.mockReset();
+    orchestrationApi.saveDraft.mockResolvedValue({
+      flow_id: 'flow-1',
+      draft: {
+        id: 'draft-1',
+        flow_id: 'flow-1',
+        updated_at: '2026-04-15T09:10:00Z',
+        document: {
+          schemaVersion: '1flowse.flow/v1',
+          meta: {
+            flowId: 'flow-1',
+            name: 'Untitled agentFlow',
+            description: '',
+            tags: []
+          },
+          graph: {
+            nodes: [],
+            edges: []
+          },
+          editor: {
+            viewport: { x: 0, y: 0, zoom: 1 },
+            annotations: [],
+            activeContainerPath: []
+          }
+        }
+      },
+      versions: [],
+      autosave_interval_seconds: 30
+    });
   });
 
   test('redirects /applications/:id to orchestration', async () => {
@@ -176,6 +205,30 @@ describe('application shell routing', () => {
       expect(await screen.findByText('30 秒自动保存')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '保存' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Issues' })).toBeInTheDocument();
+    } finally {
+      desktopBreakpoints.mockRestore();
+    }
+  });
+
+  test('keeps orchestration draft save enabled when application api capability is planned', async () => {
+    const desktopBreakpoints = vi
+      .spyOn(Grid, 'useBreakpoint')
+      .mockReturnValue({ lg: true } as never);
+
+    window.history.pushState({}, '', '/applications/app-1/orchestration');
+
+    try {
+      render(
+        <AppProviders>
+          <AppRouterProvider />
+        </AppProviders>
+      );
+
+      fireEvent.click(await screen.findByRole('button', { name: '保存' }));
+
+      await waitFor(() => {
+        expect(orchestrationApi.saveDraft).toHaveBeenCalledTimes(1);
+      });
     } finally {
       desktopBreakpoints.mockRestore();
     }

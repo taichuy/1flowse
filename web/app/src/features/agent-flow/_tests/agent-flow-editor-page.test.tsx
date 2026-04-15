@@ -300,7 +300,6 @@ describe('AgentFlowEditorShell', () => {
         <AgentFlowEditorPage
           applicationId="app-1"
           applicationName="Support Agent"
-          apiCapabilityStatus="planned"
         />
       </AppProviders>
     );

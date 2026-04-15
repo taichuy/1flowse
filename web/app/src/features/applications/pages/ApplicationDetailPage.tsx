@@ -48,7 +48,6 @@ export function ApplicationDetailPage({
       <AgentFlowEditorPage
         applicationId={applicationId}
         applicationName={application.name}
-        apiCapabilityStatus={application.sections.api.api_capability_status}
       />
     ) : (
       <ApplicationSectionState

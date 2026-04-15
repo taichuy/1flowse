@@ -11,12 +11,10 @@ import { AgentFlowEditorShell } from '../components/editor/AgentFlowEditorShell'
 
 export function AgentFlowEditorPage({
   applicationId,
-  applicationName,
-  apiCapabilityStatus
+  applicationName
 }: {
   applicationId: string;
   applicationName: string;
-  apiCapabilityStatus: string;
 }) {
   const screens = Grid.useBreakpoint();
   const orchestrationQuery = useQuery({
@@ -59,9 +57,6 @@ export function AgentFlowEditorPage({
       applicationId={applicationId}
       applicationName={applicationName}
       initialState={state}
-      saveDraftOverride={
-        apiCapabilityStatus === 'ready' ? undefined : async () => state
-      }
     />
   );
 }
