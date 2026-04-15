@@ -866,7 +866,7 @@ pub struct CreateApplicationBody {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ApplicationResponse {
+pub struct ApplicationSummaryResponse {
     pub id: String,
     pub application_type: String,
     pub name: String,
@@ -877,25 +877,107 @@ pub struct ApplicationResponse {
     pub updated_at: String,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationDetailResponse {
+    #[serde(flatten)]
+    pub summary: ApplicationSummaryResponse,
+    pub sections: domain::ApplicationSections,
+}
+
+fn to_application_summary(application: domain::ApplicationRecord) -> ApplicationSummaryResponse {
+    ApplicationSummaryResponse {
+        id: application.id.to_string(),
+        application_type: application.application_type.as_str().into(),
+        name: application.name,
+        description: application.description,
+        icon: application.icon,
+        icon_type: application.icon_type,
+        icon_background: application.icon_background,
+        updated_at: application.updated_at.format(&time::format_description::well_known::Rfc3339).unwrap(),
+    }
+}
+
+fn to_application_detail(application: domain::ApplicationRecord) -> ApplicationDetailResponse {
+    ApplicationDetailResponse {
+        summary: to_application_summary(application.clone()),
+        sections: application.sections,
+    }
+}
+
 pub fn router() -> Router<Arc<ApiState>> {
     Router::new()
         .route("/applications", get(list_applications).post(create_application))
         .route("/applications/:id", get(get_application))
 }
 
-#[utoipa::path(get, path = "/api/console/applications", responses((status = 200, body = [ApplicationResponse])))]
+#[utoipa::path(
+    get,
+    path = "/api/console/applications",
+    responses((status = 200, body = [ApplicationSummaryResponse]))
+)]
 pub async fn list_applications(
     State(state): State<Arc<ApiState>>,
     headers: HeaderMap,
-) -> Result<Json<ApiSuccess<Vec<ApplicationResponse>>>, ApiError> {
+) -> Result<Json<ApiSuccess<Vec<ApplicationSummaryResponse>>>, ApiError> {
     let context = require_session(&state, &headers).await?;
     let rows = ApplicationService::new(state.store.clone())
         .list_applications(context.user.id)
         .await?;
 
     Ok(Json(ApiSuccess::new(
-        rows.into_iter().map(ApplicationResponse::from).collect(),
+        rows.into_iter().map(to_application_summary).collect(),
     )))
+}
+```
+
+同文件里补齐另外两个 handler：
+
+```rust
+#[utoipa::path(
+    post,
+    path = "/api/console/applications",
+    request_body = CreateApplicationBody,
+    responses((status = 201, body = ApplicationDetailResponse))
+)]
+pub async fn create_application(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Json(body): Json<CreateApplicationBody>,
+) -> Result<(StatusCode, Json<ApiSuccess<ApplicationDetailResponse>>), ApiError> {
+    let context = require_session(&state, &headers).await?;
+    require_csrf(&headers, &context.session)?;
+
+    let created = ApplicationService::new(state.store.clone())
+        .create_application(CreateApplicationCommand {
+            actor_user_id: context.user.id,
+            application_type: parse_application_type(&body.application_type)?,
+            name: body.name,
+            description: body.description,
+            icon: body.icon,
+            icon_type: body.icon_type,
+            icon_background: body.icon_background,
+        })
+        .await?;
+
+    Ok((StatusCode::CREATED, Json(ApiSuccess::new(to_application_detail(created)))))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/console/applications/{id}",
+    responses((status = 200, body = ApplicationDetailResponse), (status = 404, body = crate::error_response::ErrorBody))
+)]
+pub async fn get_application(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ApiSuccess<ApplicationDetailResponse>>, ApiError> {
+    let context = require_session(&state, &headers).await?;
+    let detail = ApplicationService::new(state.store.clone())
+        .get_application(context.user.id, id)
+        .await?;
+
+    Ok(Json(ApiSuccess::new(to_application_detail(detail))))
 }
 ```
 
@@ -912,7 +994,8 @@ pub mod applications;
 crate::routes::applications::list_applications,
 crate::routes::applications::create_application,
 crate::routes::applications::get_application,
-crate::routes::applications::ApplicationResponse,
+crate::routes::applications::ApplicationSummaryResponse,
+crate::routes::applications::ApplicationDetailResponse,
 crate::routes::applications::CreateApplicationBody,
 ```
 
