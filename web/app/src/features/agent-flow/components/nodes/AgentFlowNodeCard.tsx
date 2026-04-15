@@ -1,4 +1,4 @@
-import type { NodeProps } from '@xyflow/react';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 import { NodePickerPopover } from '../node-picker/NodePickerPopover';
 import type { AgentFlowCanvasNode } from './node-registry';
@@ -8,31 +8,44 @@ export function AgentFlowNodeCard({
   selected
 }: NodeProps<AgentFlowCanvasNode>) {
   return (
-    <div
-      className={`agent-flow-node-card${selected ? ' agent-flow-node-card--selected' : ''}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => data.onSelectNode(data.nodeId)}
-      onDoubleClick={() => {
-        if (data.canEnterContainer) {
-          data.onOpenContainer(data.nodeId);
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          data.onSelectNode(data.nodeId);
-        }
-      }}
-    >
-      <div className="agent-flow-node-card__eyebrow">
-        <span>{data.alias === data.typeLabel ? 'Node' : data.typeLabel}</span>
-        {data.issueCount > 0 ? (
-          <span className="agent-flow-node-card__badge">{data.issueCount}</span>
-        ) : null}
+    <>
+      {data.showTargetHandle ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="agent-flow-node-handle agent-flow-node-handle--target"
+        />
+      ) : null}
+      <div
+        className={`agent-flow-node-card${selected ? ' agent-flow-node-card--selected' : ''}`}
+        role="button"
+        tabIndex={0}
+        onClick={() => data.onSelectNode(data.nodeId)}
+        onDoubleClick={() => {
+          if (data.canEnterContainer) {
+            data.onOpenContainer(data.nodeId);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            data.onSelectNode(data.nodeId);
+          }
+        }}
+      >
+        <div className="agent-flow-node-card__eyebrow">
+          <span>{data.alias === data.typeLabel ? 'Node' : data.typeLabel}</span>
+          {data.issueCount > 0 ? (
+            <span className="agent-flow-node-card__badge">{data.issueCount}</span>
+          ) : null}
+        </div>
+        <div className="agent-flow-node-card__title">{data.alias}</div>
       </div>
-      <div className="agent-flow-node-card__title">{data.alias}</div>
-      <div className="agent-flow-node-card__actions">
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="agent-flow-node-handle agent-flow-node-handle--source"
+      >
         <NodePickerPopover
           ariaLabel={`在 ${data.alias} 后新增节点`}
           open={data.pickerOpen}
@@ -46,7 +59,7 @@ export function AgentFlowNodeCard({
           }}
           onPickNode={(nodeType) => data.onInsertNode(data.nodeId, nodeType)}
         />
-      </div>
-    </div>
+      </Handle>
+    </>
   );
 }
