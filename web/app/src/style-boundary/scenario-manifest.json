@@ -133,6 +133,16 @@
             "expected": "flex"
           }
         ]
+      },
+      {
+        "id": "editor-overlay",
+        "selector": ".agent-flow-editor__overlay",
+        "propertyAssertions": [
+          {
+            "property": "background-color",
+            "expected": "rgba(0, 0, 0, 0)"
+          }
+        ]
       }
     ]
   },
