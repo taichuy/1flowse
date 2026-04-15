@@ -428,7 +428,8 @@ describe('ApiDocsPanel', () => {
     );
 
     expect(cssSource).not.toContain('min-height: 720px');
-    expect(cssSource).not.toContain('overflow: hidden');
+    expect(cssSource).not.toContain('.api-docs-panel__detail-viewer {\n  overflow: hidden;');
+    expect(cssSource).toContain('.api-docs-panel__detail-viewer {\n  min-width: 0;\n  height: 100%;\n}');
   });
 
   test('normalizes Scalar deep links into raw endpoint paths before copying', () => {
