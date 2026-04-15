@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
+import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
 
 vi.mock('@scalar/api-reference-react', () => ({
   ApiReferenceReact: () => <div data-testid="style-boundary-scalar">Scalar</div>
@@ -66,6 +67,47 @@ describe('style boundary registry', () => {
     expect(await screen.findByText('Support Agent')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
   });
+
+  test('application detail scene save mock echoes the latest draft document', async () => {
+    const scene = getRuntimeScene('page.application-detail');
+
+    render(
+      <AppProviders>
+        <StyleBoundaryHarness scene={scene} />
+      </AppProviders>
+    );
+
+    await screen.findByText(/support agent/i);
+
+    const baseDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+    const nextDocument = {
+      ...baseDocument,
+      editor: {
+        ...baseDocument.editor,
+        viewport: { x: 120, y: 48, zoom: 0.85 }
+      }
+    };
+    const saveResponse = await fetch(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration/draft',
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          document: nextDocument,
+          change_kind: 'layout',
+          summary: '更新画布布局'
+        })
+      }
+    );
+    const savePayload = await saveResponse.json();
+    const latestResponse = await fetch(
+      'http://127.0.0.1:7800/api/console/applications/app-1/orchestration'
+    );
+    const latestPayload = await latestResponse.json();
+
+    expect(savePayload.data.draft.document).toEqual(nextDocument);
+    expect(latestPayload.data.draft.document).toEqual(nextDocument);
+  }, 15_000);
 
   test(
     'renders the settings scene with mocked api docs data',

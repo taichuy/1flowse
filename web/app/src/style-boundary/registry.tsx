@@ -188,6 +188,7 @@ function seedStyleBoundaryApplicationFetch() {
 
   styleBoundaryOriginalFetch ??= globalThis.fetch.bind(globalThis);
   const originalFetch = styleBoundaryOriginalFetch;
+  let currentDraftDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
 
   globalThis.fetch = async (input, init) => {
     const url =
@@ -196,8 +197,54 @@ function seedStyleBoundaryApplicationFetch() {
         : input instanceof Request
           ? input.url
           : String(input);
+    const method =
+      init?.method ?? (input instanceof Request ? input.method : 'GET');
 
-    if (url.includes('/api/console/applications/app-1/orchestration')) {
+    if (
+      method.toUpperCase() === 'PUT' &&
+      url.includes('/api/console/applications/app-1/orchestration/draft')
+    ) {
+      const requestBody =
+        typeof init?.body === 'string'
+          ? JSON.parse(init.body)
+          : init?.body && typeof init.body === 'object'
+            ? init.body
+            : null;
+
+      if (
+        requestBody &&
+        'document' in requestBody &&
+        requestBody.document &&
+        typeof requestBody.document === 'object'
+      ) {
+        currentDraftDocument = requestBody.document as ReturnType<
+          typeof createDefaultAgentFlowDocument
+        >;
+      }
+
+      return new Response(
+        JSON.stringify({
+          data: {
+            flow_id: 'flow-1',
+            draft: {
+              id: 'draft-1',
+              flow_id: 'flow-1',
+              updated_at: '2026-04-15T09:10:00Z',
+              document: currentDraftDocument
+            },
+            versions: [],
+            autosave_interval_seconds: 30
+          },
+          meta: null
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        }
+      );
+    }
+
+    if (url.endsWith('/api/console/applications/app-1/orchestration')) {
       return new Response(
         JSON.stringify({
           data: {
@@ -206,7 +253,7 @@ function seedStyleBoundaryApplicationFetch() {
               id: 'draft-1',
               flow_id: 'flow-1',
               updated_at: '2026-04-15T09:00:00Z',
-              document: createDefaultAgentFlowDocument({ flowId: 'flow-1' })
+              document: currentDraftDocument
             },
             versions: [],
             autosave_interval_seconds: 30

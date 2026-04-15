@@ -35,6 +35,12 @@ interface AgentFlowCanvasProps {
   onOpenContainer: (nodeId: string) => void;
   onSelectNode: (nodeId: string | null) => void;
   onDocumentChange: (document: FlowAuthoringDocument) => void;
+  onViewportSnapshotChange?: (
+    viewport: FlowAuthoringDocument['editor']['viewport']
+  ) => void;
+  onViewportGetterReady?: (
+    getter: (() => FlowAuthoringDocument['editor']['viewport']) | null
+  ) => void;
 }
 
 interface InsertNodeEventDetail {
@@ -155,6 +161,37 @@ function ZoomToolbar() {
   );
 }
 
+function ViewportObserver({
+  onViewportSnapshotChange,
+  onViewportGetterReady
+}: {
+  onViewportSnapshotChange?: (
+    viewport: FlowAuthoringDocument['editor']['viewport']
+  ) => void;
+  onViewportGetterReady?: (
+    getter: (() => FlowAuthoringDocument['editor']['viewport']) | null
+  ) => void;
+}) {
+  const reactFlow = useReactFlow();
+  const viewport = useViewport();
+
+  useEffect(() => {
+    onViewportGetterReady?.(() => reactFlow.getViewport());
+
+    return () => onViewportGetterReady?.(null);
+  }, [onViewportGetterReady, reactFlow]);
+
+  useEffect(() => {
+    onViewportSnapshotChange?.({
+      x: viewport.x,
+      y: viewport.y,
+      zoom: viewport.zoom
+    });
+  }, [onViewportSnapshotChange, viewport.x, viewport.y, viewport.zoom]);
+
+  return null;
+}
+
 function AgentFlowCanvasInner({
   activeContainerId,
   document,
@@ -162,7 +199,9 @@ function AgentFlowCanvasInner({
   onOpenContainer,
   selectedNodeId,
   onSelectNode,
-  onDocumentChange
+  onDocumentChange,
+  onViewportSnapshotChange,
+  onViewportGetterReady
 }: AgentFlowCanvasProps) {
   const [pickerNodeId, setPickerNodeId] = useState<string | null>(null);
 
@@ -273,6 +312,10 @@ function AgentFlowCanvasInner({
         }}
       >
         <Background gap={20} size={1} />
+        <ViewportObserver
+          onViewportSnapshotChange={onViewportSnapshotChange}
+          onViewportGetterReady={onViewportGetterReady}
+        />
         <ZoomToolbar />
       </ReactFlow>
     </div>

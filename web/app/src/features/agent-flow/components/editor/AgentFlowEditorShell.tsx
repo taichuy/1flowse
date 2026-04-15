@@ -2,8 +2,9 @@ import type {
   ConsoleApplicationOrchestrationState,
   SaveConsoleApplicationDraftInput
 } from '@1flowse/api-client';
+import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 import { Button, Typography } from 'antd';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { restoreVersion, saveDraft } from '../../api/orchestration';
 import { validateDocument } from '../../lib/validate-document';
@@ -59,6 +60,11 @@ export function AgentFlowEditorShell({
   const csrfToken = useAuthStore((state) => state.csrfToken);
   const [editorState, setEditorState] = useState(initialState);
   const [document, setDocument] = useState(initialState.draft.document);
+  const documentRef = useRef(initialState.draft.document);
+  const lastSavedDocumentRef = useRef(initialState.draft.document);
+  const viewportSnapshotRef = useRef(initialState.draft.document.editor.viewport);
+  const viewportGetterRef =
+    useRef<(() => FlowAuthoringDocument['editor']['viewport']) | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-llm');
   const [containerPath, setContainerPath] = useState<string[]>([]);
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -81,9 +87,47 @@ export function AgentFlowEditorShell({
 
     return counts;
   }, [issues]);
+
+  function handleDocumentChange(nextDocument: FlowAuthoringDocument) {
+    viewportSnapshotRef.current = nextDocument.editor.viewport;
+    documentRef.current = nextDocument;
+    setDocument(nextDocument);
+  }
+
+  function getDocumentWithLatestViewport(currentDocument: FlowAuthoringDocument) {
+    const viewport = viewportGetterRef.current?.() ?? viewportSnapshotRef.current;
+    const currentViewport = currentDocument.editor.viewport;
+
+    if (
+      currentViewport.x === viewport.x &&
+      currentViewport.y === viewport.y &&
+      currentViewport.zoom === viewport.zoom
+    ) {
+      return currentDocument;
+    }
+
+    return {
+      ...currentDocument,
+      editor: {
+        ...currentDocument.editor,
+        viewport
+      }
+    };
+  }
+
+  function applyServerState(nextState: ConsoleApplicationOrchestrationState) {
+    setEditorState(nextState);
+    lastSavedDocumentRef.current = nextState.draft.document;
+    viewportSnapshotRef.current = nextState.draft.document.editor.viewport;
+    documentRef.current = nextState.draft.document;
+    setDocument(nextState.draft.document);
+  }
+
   const autosaveController = useEditorAutosave({
     document,
     lastSavedDocument: editorState.draft.document,
+    getCurrentDocument: () => getDocumentWithLatestViewport(documentRef.current),
+    getLastSavedDocument: () => lastSavedDocumentRef.current,
     intervalMs: editorState.autosave_interval_seconds * 1000,
     onSave: async (input) => {
       const nextState = saveDraftOverride
@@ -96,8 +140,7 @@ export function AgentFlowEditorShell({
             return saveDraft(applicationId, input, csrfToken);
           })();
 
-      setEditorState(nextState);
-      setDocument(nextState.draft.document);
+      applyServerState(nextState);
     }
   });
 
@@ -115,8 +158,7 @@ export function AgentFlowEditorShell({
             return restoreVersion(applicationId, versionId, csrfToken);
           })();
 
-      setEditorState(nextState);
-      setDocument(nextState.draft.document);
+      applyServerState(nextState);
       setContainerPath([]);
       setHistoryOpen(false);
     } finally {
@@ -188,14 +230,20 @@ export function AgentFlowEditorShell({
           onOpenContainer={handleOpenContainer}
           selectedNodeId={selectedNodeId}
           onSelectNode={setSelectedNodeId}
-          onDocumentChange={setDocument}
+          onDocumentChange={handleDocumentChange}
+          onViewportSnapshotChange={(viewport) => {
+            viewportSnapshotRef.current = viewport;
+          }}
+          onViewportGetterReady={(getter) => {
+            viewportGetterRef.current = getter;
+          }}
         />
         <NodeInspector
           document={document}
           selectedNodeId={selectedNodeId}
           focusFieldKey={focusFieldKey}
           openSectionKey={openSectionKey}
-          onDocumentChange={setDocument}
+          onDocumentChange={handleDocumentChange}
           onFocusHandled={() => setFocusFieldKey(null)}
           onClose={() => setSelectedNodeId(null)}
         />

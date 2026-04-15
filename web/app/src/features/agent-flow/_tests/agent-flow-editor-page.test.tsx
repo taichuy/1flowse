@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Grid } from 'antd';
+import { useRef, useState } from 'react';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createDefaultAgentFlowDocument } from '@1flowse/flow-schema';
@@ -44,6 +45,49 @@ function AutosaveHarness({
   });
 
   return <span>{autosave.status}</span>;
+}
+
+function ImmediateSaveHarness({
+  onSave
+}: {
+  onSave: (input: {
+    document: ReturnType<typeof createDefaultAgentFlowDocument>;
+    change_kind: 'layout' | 'logical';
+    summary: string;
+  }) => Promise<void>;
+}) {
+  const initialDocument = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
+  const [document, setDocument] = useState(initialDocument);
+  const documentRef = useRef(initialDocument);
+  const lastSavedDocumentRef = useRef(initialDocument);
+  const autosave = useEditorAutosave({
+    document,
+    lastSavedDocument: lastSavedDocumentRef.current,
+    getCurrentDocument: () => documentRef.current,
+    getLastSavedDocument: () => lastSavedDocumentRef.current,
+    onSave
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const nextDocument = {
+          ...documentRef.current,
+          editor: {
+            ...documentRef.current.editor,
+            viewport: { x: 120, y: 48, zoom: 0.85 }
+          }
+        };
+
+        documentRef.current = nextDocument;
+        setDocument(nextDocument);
+        void autosave.saveNow();
+      }}
+    >
+      save latest viewport
+    </button>
+  );
 }
 
 afterEach(() => {
@@ -152,6 +196,27 @@ describe('AgentFlowEditorShell', () => {
         })
       })
     );
+  });
+
+  test('manual save reads the latest viewport even before the next render commits', async () => {
+    const saveDraft = vi.fn().mockResolvedValue(undefined);
+
+    render(<ImmediateSaveHarness onSave={saveDraft} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'save latest viewport' }));
+
+    await waitFor(() => {
+      expect(saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          change_kind: 'layout',
+          document: expect.objectContaining({
+            editor: expect.objectContaining({
+              viewport: { x: 120, y: 48, zoom: 0.85 }
+            })
+          })
+        })
+      );
+    });
   });
 
   test('opens the selected issue target and focuses the node field', async () => {

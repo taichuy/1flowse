@@ -6,11 +6,15 @@ import { buildDraftSaveInput } from '../lib/draft-save';
 export function useEditorAutosave({
   document,
   lastSavedDocument,
+  getCurrentDocument,
+  getLastSavedDocument,
   onSave,
   intervalMs = 30_000
 }: {
   document: FlowAuthoringDocument;
   lastSavedDocument: FlowAuthoringDocument;
+  getCurrentDocument?: () => FlowAuthoringDocument;
+  getLastSavedDocument?: () => FlowAuthoringDocument;
   onSave: (input: {
     document: FlowAuthoringDocument;
     change_kind: 'layout' | 'logical';
@@ -34,7 +38,12 @@ export function useEditorAutosave({
     setStatus('saving');
 
     try {
-      await onSave(buildDraftSaveInput(lastSavedDocument, document));
+      const currentDocument = getCurrentDocument ? getCurrentDocument() : document;
+      const currentLastSavedDocument = getLastSavedDocument
+        ? getLastSavedDocument()
+        : lastSavedDocument;
+
+      await onSave(buildDraftSaveInput(currentLastSavedDocument, currentDocument));
       setStatus('saved');
       return true;
     } catch {
