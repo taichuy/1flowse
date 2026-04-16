@@ -7,6 +7,11 @@ import {
   type FlowAuthoringDocument
 } from '@1flowse/flow-schema';
 
+import {
+  buildDefaultAgentFlowDocument,
+  createNextNodeId
+} from '../lib/default-agent-flow-document';
+
 describe('agent flow document helpers', () => {
   test('seeds the default start -> llm -> answer graph', () => {
     const document = createDefaultAgentFlowDocument({ flowId: 'flow-1' });
@@ -56,5 +61,16 @@ describe('agent flow document helpers', () => {
 
     expect(classifyDocumentChange(before, viewportOnly)).toBe('layout');
     expect(classifyDocumentChange(before, logicalChange)).toBe('logical');
+  });
+
+  test('keeps the local document helper facade aligned with flow-schema defaults', () => {
+    const document = buildDefaultAgentFlowDocument('flow-1');
+
+    expect(document.graph.nodes.map((node) => node.id)).toEqual([
+      'node-start',
+      'node-llm',
+      'node-answer'
+    ]);
+    expect(createNextNodeId(document, 'llm')).toBe('node-llm-1');
   });
 });

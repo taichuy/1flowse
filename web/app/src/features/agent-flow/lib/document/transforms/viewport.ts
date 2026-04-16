@@ -1,0 +1,24 @@
+import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
+
+export function setViewport(
+  document: FlowAuthoringDocument,
+  viewport: FlowAuthoringDocument['editor']['viewport']
+) {
+  const currentViewport = document.editor.viewport;
+
+  if (
+    currentViewport.x === viewport.x &&
+    currentViewport.y === viewport.y &&
+    currentViewport.zoom === viewport.zoom
+  ) {
+    return document;
+  }
+
+  return {
+    ...document,
+    editor: {
+      ...document.editor,
+      viewport
+    }
+  };
+}

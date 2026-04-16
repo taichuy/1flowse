@@ -97,7 +97,7 @@
 - Modify: `web/app/src/features/agent-flow/lib/default-agent-flow-document.ts`
 - Modify: `web/app/src/features/agent-flow/_tests/agent-flow-document.test.ts`
 
-- [ ] **Step 1: 写失败的 transform 测试**
+- [x] **Step 1: 写失败的 transform 测试**
 
 ```ts
 import { describe, expect, test } from 'vitest';
@@ -206,13 +206,15 @@ describe('agent flow document transforms', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试，确认当前模块边界还不存在**
+- [x] **Step 2: 运行测试，确认当前模块边界还不存在**
 
 Run: `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/document-transforms.test.ts src/features/agent-flow/_tests/agent-flow-document.test.ts`
 
 Expected: FAIL with module resolution errors for `../lib/document/*` and missing exports such as `insertNodeOnEdge`, `moveNodes`, or `classifyDocumentChange`.
 
-- [ ] **Step 3: 实现 document 模块与兼容 facade**
+Status note (`2026-04-16 10`): 已执行 `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/document-transforms.test.ts src/features/agent-flow/_tests/agent-flow-document.test.ts`。第一次运行按预期失败，失败点为 `../lib/document/change-kind` 等新模块尚不存在。
+
+- [x] **Step 3: 实现 document 模块与兼容 facade**
 
 ```ts
 // web/app/src/features/agent-flow/lib/document/node-factory.ts
@@ -516,11 +518,13 @@ export { moveNodes, updateNodeField } from './document/transforms/node';
 export { setViewport } from './document/transforms/viewport';
 ```
 
-- [ ] **Step 4: 重跑 document 测试**
+- [x] **Step 4: 重跑 document 测试**
 
 Run: `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/document-transforms.test.ts src/features/agent-flow/_tests/agent-flow-document.test.ts`
 
 Expected: PASS; `document-transforms.test.ts` 覆盖 edge insert、reconnect、layout/logical classify、container path，`agent-flow-document.test.ts` 继续通过默认三节点断言。
+
+Status note (`2026-04-16 10`): 已重新执行 `pnpm --dir web/app exec vitest run src/features/agent-flow/_tests/document-transforms.test.ts src/features/agent-flow/_tests/agent-flow-document.test.ts`，结果为 `2` 个文件、`7` 个测试全部 PASS。
 
 - [ ] **Step 5: Commit**
 

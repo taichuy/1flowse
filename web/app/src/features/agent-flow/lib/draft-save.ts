@@ -1,9 +1,7 @@
 import type { SaveConsoleApplicationDraftInput } from '@1flowse/api-client';
-import {
-  classifyDocumentChange,
-  type FlowAuthoringDocument
-} from '@1flowse/flow-schema';
+import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
 
+import { classifyDocumentChange } from './document/change-kind';
 import { buildVersionSummary } from './history-change';
 
 export function buildDraftSaveInput(

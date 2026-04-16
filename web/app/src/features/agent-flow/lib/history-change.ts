@@ -1,7 +1,6 @@
-import {
-  classifyDocumentChange,
-  type FlowAuthoringDocument
-} from '@1flowse/flow-schema';
+import type { FlowAuthoringDocument } from '@1flowse/flow-schema';
+
+import { classifyDocumentChange } from './document/change-kind';
 
 export function buildVersionSummary(
   before: FlowAuthoringDocument,
